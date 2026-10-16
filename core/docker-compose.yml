@@ -1,0 +1,139 @@
+services:
+  control-db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-emerge}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-emerge}
+      POSTGRES_DB: ${POSTGRES_DB:-emerge_control}
+    ports:
+      - "${CONTROL_DB_PORT:-5432}:5432"
+    volumes:
+      - control-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-emerge}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # Scratch database for `migrate make`. Atlas wipes it on every diff, so it is
+  # deliberately not given a persistent volume.
+  dev-db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-emerge}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-emerge}
+      POSTGRES_DB: emerge_dev
+    ports:
+      - "${DEV_DB_PORT:-5433}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-emerge}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # One tenant database for local work. Real deployments give each school its
+  # own database, registered through POST /api/v1/schools/{id}/profiles/postgres.
+  tenant-db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-emerge}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-emerge}
+      POSTGRES_DB: emerge_tenant_demo
+    ports:
+      - "${TENANT_DB_PORT:-5434}:5432"
+    volumes:
+      - tenant-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-emerge}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # The s3 endpoint a school is registered with is stored in the control plane,
+  # not set here, and one value has to serve two readers: this container, which
+  # calls the store to HEAD and delete objects, and whoever holds the presigned
+  # URL, which is a browser on the host. http://localhost:9000 works from the
+  # host and not from in here; http://object-store:9000 is the other way round.
+  # Running the API with `go run` on the host, as the README does, is what makes
+  # the single value correct for both.
+  api:
+    build:
+      context: .
+      args:
+        VERSION: ${VERSION:-dev}
+    environment:
+      APP_ENV: ${APP_ENV:-development}
+      PORT: 8081
+      CONTROL_DATABASE_URL: postgres://${POSTGRES_USER:-emerge}:${POSTGRES_PASSWORD:-emerge}@control-db:5432/${POSTGRES_DB:-emerge_control}?sslmode=disable
+      SECRETS_MASTER_KEY: ${SECRETS_MASTER_KEY:?set SECRETS_MASTER_KEY in .env}
+    ports:
+      - "${API_PORT:-8081}:8081"
+    depends_on:
+      control-db:
+        condition: service_healthy
+      object-store-bucket:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+  # Object store for library assets. Without one, POST /api/v1/library/assets
+  # answers 503 "this school has no object store configured" and writes no row,
+  # so /ready, /link and the asset delete have nothing to act on: the entire
+  # presigned-upload lifecycle is unreachable on a stock checkout.
+  #
+  # MinIO rather than LocalStack because the lifecycle leans on two things that
+  # a rough S3 impersonation tends to get wrong: sigv4 presigning that binds
+  # x-amz-checksum-sha256, content-length and content-type into the signature,
+  # and HeadObject handing that same sha256 back so /ready can verify the bytes
+  # against what the asset row claims. MinIO does both; it is also one process
+  # and one volume, which is the weight the three databases here are.
+  #
+  # Pinned to a release, unlike postgres:16-alpine, because MinIO has no stable
+  # channel and the checksum round trip is exactly the behaviour that shifts
+  # between releases. A shift there reads as a bug in our verification rather
+  # than as a change in the store, which is the most expensive way to be wrong.
+  # The images come from quay.io: MinIO stopped publishing to Docker Hub.
+  object-store:
+    image: quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${OBJECT_STORE_ACCESS_KEY:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${OBJECT_STORE_SECRET_KEY:-minioadmin}
+    ports:
+      - "${OBJECT_STORE_PORT:-9000}:9000"
+      - "${OBJECT_STORE_CONSOLE_PORT:-9001}:9001"
+    volumes:
+      - object-data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # The bucket. MinIO makes none on its own, and a store that comes up healthy
+  # with an empty namespace is a worse failure than no store at all: the asset
+  # row is created, the presigned PUT is minted, and the first thing that says
+  # anything is the object store itself, answering NoSuchBucket to a client
+  # holding a URL it cannot read. The error arrives late and names the wrong
+  # thing. So the bucket is made here, before anything can ask for it.
+  #
+  # Runs to completion and exits; `docker compose up` reports it as exited 0.
+  # Bring the store up through this service rather than directly -- it pulls
+  # object-store in behind it and guarantees the bucket is there.
+  object-store-bucket:
+    image: quay.io/minio/mc:RELEASE.2025-08-13T08-35-41Z
+    depends_on:
+      object-store:
+        condition: service_healthy
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        mc alias set store http://object-store:9000 "${OBJECT_STORE_ACCESS_KEY:-minioadmin}" "${OBJECT_STORE_SECRET_KEY:-minioadmin}" &&
+        mc mb --ignore-existing "store/${OBJECT_STORE_BUCKET:-emerge-dps-ngp}" &&
+        mc ls store
+    restart: "no"
+
+volumes:
+  control-data:
+  tenant-data:
+  object-data:
