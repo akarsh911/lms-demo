@@ -1,0 +1,20 @@
+-- Create "result_schemes" table
+CREATE TABLE "result_schemes" ("id" uuid NOT NULL, "created_at" timestamptz NOT NULL DEFAULT now(), "updated_at" timestamptz NOT NULL DEFAULT now(), "name" character varying NOT NULL, "code" character varying NOT NULL, "description" text NULL, "total_marks" numeric(8,2) NOT NULL DEFAULT 100, "status" character varying NOT NULL DEFAULT 'draft', "academic_session_id" uuid NOT NULL, "supersedes_id" uuid NULL, PRIMARY KEY ("id"), CONSTRAINT "result_schemes_academic_sessions_academic_session" FOREIGN KEY ("academic_session_id") REFERENCES "academic_sessions" ("id") ON UPDATE NO ACTION ON DELETE NO ACTION, CONSTRAINT "result_schemes_result_schemes_superseded_by" FOREIGN KEY ("supersedes_id") REFERENCES "result_schemes" ("id") ON UPDATE NO ACTION ON DELETE SET NULL, CONSTRAINT "result_schemes_total_marks_positive" CHECK (total_marks > (0)::numeric));
+-- Create index "resultscheme_academic_session_id_code" to table: "result_schemes"
+CREATE UNIQUE INDEX "resultscheme_academic_session_id_code" ON "result_schemes" ("academic_session_id", "code");
+-- Create index "resultscheme_academic_session_id_status" to table: "result_schemes"
+CREATE INDEX "resultscheme_academic_session_id_status" ON "result_schemes" ("academic_session_id", "status");
+-- Create "result_components" table
+CREATE TABLE "result_components" ("id" uuid NOT NULL, "created_at" timestamptz NOT NULL DEFAULT now(), "updated_at" timestamptz NOT NULL DEFAULT now(), "name" character varying NOT NULL, "maximum_marks" numeric(8,2) NOT NULL, "weight" numeric(8,2) NOT NULL, "aggregation" character varying NOT NULL DEFAULT 'single', "take_best" bigint NULL, "position" bigint NOT NULL DEFAULT 0, "result_scheme_id" uuid NOT NULL, PRIMARY KEY ("id"), CONSTRAINT "result_components_result_schemes_components" FOREIGN KEY ("result_scheme_id") REFERENCES "result_schemes" ("id") ON UPDATE NO ACTION ON DELETE CASCADE, CONSTRAINT "result_components_marks_positive" CHECK ((maximum_marks > (0)::numeric) AND (weight > (0)::numeric)), CONSTRAINT "result_components_take_best_iff_best_of" CHECK ((((aggregation)::text = 'best_of'::text) AND (take_best IS NOT NULL)) OR (((aggregation)::text <> 'best_of'::text) AND (take_best IS NULL))), CONSTRAINT "result_components_take_best_range" CHECK ((take_best IS NULL) OR (take_best > 0)));
+-- Create index "resultcomponent_result_scheme_id_name" to table: "result_components"
+CREATE UNIQUE INDEX "resultcomponent_result_scheme_id_name" ON "result_components" ("result_scheme_id", "name");
+-- Create index "resultcomponent_result_scheme_id_position" to table: "result_components"
+CREATE INDEX "resultcomponent_result_scheme_id_position" ON "result_components" ("result_scheme_id", "position");
+-- Create "result_component_exams" table
+CREATE TABLE "result_component_exams" ("id" uuid NOT NULL, "created_at" timestamptz NOT NULL DEFAULT now(), "updated_at" timestamptz NOT NULL DEFAULT now(), "result_component_id" uuid NOT NULL, "exam_id" uuid NOT NULL, PRIMARY KEY ("id"), CONSTRAINT "result_component_exams_exams_exam" FOREIGN KEY ("exam_id") REFERENCES "exams" ("id") ON UPDATE NO ACTION ON DELETE NO ACTION, CONSTRAINT "result_component_exams_result_components_exams" FOREIGN KEY ("result_component_id") REFERENCES "result_components" ("id") ON UPDATE NO ACTION ON DELETE CASCADE);
+-- Create index "resultcomponentexam_exam_id" to table: "result_component_exams"
+CREATE INDEX "resultcomponentexam_exam_id" ON "result_component_exams" ("exam_id");
+-- Create index "resultcomponentexam_result_component_id_exam_id" to table: "result_component_exams"
+CREATE UNIQUE INDEX "resultcomponentexam_result_component_id_exam_id" ON "result_component_exams" ("result_component_id", "exam_id");
+-- Modify "subject_offerings" table
+ALTER TABLE "subject_offerings" ADD COLUMN "result_scheme_id" uuid NULL, ADD CONSTRAINT "subject_offerings_result_schemes_subject_offerings" FOREIGN KEY ("result_scheme_id") REFERENCES "result_schemes" ("id") ON UPDATE NO ACTION ON DELETE SET NULL;

@@ -1,0 +1,10 @@
+-- Create "student_exam_marks" table
+CREATE TABLE "student_exam_marks" ("id" uuid NOT NULL, "created_at" timestamptz NOT NULL DEFAULT now(), "updated_at" timestamptz NOT NULL DEFAULT now(), "status" character varying NOT NULL DEFAULT 'marked', "marks_obtained" numeric(8,2) NULL, "remarks" text NULL, "marked_at" timestamptz NULL, "exam_subject_id" uuid NOT NULL, "student_id" uuid NOT NULL, "exam_sitting_id" uuid NULL, "marked_by" uuid NULL, PRIMARY KEY ("id"), CONSTRAINT "student_exam_marks_exam_sittings_exam_sitting" FOREIGN KEY ("exam_sitting_id") REFERENCES "exam_sittings" ("id") ON UPDATE NO ACTION ON DELETE SET NULL, CONSTRAINT "student_exam_marks_exam_subjects_exam_subject" FOREIGN KEY ("exam_subject_id") REFERENCES "exam_subjects" ("id") ON UPDATE NO ACTION ON DELETE NO ACTION, CONSTRAINT "student_exam_marks_persons_marker" FOREIGN KEY ("marked_by") REFERENCES "persons" ("id") ON UPDATE NO ACTION ON DELETE SET NULL, CONSTRAINT "student_exam_marks_students_student" FOREIGN KEY ("student_id") REFERENCES "students" ("id") ON UPDATE NO ACTION ON DELETE CASCADE, CONSTRAINT "student_exam_marks_not_negative" CHECK ((marks_obtained IS NULL) OR (marks_obtained >= (0)::numeric)), CONSTRAINT "student_exam_marks_value_iff_marked" CHECK ((((status)::text = 'marked'::text) AND (marks_obtained IS NOT NULL)) OR (((status)::text <> 'marked'::text) AND (marks_obtained IS NULL))));
+-- Create index "studentexammark_exam_sitting_id" to table: "student_exam_marks"
+CREATE INDEX "studentexammark_exam_sitting_id" ON "student_exam_marks" ("exam_sitting_id");
+-- Create index "studentexammark_exam_subject_id_status" to table: "student_exam_marks"
+CREATE INDEX "studentexammark_exam_subject_id_status" ON "student_exam_marks" ("exam_subject_id", "status");
+-- Create index "studentexammark_exam_subject_id_student_id" to table: "student_exam_marks"
+CREATE UNIQUE INDEX "studentexammark_exam_subject_id_student_id" ON "student_exam_marks" ("exam_subject_id", "student_id");
+-- Create index "studentexammark_student_id" to table: "student_exam_marks"
+CREATE INDEX "studentexammark_student_id" ON "student_exam_marks" ("student_id");

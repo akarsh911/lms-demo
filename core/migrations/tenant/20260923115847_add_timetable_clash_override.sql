@@ -1,0 +1,4 @@
+-- Modify "timetable_slots" table
+ALTER TABLE "timetable_slots" ADD CONSTRAINT "timetable_slots_override_reason" CHECK ((clash_override IS FALSE) OR ((clash_override_reason IS NOT NULL) AND (btrim((clash_override_reason)::text) <> ''::text))), ADD COLUMN "clash_override" boolean NOT NULL DEFAULT false, ADD COLUMN "clash_override_reason" character varying NULL, ADD COLUMN "clash_overridden_at" timestamptz NULL, ADD COLUMN "clash_override_json" jsonb NULL, ADD COLUMN "clash_overridden_by" uuid NULL, ADD CONSTRAINT "timetable_slots_persons_clash_override_author" FOREIGN KEY ("clash_overridden_by") REFERENCES "persons" ("id") ON UPDATE NO ACTION ON DELETE SET NULL;
+-- Create index "timetableslot_timetable_id_clash_override" to table: "timetable_slots"
+CREATE INDEX "timetableslot_timetable_id_clash_override" ON "timetable_slots" ("timetable_id", "clash_override") WHERE clash_override;

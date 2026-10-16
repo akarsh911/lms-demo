@@ -1,0 +1,2 @@
+-- Modify "exams" table
+ALTER TABLE "exams" ADD CONSTRAINT "exams_practice_has_no_weight" CHECK (((assessment_kind)::text <> 'practice'::text) OR (result_weight IS NULL)), ADD CONSTRAINT "exams_result_weight_positive" CHECK ((result_weight IS NULL) OR (result_weight > (0)::numeric)), ADD COLUMN "assessment_kind" character varying NOT NULL DEFAULT 'evaluative', ADD COLUMN "result_weight" numeric(6,3) NULL;

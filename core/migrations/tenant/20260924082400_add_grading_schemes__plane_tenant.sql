@@ -1,0 +1,8 @@
+-- Create "grading_schemes" table
+CREATE TABLE "grading_schemes" ("id" uuid NOT NULL, "created_at" timestamptz NOT NULL DEFAULT now(), "updated_at" timestamptz NOT NULL DEFAULT now(), "name" character varying NOT NULL, "code" character varying NOT NULL, "description" text NULL, "kind" character varying NOT NULL DEFAULT 'marks', "maximum_marks" numeric(8,2) NULL, "pass_marks" numeric(8,2) NULL, "scale_json" jsonb NULL, "pass_rule_json" jsonb NULL, "status" character varying NOT NULL DEFAULT 'active', "academic_session_id" uuid NOT NULL, "supersedes_id" uuid NULL, PRIMARY KEY ("id"), CONSTRAINT "grading_schemes_academic_sessions_academic_session" FOREIGN KEY ("academic_session_id") REFERENCES "academic_sessions" ("id") ON UPDATE NO ACTION ON DELETE NO ACTION, CONSTRAINT "grading_schemes_grading_schemes_superseded_by" FOREIGN KEY ("supersedes_id") REFERENCES "grading_schemes" ("id") ON UPDATE NO ACTION ON DELETE SET NULL, CONSTRAINT "grading_schemes_marks_range" CHECK ((maximum_marks IS NULL) OR (pass_marks IS NULL) OR (pass_marks <= maximum_marks)));
+-- Create index "gradingscheme_academic_session_id_code" to table: "grading_schemes"
+CREATE UNIQUE INDEX "gradingscheme_academic_session_id_code" ON "grading_schemes" ("academic_session_id", "code");
+-- Create index "gradingscheme_academic_session_id_status" to table: "grading_schemes"
+CREATE INDEX "gradingscheme_academic_session_id_status" ON "grading_schemes" ("academic_session_id", "status");
+-- Modify "subject_offerings" table
+ALTER TABLE "subject_offerings" ADD CONSTRAINT "subject_offerings_grading_schemes_subject_offerings" FOREIGN KEY ("grading_scheme_id") REFERENCES "grading_schemes" ("id") ON UPDATE NO ACTION ON DELETE SET NULL;
