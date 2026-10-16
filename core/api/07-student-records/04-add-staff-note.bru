@@ -1,0 +1,52 @@
+meta {
+  name: Add staff note
+  type: http
+  seq: 4
+}
+
+post {
+  url: {{baseUrl}}/api/v1/student-notes
+  body: json
+  auth: inherit
+}
+
+headers {
+  X-School-Id: {{schoolCode}}
+}
+
+body:json {
+  {
+    "student_id": "{{studentId}}",
+    "academic_session_id": "{{sessionId}}",
+    "category": "academic",
+    "title": "Strong in algebra",
+    "body": "Consistently ahead of the class.",
+    "visibility": "staff"
+  }
+}
+
+assert {
+  res.status: eq 201
+  res.body.visibility: eq staff
+  res.body.author_person_id: isDefined
+}
+
+script:post-response {
+  bru.setEnvVar("staffNoteId", res.body.id);
+}
+
+docs {
+  visibility staff means the family cannot read it.
+
+  There is no author_person_id in the body. The author is taken from the
+  authenticated caller, and supplying one is refused outright -- 400, "must
+  not be supplied" -- rather than quietly overwritten, so a client that
+  believes it is writing on someone else's behalf finds out.
+
+  The precondition that follows: the caller must have a person record at this
+  school, matched by cas_user_id. A note has to have an author, so a subject
+  with no person -- a service account, the development subject, or an operator
+  whose CAS user was never linked here -- is refused with "the caller has no
+  person record at this school". Running this request needs a token belonging
+  to a member of staff, not an administrator's.
+}

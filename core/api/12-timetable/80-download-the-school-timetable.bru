@@ -1,0 +1,50 @@
+meta {
+  name: Download the school timetable, a sheet per class
+  type: http
+  seq: 80
+}
+
+get {
+  url: {{baseUrl}}/api/v1/timetable-export.xlsx?branch_id={{branchId}}&on=2026-11-02
+  body: none
+  auth: inherit
+}
+
+headers {
+  X-School-Id: {{schoolCode}}
+}
+
+assert {
+  res.status: eq 200
+  res.headers['content-type']: eq application/vnd.openxmlformats-officedocument.spreadsheetml.sheet
+}
+
+docs {
+  One worksheet per class section, named after the grade and the section, of the
+  weekly pattern as published and in force on `on`. This is the default and it
+  is deliberate: the pattern is the document a school prints and pins up, it
+  holds all term, and a stale copy of it is still broadly true.
+
+  `on` chooses which published version is in force, not which week is exported.
+  It defaults to today.
+
+  Add `section_id` with a comma-separated list to export a group of classes
+  rather than the whole school. Add `status` to export a draft rather than the
+  published timetable.
+
+  Rows are the periods of the section's scheme, in sequence, with the default
+  bell schedule's times. Non-teaching periods are labelled rather than left
+  blank, because a blank cell in a timetable reads as a free period. Each cell
+  names the subject, the teacher and the room, and two slots in one period are
+  merged with a slash rather than one hiding the other.
+
+  Sheet names are sanitised for Excel: 31 characters, no [ ] : * ? / \, and
+  two classes whose names collide after sanitising get (2) and (3) rather than
+  one overwriting the other. The section's code is on the sheet's caption row
+  either way.
+
+  A caller who may read only some classes gets only those sheets. A caller who
+  may read none gets 404, not an empty workbook: an .xlsx that opens and is
+  blank reads as "this school has no timetable", which is a false statement
+  about the school rather than a true one about the caller.
+}

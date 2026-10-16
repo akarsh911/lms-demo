@@ -1,0 +1,46 @@
+meta {
+  name: The slot is not yours to send
+  type: http
+  seq: 4
+}
+
+post {
+  url: {{baseUrl}}/api/v1/attendance/register
+  body: json
+  auth: inherit
+}
+
+headers {
+  X-School-Id: {{schoolCode}}
+}
+
+body:json {
+  {
+    "subject_offering_id": "{{offeringId}}",
+    "period_id": "{{periodOneId}}",
+    "attendance_date": "2026-11-02",
+    "timetable_slot_id": "{{slotId}}",
+    "entries": [
+      {
+        "student_id": "{{studentId}}",
+        "status": "present"
+      }
+    ]
+  }
+}
+
+assert {
+  res.status: eq 400
+}
+
+docs {
+  400 "unknown field", not 422. The register body has no timetable_slot_id
+  field at all, so the decoder refuses it before any handler logic runs. The
+  same is true of teacher_id, marked_by and marked_at.
+
+  It matters that this fails rather than being ignored: a client that could
+  name the slot could attach a register to a class other than the one that
+  ran, and the mark would then disagree with the timetable it claims to come
+  from. Sending the correct slot id is refused exactly as loudly as sending
+  the wrong one.
+}

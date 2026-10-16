@@ -1,0 +1,54 @@
+meta {
+  name: Send the register again
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{baseUrl}}/api/v1/attendance/register
+  body: json
+  auth: inherit
+}
+
+headers {
+  X-School-Id: {{schoolCode}}
+}
+
+body:json {
+  {
+    "subject_offering_id": "{{offeringId}}",
+    "period_id": "{{periodOneId}}",
+    "attendance_date": "2026-11-02",
+    "source": "manual",
+    "entries": [
+      {
+        "student_id": "{{studentId}}",
+        "status": "late",
+        "reason_code": "TRANSPORT",
+        "remarks": "School bus held up at the level crossing."
+      }
+    ]
+  }
+}
+
+assert {
+  res.status: eq 200
+  res.body.created: eq 0
+  res.body.updated: eq 1
+  res.body.marks[0].status: eq late
+  res.body.marks[0].reason_code: eq TRANSPORT
+}
+
+docs {
+  The same pupil, the same date, the same period: an upsert on the natural key
+  rather than a second row. created drops to 0 and updated rises to 1, which
+  is how a client tells "I corrected the register" from "I took it twice".
+
+  This is what makes the route safe to retry. A teacher whose phone lost
+  signal halfway through can send the whole register again without creating
+  duplicates or having to work out which pupils got through.
+
+  reason_code is a short school-defined string, 64 characters at most. It is
+  not validated against a list, because the list differs per school and a
+  refused code would lose the mark along with the reason.
+}

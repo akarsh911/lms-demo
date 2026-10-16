@@ -1,0 +1,83 @@
+meta {
+  name: Provision person in CAS [outcome unverified]
+  type: http
+  seq: 14
+}
+
+post {
+  url: {{baseUrl}}/api/v1/persons/provision
+  body: json
+  auth: inherit
+}
+
+headers {
+  X-School-Id: {{schoolCode}}
+}
+
+body:json {
+  {
+    "username": "kavya.nair",
+    "email": "kavya.nair@example.com",
+    "phone": "+91-9800000002",
+    "first_name": "Kavya",
+    "last_name": "Nair",
+    "display_name": "Kavya Nair",
+    "group_keys": ["teachers"]
+  }
+}
+
+tests {
+  // There is no status assert here on purpose. Nobody on this team has run
+  // this request against a live CAS, and an assert would read as a statement
+  // of fact about behaviour we have only reasoned about. This test accepts any
+  // outcome we can explain, names which one happened, and fails on anything
+  // else - including 401, which means you ran without a token and learnt
+  // nothing about provisioning.
+  //
+  // Once you have seen the answer, replace this block with a plain assert.
+  const explained = [201, 501, 502];
+  const meaning = {
+    201: "CAS created the identity. Provisioning works: assert 201, and read the note in request 18 about what folder 12 then has to delete.",
+    501: "this service refused before calling CAS - no caller token on the request, or CAS offers this client no user service at all.",
+    502: "the call reached CAS and CAS answered badly. Look at the server log for the status CAS returned.",
+    401: "you ran without a token, so this request says nothing about provisioning either way."
+  };
+
+  test("provisioning answers something we can account for", function () {
+    const status = res.getStatus();
+    console.log("POST /persons/provision returned " + status + " - " +
+      (meaning[status] || "an outcome none of us predicted; work out why before changing this test"));
+    expect(explained).to.include(status);
+  });
+}
+
+docs {
+  UNVERIFIED. Read the tests block before you trust anything here.
+
+  What this route is for: one call that mints the CAS identity and writes the
+  emerge-core person row against it, instead of the two-step dance requests 01
+  to 07 do (create the user in CAS by hand, then POST /persons with their
+  cas_user_id). Omit password and CAS generates one, returned once in the
+  response body and never stored here.
+
+  What it answers is an open question, because it is a property of CAS's
+  behaviour rather than of our code, and we have not run it:
+
+  201 - the likely one. internal/infrastructure/cas/admin.go posts to the REST
+  endpoint /v1/admin/users, and that call was extended once before to carry
+  group_id so that CAS writes the user and their group membership in one
+  transaction. That work was done against production CAS and it worked, which
+  is decent evidence the endpoint is there and answers.
+
+  502 - if CAS answers non-2xx for any reason other than 401, 403 or 409, the
+  error falls through to the default arm of writeProvisioningErr and is
+  reported as a bad gateway: CAS spoke, and we could not use what it said.
+
+  501 - only in three narrow cases: the caller sent no token to forward (CAS
+  admin routes read a session from it, so a service token will not do), CAS is
+  not configured at all, or the lookup half of the flow is unavailable.
+
+  An older internal note said 501 was the settled answer "until a
+  cas.v1.UserService lands". That sentence is about a gRPC service and this
+  code path is REST, so treat the note as stale rather than as an answer.
+}

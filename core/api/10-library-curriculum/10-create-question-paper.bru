@@ -1,0 +1,63 @@
+meta {
+  name: Create question paper
+  type: http
+  seq: 10
+}
+
+post {
+  url: {{baseUrl}}/api/v1/library
+  body: json
+  auth: inherit
+}
+
+headers {
+  X-School-Id: {{schoolCode}}
+}
+
+body:json {
+  {
+    "kind": "paper",
+    "title": "Class 6 Mathematics, annual examination 2019",
+    "audience": "grade",
+    "grade_level_id": "{{gradeLevelId}}",
+    "subject_id": "{{subjectId}}",
+    "language": "en",
+    "paper": {
+      "exam_type": "annual",
+      "board": "CBSE",
+      "exam_year": 2019,
+      "total_marks": 80,
+      "duration_minutes": 150,
+      "paper_set": "A",
+      "attempt": "main"
+    }
+  }
+}
+
+assert {
+  res.status: eq 201
+  res.body.kind: eq paper
+  res.body.paper.exam_type: eq annual
+  res.body.paper.exam_year: eq 2019
+  res.body.paper.board: eq CBSE
+}
+
+script:post-response {
+  bru.setEnvVar("paperItemId", res.body.id);
+}
+
+docs {
+  There is no /question-papers route. A past paper is a content item with exam
+  metadata attached, and the metadata travels as an inline paper object on the
+  same request, written in the same transaction. Two requests would leave a
+  window where a paper exists with no exam, year or board on it, and a paper
+  nobody can find by exam, year or board is a file nobody will ever open.
+
+  kind paper without a paper object is 422, and a paper object on any other
+  kind is 422 as well -- request 11 shows the second half. paper.content_item_id
+  is the server's: it names the item the sidecar belongs to, and a caller who
+  could set it could staple exam metadata to somebody else's book.
+
+  board is whitespace-collapsed on the way in, so "C B S E" and "CBSE  " do not
+  become two boards that no filter can match at once.
+}

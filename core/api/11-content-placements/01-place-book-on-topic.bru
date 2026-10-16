@@ -1,0 +1,58 @@
+meta {
+  name: Place the textbook pages on the topic
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{baseUrl}}/api/v1/placements
+  body: json
+  auth: inherit
+}
+
+headers {
+  X-School-Id: {{schoolCode}}
+}
+
+body:json {
+  {
+    "curriculum_id": "{{curriculumId}}",
+    "curriculum_node_id": "{{curriculumTopicId}}",
+    "content_item_id": "{{libraryItemId}}",
+    "grain": "node",
+    "page_start": 12,
+    "page_end": 28,
+    "origin": "manual"
+  }
+}
+
+assert {
+  res.status: eq 201
+  res.body.grain: eq node
+  res.body.status: eq proposed
+  res.body.origin: eq manual
+  res.body.created_by: eq {{callerPersonId}}
+}
+
+script:post-response {
+  bru.setEnvVar("placementId", res.body.id);
+}
+
+docs {
+  Pages 12 to 28 of the prescribed book are where prime factorisation is
+  taught. That sentence is the whole point of this row: without it a search
+  about factor trees can only return "somewhere in this 300 page book".
+
+  Both ends are checked before the row is written. The curriculum must be one
+  the caller may write, the node must belong to that curriculum, the content
+  item must be one the caller may read, and a content_node_id, if sent, must
+  belong to that item. Each failure is a 422 naming the field, because a
+  placement that points at something the caller cannot see is either a mistake
+  or a probe.
+
+  created_by is taken from the token. Who claimed this mapping is half of what
+  makes confirming it meaningful, so it is not the caller's to assert.
+
+  Note the status: created proposed even though a person typed it. Confirming
+  is a separate request on purpose -- see request 6.
+}

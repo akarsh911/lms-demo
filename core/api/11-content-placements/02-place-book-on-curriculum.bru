@@ -1,0 +1,56 @@
+meta {
+  name: Place the whole book on the curriculum
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{baseUrl}}/api/v1/placements
+  body: json
+  auth: inherit
+}
+
+headers {
+  X-School-Id: {{schoolCode}}
+}
+
+body:json {
+  {
+    "curriculum_id": "{{curriculumId}}",
+    "content_item_id": "{{libraryItemId}}",
+    "grain": "curriculum",
+    "origin": "inferred",
+    "confidence": 0.72
+  }
+}
+
+assert {
+  res.status: eq 201
+  res.body.grain: eq curriculum
+  res.body.origin: eq inferred
+  res.body.status: eq proposed
+}
+
+script:post-response {
+  bru.setEnvVar("wholeBookPlacementId", res.body.id);
+}
+
+docs {
+  The coarse mapping: this book belongs to this syllabus, without saying where
+  in it. It is what an extraction pipeline can assert from a title page alone,
+  which is why this one is origin inferred and carries a confidence.
+
+  Grain is the difference between the two. curriculum grain must not carry a
+  node -- the database enforces that with a check constraint as well as the
+  API, since a row that says "whole syllabus" while naming one topic is two
+  claims that cannot both be true.
+
+  Coarse placements are how a query about a topic nobody mapped still finds
+  something: resolve with include_ancestors=true and this row answers for every
+  node in the syllabus, marked exact false so the caller knows it was a
+  fallback. Request 9 shows that.
+
+  confidence is only meaningful next to origin inferred. Nothing rejects a
+  confidence on a manual placement, but a person who typed a mapping and gave
+  it 0.7 has said nothing a reader can act on.
+}

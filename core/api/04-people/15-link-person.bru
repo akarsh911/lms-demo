@@ -1,0 +1,53 @@
+meta {
+  name: Link person to an existing CAS identity
+  type: http
+  seq: 15
+}
+
+post {
+  url: {{baseUrl}}/api/v1/persons/link
+  body: json
+  auth: inherit
+}
+
+headers {
+  X-School-Id: {{schoolCode}}
+}
+
+body:json {
+  {
+    "identifier": "kavya.nair@example.com",
+    "first_name": "Kavya",
+    "last_name": "Nair",
+    "display_name": "Kavya Nair"
+  }
+}
+
+assert {
+  res.status: eq 501
+}
+
+docs {
+  The sibling of request 14, for someone who already has a CAS account: look
+  the identity up by username or email, then write the local person row against
+  the id that lookup returns. It exists so a parent with two children at two
+  schools is one CAS identity and two person rows, rather than two identities.
+
+  501, and unlike request 14 this one is asserted rather than left open. The
+  difference is where the answer comes from. FindUser maps every non-2xx from
+  CAS to ErrLookupUnsupported, which this service reports as 501, so whatever
+  CAS does short of answering the lookup successfully, the status here is
+  decided by our code and can be established by reading it. Request 13's status
+  is decided by CAS's behaviour, which reading our code cannot tell you.
+
+  Note the deliberate asymmetry with a search that finds nothing: "CAS cannot be
+  asked" is 501, and would be wrong to report as 404 "no such user", which is a
+  fact we are not in a position to state.
+
+  The one way this returns 201 is CAS answering the lookup with a matching user.
+  If that ever happens, this request creates a person row that folder 12 does
+  not delete - the same gap request 18 documents.
+
+  Until CAS grows the endpoint, supply cas_user_id to POST /persons directly,
+  as request 02 does.
+}

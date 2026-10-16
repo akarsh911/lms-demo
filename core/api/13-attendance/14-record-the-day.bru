@@ -1,0 +1,57 @@
+meta {
+  name: Record the day
+  type: http
+  seq: 14
+}
+
+post {
+  url: {{baseUrl}}/api/v1/attendance/days
+  body: json
+  auth: inherit
+}
+
+headers {
+  X-School-Id: {{schoolCode}}
+}
+
+body:json {
+  {
+    "student_id": "{{studentId}}",
+    "section_id": "{{sectionId}}",
+    "attendance_date": "2026-11-02",
+    "forenoon_status": "present",
+    "afternoon_status": "absent",
+    "reason_code": "MEDICAL",
+    "remarks": "Sent home after lunch with a fever.",
+    "source": "manual"
+  }
+}
+
+assert {
+  res.status: eq 201
+  res.body.forenoon_status: eq present
+  res.body.afternoon_status: eq absent
+  res.body.section_id: eq {{sectionId}}
+  res.body.academic_session_id: eq {{sessionId}}
+}
+
+script:post-response {
+  bru.setEnvVar("attendanceDayId", res.body.id);
+}
+
+docs {
+  201 here, unlike the register: one pupil, one day, one row.
+
+  academic_session_id is not sent. It and the branch are read off the section,
+  which is also where the branch for the in-session check comes from - so the
+  section is what places a day mark in the calendar, and a pupil moving
+  section mid-year moves the branch their days are checked against.
+
+  At least one half is required. Sending only forenoon_status leaves the
+  afternoon genuinely unknown rather than defaulting it to present, which is
+  the difference between "we did not take an afternoon roll" and "she was
+  here".
+
+  Each half sent is checked against the calendar independently, so a day that
+  is half open accepts half a mark.
+}

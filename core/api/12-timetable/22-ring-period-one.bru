@@ -1,0 +1,48 @@
+meta {
+  name: Ring period 1 at 09:05
+  type: http
+  seq: 22
+}
+
+post {
+  url: {{baseUrl}}/api/v1/bell-schedules/{{bellScheduleId}}/periods
+  body: json
+  auth: inherit
+}
+
+headers {
+  X-School-Id: {{schoolCode}}
+}
+
+body:json {
+  {
+    "period_id": "{{periodOneId}}",
+    "start_minute": 545,
+    "end_minute": 585
+  }
+}
+
+assert {
+  res.status: eq 201
+  res.body.start_minute: eq 545
+  res.body.end_minute: eq 585
+  res.body.bell_schedule_id: eq {{bellScheduleId}}
+}
+
+script:post-response {
+  bru.setEnvVar("bellPeriodOneId", res.body.id);
+}
+
+docs {
+  545 is 09:05 and 585 is 09:45: integer minutes from midnight, not a time
+  string and not an ISO timestamp. A body carrying "start_time": "09:05" is
+  refused as an unknown field, which is the failure you want rather than a
+  silently zeroed span.
+
+  The span must satisfy 0 <= start < end <= 1440. end equal to start is
+  refused, so a zero-length period cannot be recorded.
+
+  Which half of the day a class belongs to is derived from these minutes, not
+  declared. Anything starting before the midday boundary is forenoon. That is
+  how a register knows whether a closed afternoon should stop it.
+}

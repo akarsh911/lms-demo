@@ -1,0 +1,56 @@
+meta {
+  name: Update guardian link
+  type: http
+  seq: 29
+}
+
+patch {
+  url: {{baseUrl}}/api/v1/guardians/{{guardianId}}/students/{{studentId}}
+  body: json
+  auth: inherit
+}
+
+headers {
+  X-School-Id: {{schoolCode}}
+}
+
+body:json {
+  {
+    "is_emergency_contact": true,
+    "can_view_academic": true
+  }
+}
+
+assert {
+  res.status: eq 403
+}
+
+docs {
+  403 is what this answers today, and the assert says so deliberately.
+
+  The route is gated by core.student_guardians.write, which is not registered in
+  CAS yet, so the guard refuses the capability before any row is read and the
+  body replies "not permitted: core.student_guardians.write". Registering that
+  capability in CAS and granting it is the only thing standing between this and
+  a 200 - the handler itself is finished. When that happens this assert must be
+  changed to 200, and it will fail loudly in the meantime rather than quietly
+  passing against a route nobody can call.
+
+  Read the 403 carefully: it is about the capability, not about this particular
+  guardian or this particular child. A caller who holds the capability but
+  cannot reach the guardian or the student gets 404 instead - see request 13.
+
+  Why the route matters. can_view_academic on this link gates real access, not
+  a UI checkbox: with it false, this guardian's own token cannot reach the
+  ward's enrolments, subject enrolments, student assignments or documents, even
+  though CAS granted them core.students.read for their children. The body here
+  re-affirms the values request 09 already set, so that the run stays
+  reproducible if this ever starts succeeding.
+
+  Two things the route will not do even once it is allowed: student_id comes
+  from the path and sending it in the body is a 400, because moving a link to a
+  different child is deleting one relationship and creating another; and
+  editing a link needs core.guardians.write and core.students.read as well,
+  since a caller who cannot see the child has no business editing who may
+  collect them.
+}

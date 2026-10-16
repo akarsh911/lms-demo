@@ -1,0 +1,45 @@
+meta {
+  name: Give the Monday its bells
+  type: http
+  seq: 37
+}
+
+post {
+  url: {{baseUrl}}/api/v1/calendar-days/{{calendarDayId}}/schedules
+  body: json
+  auth: inherit
+}
+
+headers {
+  X-School-Id: {{schoolCode}}
+}
+
+body:json {
+  {
+    "period_scheme_id": "{{schemeId}}",
+    "bell_schedule_id": "{{bellScheduleId}}"
+  }
+}
+
+assert {
+  res.status: eq 201
+  res.body.calendar_day_id: eq {{calendarDayId}}
+  res.body.bell_schedule_id: eq {{bellScheduleId}}
+}
+
+script:post-response {
+  bru.setEnvVar("dayScheduleId", res.body.id);
+}
+
+docs {
+  WITHOUT THIS ROW THE DAY HAS NO CLASSES. Being in session is not enough:
+  occurrences are resolved by walking each calendar day's schedules and
+  finding the timetable in force for that scheme on that date, so a day with
+  no schedule yields an empty list no matter how many slots exist. It is the
+  most confusing failure in this feature, because /timetable-calendar happily
+  reports the day as open while /timetable-occurrences returns nothing and the
+  register refuses with attendance_not_scheduled.
+
+  A day may carry more than one, which is how a school runs two period schemes
+  side by side - junior and senior bells on the same date.
+}

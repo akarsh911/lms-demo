@@ -1,0 +1,51 @@
+meta {
+  name: Create the period scheme
+  type: http
+  seq: 7
+}
+
+post {
+  url: {{baseUrl}}/api/v1/period-schemes
+  body: json
+  auth: inherit
+}
+
+headers {
+  X-School-Id: {{schoolCode}}
+}
+
+body:json {
+  {
+    "academic_session_id": "{{sessionId}}",
+    "branch_id": "{{branchId}}",
+    "name": "Regular day",
+    "code": "REG",
+    "description": "Two teaching periods and a short break, enough to timetable against."
+  }
+}
+
+assert {
+  res.status: eq 201
+  res.body.code: eq REG
+  res.body.status: eq active
+}
+
+script:post-response {
+  bru.setEnvVar("schemeId", res.body.id);
+}
+
+docs {
+  THIS IS THE PRECONDITION FOR EVERYTHING ELSE IN THE FOLDER. Periods, bell
+  schedules and the timetable itself all hang off a period scheme, and the
+  clash checker finds the branch to check by looking through the timetable to
+  its scheme. Without this row the timetable create at request 48 has nothing
+  to point period_scheme_id at.
+
+  It is scoped to a session as well as a branch, so a school that changes the
+  shape of its day between years keeps both shapes and the old timetable still
+  resolves.
+
+  Writing one needs a grant that reaches the whole tenant: a scheme shapes the
+  day for every section, so a section-scoped grant is refused 403 rather than
+  quietly writing something it cannot see.
+}

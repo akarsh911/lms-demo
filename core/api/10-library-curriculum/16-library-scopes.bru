@@ -1,0 +1,49 @@
+meta {
+  name: What this caller may read
+  type: http
+  seq: 16
+}
+
+get {
+  url: {{baseUrl}}/api/v1/library/scopes
+  body: none
+  auth: inherit
+}
+
+headers {
+  X-School-Id: {{schoolCode}}
+}
+
+assert {
+  res.status: eq 200
+  res.body.unrestricted: eq true
+  res.body.count: eq 1
+  res.body.labels[0]: contains unrestricted_
+}
+
+docs {
+  The caller's readable set, written out as labels. This is the cleanest view
+  of what class-wise scoping actually is, because it is the same set the
+  retrieval engine is handed when a search runs: what a caller may find is
+  decided before the search, not filtered out of its results.
+
+  A label is a prefix and an id. school_ for everything at the school, grade_,
+  section_ and offering_ for the three anchors a content item can carry, and
+  person_ for items whose audience is their owner. unrestricted_ is the
+  wildcard that matches all of them, and it is what this collection sees,
+  because it runs as an unrestricted caller: one label, unrestricted true.
+
+  A class teacher's set is the interesting one -- school_, grade_ for the
+  grades they teach, one section_ per section, one offering_ per subject they
+  teach in it, and their own person_. Seeing that here needs a real teacher
+  token, which is the same gap the README notes about row-level narrowing.
+
+  Two failures worth knowing, both 409 rather than an empty set, because an
+  empty set reads as "you may see nothing" and would silently return no
+  results:
+
+  scope_unresolved              the set could not be worked out at all
+  scope_pinned_unexpressible    the grant carries a constraint that cannot be
+                                written as labels, so an operator has to widen
+                                or remove it
+}

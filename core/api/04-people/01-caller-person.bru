@@ -1,0 +1,95 @@
+meta {
+  name: Give the caller a person row
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{baseUrl}}/api/v1/persons
+  body: json
+  auth: inherit
+}
+
+headers {
+  X-School-Id: {{schoolCode}}
+}
+
+body:json {
+  {
+    "cas_user_id": "{{callerCasId}}",
+    "first_name": "Collection",
+    "last_name": "Runner",
+    "email": "collection-runner@dps-nagpur.example"
+  }
+}
+
+assert {
+  res.status: eq 201
+  res.body.cas_user_id: eq {{callerCasId}}
+}
+
+script:pre-request {
+  // The CAS identity of whoever is running the collection, read out of the
+  // token rather than configured, so the two can never disagree. With no token
+  // the API runs with a development subject whose id is all zeroes, which is
+  // the same id scripts/e2e.sh hardcodes for the same purpose.
+  const token = bru.getEnvVar("token");
+  if (!token) {
+    console.log("no token set: attributing to the development subject, all zeroes. " +
+      "Against a CAS-guarded server this run will 401 long before that matters.");
+    bru.setEnvVar("callerCasId", "00000000-0000-0000-0000-000000000000");
+  } else {
+    const payload = token.split(".")[1];
+    if (!payload) {
+      throw new Error("the token in this environment is not a JWT, so its subject cannot be read. " +
+        "Every attributed write in folders 06, 07 and 10 will fail until this request succeeds.");
+    }
+    const claims = JSON.parse(
+      Buffer.from(payload.replace(/-/g, "+").replace(/_/g, "/"), "base64").toString("utf8")
+    );
+    if (!claims.sub) {
+      throw new Error("the token carries no sub claim, so there is no identity to attribute writes to. " +
+        "Every attributed write in folders 06, 07 and 10 will fail until this request succeeds.");
+    }
+    bru.setEnvVar("callerCasId", claims.sub);
+  }
+}
+
+script:post-response {
+  bru.setEnvVar("callerPersonId", res.body.id);
+}
+
+docs {
+  First, because everything that records who did something depends on it.
+
+  Several handlers attribute a write to the caller: author_person_id on a
+  student note, owner_person_id on a library item, confirmed_by on a placement,
+  and created_by, assigned_by, verified_by and uploaded_by elsewhere. The value
+  is read from the authenticated subject and refused in the body - send it
+  yourself and you get a 400 saying so - and the subject is resolved to a person
+  by matching the token's sub against cas_user_id. No such row, no attribution,
+  and the strict ones answer:
+
+    400 cannot record author_person_id: the caller has no person record at this school
+
+  That is not a hypothetical. Until this request existed, folder 07's notes and
+  every attributed write behind them had never once succeeded, in any run, by
+  anyone - and folder 12's deletes for them were deleting nothing, which is why
+  a red run never made it obvious. The optional ones are worse: they do not fail,
+  they just record nobody.
+
+  Why here rather than in the folder that first trips over it: this is the
+  earliest folder that creates people and it runs before every consumer -
+  folder 06 assigns teachers and students, folder 07 writes notes and documents,
+  folder 10 uploads. Creating it at the top of any of those would be too late
+  for the others.
+
+  The id is taken from the token rather than configured, so the row cannot end
+  up describing someone other than the caller. With no token, the development
+  subject's all-zero id is used instead, which is what scripts/e2e.sh does.
+  The env vars it leaves behind are callerCasId and callerPersonId.
+
+  A second run against the same database fails here with 409: cas_user_id is
+  unique, because one identity is one person. That is true of this whole
+  collection, which expects a database it has not run against yet.
+}

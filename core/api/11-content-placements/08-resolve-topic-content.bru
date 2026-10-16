@@ -1,0 +1,60 @@
+meta {
+  name: Resolve the topic to content
+  type: http
+  seq: 8
+}
+
+get {
+  url: {{baseUrl}}/api/v1/curriculum-nodes/{{curriculumTopicId}}/content
+  body: none
+  auth: inherit
+}
+
+headers {
+  X-School-Id: {{schoolCode}}
+}
+
+assert {
+  res.status: eq 200
+  res.body.curriculum_id: eq {{curriculumId}}
+  res.body.count: eq 1
+  res.body.resolution: eq unindexed
+  res.body.content[0].placement_id: eq {{placementId}}
+  res.body.content[0].exact: eq true
+  res.body.content[0].page_start: eq 12
+  res.body.content[0].retrieval_state: eq not_indexed
+  res.body.counts.not_indexed: eq 1
+  res.body.counts.unreadable: eq 0
+}
+
+docs {
+  The question this whole surface is built to answer: a pupil asks about prime
+  factorisation, and this turns that syllabus point into the pages that teach
+  it.
+
+  retrieval_state is not_indexed here, and that is the truth today rather than
+  a defect. Indexing sits behind RETRIEVAL_INDEX_ENABLED, which is off, so
+  publishing the textbook in folder 10 catalogued it and never sent it to the
+  retrieval engine. Turn the flag on, publish, let the engine ingest, and the
+  same request answers current. Do not read this assert as a bug report, and do
+  not change it to current until the flag is on.
+
+  The five states are separate answers on purpose, because the fix differs:
+
+  not_indexed     mapped, published, never sent to the engine
+  stale           indexed, but the asset has been replaced since
+  current         indexed and the digest still matches
+  unpublished     mapped, but the item is a draft, so nothing may read it
+  source_deleted  the asset behind it is gone
+
+  resolution is the same judgement for the node as a whole: resolved if
+  anything is searchable, unindexed, unpublished or source_deleted if the only
+  reason nothing is, unmapped if no placement exists at all, and restricted if
+  placements exist but this caller may read none of the content behind them.
+  restricted and unmapped are deliberately different: "there is nothing" and
+  "there is something you may not see" are not the same answer, and a client
+  that shows them the same way teaches pupils to stop asking.
+
+  Only confirmed placements count by default. The whole-book placement from
+  request 2 is still proposed, so it is not here.
+}

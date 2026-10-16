@@ -1,0 +1,46 @@
+services:
+  # The CP-SAT timetable solver. Stateless: no database, no volume, no secret
+  # beyond its own bearer token. It joins emerge-db_default only so that the
+  # emerge-core container can reach it by name; it never opens a connection to
+  # anything on that network.
+  #
+  # The published port is loopback-only and exists for `curl /healthz` on the
+  # box. emerge-core does not use it -- TIMETABLE_SOLVER_BASE_URL should be
+  # http://timetable-solver:8099, which stays inside the bridge.
+  timetable-solver:
+    image: emerge-timetable-solver:${TIMETABLE_SOLVER_TAG:-latest}
+    container_name: timetable-solver
+    restart: unless-stopped
+    environment:
+      TIMETABLE_SOLVER_TOKEN: ${TIMETABLE_SOLVER_TOKEN:?set TIMETABLE_SOLVER_TOKEN in .env}
+      TIMETABLE_SOLVER_BIND: 0.0.0.0
+      TIMETABLE_SOLVER_PORT: 8099
+      TIMETABLE_SOLVER_CONCURRENCY: ${TIMETABLE_SOLVER_CONCURRENCY:-2}
+      TIMETABLE_SOLVER_LOG_LEVEL: ${TIMETABLE_SOLVER_LOG_LEVEL:-INFO}
+    ports:
+      - "127.0.0.1:${TIMETABLE_SOLVER_PORT:-8099}:8099"
+    networks:
+      - emerge-db
+    # A solve is CPU-bound across its workers and bursty. Capping it keeps one
+    # school's week from starving the API container beside it on the same box.
+    deploy:
+      resources:
+        limits:
+          cpus: "${TIMETABLE_SOLVER_CPUS:-4}"
+          memory: ${TIMETABLE_SOLVER_MEMORY:-2g}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8099/healthz', timeout=2).status == 200 else 1)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+networks:
+  emerge-db:
+    external: true
+    name: emerge-db_default

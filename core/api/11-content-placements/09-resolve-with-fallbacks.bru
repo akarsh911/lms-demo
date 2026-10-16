@@ -1,0 +1,48 @@
+meta {
+  name: Resolve including proposals and ancestors
+  type: http
+  seq: 9
+}
+
+get {
+  url: {{baseUrl}}/api/v1/curriculum-nodes/{{curriculumTopicId}}/content?include_proposed=true&include_ancestors=true
+  body: none
+  auth: inherit
+}
+
+headers {
+  X-School-Id: {{schoolCode}}
+}
+
+assert {
+  res.status: eq 200
+  res.body.count: eq 2
+  res.body.include_proposed: eq true
+  res.body.include_ancestors: eq true
+  res.body.counts.placements: eq 2
+  res.body.counts.exact: eq 1
+  res.body.counts.readable: eq 2
+}
+
+docs {
+  The same topic, asked with both fallbacks on, which is what a review screen
+  wants rather than what a pupil's question should get.
+
+  include_ancestors walks up the tree from this topic to its unit and on to the
+  curriculum, and adds the curriculum-grain placements alongside. That is how a
+  topic nobody mapped still finds the book its syllabus was taught from.
+
+  include_proposed adds mappings nobody has agreed with yet. Useful when
+  checking an import, wrong for answering a pupil: a guess presented as an
+  answer is worse than no answer.
+
+  exact tells the two apart in the result. One row here is exact -- it names
+  this very node -- and the other came from the curriculum-grain fallback.
+  Counting exact separately is what lets a client say "from your syllabus
+  point" instead of "from somewhere in this subject".
+
+  A node carrying more than 500 placements is refused with 409
+  placements_unbounded rather than truncated. A truncated list would search a
+  subset of the mapped content without saying so, and the caller would have no
+  way to tell a thin answer from a complete one.
+}

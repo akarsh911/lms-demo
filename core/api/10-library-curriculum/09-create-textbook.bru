@@ -1,0 +1,61 @@
+meta {
+  name: Create textbook
+  type: http
+  seq: 9
+}
+
+post {
+  url: {{baseUrl}}/api/v1/library
+  body: json
+  auth: inherit
+}
+
+headers {
+  X-School-Id: {{schoolCode}}
+}
+
+body:json {
+  {
+    "kind": "book",
+    "title": "NCERT Mathematics, Class 6",
+    "description": "The prescribed textbook for the year.",
+    "audience": "grade",
+    "grade_level_id": "{{gradeLevelId}}",
+    "subject_id": "{{subjectId}}",
+    "asset_id": "{{assetId}}",
+    "language": "en",
+    "author": "NCERT",
+    "publisher": "NCERT",
+    "isbn": "9788174504937"
+  }
+}
+
+assert {
+  res.status: eq 201
+  res.body.kind: eq book
+  res.body.audience: eq grade
+  res.body.status: eq draft
+  res.body.owner_person_id: eq {{callerPersonId}}
+}
+
+script:post-response {
+  bru.setEnvVar("libraryItemId", res.body.id);
+}
+
+docs {
+  audience is the whole access story for a content item, and it is checked two
+  ways. The audience names which anchor must be present -- grade needs
+  grade_level_id, section needs section_id, offering needs subject_offering_id,
+  owner and school need none -- and sending an anchor the audience does not use
+  is a 400, not an ignored field. An item anchored to a section while claiming
+  to be school-wide would be readable by everyone and filterable by nobody.
+
+  Then the anchor is checked against what the caller may publish to. A teacher
+  can put something in front of the sections and offerings they teach; making
+  it visible to a whole grade they do not teach is 403. The collection runs as
+  an unrestricted caller, so it never sees that refusal -- it needs a real
+  teacher token, the same gap the README describes for row-level narrowing.
+
+  Items are born draft. Nothing reads a draft but its owner, which is what
+  makes request 14 a decision rather than a formality.
+}

@@ -1,0 +1,43 @@
+meta {
+  name: Publish textbook
+  type: http
+  seq: 14
+}
+
+patch {
+  url: {{baseUrl}}/api/v1/library/{{libraryItemId}}
+  body: json
+  auth: inherit
+}
+
+headers {
+  X-School-Id: {{schoolCode}}
+}
+
+body:json {
+  {
+    "status": "published",
+    "description": "The prescribed textbook for the year. Chapters 1 to 14."
+  }
+}
+
+assert {
+  res.status: eq 200
+  res.body.status: eq published
+  res.body.index_status: eq none
+}
+
+docs {
+  Publishing is what makes an item visible to its audience, and it is the point
+  where the item would be handed to the retrieval engine. It is not, here:
+  RETRIEVAL_INDEX_ENABLED is off, so the item is catalogued and never
+  submitted. index_status stays none, which is why folder 11 resolves this
+  book to not_indexed. Turn the flag on and the same publish marks it pending
+  and queues the asset for extraction.
+
+  The audience anchors are re-checked on every write, not only on create. A
+  patch that moves an item to an audience the caller cannot publish to is 403,
+  and a patch that changes audience without supplying the new anchor is 400 --
+  the old anchor is dropped rather than carried across, so an item cannot end
+  up claiming to be section-wide while pointing at a grade.
+}

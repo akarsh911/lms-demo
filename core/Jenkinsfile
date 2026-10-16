@@ -1,0 +1,59 @@
+emergeDeploy(
+  name: 'emerge-core',
+  deployDir: '/opt/emerge/core',
+  srcMode: 'overlay',
+  deployScript: 'src/deploy/deploy.sh',
+  tests: [
+    [type: 'go', version: '1.25', label: 'build, vet, gofmt',
+     run: '''
+go build ./...
+go vet ./...
+unformatted=$(gofmt -l cmd internal pkg)
+if [ -n "$unformatted" ]; then
+  echo "these files are not gofmt-clean:"
+  echo "$unformatted"
+  exit 1
+fi
+echo "gofmt is clean"
+'''],
+    [type: 'python', version: '3.12', label: 'no comments in Go source',
+     run: 'python3 scripts/nocomments.py cmd internal pkg'],
+    [type: 'go', version: '1.25', postgres: ['16', '16'], label: 'go test with databases',
+     env: [
+       APP_ENV: 'test',
+       CONTROL_DATABASE_URL: 'postgres://ci:ci@pg0:5432/ci?sslmode=disable',
+       TENANT_DSN: 'postgres://ci:ci@pg1:5432/ci?sslmode=disable',
+       TEST_SCHOOL_CODE: 'DPS-NGP',
+       TEST_REQUIRE_TENANT_DB: '1',
+       AUTH_DISABLED: 'true'
+     ],
+     run: '''
+export SECRETS_MASTER_KEY="1:$(openssl rand -hex 32)"
+seed_args=(-school-name "CI School" -school-code "$TEST_SCHOOL_CODE" -tenant-dsn "$TENANT_DSN")
+seed_args+=(-admin-cas-user-id 11111111-1111-4111-8111-111111111111)
+seed_args+=(-admin-first-name CI -admin-last-name Bot -admin-email ci@example.com)
+seed_school() { go run ./cmd/seed "${seed_args[@]}"; }
+go run ./cmd/migrate apply -plane control
+seed_school || echo "first seed pass stopped short as expected: the tenant has no tables yet"
+go run ./cmd/migrate apply -plane tenant
+seed_school
+go run ./cmd/seeddemo -school "$TEST_SCHOOL_CODE" -classes 2 -sections 2 -teachers 4 -students 20 -no-guardian 1
+go test -v -count=1 ./... 2>&1 | tee gotest.log
+skipped=$(grep -c -- '--- SKIP' gotest.log || true)
+echo "$skipped test(s) skipped"
+if [ "$skipped" != "0" ]; then
+  grep -B1 -- '--- SKIP' gotest.log || true
+fi
+go test -race -v -count=1 ./... 2>&1 | tee race.log
+if grep -n 'TENANT-DB-TEST-SKIPPED' race.log; then
+  echo "A database-backed test skipped instead of running under -race."
+  exit 1
+fi
+echo "no database-backed test was skipped under -race"
+''',
+     mustNotMatch: 'TENANT-DB-TEST-SKIPPED', log: 'gotest.log']
+  ],
+  health: [url: 'http://127.0.0.1:8077/health', timeout: 180],
+  ports: [8077],
+  imageKeep: ['emerge-core:rollback']
+)

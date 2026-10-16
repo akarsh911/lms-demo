@@ -1,0 +1,67 @@
+meta {
+  name: Create asset
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{baseUrl}}/api/v1/library/assets
+  body: json
+  auth: inherit
+}
+
+headers {
+  X-School-Id: {{schoolCode}}
+}
+
+body:json {
+  {
+    "file_name": "ncert-maths-6.pdf",
+    "mime_type": "application/pdf",
+    "size_bytes": 482913,
+    "sha256": "c3e8a0ff6971d17b440b40e15be0724c75c90ab7bf0fa9dee6eefdf904d95646"
+  }
+}
+
+assert {
+  res.status: eq 201
+  res.body.status: eq pending
+  res.body.storage_key: isDefined
+  res.body.upload_url: isDefined
+  res.body.upload_headers: isDefined
+}
+
+script:post-response {
+  bru.setEnvVar("assetId", res.body.id);
+  bru.setEnvVar("assetUploadUrl", res.body.upload_url);
+}
+
+docs {
+  An upload is two steps and Bruno can only do the first one.
+
+  This request records the asset and hands back a presigned PUT. The signature
+  binds three headers -- content-length, content-type and
+  x-amz-checksum-sha256 -- so the URL alone is not enough: a client that PUTs
+  without repeating upload_headers exactly is refused by the store. Real S3 says
+  SignatureDoesNotMatch; MinIO says 400 AccessDenied, "There were headers present
+  in the request which were not signed" - different wording, same cause,
+  not a helpful error from us. Note that the checksum in those headers is the
+  digest base64 encoded, while the sha256 sent above is hex; sending the hex
+  form in the header is the usual way to fail this.
+
+  storage_key, status and the digest are the server's to choose. Supplying
+  storage_key or status is refused with 422 rather than ignored, because an
+  asset whose key the caller picked is an asset the caller can point at
+  somebody else's bytes.
+
+  The bytes themselves, with curl:
+
+  curl -X PUT --upload-file ncert-maths-6.pdf \
+    -H "content-type: application/pdf" \
+    -H "content-length: 482913" \
+    -H "x-amz-checksum-sha256: <upload_headers value>" \
+    "<upload_url>"
+
+  The link lasts 15 minutes. Nothing here uploads anything, so requests 5 and 6
+  fail on purpose and say so.
+}

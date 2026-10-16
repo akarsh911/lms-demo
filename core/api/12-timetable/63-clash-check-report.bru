@@ -1,0 +1,63 @@
+meta {
+  name: Ask before you move
+  type: http
+  seq: 63
+}
+
+post {
+  url: {{baseUrl}}/api/v1/timetables/{{timetableId}}/clash-check
+  body: json
+  auth: inherit
+}
+
+headers {
+  X-School-Id: {{schoolCode}}
+}
+
+body:json {
+  {
+    "rules": ["teacher", "room", "student_set"],
+    "proposed": [
+      {
+        "ref": "maths-to-period-2",
+        "replaces_timetable_slot_id": "{{slotId}}",
+        "section_id": "{{sectionId}}",
+        "period_id": "{{periodTwoId}}",
+        "day_of_week": 1,
+        "subject_offering_id": "{{offeringId}}",
+        "teacher_id": "{{teacherId}}",
+        "room_id": "{{labRoomId}}"
+      }
+    ]
+  }
+}
+
+assert {
+  res.status: eq 200
+  res.body.clear: eq false
+  res.body.count: eq 1
+  res.body.clashes[0].rule: eq room
+  res.body.clashes[0].right.ref: eq maths-to-period-2
+}
+
+docs {
+  200, NOT 409. This is a report, not a refusal - it is what a timetabling
+  screen calls while someone drags a class around, and answering 409 would
+  make every honest question look like an error in the network tab.
+
+  ref is yours: it comes back on the clashing side so a batch of proposals can
+  be matched up to the rows on screen. replaces_timetable_slot_id excludes the
+  slot being moved from the comparison, which is why moving maths onto its own
+  period is not reported as colliding with itself.
+
+  The one clash is on room: French already has the laboratory in period 2.
+  Neither the teacher nor the student set collides, because French has nobody
+  assigned to teach it and nobody actively enrolled in it by this point in the
+  run - which is worth noticing, because it means a question that looks like
+  it should clash three ways clashes once.
+
+  from and to must be given together and turn on date-scoped checking, which
+  walks the calendar and catches collisions that only deviations create.
+  Without them only the weekly pattern is compared and dates_checked is null.
+  At most 100 proposals in one call.
+}

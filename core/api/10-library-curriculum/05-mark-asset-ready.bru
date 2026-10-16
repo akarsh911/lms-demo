@@ -1,0 +1,47 @@
+meta {
+  name: Mark asset ready with nothing uploaded
+  type: http
+  seq: 5
+}
+
+post {
+  url: {{baseUrl}}/api/v1/library/assets/{{assetId}}/ready
+  body: none
+  auth: inherit
+}
+
+headers {
+  X-School-Id: {{schoolCode}}
+}
+
+assert {
+  res.status: eq 409
+  res.body.code: eq asset_object_missing
+}
+
+docs {
+  This is the second half of the upload, and it fails here on purpose.
+
+  Bruno cannot perform the signed PUT from request 2, so no object exists.
+  Rather than trust the caller's word that the upload happened, the API HEADs
+  the object and refuses: 409 asset_object_missing, "nothing has been uploaded
+  for this asset yet". Read the assert as the documented outcome of skipping
+  the upload, not as a bug.
+
+  Upload the bytes first and the same request returns 200 with status ready.
+  Three other refusals live on this path, each with its own code, and all of
+  them are the store disagreeing with what the asset row claims:
+
+  asset_size_mismatch     the object is not size_bytes long
+  asset_digest_mismatch   the object does not carry the recorded sha256
+  asset_digest_unavailable  the bucket has sha256 checksums turned off, so the
+                          bytes cannot be verified at all -- a 503, because
+                          that is an operator's problem and not the caller's
+
+  Calling this twice on an asset that is already ready is a 200, not a
+  conflict. Calling it on a deleted asset is 409 asset_deleted.
+
+  With no object store configured for the school there is no HEAD to make and
+  no asset to make it against: this answers 503 rather than 409, because
+  request 2 never created a row. See the folder docs.
+}

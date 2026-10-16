@@ -1,0 +1,51 @@
+meta {
+  name: A filter cannot widen
+  type: http
+  seq: 9
+}
+
+get {
+  url: {{baseUrl}}/api/v1/student-documents?student_id=44444444-4444-4444-8444-444444444444
+  body: none
+  auth: inherit
+}
+
+headers {
+  X-School-Id: {{schoolCode}}
+}
+
+assert {
+  res.status: eq 200
+  res.body.count: eq 0
+  res.body.student_documents: length 0
+  res.body.page.limit: eq 50
+  res.body.page.offset: eq 0
+  res.body.page.has_more: eq false
+}
+
+docs {
+  Naming a pupil in student_id does not ask the API to fetch that pupil. The
+  filter is ANDed onto a query that has already been narrowed to who the
+  caller may see, so the most a filter can ever do is subtract. Here it
+  subtracts everything and the answer is an empty list.
+
+  200 with nothing in it, not 400 and not 403. The three cases -- no such
+  pupil, a pupil with no documents, and a pupil this caller has no claim to --
+  are deliberately indistinguishable from the outside. Telling them apart is
+  what would turn this parameter into a way of probing the roll.
+
+  What this request does NOT test. The collection runs as one unrestricted
+  caller, and for such a caller the narrowing predicate is a no-op: there is
+  nothing underneath the filter to AND onto. So the empty list above is the
+  filter subtracting from everything, and it proves the filter cannot widen.
+  It says nothing whatever about whether the scoping works, because no scoping
+  was in play. A green run here is not evidence that a guardian is confined to
+  their own children.
+
+  Testing that needs a caller who is actually narrowed -- a real CAS token for
+  a guardian, a class teacher, a subject teacher -- which this collection
+  cannot mint. api/README.md says the same thing about the run as a whole. The
+  narrowing itself is covered in Go, in
+  internal/transport/http/documentscope_test.go and guardianacademic_test.go,
+  and that is where to look for the proof this request cannot give.
+}

@@ -1,0 +1,63 @@
+meta {
+  name: What this caller may do
+  type: http
+  seq: 6
+}
+
+get {
+  url: {{baseUrl}}/api/v1/capabilities
+  body: none
+  auth: inherit
+}
+
+headers {
+  X-School-Id: {{schoolCode}}
+}
+
+assert {
+  res.status: eq 200
+  res.body.service: eq core
+  res.body.count: gte 1
+  res.body.capabilities: isArray
+  res.body.capabilities[0].key: isDefined
+  res.body.capabilities[0].area: isDefined
+  res.body.capabilities[0].action: isDefined
+  res.body.capabilities[0].breadth: isDefined
+  res.body.capabilities[0].fields.all: isDefined
+}
+
+docs {
+  The other half of this folder's question. Every other request here asks what
+  a caller can see by asking for rows and counting what comes back; this one
+  asks the authorization layer directly, and it is what a client reads at
+  startup to decide which buttons to draw.
+
+  It is a tenant-plane route despite having nothing tenant-shaped in it.
+  Without X-School-Id it is 400, not 401, because capabilities are answered
+  per school - the same person is an office clerk at one branch's school and a
+  parent at another.
+
+  The count is not a fixed number. It is every entity in the authorization
+  catalogue this caller holds, so it grows whenever a capability is added to
+  the catalogue - which is why nothing here asserts on it beyond being
+  non-empty. On a stock checkout with the development subject it came back
+  130.
+
+  WHAT THIS CANNOT TELL YOU UNDER THIS COLLECTION'S USUAL SETUP. With
+  CAS_BASE_URL empty the guard is allow-all, so every entity is held, `reach`
+  is absent from every entry and `breadth` is only ever school_wide or
+  not_applicable. Nothing is narrowed, so the interesting part of the answer -
+  which grants are section-scoped, which are pinned to particular rows -
+  cannot appear. Point the API at real CAS and the same request is the fastest
+  way to see what a token actually carries.
+
+  breadth is derived, not stored: an action ending _all is school_wide, an
+  action whose _all counterpart is also held is narrowed, and one with no _all
+  counterpart in the catalogue at all is not_applicable. That last case is
+  real and easy to misread - core.calendar.read has no core.calendar.read_all,
+  so it reports not_applicable rather than school_wide, while
+  core.timetable.read alongside core.timetable.read_all does not.
+
+  row_pinned says the grant carries row constraints; fields says which columns
+  survive projection, with all true meaning no column was withheld.
+}

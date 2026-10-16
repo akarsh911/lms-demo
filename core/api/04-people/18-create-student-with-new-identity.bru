@@ -1,0 +1,82 @@
+meta {
+  name: Create student with a new identity [outcome unverified]
+  type: http
+  seq: 18
+}
+
+post {
+  url: {{baseUrl}}/api/v1/students
+  body: json
+  auth: inherit
+}
+
+headers {
+  X-School-Id: {{schoolCode}}
+}
+
+body:json {
+  {
+    "person": {
+      "username": "ishaan.verma",
+      "email": "ishaan.verma@example.com",
+      "first_name": "Ishaan",
+      "last_name": "Verma",
+      "display_name": "Ishaan Verma",
+      "group_keys": ["students"]
+    },
+    "admission_number": "ADM-2026-0002",
+    "admission_date": "2026-04-01"
+  }
+}
+
+tests {
+  // Same reasoning as request 14, which this shares its CAS call with: no
+  // status assert, because none of us has seen the answer. The 201 arm is the
+  // one that needs acting on, not just recording - it leaves two rows behind
+  // that folder 12 does not delete.
+  const explained = [201, 501, 502];
+  const meaning = {
+    201: "a student AND a person now exist. Save their ids, delete them by hand, and add the two deletes to folder 12 before anyone runs this again.",
+    501: "provisioning refused before CAS was called. Nothing was created.",
+    502: "CAS was called and answered badly. Nothing was created here, but check CAS for a half-made identity.",
+    401: "you ran without a token, so this request says nothing about provisioning either way."
+  };
+
+  test("inline provisioning answers something we can account for", function () {
+    const status = res.getStatus();
+    console.log("POST /students with an inline person returned " + status + " - " +
+      (meaning[status] || "an outcome none of us predicted; work out why before changing this test"));
+    if (status === 201) {
+      console.log("  student_id=" + res.body.id + " person_id=" + res.body.person_id + " - these are NOT cleaned up");
+    }
+    expect(explained).to.include(status);
+  });
+}
+
+docs {
+  UNVERIFIED. Read the tests block before you trust anything here.
+
+  This is the interesting shape on this surface: send person_id for someone who
+  already exists, or send a person object and the CAS identity is minted as
+  part of creating the student. The same option exists on POST /staff and
+  POST /guardians. One capability covers both paths - core.students.create here,
+  core.staff.write and core.guardians.create for the other two - so whoever may
+  admit a student may also, by that fact, cause a login to exist for them.
+
+  The outcome is open for exactly the reason request 14's is: this goes through
+  the same provisioner, so it answers 201, 502 or 501 under the same conditions,
+  and 13 spells out which is which. What differs is the cost of being wrong.
+
+  If this returns 201 it creates a student and a person that folder 12 knows
+  nothing about - it deletes by the ids saved in requests 02 to 09, and these
+  two are not among them. That gap is deliberate: a delete for rows that cannot
+  currently exist is dead weight that looks like coverage. Whoever makes
+  provisioning work owns adding the two deletes, and will find this note in the
+  request that caused the problem.
+
+  A re-run after a 201 is the second trap: admission_number is unique per
+  school, so ADM-2026-0002 comes back 409 until the leftover row is gone.
+
+  The inline object is only accepted when creating. PATCH with it and you get a
+  400 - request 19.
+}

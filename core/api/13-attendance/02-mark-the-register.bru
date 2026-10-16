@@ -1,0 +1,62 @@
+meta {
+  name: Mark the register
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{baseUrl}}/api/v1/attendance/register
+  body: json
+  auth: inherit
+}
+
+headers {
+  X-School-Id: {{schoolCode}}
+}
+
+body:json {
+  {
+    "subject_offering_id": "{{offeringId}}",
+    "period_id": "{{periodOneId}}",
+    "attendance_date": "2026-11-02",
+    "source": "manual",
+    "entries": [
+      {
+        "student_id": "{{studentId}}",
+        "status": "present"
+      }
+    ]
+  }
+}
+
+assert {
+  res.status: eq 200
+  res.body.created: eq 1
+  res.body.updated: eq 0
+  res.body.count: eq 1
+  res.body.marks[0].status: eq present
+  res.body.marks[0].timetable_slot_id: eq {{slotId}}
+}
+
+script:post-response {
+  bru.setEnvVar("markId", res.body.marks[0].id);
+}
+
+docs {
+  200, NOT 201, and it is deliberate. A register is not a resource being
+  created; it is a whole class's marks being asserted, some new and some
+  replaced, and the created and updated counts are the answer. There is no
+  Location header because there is nothing single to point at.
+
+  timetable_slot_id in the response was never sent. It, and teacher_id, are
+  resolved from the occurrence standing on 2 November, which is what ties the
+  mark to the class that was actually taught rather than to the class that
+  was planned.
+
+  source is manual, import or device, and defaults to manual. It is the field
+  a biometric feed or a spreadsheet import sets so a later correction can tell
+  a machine's guess from a teacher's judgement.
+
+  The whole register is one transaction: if any entry cannot be reached, none
+  of them is written. At most 400 entries.
+}

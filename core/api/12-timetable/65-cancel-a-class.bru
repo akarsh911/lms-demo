@@ -1,0 +1,46 @@
+meta {
+  name: Cancel a class
+  type: http
+  seq: 65
+}
+
+post {
+  url: {{baseUrl}}/api/v1/timetable-deviations
+  body: json
+  auth: inherit
+}
+
+headers {
+  X-School-Id: {{schoolCode}}
+}
+
+body:json {
+  {
+    "timetable_slot_id": "{{slotId}}",
+    "deviation_date": "2026-11-09",
+    "kind": "cancelled",
+    "reason": "Teacher on examination duty; no substitute available."
+  }
+}
+
+assert {
+  res.status: eq 201
+  res.body.kind: eq cancelled
+  res.body.section_id: eq {{sectionId}}
+  res.body.period_id: eq {{periodOneId}}
+}
+
+script:post-response {
+  bru.setEnvVar("cancelledDeviationId", res.body.id);
+}
+
+docs {
+  section_id and period_id come back filled in although they were not sent:
+  when a deviation names a slot they are copied from it, and sending them is
+  refused 422 so the copy can never disagree with the slot.
+
+  A cancellation does not delete anything. The slot still exists, the weekly
+  pattern is untouched, and only 9 November is different - which is what lets
+  folder 13 answer attendance_class_cancelled instead of pretending the class
+  was never timetabled.
+}

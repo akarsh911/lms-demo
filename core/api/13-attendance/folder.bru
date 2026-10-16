@@ -1,0 +1,40 @@
+meta {
+  name: Marking who was there
+  seq: 13
+}
+
+docs {
+  Attendance is kept twice over and the two are not derived from each other. A
+  period mark says a pupil was in that class in that period; a day mark says
+  the pupil was in school that forenoon or afternoon. Schools need both - one
+  for the subject teacher's record and the truancy that hides inside a full
+  day, one for the roll the office reports upwards - and neither is computed
+  from the other, so a pupil can be present all day and absent from third
+  period without any contradiction to resolve.
+
+  The natural key of a period mark is (student_id, attendance_date,
+  period_id). SUBJECT OFFERING IS NOT IN IT. One pupil is in one place in one
+  period, so submitting the same register twice is an idempotent upsert on
+  that key rather than a duplicate, and the create/update counts in the
+  response say which happened. It also means marking the same pupil for the
+  same period under two different offerings overwrites rather than accumulates
+  - which is correct, and is the reason the clash rules exist.
+
+  Four fields are the server's, not yours: timetable_slot_id and teacher_id
+  are resolved from the occurrence that stands on the day, and marked_by and
+  marked_at come from the caller and the clock. Sending any of them is 400,
+  because unknown fields are refused outright. That resolution is also why a
+  register cannot be taken against a class that is not timetabled - there
+  would be no slot to record.
+
+  Every refusal that is about the school day rather than the request is 422
+  with a code in the message: attendance_not_in_session,
+  attendance_not_scheduled, attendance_class_cancelled,
+  attendance_not_enrolled. A mark the caller cannot reach is 404, never 403,
+  so a grant's reach cannot be used to prove a mark exists.
+
+  The second half of this folder tears down folder 12. Every timetable row
+  above is a precondition of something here, so it could not be deleted there;
+  and it has to go before folder 14 deletes the section, the offering and the
+  pupil underneath it.
+}

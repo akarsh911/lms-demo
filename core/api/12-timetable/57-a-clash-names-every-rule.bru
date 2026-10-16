@@ -1,0 +1,63 @@
+meta {
+  name: A clash names every rule it broke
+  type: http
+  seq: 57
+}
+
+post {
+  url: {{baseUrl}}/api/v1/timetables/{{timetableId}}/slots
+  body: json
+  auth: inherit
+}
+
+headers {
+  X-School-Id: {{schoolCode}}
+}
+
+body:json {
+  {
+    "section_id": "{{sectionId}}",
+    "period_id": "{{periodOneId}}",
+    "day_of_week": 1,
+    "label": "Supervised study",
+    "teacher_id": "{{teacherId}}"
+  }
+}
+
+assert {
+  res.status: eq 409
+  res.body.code: eq timetable_clash
+  res.body.count: eq 2
+  res.body.clashes[0].rule: eq student_set
+  res.body.clashes[1].rule: eq teacher
+}
+
+docs {
+  409 with code timetable_clash and both parties named: the existing slot
+  under "left", the rejected proposal under "right", with the rule and the
+  scope that caught it. scope is "pattern" when two weekly slots collide and
+  "date" when a deviation puts them on the same day.
+
+  TWO clashes come back, not one. Every rule the proposal breaks is reported
+  separately against the same pair of slots, because a screen that fixed the
+  teacher and resubmitted would otherwise be told about the second problem
+  only on the second attempt. They arrive sorted by scope, then date, then
+  weekday, then rule name alphabetically - room, student_set, teacher - which
+  is why student_set is first here and not teacher.
+
+  The student_set clash is the interesting one, and it is not obvious. This
+  proposal has no subject offering, only a label, and a slot with no offering
+  is taken to mean THE WHOLE SECTION: its student set is the section's active
+  enrolments rather than an offering's. So supervised study in the same period
+  as maths collides with every pupil timetabled into maths. That is what makes
+  assembly, games and study hall safe to timetable with a label - they are
+  refused against anything the section is already doing.
+
+  THERE IS NO ?force= AND NO OVERRIDE HEADER. A clash cannot be written by any
+  caller at any reach. The escape hatch is a deviation on the day, which is a
+  different row with a reason on it, rather than a plan that quietly lies
+  about where a teacher is.
+
+  No row is written. The three rules are teacher, room and student_set, all on
+  by default.
+}
