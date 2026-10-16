@@ -1,0 +1,122 @@
+syntax = "proto3";
+
+package cas.v1;
+
+option go_package = "github.com/mentis/cas/internal/pb/casv1;casv1";
+
+// Group membership, for the domain service that owns the business objects
+// groups mirror.
+//
+// The sync pattern this serves (architecture doc §24.2): Emerge creates a class,
+// then asks CAS to create or link the corresponding group and stores the
+// returned id. Emerge owns the class; CAS owns the authorization boundary; the
+// id is the join between them.
+//
+// Read and membership only. Creating, nesting and deleting groups stay on the
+// HTTP admin surface, because those are administrative acts with scope checks,
+// audit rows and an epoch bump, and duplicating that machinery across two
+// transports is how the two grow different rules about who may do what.
+service GroupService {
+  // GetGroup resolves a group by CAS id or by stable key.
+  rpc GetGroup(GetGroupRequest) returns (GetGroupResponse);
+
+  // EnsureGroup creates a group if it does not exist and returns it either way.
+  //
+  // Idempotent by KEY, which is what makes it safe for a domain service to call
+  // on every class creation without first checking: a lost response is retried
+  // and returns the same group rather than making a second one.
+  rpc EnsureGroup(EnsureGroupRequest) returns (EnsureGroupResponse);
+
+  // SetMembership adds and removes users in one call.
+  //
+  // Removals apply before additions, so a partial failure leaves a SUBSET of the
+  // intended membership rather than a superset — an under-grant is loud (someone
+  // reports a 403) where an over-grant is silent.
+  rpc SetMembership(SetMembershipRequest) returns (SetMembershipResponse);
+
+  // ListMembers returns the direct members of a group.
+  rpc ListMembers(ListMembersRequest) returns (ListMembersResponse);
+}
+
+message GetGroupResponse {
+  Group group = 1;
+}
+
+message EnsureGroupResponse {
+  Group group = 1;
+  // True when this call created the group rather than finding it. Lets a caller
+  // log a provisioning event exactly once across retries.
+  bool created = 2;
+}
+
+message Group {
+  string id = 1;
+  string key = 2;
+  string name = 3;
+  bool is_system = 4;
+  // The tenant tag, present only on a tagged root and inherited below it.
+  string tenant_id = 5;
+  // What this group is FOR — see architecture doc open question 36.
+  GroupType type = 6;
+}
+
+// GroupType distinguishes the two things a group is used for. Both are legal on
+// one group; the type records intent so a console can present them differently
+// and an operator can tell an org chart from a marketing audience.
+enum GroupType {
+  GROUP_TYPE_UNSPECIFIED = 0;
+  // A stable organisational boundary: school, grade, class.
+  GROUP_TYPE_ORGANIZATIONAL = 1;
+  // An audience assembled to receive an entitlement — a pilot cohort, a
+  // subscription tier. Expected to churn.
+  GROUP_TYPE_AUDIENCE = 2;
+}
+
+message GetGroupRequest {
+  // Exactly one of id or key.
+  string id = 1;
+  string key = 2;
+}
+
+message EnsureGroupRequest {
+  // The stable key this group is identified by. Required: it is what makes the
+  // call idempotent, and a group created without one could not be found again.
+  string key = 1;
+  string name = 2;
+  // Optional parent, by CAS id or key. Applied only when the group is CREATED —
+  // re-parenting an existing group is an administrative act with its own scope
+  // checks, not a side effect of a sync call.
+  string parent_id = 3;
+  string parent_key = 4;
+  GroupType type = 5;
+}
+
+message SetMembershipRequest {
+  string group_id = 1;
+  string group_key = 2;
+  repeated string add_user_ids = 3;
+  repeated string remove_user_ids = 4;
+}
+
+message SetMembershipResponse {
+  int32 added = 1;
+  int32 removed = 2;
+  // Members after the change, so a caller sees the result rather than inferring
+  // it from counts.
+  int32 member_count = 3;
+}
+
+message ListMembersRequest {
+  string group_id = 1;
+  string group_key = 2;
+}
+
+message ListMembersResponse {
+  repeated Member members = 1;
+}
+
+message Member {
+  string user_id = 1;
+  string username = 2;
+  string status = 3;
+}

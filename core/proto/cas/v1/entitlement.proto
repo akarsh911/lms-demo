@@ -1,0 +1,55 @@
+syntax = "proto3";
+
+package cas.v1;
+
+option go_package = "github.com/mentis/cas/internal/pb/casv1;casv1";
+
+// Feature entitlement: is a capability offered to this user, here.
+//
+// Separate from AuthorizationService because the two answer different questions
+// and one is not a substitute for the other. A feature key is a VISIBILITY key:
+// it decides what an interface offers. It authorizes nothing, and a backend that
+// gates on one has no authorization at all — that is what Check is for.
+//
+// Kept as its own service rather than bolted onto AuthorizationService so a
+// caller cannot reach for the cheap answer when it needs the real one.
+service EntitlementService {
+  // EvaluateFeatures answers several keys against one resolution.
+  //
+  // Only the plural form exists. The singular would be the one everybody
+  // reaches for in a loop, and the whole saving here is that the grant read and
+  // the scope closures are per USER rather than per feature.
+  rpc EvaluateFeatures(EvaluateFeaturesRequest) returns (EvaluateFeaturesResponse);
+}
+
+message EvaluateFeaturesRequest {
+  // The end user's access token. CAS verifies it.
+  string token = 1;
+  string audience = 2;
+  repeated string features = 3;
+  // Where the request is happening: group keys or ids, typically the class or
+  // grade the resource belongs to. The caller resolves this from its own data —
+  // CAS knows which groups exist, the domain service knows which one a given
+  // chapter is in.
+  //
+  // Empty means "nowhere in particular", and a scoped entitlement answers OFF to
+  // that: a scope that turns on when nobody says where is decorative.
+  repeated string context = 4;
+}
+
+message EvaluateFeaturesResponse {
+  repeated FeatureDecision decisions = 1;
+  int64 policy_epoch = 2;
+}
+
+message FeatureDecision {
+  string feature = 1;
+  bool enabled = 2;
+  // Stable and machine-readable: unscoped_grant, scope_match, out_of_scope,
+  // no_grant, retired, kill_switch, scoped_grant_needs_context. Worth surfacing
+  // to support staff — "out_of_scope" and "no_grant" look identical to a user
+  // and mean entirely different things to whoever has to explain it.
+  string reason = 3;
+  // The context value that satisfied a scoped grant, when one did.
+  string matched_scope = 4;
+}

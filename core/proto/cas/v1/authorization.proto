@@ -1,0 +1,112 @@
+syntax = "proto3";
+
+package cas.v1;
+
+option go_package = "github.com/mentis/cas/internal/pb/casv1;casv1";
+
+// The policy contract, versioned so a v2 can exist beside it.
+//
+// CAS is not a decision point for anybody but itself. It resolves who a caller
+// is and what policies they hold; the calling service applies those policies to
+// its own data. That is why there is no Check here: a Check would be CAS
+// answering a question about a request it never sees, which is the mistake this
+// contract exists to avoid.
+//
+// A TRANSPORT for the same resolver the HTTP endpoints use, never a second one,
+// so the two cannot answer differently.
+
+service PolicyService {
+  // GetPolicies returns everything a caller may see, grouped by entity.
+  rpc GetPolicies(GetPoliciesRequest) returns (GetPoliciesResponse);
+
+  // ResolveIdentity returns who the caller is, without their policies.
+  rpc ResolveIdentity(ResolveIdentityRequest) returns (ResolveIdentityResponse);
+}
+
+message GetPoliciesRequest {
+  // The end user's access token. CAS verifies it, so the caller need not — and
+  // must not be trusted to have done so.
+  string token = 1;
+  // The audience the CALLING service expects the token to name. Empty accepts
+  // any audience the estate serves.
+  string audience = 2;
+  // Return only entities under these services. Empty returns everything, which
+  // is what a gateway wants and a single service usually does not.
+  repeated string services = 3;
+}
+
+message GetPoliciesResponse {
+  repeated EntityPolicies entities = 1;
+  // The policy version this set was read at. A service caching a set should
+  // revalidate when the epoch it sees on a later call differs.
+  int64 policy_epoch = 2;
+  // The caller's tenant, when they resolve to exactly one. Empty when they reach
+  // none or several, because a partition key that is sometimes ambiguous is
+  // worse than one a service is forced to ask for.
+  string tenant_id = 3;
+}
+
+// EntityPolicies is every alternative one caller holds on one entity.
+message EntityPolicies {
+  // The full key: core.students.read.
+  string entity = 1;
+  string service = 2;
+  // Each alternative stands alone. A request is admitted if ANY of them admits
+  // it — they are never merged, because two rules bounding this entity
+  // differently authorize their own combinations and not the cross product.
+  repeated PolicyAlternative alternatives = 3;
+}
+
+message PolicyAlternative {
+  // The rule this came from, so a service can log which grant admitted a request.
+  string rule = 1;
+  string rule_key = 2;
+  // The boolean expression, as JSON. A group is {"op":"AND"|"OR","children":[…]};
+  // a condition is {"field":…,"operator":…,"values":[…]}. Carried as JSON rather
+  // than modelled here because the shape is recursive and the operator
+  // vocabulary belongs to the entity, not to this contract.
+  string expression = 3;
+  // Which fields this alternative admits. Absent means unrestricted.
+  FieldPolicy fields = 4;
+}
+
+// FieldPolicy is which fields of an entity an alternative admits.
+message FieldPolicy {
+  // all, include, or all_except. all_except is a set shorthand, not a deny:
+  // another grant may still admit an excluded field.
+  string mode = 1;
+  repeated string keys = 2;
+  string profile = 3;
+}
+
+message ResolveIdentityRequest {
+  string token = 1;
+  string audience = 2;
+}
+
+message ResolveIdentityResponse {
+  string user_id = 1;
+  string username = 2;
+  string email = 3;
+  string status = 4;
+  repeated GroupRef groups = 5;
+  // Frontend visibility keys. These authorize NOTHING; a service that gates on
+  // one has no authorization at all.
+  repeated string features = 6;
+  repeated RuleRef rules = 7;
+  bool super_admin = 8;
+  int64 policy_epoch = 9;
+  string tenant_id = 10;
+}
+
+message RuleRef {
+  string id = 1;
+  string key = 2;
+  string name = 3;
+}
+
+message GroupRef {
+  string id = 1;
+  string key = 2;
+  string name = 3;
+}
