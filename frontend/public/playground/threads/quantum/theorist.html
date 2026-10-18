@@ -1,0 +1,846 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Photons and the Atom</title>
+<meta name="description" content="Class 12: shine light on a metal in a photocell, sweep the collector potential, measure stopping potentials and fit h/e; drop hydrogen's electron between Bohr levels and fit a de Broglie wave on its orbit.">
+<link rel="icon" href="../../favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600&family=Inter:wght@400;500;600;700&family=Nunito:wght@500;700;800&family=Newsreader:opsz,wght@6..72,400;6..72,500&family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="../../play.css">
+<style>
+/* Only what this page needs beyond play.css. */
+.pg-stage{align-self:start; min-height:0}
+.gate{position:absolute; inset:0; display:grid; place-items:center; pointer-events:none}
+.gate span{background:rgba(22,26,40,.86); color:#fff; padding:10px 16px; border-radius:99px; font-weight:600; font-size:14px}
+.seg{display:grid; grid-auto-flow:column; grid-auto-columns:1fr; gap:4px; background:var(--sunk); padding:4px; border-radius:var(--radius-sm); margin-bottom:10px}
+.seg button{border:0; background:transparent; border-radius:7px; min-height:30px; font-weight:600; font-size:12.5px; cursor:pointer; color:var(--ink-2); padding:0 6px}
+.seg button[aria-pressed="true"]{background:var(--card); color:var(--ink); box-shadow:var(--shadow)}
+.seg button:disabled{opacity:.5; cursor:default}
+.nums{display:grid; grid-template-columns:1fr auto; gap:3px 12px; font-size:13px; align-items:baseline}
+.nums span{color:var(--ink-2)}
+.nums b{font-family:var(--font-mono); font-weight:600; font-size:12.5px; font-variant-numeric:tabular-nums; text-align:right}
+.nums .sep{grid-column:1/-1; height:1px; background:var(--hair); margin:3px 0}
+.why p{font-size:13.5px; margin-bottom:.5em}
+.note{font-size:12.5px; color:var(--ink-3); margin:6px 0 0}
+.ctl{grid-template-columns:118px 1fr 78px; margin:4px 0}
+.ctl label{font-size:12.5px; line-height:1.2}
+.ctl output{font-family:var(--font-mono); font-size:12.5px; font-weight:600; min-width:0}
+.pick{display:flex; gap:8px; align-items:center; flex-wrap:wrap; font-size:13px; margin:4px 0 6px}
+svg text.m{white-space:pre}
+.lvl{cursor:pointer} #ringHit{cursor:grab} #ringHit.dragging{cursor:grabbing}
+</style>
+</head>
+<body>
+<header class="pg-top"></header>
+
+<div class="pg-intro">
+  <h1>Photons and the atom</h1>
+  <p>Light on a metal knocks electrons out — but only some light. Run the photocell yourself: change the colour, the brightness and the
+     collector’s potential, sweep out the current, measure stopping potentials and fit a straight line to find Planck’s constant, as Millikan did.
+     Then drop hydrogen’s electron between Bohr’s levels and read the light it gives out, and stretch its orbit until the electron’s own wave fits.</p>
+</div>
+
+<main class="pg-main wide-side">
+  <section class="pg-stage" id="stageWrap">
+    <svg id="stage" viewBox="0 0 1000 650" role="img" aria-label="A photocell with its current–voltage graph, an energy ledger and a graph of stopping potential against frequency"></svg>
+    <div class="gate" id="gate"><span>Make your prediction first →</span></div>
+  </section>
+
+  <aside class="pg-side">
+    <div id="poe"></div>
+
+    <div class="card" id="ctlCard">
+      <div class="seg" role="group" aria-label="Model">
+        <button id="tabPhoto" aria-pressed="true">Photocell</button>
+        <button id="tabBohr" aria-pressed="false">Bohr’s hydrogen</button>
+        <button id="tabWave" aria-pressed="false">Electron waves</button>
+      </div>
+      <div id="ctlPhoto">
+        <div class="pick"><label for="metal">Emitter metal</label>
+          <select id="metal"></select></div>
+        <div class="ctl"><label for="nu">Frequency ν (×10¹⁴ Hz)</label><input type="range" id="nu" min="3" max="15" step="0.1" value="4.5"><output id="nuOut">4.5</output></div>
+        <div class="ctl"><label for="flux">Brightness (×10¹³ photons/s)</label><input type="range" id="flux" min="0" max="10" step="0.5" value="3"><output id="fluxOut">3.0</output></div>
+        <div class="ctl"><label for="volt">Collector potential V</label><input type="range" id="volt" min="-5" max="8" step="0.05" value="1"><output id="voltOut">+1.00 V</output></div>
+        <div class="row">
+          <button class="btn sm primary" id="btnSweep">Sweep V, −5 → +8 V</button>
+          <button class="btn sm" id="btnRecord" disabled>Record (ν, V₀)</button>
+          <button class="btn sm" id="btnClearP">Clear</button>
+        </div>
+        <p class="note">A sweep draws the whole current–voltage curve and reads the stopping potential V₀ off it. Record V₀ at several frequencies and a line is fitted.</p>
+      </div>
+      <div id="ctlBohr" hidden>
+        <p class="note" style="margin-top:0">Click a level in the diagram to move the electron: up absorbs a photon, down emits one.</p>
+        <div class="ctl"><label for="beam">Electron-beam energy</label><input type="range" id="beam" min="9" max="13.5" step="0.05" value="12.5"><output id="beamOut">12.50 eV</output></div>
+        <div class="row">
+          <button class="btn sm primary" id="btnFire">Fire 200 electrons at hydrogen</button>
+          <button class="btn sm" id="btnClearS">Clear spectrum</button>
+        </div>
+      </div>
+      <div id="ctlWave" hidden>
+        <div class="ctl"><label for="rad">Orbit radius r (units of a₀)</label><input type="range" id="rad" min="0.5" max="17" step="0.01" value="2.3"><output id="radOut">2.30</output></div>
+        <p class="note">Or drag the ring itself. The electron’s speed is whatever the proton’s pull demands at that radius; its wavelength is λ = h/mv.</p>
+      </div>
+    </div>
+
+    <div class="card" id="numCard">
+      <div class="kicker">Measured by the model</div>
+      <div id="nums"></div>
+    </div>
+
+    <div class="card why" id="whyCard" hidden>
+      <div class="kicker">What the model says</div>
+      <div id="why"></div>
+    </div>
+
+    <div class="card"><div class="kicker">To find</div><div id="finds"></div></div>
+  </aside>
+</main>
+
+<script src="../../play.js"></script>
+<script>
+'use strict';
+const {$, esc, clamp, fmt, drag, loop, tween, sound, track, toast, predict, findings, discover, found,
+       shareState, sharedState, mount, reduced} = Play;
+mount({thread: 'quantum', band: 'theorist'});
+
+/* MODEL:start ==================================================================
+   1. THE PHOTOCELL (NCERT Class 12, Ch 11).
+   Light of frequency ν arrives as Φ photons a second; each carries hν. A fraction ETA of
+   the photons that land free one electron each — but only if hν > φ, the metal's work
+   function. A freed electron leaves with K = hν − φ − (whatever it lost getting out),
+   the loss spread evenly from 0 to hν − φ ("more tightly bound electrons emerge with
+   less than the maximum", §11.6). It leaves at an angle θ to the plate's normal with
+   the cosine law.
+
+   Between the plates (gap d) the collector's potential V gives a uniform field. Each
+   electron's flight is solved exactly: with energies in eV and lengths in d, the time to
+   cross is τ = 2(√(Kn+V) − √Kn)/V (Kn = K cos²θ, the normal part), and it drifts
+   sideways √(Kt)·τ. It is counted only if it reaches the collector plate: Kn + V > 0, and
+   it lands within the plate's half-width. The current is e × ETA × Φ × (fraction
+   collected). The fraction is an exact quadrature over a fixed grid of angles, energies
+   and starting points (the grid includes θ = 0 and no loss, so the current falls to zero
+   exactly at V = −(hν − φ)/e).
+   ============================================================================ */
+const H = 6.62607e-34, QE = 1.602177e-19, CL = 2.99792e8, ME = 9.10938e-31, KC = 8.98755e9;
+const HC_EVNM = H * CL / QE * 1e9;                 // 1239.84 eV nm
+const ETA = 0.2;                                    // electrons per photon (an assumed quantum efficiency)
+const GEOM = {we: 0.3, wc: 1.2};                    // lit spot and collector half-widths, in units of the gap d
+const METALS = {
+  Cs: {name: 'Caesium', phi: 2.14}, K: {name: 'Potassium', phi: 2.30}, Na: {name: 'Sodium', phi: 2.75},
+  Ca: {name: 'Calcium', phi: 3.20}, Cu: {name: 'Copper', phi: 4.65},
+};
+const NU = 31, NW = 16, NY = 7;
+const GRID = (() => {
+  const g = [];
+  for (let i = 0; i < NU; i++) {
+    const u = -1 + (2 * i + 1) / NU;                 // u = sin θ, uniform: the cosine law in the plane
+    for (let j = 0; j < NW; j++) for (let k = 0; k < NY; k++)
+      g.push({c2: 1 - u * u, s2: u * u, sg: Math.sign(u), w: j / NW, y0: -GEOM.we + (2 * k + 1) / NY * GEOM.we});
+  }
+  return g;
+})();
+const photonEV = nu14 => H * nu14 * 1e14 / QE;     // ν in units of 10¹⁴ Hz → eV
+const lambdaNm = nu14 => CL / (nu14 * 1e14) * 1e9;
+const threshold14 = phi => phi * QE / H / 1e14;
+/* One electron's flight: {hit, y, tau}. */
+function flight(Kn, Kt, V, y0, sg){
+  if (Kn + V <= 0) return {hit: false, back: true};
+  const tau = Math.abs(V) < 1e-9 ? (Kn > 0 ? 1 / Math.sqrt(Kn) : Infinity) : 2 * (Math.sqrt(Kn + V) - Math.sqrt(Kn)) / V;
+  const y = y0 + sg * Math.sqrt(Kt) * tau;
+  return {hit: isFinite(y) && Math.abs(y) <= GEOM.wc, y, tau};
+}
+function collectedFraction(Kmax, V){
+  if (!(Kmax > 0)) return 0;
+  let n = 0;
+  for (const s of GRID) {
+    const K = Kmax * (1 - s.w);
+    if (flight(K * s.c2, K * s.s2, V, s.y0, s.sg).hit) n++;
+  }
+  return n / GRID.length;
+}
+/* Photocurrent in amperes. p = {metal, nu (×10¹⁴ Hz), flux (×10¹³ /s), V} */
+function current(p){
+  const Kmax = photonEV(p.nu) - METALS[p.metal].phi;
+  if (Kmax <= 0) return 0;
+  return ETA * QE * p.flux * 1e13 * collectedFraction(Kmax, p.V);
+}
+/* Sweep V from −5 to +8 V in 0.01 V steps; the stopping potential is read off the curve
+   where the current first rises above zero. */
+function sweep(p, from = -5, to = 8, dv = 0.01){
+  const pts = []; let first = null;
+  for (let k = 0; ; k++) {
+    const V = from + k * dv; if (V > to + 1e-9) break;
+    const I = current(Object.assign({}, p, {V}));
+    if (first == null && I > 0) first = V;
+    pts.push([V, I]);
+  }
+  return {pts, V0: first == null ? null : -(first - dv / 2), Isat: pts[pts.length - 1][1]};
+}
+function fitLine(pts){                               // least squares, pts = [[x, y]]
+  const m = pts.length, mx = pts.reduce((s, p) => s + p[0], 0) / m, my = pts.reduce((s, p) => s + p[1], 0) / m;
+  let sxx = 0, sxy = 0; for (const [x, y] of pts) { sxx += (x - mx) ** 2; sxy += (x - mx) * (y - my); }
+  const slope = sxy / sxx; return {slope, icpt: my - slope * mx};
+}
+/* Stopping potential against frequency (ν in Hz): slope h/e, intercept −φ/e. */
+function millikan(recs){
+  const f = fitLine(recs.map(r => [r.nu * 1e14, r.V0]));
+  return {slope: f.slope, h: f.slope * QE, phi: -f.icpt, nu0: -f.icpt / f.slope / 1e14};
+}
+const deBroglie = (m, v) => H / (m * v);
+
+/* 2. BOHR'S HYDROGEN (Ch 12): Eₙ = −13.6/n² eV; a photon carries the difference. */
+const RY = 13.6;
+const En = n => -RY / (n * n);
+const lineNm = (ni, nf) => HC_EVNM / Math.abs(En(ni) - En(nf));
+const rn = n => 0.529 * n * n;                        // Å
+const vn = n => QE * QE / (2 * 8.854188e-12 * H * n);   // m/s = e²/(2ε₀hn)
+const SERIES = {1: 'Lyman', 2: 'Balmer', 3: 'Paschen', 4: 'Brackett', 5: 'Pfund'};
+/* An electron beam of energy E hits ground-state atoms. Each hit lifts the atom to any
+   level it can afford (chosen at random); the atom then falls, a random lower level at a
+   time, and every fall is a photon. Returns counts of each line. */
+function bombard(E, count, seed = 7){
+  const rnd = Play.mulberry32(seed), lines = {};
+  let nmax = 1; while (nmax < 40 && En(nmax + 1) - En(1) <= E + 1e-9) nmax++;
+  let excited = 0;
+  for (let i = 0; i < count; i++) {
+    if (nmax < 2) break;
+    let n = 2 + Math.floor(rnd() * (nmax - 1)); excited++;
+    while (n > 1) { const m = 1 + Math.floor(rnd() * (n - 1)); const k = n + '-' + m; lines[k] = (lines[k] || 0) + 1; n = m; }
+  }
+  return {nmax, excited, lines};
+}
+
+/* 3. THE ELECTRON AS A WAVE ON ITS ORBIT (Ch 12.6). On a circle of radius r the proton's
+   pull fixes the speed (mv²/r = ke²/r²); de Broglie gives λ = h/mv. N = 2πr/λ waves fit
+   round the circumference: a standing wave needs N to be a whole number. */
+const A0 = 0.52918e-10;
+function orbitWave(rA0){
+  const r = rA0 * A0, v = Math.sqrt(KC * QE * QE / (ME * r)), lam = H / (ME * v);
+  return {r, v, lam, N: 2 * Math.PI * r / lam, L: ME * v * r / (H / (2 * Math.PI)), E: -KC * QE * QE / (2 * r) / QE};
+}
+/* MODEL:end */
+
+/* ---- state ------------------------------------------------------------------ */
+const S = {tab: 'photo', locked: false, metal: 'Cs', nu: 4.5, flux: 3, V: 1,
+           traces: [], recs: [], sweeping: null,
+           level: 1, marks: [], lines: {}, beamE: 12.5, fired: null, last: null,
+           r: 2.3, seenBelow: false};
+const shared = sharedState();
+if (shared) {
+  if (['photo', 'bohr', 'wave'].includes(shared.tab)) S.tab = shared.tab;
+  if (METALS[shared.metal]) S.metal = shared.metal;
+  if (isFinite(+shared.nu)) S.nu = clamp(+shared.nu, 3, 15);
+  if (isFinite(+shared.flux)) S.flux = clamp(+shared.flux, 0, 10);
+  if (isFinite(+shared.V)) S.V = clamp(+shared.V, -5, 8);
+  if (isFinite(+shared.r)) S.r = clamp(+shared.r, 0.5, 17);
+  if (isFinite(+shared.beamE)) S.beamE = clamp(+shared.beamE, 9, 13.5);
+}
+shareState(() => ({tab: S.tab, metal: S.metal, nu: S.nu, flux: S.flux, V: S.V, r: S.r, beamE: S.beamE}));
+const P = () => ({metal: S.metal, nu: S.nu, flux: S.flux, V: S.V});
+
+/* ---- colour of light (drawing only) ---------------------------------------- */
+function nmColour(l){
+  if (l < 380) return '#b9a4ff';
+  if (l > 750) return '#b0413e';
+  let r = 0, g = 0, b = 0;
+  if (l < 440) { r = -(l - 440) / 60; b = 1; } else if (l < 490) { g = (l - 440) / 50; b = 1; }
+  else if (l < 510) { g = 1; b = -(l - 510) / 20; } else if (l < 580) { r = (l - 510) / 70; g = 1; }
+  else if (l < 645) { r = 1; g = -(l - 645) / 65; } else r = 1;
+  const f = l < 420 ? .3 + .7 * (l - 380) / 40 : l > 700 ? .3 + .7 * (750 - l) / 50 : 1;
+  const c = v => Math.round(255 * Math.pow(v * f, 0.8)).toString(16).padStart(2, '0');
+  return '#' + c(r) + c(g) + c(b);
+}
+const bandName = l => l < 380 ? 'ultraviolet' : l > 750 ? 'infrared' : 'visible';
+const SUP = {'-': '⁻', 0: '⁰', 1: '¹', 2: '²', 3: '³', 4: '⁴', 5: '⁵', 6: '⁶', 7: '⁷', 8: '⁸', 9: '⁹'};
+const sup = s => String(s).split('').map(c => SUP[c] || c).join('');
+function sci(v, dp = 2){
+  if (!isFinite(v)) return '—'; if (v === 0) return '0';
+  const e = Math.floor(Math.log10(Math.abs(v)));
+  return (v / Math.pow(10, e)).toFixed(dp) + ' × 10' + sup(e);
+}
+const sgn = v => (v >= 0 ? '+' : '−') + Math.abs(v).toFixed(2);
+const uA = I => (I * 1e6).toFixed(3);
+
+/* ============================================================================
+   The stage: built once, then patched.
+   ============================================================================ */
+const svg = $('stage');
+const NS = 'http://www.w3.org/2000/svg';
+/* photocell geometry on screen */
+const EXs = 225, AXs = 310, PY = 180, DPX = AXs - EXs;           // emitter, collector x; plate centre; gap in px
+const LAMP = {x: 282, y: 30};
+const IV = {x: 594, y: 40, w: 380, h: 240, v0: -5, v1: 8, i1: 3.4e-6};
+const MG = {x: 432, y: 392, w: 540, h: 208, n0: 0, n1: 16, v0: -3, v1: 4.5};
+const LG = {x: 40, y: 380, base: 610, s: 36};                    // ledger: px per eV
+const ivx = V => IV.x + (V - IV.v0) / (IV.v1 - IV.v0) * IV.w, ivy = I => IV.y + IV.h - clamp(I / IV.i1, -0.02, 1.04) * IV.h;
+const mgx = n => MG.x + (n - MG.n0) / (MG.n1 - MG.n0) * MG.w, mgy = v => MG.y + MG.h - (v - MG.v0) / (MG.v1 - MG.v0) * MG.h;
+/* Bohr geometry */
+const LV = {x0: 110, x1: 440, top: 64, H: 540};
+const lvy = E => LV.top + LV.H * Math.sqrt(Math.max(0, -E) / RY);
+const lvyLin = E => LV.top + LV.H * (-E / RY);
+const AT = {x: 790, y: 165, k: 7};
+const SP = {x: 600, y: 352, w: 380, h: 64, l0: Math.log10(80), l1: Math.log10(2000)};
+const spx = l => SP.x + (Math.log10(l) - SP.l0) / (SP.l1 - SP.l0) * SP.w;
+/* wave geometry */
+const WV = {x: 300, y: 330, k: 17};
+const NR = {x: 650, y: 44, w: 320, h: 220};
+const ER = {x: 650, y: 370, w: 320, h: 220};
+const MCOL = {Cs: '#6a3fc2', K: '#e8890c', Na: '#2f9e5b', Ca: '#3f7fd8', Cu: '#d6453d'};
+
+function build(){
+  const T = (x, y, s, o = '') => `<text x="${x}" y="${y}" ${o}>${s}</text>`;
+  let ivAx = `<rect x="${IV.x}" y="${IV.y}" width="${IV.w}" height="${IV.h}" fill="#fff" stroke="#e2ded2"/>`;
+  for (let V = -5; V <= 8; V++) { const x = ivx(V); ivAx += `<line x1="${x}" y1="${IV.y}" x2="${x}" y2="${IV.y + IV.h}" stroke="${V === 0 ? '#9aa3a6' : '#f0ede4'}"/>` + (V % 1 === 0 ? T(x, IV.y + IV.h + 15, V, 'fill="#7c878c" font-size="10.5" text-anchor="middle" class="m"') : ''); }
+  for (let i = 0; i <= 3.01; i += 0.5) { const y = ivy(i * 1e-6); ivAx += `<line x1="${IV.x}" y1="${y}" x2="${IV.x + IV.w}" y2="${y}" stroke="#f0ede4"/>` + T(IV.x - 6, y + 4, i.toFixed(1), 'fill="#7c878c" font-size="10.5" text-anchor="end" class="m"'); }
+  ivAx += T(IV.x + IV.w, IV.y + IV.h + 32, 'collector potential V (volts) →', 'fill="#7c878c" font-size="11" text-anchor="end"') + T(IV.x - 36, IV.y - 10, 'I (µA)', 'fill="#7c878c" font-size="11"');
+  let mgAx = `<rect x="${MG.x}" y="${MG.y}" width="${MG.w}" height="${MG.h}" fill="#fff" stroke="#e2ded2"/>`;
+  for (let n = 0; n <= 16; n += 2) { const x = mgx(n); mgAx += `<line x1="${x}" y1="${MG.y}" x2="${x}" y2="${MG.y + MG.h}" stroke="#f0ede4"/>` + T(x, MG.y + MG.h + 15, n, 'fill="#7c878c" font-size="10.5" text-anchor="middle" class="m"'); }
+  for (let v = -3; v <= 4; v++) { const y = mgy(v); mgAx += `<line x1="${MG.x}" y1="${y}" x2="${MG.x + MG.w}" y2="${y}" stroke="${v === 0 ? '#9aa3a6' : '#f0ede4'}"/>` + T(MG.x - 6, y + 4, v, 'fill="#7c878c" font-size="10.5" text-anchor="end" class="m"'); }
+  mgAx += T(MG.x + MG.w, MG.y + MG.h + 32, 'frequency ν (×10¹⁴ Hz) →', 'fill="#7c878c" font-size="11" text-anchor="end"') + T(MG.x - 34, MG.y - 8, 'V₀ (V)', 'fill="#7c878c" font-size="11"');
+  /* visible band under the frequency axis */
+  let vis = '';
+  for (let n = 4.0; n <= 7.9; n += 0.1) vis += `<rect x="${mgx(n).toFixed(1)}" y="${MG.y + MG.h - 5}" width="${(mgx(n + 0.1) - mgx(n) + .5).toFixed(1)}" height="5" fill="${nmColour(lambdaNm(n + .05))}"/>`;
+
+  /* Bohr levels */
+  let lv = '', lvHit = '', lin = '';
+  for (let n = 1; n <= 12; n++) {
+    const y = lvy(En(n)), yl = lvyLin(En(n));
+    lin += `<line x1="36" y1="${yl.toFixed(1)}" x2="66" y2="${yl.toFixed(1)}" stroke="#4a555b" stroke-width="${n <= 6 ? 1.2 : .6}"/>`;
+    if (n <= 6) {
+      lv += `<line x1="${LV.x0}" y1="${y.toFixed(1)}" x2="${LV.x1}" y2="${y.toFixed(1)}" stroke="#1d2327" stroke-width="1.6"/>` +
+        T(LV.x1 + 8, y + 4, `n = ${n}`, 'fill="#1d2327" font-size="12.5" font-weight="700"') + T(LV.x1 + 54, y + 4, `${En(n).toFixed(2)} eV`, 'fill="#4a555b" font-size="11.5" class="m"');
+      const ya = n === 1 ? y + 40 : (y + lvy(En(n - 1))) / 2, yb = n === 6 ? y - 9 : (y + lvy(En(n + 1))) / 2;
+      lvHit += `<rect class="lvl" id="lv${n}" data-n="${n}" x="${LV.x0 - 10}" y="${yb.toFixed(1)}" width="${LV.x1 - LV.x0 + 150}" height="${(ya - yb).toFixed(1)}" fill="transparent" role="button" aria-label="Level n = ${n}"/>`;
+    } else lv += `<line x1="${LV.x0}" y1="${y.toFixed(1)}" x2="${LV.x1}" y2="${y.toFixed(1)}" stroke="#9aa3a6" stroke-width=".7" stroke-dasharray="2 3"/>`;
+  }
+  lv += `<line x1="${LV.x0}" y1="${LV.top}" x2="${LV.x1}" y2="${LV.top}" stroke="#9aa3a6" stroke-width="1.2" stroke-dasharray="6 4"/>` + T(LV.x1 + 8, LV.top + 4, 'n = ∞', 'fill="#4a555b" font-size="12.5" font-weight="700"') + T(LV.x1 + 54, LV.top + 4, '0.00 eV', 'fill="#4a555b" font-size="11.5" class="m"');
+  lin += `<line x1="36" y1="${LV.top}" x2="66" y2="${LV.top}" stroke="#9aa3a6" stroke-dasharray="3 2"/>` + T(51, LV.top + LV.H + 22, 'true', 'fill="#7c878c" font-size="10" text-anchor="middle"') + T(51, LV.top + LV.H + 34, 'scale', 'fill="#7c878c" font-size="10" text-anchor="middle"');
+  let spAx = `<rect x="${SP.x}" y="${SP.y}" width="${SP.w}" height="${SP.h}" fill="#0d1117" rx="3"/>`;
+  for (let l = 380; l < 750; l += 5) spAx += `<rect x="${spx(l).toFixed(1)}" y="${SP.y}" width="${(spx(l + 5) - spx(l) + .6).toFixed(1)}" height="6" fill="${nmColour(l + 2.5)}" opacity=".9"/>`;
+  for (const l of [100, 200, 500, 1000, 2000]) spAx += `<line x1="${spx(l)}" y1="${SP.y + SP.h}" x2="${spx(l)}" y2="${SP.y + SP.h + 5}" stroke="#7c878c"/>` + T(spx(l), SP.y + SP.h + 17, l, 'fill="#7c878c" font-size="10.5" text-anchor="middle" class="m"');
+  spAx += T(SP.x + SP.w, SP.y + SP.h + 32, 'wavelength, nm (log scale)', 'fill="#7c878c" font-size="11" text-anchor="end"');
+  for (const [a, b, nm] of [[91.2, 121.6, 'Lyman · UV'], [364.6, 656.5, 'Balmer'], [820.4, 1875, 'Paschen · IR']])
+    spAx += `<line x1="${spx(a)}" y1="${SP.y - 8}" x2="${spx(b)}" y2="${SP.y - 8}" stroke="#9aa3a6"/>` + T((spx(a) + spx(b)) / 2, SP.y - 13, nm, 'fill="#7c878c" font-size="10.5" text-anchor="middle"');
+
+  /* wave plots */
+  let nrAx = `<rect x="${NR.x}" y="${NR.y}" width="${NR.w}" height="${NR.h}" fill="#fff" stroke="#e2ded2"/>`;
+  const nrx = r => NR.x + r / 17 * NR.w, nry = N => NR.y + NR.h - N / 4.4 * NR.h;
+  for (let n = 1; n <= 4; n++) nrAx += `<line x1="${NR.x}" y1="${nry(n)}" x2="${NR.x + NR.w}" y2="${nry(n)}" stroke="#ece5fa" stroke-width="1.5"/>` + T(NR.x - 6, nry(n) + 4, n, 'fill="#6a3fc2" font-size="11" text-anchor="end" class="m"') +
+    `<line x1="${nrx(n * n)}" y1="${nry(n)}" x2="${nrx(n * n)}" y2="${NR.y + NR.h}" stroke="#c9bfe0" stroke-dasharray="3 3"/>` + T(nrx(n * n), NR.y + NR.h + 15, n * n, 'fill="#7c878c" font-size="10.5" text-anchor="middle" class="m"');
+  let d = ''; for (let i = 0; i <= 120; i++) { const r = 0.05 + i / 120 * 16.95; d += (i ? 'L' : 'M') + nrx(r).toFixed(1) + ' ' + nry(orbitWave(r).N).toFixed(1); }
+  nrAx += `<path d="${d}" fill="none" stroke="#1d2327" stroke-width="1.8"/>` + T(NR.x + NR.w, NR.y + NR.h + 32, 'orbit radius r (units of a₀) →', 'fill="#7c878c" font-size="11" text-anchor="end"') + T(NR.x, NR.y - 12, 'WAVELENGTHS ROUND THE ORBIT, N = 2πr/λ', 'fill="#4a555b" font-size="12" font-weight="700" letter-spacing=".06em"');
+  let erAx = `<rect x="${ER.x}" y="${ER.y}" width="${ER.w}" height="${ER.h}" fill="#fff" stroke="#e2ded2"/>`;
+  const erx = r => ER.x + r / 17 * ER.w, ery = E => ER.y + (-E) / 14.5 * ER.h;
+  for (const E of [0, -3.4, -13.6]) erAx += `<line x1="${ER.x}" y1="${ery(E)}" x2="${ER.x + ER.w}" y2="${ery(E)}" stroke="#f0ede4"/>` + T(ER.x - 6, ery(E) + 4, E.toFixed(1), 'fill="#7c878c" font-size="10.5" text-anchor="end" class="m"');
+  d = ''; for (let i = 0; i <= 160; i++) { const r = 0.94 + i / 160 * 16.06; d += (i ? 'L' : 'M') + erx(r).toFixed(1) + ' ' + ery(orbitWave(r).E).toFixed(1); }
+  erAx += `<path d="${d}" fill="none" stroke="#9aa3a6" stroke-width="1.5"/>`;
+  for (let n = 1; n <= 4; n++) erAx += `<circle cx="${erx(n * n)}" cy="${ery(En(n))}" r="4" fill="#6a3fc2"/>` + T(erx(n * n) + (n === 4 ? -30 : 6), ery(En(n)) - 6, `n=${n}`, 'fill="#6a3fc2" font-size="11" class="m"');
+  erAx += T(ER.x, ER.y - 12, 'ENERGY OF A CIRCULAR ORBIT, E = −ke²/2r (eV)', 'fill="#4a555b" font-size="12" font-weight="700" letter-spacing=".06em"') + T(ER.x + ER.w, ER.y + ER.h + 20, 'r (a₀) →', 'fill="#7c878c" font-size="11" text-anchor="end"');
+
+  svg.innerHTML = `
+  <defs>
+    <radialGradient id="gLamp" cx="50%" cy="45%"><stop offset="0" stop-color="#fff"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></radialGradient>
+    <linearGradient id="gPlate" x1="0" x2="1"><stop offset="0" stop-color="#7d8790"/><stop offset=".5" stop-color="#d4d9de"/><stop offset="1" stop-color="#8a949c"/></linearGradient>
+    <radialGradient id="gNuc" cx="40%" cy="38%"><stop offset="0" stop-color="#ffb3a7"/><stop offset="1" stop-color="#c2412f"/></radialGradient>
+    <clipPath id="clipAtom"><rect x="560" y="0" width="440" height="318"/></clipPath>
+    <clipPath id="clipIV"><rect x="${IV.x}" y="${IV.y - 4}" width="${IV.w}" height="${IV.h + 8}"/></clipPath>
+    <clipPath id="clipMG"><rect x="${MG.x}" y="${MG.y}" width="${MG.w}" height="${MG.h}"/></clipPath>
+    <clipPath id="clipWave"><rect x="0" y="0" width="600" height="650"/></clipPath>
+    <marker id="mUp" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="context-stroke"/></marker>
+  </defs>
+  <rect x="0" y="0" width="1000" height="650" fill="#fbfaf6"/>
+
+  <g id="vPhoto">
+    <rect x="0" y="0" width="548" height="340" fill="#121826"/>
+    ${T(18, 26, 'THE PHOTOCELL', 'fill="#9fb3c8" font-size="13" font-weight="700" letter-spacing=".08em"')}
+    <text id="lampTxt" x="18" y="48" fill="#dce6f0" font-size="12.5" class="m"></text>
+    <text id="lampTxt3" x="18" y="82" fill="#9fb3c8" font-size="12" class="m"></text>
+    <text id="lampTxt2" x="18" y="65" fill="#9fb3c8" font-size="12" class="m"></text>
+    <path id="lightBeam" fill="#fff" opacity=".12"/>
+    <rect x="170" y="62" width="220" height="244" rx="26" fill="#1a2336" stroke="#5a6b86" stroke-width="2"/>
+    <rect x="256" y="58" width="52" height="8" rx="2" fill="#9ec9ff" opacity=".7"/>
+    ${T(314, 56, 'quartz window', 'fill="#6d7f99" font-size="9.5"')}
+    <circle cx="${LAMP.x}" cy="${LAMP.y}" r="26" fill="url(#gLamp)" id="lampGlow"/>
+    <circle cx="${LAMP.x}" cy="${LAMP.y}" r="11" id="lampCore" fill="#fff"/>
+    <rect x="${EXs - 12}" y="${PY - 102}" width="12" height="204" fill="url(#gPlate)" rx="2"/>
+    <rect x="${AXs}" y="${PY - 102}" width="10" height="204" fill="url(#gPlate)" rx="2"/>
+    <rect id="spot" x="${EXs - 3}" y="${PY - 25}" width="5" height="50" fill="#fff" opacity=".0"/>
+    ${T(EXs - 6, PY + 122, 'C', 'fill="#dce6f0" font-size="14" font-weight="700" text-anchor="middle"')}
+    ${T(AXs + 5, PY + 122, 'A', 'fill="#dce6f0" font-size="14" font-weight="700" text-anchor="middle"')}
+    <text id="metalTxt" x="${EXs - 16}" y="${PY}" fill="#9fb3c8" font-size="11" text-anchor="end" transform="rotate(-90 ${EXs - 20} ${PY})"></text>
+    <g id="photons"></g>
+    <g id="elecs" fill="#7fe3ff"></g>
+    <!-- circuit -->
+    <path d="M${EXs - 6} ${PY + 102} V322 H252 M310 322 H${AXs + 5} V${PY + 102}" fill="none" stroke="#6d7f99" stroke-width="2"/>
+    <line x1="252" y1="310" x2="252" y2="334" stroke="#dce6f0" stroke-width="2"/><line x1="262" y1="316" x2="262" y2="328" stroke="#dce6f0" stroke-width="3"/>
+    <line x1="272" y1="310" x2="272" y2="334" stroke="#dce6f0" stroke-width="2"/><line x1="282" y1="316" x2="282" y2="328" stroke="#dce6f0" stroke-width="3"/>
+    <path d="M282 322 H310" stroke="#6d7f99" stroke-width="2"/>
+    ${T(412, 108, 'collector potential', 'fill="#9fb3c8" font-size="11.5"')}
+    <text id="vRead" x="412" y="134" fill="#ffd36b" font-size="21" class="m"></text>
+    ${T(412, 176, 'photocurrent', 'fill="#9fb3c8" font-size="11.5"')}
+    <text id="iRead" x="412" y="202" fill="#7fe3ff" font-size="21" class="m"></text>
+    <text id="iRead2" x="412" y="222" fill="#9fb3c8" font-size="11" class="m"></text>
+    <text id="cellNote" x="412" y="258" fill="#dce6f0" font-size="11.5"></text>
+    <text id="cellNote2" x="412" y="274" fill="#dce6f0" font-size="11.5"></text>
+
+    ${T(IV.x, 24, 'CURRENT AGAINST COLLECTOR POTENTIAL', 'fill="#4a555b" font-size="12" font-weight="700" letter-spacing=".06em"')}
+    ${ivAx}
+    <g clip-path="url(#clipIV)"><g id="ivTraces"></g><path id="ivSweep" fill="none" stroke="#1d2327" stroke-width="2"/><circle id="ivDot" r="5" fill="#ffb400" stroke="#1d2327" stroke-width="1.3"/></g>
+    <g id="ivLegend"></g>
+
+    <line x1="0" y1="340" x2="1000" y2="340" stroke="#e2ded2"/>
+    ${T(18, 364, 'EINSTEIN’S LEDGER, PER PHOTON', 'fill="#4a555b" font-size="12" font-weight="700" letter-spacing=".06em"')}
+    <g id="ledger"></g>
+    ${T(MG.x, 364, 'STOPPING POTENTIAL AGAINST FREQUENCY', 'fill="#4a555b" font-size="12" font-weight="700" letter-spacing=".06em"')}
+    ${mgAx}${vis}
+    <g clip-path="url(#clipMG)"><g id="mgFits"></g></g>
+    <g id="mgPts"></g>
+    <text id="mgNote" x="${MG.x + 10}" y="${MG.y + 20}" fill="#4a555b" font-size="11.5" class="m"></text>
+    <g id="veilP">
+      <rect x="531" y="0" width="469" height="339" fill="#fbfaf6" opacity=".95"/>
+      <rect x="0" y="341" width="1000" height="309" fill="#fbfaf6" opacity=".95"/>
+      ${T(765, 170, 'The graphs appear once you', 'fill="#7c878c" font-size="15" font-weight="600" text-anchor="middle"')}
+      ${T(765, 192, 'have made a prediction.', 'fill="#7c878c" font-size="15" font-weight="600" text-anchor="middle"')}
+    </g>
+  </g>
+
+  <g id="vBohr" hidden>
+    ${T(18, 26, 'HYDROGEN’S ENERGY LEVELS', 'fill="#4a555b" font-size="12" font-weight="700" letter-spacing=".06em"')}
+    ${T(18, 44, 'Eₙ = −13.6 eV / n²   (drawn on a square-root scale; left strip to true scale)', 'fill="#7c878c" font-size="11"')}
+    <rect x="30" y="${LV.top - 6}" width="42" height="${LV.H + 12}" fill="#fff" stroke="#e2ded2"/>
+    ${lin}${lv}
+    <g id="arrows"></g>
+    <circle id="bElec" r="7" fill="#3f7fd8" stroke="#fff" stroke-width="2"/>
+    <g id="lvHits">${lvHit}</g>
+    <line x1="560" y1="0" x2="560" y2="650" stroke="#e2ded2"/>
+    <rect x="561" y="0" width="439" height="318" fill="#0f1420"/>
+    ${T(578, 26, 'THE ATOM, rₙ = n² a₀', 'fill="#9fb3c8" font-size="12" font-weight="700" letter-spacing=".06em"')}
+    <g clip-path="url(#clipAtom)">
+      ${[1, 2, 3, 4, 5].map(n => `<circle cx="${AT.x}" cy="${AT.y}" r="${AT.k * n * n}" fill="none" stroke="#33415c" stroke-width="1.2"/>`).join('')}
+      <circle cx="${AT.x}" cy="${AT.y}" r="4.5" fill="url(#gNuc)"/>
+      <circle id="aElec" r="5" fill="#7fb4ff"/>
+      <g id="aPhoton"></g>
+    </g>
+    <text id="atomTxt" x="578" y="300" fill="#dce6f0" font-size="12" class="m"></text>
+    ${spAx}
+    <g id="spLines"></g>
+    ${T(SP.x, 468, 'LINES SEEN', 'fill="#4a555b" font-size="12" font-weight="700" letter-spacing=".06em"')}
+    <g id="lineTable"></g>
+  </g>
+
+  <g id="vWave" hidden>
+    ${T(18, 26, 'DE BROGLIE’S ELECTRON ON A BOHR ORBIT', 'fill="#4a555b" font-size="12" font-weight="700" letter-spacing=".06em"')}
+    <g clip-path="url(#clipWave)">
+      <circle id="wRing" cx="${WV.x}" cy="${WV.y}" fill="none" stroke="#c9bfe0" stroke-width="1.2" stroke-dasharray="4 4"/>
+      ${[1, 2, 3, 4].map(n => `<circle cx="${WV.x}" cy="${WV.y}" r="${WV.k * n * n}" fill="none" stroke="#ece5fa" stroke-width="1"/>`).join('')}
+      <path id="wLap2" fill="none" stroke="#e8890c" stroke-width="1.6" stroke-dasharray="5 4" opacity=".8"/>
+      <path id="wLap1" fill="none" stroke="#6a3fc2" stroke-width="2.4"/>
+      <circle cx="${WV.x}" cy="${WV.y}" r="6" fill="url(#gNuc)"/>
+      <circle id="ringHit" r="13" fill="#6a3fc2" fill-opacity=".18" stroke="#6a3fc2" stroke-width="1.5" tabindex="0" role="slider" aria-label="Orbit radius: drag in or out"/>
+    </g>
+    <text id="wBanner" x="${WV.x}" y="620" fill="#6a3fc2" font-size="16" text-anchor="middle" class="serif"></text>
+    <text id="wTxt" x="18" y="48" fill="#4a555b" font-size="12" class="m"></text>
+    ${T(18, 640, 'purple: the first lap of the wave · orange dashes: the same wave on its second lap', 'fill="#7c878c" font-size="11"')}
+    ${nrAx}<circle id="nrDot" r="5.5" fill="#ffb400" stroke="#1d2327" stroke-width="1.2"/>
+    ${erAx}<circle id="erDot" r="5.5" fill="#ffb400" stroke="#1d2327" stroke-width="1.2"/>
+  </g>`;
+  $('metal').innerHTML = Object.entries(METALS).map(([k, m]) => `<option value="${k}">${m.name} (φ = ${m.phi.toFixed(2)} eV)</option>`).join('');
+}
+
+/* ============================================================================
+   Paint
+   ============================================================================ */
+function paintPhoto(){
+  const p = P(), m = METALS[S.metal], ev = photonEV(S.nu), lam = lambdaNm(S.nu), col = nmColour(lam);
+  const I = current(p), Kmax = ev - m.phi;
+  $('lampTxt').textContent = `ν = ${S.nu.toFixed(1)} × 10¹⁴ Hz`;
+  $('lampTxt2').textContent = `λ = ${lam.toFixed(0)} nm, ${bandName(lam)}`; $('lampTxt3').textContent = `${S.flux.toFixed(1)} × 10¹³ photons/s`;
+  $('lampCore').setAttribute('fill', col);
+  $('lampGlow').setAttribute('opacity', (0.15 + S.flux / 10 * 0.85).toFixed(2));
+  $('lightBeam').setAttribute('d', `M${LAMP.x - 6} ${LAMP.y + 8} L${EXs + 1} ${PY - 25} L${EXs + 1} ${PY + 25} L${LAMP.x + 6} ${LAMP.y + 8}Z`);
+  $('lightBeam').setAttribute('fill', col); $('lightBeam').setAttribute('opacity', (S.flux / 10 * 0.28).toFixed(2));
+  $('spot').setAttribute('fill', col); $('spot').setAttribute('opacity', (S.flux / 10 * 0.9).toFixed(2));
+  $('metalTxt').textContent = `${m.name}, φ = ${m.phi.toFixed(2)} eV`;
+  $('vRead').textContent = `V = ${sgn(S.V)} V`;
+  $('iRead').textContent = S.locked ? `I = ${uA(I)} µA` : 'I = ?.??? µA';
+  $('iRead2').textContent = S.locked ? `${(I / QE / 1e12).toFixed(2)} × 10¹² electrons/s` : '';
+  $('cellNote').textContent = S.V < 0 ? 'A below C: it pushes' : 'A above C: it pulls';
+  $('cellNote2').textContent = S.V < 0 ? 'electrons back to C.' : 'electrons across.';
+  /* I–V: held traces, the running sweep, and the live point */
+  $('ivTraces').innerHTML = S.traces.map((t, i) => `<path d="${ivPath(t.pts)}" fill="none" stroke="${t.col}" stroke-width="2" opacity="${i === S.traces.length - 1 ? 1 : .75}"/>` +
+    (t.V0 != null ? `<line x1="${ivx(-t.V0)}" y1="${ivy(0) - 10}" x2="${ivx(-t.V0)}" y2="${ivy(0) + 4}" stroke="${t.col}" stroke-width="2"/>` : '')).join('');
+  $('ivLegend').innerHTML = S.traces.map((t, i) => `<g transform="translate(${IV.x + 12} ${IV.y + 16 + i * 16})"><line x1="0" y1="-4" x2="16" y2="-4" stroke="${t.col}" stroke-width="2.4"/><text x="22" y="0" font-size="10.5" fill="#4a555b" class="m">${t.metal.padEnd(2)} ν=${t.nu.toFixed(1)} Φ=${t.flux.toFixed(1)}  V₀=${t.V0 == null ? '—' : t.V0.toFixed(2) + ' V'}</text></g>`).join('');
+  $('ivDot').setAttribute('cx', ivx(S.V).toFixed(1)); $('ivDot').setAttribute('cy', ivy(I).toFixed(1));
+  /* ledger */
+  const b = LG.base, s = LG.s, y = e => b - e * s;
+  let g = `<line x1="${LG.x - 10}" y1="${b}" x2="330" y2="${b}" stroke="#9aa3a6"/>`;
+  for (let e = 0; e <= 6; e++) g += `<text x="${LG.x - 14}" y="${y(e) + 4}" font-size="10.5" fill="#7c878c" text-anchor="end" class="m">${e}</text><line x1="${LG.x - 10}" y1="${y(e)}" x2="${LG.x - 6}" y2="${y(e)}" stroke="#9aa3a6"/>`;
+  g += `<text x="${LG.x - 30}" y="${y(6.4)}" font-size="11" fill="#7c878c">eV</text>`;
+  g += `<rect x="${LG.x + 10}" y="${y(ev)}" width="54" height="${ev * s}" fill="${col}" stroke="#1d2327" stroke-width=".8"/><text x="${LG.x + 37}" y="${b + 16}" font-size="11.5" fill="#1d2327" text-anchor="middle">photon</text>` +
+       `<text x="${LG.x + 37}" y="${y(ev) - 6}" font-size="11.5" fill="#1d2327" text-anchor="middle" class="m">hν ${ev.toFixed(2)}</text>`;
+  g += `<rect x="${LG.x + 104}" y="${y(m.phi)}" width="54" height="${m.phi * s}" fill="#c8cdd2" stroke="#1d2327" stroke-width=".8"/><text x="${LG.x + 131}" y="${b + 16}" font-size="11.5" fill="#1d2327" text-anchor="middle">electron</text>` +
+       `<text x="${LG.x + 131}" y="${y(m.phi / 2) + 4}" font-size="11.5" fill="#1d2327" text-anchor="middle" class="m">φ ${m.phi.toFixed(2)}</text>`;
+  if (Kmax > 0) g += `<rect x="${LG.x + 104}" y="${y(ev)}" width="54" height="${Kmax * s}" fill="#7fd6a0" stroke="#1d2327" stroke-width=".8"/><text x="${LG.x + 131}" y="${y(ev) - 6}" font-size="11.5" fill="#1a6b3c" text-anchor="middle" class="m">K ${Kmax.toFixed(2)}</text>`;
+  else g += `<rect x="${LG.x + 104}" y="${y(m.phi)}" width="54" height="${-Kmax * s}" fill="none" stroke="#d6453d" stroke-dasharray="4 3"/><text x="${LG.x + 131}" y="${y(m.phi) - 6}" font-size="11.5" fill="#b23a33" text-anchor="middle" class="m">short ${(-Kmax).toFixed(2)}</text>`;
+  if (S.V < 0) g += `<line x1="${LG.x + 96}" y1="${y(m.phi - S.V)}" x2="${LG.x + 168}" y2="${y(m.phi - S.V)}" stroke="#e8890c" stroke-width="2" stroke-dasharray="5 3"/><text x="${LG.x + 172}" y="${y(m.phi - S.V) + 4}" font-size="11" fill="#b56a00">the hill e|V| = ${(-S.V).toFixed(2)}</text>`;
+  const kx = LG.x + 180;
+  g += `<text x="${kx}" y="${y(5.3)}" font-size="12" fill="#1d2327" class="serif" style="font-size:16px">hν = φ + K<tspan font-size="11" dy="3">max</tspan></text>`;
+  if (Kmax > 0) {
+    const v = Math.sqrt(2 * Kmax * QE / ME);
+    g += `<text x="${kx}" y="${y(4.55)}" font-size="11" fill="#4a555b" class="m">fastest electron</text><text x="${kx}" y="${y(4.55) + 15}" font-size="11" fill="#1d2327" class="m">v = ${sci(v, 2)} m/s</text><text x="${kx}" y="${y(4.55) + 30}" font-size="11" fill="#1d2327" class="m">λ = h/mv = ${(deBroglie(ME, v) * 1e9).toFixed(3)} nm</text>`;
+  } else g += `<text x="${kx}" y="${y(4.55)}" font-size="11.5" fill="#b23a33">No photon has enough</text><text x="${kx}" y="${y(4.55) + 15}" font-size="11.5" fill="#b23a33">energy to free an electron.</text>`;
+  $('ledger').innerHTML = g;
+  /* stopping potential against frequency */
+  let pts = '', fits = '', note = [];
+  for (const [k, r] of S.recs.entries()) pts += `<circle cx="${mgx(r.nu).toFixed(1)}" cy="${mgy(r.V0).toFixed(1)}" r="4.5" fill="${MCOL[r.metal]}" stroke="#fff" stroke-width="1.2"><title>${METALS[r.metal].name}: ν = ${r.nu.toFixed(1)}, V₀ = ${r.V0.toFixed(2)} V</title></circle>`;
+  for (const k of Object.keys(METALS)) {
+    const rs = S.recs.filter(r => r.metal === k);
+    if (rs.length < 2 || spread(rs) < 0.5) continue;
+    const f = millikan(rs), yv = n => f.slope * n * 1e14 - f.phi;
+    fits += `<line x1="${mgx(0)}" y1="${mgy(yv(0))}" x2="${mgx(16)}" y2="${mgy(yv(16))}" stroke="${MCOL[k]}" stroke-width="1.2" stroke-dasharray="5 4"/>` +
+            `<line x1="${mgx(f.nu0)}" y1="${mgy(0)}" x2="${mgx(16)}" y2="${mgy(yv(16))}" stroke="${MCOL[k]}" stroke-width="2.2"/>` +
+            `<circle cx="${mgx(f.nu0)}" cy="${mgy(0)}" r="3.5" fill="#fff" stroke="${MCOL[k]}" stroke-width="2"/>`;
+    note.push(`${k}: slope ${sci(f.slope, 3)} V s → h = ${sci(f.h, 3)} J s, ν₀ = ${f.nu0.toFixed(2)}, φ = ${f.phi.toFixed(2)} eV${rs.length < 3 ? ' (2 pts)' : ''}`);
+  }
+  $('mgPts').innerHTML = pts; $('mgFits').innerHTML = fits;
+  $('mgNote').innerHTML = note.slice(-3).map((t, i) => `<tspan x="${MG.x + 10}" dy="${i ? 15 : 0}">${esc(t)}</tspan>`).join('');
+  const last = S.traces[S.traces.length - 1];
+  $('btnRecord').disabled = !S.locked || !last || last.metal !== S.metal || Math.abs(last.nu - S.nu) > 1e-9 || last.V0 == null || S.sweeping != null;
+}
+const spread = rs => Math.max(...rs.map(r => r.nu)) - Math.min(...rs.map(r => r.nu));
+function ivPath(pts){ let d = ''; for (let i = 0; i < pts.length; i += 5) d += (i ? 'L' : 'M') + ivx(pts[i][0]).toFixed(1) + ' ' + ivy(pts[i][1]).toFixed(1); return d; }
+
+function paintBohr(){
+  const y = lvy(En(S.level));
+  $('bElec').setAttribute('cx', BE.x.toFixed(1)); $('bElec').setAttribute('cy', BE.y.toFixed(1));
+  const colX = {1: 150, 2: 250, 3: 330, 4: 395, 5: 425};
+  $('arrows').innerHTML = S.marks.slice(-12).map((t, i, a) => {
+    const x = (colX[Math.min(t.lo, 5)] || 425) + (i % 3) * 12, c = nmColour(t.nm), up = t.kind === 'abs';
+    const y1 = lvy(En(up ? t.lo : t.hi)), y2 = lvy(En(up ? t.hi : t.lo));
+    return `<line x1="${x}" y1="${y1.toFixed(1)}" x2="${x}" y2="${(y2 + (up ? 6 : -6)).toFixed(1)}" stroke="${c === '#b9a4ff' ? '#8b6fe0' : c === '#b0413e' ? '#a1403c' : c}" stroke-width="${i === a.length - 1 ? 3 : 2}" marker-end="url(#mUp)" opacity="${(0.4 + 0.6 * (i + 1) / a.length).toFixed(2)}" ${up ? 'stroke-dasharray="5 3"' : ''}/>`;
+  }).join('');
+  $('atomTxt').textContent = `n = ${S.level}   r = ${rn(S.level).toFixed(2)} Å   v = ${sci(vn(S.level), 2)} m/s   E = ${En(S.level).toFixed(2)} eV`;
+  /* spectrum and table */
+  const keys = Object.keys(S.lines);
+  const maxc = Math.max(1, ...keys.map(k => S.lines[k].count));
+  $('spLines').innerHTML = keys.map(k => {
+    const L = S.lines[k], x = spx(L.nm), c = nmColour(L.nm), op = 0.35 + 0.65 * Math.sqrt(L.count / maxc);
+    return L.nm < 80 || L.nm > 2000 ? '' : `<line x1="${x.toFixed(1)}" y1="${SP.y + 8}" x2="${x.toFixed(1)}" y2="${SP.y + SP.h - 2}" stroke="${c}" stroke-width="${L.abs && !L.em ? 2 : 2.4}" opacity="${op.toFixed(2)}"/>`;
+  }).join('');
+  const rows = keys.map(k => S.lines[k]).sort((a, b) => a.lo - b.lo || a.nm - b.nm).slice(0, 9);
+  const COLX = [16, 70, 150, 222, 330], cells = (y, vals, o) => vals.map((v, i) => `<text x="${SP.x + COLX[i]}" y="${y}" ${o} ${i === 4 ? 'text-anchor="end"' : ''}>${v}</text>`).join('');
+  $('lineTable').innerHTML = cells(490, ['drop', 'λ (nm)', 'series', 'band', 'count'], 'font-size="11" fill="#7c878c"') + rows.map((L, i) =>
+    `<rect x="${SP.x}" y="${498 + i * 16}" width="10" height="10" fill="${nmColour(L.nm)}"/>` + cells(507 + i * 16, [L.hi + ' → ' + L.lo, L.nm.toFixed(1), SERIES[L.lo] || '—', bandName(L.nm), L.count], 'font-size="11.5" fill="#1d2327" class="m"')).join('') +
+    (rows.length ? '' : `<text x="${SP.x}" y="512" font-size="12" fill="#7c878c">Nothing yet: move the electron down a level, or fire a beam.</text>`) +
+    (S.fired ? `<text x="${SP.x}" y="${508 + Math.max(1, rows.length) * 16 + 8}" font-size="11.5" fill="#4a555b" class="m">beam ${S.fired.E.toFixed(2)} eV: atoms reach n ≤ ${S.fired.nmax}; ${Object.keys(S.fired.lines).length} different lines</text>` : '');
+}
+const BE = {x: 300, y: lvy(En(1))};
+
+function paintWave(){
+  const w = orbitWave(S.r), R = S.r * WV.k, N = w.N, A = 8 + R * 0.08;
+  $('wRing').setAttribute('r', R.toFixed(1));
+  const ph = WAVE.phase, amp = Math.abs(N - Math.round(N)) < 0.02 ? 0.55 + 0.45 * Math.cos(ph) : 1;
+  let d1 = '', d2 = '';
+  for (let i = 0; i <= 360; i++) {
+    const a = i / 360 * 2 * Math.PI;
+    const r1 = R + A * amp * Math.sin(N * a), r2 = R + A * amp * Math.sin(N * (a + 2 * Math.PI));
+    d1 += (i ? 'L' : 'M') + (WV.x + r1 * Math.cos(a)).toFixed(1) + ' ' + (WV.y - r1 * Math.sin(a)).toFixed(1);
+    d2 += (i ? 'L' : 'M') + (WV.x + r2 * Math.cos(a)).toFixed(1) + ' ' + (WV.y - r2 * Math.sin(a)).toFixed(1);
+  }
+  $('wLap1').setAttribute('d', d1); $('wLap2').setAttribute('d', d2);
+  const hx = WV.x + R * Math.cos(-Math.PI / 4), hy = WV.y - R * Math.sin(-Math.PI / 4);
+  $('ringHit').setAttribute('cx', hx.toFixed(1)); $('ringHit').setAttribute('cy', hy.toFixed(1));
+  const miss = N - Math.round(N), fit = Math.abs(miss) < 0.02 && Math.round(N) >= 1;
+  $('wBanner').textContent = fit ? `${Math.round(N)} whole wavelengths: the wave meets itself — a standing wave` : `${N.toFixed(3)} wavelengths: after one lap the wave is ${Math.abs(miss * 360).toFixed(0)}° out of step`;
+  $('wBanner').setAttribute('fill', fit ? '#2f7d4f' : '#6a3fc2');
+  $('wTxt').textContent = `r = ${S.r.toFixed(2)} a₀ = ${(w.r * 1e10).toFixed(3)} Å`;
+  const nrx = r => NR.x + r / 17 * NR.w, nry = n => NR.y + NR.h - n / 4.4 * NR.h;
+  $('nrDot').setAttribute('cx', nrx(S.r).toFixed(1)); $('nrDot').setAttribute('cy', nry(N).toFixed(1));
+  const erx = r => ER.x + r / 17 * ER.w, ery = E => ER.y + clamp(-E, 0, 14.5) / 14.5 * ER.h;
+  $('erDot').setAttribute('cx', erx(S.r).toFixed(1)); $('erDot').setAttribute('cy', ery(w.E).toFixed(1));
+}
+const WAVE = {phase: 0};
+
+function paintNums(){
+  let t = '';
+  if (!S.locked) { $('nums').innerHTML = '<p style="font-size:13px;color:var(--ink-3);margin:0">The measurements appear once you have made a prediction.</p>'; return; }
+  if (S.tab === 'photo') {
+    const m = METALS[S.metal], ev = photonEV(S.nu), I = current(P());
+    t += `<span>Photon energy hν</span><b>${ev.toFixed(3)} eV</b><span>Wavelength λ = c/ν</span><b>${lambdaNm(S.nu).toFixed(1)} nm</b>` +
+         `<span>Light power Φ·hν</span><b>${(S.flux * 1e13 * ev * QE * 1e6).toFixed(2)} µW</b><i class="sep"></i>` +
+         `<span>Photocurrent at V = ${sgn(S.V)} V</span><b>${uA(I)} µA</b>`;
+    const last = S.traces[S.traces.length - 1];
+    if (last) t += `<span>Last sweep: saturation current</span><b>${uA(last.Isat)} µA</b><span>Last sweep: stopping potential V₀</span><b>${last.V0 == null ? 'no current' : last.V0.toFixed(3) + ' V'}</b>`;
+    t += `<span>Points recorded</span><b>${S.recs.length}</b>`;
+  } else if (S.tab === 'bohr') {
+    const n = S.level;
+    t += `<span>Electron in level</span><b>n = ${n}</b><span>Energy Eₙ = −13.6/n²</span><b>${En(n).toFixed(3)} eV</b>` +
+         `<span>Orbit radius rₙ = n²a₀</span><b>${rn(n).toFixed(3)} Å</b><span>Speed vₙ</span><b>${sci(vn(n), 3)} m/s</b>`;
+    if (S.last) t += `<i class="sep"></i><span>Last ${S.last.kind === 'abs' ? 'absorbed' : 'emitted'} photon: n ${S.last.hi} ↔ ${S.last.lo}</span><b></b><span>Energy |ΔE|</span><b>${S.last.dE.toFixed(3)} eV</b>` +
+         `<span>Frequency ν = ΔE/h</span><b>${sci(S.last.dE * QE / H, 3)} Hz</b><span>Wavelength λ = hc/ΔE</span><b>${S.last.nm.toFixed(1)} nm</b>`;
+  } else {
+    const w = orbitWave(S.r);
+    t += `<span>Radius r</span><b>${(w.r * 1e10).toFixed(3)} Å</b><span>Speed v = √(ke²/mr)</span><b>${sci(w.v, 3)} m/s</b>` +
+         `<span>de Broglie λ = h/mv</span><b>${(w.lam * 1e10).toFixed(3)} Å</b><span>Circumference 2πr</span><b>${(2 * Math.PI * w.r * 1e10).toFixed(3)} Å</b><i class="sep"></i>` +
+         `<span>Wavelengths round it, N = 2πr/λ</span><b>${w.N.toFixed(3)}</b><span>Angular momentum mvr, in h/2π</span><b>${w.L.toFixed(3)}</b><span>Energy</span><b>${w.E.toFixed(3)} eV</b>`;
+  }
+  $('nums').innerHTML = `<div class="nums">${t}</div>`;
+}
+
+function paintWhy(){
+  if (!S.locked) { $('whyCard').hidden = true; return; }
+  $('whyCard').hidden = false;
+  let t = '';
+  if (S.tab === 'photo') {
+    const m = METALS[S.metal], ev = photonEV(S.nu), nu0 = threshold14(m.phi);
+    if (ev <= m.phi) t = `<p>Each photon brings <span class="mono">${ev.toFixed(2)} eV</span>; ${m.name.toLowerCase()} needs <span class="mono">${m.phi.toFixed(2)} eV</span> to let an electron go. One photon is absorbed by one electron, so ${S.flux > 0 ? `the ${S.flux.toFixed(1)} × 10¹³ photons a second` : 'more photons'} change nothing: the current is <span class="mono">0.000 µA</span> at every potential.</p>`;
+    else t = `<p>Each photon brings <span class="mono">${ev.toFixed(2)} eV</span>; <span class="mono">${m.phi.toFixed(2)}</span> of it pays the work function and the fastest electron keeps <span class="mono">${(ev - m.phi).toFixed(2)} eV</span>. To stop even that one the collector must be <span class="mono">${(ev - m.phi).toFixed(2)} V</span> below the emitter.</p>` +
+      `<p>${S.V < 0 ? 'Only electrons with more than ' + (-S.V).toFixed(2) + ' eV of motion towards A get up the hill.' : 'A positive collector gathers electrons that set off at a slant; enough pull, and it catches them all: the current saturates.'}</p>`;
+    if (S.recs.length >= 2) t += `<p>Your points lie on a line of slope h/e: the frequency sets each electron’s energy; the brightness only sets how many there are.</p>`;
+  } else if (S.tab === 'bohr') {
+    t = S.last ? `<p>The electron ${S.last.kind === 'abs' ? 'rose' : 'fell'} from n = ${S.last.kind === 'abs' ? S.last.lo : S.last.hi} to n = ${S.last.kind === 'abs' ? S.last.hi : S.last.lo}: the photon carries exactly <span class="mono">${S.last.dE.toFixed(3)} eV</span>, so λ = 1240/${S.last.dE.toFixed(3)} = <span class="mono">${S.last.nm.toFixed(1)} nm</span> (${bandName(S.last.nm)}).</p>` : `<p>Only the drops between allowed levels are possible, so only certain wavelengths ever come out: a line spectrum.</p>`;
+    if (S.fired) t += `<p>A ${S.fired.E.toFixed(2)} eV electron can lift an atom from −13.6 eV at most to n = ${S.fired.nmax} (E${S.fired.nmax} − E₁ = ${(En(S.fired.nmax) - En(1)).toFixed(2)} eV). Every line you see is a fall between levels up to n = ${S.fired.nmax}.</p>`;
+  } else {
+    const w = orbitWave(S.r);
+    t = `<p>At r = <span class="mono">${S.r.toFixed(2)} a₀</span> the electron moves at <span class="mono">${sci(w.v, 2)} m/s</span>, so its wavelength is <span class="mono">${(w.lam * 1e10).toFixed(3)} Å</span> and <span class="mono">${w.N.toFixed(3)}</span> of them fit round the orbit. N works out to √(r/a₀): a whole number only at r = a₀, 4a₀, 9a₀ … = n²a₀.</p>` +
+        `<p>And mvr = N·h/2π, always — so a wave that fits is exactly Bohr’s rule L = nh/2π.</p>`;
+  }
+  $('why').innerHTML = t;
+}
+
+const TABS = {photo: 'Photo', bohr: 'Bohr', wave: 'Wave'};
+function paint(){
+  for (const [t, c] of Object.entries(TABS)) {
+    $('v' + c).toggleAttribute('hidden', S.tab !== t);
+    $('ctl' + c).hidden = S.tab !== t;
+    $('tab' + c).setAttribute('aria-pressed', S.tab === t);
+  }
+  svg.setAttribute('aria-label', {photo: 'A photocell with its current–voltage graph, an energy ledger and a graph of stopping potential against frequency',
+    bohr: 'Hydrogen’s energy levels, its orbits and its line spectrum', wave: 'An electron’s de Broglie wave on a circular orbit, with graphs of the number of wavelengths and the energy against radius'}[S.tab]);
+  if (S.tab === 'photo') paintPhoto(); else if (S.tab === 'bohr') paintBohr(); else paintWave();
+  paintNums(); paintWhy();
+}
+
+/* ============================================================================
+   Findings and the prediction
+   ============================================================================ */
+let POE = null, EXPLAINED = false;
+function check(){
+  if (!S.locked) return;
+  const m = METALS[S.metal], I = current(P());
+  if (S.tab === 'photo' && photonEV(S.nu) < m.phi && S.flux >= 8 && S.V >= 0 && I === 0) {
+    discover('threshold');
+    if (!EXPLAINED && POE) {
+      EXPLAINED = true;
+      POE.explain(`At ν = ${S.nu.toFixed(1)} × 10¹⁴ Hz each photon carries hν = <b>${photonEV(S.nu).toFixed(2)} eV</b>, less than ${m.name.toLowerCase()}’s work function <b>${m.phi.toFixed(2)} eV</b>. ` +
+        `With ${S.flux.toFixed(1)} × 10¹³ photons a second the ammeter still reads <b>${uA(I)} µA</b>. One photon gives its energy to one electron, all at once; brightness is only the number of photons. Nothing comes out until ν passes ${threshold14(m.phi).toFixed(2)} × 10¹⁴ Hz — and then it comes out at once, however dim the light.`);
+    }
+  }
+  /* same metal and colour, brightness at least doubled: more current, the same V₀ */
+  const tr = S.traces;
+  for (let i = 0; i < tr.length; i++) for (let j = 0; j < tr.length; j++) {
+    const a = tr[i], b = tr[j];
+    if (i !== j && a.metal === b.metal && Math.abs(a.nu - b.nu) < 1e-9 && a.V0 != null && b.V0 != null && b.flux >= 2 * a.flux && a.flux > 0 &&
+        Math.abs(a.V0 - b.V0) < 0.011 && b.Isat > 1.9 * a.Isat) discover('intensity');
+  }
+  const by = {};
+  for (const r of S.recs) (by[r.metal] = by[r.metal] || []).push(r);
+  const fits = {};
+  for (const [k, rs] of Object.entries(by)) if (rs.length >= 2 && spread(rs) >= 0.5) fits[k] = Object.assign(millikan(rs), {n: rs.length, spread: spread(rs)});
+  for (const f of Object.values(fits)) if (f.n >= 3 && f.spread >= 2 && Math.abs(f.h / 6.626e-34 - 1) < 0.02) discover('millikan');
+  const fk = Object.keys(fits);
+  for (let i = 0; i < fk.length; i++) for (let j = i + 1; j < fk.length; j++) {
+    const a = fits[fk[i]], b = fits[fk[j]];
+    if (Math.abs(a.slope / b.slope - 1) < 0.03 && Math.abs(a.phi - b.phi) > 0.1) discover('workfn');
+  }
+  if (S.last && S.last.kind === 'em' && S.last.lo === 2 && S.last.nm >= 380 && S.last.nm <= 750) discover('balmer');
+  if (S.fired && S.fired.E >= 12.09 && S.fired.E < 12.75 && Object.keys(S.fired.lines).length === 3) discover('beam');
+}
+
+/* ============================================================================
+   Controls
+   ============================================================================ */
+build();
+function setTab(t){ S.tab = t; sound('tick'); paint(); track('tab', {tab: t}); }
+$('tabPhoto').addEventListener('click', () => setTab('photo'));
+$('tabBohr').addEventListener('click', () => setTab('bohr'));
+$('tabWave').addEventListener('click', () => setTab('wave'));
+function syncOuts(){
+  $('nuOut').textContent = S.nu.toFixed(1); $('fluxOut').textContent = S.flux.toFixed(1); $('voltOut').textContent = sgn(S.V) + ' V';
+  $('beamOut').textContent = S.beamE.toFixed(2) + ' eV'; $('radOut').textContent = S.r.toFixed(2);
+  $('metal').value = S.metal; $('nu').value = S.nu; $('flux').value = S.flux; $('volt').value = S.V; $('beam').value = S.beamE; $('rad').value = S.r;
+}
+$('metal').addEventListener('change', e => { S.metal = e.target.value; paint(); check(); track('metal', {metal: S.metal}); });
+$('nu').addEventListener('input', e => { S.nu = Math.round(+e.target.value * 10) / 10; syncOuts(); paint(); check(); });
+$('flux').addEventListener('input', e => { S.flux = +e.target.value; syncOuts(); paint(); check(); });
+$('volt').addEventListener('input', e => { S.V = Math.round(+e.target.value * 100) / 100; syncOuts(); paint(); check(); });
+for (const id of ['nu', 'flux', 'volt']) $(id).addEventListener('change', () => track('photocell', P()));
+const TCOL = ['#6a3fc2', '#e8890c', '#2f9e5b', '#3f7fd8', '#d6453d'];
+let traceN = 0;
+$('btnSweep').addEventListener('click', () => {
+  if (S.sweeping != null) return;
+  const p = P(), res = sweep(p);
+  const tr = {metal: p.metal, nu: p.nu, flux: p.flux, pts: res.pts, V0: res.V0, Isat: res.Isat, col: TCOL[traceN++ % TCOL.length]};
+  sound('whoosh'); track('sweep', {metal: p.metal, nu: p.nu, flux: p.flux, V0: res.V0});
+  S.sweeping = 0;
+  tween(0, 1, 1400, k => { S.sweeping = k; $('ivSweep').setAttribute('d', ivPath(res.pts.slice(0, Math.max(2, Math.round(k * res.pts.length))))); }, t => t).then(() => {
+    S.sweeping = null; $('ivSweep').setAttribute('d', '');
+    S.traces.push(tr); if (S.traces.length > 5) S.traces.shift();
+    paint(); check();
+  });
+});
+$('btnRecord').addEventListener('click', () => {
+  const last = S.traces[S.traces.length - 1]; if (!last || last.V0 == null) return;
+  S.recs = S.recs.filter(r => !(r.metal === last.metal && Math.abs(r.nu - last.nu) < 1e-9));
+  S.recs.push({metal: last.metal, nu: last.nu, V0: last.V0});
+  sound('pop'); track('record', {metal: last.metal, nu: last.nu, V0: last.V0}); paint(); check();
+});
+$('btnClearP').addEventListener('click', () => { S.traces = []; S.recs = []; paint(); });
+
+/* Bohr: click a level */
+let bohrBusy = false;
+function goLevel(n){
+  if (!S.locked || bohrBusy || n === S.level) return;
+  const from = S.level, hi = Math.max(from, n), lo = Math.min(from, n), dE = En(hi) - En(lo), nm = HC_EVNM / dE;
+  const kind = n > from ? 'abs' : 'em';
+  S.last = {kind, hi, lo, dE, nm};
+  S.marks.push({kind, hi, lo, nm}); if (S.marks.length > 20) S.marks.shift();
+  const key = hi + '-' + lo;
+  if (kind === 'em') { S.lines[key] = S.lines[key] || {hi, lo, nm, count: 0}; S.lines[key].count++; S.lines[key].em = true; }
+  S.level = n; sound(kind === 'em' ? 'chime' : 'pop'); track('transition', {from, to: n, nm});
+  bohrBusy = true;
+  const y0 = BE.y, y1 = lvy(En(n));
+  flashPhoton(nm, kind);
+  tween(y0, y1, 450, y => { BE.y = y; paintBohr(); }).then(() => { bohrBusy = false; paint(); check(); });
+  paint();
+}
+function flashPhoton(nm, kind){
+  const c = nmColour(nm);
+  let d = ''; for (let i = 0; i <= 60; i++) { const x = i * 2.4; d += (i ? 'L' : 'M') + x.toFixed(1) + ' ' + (6 * Math.sin(i / 60 * Math.PI * 10)).toFixed(1); }
+  $('aPhoton').innerHTML = `<g transform="translate(${AT.x + 20} ${AT.y - 90})"><path d="${d}" fill="none" stroke="${c}" stroke-width="2.4"/><text x="0" y="-12" fill="${c}" font-size="12" class="m">${kind === 'em' ? 'out' : 'in'}: ${nm.toFixed(1)} nm</text></g>`;
+}
+$('lvHits').addEventListener('click', e => { const r = e.target.closest('[data-n]'); if (r) goLevel(+r.dataset.n); });
+$('beam').addEventListener('input', e => { S.beamE = Math.round(+e.target.value * 100) / 100; syncOuts(); });
+let fireSeed = 3;
+$('btnFire').addEventListener('click', () => {
+  if (!S.locked) return;
+  const r = bombard(S.beamE, 200, fireSeed++);
+  S.fired = {E: S.beamE, nmax: r.nmax, lines: r.lines};
+  S.lines = {};
+  for (const [k, c] of Object.entries(r.lines)) { const [hi, lo] = k.split('-').map(Number); S.lines[k] = {hi, lo, nm: lineNm(hi, lo), count: c, em: true}; }
+  S.last = null; sound(Object.keys(r.lines).length ? 'chime' : 'oops');
+  track('bombard', {E: S.beamE, lines: Object.keys(r.lines).length});
+  if (!Object.keys(r.lines).length) toast(`At ${S.beamE.toFixed(2)} eV no electron can lift an atom even to n = 2 (it needs 10.2 eV): no light.`);
+  paint(); check();
+});
+$('btnClearS').addEventListener('click', () => { S.lines = {}; S.fired = null; S.marks = []; S.last = null; paint(); });
+
+/* Waves: drag the ring or use the slider */
+$('rad').addEventListener('input', e => { S.r = +e.target.value; syncOuts(); paint(); });
+$('rad').addEventListener('change', () => { waveEnd(); });
+drag($('ringHit'), svg, {
+  start(){ if (!S.locked) return false; },
+  move(p){ S.r = clamp(Math.round(Math.hypot(p.x - WV.x, p.y - WV.y) / WV.k * 100) / 100, 0.5, 17); syncOuts(); paint(); },
+  end(){ waveEnd(); },
+});
+function waveEnd(){
+  const w = orbitWave(S.r);
+  track('orbit', {r: S.r, N: w.N});
+  if (Math.abs(w.N - Math.round(w.N)) < 0.02 && Math.round(w.N) >= 2) discover('standing');
+}
+
+function lockControls(lock){
+  for (const id of ['metal', 'nu', 'flux', 'volt', 'btnSweep', 'btnClearP', 'beam', 'btnFire', 'btnClearS', 'rad']) $(id).disabled = lock;
+  $('gate').hidden = !lock;
+  $('ringHit').style.pointerEvents = lock ? 'none' : '';
+}
+
+/* ============================================================================
+   Start
+   ============================================================================ */
+findings($('finds'), [
+  {id: 'threshold', icon: '⛔', label: 'Too red, however bright', hint: 'Below some frequency, turn the light right up'},
+  {id: 'intensity', icon: '☀', label: 'Brighter: more current, same V₀', hint: 'Sweep twice at one colour, twice as bright'},
+  {id: 'millikan',  icon: 'h', label: 'Planck’s constant from a straight line', hint: 'Record V₀ at three frequencies or more'},
+  {id: 'workfn',    icon: '∥', label: 'Every metal, the same slope', hint: 'Fit lines for two metals'},
+  {id: 'balmer',    icon: '🔴', label: 'A visible line: a fall to n = 2', hint: 'Drop the electron and look at the spectrum'},
+  {id: 'beam',      icon: '⚡', label: 'A 12.5 eV beam lights three lines', hint: 'Fire a beam between 12.09 and 12.75 eV'},
+  {id: 'standing',  icon: '◯', label: 'The wave fits: r = n²a₀', hint: 'Stretch the orbit until the wave meets itself'},
+], () => toast('All seven. Light arrives in packets; the atom takes and gives them only in fixed sizes.', 4800));
+
+POE = predict($('poe'), {
+  id: 'threshold',
+  q: 'Red light shines on a caesium plate and no electrons come out. You make the red light 100 times brighter. What happens?',
+  options: [
+    {id: 'fast',  text: 'Electrons come out, and they come out faster.'},
+    {id: 'delay', text: 'Electrons come out after a while, once they have soaked up enough energy.'},
+    {id: 'none',  text: 'Still no electrons at all.', right: true},
+    {id: 'slow',  text: 'A few slow electrons come out.'},
+  ],
+  onLock(){
+    S.locked = true; lockControls(false);
+    $('veilP').remove();
+    paint(); check();
+  },
+});
+lockControls(!POE.locked);
+if (!Play.FF('predict')) { S.locked = true; }
+syncOuts(); paint();
+
+/* ---- animation: photons in, electrons across; the atom's electron goes round ---- */
+const RM = reduced();
+const PH = [], EL = [];
+let photAcc = 0, rng = Play.mulberry32(99), aAng = 0, lastT = 0;
+loop(dt => {
+  if (S.tab === 'photo') animPhoto(dt);
+  else if (S.tab === 'bohr') { if (!RM) aAng += dt * 1.6 / Math.pow(S.level, 3); const R = AT.k * S.level * S.level; $('aElec').setAttribute('cx', (AT.x + R * Math.cos(aAng)).toFixed(1)); $('aElec').setAttribute('cy', (AT.y - R * Math.sin(aAng)).toFixed(1)); }
+  else if (S.tab === 'wave') { const w = orbitWave(S.r); w.fits = Math.abs(w.N - Math.round(w.N)) < 0.02; if (!RM && w.fits) { WAVE.phase += dt * 3; paintWave(); } else if (WAVE.phase !== 0) { WAVE.phase = 0; paintWave(); } }
+});
+function animPhoto(dt){
+  if (RM) { $('photons').innerHTML = ''; $('elecs').innerHTML = ''; return; }
+  const m = METALS[S.metal], ev = photonEV(S.nu), Kmax = ev - m.phi, col = nmColour(lambdaNm(S.nu));
+  photAcc += dt * S.flux * 10;
+  while (photAcc >= 1) {
+    photAcc -= 1;
+    PH.push({t: 0, y0: (rng() * 2 - 1) * 0.3});
+  }
+  const sx = LAMP.x, sy = LAMP.y + 8;
+  let ph = '';
+  for (let i = PH.length - 1; i >= 0; i--) {
+    const p = PH[i]; p.t += dt * 1.8;
+    const tx = EXs + 1, ty = PY + p.y0 * DPX;
+    if (p.t >= 1) {
+      PH.splice(i, 1);
+      if (Kmax > 0 && rng() < ETA) {             // ETA of the photons that land free an electron
+        const u = rng() * 2 - 1, K = Kmax * (1 - rng());
+        EL.push({x: 0, y: p.y0, sn: Math.sqrt(K * (1 - u * u)), st: Math.sign(u) * Math.sqrt(K * u * u), age: 0});
+      }
+      continue;
+    }
+    const x = sx + (tx - sx) * p.t, y = sy + (ty - sy) * p.t;
+    ph += `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="2.6" fill="${col}"/>`;
+  }
+  $('photons').innerHTML = ph;
+  /* electrons: x″ = V/2 in units of d and √eV, exactly as the model's flight() */
+  let el = '';
+  const step = dt * 1.2;
+  for (let i = EL.length - 1; i >= 0; i--) {
+    const e = EL[i];
+    e.x += e.sn * step + S.V / 4 * step * step; e.sn += S.V / 2 * step; e.y += e.st * step; e.age += dt;
+    if (e.x < 0 || e.age > 6) { EL.splice(i, 1); continue; }
+    if (e.x >= 1) { if (Math.abs(e.y) <= GEOM.wc) { EL.splice(i, 1); continue; } }
+    if (Math.abs(e.y) > 1.35 || e.x > 1.6) { EL.splice(i, 1); continue; }
+    el += `<circle cx="${(EXs + e.x * DPX).toFixed(1)}" cy="${(PY + e.y * DPX).toFixed(1)}" r="2.3"/>`;
+  }
+  $('elecs').innerHTML = el;
+}
+window.PG_STATE = () => ({tab: S.tab, locked: S.locked, metal: S.metal, nu: S.nu, flux: S.flux, V: S.V, I: current(P()),
+  traces: S.traces.map(t => ({metal: t.metal, nu: t.nu, flux: t.flux, V0: t.V0, Isat: t.Isat})), recs: S.recs.slice(),
+  level: S.level, last: S.last, lines: Object.values(S.lines).map(l => ({hi: l.hi, lo: l.lo, nm: l.nm, count: l.count})), fired: S.fired && {E: S.fired.E, nmax: S.fired.nmax},
+  r: S.r, N: orbitWave(S.r).N, sweeping: S.sweeping != null});
+window.PG_MODEL = {photonEV, lambdaNm, threshold14, current, collectedFraction, sweep, fitLine, millikan, deBroglie, En, lineNm, rn, vn, bombard, orbitWave, METALS, ETA, H, QE, ME};
+</script>
+</body>
+</html>

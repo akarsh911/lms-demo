@@ -1,0 +1,667 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ticking Clocks, Turning Calendars</title>
+<meta name="description" content="Class 4: turn the minute hand of a geared clock and watch the hour hand follow; time Raghav, Muneera and Akira; read AM, PM and the 24-hour clock; page through calendars to find leap years and weekday patterns.">
+<link rel="icon" href="../../favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600&family=Nunito:wght@500;700;800&family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="../../play.css">
+<style>
+html{scrollbar-gutter:stable}
+.tabs{display:flex; gap:8px; padding:10px 12px; background:var(--sunk); border-bottom:1px solid var(--hair)}
+.tab{flex:1; min-height:48px; border-radius:var(--radius-sm); border:2px solid transparent; background:var(--card); cursor:pointer;
+  font-family:var(--font-head); font-size:17px; font-weight:600; color:var(--ink-2); display:flex; align-items:center; justify-content:center; gap:8px}
+.tab[aria-selected="true"]{border-color:var(--accent); color:var(--ink); box-shadow:0 2px 0 var(--accent)}
+.tab:hover{border-color:var(--hair-2)}
+#stageWrap{align-self:start; min-height:0}
+#clockHit{cursor:grab}
+#clockHit.dragging{cursor:grabbing}
+.gate{position:absolute; left:0; right:0; top:300px; display:grid; place-items:center; pointer-events:none}
+.gate span{background:rgba(15,26,43,.86); color:#fff; padding:12px 20px; border-radius:99px; font-weight:700; font-size:16px}
+.missions{list-style:none; margin:0; padding:0; display:grid; gap:6px}
+.missions li{display:grid; grid-template-columns:30px 1fr; gap:8px; align-items:center}
+.missions li i{width:28px; height:28px; border-radius:50%; border:2.5px dashed var(--hair-2); display:grid; place-items:center; font-style:normal; font-size:15px; color:#fff}
+.missions button{all:unset; box-sizing:border-box; cursor:pointer; font-weight:700; font-size:14.5px; line-height:1.3; color:var(--ink-2); padding:6px 8px; border-radius:10px; border:2px solid transparent}
+.missions button:hover{background:var(--sunk)}
+.missions button:focus-visible{outline:3px solid var(--accent)}
+.missions li.on button{border-color:var(--accent); background:var(--accent-soft); color:var(--ink)}
+.missions li.done i{border:none; background:var(--good); animation:tickPop .5s var(--spring)}
+.missions li.done button{color:var(--ink)}
+.missions li.done button span{text-decoration:line-through; text-decoration-color:var(--good); text-decoration-thickness:2px}
+@keyframes tickPop{0%{transform:scale(.3)}100%{transform:scale(1)}}
+.note{font-size:13px; color:var(--ink-3); margin:6px 0 0}
+/* the calendar, drawn in HTML: a wall calendar with rings */
+#calWrap{display:grid; grid-template-columns:minmax(0,1fr) 300px; gap:16px; padding:18px; background:linear-gradient(#f4ead8,#efe1c8); min-height:580px}
+.calPage{background:#fff; border-radius:18px; box-shadow:0 6px 18px rgba(80,50,10,.18); position:relative; padding:34px 18px 18px; color:#2a2a2a}
+.rings{position:absolute; top:-12px; left:0; right:0; display:flex; justify-content:space-evenly}
+.rings i{width:14px; height:30px; border-radius:8px; background:linear-gradient(#9aa3ad,#5c6670); box-shadow:inset 0 2px 0 rgba(255,255,255,.4)}
+.calHead{display:grid; grid-template-columns:52px 1fr 52px; align-items:center; gap:8px; background:#e2553f; color:#fff; border-radius:12px; padding:6px}
+.calHead h2{text-align:center; font-size:26px; font-family:var(--font-head); font-weight:600}
+.calHead h2 small{font-size:16px; opacity:.85; font-weight:500; margin-left:8px}
+.nav{min-height:48px; border-radius:10px; border:0; background:rgba(255,255,255,.22); color:#fff; font-size:22px; font-weight:800; cursor:pointer}
+.nav:hover{background:rgba(255,255,255,.34)}
+.yearRow{display:flex; justify-content:center; gap:8px; margin:8px 0 4px; align-items:center; font-weight:800; color:#6b4a2a}
+.yearRow .nav{background:#f3e6d2; color:#6b4a2a; min-height:36px; font-size:15px; padding:0 12px}
+.yearRow .nav:hover{background:#ead6b8}
+.grid{display:grid; grid-template-columns:repeat(7,1fr); gap:5px; margin-top:8px}
+.grid .wd{text-align:center; font-weight:800; font-size:13px; color:#6b7480; padding:4px 0}
+.grid .wd.sun{color:#d6453d}
+.day{min-height:52px; border-radius:10px; border:2px solid #efe7da; background:#fffdf8; cursor:pointer; font-family:var(--font-head); font-size:20px; font-weight:600; color:#2a2a2a; position:relative}
+.day:hover{border-color:#e2b36a}
+.day.sun{color:#d6453d}
+.day.pick{background:#2f7de1; border-color:#2f7de1; color:#fff}
+.day.mark{box-shadow:inset 0 0 0 3px #ffb400}
+.day .cake{position:absolute; right:3px; top:1px; font-size:13px}
+.blank{min-height:52px}
+.leapBadge{margin-top:10px; padding:8px 12px; border-radius:12px; background:#fff4d6; color:#6b4a2a; font-weight:700; font-size:14.5px}
+.calSide{display:flex; flex-direction:column; gap:12px; color:#2a2a2a}
+.nbook{background:#fffef6; border-radius:14px; padding:12px 14px; box-shadow:0 4px 12px rgba(80,50,10,.14); border-left:6px solid #e2553f;
+  background-image:repeating-linear-gradient(#fffef6 0 27px, #dce8f5 27px 28px); font-size:15px; line-height:28px}
+.nbook b{font-variant-numeric:tabular-nums}
+.nbook .k{font-size:11px; letter-spacing:.07em; text-transform:uppercase; font-weight:800; color:#a0673a; line-height:20px}
+.patt{display:grid; gap:4px; margin-top:4px}
+.patt div{display:flex; justify-content:space-between; background:#fff; border-radius:8px; padding:0 8px; line-height:30px; font-weight:700}
+@media (max-width:1240px){ #calWrap{grid-template-columns:1fr} .calSide{display:grid; grid-template-columns:1fr 1fr; align-items:start} }
+@media (max-width:1040px) and (min-width:981px){ .day{min-height:44px; font-size:17px} .blank{min-height:44px} }
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]) #calWrap{background:linear-gradient(#3a3024,#2e261c)} }
+</style>
+</head>
+<body>
+<header class="pg-top"></header>
+
+<div class="pg-intro">
+  <h1>Ticking clocks, turning calendars</h1>
+  <p>Turn the long minute hand and watch the short hour hand follow. Help Akira, Raghav and Muneera with their times, then page through the calendar with Parv to find leap years and patterns.</p>
+</div>
+
+<main class="pg-main">
+  <section class="pg-stage" id="stageWrap">
+    <div class="tabs" role="tablist">
+      <button class="tab" id="tabClock" role="tab" aria-selected="true">🕰️ The geared clock</button>
+      <button class="tab" id="tabCal" role="tab" aria-selected="false">📅 Parv’s calendar</button>
+    </div>
+    <svg id="clockStage" viewBox="0 0 1000 580" role="img" aria-label="A clock with an hour hand and a minute hand, a window showing the sky at that time, a digital clock and a time-taken ruler. Drag round the clock to turn the hands."></svg>
+    <div id="calWrap" hidden>
+      <div class="calPage">
+        <div class="rings"><i></i><i></i><i></i><i></i><i></i><i></i></div>
+        <div class="calHead"><button class="nav" id="mPrev" aria-label="Previous month">◀</button><h2 id="calTitle">February <small>2024</small></h2><button class="nav" id="mNext" aria-label="Next month">▶</button></div>
+        <div class="yearRow"><button class="nav" id="yPrev" aria-label="Previous year">◀ year</button><span id="yearOut">2024</span><button class="nav" id="yNext" aria-label="Next year">year ▶</button></div>
+        <div class="grid" id="calGrid"></div>
+        <div class="leapBadge" id="leapBadge"></div>
+      </div>
+      <div class="calSide">
+        <svg id="parvArt" viewBox="0 0 300 190" role="img" aria-label="Parv"></svg>
+        <div class="nbook" id="nbook"></div>
+      </div>
+    </div>
+    <div class="gate" id="gate" hidden><span>Make a guess first →</span></div>
+  </section>
+
+  <aside class="pg-side">
+    <div id="poe"></div>
+    <div class="card">
+      <div class="kicker">Missions</div>
+      <ul class="missions" id="missions"></ul>
+      <div class="row" style="margin-top:10px" id="clockBtns">
+        <button class="btn sm" id="btnTick">▶ Let it tick</button>
+        <button class="btn sm" id="btnStart">⏱ Start timing from here</button>
+      </div>
+      <p class="note" id="tip">Tip: drag the short hand to move a whole hour at a time.</p>
+    </div>
+    <div class="card"><div class="kicker">Discoveries</div><div id="finds"></div></div>
+  </aside>
+</main>
+
+<script src="../../play.js"></script>
+<script>
+'use strict';
+const {$, esc, clamp, lerp, fmt, drag, loop, sound, say, track, toast, tween, predict, findings, found,
+       shareState, sharedState, mount, reduced} = Play;
+mount({thread: 'time', band: 'explorer'});
+
+/* MODEL:start ==================================================================
+   Two small, real machines.
+
+   THE GEARED CLOCK. The clock holds one number: t, the minutes since midnight
+   (it may run past a day). The hands are gears on t:
+       minute hand angle = 6° × (t mod 60)          (once round in 60 minutes)
+       hour hand angle   = 0.5° × (t mod 720)       (once round in 12 hours)
+   so while the minute hand turns 360°, the hour hand turns 30°: one number,
+   1/12 as fast. Dragging EITHER hand changes t, and the other hand follows.
+   Time taken is simply t − t0. AM/PM and the 24-hour clock read t mod 1440.
+
+   THE CALENDAR. The Gregorian rules: a year is a leap year if it divides by 4,
+   except century years, which must divide by 400. Months have 31, 28 (29 in a
+   leap year), 31, 30, 31, 30, 31, 31, 30, 31, 30, 31 days. The day of the week is
+   counted, not looked up: days from 1 January of year 1 (a Monday in this
+   calendar), mod 7.
+   ============================================================================ */
+const DAY = 1440;
+const minuteAngle = t => (((t % 60) + 60) % 60) * 6;
+const hourAngle = t => (((t % 720) + 720) % 720) * 0.5;
+const tod = t => ((t % DAY) + DAY) % DAY;
+const two = n => String(n).padStart(2, '0');
+function fmt24(t){ const m = tod(t); return two(Math.floor(m / 60)) + ':' + two(m % 60); }
+function fmt12(t){ const m = tod(t), h = Math.floor(m / 60); return `${h % 12 === 0 ? 12 : h % 12}:${two(m % 60)} ${h < 12 ? 'AM' : 'PM'}`; }
+const NUMW = ['twelve', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten', 'eleven', 'twelve'];
+function words(t){
+  const m = tod(t), h = Math.floor(m / 60) % 12, mm = m % 60, next = (h + 1) % 12;
+  if (mm === 0) return `${NUMW[h]} o’clock`;
+  if (mm === 15) return `quarter past ${NUMW[h]}`;
+  if (mm === 30) return `half past ${NUMW[h]}`;
+  if (mm === 45) return `quarter to ${NUMW[next]}`;
+  if (mm < 30) return `${mm} minute${mm > 1 ? 's' : ''} past ${NUMW[h]}`;
+  return `${60 - mm} minute${60 - mm > 1 ? 's' : ''} to ${NUMW[next]}`;
+}
+function duration(min){
+  if (min === 0) return '0 minutes';
+  const h = Math.floor(Math.abs(min) / 60), m = Math.abs(min) % 60, s = [];
+  if (h) s.push(`${h} hour${h > 1 ? 's' : ''}`);
+  if (m) s.push(`${m} minute${m > 1 ? 's' : ''}`);
+  return (min < 0 ? '−' : '') + s.join(' ');
+}
+const isLeap = y => (y % 4 === 0 && y % 100 !== 0) || y % 400 === 0;
+const MLEN = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+const daysIn = (m, y) => m === 1 && isLeap(y) ? 29 : MLEN[m];          // m: 0 = January
+const daysInYear = y => isLeap(y) ? 366 : 365;
+const WEEK = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+/* days since 1 January of year 1 (that day = 0) */
+function dayNumber(d, m, y){
+  const yp = y - 1;
+  let n = 365 * yp + Math.floor(yp / 4) - Math.floor(yp / 100) + Math.floor(yp / 400);
+  for (let i = 0; i < m; i++) n += daysIn(i, y);
+  return n + d - 1;
+}
+const weekday = (d, m, y) => (dayNumber(d, m, y) + 1) % 7;               // 0 = Sunday; 1 Jan 0001 was a Monday
+const ddmmyyyy = (d, m, y) => `${two(d)}/${two(m + 1)}/${y}`;
+/* the same date in the next month moves on through the week by (days in this month) mod 7 */
+const weekShift = (m, y) => daysIn(m, y) % 7;
+/* MODEL:end */
+
+/* ---- state: plain data --------------------------------------------------- */
+const MISSIONS = [
+  {id: 'akira',   tab: 'clock', who: 'Akira',   t0: 8 * 60,       text: 'Akira: at 8:00 AM, turn the minute hand once all the way round'},
+  {id: 'raghav',  tab: 'clock', who: 'Raghav',  t0: 8 * 60 + 20,  text: 'Raghav leaves at 8:20 AM and is back at 8:35 AM. How long did he take?'},
+  {id: 'muneera', tab: 'clock', who: 'Muneera', t0: 16 * 60 + 15, text: 'Muneera reads from 4:15 PM for 45 minutes. When does she finish?'},
+  {id: 'eightpm', tab: 'clock', who: 'Akira',   t0: null,         text: 'Make it 8 o’clock at night. What does the digital clock say?'},
+  {id: 'leap',    tab: 'cal',   who: 'Parv',    text: 'Parv was born on 29 February 2016. Look at February 2024 and 2025. Which has a 29th?'},
+  {id: 'mondays', tab: 'cal',   who: 'Parv',    text: '1 July 2024 is a Monday. Tap the next two Mondays.'},
+  {id: 'pattern', tab: 'cal',   who: 'Parv',    text: 'Tap the 15th of July, August and September. What pattern do you see?'},
+];
+const S = {tab: 'clock', t: 8 * 60, t0: 8 * 60, active: 'akira', locked: false, ticking: false, missions: {},
+           cm: 1, cy: 2024, pick: null, taps: [], seenFeb: {}};
+const shared = sharedState();
+if (shared) {
+  if (isFinite(+shared.t)) S.t = Math.round(+shared.t);
+  if (isFinite(+shared.t0)) S.t0 = Math.round(+shared.t0);
+  if (shared.tab === 'cal') S.tab = 'cal';
+  if (isFinite(+shared.cm)) S.cm = clamp(Math.round(+shared.cm), 0, 11);
+  if (isFinite(+shared.cy)) S.cy = clamp(Math.round(+shared.cy), 1900, 2100);
+}
+shareState(() => ({tab: S.tab, t: S.t, t0: S.t0, cm: S.cm, cy: S.cy}));
+
+/* ============================================================================
+   The clock scene. Built once, then patched.
+   ============================================================================ */
+const svg = $('clockStage');
+const f1 = n => (+n).toFixed(1);
+const TAU = Math.PI * 2, D2R = Math.PI / 180;
+const CK = {x: 280, y: 300, r: 222};
+const at = (deg, r) => ({x: CK.x + r * Math.sin(deg * D2R), y: CK.y - r * Math.cos(deg * D2R)});
+const SKY = {x: 560, y: 22, w: 414, h: 200};
+const RUL = {x: 584, y: 470, w: 366};
+
+const mix = (a, b, t) => {
+  t = clamp(t, 0, 1);
+  const pa = [1, 3, 5].map(i => parseInt(a.slice(i, i + 2), 16)), pb = [1, 3, 5].map(i => parseInt(b.slice(i, i + 2), 16));
+  return '#' + pa.map((v, i) => Math.round(v + (pb[i] - v) * t).toString(16).padStart(2, '0')).join('');
+};
+/* the sky over the town: the Sun is up from about 6 to 6:30 pm */
+function sunUp(h){ h = ((h % 24) + 24) % 24; if (h >= 6 && h <= 18.5) return Math.sin(Math.PI * (h - 6) / 12.5); return -Math.sin(Math.PI * (((h - 18.5) + 24) % 24) / 11.5); }
+function skyLowCol(h){ const a = sunUp(h), dawn = ((h % 24) + 24) % 24 < 12, tw = dawn ? '#ffc8a0' : '#ff9a50';
+  return a >= 0.5 ? '#d9f1ff' : a >= 0 ? mix(tw, '#d9f1ff', a / 0.5) : a >= -0.3 ? mix('#262c5e', '#ff9a6b', (a + 0.3) / 0.3) : '#262c5e'; }
+function skyCol(h){ const a = sunUp(h), dawn = ((h % 24) + 24) % 24 < 12, tw = dawn ? '#8fb0e8' : '#7a86d0';
+  return a >= 0.5 ? '#4fb0f2' : a >= 0 ? mix(tw, '#4fb0f2', a / 0.5) : a >= -0.3 ? mix('#1b2150', dawn ? '#6f7fc8' : '#7a5aa0', (a + 0.3) / 0.3) : '#161c46'; }
+
+/* a child, drawn in code; colours and a prop change who it is */
+const KIDS = {
+  Akira:   {skin: '#d89a68', hair: '#2a1a10', top: '#2f9e5b', bottom: '#1d6b3b', girl: true,  prop: 'bag'},
+  Raghav:  {skin: '#c98a5a', hair: '#1a1210', top: '#3f7fd8', bottom: '#23446e', girl: false, prop: 'milk'},
+  Muneera: {skin: '#e0a878', hair: '#3a2012', top: '#7b5cd6', bottom: '#4b358f', girl: true,  prop: 'book'},
+  Parv:    {skin: '#c98a5a', hair: '#2a1a10', top: '#e2553f', bottom: '#8f2e22', girl: false, prop: 'cake'},
+};
+function kid(name){
+  const k = KIDS[name];
+  const prop = {
+    bag: `<rect x="-40" y="-104" width="26" height="40" rx="8" fill="#ffb400" stroke="#b8761a" stroke-width="3"/>`,
+    milk: `<g transform="translate(34 -60)"><path d="M-10 -4 L10 -4 L12 26 L-12 26 Z" fill="#c8d2dc" stroke="#6a7a8a" stroke-width="3" stroke-linejoin="round"/><path d="M-8 -4 C-8 -16 8 -16 8 -4" fill="none" stroke="#6a7a8a" stroke-width="3"/><rect x="-11" y="6" width="22" height="6" fill="#fff"/></g>`,
+    book: `<g transform="translate(0 -70)"><path d="M-26 0 L0 6 L26 0 L26 -26 L0 -20 L-26 -26 Z" fill="#fff" stroke="#e0567a" stroke-width="3" stroke-linejoin="round"/><path d="M0 6 V-20" stroke="#e0567a" stroke-width="2.5"/></g>`,
+    cake: `<g transform="translate(40 -66)"><rect x="-20" y="-6" width="40" height="22" rx="4" fill="#f7c6d9" stroke="#c2569b" stroke-width="2.5"/><path d="M-20 -2 q5 5 10 0 q5 5 10 0 q5 5 10 0 q5 5 10 0" fill="none" stroke="#fff" stroke-width="3"/><rect x="-2" y="-20" width="4" height="14" fill="#3f7fd8"/><path d="M0 -28 q4 4 0 8 q-4 -4 0 -8 Z" fill="#ffb400"/></g>`,
+  }[k.prop];
+  return `<g>
+    <ellipse cx="0" cy="2" rx="34" ry="7" fill="#000" opacity=".15"/>
+    <path d="M-9 -2 V-44 M9 -2 V-44" stroke="${k.skin}" stroke-width="10" stroke-linecap="round"/>
+    ${k.girl ? `<path d="M-22 -96 C-28 -76 -32 -58 -34 -40 L34 -40 C32 -58 28 -76 22 -96 C10 -102 -10 -102 -22 -96 Z" fill="${k.top}"/>`
+             : `<path d="M-20 -96 C-24 -80 -24 -66 -22 -50 L22 -50 C24 -66 24 -80 20 -96 C10 -102 -10 -102 -20 -96 Z" fill="${k.top}"/><path d="M-22 -52 H22 L20 -34 H3 L0 -44 L-3 -34 H-20 Z" fill="${k.bottom}"/>`}
+    <path d="M-20 -92 C-32 -80 -34 -66 -32 -54 M20 -92 C32 -80 34 -66 32 -54" stroke="${k.skin}" stroke-width="9" fill="none" stroke-linecap="round"/>
+    <rect x="-5" y="-110" width="10" height="10" fill="${k.skin}"/>
+    <circle cx="0" cy="-130" r="24" fill="${k.skin}"/>
+    ${k.girl ? `<circle cx="-24" cy="-132" r="8" fill="${k.hair}"/><circle cx="24" cy="-132" r="8" fill="${k.hair}"/>` : ''}
+    <path d="M-24 -134 C-26 -160 26 -160 24 -134 C18 -146 6 -150 0 -144 C-6 -150 -18 -146 -24 -134 Z" fill="${k.hair}"/>
+    <circle cx="-8" cy="-131" r="3" fill="#2a1a10"/><circle cx="8" cy="-131" r="3" fill="#2a1a10"/>
+    <path d="M-7 -120 Q0 -113 7 -120" stroke="#6b2a1a" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+    <ellipse cx="-15" cy="-121" rx="4.5" ry="3" fill="#ff7a6a" opacity=".45"/><ellipse cx="15" cy="-121" rx="4.5" ry="3" fill="#ff7a6a" opacity=".45"/>
+    ${prop}
+  </g>`;
+}
+
+function buildClock(){
+  let ticks = '', nums = '';
+  for (let i = 0; i < 60; i++) {
+    const big = i % 5 === 0, a = at(i * 6, CK.r - 14), b = at(i * 6, CK.r - (big ? 36 : 24));
+    ticks += `<line x1="${f1(a.x)}" y1="${f1(a.y)}" x2="${f1(b.x)}" y2="${f1(b.y)}" stroke="#3a2a1a" stroke-width="${big ? 5 : 2}" stroke-linecap="round"/>`;
+  }
+  for (let n = 1; n <= 12; n++) { const p = at(n * 30, CK.r - 66); nums += `<text x="${f1(p.x)}" y="${f1(p.y + 13)}" text-anchor="middle" font-size="38" font-weight="600" fill="#2a1a10" font-family="Fredoka, Nunito, sans-serif">${n}</text>`; }
+  /* the minutes, small, round the outside, every five */
+  let mins = '';
+  for (let i = 5; i <= 60; i += 5) { const p = at(i * 6, CK.r + 2); mins += `<text x="${f1(p.x)}" y="${f1(p.y + 5)}" text-anchor="middle" font-size="13" font-weight="800" fill="#fff4dc" font-family="Nunito, sans-serif">${i}</text>`; }
+  let rulTicks = '';
+  svg.innerHTML = `
+  <defs>
+    <radialGradient id="gFace" cx="45%" cy="40%"><stop offset="0" stop-color="#fffdf6"/><stop offset="1" stop-color="#f6ecd6"/></radialGradient>
+    <linearGradient id="gWood" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#c98a4a"/><stop offset="1" stop-color="#8a5226"/></linearGradient>
+    <linearGradient id="gSkyW" x1="0" y1="0" x2="0" y2="1"><stop id="skw0" offset="0" stop-color="#4fb0f2"/><stop id="skw1" offset="1" stop-color="#d9f1ff"/></linearGradient>
+    <clipPath id="clipSky"><rect x="${SKY.x}" y="${SKY.y}" width="${SKY.w}" height="${SKY.h}" rx="22"/></clipPath>
+    <filter id="soft" x="-20%" y="-20%" width="140%" height="140%"><feDropShadow dx="0" dy="4" stdDeviation="5" flood-color="#000" flood-opacity=".25"/></filter>
+  </defs>
+  <rect width="1000" height="580" fill="#fdf3e1"/>
+  <path d="M0 520 H1000 V580 H0 Z" fill="#f2dfbd"/>
+  <!-- the clock -->
+  <g filter="url(#soft)"><circle cx="${CK.x}" cy="${CK.y}" r="${CK.r + 22}" fill="url(#gWood)"/></g>
+  <circle cx="${CK.x}" cy="${CK.y}" r="${CK.r - 6}" fill="url(#gFace)" stroke="#6b3f1c" stroke-width="4"/>
+  ${mins}
+  <path id="elapsed" d="" fill="#ffb400" opacity=".35"/>
+  <g id="dayWin">
+    <rect x="${CK.x - 34}" y="${CK.y + 52}" width="68" height="40" rx="12" fill="#4fb0f2" stroke="#6b3f1c" stroke-width="3" id="dayWinBg"/>
+    <g id="dayWinSun" transform="translate(${CK.x - 12} ${CK.y + 72})"><circle r="11" fill="#ffd23f" stroke="#f29a12" stroke-width="2.5"/></g>
+    <g id="dayWinMoon" transform="translate(${CK.x - 12} ${CK.y + 72})"><path d="M3 -11 a11 11 0 1 0 8 19 a9 9 0 1 1 -8 -19 Z" fill="#fff1a8"/></g>
+    <text id="dayWinTxt" x="${CK.x + 16}" y="${CK.y + 78}" text-anchor="middle" font-size="16" font-weight="800" fill="#fff" font-family="Nunito, sans-serif">AM</text>
+  </g>
+  ${ticks}${nums}
+  <g id="startMark" opacity="0">
+    <line id="startHour" x1="${CK.x}" y1="${CK.y}" x2="${CK.x}" y2="${CK.y - 120}" stroke="#2a1a10" stroke-width="12" stroke-linecap="round" opacity=".16"/>
+    <line id="startMin" x1="${CK.x}" y1="${CK.y}" x2="${CK.x}" y2="${CK.y - 180}" stroke="#2a1a10" stroke-width="7" stroke-linecap="round" opacity=".16"/>
+    <g id="startFlag"><path d="M0 0 V-26" stroke="#d6453d" stroke-width="3"/><path d="M0 -26 L18 -20 L0 -14 Z" fill="#d6453d"/></g>
+  </g>
+  <g id="hourHand"><path d="M-9 18 L-7 -118 Q0 -134 7 -118 L9 18 Z" fill="#2a1a10"/></g>
+  <g id="minHand"><path d="M-5 24 L-4 -186 Q0 -202 4 -186 L5 24 Z" fill="#d6453d"/></g>
+  <circle cx="${CK.x}" cy="${CK.y}" r="13" fill="#2a1a10"/><circle cx="${CK.x}" cy="${CK.y}" r="5" fill="#ffd23f"/>
+
+  <!-- the sky window: the same time, outside -->
+  <g filter="url(#soft)"><rect x="${SKY.x}" y="${SKY.y}" width="${SKY.w}" height="${SKY.h}" rx="22" fill="#fff"/></g>
+  <g clip-path="url(#clipSky)">
+    <rect x="${SKY.x}" y="${SKY.y}" width="${SKY.w}" height="${SKY.h}" fill="url(#gSkyW)"/>
+    <g id="wStars" opacity="0" fill="#fff">${Array.from({length: 26}, (_, i) => `<circle cx="${f1(SKY.x + ((i * 97) % SKY.w))}" cy="${f1(SKY.y + 10 + ((i * 53) % 110))}" r="${i % 3 ? 1.3 : 2}"/>`).join('')}</g>
+    <g id="wSun"><circle r="34" fill="#ffe27a" opacity=".35"/><circle r="20" fill="#ffd23f" stroke="#f29a12" stroke-width="3"/></g>
+    <g id="wMoon"><path d="M5 -18 a18 18 0 1 0 13 31 a15 15 0 1 1 -13 -31 Z" fill="#fff1a8"/></g>
+    <path d="M${SKY.x} ${SKY.y + 160} C${SKY.x + 120} ${SKY.y + 140} ${SKY.x + 280} ${SKY.y + 150} ${SKY.x + SKY.w} ${SKY.y + 146} V${SKY.y + SKY.h} H${SKY.x} Z" id="wGround" fill="#5cb85c"/>
+    <g transform="translate(${SKY.x + 330} ${SKY.y + 166})"><rect x="-44" y="-62" width="88" height="62" fill="#ffe3b3" stroke="#8a5a2b" stroke-width="3"/><path d="M-54 -58 L0 -98 L54 -58 Z" fill="#e2553f" stroke="#8f2e22" stroke-width="3" stroke-linejoin="round"/>
+      <rect x="-11" y="-34" width="22" height="34" fill="#8a5a2b"/><rect id="wWin" x="-36" y="-50" width="18" height="16" fill="#bfe6ff" stroke="#8a5a2b" stroke-width="2"/><rect id="wWin2" x="18" y="-50" width="18" height="16" fill="#bfe6ff" stroke="#8a5a2b" stroke-width="2"/></g>
+    <g id="kidG" transform="translate(${SKY.x + 200} ${SKY.y + 190}) scale(.95)"></g>
+    <rect id="wNight" x="${SKY.x}" y="${SKY.y}" width="${SKY.w}" height="${SKY.h}" fill="#0b1236" opacity="0"/>
+  </g>
+  <g filter="url(#soft)"><rect x="${SKY.x + 12}" y="${SKY.y + 12}" width="118" height="34" rx="17" fill="#fff"/></g>
+  <text id="kidName" x="${SKY.x + 71}" y="${SKY.y + 35}" text-anchor="middle" font-size="17" font-weight="800" fill="#2a1a10" font-family="Nunito, sans-serif">Akira</text>
+
+  <!-- the digital clock -->
+  <g filter="url(#soft)"><rect x="${SKY.x}" y="238" width="${SKY.w}" height="96" rx="18" fill="#1f2a30"/></g>
+  <rect x="${SKY.x + 14}" y="250" width="228" height="72" rx="10" fill="#0f1a12"/>
+  <text id="dig24" x="${SKY.x + 128}" y="306" text-anchor="middle" font-size="54" font-weight="600" fill="#6dff9a" font-family="JetBrains Mono, monospace">08:00</text>
+  <text x="${SKY.x + 256}" y="276" font-size="13" font-weight="800" fill="#9fb3bb" font-family="Nunito, sans-serif" letter-spacing="1.5">24-HOUR</text>
+  <text id="dig12" x="${SKY.x + 256}" y="312" font-size="32" font-weight="600" fill="#fff" font-family="Fredoka, Nunito, sans-serif">8:00 AM</text>
+  <text id="wordsOut" x="${SKY.x + SKY.w / 2}" y="378" text-anchor="middle" font-size="27" font-weight="600" fill="#2a1a10" font-family="Fredoka, Nunito, sans-serif">eight o’clock</text>
+
+  <!-- time taken: a ruler of minutes -->
+  <text x="${RUL.x}" y="424" font-size="14" font-weight="800" fill="#a0673a" font-family="Nunito, sans-serif" letter-spacing="1.5">TIME TAKEN</text>
+  <text id="takenOut" x="${RUL.x + RUL.w}" y="428" text-anchor="end" font-size="28" font-weight="600" fill="#2a1a10" font-family="Fredoka, Nunito, sans-serif">0 minutes</text>
+  <text id="takenFrom" x="${RUL.x}" y="450" font-size="14" font-weight="700" fill="#6b5238" font-family="Nunito, sans-serif">from 8:00 AM</text>
+  <rect x="${RUL.x}" y="${RUL.y}" width="${RUL.w}" height="34" rx="10" fill="#fff" stroke="#d9c4a0" stroke-width="2"/>
+  <rect id="rulFill" x="${RUL.x}" y="${RUL.y}" width="0" height="34" rx="10" fill="#ffb400"/>
+  <g id="rulTicks"></g>
+  <text id="rulNote" x="${RUL.x + RUL.w / 2}" y="${RUL.y + 76}" text-anchor="middle" font-size="16" font-weight="700" fill="#6b5238" font-family="Nunito, sans-serif"></text>
+
+  <!-- the hit target: the whole clock face; it never moves -->
+  <circle id="clockHit" cx="${CK.x}" cy="${CK.y}" r="${CK.r + 22}" fill="transparent" tabindex="0" role="slider" aria-label="The clock. Drag round it to turn a hand; arrow keys move one minute, Page Up and Page Down one hour."/>
+  `;
+  void rulTicks;
+}
+buildClock();
+
+/* ---- paint the clock scene ---------------------------------------------- */
+let rulScale = 0;
+function paintRuler(max){
+  if (max === rulScale) return;
+  rulScale = max;
+  let g = '';
+  for (let m = 0; m <= max; m += 5) {
+    const x = RUL.x + RUL.w * m / max, big = m % 15 === 0;
+    g += `<line x1="${f1(x)}" y1="${RUL.y}" x2="${f1(x)}" y2="${RUL.y + (big ? 34 : 10)}" stroke="#6b5238" stroke-width="${big ? 2.5 : 1.2}"/>`;
+    if (big && max <= 120) g += `<text x="${f1(x)}" y="${RUL.y + 52}" text-anchor="middle" font-size="13" font-weight="800" fill="#6b5238" font-family="Nunito, sans-serif">${m}</text>`;
+    else if (m % 60 === 0) g += `<text x="${f1(x)}" y="${RUL.y + 52}" text-anchor="middle" font-size="13" font-weight="800" fill="#6b5238" font-family="Nunito, sans-serif">${m / 60} h</text>`;
+  }
+  $('rulTicks').innerHTML = g;
+}
+function sectorPath(a0, a1, r){         // clockwise from a0 to a1 (degrees), a1 ≥ a0
+  if (a1 - a0 >= 359.999) return `M${CK.x} ${CK.y - r} A${r} ${r} 0 1 1 ${CK.x - 0.01} ${CK.y - r} Z`;
+  const p0 = at(a0, r), p1 = at(a1, r), large = a1 - a0 > 180 ? 1 : 0;
+  return `M${CK.x} ${CK.y} L${f1(p0.x)} ${f1(p0.y)} A${r} ${r} 0 ${large} 1 ${f1(p1.x)} ${f1(p1.y)} Z`;
+}
+let kidShown = null;
+function paintClock(){
+  const t = S.t, h = tod(t) / 60, up = sunUp(h);
+  $('minHand').setAttribute('transform', `translate(${CK.x} ${CK.y}) rotate(${minuteAngle(t).toFixed(2)})`);
+  $('hourHand').setAttribute('transform', `translate(${CK.x} ${CK.y}) rotate(${hourAngle(t).toFixed(2)})`);
+  const am = tod(t) < 720;
+  $('dayWinTxt').textContent = am ? 'AM' : 'PM';
+  $('dayWinSun').setAttribute('opacity', up >= 0 ? 1 : 0); $('dayWinMoon').setAttribute('opacity', up >= 0 ? 0 : 1);
+  $('dayWinBg').setAttribute('fill', up >= 0 ? '#4fb0f2' : '#1b2150');
+  /* time taken: a sector for the minutes the minute hand has swept */
+  const el = S.t - S.t0;
+  const timing = S.t0 != null;
+  $('startMark').setAttribute('opacity', timing ? 1 : 0);
+  if (timing) {
+    $('startHour').setAttribute('transform', `rotate(${hourAngle(S.t0)} ${CK.x} ${CK.y})`);
+    $('startMin').setAttribute('transform', `rotate(${minuteAngle(S.t0)} ${CK.x} ${CK.y})`);
+    const fp = at(minuteAngle(S.t0), CK.r - 8);
+    $('startFlag').setAttribute('transform', `translate(${f1(fp.x)} ${f1(fp.y)})`);
+    const a0 = minuteAngle(S.t0);
+    $('elapsed').setAttribute('d', el > 0 ? sectorPath(a0, a0 + Math.min(el, 60) * 6, CK.r - 40) : '');
+    $('elapsed').setAttribute('opacity', el >= 60 ? .5 : .35);
+  } else $('elapsed').setAttribute('d', '');
+  $('takenOut').textContent = timing ? duration(el) : '—';
+  $('takenFrom').textContent = timing ? `from ${fmt12(S.t0)} to ${fmt12(S.t)}` : 'press “Start timing from here”';
+  const max = Math.max(60, Math.ceil(Math.max(el, 1) / 60) * 60);
+  paintRuler(Math.min(max, 720));
+  $('rulFill').setAttribute('width', f1(RUL.w * clamp(el, 0, rulScale) / rulScale));
+  const q = {15: 'a quarter of an hour', 30: 'half an hour', 45: 'three quarters of an hour', 60: 'one hour = 60 minutes'}[el];
+  $('rulNote').textContent = timing && q ? `${el} minutes is ${q}` : timing && el > 0 && el % 60 === 0 ? `${el / 60} hours = ${el} minutes` : '';
+  /* outside the window */
+  const sk = skyCol(h);
+  $('skw0').setAttribute('stop-color', sk); $('skw1').setAttribute('stop-color', skyLowCol(h));
+  $('wStars').setAttribute('opacity', clamp(-up * 3, 0, 1).toFixed(2));
+  $('wNight').setAttribute('opacity', clamp(-up * 1.2, 0, .35).toFixed(2));
+  $('wGround').setAttribute('fill', mix('#5cb85c', '#23402f', clamp(-up * 2, 0, 1)));
+  const lit = up < 0.05 ? '#ffd75a' : '#bfe6ff'; $('wWin').setAttribute('fill', lit); $('wWin2').setAttribute('fill', lit);
+  const day = h >= 6 && h <= 18.5, u = day ? (h - 6) / 12.5 : ((((h - 18.5) + 24) % 24) / 11.5);
+  const bx = SKY.x + 30 + u * (SKY.w - 60), by = SKY.y + 150 - Math.pow(Math.sin(Math.PI * u), 0.6) * 118;
+  $('wSun').setAttribute('transform', `translate(${f1(bx)} ${f1(by)})`); $('wSun').setAttribute('opacity', day ? 1 : 0);
+  $('wMoon').setAttribute('transform', `translate(${f1(bx)} ${f1(by)})`); $('wMoon').setAttribute('opacity', day ? 0 : 1);
+  $('dig24').textContent = fmt24(t); $('dig12').textContent = fmt12(t);
+  $('wordsOut').textContent = words(t);
+  const who = (MISSIONS.find(m => m.id === S.active) || {who: 'Akira'}).who;
+  if (kidShown !== who) { kidShown = who; $('kidG').innerHTML = kid(who); $('kidName').textContent = who; }
+  $('clockHit').setAttribute('aria-valuetext', `${fmt12(t)}, ${words(t)}`);
+}
+
+/* ---- turning the hands ------------------------------------------------------ */
+const angDiff = (b, a) => { let d = b - a; while (d > 180) d -= 360; while (d < -180) d += 360; return d; };
+const ptAngle = p => ((Math.atan2(p.x - CK.x, -(p.y - CK.y)) / D2R) + 360) % 360;
+const grab = {hand: null, last: 0, tf: 0, moved: 0};
+function pickHand(p){
+  const a = ptAngle(p), r = Math.hypot(p.x - CK.x, p.y - CK.y);
+  const dH = Math.abs(angDiff(a, hourAngle(S.t))), dM = Math.abs(angDiff(a, minuteAngle(S.t)));
+  if (r < CK.r * 0.62 && dH < 28) return 'hour';
+  if (dM < 28) return 'minute';
+  if (dH < 28) return 'hour';
+  return 'minute';
+}
+function setT(t){ S.t = Math.round(t); paintClock(); }
+drag($('clockHit'), svg, {
+  start(p){
+    if (!S.locked) { toast('Make your guess first, in the yellow card.'); sound('boing'); return false; }
+    if (Math.hypot(p.x - CK.x, p.y - CK.y) < 14) return false;
+    stopTick();
+    grab.hand = pickHand(p); grab.last = ptAngle(p); grab.tf = S.t; grab.moved = 0;
+    sound('tick');
+  },
+  move(p){
+    if (!grab.hand || Math.hypot(p.x - CK.x, p.y - CK.y) < 10) return;
+    const a = ptAngle(p), d = angDiff(a, grab.last); grab.last = a;
+    grab.tf += grab.hand === 'minute' ? d / 6 : d * 2;
+    grab.moved += Math.abs(d);
+    const before = S.t;
+    setT(grab.tf);
+    if (Math.floor(before / 5) !== Math.floor(S.t / 5)) sound('tick');
+  },
+  end(){ if (!grab.hand) return; track('turn', {hand: grab.hand, t: S.t, elapsed: S.t - S.t0}); grab.hand = null; settle(); },
+});
+$('clockHit').addEventListener('keydown', e => {
+  const k = {ArrowRight: 1, ArrowUp: 1, ArrowLeft: -1, ArrowDown: -1, PageUp: 60, PageDown: -60}[e.key];
+  if (!k || !S.locked) return;
+  e.preventDefault(); stopTick(); setT(S.t + k); settle();
+});
+/* let it tick: one minute every tenth of a second */
+let tickLoop = null, tickAcc = 0;
+function stopTick(){ if (tickLoop) { tickLoop.stop(); tickLoop = null; } S.ticking = false; $('btnTick').textContent = '▶ Let it tick'; }
+$('btnTick').addEventListener('click', () => {
+  if (!S.locked) { toast('Make your guess first, in the yellow card.'); return; }
+  if (S.ticking) { stopTick(); settle(); return; }
+  S.ticking = true; $('btnTick').textContent = '⏸ Stop';
+  tickAcc = 0;
+  tickLoop = loop(dt => { tickAcc += dt * 10; while (tickAcc >= 1) { tickAcc -= 1; setT(S.t + 1); if (S.t % 5 === 0) sound('tick'); } });
+  track('tick');
+});
+$('btnStart').addEventListener('click', () => { S.t0 = S.t; S.active = null; renderMissions(); paintClock(); sound('snap'); say(`Timing from ${fmt12(S.t)}.`); track('startTiming', {t0: S.t0}); });
+
+/* ---- missions: a checklist that ticks itself --------------------------------- */
+function renderMissions(){
+  $('missions').innerHTML = MISSIONS.filter(m => m.tab === S.tab).map(m => {
+    const done = S.missions[m.id];
+    return `<li class="${done ? 'done' : ''} ${S.active === m.id ? 'on' : ''}"><i aria-hidden="true">${done ? '✓' : ''}</i><button data-m="${m.id}"><span>${esc(m.text)}</span></button></li>`;
+  }).join('');
+}
+$('missions').addEventListener('click', e => { const b = e.target.closest('[data-m]'); if (b) loadMission(b.dataset.m); });
+const LOAD_LINE = {
+  akira: 'Akira’s clock says 8 o’clock in the morning. Turn the long minute hand once, all the way round. Watch the short hour hand!',
+  raghav: 'Raghav goes to buy milk at 8:20 in the morning. He is back at 8:35. Turn the clock to 8:35. How long did he take?',
+  muneera: 'Muneera starts reading a story at 4:15 in the afternoon. She reads for 45 minutes. Turn the clock to when she finishes.',
+  eightpm: 'Make the clock say 8 o’clock at night. Tip: drag the short hand, it moves a whole hour at a time.',
+  leap: 'Parv was born on 29 February 2016. Look at February 2024, then February 2025. Which one has a 29th?',
+  mondays: '1 July 2024 is a Monday. Can you tap the next two Mondays?',
+  pattern: 'Tap the 15th of July. Then the 15th of August, and the 15th of September. What do you notice?',
+};
+function loadMission(id){
+  const m = MISSIONS.find(x => x.id === id); if (!m) return;
+  S.active = id;
+  if (m.tab !== S.tab) showTab(m.tab);
+  if (m.tab === 'clock') {
+    stopTick();
+    if (m.t0 != null) { S.t0 = m.t0; S.t = m.t0; } else { S.t0 = S.t; }
+    paintClock();
+  } else {
+    if (id === 'leap') { S.cm = 1; S.cy = 2024; }
+    if (id === 'mondays' || id === 'pattern') { S.cm = 6; S.cy = 2024; }
+    S.pick = null; paintCal();
+  }
+  renderMissions();
+  say(LOAD_LINE[id]);
+  track('mission-load', {id});
+}
+function tickMission(id, line){
+  if (S.missions[id]) return false;
+  S.missions[id] = true;
+  renderMissions();
+  sound('chime');
+  track('mission', {id});
+  if (line) say(line);
+  /* move on to the next mission in this tab, after a moment */
+  setTimeout(() => {
+    const next = MISSIONS.find(m => m.tab === S.tab && !S.missions[m.id]);
+    if (next && S.active === id) loadMission(next.id);
+  }, 3800);
+  return true;
+}
+function clockClient(){ const m = svg.getScreenCTM(); if (!m) return null; return {x: CK.x * m.a + m.e, y: (CK.y - 120) * m.d + m.f}; }
+/* the model has reached a state: check the missions */
+function settle(){
+  const el = S.t - S.t0;
+  if (S.active === 'akira' && S.t0 === 8 * 60) {
+    if (el === 60) {
+      tickMission('akira');
+      Play.discover('fullTurn', clockClient());
+      const dh = hourAngle(S.t) - hourAngle(S.t0);
+      poe.explain(`The long hand turned all the way round: <b>360°</b>, 60 minutes. The short hand moved from <b>${Math.floor(tod(S.t0) / 60)}</b> to <b>${Math.floor(tod(S.t) / 60)}</b>, just <b>${dh}°</b>, one number. So <b>1 hour = 60 minutes</b>: the hour hand turns 12 times slower.`);
+    } else if (el > 50 && el < 70) toast(`${duration(el)}. Stop exactly at 9:00!`);
+  }
+  if (S.active === 'raghav' && S.t0 === 8 * 60 + 20 && S.t === 8 * 60 + 35) {
+    tickMission('raghav', 'Raghav took 15 minutes. That is a quarter of an hour!');
+    Play.discover('quarter', clockClient());
+  }
+  if (S.active === 'muneera' && S.t0 === 16 * 60 + 15 && el === 45) {
+    tickMission('muneera', 'Muneera finishes at 5 o’clock in the evening. 45 minutes is three quarters of an hour.');
+    Play.discover('threeQ', clockClient());
+  }
+  if (tod(S.t) === 20 * 60) {
+    if (tickMission('eightpm', 'Eight o’clock at night is 8 PM. The 24-hour clock says 20:00.')) Play.discover('pm', clockClient());
+  }
+}
+
+/* ---- predict (a light one: no confidence) ------------------------------------- */
+const poe = predict($('poe'), {
+  id: 'hour-hand',
+  q: 'Akira’s clock says 8:00. If the long minute hand goes all the way round once, where will the short hour hand be?',
+  confidence: false,
+  options: [
+    {id: 'round', text: 'It goes all the way round too, back to 8'},
+    {id: 'nine',  text: 'It moves on to the next number, 9', right: true},
+    {id: 'stay',  text: 'It stays exactly at 8'},
+    {id: 'twelve', text: 'It jumps to 12'},
+  ],
+  onLock(){ S.locked = true; $('gate').hidden = true; say('Now turn the long minute hand, all the way round, clockwise.'); },
+});
+
+/* ============================================================================
+   The calendar.
+   ============================================================================ */
+function paintCal(){
+  const m = S.cm, y = S.cy, n = daysIn(m, y), first = weekday(1, m, y);
+  $('calTitle').innerHTML = `${MONTHS[m]} <small>${y}</small>`;
+  $('yearOut').textContent = y;
+  let g = WEEK.map((w, i) => `<div class="wd${i === 0 ? ' sun' : ''}">${w.slice(0, 3)}</div>`).join('');
+  for (let i = 0; i < first; i++) g += '<div class="blank"></div>';
+  for (let d = 1; d <= n; d++) {
+    const wd = (first + d - 1) % 7, pick = S.pick && S.pick.d === d && S.pick.m === m && S.pick.y === y;
+    const tapped = S.taps.some(t => t.d === d && t.m === m && t.y === y);
+    const bday = m === 1 && d === 29;
+    g += `<button class="day${wd === 0 ? ' sun' : ''}${pick ? ' pick' : ''}${tapped && !pick ? ' mark' : ''}" data-d="${d}" aria-label="${WEEK[wd]} ${d} ${MONTHS[m]} ${y}">${d}${bday ? '<span class="cake" aria-hidden="true">🎂</span>' : ''}</button>`;
+  }
+  $('calGrid').innerHTML = g;
+  $('leapBadge').innerHTML = isLeap(y)
+    ? `🎉 <b>${y}</b> is a leap year: February has <b>29</b> days and the year has <b>${daysInYear(y)}</b> days.`
+    : `<b>${y}</b> is not a leap year: February has <b>28</b> days and the year has <b>${daysInYear(y)}</b> days.`;
+  /* Parv's notebook: facts computed from the calendar */
+  let nb = `<div class="k">Parv’s notebook</div>${MONTHS[m]} ${y} has <b>${n}</b> days. The 1st is a <b>${WEEK[first]}</b>.<br>`;
+  if (S.pick) { const p = S.pick; nb += `You picked <b>${WEEK[weekday(p.d, p.m, p.y)]}, ${p.d} ${MONTHS[p.m]} ${p.y}</b> — <span class="mono">${ddmmyyyy(p.d, p.m, p.y)}</span><br>`; }
+  const fifteens = S.taps.filter(t => t.d === 15).slice(-3);
+  if (fifteens.length) {
+    nb += `<div class="k" style="margin-top:4px">The 15th, month by month</div><div class="patt">${fifteens.map(t => `<div><span>15 ${MONTHS[t.m].slice(0, 3)} ${t.y}</span><span>${WEEK[weekday(15, t.m, t.y)]}</span></div>`).join('')}</div>`;
+    const run = patternRun();
+    if (run) nb += `<div style="line-height:1.45; margin-top:6px">${MONTHS[run[0].m]} has ${daysIn(run[0].m, run[0].y)} days = 4 weeks and <b>${weekShift(run[0].m, run[0].y)}</b> days, so the 15th moves on <b>${weekShift(run[0].m, run[0].y)}</b> days in the week. ${MONTHS[run[1].m]} has ${daysIn(run[1].m, run[1].y)} days: <b>${weekShift(run[1].m, run[1].y)}</b> more.</div>`;
+  }
+  $('nbook').innerHTML = nb;
+  $('parvArt').innerHTML = parvScene(m, y);
+  if (m === 1) { S.seenFeb[y] = true; checkLeap(); }
+}
+function parvScene(m, y){
+  const leapFeb = m === 1 && isLeap(y);
+  return `<rect width="300" height="190" rx="18" fill="${leapFeb ? '#fff1c9' : '#e8f4ff'}"/>
+    <g transform="translate(90 182) scale(.95)">${kid('Parv')}</g>
+    <g transform="translate(160 20)"><rect width="126" height="${leapFeb ? 96 : 76}" rx="16" fill="#fff" stroke="#e0c9a0" stroke-width="2"/>
+      <text x="63" y="30" text-anchor="middle" font-size="16" font-weight="800" fill="#6b4a2a" font-family="Nunito, sans-serif">${leapFeb ? 'My birthday' : 'Days in'}</text>
+      <text x="63" y="62" text-anchor="middle" font-size="${leapFeb ? 20 : 26}" font-weight="600" fill="#e2553f" font-family="Fredoka, sans-serif">${leapFeb ? 'is here! 🎂' : daysIn(m, y) + ' days'}</text>
+      ${leapFeb ? `<text x="63" y="86" text-anchor="middle" font-size="13" font-weight="700" fill="#6b4a2a" font-family="Nunito, sans-serif">29 Feb ${y}</text>` : ''}</g>`;
+}
+function checkLeap(){
+  if (S.seenFeb[2024] && S.seenFeb[2025]) {
+    if (tickMission('leap', '2024 has a 29th of February: it is a leap year, with 366 days. 2025 does not.')) Play.discover('leap');
+  }
+}
+function patternRun(){
+  /* three 15ths of months that follow one another, the last three tapped */
+  const f = S.taps.filter(t => t.d === 15).slice(-3);
+  if (f.length < 3) return null;
+  const idx = t => t.y * 12 + t.m;
+  return idx(f[1]) === idx(f[0]) + 1 && idx(f[2]) === idx(f[1]) + 1 ? f : null;
+}
+$('calGrid').addEventListener('click', e => {
+  const b = e.target.closest('[data-d]'); if (!b) return;
+  const d = +b.dataset.d, m = S.cm, y = S.cy;
+  S.pick = {d, m, y};
+  S.taps.push({d, m, y}); if (S.taps.length > 40) S.taps.shift();
+  sound('pop');
+  const wd = weekday(d, m, y);
+  say(`${WEEK[wd]}, ${d} ${MONTHS[m]}.`);
+  track('date', {d, m: m + 1, y, weekday: WEEK[wd]});
+  /* Mondays after 1 July 2024 */
+  if (m === 6 && y === 2024) {
+    const mons = S.taps.filter(t => t.m === 6 && t.y === 2024 && weekday(t.d, 6, 2024) === 1 && t.d > 1).map(t => t.d);
+    if (wd !== 1 && S.active === 'mondays') toast(`${d} July is a ${WEEK[wd]}. Count on from Monday, 1 July!`);
+    if (mons.includes(8) && mons.includes(15)) tickMission('mondays', '8 July and 15 July are Mondays. Every 7 days, it is Monday again!');
+  }
+  paintCal();
+  const run = patternRun();
+  if (run) {
+    if (tickMission('pattern', `The 15th moved on ${weekShift(run[0].m, run[0].y)} days in the week, because ${MONTHS[run[0].m]} has ${daysIn(run[0].m, run[0].y)} days: 4 weeks and ${weekShift(run[0].m, run[0].y)} days.`)) Play.discover('pattern');
+  }
+});
+function stepMonth(k){ let m = S.cm + k, y = S.cy; while (m < 0) { m += 12; y--; } while (m > 11) { m -= 12; y++; } S.cm = m; S.cy = clamp(y, 1900, 2100); S.pick = null; sound('tick'); paintCal(); track('page', {m: S.cm + 1, y: S.cy}); }
+$('mPrev').addEventListener('click', () => stepMonth(-1));
+$('mNext').addEventListener('click', () => stepMonth(1));
+$('yPrev').addEventListener('click', () => stepMonth(-12));
+$('yNext').addEventListener('click', () => stepMonth(12));
+
+/* ---- tabs ------------------------------------------------------------------------ */
+function showTab(tab){
+  S.tab = tab;
+  $('tabClock').setAttribute('aria-selected', tab === 'clock'); $('tabCal').setAttribute('aria-selected', tab === 'cal');
+  svg.style.display = tab === 'clock' ? '' : 'none'; $('calWrap').hidden = tab !== 'cal';
+  $('gate').hidden = tab !== 'clock' || S.locked;
+  $('poe').hidden = tab !== 'clock';
+  $('clockBtns').hidden = tab !== 'clock'; $('tip').hidden = tab !== 'clock';
+  if (tab === 'cal') { stopTick(); if (!MISSIONS.some(m => m.id === S.active && m.tab === 'cal')) S.active = MISSIONS.find(m => m.tab === 'cal' && !S.missions[m.id]) ? MISSIONS.find(m => m.tab === 'cal' && !S.missions[m.id]).id : null; paintCal(); }
+  else if (!MISSIONS.some(m => m.id === S.active && m.tab === 'clock')) { const n = MISSIONS.find(m => m.tab === 'clock' && !S.missions[m.id]); S.active = n ? n.id : null; }
+  renderMissions();
+  track('tab', {tab});
+}
+$('tabClock').addEventListener('click', () => { showTab('clock'); paintClock(); });
+$('tabCal').addEventListener('click', () => { showTab('cal'); say(LOAD_LINE[S.active] || 'Page through the calendar.'); });
+
+/* ============================================================================
+   Start
+   ============================================================================ */
+findings($('finds'), [
+  {id: 'fullTurn', icon: '🕗', label: '1 hour = 60 minutes',   say: 'The minute hand went round once, and the hour hand moved one number. One hour is 60 minutes!'},
+  {id: 'quarter',  icon: '🥛', label: 'A quarter of an hour',  say: '15 minutes is a quarter of an hour.'},
+  {id: 'threeQ',   icon: '📖', label: 'Three quarters',        say: '45 minutes is three quarters of an hour.'},
+  {id: 'pm',       icon: '🌙', label: '8 PM is 20:00',         say: 'After 12 noon comes PM. 8 PM on a 24-hour clock is 20:00.'},
+  {id: 'leap',     icon: '🎂', label: 'Leap year',             say: 'A leap year has a 29th of February, and 366 days.'},
+  {id: 'pattern',  icon: '🔁', label: 'The 15th moves on',     say: 'The same date moves on through the week, month by month.'},
+], () => say('You found them all! Clocks and calendars are counting machines.'));
+
+if (shared) { S.locked = true; S.active = null; }
+$('gate').hidden = S.locked;
+if (S.locked) { poe.locked = true; }
+showTab(S.tab);
+paintClock(); paintCal();
+window.applyFeatures = () => paintClock();
+window.PG_STATE = () => Object.assign(JSON.parse(JSON.stringify(S)), {digital: fmt24(S.t), ampm: fmt12(S.t), words: words(S.t), elapsed: S.t - S.t0,
+  minuteAngle: minuteAngle(S.t), hourAngle: hourAngle(S.t)});
+window.PG_MODEL = {minuteAngle, hourAngle, fmt24, fmt12, words, duration, isLeap, daysIn, daysInYear, weekday, dayNumber, ddmmyyyy, weekShift, WEEK, MONTHS, CK};
+</script>
+</body>
+</html>

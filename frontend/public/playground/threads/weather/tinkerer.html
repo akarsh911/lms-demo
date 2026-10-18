@@ -1,0 +1,996 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Winds, Storms and Cyclones</title>
+<meta name="description" content="Class 7–8: heat the land and watch the sea breeze start, grow a cyclone over a warm Bay of Bengal and steer it onto the coast, and move a town round India to see what sets its climate.">
+<link rel="icon" href="../../favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600&family=Inter:wght@400;500;600;700&family=Nunito:wght@500;700;800&family=Newsreader:opsz,wght@6..72,400;6..72,500&family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="../../play.css">
+<style>
+/* Only what this page needs beyond play.css. */
+.pg-stage{background:#eaf3f7}
+.tabs{display:flex; gap:4px; padding:8px 10px; background:var(--card); border-bottom:1px solid var(--hair)}
+.tabs button{flex:1; border:1px solid transparent; background:var(--sunk); border-radius:99px; padding:7px 10px; font-weight:600; font-size:13.5px; cursor:pointer; color:var(--ink-2)}
+.tabs button[aria-pressed="true"]{background:var(--accent); color:#fff}
+.tabs button:disabled{opacity:.5; cursor:default}
+.gate{position:absolute; left:0; right:0; top:52px; height:45%; display:grid; place-items:center; pointer-events:none}
+.gate span{background:rgba(15,30,40,.84); color:#fff; padding:10px 16px; border-radius:99px; font-weight:600; font-size:14px}
+.play{width:40px; min-width:40px; padding:0}
+.clock{font-family:"Fredoka",var(--font-head); font-size:24px; font-weight:600; line-height:1; font-variant-numeric:tabular-nums}
+.ctl{grid-template-columns:96px 1fr 70px}
+.ctl label{font-size:12.5px; line-height:1.2}
+.hint{font-size:12.5px; color:var(--ink-3); margin:6px 0 0}
+.why p{font-size:14px; margin-bottom:.55em}
+.why b{color:var(--ink)}
+.chips{display:flex; flex-wrap:wrap; gap:5px; margin-top:6px}
+.chips button{border:1px solid var(--hair-2); background:var(--card); border-radius:99px; padding:4px 10px; font-size:12.5px; font-weight:600; cursor:pointer; color:var(--ink-2)}
+.chips button[aria-pressed="true"]{background:var(--accent-soft); border-color:var(--accent); color:var(--ink)}
+.chips button:disabled{opacity:.5; cursor:default}
+.readout{display:grid; grid-template-columns:1fr auto; gap:3px 12px; font-size:13.5px}
+.readout span{color:var(--ink-2)}
+.readout b{font-variant-numeric:tabular-nums; text-align:right}
+.cat{display:inline-block; padding:2px 9px; border-radius:99px; font-weight:700; font-size:12.5px; color:#fff}
+.tog[aria-pressed="true"]{background:var(--accent-soft); border-color:var(--accent)}
+.tog[aria-pressed="false"]{background:var(--bad-soft); border-color:var(--bad)}
+#stormHit,#seedHit{cursor:grab} #stormHit.dragging,#seedHit.dragging{cursor:grabbing}
+#pinHit{cursor:grab} #pinHit.dragging{cursor:grabbing}
+</style>
+</head>
+<body>
+<header class="pg-top"></header>
+
+<div class="pg-intro">
+  <h1>Winds, storms and cyclones</h1>
+  <p>Air moves from high pressure to low pressure. Everything on this page follows from that, and from the fact that land heats up and
+     cools down much faster than the sea. Heat the coast at Mumbai and watch a breeze begin. Grow a cyclone over a warm Bay of Bengal
+     and steer it onto the east coast. Then move a town round India and see what decides its climate.</p>
+</div>
+
+<main class="pg-main wide-side">
+  <section class="pg-stage" id="stageWrap">
+    <div class="tabs" id="tabs">
+      <button data-tab="breeze" aria-pressed="true">1 · Sea breeze</button>
+      <button data-tab="cyclone" aria-pressed="false">2 · Grow a cyclone</button>
+      <button data-tab="town" aria-pressed="false">3 · Climate of a town</button>
+    </div>
+    <svg id="stage" viewBox="0 0 1000 640" role="img" aria-label="A model of the weather: a coast by day and night, the Bay of Bengal with a cyclone, and a map of India's climates"></svg>
+    <div class="gate" id="gate"><span>Make your prediction first →</span></div>
+  </section>
+
+  <aside class="pg-side">
+    <div id="poe"></div>
+
+    <!-- scene 1 -->
+    <div class="card" id="ctlBreeze">
+      <div class="row" style="justify-content:space-between">
+        <div><div class="kicker">Juhu beach, Mumbai</div><div class="clock" id="clock">6:00 am</div></div>
+        <button class="btn play" id="btnPlay" aria-label="Play the day" title="Play the day">▶</button>
+      </div>
+      <div class="ctl"><label for="hour">Time of day</label><input type="range" id="hour" min="0" max="24" step="0.25" value="6"><output id="hourOut" class="num">6:00</output></div>
+      <div class="ctl"><label for="sun">Sunshine</label><input type="range" id="sun" min="0" max="100" step="5" value="100"><output id="sunOut" class="num">100%</output></div>
+      <p class="hint">Sunshine 0% is a thick grey monsoon sky.</p>
+    </div>
+
+    <!-- scene 2 -->
+    <div class="card" id="ctlCyclone" hidden>
+      <div class="row" style="justify-content:space-between">
+        <div class="kicker" style="margin:0">The Bay of Bengal</div>
+        <div class="row" style="gap:6px">
+          <button class="btn sm" id="btnRun" aria-label="Pause">❚❚ Pause</button>
+          <button class="btn sm" id="btnNew">New low</button>
+        </div>
+      </div>
+      <div class="ctl"><label for="sst">Sea surface</label><input type="range" id="sst" min="25" max="31" step="0.5" value="29"><output id="sstOut" class="num">29 °C</output></div>
+      <div class="row" style="justify-content:space-between; margin-top:2px">
+        <button class="btn sm tog" id="btnSpin" aria-pressed="true">🌍 The Earth spins</button>
+        <span class="hint" style="margin:0">1 day = <span id="secPerDay">4</span> s</span>
+      </div>
+      <p class="hint">Drag the <b>L</b> onto the sea to start a low. You can drag the storm too.</p>
+      <div class="readout" style="margin-top:8px">
+        <span>Pressure at the centre</span><b id="rPc">—</b>
+        <span>Strongest wind</span><b id="rV">—</b>
+        <span>Over</span><b id="rOver">—</b>
+        <span>Days since it began</span><b id="rAge">—</b>
+      </div>
+      <div style="margin-top:8px"><span class="cat" id="rCat" style="background:#8a94a6">No low yet</span></div>
+    </div>
+
+    <!-- scene 3 -->
+    <div class="card" id="ctlTown" hidden>
+      <div class="kicker">Put the town anywhere</div>
+      <div class="chips" id="presets"></div>
+      <div class="ctl" style="margin-top:10px"><label for="alt">Height above sea</label><input type="range" id="alt" min="0" max="4000" step="10" value="14"><output id="altOut" class="num">14 m</output></div>
+      <p class="hint">Drag the pin on the map to move the town. The height is set here.</p>
+      <div class="readout" style="margin-top:8px">
+        <span>Latitude</span><b id="tLat">—</b>
+        <span>Distance from the sea</span><b id="tSea">—</b>
+        <span>Hottest month, average day</span><b id="tMax">—</b>
+        <span>Coldest month, average night</span><b id="tMin">—</b>
+        <span>Range</span><b id="tRange">—</b>
+      </div>
+    </div>
+
+    <div class="card why" id="whyCard" hidden>
+      <div class="kicker">What is happening</div>
+      <div id="why"></div>
+    </div>
+
+    <div class="card"><div class="kicker">To find</div><div id="finds"></div></div>
+  </aside>
+</main>
+
+<script src="../../play.js"></script>
+<script>
+'use strict';
+const {$, esc, clamp, fmt, drag, loop, sound, say, track, toast, predict, findings, discover, found,
+       shareState, sharedState, mount, reduced} = Play;
+mount({thread: 'weather', band: 'tinkerer'});
+
+/* MODEL:start ==================================================================
+   Three small models, one idea: air moves from high pressure to low pressure.
+
+   1. SEA BREEZE. The land and the sea are heated by the same Sun. Each is a slab
+      with a heat capacity: C dT/dt = a·S(t) − λ(T − T0). The sea's capacity is 60
+      times the land's (a deep, stirred layer of water), so the land swings and the
+      sea barely moves. (A teaching model: the numbers are typical, not measured.) Warm air is lighter: a warmer column of air presses less on
+      the ground. For a shallow heated layer of depth h, the surface pressure drops
+      by ρ·g·h·ΔT/T ≈ 0.12 hPa for each degree (h = 300 m). The wind is pushed by that
+      pressure difference across the coast and slowed by friction:
+        du/dt = Δp / (ρ·L) − u/τ.
+   2. CYCLONE. A low over the sea with a central pressure deficit Δp (hPa).
+      Over sea warmer than 27 °C (NCERT Class 11) the rising moist air releases heat
+      and deepens the low, up to a limit set by the sea's warmth:
+        dΔp/dt = g·s·Δp·(1 − Δp/Δp_max),   Δp_max = 25 hPa per °C above 27 °C.
+      s is how well the Earth's spin organises the swirl (0 at the equator, 0 if the
+      Earth does not spin). Without spin the inflowing air fills the low (τ = 12 h).
+      Over land the moist air is cut off and the low fills (τ = 12 h).
+      The pressure round the centre is Holland's profile
+        p(r) = p_c + Δp·exp(−(R/r)^B),  B = 1.5, R = 30 km,
+      and the wind at radius r is the speed at which the pressure push balances the
+      turning (the gradient wind):
+        V = √( (BΔp/ρ)(R/r)^B e^{−(R/r)^B} + (rf/2)² ) − rf/2,   f = 2Ω sin(latitude).
+      At the centre that gives no wind at all: the eye.
+   3. CLIMATE OF A TOWN. Daily sunshine at the top of the air from the latitude and
+      the date. The land's temperature chases it with a lag; the sea's with a much
+      longer lag. Near the coast the sea air takes over (weight e^{−d/137 km}).
+      Up a hill it is 6.5 °C colder for every 1000 m. Monsoon cloud (from the
+      onset date, 1 June in Kerala, later further north) cuts the sunshine by 40 %.
+   ============================================================================ */
+const D2R = Math.PI / 180, OMEGA = 7.292e-5, RHO = 1.15;
+
+/* ---- 1. breeze ------------------------------------------------------------ */
+const BZ = {S0: 850, aL: 0.44, R: 110, lam: 16, lamS: 20, CL: 4.5e5, CS: 1.08e8, TS0: 28, kp: 0.12, L: 25000, tauDay: 2400, tauNight: 1200};
+/* The force of the air on an area, from the pressure (NCERT: 15 cm × 15 cm ≈ 2250 N). */
+const airForce = (p_hPa, area_m2) => p_hPa * 100 * area_m2;
+/* Run the coast for three days at this sunshine; return the third day, every 5 minutes.
+   Both surfaces take in sunlight (a·S) and lose heat to the sky (R, less under cloud).
+   The land also trades heat with the air over it, which comes off the sea (λ). */
+function breezeDay(sun){
+  let TL = 27, TS = BZ.TS0, u = 0;
+  const dt = 60, out = [];
+  for (let day = 0; day < 3; day++) for (let m = 0; m < 1440; m++) {
+    const h = m / 60;
+    const S = BZ.S0 * (sun / 100) * Math.max(0, Math.sin(Math.PI * (h - 6) / 12));
+    const R = BZ.R * (0.08 + 0.92 * sun / 100);
+    TL += dt * (BZ.aL * S - R - BZ.lam * (TL - TS)) / BZ.CL;
+    TS += dt * (BZ.aL * S - R - BZ.lamS * (TS - BZ.TS0)) / BZ.CS;
+    const dT = TL - TS;
+    const pLand = 1010 - BZ.kp * dT / 2, pSea = 1010 + BZ.kp * dT / 2;
+    /* friction is stronger at night, when the air near the cold ground is still and heavy */
+    const tau = S > 0 ? BZ.tauDay : BZ.tauNight;
+    u += dt * ((pSea - pLand) * 100 / (RHO * BZ.L) - u / tau);     // + = from the sea onto the land
+    if (day === 2 && m % 5 === 0) out.push({h, TL, TS, pLand, pSea, u, S});
+  }
+  out.push(Object.assign({}, out[0], {h: 24}));
+  return out;
+}
+
+/* ---- 2. cyclone ----------------------------------------------------------- */
+const CY = {B: 1.5, R: 30, pAmb: 1008, grow: 1.1, kPI: 25, sst0: 27, tauFill: 0.5, tauLand: 0.5, speed: 380};
+const potential = sst => Math.max(0, CY.kPI * (sst - CY.sst0));
+/* wind speed (m/s) at r km from the centre */
+function windAt(dp, r, lat, spin){
+  if (dp <= 0) return 0;
+  const f = spin ? 2 * OMEGA * Math.sin(lat * D2R) : 0;
+  const x = Math.pow(CY.R / Math.max(r, 0.01), CY.B), rm = r * 1000;
+  return Math.sqrt(CY.B * dp * 100 / RHO * x * Math.exp(-x) + Math.pow(rm * f / 2, 2)) - rm * f / 2;
+}
+function vmax(dp, lat, spin){ let m = 0; for (let r = 5; r <= 120; r += 1) m = Math.max(m, windAt(dp, r, lat, spin)); return m; }
+const pressureAt = (dp, r) => CY.pAmb - dp + dp * Math.exp(-Math.pow(CY.R / Math.max(r, 0.01), CY.B));
+/* India Meteorological Department's scale, by the strongest wind in km/h. */
+const IMD = [[0, 'Low-pressure area', '#8a94a6'], [31, 'Depression', '#4f8fc0'], [50, 'Deep depression', '#3f7fb0'], [62, 'Cyclonic storm', '#e0a526'],
+  [89, 'Severe cyclonic storm', '#e8781e'], [118, 'Very severe cyclonic storm', '#d6453d'], [166, 'Extremely severe cyclonic storm', '#b3245a'], [222, 'Super cyclonic storm', '#6b1f7a']];
+const category = kmh => { let c = IMD[0]; for (const k of IMD) if (kmh >= k[0]) c = k; return c; };
+/* One step of the storm: dt in days. */
+function stormStep(st, dt, env){
+  const lat = st.lat, spin = env.spin;
+  const s = spin ? clamp((lat - 4) / 5, 0, 1) : 0;
+  const land = env.isLand(st.lon, st.lat);
+  let d = 0;
+  if (!land && env.sst > CY.sst0) d += CY.grow * s * Math.max(st.dp, 0.5) * (1 - st.dp / potential(env.sst));
+  if (!land && env.sst <= CY.sst0) d -= st.dp / 3;
+  d -= st.dp * (1 - s) / CY.tauFill;
+  if (land) d -= st.dp / CY.tauLand;
+  st.dp = Math.max(0, st.dp + d * dt);
+  st.age += dt;
+  /* the steering winds: north-west across the southern Bay, turning north and then
+     north-east (recurving) beyond 20° N, about 380 km a day (NCERT: 300–500 km a day) */
+  if (env.drift) {
+    const turn = clamp((lat - 15) / 8, 0, 1.4);
+    const hd = (-45 + 80 * turn) * D2R;         // heading from north, degrees → radians
+    const km = CY.speed * dt;
+    st.lat += km * Math.cos(hd) / 111;
+    st.lon += km * Math.sin(hd) / (111 * Math.cos(st.lat * D2R));
+  }
+  return st;
+}
+
+/* ---- 3. climate of a town ------------------------------------------------- */
+const CL = {t0: 30.4, tk: 0.207, b: 0.087, tauL: 9, tauS: 104, L: 137, dtrIn: 17.3, dtrSea: 7.5, cloud: 0.4, qm: 0.42, gam: 6.5};
+const MDAYS = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+function insol(lat, d){          // daily-mean sunshine at the top of the air, W/m²
+  const dec = 23.44 * Math.sin(2 * Math.PI * (d - 81) / 365) * D2R, phi = lat * D2R;
+  const c = -Math.tan(phi) * Math.tan(dec);
+  const H0 = c >= 1 ? 0 : c <= -1 ? Math.PI : Math.acos(c);
+  return 1361 / Math.PI * (1 + 0.033 * Math.cos(2 * Math.PI * d / 365)) * (H0 * Math.sin(phi) * Math.sin(dec) + Math.cos(phi) * Math.cos(dec) * Math.sin(H0));
+}
+/* The monsoon reaches Kerala (about 9° N) by 1 June and moves north; it leaves the north first. */
+const onsetDay = lat => 152 + 1.2 * Math.max(0, lat - 9);
+const withdrawDay = lat => 290 - 1.3 * Math.max(0, lat - 9);
+const monsoonOn = (lat, d) => d >= onsetDay(lat) && d <= withdrawDay(lat);
+function climate(pl){
+  const w = Math.exp(-pl.dSea / CL.L);
+  let Qm = 0; for (let d = 1; d <= 365; d++) Qm += insol(pl.lat, d) * (1 - (monsoonOn(pl.lat, d) ? CL.cloud * CL.qm : 0)) / 365;
+  const Tann = CL.t0 - CL.tk * (pl.lat - 8);
+  let TL = 25, TS = 25; const days = [];
+  for (let y = 0; y < 3; y++) for (let d = 1; d <= 365; d++) {
+    const cl = monsoonOn(pl.lat, d) ? CL.cloud : 0;
+    const Teq = Tann + CL.b * (insol(pl.lat, d) * (1 - cl) - Qm);
+    TL += (Teq - TL) / CL.tauL; TS += (Teq - TS) / CL.tauS;
+    if (y === 2) {
+      const Tm = (1 - w) * TL + w * TS - CL.gam * pl.alt / 1000;
+      const dtr = (CL.dtrIn * (1 - w) + CL.dtrSea * w) * (1 - 2 * cl);
+      days.push({Tm, max: Tm + dtr / 2, min: Tm - dtr / 2});
+    }
+  }
+  const out = []; let k = 0;
+  for (let m = 0; m < 12; m++) { let s = 0, mx = 0, mn = 0; for (let i = 0; i < MDAYS[m]; i++, k++) { s += days[k].Tm; mx += days[k].max; mn += days[k].min; }
+    out.push({mean: s / MDAYS[m], max: mx / MDAYS[m], min: mn / MDAYS[m]}); }
+  const hot = Math.max(...out.map(o => o.max)), cold = Math.min(...out.map(o => o.min));
+  return {months: out, hot, cold, range: hot - cold, hotMonth: out.findIndex(o => o.max === hot), coldMonth: out.findIndex(o => o.min === cold)};
+}
+
+/* ---- geography: a simplified outline of India and its coasts (lon, lat) --- */
+const WEST = [[68.4,23.6],[69.1,22.8],[69.0,22.3],[69.6,21.6],[70.4,20.9],[71.0,20.7],[72.1,21.2],[72.3,21.9],[72.6,22.3],[72.7,21.1],[72.8,20.4],[72.8,19.0],[73.0,18.0],[73.3,17.0],[73.8,15.4],[74.1,14.8],[74.5,13.9],[74.8,12.9],[75.5,11.8],[75.8,11.2],[76.2,9.9],[76.5,9.2],[76.9,8.5],[77.5,8.1]];
+const EAST = [[77.5,8.1],[78.1,8.8],[78.6,9.1],[79.3,9.3],[79.85,10.3],[79.85,10.8],[79.83,11.9],[80.3,13.1],[80.1,14.4],[80.2,15.5],[80.8,15.9],[81.2,16.2],[82.3,16.9],[83.3,17.7],[84.1,18.3],[84.9,19.3],[85.8,19.8],[86.7,20.3],[87.0,21.0],[87.1,21.4],[87.5,21.6],[88.1,21.6],[88.9,21.6]];
+const BORDER = [[89.1,22.2],[88.7,23.3],[88.1,24.5],[88.3,25.2],[88.6,26.3],[89.8,26.0],[89.9,25.3],[92.0,25.1],[92.3,24.3],[91.4,24.1],[91.2,23.3],[91.8,22.9],[92.3,22.4],[92.6,21.95],[93.2,22.3],[93.4,23.6],[94.2,24.0],[94.6,25.4],[95.2,26.6],[96.1,27.2],[97.3,28.1],[96.4,29.2],[95.4,29.1],[94.0,28.9],[93.0,28.2],[92.0,27.8],[91.7,26.8],[89.8,26.7],[88.9,27.3],[88.7,28.1],[88.1,27.9],[88.1,26.4],[87.2,26.4],[85.8,26.6],[84.6,27.3],[83.3,27.4],[82.0,27.9],[81.0,28.4],[80.1,28.9],[80.4,29.7],[81.0,30.2],[79.9,30.9],[78.8,31.3],[78.4,32.5],[79.5,32.6],[78.9,33.4],[79.5,34.3],[80.3,35.4],[77.8,35.8],[75.9,36.8],[74.6,37.0],[73.0,36.2],[73.8,34.8],[73.6,33.8],[74.7,32.5],[74.6,31.9],[74.6,31.1],[73.9,30.4],[73.4,29.9],[72.9,29.0],[71.9,27.9],[70.6,28.0],[69.5,27.1],[70.1,26.6],[70.4,25.7],[71.1,24.6],[70.8,24.2],[69.5,24.3],[68.8,24.3]];
+const INDIA = WEST.concat(EAST.slice(1), BORDER);
+const BANGLADESH = [[88.9,21.6],[89.1,22.2],[88.7,23.3],[88.1,24.5],[88.3,25.2],[88.6,26.3],[89.8,26.0],[89.9,25.3],[92.0,25.1],[92.3,24.3],[91.4,24.1],[91.2,23.3],[91.8,22.9],[92.3,22.4],[92.6,21.95],[92.3,20.8],[92.0,21.4],[91.8,22.3],[91.1,22.5],[90.5,22.1],[89.6,21.9]];
+const MYANMAR = [[92.6,21.95],[93.2,22.3],[93.4,23.6],[94.2,24.0],[94.6,25.4],[95.2,26.6],[96.1,27.2],[97.3,28.1],[99.5,28],[99.5,10],[98.5,10.0],[98.2,13.2],[97.7,15.0],[97.4,16.5],[96.3,16.6],[95.2,15.8],[94.2,16.0],[94.4,16.9],[94.3,18.3],[93.6,19.4],[92.9,20.1],[92.3,20.8]];
+const SRILANKA = [[79.9,9.8],[80.3,9.8],[81.0,8.9],[81.9,7.4],[81.7,6.4],[81.1,6.1],[80.1,6.1],[79.8,7.0],[79.8,8.2]];
+const COASTS = [WEST, EAST, [[88.9,21.6],[89.6,21.9],[90.5,22.1],[91.1,22.5],[91.8,22.3],[92.0,21.4],[92.4,20.7],[92.9,20.1],[93.6,19.4],[94.3,18.3]], [[68.4,23.6],[67.4,23.9],[66.7,24.8]]];
+function inPoly(poly, lon, lat){
+  let c = false;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const [xi, yi] = poly[i], [xj, yj] = poly[j];
+    if ((yi > lat) !== (yj > lat) && lon < (xj - xi) * (lat - yi) / (yj - yi) + xi) c = !c;
+  }
+  return c;
+}
+const isLand = (lon, lat) => inPoly(INDIA, lon, lat) || inPoly(BANGLADESH, lon, lat) || inPoly(MYANMAR, lon, lat) || inPoly(SRILANKA, lon, lat);
+/* Distance in km from a point to the nearest coast, on a local flat projection. */
+function distToSea(lon, lat){
+  const kx = 111.32 * Math.cos(lat * D2R), ky = 110.6;
+  let best = 1e9;
+  for (const line of COASTS) for (let i = 0; i < line.length - 1; i++) {
+    const ax = (line[i][0] - lon) * kx, ay = (line[i][1] - lat) * ky, bx = (line[i + 1][0] - lon) * kx, by = (line[i + 1][1] - lat) * ky;
+    const dx = bx - ax, dy = by - ay, L2 = dx * dx + dy * dy;
+    const t = L2 ? clamp(-(ax * dx + ay * dy) / L2, 0, 1) : 0;
+    best = Math.min(best, Math.hypot(ax + t * dx, ay + t * dy));
+  }
+  return inPoly(INDIA, lon, lat) ? best : 0;
+}
+/* MODEL:end */
+
+const TOWNS = {
+  Mumbai: {lon: 72.85, lat: 19.07, alt: 14}, Nagpur: {lon: 79.09, lat: 21.15, alt: 310}, Delhi: {lon: 77.2, lat: 28.6, alt: 216},
+  Jaisalmer: {lon: 70.9, lat: 26.9, alt: 225}, Srinagar: {lon: 74.8, lat: 34.08, alt: 1585}, Coimbatore: {lon: 76.96, lat: 11.0, alt: 411},
+  Ooty: {lon: 76.7, lat: 11.41, alt: 2240}, Kanniyakumari: {lon: 77.54, lat: 8.09, alt: 30}, Chennai: {lon: 80.27, lat: 13.08, alt: 7}, Kolkata: {lon: 88.36, lat: 22.57, alt: 9},
+};
+
+/* ---- state: plain data --------------------------------------------------- */
+const S = {tab: 'breeze', locked: false, hour: 6, sun: 100, playing: false,
+  sst: 29, spin: true, running: true, storm: null, track: [], peak: 0,
+  town: {lon: 72.85, lat: 19.07, alt: 14, name: 'Mumbai'}, visited: []};
+const shared = sharedState();
+if (shared) {
+  if (['breeze', 'cyclone', 'town'].includes(shared.tab)) S.tab = shared.tab;
+  if (shared.hour != null) S.hour = clamp(+shared.hour, 0, 24);
+  if (shared.sun != null) S.sun = clamp(+shared.sun, 0, 100);
+  if (shared.sst != null) S.sst = clamp(+shared.sst, 25, 31);
+  if (shared.town && isFinite(shared.town.lon)) S.town = {lon: +shared.town.lon, lat: +shared.town.lat, alt: clamp(+shared.town.alt || 0, 0, 4000), name: String(shared.town.name || '')};
+}
+shareState(() => ({tab: S.tab, hour: S.hour, sun: S.sun, sst: S.sst, town: S.town}));
+
+/* ============================================================================
+   The stage: every scene is built once, then only patched.
+   ============================================================================ */
+const svg = $('stage');
+const NS = 'http://www.w3.org/2000/svg';
+const pts = (arr, P) => arr.map(p => P(p[0], p[1]).map(v => v.toFixed(1)).join(',')).join(' ');
+/* Bay of Bengal map: 77–95.5° E, 5–24.5° N */
+const BAY = {lon0: 77, lat1: 24.5, kx: 31.7, ky: 32.8};
+const bayP = (lon, lat) => [(lon - BAY.lon0) * BAY.kx, (BAY.lat1 - lat) * BAY.ky];
+const bayInv = (x, y) => [x / BAY.kx + BAY.lon0, BAY.lat1 - y / BAY.ky];
+const KM_PX = 111 / BAY.ky;          // km per pixel on the bay map
+/* India map for the town: 67.5–98° E, 6–37.5° N */
+const IND = {lon0: 67.3, lat1: 37.6, kx: 16.3, ky: 17.4, ox: 16, oy: 42};
+const indP = (lon, lat) => [IND.ox + (lon - IND.lon0) * IND.kx, IND.oy + (IND.lat1 - lat) * IND.ky];
+const indInv = (x, y) => [(x - IND.ox) / IND.kx + IND.lon0, IND.lat1 - (y - IND.oy) / IND.ky];
+/* breeze graph */
+const BG = {x: 70, y: 420, w: 860, h: 170};
+const bgx = h => BG.x + h / 24 * BG.w;
+const bgyT = t => BG.y + BG.h - (t - 18) / 22 * BG.h;        // 18–40 °C
+const bgyU = u => BG.y + BG.h / 2 - u / 30 * (BG.h / 2);      // ±30 km/h
+/* town graph */
+const TG = {x: 600, y: 120, w: 360, h: 330};
+const tgx = m => TG.x + (m + 0.5) / 12 * TG.w;
+const tgy = t => TG.y + TG.h - (t + 15) / 65 * TG.h;          // −15 … 50 °C
+/* cyclone side graphs */
+const WP = {x: 640, y: 70, w: 320, h: 190};      // wind vs distance
+const IG = {x: 640, y: 370, w: 320, h: 200};     // strongest wind vs days
+
+function build(){
+  const rnd = Play.mulberry32(11);
+  let clouds = '';
+  for (let i = 0; i < 5; i++) { const x = 60 + i * 200 + rnd() * 60, y = 50 + rnd() * 50; clouds += `<g transform="translate(${x.toFixed(0)} ${y.toFixed(0)})"><ellipse rx="46" ry="15" fill="#fff"/><ellipse cx="-20" cy="-9" rx="22" ry="14" fill="#fff"/><ellipse cx="14" cy="-12" rx="26" ry="16" fill="#fff"/></g>`; }
+  let stars = '';
+  for (let i = 0; i < 60; i++) stars += `<circle cx="${(rnd() * 1000).toFixed(0)}" cy="${(rnd() * 260).toFixed(0)}" r="${(rnd() * 1.1 + .4).toFixed(1)}" fill="#fff" opacity="${(rnd() * .6 + .3).toFixed(2)}"/>`;
+  /* the circulation loop: parcels ride this path; direction and speed come from the model's wind */
+  let parcels = '';
+  for (let i = 0; i < 44; i++) parcels += `<circle class="parcel" r="4.2" fill="#ffffff" stroke="#2c6f8f" stroke-width="1.4"/>`;
+  svg.innerHTML = `
+  <defs>
+    <linearGradient id="gSky" x1="0" y1="0" x2="0" y2="1"><stop id="sky0" offset="0" stop-color="#5aa9ef"/><stop id="sky1" offset="1" stop-color="#cde8fb"/></linearGradient>
+    <linearGradient id="gSea" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2f7fb3"/><stop offset="1" stop-color="#1b4f7a"/></linearGradient>
+    <radialGradient id="gSun" cx="45%" cy="40%"><stop offset="0" stop-color="#fff4c2"/><stop offset=".55" stop-color="#ffc53d"/><stop offset="1" stop-color="#f28a12"/></radialGradient>
+    <marker id="arrW" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#ffffff"/></marker>
+    <marker id="arrK" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#1d4e66"/></marker>
+    <clipPath id="clipBay"><rect x="0" y="0" width="${(95.5 - 77) * BAY.kx}" height="640"/></clipPath>
+    <radialGradient id="gCloud"><stop offset="0" stop-color="#fff" stop-opacity=".0"/><stop offset=".12" stop-color="#fff" stop-opacity=".95"/><stop offset=".55" stop-color="#eef3f6" stop-opacity=".75"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></radialGradient>
+  </defs>
+
+  <!-- ========== SCENE 1: the coast ========== -->
+  <g id="scBreeze">
+    <rect x="0" y="0" width="1000" height="360" fill="url(#gSky)"/>
+    <g id="stars" opacity="0">${stars}</g>
+    <g id="clouds" opacity=".0">${clouds}</g>
+    <circle id="sunDisc" r="30" fill="url(#gSun)"/>
+    <circle id="moonDisc" r="18" fill="#eef2f7" opacity="0"/>
+    <!-- sea on the west (left), land on the east (right): Mumbai faces the Arabian Sea -->
+    <rect x="0" y="300" width="470" height="60" fill="url(#gSea)"/>
+    <path d="M0 306 Q 30 300 60 306 T 120 306 T 180 306 T 240 306 T 300 306 T 360 306 T 420 306 T 470 306" fill="none" stroke="#9fd0ef" stroke-width="2" opacity=".7"/>
+    <path id="landPath" d="M470 300 L520 296 L1000 292 L1000 360 L470 360 Z" fill="#c9a86a"/>
+    <path d="M470 300 L520 296 L560 295 L560 300 L470 305Z" fill="#e8d39a"/>
+    <g fill="#7d8f9a">
+      <rect x="640" y="236" width="34" height="58"/><rect x="684" y="210" width="28" height="84"/><rect x="722" y="252" width="40" height="42"/>
+      <rect x="820" y="226" width="30" height="68"/><rect x="858" y="246" width="44" height="48"/><rect x="912" y="218" width="26" height="76"/>
+    </g>
+    <g id="windows" fill="#ffe28a" opacity="0">
+      <rect x="648" y="246" width="6" height="6"/><rect x="660" y="262" width="6" height="6"/><rect x="692" y="222" width="6" height="6"/><rect x="700" y="244" width="6" height="6"/>
+      <rect x="730" y="262" width="6" height="6"/><rect x="828" y="240" width="6" height="6"/><rect x="866" y="258" width="6" height="6"/><rect x="920" y="232" width="6" height="6"/>
+    </g>
+    <g transform="translate(560 294)"><path d="M0 0 Q 4 -30 -2 -58" stroke="#6b4a2b" stroke-width="5" fill="none"/>
+      <g id="palm" transform="translate(-2 -58)"><path d="M0 0 Q -24 -10 -40 4 M0 0 Q 22 -12 40 2 M0 0 Q -10 -22 -28 -26 M0 0 Q 12 -22 30 -24 M0 0 Q 0 -20 4 -36" stroke="#2f8f4e" stroke-width="5" fill="none" stroke-linecap="round"/></g></g>
+    <path id="loopPath" d="M150 282 L840 282 Q 860 282 860 262 L860 150 Q 860 130 840 130 L150 130 Q 130 130 130 150 L130 262 Q 130 282 150 282 Z" fill="none" stroke="#ffffff" stroke-width="1.4" stroke-dasharray="4 7" opacity=".5"/>
+    <g id="parcels">${parcels}</g>
+    <g id="bigArrow"><line id="arrLine" x1="330" y1="262" x2="640" y2="262" stroke="#ffffff" stroke-width="7" stroke-linecap="round" marker-end="url(#arrW)"/>
+      <text id="arrLab" x="485" y="250" text-anchor="middle" fill="#ffffff" font-size="17" font-weight="700" stroke="#1d4e66" stroke-width="3" paint-order="stroke"></text></g>
+    <!-- thermometers and barometers -->
+    <g id="thSea" transform="translate(60 120)"></g>
+    <g id="thLand" transform="translate(940 120)"></g>
+    <text id="pSeaLab" x="235" y="330" text-anchor="middle" fill="#fff" font-size="15" font-weight="700"></text>
+    <text id="pLandLab" x="760" y="330" text-anchor="middle" fill="#3b2a12" font-size="15" font-weight="700"></text>
+    <text x="235" y="350" text-anchor="middle" fill="#cfe6f5" font-size="12" font-weight="600">ARABIAN SEA</text>
+    <text x="760" y="350" text-anchor="middle" fill="#5a4320" font-size="12" font-weight="600">MUMBAI</text>
+    <text id="forceLab" x="500" y="30" text-anchor="middle" fill="#0d2a44" font-size="13" font-weight="600"></text>
+    <!-- the day, as a graph -->
+    <rect x="0" y="360" width="1000" height="280" fill="#fbfaf6"/>
+    <line x1="0" y1="360" x2="1000" y2="360" stroke="#e2ded2"/>
+    <text x="18" y="388" fill="#4a555b" font-size="13" font-weight="700" letter-spacing=".08em">THE WHOLE DAY</text>
+    <g id="bgNight"></g>
+    <g id="bgAxes"></g>
+    <path id="bgU" fill="#2c8fb0" opacity=".22"/>
+    <path id="bgUl" fill="none" stroke="#2c8fb0" stroke-width="2"/>
+    <path id="bgTL" fill="none" stroke="#d9772b" stroke-width="3"/>
+    <path id="bgTS" fill="none" stroke="#2f6fb8" stroke-width="3" stroke-dasharray="8 5"/>
+    <line id="bgNow" y1="${BG.y}" y2="${BG.y + BG.h}" stroke="#1d2327" stroke-width="1.5"/>
+    <g font-size="12.5" font-weight="600">
+      <line x1="430" y1="384" x2="456" y2="384" stroke="#d9772b" stroke-width="3"/><text x="462" y="388" fill="#9a4d10">Land</text>
+      <line x1="510" y1="384" x2="536" y2="384" stroke="#2f6fb8" stroke-width="3" stroke-dasharray="8 5"/><text x="542" y="388" fill="#1f4f94">Sea</text>
+      <rect x="590" y="377" width="22" height="13" fill="#2c8fb0" opacity=".35"/><text x="618" y="388" fill="#1d5f78">Wind: up = from the sea, down = from the land</text>
+    </g>
+    <g id="bgVeil"><rect x="0" y="361" width="1000" height="279" fill="#fbfaf6" opacity=".94"/>
+      <text x="500" y="505" text-anchor="middle" fill="#7c878c" font-size="15" font-weight="600">The graph appears once you have made a prediction.</text></g>
+  </g>
+
+  <!-- ========== SCENE 2: the Bay of Bengal ========== -->
+  <g id="scCyclone" display="none">
+    <rect x="0" y="0" width="1000" height="640" fill="#fbfaf6"/>
+    <g clip-path="url(#clipBay)">
+      <rect id="seaRect" x="0" y="0" width="${(95.5 - 77) * BAY.kx}" height="640" fill="#3a8fc0"/>
+      <rect id="seaNorth" x="0" y="0" width="${(95.5 - 77) * BAY.kx}" height="${(24.5 - 20) * BAY.ky}" fill="#2f78a8" opacity=".35"/>
+      <g fill="#cdbb8a" stroke="#8a7a52" stroke-width="1">
+        <polygon points="${pts(INDIA, bayP)}"/><polygon points="${pts(BANGLADESH, bayP)}"/><polygon points="${pts(MYANMAR, bayP)}"/><polygon points="${pts(SRILANKA, bayP)}"/>
+      </g>
+      <g id="grid" stroke="#ffffff" stroke-opacity=".22" stroke-width="1"></g>
+      <g id="places" font-size="11.5" font-weight="600" fill="#3b2a12"></g>
+      <path id="track" fill="none" stroke="#1d2327" stroke-width="2" stroke-dasharray="2 5" opacity=".7"/>
+      <g id="trackDots"></g>
+      <g id="stormG" opacity="0">
+        <circle id="cloudDisc" r="120" fill="url(#gCloud)"/>
+        <g id="bands" fill="none" stroke="#ffffff" stroke-linecap="round"></g>
+        <g id="isobars" fill="none" stroke="#12324a" stroke-width="1.3" opacity=".75"></g>
+        <g id="isoLabs" font-size="10.5" font-weight="700" fill="#0f2a3d"></g>
+        <g id="tracers" stroke="#ffffff" stroke-width="1.6" stroke-linecap="round" fill="none"></g>
+        <circle id="eye" r="6" fill="#3a8fc0" stroke="#ffffff" stroke-width="1.5"/>
+        <text id="lowL" text-anchor="middle" font-size="22" font-weight="800" fill="#b3245a" dy="8">L</text>
+      </g>
+      <circle id="stormHit" r="26" fill="transparent" role="button" aria-label="The storm: drag it"/>
+    </g>
+    <line x1="${(95.5 - 77) * BAY.kx}" y1="0" x2="${(95.5 - 77) * BAY.kx}" y2="640" stroke="#e2ded2"/>
+    <text x="14" y="24" fill="#3b2a12" font-size="13" font-weight="700" letter-spacing=".08em">BAY OF BENGAL</text>
+    <text id="sstLab" x="14" y="42" fill="#3b2a12" font-size="12" font-weight="600"></text>
+    <!-- the seed: a low-pressure area waiting in its dock -->
+    <g id="dock"><rect x="470" y="560" width="104" height="66" rx="10" fill="#ffffff" opacity=".85"/><text x="522" y="618" text-anchor="middle" font-size="11" font-weight="600" fill="#4a555b">drag onto the sea</text></g>
+    <g id="seedG"><circle id="seedC" r="20" fill="#fff" stroke="#b3245a" stroke-width="2.5"/><text id="seedT" text-anchor="middle" font-size="22" font-weight="800" fill="#b3245a" dy="8">L</text></g>
+    <circle id="seedHit" r="24" fill="transparent" role="button" aria-label="A low-pressure area: drag it onto the sea"/>
+    <!-- wind against distance -->
+    <text x="${WP.x}" y="${WP.y - 30}" fill="#4a555b" font-size="13" font-weight="700" letter-spacing=".08em">WIND ACROSS THE STORM</text>
+    <text x="${WP.x}" y="${WP.y - 13}" fill="#7c878c" font-size="11.5">Wind speed against distance from the centre</text>
+    <g id="wpAxes"></g><path id="wpFill" fill="#d6453d" opacity=".14"/><path id="wpLine" fill="none" stroke="#d6453d" stroke-width="2.6"/>
+    <text id="wpEye" fill="#0f2a3d" font-size="11.5" font-weight="700"></text>
+    <!-- strongest wind through time -->
+    <text x="${IG.x}" y="${IG.y - 30}" fill="#4a555b" font-size="13" font-weight="700" letter-spacing=".08em">STRONGEST WIND, DAY BY DAY</text>
+    <text x="${IG.x}" y="${IG.y - 13}" fill="#7c878c" font-size="11.5">Coloured bands: the IMD's names for each strength</text>
+    <g id="igBands"></g><g id="igAxes"></g><path id="igLine" fill="none" stroke="#1d2327" stroke-width="2.4"/><circle id="igNow" r="5" fill="#1d2327" stroke="#fff" stroke-width="2"/>
+  </g>
+
+  <!-- ========== SCENE 3: India ========== -->
+  <g id="scTown" display="none">
+    <rect x="0" y="0" width="1000" height="640" fill="#dfeef6"/>
+    <rect x="560" y="0" width="440" height="640" fill="#fbfaf6"/>
+    <line x1="560" y1="0" x2="560" y2="640" stroke="#e2ded2"/>
+    <text x="16" y="26" fill="#1f4760" font-size="13" font-weight="700" letter-spacing=".08em">INDIA</text>
+    <polygon points="${pts(INDIA, indP)}" fill="#e9dcb4" stroke="#8a7a52" stroke-width="1.2"/>
+    <polygon points="${pts(SRILANKA, indP)}" fill="#e9dcb4" stroke="#8a7a52" stroke-width="1" opacity=".7"/>
+    <g id="indGrid" font-size="10.5" fill="#5a7a8f"></g>
+    <g id="townDots" font-size="10.5" font-weight="600" fill="#3b2a12"></g>
+    <line id="seaLine" stroke="#2f6fb8" stroke-width="1.6" stroke-dasharray="4 4"/>
+    <g id="pinG"><path d="M0 0 C -9 -14 -13 -20 -13 -27 A 13 13 0 1 1 13 -27 C 13 -20 9 -14 0 0Z" fill="#d6453d" stroke="#fff" stroke-width="2"/><circle cy="-27" r="5" fill="#fff"/></g>
+    <circle id="pinHit" r="22" fill="transparent" role="slider" aria-label="The town: drag it round the map"/>
+    <text id="townName" x="580" y="36" fill="#1d2327" font-size="20" font-weight="600" font-family="Fredoka, Inter, sans-serif"></text>
+    <text id="townSub" x="580" y="58" fill="#4a555b" font-size="12.5"></text>
+    <text x="580" y="92" fill="#4a555b" font-size="13" font-weight="700" letter-spacing=".08em">TEMPERATURE THROUGH THE YEAR</text>
+    <g id="tgAxes"></g>
+    <path id="tgGhost" fill="#8a94a6" opacity=".18"/>
+    <path id="tgGhostL" fill="none" stroke="#8a94a6" stroke-width="1.5" stroke-dasharray="5 4"/>
+    <text id="tgGhostLab" fill="#6b7479" font-size="11.5" font-weight="600"></text>
+    <path id="tgBand" fill="#e8890c" opacity=".22"/>
+    <path id="tgMax" fill="none" stroke="#d6453d" stroke-width="2.6"/>
+    <path id="tgMin" fill="none" stroke="#2f6fb8" stroke-width="2.6"/>
+    <g id="tgMon" font-size="11" fill="#7c878c" font-weight="600"></g>
+    <rect id="tgMonsoon" y="${TG.y}" height="${TG.h}" fill="#2c8fb0" opacity=".08"/>
+    <text id="tgMonsoonLab" y="${TG.y + 14}" fill="#1d5f78" font-size="11" font-weight="700" text-anchor="middle">monsoon</text>
+    <g font-size="12" font-weight="600">
+      <line x1="600" y1="${TG.y + TG.h + 44}" x2="624" y2="${TG.y + TG.h + 44}" stroke="#d6453d" stroke-width="2.6"/><text x="630" y="${TG.y + TG.h + 48}" fill="#9b2a24">Average day</text>
+      <line x1="730" y1="${TG.y + TG.h + 44}" x2="754" y2="${TG.y + TG.h + 44}" stroke="#2f6fb8" stroke-width="2.6"/><text x="760" y="${TG.y + TG.h + 48}" fill="#1f4f94">Average night</text>
+      <line x1="870" y1="${TG.y + TG.h + 44}" x2="894" y2="${TG.y + TG.h + 44}" stroke="#8a94a6" stroke-width="1.5" stroke-dasharray="5 4"/><text x="900" y="${TG.y + TG.h + 48}" fill="#6b7479">Last town</text>
+    </g>
+    <text id="tgNote" x="580" y="${TG.y + TG.h + 80}" fill="#4a555b" font-size="12.5"></text>
+  </g>`;
+  buildStatic();
+}
+
+function buildStatic(){
+  /* thermometers */
+  for (const id of ['thSea', 'thLand']) $(id).innerHTML = `<rect x="-7" y="0" width="14" height="110" rx="7" fill="#ffffff" stroke="#1d4e66" stroke-width="1.5"/>
+      <rect class="merc" x="-3.5" width="7" rx="3.5" fill="#d6453d"/><circle cx="0" cy="116" r="11" fill="#d6453d" stroke="#1d4e66" stroke-width="1.5"/>
+      <text class="tv" x="0" y="-10" text-anchor="middle" font-size="15" font-weight="700" fill="#0d2a44" stroke="#fff" stroke-width="3" paint-order="stroke"></text>`;
+  /* bay grid and places */
+  let g = '';
+  for (let lat = 10; lat <= 20; lat += 5) { const y = bayP(0, lat)[1]; g += `<line x1="0" y1="${y}" x2="600" y2="${y}"/><text x="${(95.5 - 77) * BAY.kx - 6}" y="${y - 4}" text-anchor="end" fill="#ffffff" fill-opacity=".8" stroke="none" font-size="11">${lat}° N</text>`; }
+  for (let lon = 80; lon <= 95; lon += 5) { const x = bayP(lon, 0)[0]; g += `<line x1="${x}" y1="0" x2="${x}" y2="640"/><text x="${x + 4}" y="632" fill="#ffffff" fill-opacity=".8" stroke="none" font-size="11">${lon}° E</text>`; }
+  $('grid').innerHTML = g;
+  const PL = [['Chennai', 80.27, 13.08, 'r'], ['Machilipatnam', 81.14, 16.17, 'r'], ['Visakhapatnam', 83.3, 17.7, 'r'], ['Puri', 85.83, 19.8, 'r'], ['Kolkata', 88.36, 22.57, 'l'], ['Dhaka', 90.4, 23.8, 'l'], ['Sri Lanka', 80.7, 7.6, 'c']];
+  $('places').innerHTML = PL.map(([n, lo, la, s]) => { const [x, y] = bayP(lo, la);
+    return `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="3" fill="#3b2a12"/><text x="${(x + (s === 'r' ? -6 : s === 'l' ? 6 : 0)).toFixed(1)}" y="${(y + (s === 'c' ? 16 : 4)).toFixed(1)}" text-anchor="${s === 'r' ? 'end' : s === 'l' ? 'start' : 'middle'}">${n}</text>`; }).join('');
+  /* India grid */
+  let ig = '';
+  for (const lat of [10, 20, 30]) { const [, y] = indP(70, lat); ig += `<line x1="${IND.ox}" y1="${y.toFixed(1)}" x2="552" y2="${y.toFixed(1)}" stroke="#9fbfd2" stroke-width=".8" stroke-dasharray="3 5"/><text x="${IND.ox + 2}" y="${(y - 3).toFixed(1)}">${lat}° N</text>`; }
+  { const [, yt] = indP(70, 23.44); ig += `<line x1="${IND.ox}" y1="${yt.toFixed(1)}" x2="552" y2="${yt.toFixed(1)}" stroke="#c9774a" stroke-width="1" stroke-dasharray="6 4"/><text x="548" y="${(yt - 3).toFixed(1)}" text-anchor="end" fill="#9a5a30">Tropic of Cancer</text>`; }
+  $('indGrid').innerHTML = ig;
+  $('townDots').innerHTML = Object.entries(TOWNS).map(([n, t]) => { const [x, y] = indP(t.lon, t.lat);
+    const left = ['Mumbai', 'Jaisalmer', 'Coimbatore', 'Kanniyakumari'].includes(n);
+    return `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="2.6" fill="#3b2a12"/><text x="${(x + (left ? -5 : 5)).toFixed(1)}" y="${(y + (n === 'Ooty' ? 12 : 4)).toFixed(1)}" text-anchor="${left ? 'end' : 'start'}">${n}</text>`; }).join('');
+  /* town graph axes */
+  let ta = '';
+  for (let t = -10; t <= 50; t += 10) ta += `<line x1="${TG.x}" y1="${tgy(t).toFixed(1)}" x2="${TG.x + TG.w}" y2="${tgy(t).toFixed(1)}" stroke="${t === 0 ? '#b9c3c7' : '#ece8dc'}"/><text x="${TG.x - 8}" y="${(tgy(t) + 4).toFixed(1)}" text-anchor="end" fill="#7c878c" font-size="11">${t}°</text>`;
+  $('tgAxes').innerHTML = ta;
+  $('tgMon').innerHTML = MONTHS.map((m, i) => `<text x="${tgx(i).toFixed(1)}" y="${TG.y + TG.h + 18}" text-anchor="middle">${m}</text>`).join('');
+  /* breeze graph axes */
+  let ba = `<line x1="${BG.x}" y1="${bgyU(0)}" x2="${BG.x + BG.w}" y2="${bgyU(0)}" stroke="#9aa3a6"/>`;
+  for (let h = 0; h <= 24; h += 3) ba += `<text x="${bgx(h).toFixed(1)}" y="${BG.y + BG.h + 18}" text-anchor="middle" fill="#7c878c" font-size="11.5" font-weight="600">${h === 0 || h === 24 ? 'midnight' : h === 12 ? 'noon' : (h % 12) + (h < 12 ? ' am' : ' pm')}</text>`;
+  for (let t = 20; t <= 40; t += 5) ba += `<text x="${BG.x - 8}" y="${(bgyT(t) + 4).toFixed(1)}" text-anchor="end" fill="#b5620a" font-size="11">${t}°</text>`;
+  for (const u of [-20, 20]) ba += `<text x="${BG.x + BG.w + 8}" y="${(bgyU(u) + 4).toFixed(1)}" fill="#1d5f78" font-size="11">${Math.abs(u)}</text>`;
+  ba += `<text x="${BG.x + BG.w + 8}" y="${BG.y - 8}" fill="#1d5f78" font-size="11" font-weight="600" text-anchor="end">km/h</text><text x="${BG.x - 40}" y="${BG.y - 8}" fill="#b5620a" font-size="11" font-weight="600">°C</text>`;
+  $('bgAxes').innerHTML = ba;
+  /* wind-profile axes */
+  let wa = `<line x1="${WP.x}" y1="${WP.y + WP.h}" x2="${WP.x + WP.w}" y2="${WP.y + WP.h}" stroke="#9aa3a6"/><line x1="${WP.x}" y1="${WP.y}" x2="${WP.x}" y2="${WP.y + WP.h}" stroke="#9aa3a6"/>`;
+  for (let r = 0; r <= 300; r += 100) wa += `<text x="${(WP.x + r / 300 * WP.w).toFixed(1)}" y="${WP.y + WP.h + 16}" text-anchor="middle" fill="#7c878c" font-size="11">${r} km</text>`;
+  for (let v = 0; v <= 250; v += 50) wa += `<text x="${WP.x - 6}" y="${(WP.y + WP.h - v / 280 * WP.h + 4).toFixed(1)}" text-anchor="end" fill="#7c878c" font-size="10.5">${v}</text>`;
+  wa += `<text x="${WP.x - 6}" y="${WP.y - 2}" text-anchor="end" fill="#7c878c" font-size="10.5">km/h</text>`;
+  $('wpAxes').innerHTML = wa;
+  /* strongest wind vs time: IMD bands */
+  let bands = '';
+  const igy = v => IG.y + IG.h - v / 280 * IG.h;
+  IMD.forEach((c, i) => { const lo = c[0], hi = i < IMD.length - 1 ? IMD[i + 1][0] : 280;
+    bands += `<rect x="${IG.x}" y="${igy(hi).toFixed(1)}" width="${IG.w}" height="${(igy(lo) - igy(hi)).toFixed(1)}" fill="${c[2]}" opacity=".13"/>`;
+    if (i >= 3) bands += `<text x="${IG.x + IG.w - 4}" y="${(igy(lo) - 4).toFixed(1)}" text-anchor="end" fill="${c[2]}" font-size="10.5" font-weight="700">${c[1]}</text>`; });
+  $('igBands').innerHTML = bands;
+  let iga = `<line x1="${IG.x}" y1="${IG.y + IG.h}" x2="${IG.x + IG.w}" y2="${IG.y + IG.h}" stroke="#9aa3a6"/>`;
+  for (let d = 0; d <= 8; d += 2) iga += `<text x="${(IG.x + d / 8 * IG.w).toFixed(1)}" y="${IG.y + IG.h + 16}" text-anchor="middle" fill="#7c878c" font-size="11">day ${d}</text>`;
+  for (let v = 0; v <= 250; v += 50) iga += `<text x="${IG.x - 6}" y="${(igy(v) + 4).toFixed(1)}" text-anchor="end" fill="#7c878c" font-size="10.5">${v}</text>`;
+  $('igAxes').innerHTML = iga;
+}
+
+/* ============================================================================
+   SCENE 1 — the coast
+   ============================================================================ */
+let DAY = breezeDay(S.sun);
+const at = h => { const i = clamp(h / 24 * (DAY.length - 1), 0, DAY.length - 1), a = Math.floor(i), b = Math.min(DAY.length - 1, a + 1), k = i - a;
+  const A = DAY[a], B = DAY[b]; const o = {}; for (const key in A) o[key] = A[key] + (B[key] - A[key]) * k; return o; };
+const clockOf = h => { h = ((h % 24) + 24) % 24; const H = Math.floor(h + 1e-6), M = Math.round((h - H) * 60) % 60; const hh = H % 12 || 12; return `${hh}:${String(M).padStart(2, '0')} ${H < 12 ? 'am' : 'pm'}`; };
+const kmh = u => u * 3.6;
+function mix(a, b, t){ const pa = [1, 3, 5].map(i => parseInt(a.slice(i, i + 2), 16)), pb = [1, 3, 5].map(i => parseInt(b.slice(i, i + 2), 16));
+  return '#' + pa.map((v, i) => Math.round(v + (pb[i] - v) * clamp(t, 0, 1)).toString(16).padStart(2, '0')).join(''); }
+function drawBreezeGraph(){
+  const P = (f, g) => DAY.map((d, i) => (i ? 'L' : 'M') + bgx(d.h).toFixed(1) + ' ' + g(f(d)).toFixed(1)).join('');
+  $('bgTL').setAttribute('d', P(d => d.TL, bgyT));
+  $('bgTS').setAttribute('d', P(d => d.TS, bgyT));
+  const U = P(d => clamp(kmh(d.u), -30, 30), bgyU);
+  $('bgUl').setAttribute('d', U);
+  $('bgU').setAttribute('d', U + `L${bgx(24)} ${bgyU(0)}L${bgx(0)} ${bgyU(0)}Z`);
+  $('bgNight').innerHTML = `<rect x="${bgx(0)}" y="${BG.y}" width="${bgx(6) - bgx(0)}" height="${BG.h}" fill="#1d2a44" opacity=".07"/><rect x="${bgx(18)}" y="${BG.y}" width="${bgx(24) - bgx(18)}" height="${BG.h}" fill="#1d2a44" opacity=".07"/>`;
+}
+let loopLen = 0;
+function paintBreeze(){
+  const s = at(S.hour), h = S.hour;
+  const sunUp = h > 6 && h < 18, el = sunUp ? Math.sin(Math.PI * (h - 6) / 12) : 0;
+  const grey = 1 - S.sun / 100;
+  const dayK = sunUp ? Math.min(1, el * 3) : 0;
+  $('sky0').setAttribute('stop-color', mix(mix('#0b1530', '#4f9ff0', dayK), '#8a98a6', grey * dayK));
+  $('sky1').setAttribute('stop-color', mix(mix('#1a2a4d', dayK < .5 ? '#f2b27a' : '#cfe8fb', dayK), '#b9c3c9', grey * dayK));
+  $('stars').setAttribute('opacity', (1 - dayK).toFixed(2));
+  $('clouds').setAttribute('opacity', (grey * .9 * (0.4 + .6 * dayK)).toFixed(2));
+  const ang = Math.PI * (h - 6) / 12;
+  $('sunDisc').setAttribute('cx', (500 - 420 * Math.cos(ang)).toFixed(1)); $('sunDisc').setAttribute('cy', (300 - 250 * Math.sin(ang)).toFixed(1));
+  $('sunDisc').setAttribute('opacity', sunUp ? (1 - grey * .75).toFixed(2) : 0);
+  const ma = Math.PI * (((h + 12) % 24) - 6) / 12;
+  $('moonDisc').setAttribute('cx', (500 - 420 * Math.cos(ma)).toFixed(1)); $('moonDisc').setAttribute('cy', (300 - 250 * Math.sin(ma)).toFixed(1));
+  $('moonDisc').setAttribute('opacity', sunUp ? 0 : .9);
+  $('windows').setAttribute('opacity', sunUp ? 0 : 1);
+  /* thermometers */
+  const th = (id, T) => { const g = $(id), hgt = clamp((T - 15) / 25, 0.05, 1) * 104;
+    g.querySelector('.merc').setAttribute('y', (110 - hgt).toFixed(1)); g.querySelector('.merc').setAttribute('height', (hgt + 6).toFixed(1));
+    g.querySelector('.tv').textContent = S.locked ? fmt(T, 1) + ' °C' : ''; };
+  th('thSea', s.TS); th('thLand', s.TL);
+  /* pressure: shown after the prediction */
+  const hiLand = s.pLand > s.pSea;
+  $('pSeaLab').textContent = S.locked ? `${hiLand ? 'L' : 'H'}  ${fmt(s.pSea, 2)} hPa` : '';
+  $('pLandLab').textContent = S.locked ? `${hiLand ? 'H' : 'L'}  ${fmt(s.pLand, 2)} hPa` : '';
+  $('forceLab').textContent = S.locked ? `Air pressing on a 15 cm × 15 cm patch of the beach: ${fmt(airForce(s.pLand, 0.15 * 0.15), 0)} N, the weight of about ${fmt(airForce(s.pLand, 0.0225) / 9.8, 0)} kg` : '';
+  /* the big arrow: direction and speed from the model */
+  const v = kmh(s.u), speed = Math.abs(v);
+  const L = clamp(speed / 25, 0.12, 1) * 300;
+  const cx = 485;
+  $('arrLine').setAttribute('x1', (v >= 0 ? cx - L / 2 : cx + L / 2).toFixed(1)); $('arrLine').setAttribute('x2', (v >= 0 ? cx + L / 2 : cx - L / 2).toFixed(1));
+  $('bigArrow').setAttribute('opacity', S.locked ? (speed < 0.8 ? .25 : 1) : 0);
+  $('arrLab').textContent = !S.locked ? '' : speed < 0.8 ? 'Calm' : `${v > 0 ? 'Sea breeze' : 'Land breeze'}: ${fmt(speed, 0)} km/h`;
+  $('palm').setAttribute('transform', `translate(-2 -58) rotate(${clamp(v * 0.9, -14, 14).toFixed(1)})`);
+  /* graph */
+  $('bgNow').setAttribute('x1', bgx(h).toFixed(1)); $('bgNow').setAttribute('x2', bgx(h).toFixed(1));
+  $('clock').textContent = clockOf(h); $('hour').value = h; $('hourOut').textContent = clockOf(h).replace(/ (am|pm)/, '');
+  $('sun').value = S.sun; $('sunOut').textContent = S.sun + '%';
+  if (S.tab === 'breeze') whyBreeze(s);
+  checkBreeze(s);
+}
+let parcelPhase = 0;
+function stepParcels(dt){
+  const s = at(S.hour);
+  const path = $('loopPath');
+  if (!loopLen) loopLen = path.getTotalLength();
+  /* Positive u (sea → land) runs the loop clockwise here: along the ground to the right, up over the land. */
+  parcelPhase += (S.locked ? kmh(s.u) : 0) * dt * 7;
+  const ps = svg.querySelectorAll('.parcel');
+  ps.forEach((c, i) => {
+    const d = ((i / ps.length) * loopLen + parcelPhase) % loopLen;
+    const p = path.getPointAtLength((d + loopLen) % loopLen);
+    c.setAttribute('cx', p.x.toFixed(1)); c.setAttribute('cy', p.y.toFixed(1));
+  });
+  svg.querySelector('#parcels').setAttribute('opacity', S.locked ? clamp(Math.abs(kmh(s.u)) / 6, 0.15, 1).toFixed(2) : 0.15);
+}
+function whyBreeze(s){
+  if (!S.locked) return;
+  const dT = s.TL - s.TS, v = kmh(s.u);
+  let t = `<p>The land is at <b>${fmt(s.TL, 1)} °C</b> and the sea at <b>${fmt(s.TS, 1)} °C</b>. `;
+  t += Math.abs(dT) < 0.3 ? 'They are almost the same, so the air over each presses down almost equally.</p>'
+    : dT > 0 ? `The warm air over the land is lighter and rises, so it presses down less: the pressure over the land is <b>${fmt(s.pSea - s.pLand, 2)} hPa lower</b> than over the sea.</p>`
+             : `At night the land has lost its heat faster than the sea. Now the air over the sea is warmer, and the pressure over the sea is <b>${fmt(s.pLand - s.pSea, 2)} hPa lower</b>.</p>`;
+  t += Math.abs(v) < 0.8 ? '<p>With so little difference, the air hardly moves.</p>'
+    : `<p>Air moves from high pressure to low pressure, so the wind blows <b>${v > 0 ? 'from the sea onto the land' : 'from the land out to sea'}</b> at <b>${fmt(Math.abs(v), 0)} km/h</b>. ` +
+      `Up above, the air goes back the other way, closing the loop.</p>`;
+  if (S.sun < 30) t += `<p>With the Sun hidden behind thick cloud, the land hardly warms up. The breeze is weak.</p>`;
+  $('why').innerHTML = t; $('whyCard').hidden = false;
+}
+function checkBreeze(s){
+  if (!S.locked) return;
+  const v = kmh(s.u);
+  if (v > 8 && s.TL > s.TS) { discover('seabreeze'); maybeExplain(s); }
+  if (v < -1.8 && s.TL < s.TS) discover('landbreeze');
+}
+let EXPLAINED = false;
+function maybeExplain(s){
+  if (EXPLAINED || !POE) return;
+  EXPLAINED = true;
+  POE.explain(`At ${clockOf(S.hour)} the model has the land at <b>${fmt(s.TL, 1)} °C</b> and the sea at <b>${fmt(s.TS, 1)} °C</b>. ` +
+    `The air over the warm land rises and the pressure there is <b>${fmt(s.pSea - s.pLand, 2)} hPa</b> lower than over the sea, ` +
+    `so the wind blows <b>from the sea onto the land at ${fmt(kmh(s.u), 0)} km/h</b>: a sea breeze. Now try the middle of the night.`);
+}
+
+/* ============================================================================
+   SCENE 2 — the cyclone
+   ============================================================================ */
+const DOCK = {x: 522, y: 588};
+let TRACERS = [];
+function seedTracers(){
+  const rnd = Play.mulberry32(5);
+  TRACERS = Array.from({length: 140}, () => ({r: 20 + Math.pow(rnd(), .7) * 330, th: rnd() * Math.PI * 2, age: rnd() * 3}));
+  $('tracers').innerHTML = TRACERS.map(() => '<path/>').join('');
+}
+function envNow(){ return {sst: S.sst, spin: S.spin, isLand, drift: true}; }
+function newLow(lon, lat){
+  S.storm = {lon, lat, dp: 4, age: 0, v: 0};
+  S.track = [{lon, lat, v: 0, age: 0}]; S.peak = 0; S.hist = [{age: 0, v: 0}];
+  S.stormNoSpinStart = S.spin ? null : 0;
+  track('lowPlaced', {lon: +lon.toFixed(2), lat: +lat.toFixed(2), sst: S.sst, spin: S.spin});
+  sound('whoosh');
+}
+function stormVmax(){ const st = S.storm; return st ? vmax(st.dp, st.lat, S.spin) : 0; }
+function paintCyclone(){
+  $('sstLab').textContent = `Sea surface ${fmt(S.sst, 1)} °C` + (S.sst > CY.sst0 ? '' : ' — too cool for a cyclone to grow');
+  $('seaRect').setAttribute('fill', mix('#5f9fc6', '#1f6fa8', (S.sst - 25) / 6));
+  $('sst').value = S.sst; $('sstOut').textContent = fmt(S.sst, 1) + ' °C';
+  $('btnSpin').setAttribute('aria-pressed', S.spin); $('btnSpin').textContent = S.spin ? '🌍 The Earth spins' : '⏸ The Earth stands still';
+  const st = S.storm;
+  $('dock').setAttribute('opacity', st ? 0.35 : 1);
+  if (!st) {
+    $('stormG').setAttribute('opacity', 0); $('stormHit').style.pointerEvents = 'none';
+    $('seedG').setAttribute('transform', `translate(${DOCK.x} ${DOCK.y})`); $('seedG').setAttribute('opacity', 1);
+    $('seedHit').setAttribute('cx', DOCK.x); $('seedHit').setAttribute('cy', DOCK.y); $('seedHit').style.pointerEvents = S.locked ? '' : 'none';
+    $('rPc').textContent = '—'; $('rV').textContent = '—'; $('rOver').textContent = '—'; $('rAge').textContent = '—';
+    $('rCat').textContent = 'No low yet'; $('rCat').style.background = '#8a94a6';
+    $('track').setAttribute('d', ''); $('trackDots').innerHTML = ''; $('wpLine').setAttribute('d', ''); $('wpFill').setAttribute('d', ''); $('wpEye').textContent = '';
+    $('igLine').setAttribute('d', ''); $('igNow').setAttribute('opacity', 0);
+    whyCyclone(); return;
+  }
+  $('seedG').setAttribute('opacity', 0); $('seedHit').style.pointerEvents = 'none'; $('stormHit').style.pointerEvents = S.locked ? '' : 'none';
+  const [x, y] = bayP(st.lon, st.lat);
+  const V = stormVmax(), K = kmh(V), cat = category(K);
+  st.v = K;
+  $('stormG').setAttribute('opacity', 1);
+  $('stormG').setAttribute('transform', `translate(${x.toFixed(1)} ${y.toFixed(1)})`);
+  $('stormHit').setAttribute('cx', x.toFixed(1)); $('stormHit').setAttribute('cy', y.toFixed(1));
+  /* the cloud shield reaches out to where the model's wind falls to about 40 km/h */
+  let rGale = 40;
+  for (let r = 40; r < 900; r += 10) { if (kmh(windAt(st.dp, r, st.lat, S.spin)) >= 40) rGale = r; }
+  const cr = clamp(rGale * 1.35, 60, 700) / KM_PX;
+  $('cloudDisc').setAttribute('r', cr.toFixed(1)); $('cloudDisc').setAttribute('opacity', clamp(st.dp / 25, 0.15, 0.95).toFixed(2));
+  /* rain bands: three spiral arms out to the edge of the shield (a picture; their turning follows the wind) */
+  let bd = '';
+  if (S.spin && K >= 50) for (let a = 0; a < 3; a++) {
+    let d = '';
+    for (let i = 0; i <= 40; i++) { const th = a * 2.094 - i * 0.12, r = (CY.R / KM_PX + 2) * Math.exp(0.16 * i * 0.12 * 8.5);
+      if (r > cr) break; d += (i ? 'L' : 'M') + (Math.cos(th) * r).toFixed(1) + ' ' + (-Math.sin(th) * r).toFixed(1); }
+    bd += `<path d="${d}" stroke-width="${(3 + clamp(K / 40, 0, 5)).toFixed(1)}" opacity="${clamp(K / 250, 0.2, 0.7).toFixed(2)}"/>`;
+  }
+  $('bands').innerHTML = bd;
+  $('bands').setAttribute('transform', `rotate(${(-(S.bandRot || 0)).toFixed(1)})`);
+  /* isobars every 4 hPa from 1004 hPa inwards, radii solved from the model's pressure profile */
+  let iso = '', labs = '';
+  const pc = CY.pAmb - st.dp;
+  for (let p = 1006; p > pc + 0.5; p -= 2) {
+    let lo = 0.5, hi = 3000;
+    for (let i = 0; i < 40; i++) { const m = (lo + hi) / 2; if (pressureAt(st.dp, m) < p) lo = m; else hi = m; }
+    const r = lo / KM_PX;
+    if (r < 3 || r > 700) continue;
+    iso += `<circle r="${r.toFixed(1)}"/>`;
+    if (r > 14 && (p % 4 === 0 || r > 40)) labs += `<text x="${(r * 0.72 + 2).toFixed(1)}" y="${(-r * 0.72).toFixed(1)}">${p}</text>`;
+  }
+  $('isobars').innerHTML = iso; $('isoLabs').innerHTML = labs;
+  const eyeR = Math.max(6, CY.R / KM_PX * 0.8);
+  $('eye').setAttribute('r', (K >= 118 ? eyeR : 0).toFixed(1));
+  $('lowL').setAttribute('opacity', K >= 118 ? 0 : 1);
+  /* track */
+  $('track').setAttribute('d', S.track.map((p, i) => { const q = bayP(p.lon, p.lat); return (i ? 'L' : 'M') + q[0].toFixed(1) + ' ' + q[1].toFixed(1); }).join(''));
+  $('trackDots').innerHTML = S.track.filter((p, i) => i % 6 === 0).map(p => { const q = bayP(p.lon, p.lat); return `<circle cx="${q[0].toFixed(1)}" cy="${q[1].toFixed(1)}" r="4" fill="${category(p.v)[2]}" stroke="#fff" stroke-width="1"/>`; }).join('');
+  /* readouts */
+  const land = isLand(st.lon, st.lat);
+  $('rPc').textContent = S.locked ? fmt(pc, 0) + ' hPa' : '—';
+  $('rV').textContent = S.locked ? fmt(K, 0) + ' km/h' : '—';
+  $('rOver').textContent = land ? 'land' : `sea at ${fmt(S.sst, 1)} °C`;
+  $('rAge').textContent = fmt(st.age, 1);
+  $('rCat').textContent = cat[1]; $('rCat').style.background = cat[2];
+  /* wind vs distance */
+  let wp = '';
+  for (let r = 0; r <= 300; r += 3) { const vv = kmh(windAt(st.dp, r, st.lat, S.spin && true)); wp += (r ? 'L' : 'M') + (WP.x + r / 300 * WP.w).toFixed(1) + ' ' + (WP.y + WP.h - clamp(vv, 0, 280) / 280 * WP.h).toFixed(1); }
+  $('wpLine').setAttribute('d', wp); $('wpFill').setAttribute('d', wp + `L${WP.x + WP.w} ${WP.y + WP.h}L${WP.x} ${WP.y + WP.h}Z`);
+  $('wpEye').setAttribute('x', WP.x + 6); $('wpEye').setAttribute('y', WP.y + WP.h - 8);
+  $('wpEye').textContent = K >= 62 ? '← calm at the centre: the eye' : '';
+  /* strongest wind vs days */
+  const igy = v => IG.y + IG.h - clamp(v, 0, 280) / 280 * IG.h, igx = d => IG.x + clamp(d / 8, 0, 1) * IG.w;
+  $('igLine').setAttribute('d', S.hist.map((p, i) => (i ? 'L' : 'M') + igx(p.age).toFixed(1) + ' ' + igy(p.v).toFixed(1)).join(''));
+  $('igNow').setAttribute('cx', igx(st.age).toFixed(1)); $('igNow').setAttribute('cy', igy(K).toFixed(1)); $('igNow').setAttribute('opacity', 1);
+  whyCyclone();
+  checkCyclone();
+}
+function stepTracers(dt){
+  const st = S.storm; if (!st || S.tab !== 'cyclone') return;
+  if (S.spin) S.bandRot = ((S.bandRot || 0) + dt * clamp(kmh(stormVmax()) / 6, 0, 40)) % 360;
+  const paths = $('tracers').children;
+  const f = S.spin ? 1 : 0;
+  const inflow = S.spin ? 22 * D2R : 90 * D2R;
+  TRACERS.forEach((t, i) => {
+    const Vr = S.spin ? windAt(st.dp, t.r, st.lat, true) : Math.min(8, st.dp * 0.9) * (1 - Math.exp(-t.r / 60));
+    const vis = dt * 3.2;                                      // pixels per (m/s · s): a picture of the wind, not its true pace
+    const vt = Vr * Math.cos(inflow) * f, vr = -Vr * Math.sin(inflow);
+    const rpx = t.r / KM_PX;
+    const th0 = t.th, r0 = t.r;
+    t.th += vt * vis / Math.max(rpx, 4);                        // anticlockwise in the northern hemisphere (screen y is down)
+    t.r = Math.max(0, t.r + vr * vis * KM_PX);
+    t.age += dt;
+    if (t.r < 25 || t.age > 4 || Vr < 0.5 && t.age > 1.5) { t.r = 120 + Math.random() * 260; t.th = Math.random() * Math.PI * 2; t.age = 0; paths[i].setAttribute('d', ''); return; }
+    const x0 = Math.cos(th0) * r0 / KM_PX, y0 = -Math.sin(th0) * r0 / KM_PX, x1 = Math.cos(t.th) * t.r / KM_PX, y1 = -Math.sin(t.th) * t.r / KM_PX;
+    /* a short streak, three times the step, so the swirl reads */
+    paths[i].setAttribute('d', `M${(x1 + (x0 - x1) * 4).toFixed(1)} ${(y1 + (y0 - y1) * 4).toFixed(1)}L${x1.toFixed(1)} ${y1.toFixed(1)}`);
+    paths[i].setAttribute('opacity', clamp(Vr / 12, 0.15, 0.95).toFixed(2));
+  });
+}
+const SEC_PER_DAY = 4;
+function stepStorm(dtReal){
+  const st = S.storm; if (!st || !S.running || !S.locked || S.dragging) return;
+  const dDays = dtReal / SEC_PER_DAY;
+  stormStep(st, dDays, envNow());
+  st.lat = clamp(st.lat, 5.2, 24.3); st.lon = clamp(st.lon, 77.2, 95.3);
+  const K = kmh(stormVmax());
+  S.peak = Math.max(S.peak, K);
+  const last = S.track[S.track.length - 1];
+  if (Math.hypot(st.lon - last.lon, st.lat - last.lat) > 0.12) S.track.push({lon: st.lon, lat: st.lat, v: K, age: st.age});
+  if (!S.hist.length || st.age - S.hist[S.hist.length - 1].age > 0.04) S.hist.push({age: st.age, v: K});
+  if (!S.spin && S.stormNoSpinStart == null) S.stormNoSpinStart = st.age;
+  if (S.spin) S.stormNoSpinStart = null;
+}
+function whyCyclone(){
+  if (!S.locked || S.tab !== 'cyclone') return;
+  const st = S.storm;
+  let t = '';
+  if (!st) t = `<p>The Bay of Bengal is at <b>${fmt(S.sst, 1)} °C</b>. Drag the low onto the sea to start one.</p>`;
+  else {
+    const land = isLand(st.lon, st.lat), K = kmh(stormVmax()), pc = CY.pAmb - st.dp;
+    t = `<p>The pressure at the centre is <b>${fmt(pc, 0)} hPa</b>, against ${CY.pAmb} hPa far away. Air rushes in from all round, from high pressure to low. `;
+    if (!S.spin) t += `But with the Earth standing still nothing turns the air aside: it pours <b>straight into the centre</b> and fills the low up.</p>`;
+    else if (st.lat < 8) t += `So close to the equator the Earth's spin hardly turns the air, so the low fills instead of spinning up.</p>`;
+    else t += `The Earth's spin turns the moving air aside, so it <b>spins anticlockwise</b> round the centre instead of filling it.</p>`;
+    if (land) t += `<p>It is <b>over land</b>. The supply of warm, moist air is cut off, so the low fills and the wind drops: now ${fmt(K, 0)} km/h.</p>`;
+    else if (S.sst <= CY.sst0) t += `<p>The sea is too cool (below ${CY.sst0} °C) to feed it. It is dying away.</p>`;
+    else if (S.spin && st.lat >= 8) t += `<p>Over sea at ${fmt(S.sst, 1)} °C, warm moist air rises; as its water vapour turns to rain it gives out heat, the air rises faster and the pressure drops further. ` +
+      `The warmest sea could take it down to about <b>${fmt(CY.pAmb - potential(S.sst), 0)} hPa</b>.</p>`;
+    if (K >= 118) t += `<p>The strongest wind, <b>${fmt(K, 0)} km/h</b>, is in a ring about ${CY.R} km out. In the middle the model's wind drops to nothing: that is the calm <b>eye</b>.</p>`;
+  }
+  $('why').innerHTML = t; $('whyCard').hidden = false;
+}
+function checkCyclone(){
+  const st = S.storm; if (!st || !S.locked) return;
+  const K = kmh(stormVmax()), land = isLand(st.lon, st.lat);
+  if (K >= 118 && S.spin) discover('eye');
+  if (land && S.peak >= 89 && K < S.peak / 2) discover('landfall');
+  if (!S.spin && S.stormNoSpinStart != null && st.age - S.stormNoSpinStart > 1 && !land && S.sst > 28 && K < 40) discover('nospin');
+}
+
+/* ============================================================================
+   SCENE 3 — a town
+   ============================================================================ */
+let GHOST = null, CUR = null;
+function townInfo(){ const d = distToSea(S.town.lon, S.town.lat); return {lat: S.town.lat, dSea: d, alt: S.town.alt}; }
+function recomputeTown(keepGhost){
+  if (CUR && !keepGhost) GHOST = CUR;
+  const inf = townInfo();
+  CUR = {info: inf, c: climate(inf), name: S.town.name || 'Your town'};
+  paintTown();
+}
+function paintTown(){
+  const [x, y] = indP(S.town.lon, S.town.lat);
+  $('pinG').setAttribute('transform', `translate(${x.toFixed(1)} ${y.toFixed(1)})`);
+  $('pinHit').setAttribute('cx', x.toFixed(1)); $('pinHit').setAttribute('cy', (y - 22).toFixed(1));
+  $('pinHit').style.pointerEvents = S.locked ? '' : 'none';
+  const inf = CUR.info, c = CUR.c;
+  /* show the nearest bit of coast the distance was measured to */
+  $('seaLine').setAttribute('opacity', 0);
+  $('townName').textContent = CUR.name;
+  $('townSub').textContent = `${fmt(inf.lat, 1)}° N · ${inf.dSea < 5 ? 'on the coast' : fmt(inf.dSea, 0) + ' km from the sea'} · ${fmt(inf.alt, 0)} m above sea level`;
+  const band = ms => ms.map((o, i) => (i ? 'L' : 'M') + tgx(i).toFixed(1) + ' ' + tgy(o.max).toFixed(1)).join('') + ms.slice().reverse().map((o, i) => 'L' + tgx(11 - i).toFixed(1) + ' ' + tgy(o.min).toFixed(1)).join('') + 'Z';
+  const line = (ms, k) => ms.map((o, i) => (i ? 'L' : 'M') + tgx(i).toFixed(1) + ' ' + tgy(o[k]).toFixed(1)).join('');
+  $('tgBand').setAttribute('d', band(c.months)); $('tgMax').setAttribute('d', line(c.months, 'max')); $('tgMin').setAttribute('d', line(c.months, 'min'));
+  if (GHOST) { $('tgGhost').setAttribute('d', band(GHOST.c.months)); $('tgGhostL').setAttribute('d', line(GHOST.c.months, 'max') + line(GHOST.c.months, 'min').replace('M', 'M'));
+    $('tgGhostLab').setAttribute('x', tgx(0) + 2); $('tgGhostLab').setAttribute('y', tgy(GHOST.c.months[0].max) - 8); $('tgGhostLab').textContent = GHOST.name; }
+  else { $('tgGhost').setAttribute('d', ''); $('tgGhostL').setAttribute('d', ''); $('tgGhostLab').textContent = ''; }
+  const on = onsetDay(inf.lat), off = withdrawDay(inf.lat), dx = d => TG.x + (d - 1) / 365 * TG.w;
+  $('tgMonsoon').setAttribute('x', dx(on).toFixed(1)); $('tgMonsoon').setAttribute('width', Math.max(0, dx(off) - dx(on)).toFixed(1));
+  $('tgMonsoonLab').setAttribute('x', ((dx(on) + dx(off)) / 2).toFixed(1));
+  $('tgNote').textContent = `Hottest: ${MONTHS[c.hotMonth]}, ${fmt(c.hot, 0)} °C by day.  Coldest: ${MONTHS[c.coldMonth]}, ${fmt(c.cold, 0)} °C at night.`;
+  $('tLat').textContent = fmt(inf.lat, 1) + '° N';
+  $('tSea').textContent = inf.dSea < 5 ? 'on the coast' : fmt(inf.dSea, 0) + ' km';
+  $('tMax').textContent = fmt(c.hot, 0) + ' °C'; $('tMin').textContent = fmt(c.cold, 0) + ' °C'; $('tRange').textContent = fmt(c.range, 0) + ' °C';
+  $('alt').value = S.town.alt; $('altOut').textContent = fmt(S.town.alt, 0) + ' m';
+  for (const b of $('presets').children) b.setAttribute('aria-pressed', b.dataset.t === S.town.name);
+  whyTown(); checkTown();
+}
+function whyTown(){
+  if (!S.locked || S.tab !== 'town') return;
+  const inf = CUR.info, c = CUR.c;
+  let t = `<p><b>${esc(CUR.name)}</b> is at ${fmt(inf.lat, 1)}° N. ` + (inf.lat < 15 ? 'So near the equator the noon Sun is high all year, so it is warm in every month.' : inf.lat > 28 ? 'So far north the winter Sun is low and the days are short, so the winters are cold.' : 'The Sun is high in summer and lower in winter.') + '</p>';
+  t += inf.dSea < 60 ? `<p>It is by the sea. The sea warms and cools slowly, and its air keeps the town from getting very hot or very cold: a range of only <b>${fmt(c.range, 0)} °C</b>.</p>`
+    : `<p>It is <b>${fmt(inf.dSea, 0)} km from the sea</b>, too far for sea air to steady it. The land heats fast and cools fast: a range of <b>${fmt(c.range, 0)} °C</b>.</p>`;
+  if (inf.alt > 400) t += `<p>It is <b>${fmt(inf.alt, 0)} m</b> up. The air is thinner and farther from the warm ground, so it is about <b>${fmt(6.5 * inf.alt / 1000, 1)} °C cooler</b> than it would be at sea level.</p>`;
+  t += `<p>The monsoon reaches it around <b>${dateOf(onsetDay(inf.lat))}</b>; its clouds cool the days after that.</p>`;
+  if (GHOST) t += `<p style="color:var(--ink-3);font-size:13px">Compare the grey band: ${esc(GHOST.name)}, range ${fmt(GHOST.c.range, 0)} °C.</p>`;
+  $('why').innerHTML = t; $('whyCard').hidden = false;
+}
+function dateOf(d){ d = Math.round(d); let m = 0; while (m < 11 && d > MDAYS[m]) { d -= MDAYS[m]; m++; } return d + ' ' + ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'][m]; }
+function checkTown(){
+  if (!S.locked) return;
+  const inf = CUR.info, c = CUR.c;
+  S.visited.push({lat: inf.lat, d: inf.dSea, range: c.range, alt: inf.alt});
+  if (S.visited.length > 40) S.visited.shift();
+  const coast = S.visited.filter(v => v.d < 50 && v.alt < 300), inland = S.visited.filter(v => v.d > 400 && v.alt < 600);
+  if (coast.some(a => inland.some(b => Math.abs(a.lat - b.lat) < 5 && b.range - a.range >= 10))) discover('coast');
+  if (inf.alt >= 1500) discover('altitude');
+}
+
+/* ============================================================================
+   Tabs, controls, wiring
+   ============================================================================ */
+build();
+seedTracers();
+drawBreezeGraph();
+function setTab(t){
+  S.tab = t;
+  for (const b of $('tabs').children) b.setAttribute('aria-pressed', b.dataset.tab === t);
+  $('scBreeze').setAttribute('display', t === 'breeze' ? 'inline' : 'none');
+  $('scCyclone').setAttribute('display', t === 'cyclone' ? 'inline' : 'none');
+  $('scTown').setAttribute('display', t === 'town' ? 'inline' : 'none');
+  $('ctlBreeze').hidden = t !== 'breeze'; $('ctlCyclone').hidden = t !== 'cyclone'; $('ctlTown').hidden = t !== 'town';
+  $('whyCard').hidden = true;
+  if (t === 'breeze') paintBreeze();
+  if (t === 'cyclone') paintCyclone();
+  if (t === 'town') paintTown();
+  track('tab', {tab: t});
+}
+$('tabs').addEventListener('click', e => { const b = e.target.closest('[data-tab]'); if (b && !b.disabled) { sound('tick'); setTab(b.dataset.tab); } });
+
+function setPlaying(on){
+  S.playing = on;
+  $('btnPlay').textContent = on ? '❚❚' : '▶'; $('btnPlay').setAttribute('aria-label', on ? 'Pause' : 'Play the day');
+}
+$('btnPlay').addEventListener('click', () => { setPlaying(!S.playing); sound('tick'); });
+$('hour').addEventListener('input', e => { setPlaying(false); S.hour = +e.target.value; paintBreeze(); });
+$('sun').addEventListener('input', e => { S.sun = +e.target.value; DAY = breezeDay(S.sun); drawBreezeGraph(); paintBreeze(); });
+$('sun').addEventListener('change', () => track('sunshine', {sun: S.sun}));
+
+$('sst').addEventListener('input', e => { S.sst = +e.target.value; paintCyclone(); });
+$('sst').addEventListener('change', () => track('sst', {sst: S.sst}));
+$('btnSpin').addEventListener('click', () => { S.spin = !S.spin; sound('pop'); track('spin', {on: S.spin}); if (!S.spin && S.storm) S.stormNoSpinStart = S.storm.age; paintCyclone(); });
+$('btnRun').addEventListener('click', () => { S.running = !S.running; $('btnRun').textContent = S.running ? '❚❚ Pause' : '▶ Run'; sound('tick'); });
+$('btnNew').addEventListener('click', () => { S.storm = null; S.track = []; S.hist = []; sound('tick'); paintCyclone(); });
+
+/* The seed: drag the L out of its dock onto the map. */
+drag($('seedHit'), svg, {
+  start(){ if (!S.locked) return false; },
+  move(p){ const x = clamp(p.x, 4, 582), y = clamp(p.y, 4, 636);
+    $('seedG').setAttribute('transform', `translate(${x.toFixed(1)} ${y.toFixed(1)})`); $('seedHit').setAttribute('cx', x.toFixed(1)); $('seedHit').setAttribute('cy', y.toFixed(1)); },
+  end(p){ const x = clamp(p.x, 4, 582), y = clamp(p.y, 4, 636);
+    if (Math.hypot(x - DOCK.x, y - DOCK.y) < 30) { paintCyclone(); return; }
+    const [lon, lat] = bayInv(x, y); newLow(clamp(lon, 77.2, 95.3), clamp(lat, 5.2, 24.3)); paintCyclone(); },
+});
+/* Drag the storm itself — onto land, back to sea, up to the north. */
+drag($('stormHit'), svg, {
+  start(){ if (!S.locked || !S.storm) return false; S.dragging = true; },
+  move(p){ const [lon, lat] = bayInv(clamp(p.x, 4, 582), clamp(p.y, 4, 636)); S.storm.lon = lon; S.storm.lat = lat; paintCyclone(); },
+  end(){ S.dragging = false; const st = S.storm; S.track.push({lon: st.lon, lat: st.lat, v: st.v, age: st.age}); track('dragStorm', {lon: +st.lon.toFixed(2), lat: +st.lat.toFixed(2)}); },
+});
+
+/* presets and the pin */
+$('presets').innerHTML = Object.keys(TOWNS).map(n => `<button data-t="${n}" aria-pressed="false">${n}</button>`).join('');
+$('presets').addEventListener('click', e => { const b = e.target.closest('[data-t]'); if (!b || !S.locked) return;
+  const t = TOWNS[b.dataset.t]; S.town = {lon: t.lon, lat: t.lat, alt: t.alt, name: b.dataset.t}; sound('pop'); recomputeTown(); track('town', {name: b.dataset.t}); });
+$('alt').addEventListener('input', e => { S.town.alt = +e.target.value; S.town.name = S.town.name.replace(/ \(raised\)$/, '') + (S.town.name && !TOWNS[S.town.name] ? '' : ''); recomputeTown(true); });
+$('alt').addEventListener('change', () => { track('altitude', {alt: S.town.alt}); });
+let PRE_DRAG = null;
+drag($('pinHit'), svg, {
+  start(){ if (!S.locked) return false; PRE_DRAG = CUR; },
+  move(p){ const [lon, lat] = indInv(p.x, p.y + 22);
+    if (!inPoly(INDIA, lon, lat)) return;
+    S.town.lon = lon; S.town.lat = lat; S.town.name = 'Your town'; recomputeTown(true); },
+  end(){ if (PRE_DRAG && PRE_DRAG.name !== 'Your town') GHOST = PRE_DRAG; recomputeTown(true); track('dragTown', {lat: +S.town.lat.toFixed(2), d: Math.round(CUR.info.dSea)}); },
+});
+
+function lockControls(lock){
+  for (const id of ['hour', 'sun', 'btnPlay', 'sst', 'btnSpin', 'btnRun', 'btnNew', 'alt']) $(id).disabled = lock;
+  for (const b of $('presets').children) b.disabled = lock;
+  $('gate').hidden = !lock;
+}
+
+/* ---- the frame loop ---- */
+loop(dt => {
+  if (S.tab === 'breeze') {
+    if (S.playing) { S.hour += dt * 1.6; if (S.hour >= 24) S.hour -= 24; paintBreeze(); }
+    stepParcels(dt);
+  } else if (S.tab === 'cyclone') {
+    if (S.storm) { stepStorm(dt); paintCyclone(); stepTracers(dt); }
+  }
+});
+
+/* ============================================================================
+   Start
+   ============================================================================ */
+findings($('finds'), [
+  {id: 'seabreeze',  icon: '→', label: 'Sea breeze by day',              hint: 'What does the wind do on a sunny afternoon?'},
+  {id: 'landbreeze', icon: '←', label: 'Land breeze at night',            hint: 'And in the middle of the night?'},
+  {id: 'eye',        icon: '◉', label: 'A calm eye in the middle',        hint: 'Grow a very severe cyclone'},
+  {id: 'landfall',   icon: '⤓', label: 'A cyclone dies over land',        hint: 'Bring a strong storm ashore'},
+  {id: 'nospin',     icon: '⊘', label: 'No spin, no cyclone',             hint: 'What if the Earth did not turn?'},
+  {id: 'coast',      icon: '≈', label: 'The sea keeps the coast mild',     hint: 'Compare a coastal town with an inland one'},
+  {id: 'altitude',   icon: '▲', label: 'Higher up is cooler',             hint: 'Take a town up a mountain'},
+], () => toast('All seven found. That is the whole chapter, worked out by the model.', 4200));
+
+const POE = predict($('poe'), {
+  id: 'sea-breeze',
+  q: 'It is 2 pm on a hot, sunny day on Juhu beach in Mumbai. Which way does the wind blow?',
+  options: [
+    {id: 'sea',   text: 'From the sea onto the land.', right: true},
+    {id: 'land',  text: 'From the land out to sea.'},
+    {id: 'none',  text: 'There is no wind when it is hot and still.'},
+    {id: 'tide',  text: 'It follows the tide, so it keeps changing.'},
+  ],
+  onLock(){
+    S.locked = true;
+    lockControls(false);
+    $('bgVeil').remove();
+    say('Now find out. Move the time of day, and watch the land, the sea and the wind.');
+    if (!reduced()) setPlaying(true);
+    paintBreeze(); paintCyclone(); recomputeTown(true);
+  },
+});
+lockControls(!POE.locked);
+if (!Play.FF('predict')) S.locked = true;
+recomputeTown(true);
+setTab(S.tab);
+window.PG_STATE = () => JSON.parse(JSON.stringify(Object.assign({}, S, {town: S.town, cur: CUR && {range: CUR.c.range, hot: CUR.c.hot, cold: CUR.c.cold, dSea: CUR.info.dSea}})));
+window.PG_MODEL = {breezeDay, airForce, windAt, vmax, pressureAt, potential, category, stormStep, climate, insol, distToSea, isLand, inPoly, INDIA, TOWNS, onsetDay, CY, bayP, indP};
+</script>
+</body>
+</html>

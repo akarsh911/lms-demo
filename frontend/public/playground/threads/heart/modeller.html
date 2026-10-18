@@ -1,0 +1,1042 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Double Circulation</title>
+<meta name="description" content="Class 9–10: a four-chamber heart pumping real blood round a lung loop and a body loop. Tag one red blood cell and follow its oxygen; compare a fish and a frog; make a hole in the septum.">
+<link rel="icon" href="../../favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600&family=Inter:wght@400;500;600;700&family=Nunito:wght@500;700;800&family=Newsreader:opsz,wght@6..72,400;6..72,500&family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="../../play.css">
+<style>
+/* Only what this page needs beyond play.css. */
+.gate{position:absolute; left:62%; right:0; top:0; height:100%; display:grid; place-items:center; pointer-events:none}
+.gate span{background:rgba(29,35,39,.86); color:#fff; padding:10px 16px; border-radius:99px; font-weight:600; font-size:14px}
+.pg-stage{align-self:start; min-height:0}
+#tagHit{cursor:grab} #tagHit.dragging{cursor:grabbing}
+#pushHit{cursor:grab} #pushHit.dragging{cursor:grabbing}
+#graphHit{cursor:crosshair}
+.seg{display:flex; gap:4px; flex-wrap:wrap}
+.seg .btn[aria-pressed="true"], .btn[aria-pressed="true"]{background:var(--accent-soft); border-color:var(--accent)}
+.ctl{grid-template-columns:92px 1fr 86px; margin:4px 0}
+.ctl output{font-size:13px; min-width:0}
+.why p{font-size:13.5px; margin-bottom:.5em}
+.note{font-size:12.5px; color:var(--ink-3); margin:6px 0 0}
+.sub{font-size:12px; font-weight:700; color:var(--ink-3); letter-spacing:.05em; text-transform:uppercase; margin:10px 0 4px}
+svg text.m{font-family:var(--font-mono)}
+</style>
+</head>
+<body>
+<header class="pg-top"></header>
+
+<div class="pg-intro">
+  <h1>Double circulation</h1>
+  <p>A heart with four chambers pumps blood round two loops: one through the lungs and one through the body. Every dot is 5 mL of blood,
+     about twenty-five billion red cells. Each dot moves only when the heart pushes it and a valve lets it through, and it carries its own oxygen.
+     Tag one red cell and follow it. Then run, and see what a fish or a frog does differently.</p>
+  <div class="syl">CBSE Class 10 · Ch 5 Life Processes (Unit II, 25 marks) · ICSE Class 10 Biology: the circulatory system</div>
+</div>
+
+<main class="pg-main wide-side">
+  <section class="pg-stage" id="stageWrap">
+    <svg id="stage" viewBox="0 0 1000 700" role="img" aria-label="A heart pumping blood round the lungs and the body, with a graph of one tagged red cell's oxygen and the heart's numbers"></svg>
+    <div class="gate" id="gate"><span>Make your prediction first →</span></div>
+  </section>
+
+  <aside class="pg-side">
+    <div id="poe"></div>
+
+    <div class="card" id="ctlCard">
+      <div class="kicker">Whose heart?</div>
+      <div class="seg" id="animalSeg">
+        <button class="btn sm" data-animal="human" aria-pressed="true">🧍 Human, 4 chambers</button>
+        <button class="btn sm" data-animal="frog" aria-pressed="false">🐸 Frog, 3</button>
+        <button class="btn sm" data-animal="fish" aria-pressed="false">🐟 Fish, 2</button>
+      </div>
+      <div class="ctl" style="margin-top:10px"><label for="ex">Activity</label><input type="range" id="ex" min="0" max="1" step="0.05" value="0"><output id="exOut">Resting</output></div>
+      <div class="row" style="justify-content:space-between">
+        <button class="btn sm" id="btnHole" aria-pressed="false" title="A hole between the two ventricles">Hole in the septum</button>
+        <div class="row" style="gap:4px" id="speedSeg">
+          <span style="font-size:12.5px;color:var(--ink-2);font-weight:600">Time</span>
+          <button class="btn sm" data-speed="1" aria-pressed="true" title="Real time">×1</button>
+          <button class="btn sm" data-speed="5" aria-pressed="false" title="Five times faster">×5</button>
+          <button class="btn sm" data-speed="20" aria-pressed="false" title="Twenty times faster">×20</button>
+        </div>
+      </div>
+      <p class="note">Drag the tag (top left of the picture) onto any blood to follow that cell. Drag the ✋ on the aorta to push blood backwards.</p>
+    </div>
+
+    <div class="card why" id="whyCard" hidden>
+      <div class="kicker">What is happening</div>
+      <div id="why"></div>
+    </div>
+
+    <div class="card"><div class="kicker">To find</div><div id="finds"></div></div>
+  </aside>
+</main>
+
+<script src="../../play.js"></script>
+<script>
+'use strict';
+const {$, esc, clamp, fmt, drag, loop, sound, say, track, toast, predict, findings, discover, found,
+       shareState, sharedState, mount, reduced} = Play;
+mount({thread: 'heart', band: 'modeller'});
+
+/* MODEL:start ==================================================================
+   A closed circulation, integrated at DT = 0.25 ms.
+
+   Chambers are time-varying elastances: P = a(t)·E·(V − V0) + (1 − a(t))·A·(e^{B(V − V0)} − 1),
+   where a(t) is the muscle's activation (the atria contract 80 ms after each beat starts, the
+   ventricles after the PR interval). Vessels are compliances: P = (V − V_unstressed)/C.
+   Blood moves between them as Q = ΔP / R. A valve is a resistance that passes blood only
+   one way, so it opens only when the pressure behind it is higher.
+
+   Human: RA → RV → pulmonary artery → lungs → pulmonary veins → LA → LV → aorta → three body
+   beds (brain; gut, liver and kidneys; muscles and skin) → veins → RA.
+   Frog: two atria empty into ONE ventricle, which pumps to the lungs and the body at once.
+   Fish: one atrium, one ventricle → the gills → the body → back: one loop, in series.
+
+   Oxygen rides on the blood itself. Each dot (5 mL) carries a saturation. In the lungs or
+   gills it rises to 97.5 %. In a body bed it falls by that organ's O₂ use divided by the
+   blood flowing through it (Fick): drop = VO₂ / (Q × 201 mL O₂ per L at full saturation).
+   A dot leaving a chamber with two exits takes one at random, weighted by the two flows,
+   so mixing in a frog's ventricle, or through a hole in a septum, happens by itself.
+   ============================================================================ */
+const DT = 2.5e-4, BLOOD = 5000, DOT = 5, O2CAP = 201, SAT_LUNG = 0.975;
+function hill(t){ if (t <= 0) return 0; const a = Math.pow(t / 0.269, 1.32), b = Math.pow(t / 0.452, 27.4); return (a / (1 + a)) / (1 + b); }
+const HMAX = (() => { let m = 0; for (let t = 0; t < 1; t += 1e-4) m = Math.max(m, hill(t)); return m; })();
+const actV = (t, Tb) => hill(t / Tb) / HMAX;
+const actA = (t, d) => t <= 0 || t >= d ? 0 : Math.sin(Math.PI * t / d) ** 2;
+function timing(hr, ex){
+  const RR = 60 / hr, k = Math.sqrt(RR / (60 / 72));
+  return {RR, Tb: 0.735 * k * (1 - 0.22 * ex), PR: 0.16 * Math.pow(RR / (60 / 72), 0.3), aOn: 0.08, aDur: 0.1, emd: 0.02};
+}
+const ANIMALS = {
+  human: {name: 'Human', vo2k: 1, outflow: ['lv>sa'], vent: 'lv'},
+  frog:  {name: 'Frog',  vo2k: 0.3, outflow: ['v>sa', 'v>pa'], vent: 'v'},
+  fish:  {name: 'Fish',  vo2k: 0.3, outflow: ['v>va'], vent: 'v'},
+};
+const BEDS = [
+  {id: 'brain', name: 'Head and brain', R: 7.7, vo2: 50, cap: 30},
+  {id: 'trunk', name: 'Gut, liver and kidneys', R: 1.92, vo2: 140, cap: 150},
+  {id: 'limb',  name: 'Muscles and skin', R: 4.6, vo2: 60, cap: 120},
+];
+function buildCirc(animal){
+  const C = {}, L = [];
+  const ch = (id, side, E, V0, A, B, V) => C[id] = {id, kind: 'ch', side, E0: E, E, V0, A, B, V};
+  const ve = (id, Cc, Vu, P) => C[id] = {id, kind: 've', C: Cc, Vu0: Vu, Vu, V: Vu + Cc * P};
+  const valve = (from, to, R) => L.push({id: from + '>' + to, from, to, R0: R, R, valve: true, q: 0});
+  const res = (id, from, to, R) => L.push({id, from, to, R0: R, R, q: 0});
+  if (animal === 'human') {
+    ch('ra', 'a', 0.25, 10, 0.25, 0.05, 54); ch('rv', 'v', 0.55, 15, 0.25, 0.028, 90);
+    ch('la', 'a', 0.30, 10, 0.25, 0.055, 69); ch('lv', 'v', 2.5, 10, 0.35, 0.030, 107);
+    ve('pa', 3.5, 90, 13); ve('pv', 14, 290, 7.5); ve('sa', 1.1, 600, 90); ve('sv', 70, 2800, 4.7);
+    valve('ra', 'rv', 0.004); valve('rv', 'pa', 0.012); valve('la', 'lv', 0.004); valve('lv', 'sa', 0.038);
+    res('lung', 'pa', 'pv', 0.085); res('pv>la', 'pv', 'la', 0.02); res('sv>ra', 'sv', 'ra', 0.03);
+    res('vsd', 'lv', 'rv', Infinity);
+  } else if (animal === 'frog') {
+    ch('ra', 'a', 0.25, 10, 0.25, 0.05, 61); ch('la', 'a', 0.30, 10, 0.25, 0.055, 56);
+    ch('v', 'v', 1.1, 15, 0.30, 0.022, 121);
+    ve('sa', 2.0, 600, 55); ve('pa', 2.0, 150, 52); ve('pv', 14, 290, 4.5); ve('sv', 70, 2800, 4.4);
+    valve('ra', 'v', 0.004); valve('la', 'v', 0.004); valve('v', 'sa', 0.04); valve('v', 'pa', 0.04);
+    res('lung', 'pa', 'pv', 0.9); res('pv>la', 'pv', 'la', 0.02); res('sv>ra', 'sv', 'ra', 0.03);
+  } else {
+    ch('a', 'a', 0.30, 10, 0.25, 0.05, 56); ch('v', 'v', 0.75, 15, 0.30, 0.025, 105);
+    ve('va', 1.2, 300, 55); ve('sa', 2.5, 500, 37); ve('sv', 70, 3000, 3.1);
+    valve('a', 'v', 0.004); valve('v', 'va', 0.04);
+    res('gill', 'va', 'sa', 0.7); res('sv>a', 'sv', 'a', 0.03);
+  }
+  for (const b of BEDS) res(b.id, 'sa', 'sv', b.R);
+  /* exactly 5 L of blood: the rest sits unstressed in the veins, at the same pressure */
+  const tot = Object.values(C).reduce((s, c) => s + c.V, 0);
+  C.sv.V += BLOOD - tot; C.sv.Vu0 += BLOOD - tot; C.sv.Vu = C.sv.Vu0;
+  const M = {animal, A: ANIMALS[animal], C, L, Lk: Object.fromEntries(L.map(l => [l.id, l])), t: 0, nextP: 0, onsets: [],
+    ex: 0, hole: false, push: 0, hr: 72, T: timing(72, 0), beat: null, beats: [], acc: {}, ring: [], ringT: 0, backflow: 0};
+  applyLevers(M);
+  return M;
+}
+/* Exercise raises the heart rate and the squeeze, tightens the veins (the muscle pump),
+   opens the muscles' vessels and multiplies their oxygen use. */
+function applyLevers(M){
+  const e = M.ex, C = M.C;
+  M.hr = 72 + 95 * e;
+  for (const c of Object.values(C)) {
+    if (c.kind === 'ch' && c.side === 'v') c.E = c.E0 * (1 + 1.6 * e);
+    if (c.kind === 've' && c.id === 'sv') c.Vu = c.Vu0 - 900 * e;
+  }
+  for (const b of BEDS) {
+    const l = M.Lk[b.id];
+    l.R = b.id === 'limb' ? b.R / (1 + 8 * e) : b.id === 'trunk' ? b.R * (1 + 0.5 * e) : b.R;
+  }
+  if (M.Lk.lung && M.animal === 'human') M.Lk.lung.R = M.Lk.lung.R0 / (1 + 0.8 * e);
+  if (M.Lk.vsd) M.Lk.vsd.R = M.hole ? 0.4 : Infinity;
+}
+const vo2Of = (M, b) => (b.id === 'limb' ? b.vo2 + 1400 * M.ex : b.vo2) * M.A.vo2k;
+function pressureOf(M, c, aa, av){
+  if (c.kind === 've') return (c.V - c.Vu) / c.C + (c.id === 'sa' ? M.push : 0);
+  const act = c.side === 'a' ? aa : av;
+  return act * c.E * (c.V - c.V0) + (1 - act) * c.A * (Math.exp(c.B * (c.V - c.V0)) - 1);
+}
+/* One step. acc collects Q·dt per link, so the caller can average flows over a frame. */
+function stepCirc(M){
+  const t = M.t;
+  if (t >= M.nextP - 1e-9) {
+    if (M.beat) { M.beat.RR = t - M.beat.t0; M.beats.push(M.beat); if (M.beats.length > 8) M.beats.shift(); }
+    M.T = timing(M.hr, M.ex);
+    M.beat = {t0: t, hr: M.hr, sv: 0, pmax: {}, pmin: {}};
+    M.onsets.push({t0: t, T: M.T}); if (M.onsets.length > 2) M.onsets.shift();
+    M.nextP = t + M.T.RR;
+  }
+  let aa = 0, av = 0;
+  for (const o of M.onsets) { aa = Math.max(aa, actA(t - o.t0 - o.T.aOn, o.T.aDur)); av = Math.max(av, actV(t - o.t0 - o.T.PR - o.T.emd, o.T.Tb)); }
+  const P = M.P || (M.P = {});
+  for (const id in M.C) {
+    const p = P[id] = pressureOf(M, M.C[id], aa, av);
+    const b = M.beat; if (!(p <= b.pmax[id])) b.pmax[id] = p; if (!(p >= b.pmin[id])) b.pmin[id] = p;
+  }
+  for (const l of M.L) {
+    let q = l.R === Infinity ? 0 : (P[l.from] - P[l.to]) / l.R;
+    if (l.valve && q < 0) q = 0;              // a valve: never backwards
+    if (l.valve && q < -1e-12) M.backflow++;
+    l.q = q; M.acc[l.id] = (M.acc[l.id] || 0) + q * DT;
+  }
+  for (const l of M.L) { const d = l.q * DT; M.C[l.from].V -= d; M.C[l.to].V += d; }
+  for (const id of M.A.outflow) M.beat.sv += M.Lk[id].q * DT;
+  M.aa = aa; M.av = av;
+  M.t += DT;
+  if (M.t >= M.ringT) { M.ring.push([M.t, ...ringKeys(M).map(k => P[k])]); M.ringT += 0.005; if (M.ring.length > 700) M.ring.shift(); }
+}
+const ringKeys = M => M.animal === 'human' ? ['lv', 'sa', 'rv', 'pa'] : M.animal === 'frog' ? ['v', 'sa', 'pa'] : ['v', 'va', 'sa'];
+/* Run for secs of model time; returns the mean flow of every link over that time (mL/s). */
+function runCirc(M, secs){
+  M.acc = {};
+  const n = Math.max(1, Math.round(secs / DT));
+  for (let i = 0; i < n; i++) stepCirc(M);
+  const F = {}, T = n * DT;
+  for (const k in M.acc) F[k] = M.acc[k] / T;
+  F.body = BEDS.reduce((s, b) => s + F[b.id], 0);
+  return F;
+}
+/* Measured over the last few whole beats. */
+function measure(M, n = 3){
+  const bs = M.beats.slice(-n); if (!bs.length) return null;
+  const sv = bs.reduce((s, b) => s + b.sv, 0) / bs.length, rr = bs.reduce((s, b) => s + b.RR, 0) / bs.length;
+  const pk = k => bs.reduce((s, b) => s + (b.pmax[k] || 0), 0) / bs.length, mn = k => bs.reduce((s, b) => s + (b.pmin[k] || 0), 0) / bs.length;
+  const hr = 60 / rr, co = sv * hr / 1000;
+  return {hr, sv, co, circuit: BLOOD / 1000 / co * 60, pk, mn};
+}
+
+/* ---- the blood, as dots that carry oxygen ------------------------------------- */
+function makeRng(seed){ return Play.mulberry32(seed); }
+/* Each segment of the picture knows its volume, the flow through it and where it leads. */
+function segSpec(M){
+  const C = M.C, sh = M.share || (M.share = {brain: 0.15, trunk: 0.6, limb: 0.25});
+  const S = {};
+  const add = (id, o) => S[id] = Object.assign({id}, o);
+  const ch = id => () => Math.max(5, C[id].V);
+  const svVol = () => Math.max(100, C.sv.V - 300);
+  if (M.animal === 'human') {
+    add('ra', {kind: 'heart', side: 'R', vol: ch('ra'), q: F => F['ra>rv'], next: 'rv', place: 'right atrium'});
+    add('rv', {kind: 'heart', side: 'R', vol: ch('rv'), q: F => F['rv>pa'] + Math.max(0, -F.vsd),
+      next: (F, r) => F.vsd < 0 && r() < -F.vsd / (F['rv>pa'] - F.vsd) ? 'lv' : 'pa', place: 'right ventricle'});
+    add('pa', {kind: 'artery', vol: () => C.pa.V, q: F => F.lung, next: (F, r) => r() < 0.5 ? 'lungA' : 'lungB', place: 'pulmonary artery'});
+    add('pv', {kind: 'vein', vol: () => Math.max(50, C.pv.V - 100), q: F => F['pv>la'], next: 'la', place: 'pulmonary vein'});
+    add('la', {kind: 'heart', side: 'L', vol: ch('la'), q: F => F['la>lv'], next: 'lv', place: 'left atrium'});
+    add('lv', {kind: 'heart', side: 'L', vol: ch('lv'), q: F => F['lv>sa'] + Math.max(0, F.vsd),
+      next: (F, r) => F.vsd > 0 && r() < F.vsd / (F['lv>sa'] + F.vsd) ? 'rv' : 'ao', place: 'left ventricle'});
+    add('vc', {kind: 'vein', vol: () => 0.65 * svVol(), q: F => F['sv>ra'], next: 'ra', place: 'vena cava'});
+  } else if (M.animal === 'frog') {
+    add('ra', {kind: 'heart', side: 'R', vol: ch('ra'), q: F => F['ra>v'], next: 'v', place: 'right atrium'});
+    add('la', {kind: 'heart', side: 'L', vol: ch('la'), q: F => F['la>v'], next: 'v', place: 'left atrium'});
+    add('v', {kind: 'heart', side: 'M', vol: ch('v'), q: F => F['v>sa'] + F['v>pa'],
+      next: (F, r) => r() < F['v>pa'] / Math.max(1e-9, F['v>pa'] + F['v>sa']) ? 'pa' : 'ao', place: 'ventricle'});
+    add('pa', {kind: 'artery', vol: () => C.pa.V, q: F => F.lung, next: (F, r) => r() < 0.5 ? 'lungA' : 'lungB', place: 'pulmocutaneous artery'});
+    add('pv', {kind: 'vein', vol: () => Math.max(50, C.pv.V - 100), q: F => F['pv>la'], next: 'la', place: 'pulmonary vein'});
+    add('vc', {kind: 'vein', vol: () => 0.65 * svVol(), q: F => F['sv>ra'], next: 'ra', place: 'vena cava'});
+  } else {
+    add('at', {kind: 'heart', side: 'R', vol: ch('a'), q: F => F['a>v'], next: 'v', place: 'atrium'});
+    add('v', {kind: 'heart', side: 'R', vol: ch('v'), q: F => F['v>va'], next: 'va', place: 'ventricle'});
+    add('va', {kind: 'artery', vol: () => C.va.V, q: F => F.gill, next: (F, r) => r() < 0.5 ? 'lungA' : 'lungB', place: 'ventral aorta'});
+    add('vc', {kind: 'vein', vol: () => 0.65 * svVol(), q: F => F['sv>a'], next: 'at', place: 'main vein'});
+  }
+  const gas = M.animal === 'fish' ? 'gills' : 'lungs';
+  const lq = M.animal === 'fish' ? (F => F.gill / 2) : (F => F.lung / 2), after = M.animal === 'fish' ? 'ao' : 'pv';
+  add('lungA', {kind: 'lung', vol: () => 50, q: lq, next: after, place: gas});
+  add('lungB', {kind: 'lung', vol: () => 50, q: lq, next: after, place: gas});
+  add('ao', {kind: 'artery', vol: () => 0.6 * C.sa.V, q: F => F.body, place: M.animal === 'fish' ? 'dorsal aorta' : 'aorta',
+    next: (F, r) => { const x = r() * F.body; return x < F.brain ? 'art_brain' : x < F.brain + F.trunk ? 'art_trunk' : 'art_limb'; }});
+  for (const b of BEDS) {
+    add('art_' + b.id, {kind: 'artery', vol: () => Math.max(8, 0.4 * C.sa.V * sh[b.id]), q: F => F[b.id], next: 'cap_' + b.id, place: 'artery to the ' + b.name.toLowerCase()});
+    add('cap_' + b.id, {kind: 'cap', bed: b, vol: () => b.cap, q: F => F[b.id], next: 'ven_' + b.id, place: b.name.toLowerCase()});
+    add('ven_' + b.id, {kind: 'vein', vol: () => Math.max(20, 0.35 * svVol() * sh[b.id]), q: F => F[b.id], next: 'vc', place: 'vein from the ' + b.name.toLowerCase()});
+  }
+  return S;
+}
+/* Dots start where the model says they should be: full in the lungs and arteries, emptied by
+   each organ's Fick drop along its capillaries and veins, and mixed in the veins back to the heart.
+   F is the flow from a short settling run. */
+function seedDots(M, SEG, seed = 7, F = null){
+  const r = makeRng(seed), dots = [];
+  const drop = {}; let qs = 0, qd = 0;
+  for (const b of BEDS) { const q = F ? Math.max(1, F[b.id]) : 20; drop[b.id] = Math.min(0.9, vo2Of(M, b) / (q * 0.06 * O2CAP)); qs += q; qd += q * drop[b.id]; }
+  /* in a frog, lung blood and body blood mix in the ventricle: solve that mix for the steady state */
+  const art = M.animal === 'frog' && F ? SAT_LUNG - F.body / Math.max(1, F.lung) * qd / qs : SAT_LUNG;
+  const mixed = art - qd / qs;
+  const satAt = (id, s) => { const m = id.match(/^(cap|ven)_(\w+)$/); if (m) return art - drop[m[2]] * (m[1] === 'cap' ? s : 1);
+    if (/^(vc|ra|rv|va|at)$/.test(id) || (M.animal === 'fish' && id === 'v') || (M.animal === 'human' && id === 'pa')) return mixed;
+    return /^(la|pv|lung)/.test(id) ? SAT_LUNG : art; };
+  const n = Math.round(BLOOD / DOT);
+  const ids = Object.keys(SEG), vols = ids.map(id => SEG[id].vol()), tot = vols.reduce((a, b) => a + b, 0);
+  ids.forEach((id, i) => {
+    const k = Math.round(vols[i] / tot * n);
+    for (let j = 0; j < k; j++) { const s = (j + r()) / k; dots.push({seg: id, s, lat: r() * 2 - 1, sat: satAt(id, s), id: dots.length}); }
+  });
+  return dots;
+}
+/* Move every dot by the flow through its segment: ds = Q·dt / V. */
+function moveDots(M, SEG, dots, F, dt, r, onEnter){
+  const sh = M.share;
+  if (F.body > 1) for (const b of BEDS) sh[b.id] += (F[b.id] / F.body - sh[b.id]) * Math.min(1, dt / 2);
+  const drops = {};
+  for (const b of BEDS) { const q = Math.max(1, M.qEma ? M.qEma[b.id] : F[b.id]) * 0.06; drops[b.id] = vo2Of(M, b) / (q * O2CAP); }
+  for (const d of dots) {
+    let seg = SEG[d.seg], guard = 0;
+    let adv = (seg.q(F) || 0) * dt / seg.vol();
+    if (adv < 0) { d.s = Math.max(0, d.s + adv); continue; }
+    while (adv > 0 && guard++ < 6) {
+      const take = Math.min(adv, 1 - d.s);
+      if (seg.kind === 'lung') d.sat += (SAT_LUNG - d.sat) * (1 - Math.exp(-7 * take));
+      if (seg.kind === 'cap') d.sat = Math.max(0.03, d.sat - drops[seg.bed.id] * take);
+      d.s += take; adv -= take;
+      if (d.s >= 1 - 1e-9) {
+        const nx = typeof seg.next === 'function' ? seg.next(F, r) : seg.next;
+        const nseg = SEG[nx];
+        adv = adv * seg.vol() / nseg.vol();
+        d.s = 0; d.seg = nx; seg = nseg;
+        if (onEnter) onEnter(d, nx);
+      }
+    }
+  }
+}
+/* For tests: run a circulation with its dots for secs, and report flows, pressures and oxygen. */
+function simulate(animal, o = {}, secs = 40){
+  const M = buildCirc(animal); M.ex = o.ex || 0; M.hole = !!o.hole; M.push = o.push || 0; applyLevers(M);
+  const F0 = runCirc(M, 4), SEG = segSpec(M), dots = seedDots(M, SEG, 7, F0), r = makeRng(3);
+  const frame = 0.05, acc = {};
+  let n = 0;
+  M.qEma = null;
+  for (let t = 0; t < secs; t += frame) {
+    const F = runCirc(M, frame);
+    M.qEma = M.qEma || Object.assign({}, F);
+    for (const b of BEDS) M.qEma[b.id] += (F[b.id] - M.qEma[b.id]) * 0.05;
+    moveDots(M, SEG, dots, F, frame, r);
+    if (t > secs - 10) { n++; for (const k in F) acc[k] = (acc[k] || 0) + F[k]; }
+  }
+  const F = {}; for (const k in acc) F[k] = acc[k] / n * 0.06;   // L/min
+  const sat = seg => { const ds = dots.filter(d => seg.test(d.seg)); return ds.reduce((s, d) => s + d.sat, 0) / Math.max(1, ds.length); };
+  const m = measure(M, 4);
+  return {F, hr: m.hr, sv: m.sv, co: m.co, circuit: m.circuit,
+    pmax: Object.fromEntries(Object.keys(M.C).map(k => [k, m.pk(k)])), pmin: Object.fromEntries(Object.keys(M.C).map(k => [k, m.mn(k)])),
+    sat: {arterial: sat(/^ao$/), venous: sat(/^vc$/), pa: sat(/^(pa|va)$/), lungOut: sat(/^(pv)$/)},
+    blood: Object.values(M.C).reduce((s, c) => s + c.V, 0), dots: dots.length, backflow: M.backflow};
+}
+/* MODEL:end */
+
+/* ---- state: plain data --------------------------------------------------- */
+const S = {animal: 'human', ex: 0, hole: false, speed: 1, locked: false, tagged: null, gcur: null,
+           trail: [], journey: [], circuits: [], pushing: false};
+const shared = sharedState();
+if (shared) {
+  if (ANIMALS[shared.animal]) S.animal = shared.animal;
+  S.ex = clamp(+shared.ex || 0, 0, 1); S.hole = !!shared.hole && S.animal === 'human';
+}
+shareState(() => ({animal: S.animal, ex: S.ex, hole: S.hole}));
+
+/* ============================================================================
+   Geometry: the textbook figure of eight. Right heart on the left, lungs on top,
+   left heart on the right, body below.
+   ============================================================================ */
+function catmull(pts, per = 8){
+  const out = [];
+  for (let i = 0; i < pts.length - 1; i++) {
+    const p0 = pts[Math.max(0, i - 1)], p1 = pts[i], p2 = pts[i + 1], p3 = pts[Math.min(pts.length - 1, i + 2)];
+    for (let k = 0; k < per; k++) {
+      const t = k / per, t2 = t * t, t3 = t2 * t;
+      out.push([0.5 * (2 * p1[0] + (-p0[0] + p2[0]) * t + (2 * p0[0] - 5 * p1[0] + 4 * p2[0] - p3[0]) * t2 + (-p0[0] + 3 * p1[0] - 3 * p2[0] + p3[0]) * t3),
+                0.5 * (2 * p1[1] + (-p0[1] + p2[1]) * t + (2 * p0[1] - 5 * p1[1] + 4 * p2[1] - p3[1]) * t2 + (-p0[1] + 3 * p1[1] - 3 * p2[1] + p3[1]) * t3)]);
+    }
+  }
+  out.push(pts[pts.length - 1]);
+  return out;
+}
+function polyline(pts){
+  const P = catmull(pts), cum = [0];
+  for (let i = 1; i < P.length; i++) cum.push(cum[i - 1] + Math.hypot(P[i][0] - P[i - 1][0], P[i][1] - P[i - 1][1]));
+  const len = cum[cum.length - 1];
+  const at = s => {
+    const L = clamp(s, 0, 1) * len;
+    let lo = 0, hi = cum.length - 1;
+    while (hi - lo > 1) { const m = (lo + hi) >> 1; if (cum[m] < L) lo = m; else hi = m; }
+    const f = (L - cum[lo]) / Math.max(1e-9, cum[hi] - cum[lo]);
+    const x = P[lo][0] + (P[hi][0] - P[lo][0]) * f, y = P[lo][1] + (P[hi][1] - P[lo][1]) * f;
+    const dx = P[hi][0] - P[lo][0], dy = P[hi][1] - P[lo][1], dl = Math.hypot(dx, dy) || 1;
+    return [x, y, -dy / dl, dx / dl];
+  };
+  const d = 'M' + P.map(p => p[0].toFixed(1) + ' ' + p[1].toFixed(1)).join('L');
+  return {P, len, at, d};
+}
+const meander = (x0, x1, y0, y1, rows) => { const pts = []; for (let i = 0; i < rows; i++) { const y = y0 + (y1 - y0) * i / (rows - 1); const a = i % 2 ? x0 : x1, b = i % 2 ? x1 : x0; pts.push([a, y], [b, y]); } return pts; };
+const BEDX = {brain: [96, 214], trunk: [252, 370], limb: [408, 526]};
+function layout(animal){
+  const G = {};
+  const put = (id, pts, w) => G[id] = Object.assign(polyline(pts), {w});
+  /* lungs (or gills) across the top: two parallel capillary nets */
+  const wave = (y, amp) => { const p = []; for (let x = 150; x <= 470; x += 20) p.push([x, y + amp * Math.sin((x - 150) / 20 * Math.PI / 2)]); return p; };
+  put('lungA', [[150, 118], [150, 84], ...wave(84, 12).slice(1, -1), [470, 84], [470, 118]], 5);
+  put('lungB', [[150, 118], ...wave(128, 10).slice(1, -1), [470, 118]], 5);
+  /* body beds across the bottom */
+  for (const b of BEDS) {
+    const [x0, x1] = BEDX[b.id];
+    put('art_' + b.id, [[512, 492], [x1 - 6, 506], [x1 - 10, 546]], 8);
+    put('cap_' + b.id, [[x1 - 10, 548], ...meander(x0 + 12, x1 - 12, 556, 624, 4).slice(1), [x0 + 10, 632]], 4);
+    put('ven_' + b.id, [[x0 + 10, 634], [x0 + 4, 660], [Math.max(76, x0 - 30), 668], [76, 668]], 9);
+  }
+  put('vc', [[76, 668], [60, 640], [58, 470], [84, 360], [150, 312], [206, 300]], 14);
+  if (animal === 'human') {
+    put('ra', [[206, 300], [245, 296], [258, 322]], 30);
+    put('rv', [[258, 336], [262, 392], [236, 372], [220, 358]], 30);
+    put('pa', [[220, 358], [168, 350], [116, 300], [100, 230], [110, 160], [150, 118]], 12);
+    put('pv', [[470, 118], [508, 150], [514, 236], [470, 282], [410, 294]], 12);
+    put('la', [[410, 294], [372, 296], [362, 322]], 30);
+    put('lv', [[362, 336], [358, 402], [388, 410], [404, 402]], 30);
+    put('ao', [[404, 402], [446, 410], [492, 440], [512, 492]], 13);
+  } else if (animal === 'frog') {
+    put('ra', [[206, 300], [245, 296], [262, 326]], 30);
+    put('la', [[410, 294], [372, 296], [358, 326]], 30);
+    put('v', [[310, 336], [312, 384], [312, 408]], 48);
+    put('pa', [[312, 408], [262, 414], [196, 380], [120, 312], [100, 230], [110, 160], [150, 118]], 12);
+    put('pv', [[470, 118], [508, 150], [514, 236], [470, 282], [410, 294]], 12);
+    put('ao', [[312, 408], [370, 416], [446, 420], [492, 446], [512, 492]], 13);
+  } else {
+    put('at', [[206, 300], [250, 312], [292, 342]], 32);
+    put('v', [[296, 346], [352, 372], [334, 408], [306, 416]], 32);
+    put('va', [[306, 416], [230, 420], [150, 384], [106, 300], [100, 230], [110, 160], [150, 118]], 12);
+    put('ao', [[470, 118], [520, 160], [546, 270], [540, 400], [512, 492]], 13);
+  }
+  return G;
+}
+/* Chambers: centre, radii at the reference volume, rotation. */
+const CHAMBERS = {
+  human: [
+    {id: 'ra', x: 250, y: 300, rx: 40, ry: 30, rot: 0, Vr: 55, wall: 5, lab: 'RA'},
+    {id: 'rv', x: 256, y: 374, rx: 42, ry: 42, rot: -12, Vr: 100, wall: 7, lab: 'RV'},
+    {id: 'la', x: 370, y: 298, rx: 40, ry: 30, rot: 0, Vr: 65, wall: 5, lab: 'LA'},
+    {id: 'lv', x: 364, y: 380, rx: 42, ry: 50, rot: 14, Vr: 110, wall: 13, lab: 'LV'},
+  ],
+  frog: [
+    {id: 'ra', x: 252, y: 300, rx: 42, ry: 30, rot: 0, Vr: 60, wall: 5, lab: 'RA'},
+    {id: 'la', x: 368, y: 298, rx: 40, ry: 30, rot: 0, Vr: 56, wall: 5, lab: 'LA'},
+    {id: 'v', x: 312, y: 386, rx: 82, ry: 48, rot: 0, Vr: 125, wall: 11, lab: 'V'},
+  ],
+  fish: [
+    {id: 'a', x: 250, y: 318, rx: 44, ry: 32, rot: 18, Vr: 60, wall: 5, lab: 'A'},
+    {id: 'v', x: 340, y: 382, rx: 48, ry: 40, rot: 20, Vr: 105, wall: 12, lab: 'V'},
+  ],
+};
+/* Valves sit where two segments meet; each opens with its link's flow. */
+const VALVES = {
+  human: [{l: 'ra>rv', x: 258, y: 330, a: 0, w: 30}, {l: 'rv>pa', x: 222, y: 356, a: 70, w: 22},
+          {l: 'la>lv', x: 362, y: 330, a: 0, w: 30}, {l: 'lv>sa', x: 404, y: 402, a: 100, w: 22}],
+  frog:  [{l: 'ra>v', x: 264, y: 334, a: 20, w: 26}, {l: 'la>v', x: 356, y: 334, a: -20, w: 26},
+          {l: 'v>pa', x: 256, y: 414, a: 80, w: 20}, {l: 'v>sa', x: 368, y: 416, a: 100, w: 20}],
+  fish:  [{l: 'a>v', x: 294, y: 344, a: -35, w: 24}, {l: 'v>va', x: 304, y: 416, a: 90, w: 20}],
+};
+
+/* ============================================================================
+   The stage: built once, then patched.
+   ============================================================================ */
+const svg = $('stage');
+const GR = {x: 668, y: 62, w: 308, h: 166};            // follow-me graph
+const PR = {x: 668, y: 318, w: 308, h: 120};           // pressure strip
+let M, SEG, G, DOTS, RNG;
+const SATC0 = [91, 74, 158], SATC1 = [216, 50, 60];   // #5b4a9e → #d8323c
+function satCol(s, a = 1){
+  const t = Math.pow(clamp((s - 0.55) / (SAT_LUNG - 0.55), 0, 1), 1.4), m = [160, 58, 118];
+  const c = t < 0.5 ? SATC0.map((v, i) => v + (m[i] - v) * t * 2) : m.map((v, i) => v + (SATC1[i] - v) * (t - 0.5) * 2);
+  return a === 1 ? `rgb(${c.map(Math.round).join(',')})` : `rgba(${c.map(Math.round).join(',')},${a})`;
+}
+const NBIN = 12;
+
+function build(){
+  svg.innerHTML = `
+  <defs>
+    <radialGradient id="gBg" cx="50%" cy="45%" r="75%"><stop offset="0" stop-color="#fffaf5"/><stop offset="1" stop-color="#f3e9e2"/></radialGradient>
+    <linearGradient id="gMuscle" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#f0b2a6"/><stop offset=".6" stop-color="#dc8a82"/><stop offset="1" stop-color="#c46a68"/></linearGradient>
+    <radialGradient id="gLung" cx="50%" cy="40%" r="70%"><stop offset="0" stop-color="#fde3e6"/><stop offset="1" stop-color="#f4bcc5"/></radialGradient>
+    <radialGradient id="gGill" cx="50%" cy="40%" r="70%"><stop offset="0" stop-color="#ffe6ea"/><stop offset="1" stop-color="#f7aab6"/></radialGradient>
+    <radialGradient id="gHalo"><stop offset="0" stop-color="#fff" stop-opacity=".95"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></radialGradient>
+    <clipPath id="clipDia"><rect x="0" y="0" width="630" height="700"/></clipPath>
+    <clipPath id="clipGr"><rect x="${GR.x}" y="${GR.y - 4}" width="${GR.w}" height="${GR.h + 8}"/></clipPath>
+    <clipPath id="clipPr"><rect x="${PR.x}" y="${PR.y}" width="${PR.w}" height="${PR.h}"/></clipPath>
+  </defs>
+  <rect x="0" y="0" width="630" height="700" fill="url(#gBg)"/>
+  <g clip-path="url(#clipDia)">
+    <g id="loopLabs" font-size="12" font-weight="700" letter-spacing=".1em" opacity=".55"></g>
+    <g id="organArt"></g>
+    <g id="tubes" fill="none" stroke-linecap="round" stroke-linejoin="round"></g>
+    <g id="heartArt"></g>
+    <g id="valvesG" stroke="#fdf1ec" stroke-width="3.2" stroke-linecap="round"></g>
+    <g id="dotsG"></g>
+    <g id="labels" font-size="11" font-weight="600" fill="#6b3a36"></g>
+    <g id="ghostG" opacity="0"><circle id="ghost" r="9" fill="none" stroke="#1d2327" stroke-width="2" stroke-dasharray="3 2"/></g>
+    <g id="tagG" opacity="0">
+      <circle id="tagHalo" r="16" fill="url(#gHalo)"/>
+      <circle id="tagDot" r="5" stroke="#fff" stroke-width="2"/>
+      <circle id="tagRing" r="10" fill="none" stroke="#1d2327" stroke-width="2"/>
+      <rect id="tagLabBg" rx="9" height="18" fill="#1d2327" opacity=".88"/><text id="tagLab" fill="#fff" font-size="11" font-weight="600"></text>
+    </g>
+    <g id="pushG">
+      <line id="pushArrow" stroke="#1d2327" stroke-width="2.5" stroke-linecap="round" opacity="0"/>
+      <circle id="pushKnob" r="13" fill="#fff" stroke="#1d2327" stroke-width="1.5"/>
+      <text id="pushIcon" font-size="15" text-anchor="middle">✋</text>
+      <text id="pushLab" font-size="11" font-weight="700" fill="#1d2327"></text>
+    </g>
+  </g>
+  <!-- the tag tray -->
+  <g id="tray">
+    <rect x="14" y="14" width="128" height="50" rx="12" fill="#fff" stroke="#e2d6cf"/>
+    <circle cx="38" cy="39" r="11" fill="none" stroke="#1d2327" stroke-width="2" stroke-dasharray="4 2"/>
+    <circle cx="38" cy="39" r="4" fill="#d8323c"/>
+    <text x="56" y="35" font-size="11" font-weight="700" fill="#3a2a28">Tag a cell</text>
+    <text x="56" y="50" font-size="10" fill="#7c6a64">drag onto blood</text>
+  </g>
+  <g id="dragTag" opacity="0"><circle r="11" fill="none" stroke="#1d2327" stroke-width="2" stroke-dasharray="4 2"/><circle r="4" fill="#d8323c"/></g>
+  <text id="speedNote" x="616" y="690" text-anchor="end" font-size="11" fill="#7c6a64"></text>
+  <line x1="630" y1="0" x2="630" y2="700" stroke="#e2ded2"/>
+
+  <!-- right: follow me, pressures, numbers -->
+  <rect x="631" y="0" width="369" height="700" fill="#fbfaf6"/>
+  <text x="648" y="26" fill="#4a555b" font-size="12" font-weight="700" letter-spacing=".08em">FOLLOW ONE RED BLOOD CELL</text>
+  <text id="grSub" x="648" y="43" fill="#7c878c" font-size="11"></text>
+  <g id="grAxes"></g>
+  <g clip-path="url(#clipGr)"><g id="grBands"></g><path id="grLine" fill="none" stroke="#1d2327" stroke-width="1.6" stroke-linejoin="round"/><g id="grDots"></g></g>
+  <g id="grStrip"></g>
+  <g id="grCur" opacity="0"><line id="grCurL" y1="${GR.y}" y2="${GR.y + GR.h + 22}" stroke="#1d2327" stroke-dasharray="3 3"/><text id="grCurT" y="${GR.y + 14}" font-size="10.5" text-anchor="middle" class="m" fill="#1d2327" stroke="#fff" stroke-width="3" paint-order="stroke"></text></g>
+  <text id="grEmpty" x="${GR.x + GR.w / 2}" y="${GR.y + GR.h / 2}" text-anchor="middle" fill="#9aa3a6" font-size="13" font-weight="600">Tag a cell to see its oxygen here</text>
+
+  <line x1="648" y1="280" x2="984" y2="280" stroke="#e2ded2"/>
+  <text x="648" y="302" fill="#4a555b" font-size="12" font-weight="700" letter-spacing=".08em">PRESSURE IN THE PUMPS</text>
+  <g id="prAxes"></g>
+  <g clip-path="url(#clipPr)" fill="none" stroke-linejoin="round"><path id="pr0" stroke="#d8323c" stroke-width="2.2"/><path id="pr1" stroke="#d8323c" stroke-width="1.4" stroke-dasharray="5 3"/><path id="pr2" stroke="#6a4fb0" stroke-width="2.2"/><path id="pr3" stroke="#6a4fb0" stroke-width="1.4" stroke-dasharray="5 3"/></g>
+  <g id="prLeg" font-size="10.5" font-weight="600"></g>
+
+  <line x1="648" y1="478" x2="984" y2="478" stroke="#e2ded2"/>
+  <text x="648" y="500" fill="#4a555b" font-size="12" font-weight="700" letter-spacing=".08em">THE HEART’S NUMBERS</text>
+  <g id="nums"></g>
+
+  <rect id="veil" x="631" y="0" width="369" height="700" fill="#fbfaf6" opacity=".95"/>
+
+  <!-- hit targets: a layer that never moves between parents -->
+  <circle id="tagHit" cx="38" cy="39" r="22" fill="transparent" tabindex="0" role="button" aria-label="Tag: drag onto the blood to follow one red cell"/>
+  <circle id="pushHit" r="18" fill="transparent" tabindex="0" role="slider" aria-label="Push blood backwards along the aorta"/>
+  <rect id="graphHit" x="${GR.x}" y="${GR.y}" width="${GR.w}" height="${GR.h + 22}" fill="transparent" tabindex="0" role="slider" aria-label="Time along the tagged cell's journey"/>
+  `;
+}
+
+/* ---- the diagram for one animal (rebuilt only when the animal changes) ----------- */
+function drawScene(){
+  const an = S.animal;
+  /* organs: lungs or gills on top, three beds below */
+  let o = '';
+  if (an === 'fish') {
+    o += `<g opacity=".95">`;
+    for (let i = 0; i < 17; i++) { const x = 156 + i * 19; o += `<path d="M${x} 150 C ${x - 10} 118, ${x + 10} 82, ${x} 52" fill="none" stroke="#f3a9b5" stroke-width="9" stroke-linecap="round"/><path d="M${x} 150 C ${x - 10} 118, ${x + 10} 82, ${x} 52" fill="none" stroke="#fcd9de" stroke-width="3" stroke-linecap="round"/>`; }
+    o += `<path d="M140 154 Q 310 170 480 154" fill="none" stroke="#e58c99" stroke-width="6" stroke-linecap="round"/></g>`;
+    o += `<text x="310" y="40" text-anchor="middle" font-size="12" font-weight="700" fill="#a0525e" letter-spacing=".08em">GILLS</text>`;
+  } else {
+    o += `<path d="M306 18 L306 50 M306 50 C 290 58, 270 62, 250 70 M306 50 C 322 58, 342 62, 362 70" fill="none" stroke="#c9d6e3" stroke-width="10" stroke-linecap="round"/>`;
+    o += `<path d="M292 58 C 250 40, 180 30, 150 60 C 124 88, 126 150, 150 168 C 190 176, 270 168, 294 150 Z" fill="url(#gLung)" stroke="#eba7b3"/>`;
+    o += `<path d="M320 58 C 362 40, 432 30, 462 60 C 488 88, 486 150, 462 168 C 422 176, 342 168, 318 150 Z" fill="url(#gLung)" stroke="#eba7b3"/>`;
+    const r = makeRng(5); for (let i = 0; i < 70; i++) { const x = 150 + r() * 320, y = 50 + r() * 118; if (Math.abs(x - 306) < 16) continue; o += `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${(3 + r() * 4).toFixed(1)}" fill="#fff" opacity=".35"/>`; }
+    o += `<text x="182" y="46" text-anchor="middle" font-size="12" font-weight="700" fill="#a0525e" letter-spacing=".08em">LUNGS</text>`;
+    if (an === 'frog') o += `<text x="440" y="46" text-anchor="middle" font-size="10.5" font-weight="600" fill="#a0525e">(and the skin)</text>`;
+  }
+  const art = {
+    brain: `<path d="M110 600 C 100 560, 150 540, 170 552 C 196 540, 218 570, 204 600 C 214 620, 180 636, 156 626 C 130 636, 104 624, 110 600 Z" fill="#f3d2dc" stroke="#e2adbf"/><path d="M130 560 C 140 575, 128 590, 142 604 M160 552 C 150 572, 168 586, 156 606 M184 560 C 176 578, 194 590, 184 612" fill="none" stroke="#e2adbf" stroke-width="2"/>`,
+    trunk: `<path d="M266 560 C 280 540, 340 540, 356 560 C 372 590, 350 628, 312 630 C 272 630, 250 596, 266 560 Z" fill="#f5dfc4" stroke="#e5bf93"/><path d="M282 572 C 300 560, 330 564, 336 584 C 342 604, 310 614, 296 600 C 284 588, 304 578, 314 590" fill="none" stroke="#e5bf93" stroke-width="3"/>`,
+    limb: `<path d="M420 612 C 432 560, 480 540, 516 556 C 528 574, 508 604, 470 620 C 450 628, 426 632, 420 612 Z" fill="#f2c8c0" stroke="#dd9f94"/><path d="M438 604 L 500 566 M446 612 L 508 576 M432 596 L 490 560" stroke="#dd9f94" stroke-width="1.5"/>`,
+  };
+  for (const b of BEDS) { const [x0, x1] = BEDX[b.id]; o += `<g opacity=".9">${art[b.id]}</g><text x="${(x0 + x1) / 2}" y="${x0 < 100 ? 690 : 690}" text-anchor="middle" font-size="11" font-weight="700" fill="#6b3a36">${esc(b.name)}</text>`; }
+  $('organArt').innerHTML = o;
+  /* tubes: one per segment, tinted later by the oxygen of the dots in it */
+  let t = '';
+  for (const id in G) {
+    const g = G[id]; if (SEG[id].kind === 'heart') continue;
+    const w = g.w, cap = SEG[id].kind === 'cap' || SEG[id].kind === 'lung';
+    t += `<path d="${g.d}" stroke="${cap ? '#f6e7e2' : '#ecd9d2'}" stroke-width="${w + (cap ? 3 : 5)}" ${cap ? 'stroke-opacity=".8"' : ''}/><path id="tube_${id}" d="${g.d}" stroke="#c9a" stroke-width="${w}" stroke-opacity="${cap ? .35 : .45}"/>`;
+  }
+  $('tubes').innerHTML = t;
+  /* the heart */
+  let h = '';
+  if (an === 'human') h += `<path d="M200 300 C 196 262, 244 252, 310 266 C 376 252, 424 262, 420 300 C 424 372, 392 428, 336 454 C 270 440, 212 380, 200 300 Z" fill="url(#gMuscle)" stroke="#b85c5e" stroke-width="1.2"/>`;
+  else if (an === 'frog') h += `<path d="M200 300 C 196 262, 244 252, 310 266 C 376 252, 424 262, 420 300 C 420 380, 390 436, 312 446 C 234 436, 204 380, 200 300 Z" fill="url(#gMuscle)" stroke="#b85c5e" stroke-width="1.2"/>`;
+  else h += `<path d="M204 318 C 200 280, 260 276, 300 300 C 350 320, 402 340, 394 392 C 386 432, 330 440, 296 420 C 250 396, 208 360, 204 318 Z" fill="url(#gMuscle)" stroke="#b85c5e" stroke-width="1.2"/>`;
+  for (const c of CHAMBERS[an]) h += `<ellipse id="chw_${c.id}" fill="#c9696a" opacity=".55" transform="rotate(${c.rot} ${c.x} ${c.y})"/><ellipse id="ch_${c.id}" transform="rotate(${c.rot} ${c.x} ${c.y})"/>`;
+  if (an === 'human') h += `<path id="septum" d="M310 330 C 306 360, 304 400, 318 440" fill="none" stroke="#c46a68" stroke-width="9" stroke-linecap="round"/>`;
+  $('heartArt').innerHTML = h;
+  /* labels */
+  let l = '';
+  for (const c of CHAMBERS[an]) l += `<text id="lab_${c.id}" x="${c.x}" y="${c.y + 4}" text-anchor="middle" fill="#fff" font-size="12" font-weight="700" opacity=".95">${c.lab}</text>`;
+  const L = (x, y, s, a = 'start') => l += `<text x="${x}" y="${y}" text-anchor="${a}">${s}</text>`;
+  if (an === 'human') { L(92, 262, 'Pulmonary', 'end'); L(92, 275, 'artery', 'end'); L(524, 200, 'Pulmonary'); L(524, 213, 'vein'); L(460, 434, 'Aorta'); L(72, 560, 'Vena'); L(72, 573, 'cava'); }
+  if (an === 'frog') { L(92, 262, 'Pulmo-', 'end'); L(92, 275, 'cutaneous', 'end'); L(524, 200, 'Pulmonary'); L(524, 213, 'vein'); L(460, 442, 'Aorta'); L(72, 560, 'Vena'); L(72, 573, 'cava'); }
+  if (an === 'fish') { L(98, 340, 'Ventral', 'end'); L(98, 353, 'aorta', 'end'); L(560, 372, 'Dorsal'); L(560, 385, 'aorta'); L(72, 560, 'Main'); L(72, 573, 'vein'); }
+  $('labels').innerHTML = l;
+  $('loopLabs').innerHTML = an === 'fish'
+    ? `<text x="600" y="330" fill="#8a5a55" transform="rotate(90 600 330)" text-anchor="middle">ONE LOOP: HEART → GILLS → BODY → HEART</text>`
+    : `<text x="18" y="200" fill="#8a5a55" transform="rotate(-90 18 200)" text-anchor="middle">LUNG LOOP</text><text x="18" y="560" fill="#8a5a55" transform="rotate(-90 18 560)" text-anchor="middle">BODY LOOP</text>`;
+  /* valves */
+  $('valvesG').innerHTML = VALVES[an].map((v, i) => `<line id="vl${i}a"/><line id="vl${i}b"/>`).join('');
+  /* dot bins */
+  $('dotsG').innerHTML = Array.from({length: NBIN}, (_, i) => `<path id="bin${i}" fill="${satCol(0.5 + (SAT_LUNG - 0.5) * (i + 0.5) / NBIN)}" stroke="#fff" stroke-width=".5" stroke-opacity=".6"/>`).join('');
+  drawPressureAxes();
+}
+
+/* ---- per-frame paint ------------------------------------------------------------ */
+const SATSEG = {};
+function paintDiagram(F, avgV){
+  const an = S.animal;
+  /* dots, grouped by colour into a few paths */
+  const bins = Array.from({length: NBIN}, () => []);
+  const segSat = {}, segN = {};
+  for (const d of DOTS) {
+    const g = G[d.seg], sp = SEG[d.seg];
+    const c = sp.kind === 'heart' ? CHAMBERS[an].find(q => q.id === (d.seg === 'at' ? 'a' : d.seg)) : null;
+    if (c) {
+      /* inside a chamber the blood swirls: each dot keeps its own radius, and turns as it moves through */
+      const k = Math.sqrt(clamp((avgV[c.id] || c.Vr) / c.Vr, 0.2, 2.2)), fr = Math.abs(d.lat * 7.31) % 1;
+      const th = d.s * Math.PI * 1.7 + d.lat * 3.1, rr = 0.2 + 0.68 * Math.sqrt(fr), ro = c.rot * Math.PI / 180;
+      const ex = Math.cos(th) * c.rx * k * rr, ey = Math.sin(th) * c.ry * k * rr;
+      d.x = c.x + ex * Math.cos(ro) - ey * Math.sin(ro); d.y = c.y + ex * Math.sin(ro) + ey * Math.cos(ro);
+    } else {
+      const p = g.at(d.s), off = d.lat * (g.w / 2 - 1.5);
+      d.x = p[0] + p[2] * off; d.y = p[1] + p[3] * off;
+    }
+    const k = clamp(Math.floor((d.sat - 0.5) / (SAT_LUNG - 0.5) * NBIN), 0, NBIN - 1);
+    bins[k].push(d);
+    segSat[d.seg] = (segSat[d.seg] || 0) + d.sat; segN[d.seg] = (segN[d.seg] || 0) + 1;
+  }
+  const r = 2.3;
+  for (let i = 0; i < NBIN; i++) $('bin' + i).setAttribute('d', bins[i].map(d => `M${(d.x - r).toFixed(1)} ${d.y.toFixed(1)}a${r} ${r} 0 1 0 ${2 * r} 0a${r} ${r} 0 1 0 ${-2 * r} 0`).join(''));
+  /* tubes and chambers take the colour of the blood in them */
+  for (const id in G) {
+    if (segN[id]) SATSEG[id] = SATSEG[id] == null ? segSat[id] / segN[id] : SATSEG[id] + (segSat[id] / segN[id] - SATSEG[id]) * 0.08;
+    const el = $('tube_' + id); if (el && SATSEG[id] != null) el.setAttribute('stroke', satCol(SATSEG[id]));
+  }
+  for (const c of CHAMBERS[an]) {
+    const V = avgV[c.id] || c.Vr, k = Math.sqrt(clamp(V / c.Vr, 0.2, 2.2));
+    const e = $('ch_' + c.id), w = $('chw_' + c.id);
+    e.setAttribute('cx', c.x); e.setAttribute('cy', c.y); e.setAttribute('rx', (c.rx * k).toFixed(1)); e.setAttribute('ry', (c.ry * k).toFixed(1));
+    w.setAttribute('cx', c.x); w.setAttribute('cy', c.y); w.setAttribute('rx', (c.rx * k + c.wall).toFixed(1)); w.setAttribute('ry', (c.ry * k + c.wall).toFixed(1));
+    const sid = c.id === 'a' ? 'at' : c.id;
+    e.setAttribute('fill', SATSEG[sid] != null ? satCol(SATSEG[sid], 0.55) : '#d8323c');
+  }
+  /* valves: open in proportion to the flow the model lets through */
+  VALVES[an].forEach((v, i) => {
+    const q = M.Lk[v.l] ? (S.speed > 1 ? F[v.l] : M.Lk[v.l].q) : 0;
+    const open = clamp(Math.sqrt(Math.max(0, q) / 300), 0, 1) * (S.speed > 1 ? 0.5 : 1);
+    const a = v.a * Math.PI / 180, ux = Math.cos(a), uy = Math.sin(a), nx = -uy, ny = ux;
+    const hw = v.w / 2, L = hw + 1, sw = (10 + 70 * open) * Math.PI / 180;
+    const h1 = [v.x - ux * hw, v.y - uy * hw], h2 = [v.x + ux * hw, v.y + uy * hw];
+    const d1 = [Math.cos(sw) * ux + Math.sin(sw) * nx, Math.cos(sw) * uy + Math.sin(sw) * ny];
+    const d2 = [-Math.cos(sw) * ux + Math.sin(sw) * nx, -Math.cos(sw) * uy + Math.sin(sw) * ny];
+    setL('vl' + i + 'a', h1[0], h1[1], h1[0] + d1[0] * L, h1[1] + d1[1] * L);
+    setL('vl' + i + 'b', h2[0], h2[1], h2[0] + d2[0] * L, h2[1] + d2[1] * L);
+  });
+  paintTag(); paintPush();
+}
+function setL(id, x1, y1, x2, y2){ const e = $(id); if (!e) return; e.setAttribute('x1', x1.toFixed(1)); e.setAttribute('y1', y1.toFixed(1)); e.setAttribute('x2', x2.toFixed(1)); e.setAttribute('y2', y2.toFixed(1)); }
+function placeOf(seg){ return SEG[seg] ? SEG[seg].place : ''; }
+function paintTag(){
+  const d = S.tagged != null ? DOTS[S.tagged] : null;
+  $('tagG').setAttribute('opacity', d ? 1 : 0);
+  if (!d) return;
+  for (const id of ['tagHalo', 'tagDot', 'tagRing']) { $(id).setAttribute('cx', d.x.toFixed(1)); $(id).setAttribute('cy', d.y.toFixed(1)); }
+  $('tagDot').setAttribute('fill', satCol(d.sat));
+  const txt = `${Math.round(d.sat * 100)} % · ${placeOf(d.seg)}`;
+  const w = txt.length * 6.1 + 14, x = clamp(d.x + 14, 4, 626 - w), y = clamp(d.y - 26, 4, 680);
+  $('tagLabBg').setAttribute('x', x.toFixed(1)); $('tagLabBg').setAttribute('y', y.toFixed(1)); $('tagLabBg').setAttribute('width', w.toFixed(1));
+  $('tagLab').setAttribute('x', (x + 7).toFixed(1)); $('tagLab').setAttribute('y', (y + 13).toFixed(1)); $('tagLab').textContent = txt;
+}
+/* The push handle rides on the aorta, a little way from the valve. */
+const PUSH_S = 0.42;
+let pushOff = 0;
+function pushBase(){ const p = G.ao.at(PUSH_S); return {x: p[0], y: p[1], ux: -p[3], uy: p[2]}; }
+function paintPush(){
+  const b = pushBase(), g = G.ao, p = g.at(PUSH_S), q = g.at(PUSH_S - 0.25);
+  const dir = [q[0] - p[0], q[1] - p[1]], dl = Math.hypot(...dir) || 1;
+  const x = p[0] + dir[0] / dl * pushOff, y = p[1] + dir[1] / dl * pushOff - 20;
+  $('pushKnob').setAttribute('cx', x.toFixed(1)); $('pushKnob').setAttribute('cy', y.toFixed(1));
+  $('pushIcon').setAttribute('x', x.toFixed(1)); $('pushIcon').setAttribute('y', (y + 5).toFixed(1));
+  $('pushHit').setAttribute('cx', x.toFixed(1)); $('pushHit').setAttribute('cy', y.toFixed(1));
+  $('pushArrow').setAttribute('opacity', M.push > 1 ? 0.8 : 0);
+  $('pushArrow').setAttribute('x1', (x + 4).toFixed(1)); $('pushArrow').setAttribute('y1', (y + 16).toFixed(1));
+  $('pushArrow').setAttribute('x2', (x + dir[0] / dl * 26).toFixed(1)); $('pushArrow').setAttribute('y2', (y + 16 + dir[1] / dl * 26).toFixed(1));
+  $('pushLab').setAttribute('x', (x + 18).toFixed(1)); $('pushLab').setAttribute('y', (y - 8).toFixed(1));
+  const shut = M.Lk[ANIMALS[S.animal].outflow[0]].q <= 0;
+  $('pushLab').textContent = M.push > 1 ? `+${fmt(M.push, 0)} mmHg · valve ${shut ? 'SHUT: no blood goes back' : 'open'}` : '';
+}
+
+/* ---- the follow-me graph ----------------------------------------------------------- */
+const PLACE_COL = {lung: '#f29ab0', heartR: '#7b5cd6', heartL: '#d8323c', heartM: '#b0437a', brain: '#8a5cf6', trunk: '#d68a12', limb: '#2f9e5b', vessel: '#cfc9b8'};
+function placeClass(seg){
+  const sp = SEG[seg]; if (!sp) return 'vessel';
+  if (sp.kind === 'lung') return 'lung';
+  if (sp.kind === 'heart') return sp.side === 'L' ? 'heartL' : sp.side === 'M' ? 'heartM' : 'heartR';
+  if (sp.kind === 'cap') return sp.bed.id;
+  return 'vessel';
+}
+let GRT = 60;
+const gx = t => GR.x + (t - GRT0()) / GRT * GR.w;
+const GRT0 = () => { const tr = S.trail; if (!tr.length) return 0; const last = tr[tr.length - 1].t; return Math.max(tr[0].t, last - GRT); };
+const gy = s => GR.y + GR.h - s * GR.h;
+function drawGraphAxes(){
+  let a = `<rect x="${GR.x}" y="${GR.y}" width="${GR.w}" height="${GR.h}" fill="#fff" stroke="#e2ded2"/>`;
+  for (const v of [0, 0.25, 0.5, 0.75, 1]) a += `<line x1="${GR.x}" y1="${gy(v)}" x2="${GR.x + GR.w}" y2="${gy(v)}" stroke="#f0ede4"/><text x="${GR.x - 5}" y="${gy(v) + 4}" fill="#7c878c" font-size="10" text-anchor="end" class="m">${v * 100}</text>`;
+  a += `<text x="${GR.x - 24}" y="${GR.y + GR.h / 2}" fill="#7c878c" font-size="10" text-anchor="middle" transform="rotate(-90 ${GR.x - 24} ${GR.y + GR.h / 2})">O₂ saturation, %</text>`;
+  $('grAxes').innerHTML = a;
+}
+function paintGraph(){
+  const tr = S.trail;
+  $('grEmpty').setAttribute('opacity', tr.length ? 0 : 1);
+  if (!tr.length) { $('grLine').setAttribute('d', ''); $('grBands').innerHTML = ''; $('grStrip').innerHTML = ''; $('grSub').textContent = ''; return; }
+  const span = tr[tr.length - 1].t - tr[0].t;
+  GRT = span < 50 ? 60 : span < 110 ? 120 : span < 230 ? 240 : 240;
+  const t0 = GRT0();
+  const vis = tr.filter(p => p.t >= t0 - 0.5);
+  $('grLine').setAttribute('d', vis.map((p, i) => (i ? 'L' : 'M') + gx(p.t).toFixed(1) + ' ' + gy(p.sat).toFixed(1)).join(''));
+  /* location strip under the graph, and faint bands for lungs and body beds */
+  let bands = '', strip = '';
+  let i = 0;
+  while (i < vis.length) {
+    let j = i; while (j + 1 < vis.length && vis[j + 1].cls === vis[i].cls) j++;
+    const x1 = gx(vis[i].t), x2 = gx(j + 1 < vis.length ? vis[j + 1].t : vis[j].t), c = vis[i].cls;
+    strip += `<rect x="${x1.toFixed(1)}" y="${GR.y + GR.h + 4}" width="${Math.max(0.8, x2 - x1).toFixed(1)}" height="10" fill="${PLACE_COL[c]}"/>`;
+    if (c !== 'vessel') bands += `<rect x="${x1.toFixed(1)}" y="${GR.y}" width="${Math.max(0.8, x2 - x1).toFixed(1)}" height="${GR.h}" fill="${PLACE_COL[c]}" opacity=".13"/>`;
+    const lab = {lung: S.animal === 'fish' ? 'gills' : 'lungs', heartR: 'heart', heartL: 'heart', heartM: 'heart', brain: 'brain', trunk: 'gut', limb: 'muscle'}[c];
+    if (lab && x2 - x1 > 22) strip += `<text x="${((x1 + x2) / 2).toFixed(1)}" y="${GR.y + GR.h + 26}" fill="${PLACE_COL[c]}" font-size="9.5" font-weight="700" text-anchor="middle">${lab}</text>`;
+    i = j + 1;
+  }
+  $('grBands').innerHTML = bands; $('grStrip').innerHTML = strip;
+  /* time ticks */
+  let tk = '';
+  const step = GRT <= 60 ? 10 : GRT <= 120 ? 20 : 40;
+  for (let t = Math.ceil((t0 - tr[0].t) / step) * step; t <= t0 - tr[0].t + GRT; t += step) { const X = gx(tr[0].t + t); if (X < GR.x - 1 || X > GR.x + GR.w + 1) continue; tk += `<text x="${X.toFixed(1)}" y="${GR.y + GR.h + 40}" fill="#7c878c" font-size="10" text-anchor="middle" class="m">${t}s</text>`; }
+  $('grStrip').innerHTML += tk;
+  const cur = S.circuits[S.circuits.length - 1];
+  $('grSub').textContent = `${fmt(span, 0)} s since tagging` + (cur ? ` · last full circuit ${fmt(cur.dur, 0)} s, ${cur.passes} pass${cur.passes === 1 ? '' : 'es'} through the heart` : '');
+  /* the graph cursor (linked to a ghost on the diagram) */
+  if (S.gcur != null) {
+    const p = tr.reduce((b, q) => Math.abs(q.t - S.gcur) < Math.abs(b.t - S.gcur) ? q : b, tr[0]);
+    const X = gx(p.t);
+    $('grCur').setAttribute('opacity', 1); $('grCurL').setAttribute('x1', X.toFixed(1)); $('grCurL').setAttribute('x2', X.toFixed(1));
+    $('grCurT').setAttribute('x', clamp(X, GR.x + 110, GR.x + GR.w - 110).toFixed(1)); $('grCurT').textContent = `${fmt(p.t - tr[0].t, 1)} s · ${Math.round(p.sat * 100)} % · ${placeOf(p.seg)}`;
+    const g = G[p.seg];
+    if (g) { const q = g.at(p.s); $('ghost').setAttribute('cx', q[0].toFixed(1)); $('ghost').setAttribute('cy', q[1].toFixed(1)); $('ghostG').setAttribute('opacity', 1); }
+  } else { $('grCur').setAttribute('opacity', 0); $('ghostG').setAttribute('opacity', 0); }
+}
+
+/* ---- pressures ------------------------------------------------------------------ */
+let PTOP = 140;
+function drawPressureAxes(){
+  let a = `<rect x="${PR.x}" y="${PR.y}" width="${PR.w}" height="${PR.h}" fill="#fff" stroke="#e2ded2"/>`;
+  for (let v = 0; v <= PTOP; v += PTOP > 150 ? 50 : 40) { const y = PR.y + PR.h - v / PTOP * PR.h; a += `<line x1="${PR.x}" y1="${y}" x2="${PR.x + PR.w}" y2="${y}" stroke="#f0ede4"/><text x="${PR.x - 6}" y="${y + 4}" fill="#7c878c" font-size="10" text-anchor="end" class="m">${v}</text>`; }
+  a += `<text x="${PR.x - 30}" y="${PR.y - 6}" fill="#7c878c" font-size="10">mmHg</text><text x="${PR.x + PR.w}" y="${PR.y + PR.h + 14}" fill="#7c878c" font-size="10" text-anchor="end">last 3 seconds →</text>`;
+  $('prAxes').innerHTML = a;
+  const names = S.animal === 'human' ? ['LV', 'aorta', 'RV', 'pulmonary artery'] : S.animal === 'frog' ? ['ventricle', 'aorta', '', 'to the lungs'] : ['ventricle', 'into the gills', '', 'after the gills'];
+  const cols = ['#d8323c', '#d8323c', '#6a4fb0', '#6a4fb0'], dash = [0, 1, 0, 1];
+  let l = '', x = PR.x;
+  names.forEach((n, i) => { if (!n) return; l += `<line x1="${x}" y1="${PR.y + PR.h + 26}" x2="${x + 16}" y2="${PR.y + PR.h + 26}" stroke="${cols[i]}" stroke-width="2" ${dash[i] ? 'stroke-dasharray="4 2"' : ''}/><text x="${x + 20}" y="${PR.y + PR.h + 30}" fill="${cols[i]}">${n}</text>`; x += 20 + n.length * 5.8 + 14; });
+  $('prLeg').innerHTML = l;
+}
+function paintPressures(){
+  const R = M.ring; if (R.length < 2) return;
+  const tEnd = R[R.length - 1][0], t0 = tEnd - 3;
+  let mx = 0; for (const r of R) for (let k = 1; k < r.length; k++) mx = Math.max(mx, r[k]);
+  const want = mx > 135 ? Math.ceil((mx + 10) / 50) * 50 : 140;
+  if (want !== PTOP) { PTOP = want; drawPressureAxes(); }
+  const X = t => PR.x + (t - t0) / 3 * PR.w, Y = p => PR.y + PR.h - clamp(p, -5, PTOP) / PTOP * PR.h;
+  const keys = ringKeys(M), map = S.animal === 'human' ? [0, 1, 2, 3] : S.animal === 'frog' ? [0, 1, -1, 2] : [0, 1, -1, 2];
+  for (let i = 0; i < 4; i++) {
+    const k = map[i];
+    $('pr' + i).setAttribute('d', k < 0 ? '' : R.filter(r => r[0] >= t0).map((r, j) => (j ? 'L' : 'M') + X(r[0]).toFixed(1) + ' ' + Y(r[k + 1]).toFixed(1)).join(''));
+  }
+}
+
+/* ---- numbers -------------------------------------------------------------------- */
+let MEAS = null, REST_CO = null;
+function paintNumbers(){
+  const m = MEAS = measure(M, 3); if (!m) return;
+  const an = S.animal;
+  const sa = SATSEG.ao, sv = SATSEG.vc;
+  const row = (y, lab, val, col = '#1d2327', big = false) => `<text x="648" y="${y}" fill="#4a555b" font-size="12">${lab}</text><text x="984" y="${y}" text-anchor="end" fill="${col}" font-size="${big ? 14 : 12.5}" font-weight="${big ? 700 : 600}" class="m">${val}</text>`;
+  let h = '';
+  h += `<text x="648" y="526" fill="#1d2327" font-size="15" font-weight="600">HR × SV = CO</text>`;
+  h += `<text x="984" y="526" text-anchor="end" fill="#1d2327" font-size="14" font-weight="700" class="m">${fmt(m.hr, 0)}/min × ${fmt(m.sv, 0)} mL = ${fmt(m.co, 1)} L/min</text>`;
+  h += row(550, 'Heart rate', `${fmt(m.hr, 0)} beats/min`);
+  h += row(569, 'Stroke volume (each beat, from the ' + (an === 'human' ? 'LV' : 'ventricle') + ')', `${fmt(m.sv, 0)} mL`);
+  h += row(588, 'Cardiac output', `${fmt(m.co, 2)} L/min`);
+  h += row(607, 'One full circuit, on average (5 L ÷ output)', `${fmt(m.circuit, 0)} s`);
+  const cur = S.circuits[S.circuits.length - 1];
+  if (cur) h += row(626, 'Your tagged cell’s last circuit', `${fmt(cur.dur, 0)} s`);
+  h += row(648, 'O₂ in blood going to the body', sa != null ? `${Math.round(sa * 100)} %` : '—', satCol(sa || 0.9));
+  h += row(667, 'O₂ in blood coming back from the body', sv != null ? `${Math.round(sv * 100)} %` : '—', satCol(sv || 0.7));
+  if (an === 'human') h += row(688, 'Peak pressure: left vs right ventricle', `${fmt(m.pk('lv'), 0)} vs ${fmt(m.pk('rv'), 0)} mmHg`);
+  else if (an === 'fish') h += row(688, 'Mean pressure: into gills → into body', `${fmt((m.pk('va') + 2 * m.mn('va')) / 3, 0)} → ${fmt((m.pk('sa') + 2 * m.mn('sa')) / 3, 0)} mmHg`);
+  else h += row(688, 'Blood to the body / to the lungs', `${fmt(MEANF.body * 0.06, 1)} / ${fmt(MEANF.lung * 0.06, 1)} L/min`);
+  $('nums').innerHTML = h;
+}
+
+/* ---- the tag's journey ----------------------------------------------------------- */
+function onEnter(d, seg){
+  if (d.id !== S.tagged) return;
+  const J = S.journey;
+  J.push({seg, t: M.t, sat: d.sat});
+  const sp = SEG[seg];
+  /* a circuit starts when the cell leaves the main pumping ventricle, and ends when it is back */
+  const vent = ANIMALS[S.animal].vent;
+  const prev = J.length > 1 ? J[J.length - 2].seg : null;
+  if (prev === vent && seg !== vent) S.cur = {t0: M.t, passes: 0, lungs: 0, body: null, rise: 0, drop: 0, satIn: null};
+  if (S.cur) {
+    if (sp.kind === 'heart' && /^(ra|la|at)$/.test(seg)) S.cur.passes++;
+    if (S.animal === 'human' && seg === 'rv' && prev === 'lv') S.cur.passes++;     // straight through a hole: into the right heart
+    if (sp.kind === 'lung') { S.cur.lungs++; S.cur.lungIn = d.sat; }
+    if (sp.kind === 'cap') { S.cur.body = sp.bed.name; S.cur.capIn = d.sat; }
+    if (prev && SEG[prev] && SEG[prev].kind === 'lung' && S.cur.lungIn != null) S.cur.rise = Math.max(S.cur.rise, d.sat - S.cur.lungIn);
+    if (prev && SEG[prev] && SEG[prev].kind === 'cap' && S.cur.capIn != null) S.cur.drop = Math.max(S.cur.drop, S.cur.capIn - d.sat);
+    if (seg === vent && prev !== vent) {
+      const c = Object.assign({}, S.cur, {dur: M.t - S.cur.t0, animal: S.animal});
+      S.circuits.push(c); S.cur = null;
+      track('circuit', {animal: c.animal, dur: +c.dur.toFixed(1), passes: c.passes});
+      checkCircuit(c);
+    }
+  }
+  if (S.locked && S.cur && S.cur.rise >= 0.15 && S.cur.drop >= 0.15) discover('o2');
+  if (S.locked && S.circuits.some(c => c.rise >= 0.15) && S.circuits.concat(S.cur ? [S.cur] : []).some(c => c.drop >= 0.15)) discover('o2');
+}
+function checkCircuit(c){
+  if (!S.locked) return;
+  if (c.animal === 'human' && c.passes === 2 && c.lungs && c.body) { discover('twoLoops'); maybeExplain(c); }
+  if (c.animal === 'fish' && c.passes === 1 && c.lungs && c.body) discover('fish');
+  if (c.rise >= 0.15 && c.drop >= 0.15) discover('o2');
+}
+let EXPLAINED = false;
+function maybeExplain(c){
+  if (EXPLAINED || !POE) return;
+  EXPLAINED = true;
+  POE.explain(`Your cell left the left ventricle, went through the <b>${esc(c.body.toLowerCase())}</b> and came back to the <b>right</b> side of the heart (pass 1). ` +
+    `The right ventricle pumped it to the lungs, and it returned to the <b>left</b> side (pass 2) before reaching the left ventricle again: <b>twice through the heart</b> in one trip of ${fmt(c.dur, 0)} s. ` +
+    `Its oxygen rose by ${Math.round(c.rise * 100)} points in the lungs and fell by ${Math.round(c.drop * 100)} in the body. That is double circulation: the heart is two pumps side by side, one for each loop.`);
+}
+
+/* ---- what is happening -------------------------------------------------------------- */
+function paintWhy(){
+  if (!S.locked) return;
+  $('whyCard').hidden = false;
+  const an = S.animal, m = MEAS;
+  let t = '';
+  const d = S.tagged != null ? DOTS[S.tagged] : null;
+  if (d) {
+    const sp = SEG[d.seg];
+    t += `<p>Your cell is in the <b>${esc(placeOf(d.seg))}</b>, carrying <b>${Math.round(d.sat * 100)} %</b> oxygen.`;
+    if (sp.kind === 'heart' && M.P) {
+      const vs = {ra: ['rv', 'tricuspid'], rv: ['pa', 'pulmonary'], la: ['lv', 'mitral'], lv: ['sa', 'aortic'], v: [an === 'fish' ? 'va' : 'sa', 'outflow'], at: ['v', 'atrioventricular']}[d.seg];
+      const me = d.seg === 'at' ? 'a' : d.seg;
+      if (vs && M.P[me] != null && M.P[vs[0]] != null) t += ` The ${vs[1]} valve ahead of it is ${M.P[me] > M.P[vs[0]] ? '<b>open</b>: the pressure behind it' : '<b>shut</b>: the pressure behind it'} (${fmt(M.P[me], 0)} mmHg) is ${M.P[me] > M.P[vs[0]] ? 'higher than' : 'lower than'} the pressure in front (${fmt(M.P[vs[0]], 0)}).`;
+    }
+    if (sp.kind === 'lung') t += ` Oxygen is loading onto its haemoglobin.`;
+    if (sp.kind === 'cap') t += ` The ${esc(sp.bed.name.toLowerCase())} take ${fmt(vo2Of(M, sp.bed), 0)} mL of O₂ a minute from ${fmt(MEANF[sp.bed.id] * 0.06, 2)} L/min of blood.`;
+    t += `</p>`;
+  } else t += `<p>Drag the tag onto the blood anywhere to pick one red cell to follow.</p>`;
+  if (an === 'frog') t += `<p>A frog has one ventricle. Blood from the lungs (red) and from the body (purple) meet there, so the blood going to the body is only <b>${Math.round((SATSEG.ao || 0) * 100)} %</b> saturated. A frog is cold-blooded and needs far less oxygen, so it can live with that.</p>`;
+  if (an === 'fish') t += `<p>A fish heart pumps blood to the gills, and the same blood goes straight on to the body. The narrow gill capillaries use up most of the pressure, so the blood reaches the body slowly: one loop, one pass through the heart.</p>`;
+  if (an === 'human' && S.hole) t += `<p>With a hole in the septum, the stronger left ventricle pushes red blood through into the right ventricle. The blood going to the lungs is now <b>${Math.round((SATSEG.pa || 0) * 100)} %</b> saturated instead of about ${Math.round((SATSEG.vc || 0) * 100)} %: oxygen-rich blood goes round the lungs again, and the body gets less.</p>`;
+  if (m && S.ex > 0.3) t += `<p>Exercise: the heart beats <b>${fmt(m.hr, 0)}</b> times a minute and pumps <b>${fmt(m.sv, 0)}</b> mL a beat, so <b>${fmt(m.co, 1)}</b> L/min flows. The working muscles take out much more oxygen, so the blood coming back is darker.</p>`;
+  $('why').innerHTML = t;
+}
+
+/* ---- findings: reached by the model, never by a button ------------------------------- */
+function check(){
+  if (!S.locked) return;
+  const m = MEAS;
+  if (M.push >= 40) {
+    const out = M.Lk[ANIMALS[S.animal].outflow[0]];
+    const v = ANIMALS[S.animal].vent;
+    if (out.q <= 0 && M.P && M.P.sa > M.P[v] + 5) discover('valves');
+  }
+  if (m && S.ex >= 0.6 && S.animal === 'human' && m.co >= 10) discover('exercise');
+  if (S.animal === 'human' && S.hole && SATSEG.pa != null && SATSEG.vc != null && SATSEG.pa - SATSEG.vc >= 0.1) discover('hole');
+}
+
+/* ============================================================================
+   Controls
+   ============================================================================ */
+build();
+drawGraphAxes();
+let MEANF = {};
+function setup(animal){
+  S.animal = animal;
+  M = buildCirc(animal); M.ex = S.ex; M.hole = S.hole && animal === 'human'; applyLevers(M);
+  SEG = segSpec(M); G = layout(animal); RNG = makeRng(11);
+  DOTS = seedDots(M, SEG, 7, runCirc(M, 4));
+  for (const k in SATSEG) delete SATSEG[k];
+  S.tagged = null; S.trail = []; S.journey = []; S.cur = null; S.gcur = null;
+  drawScene();
+  /* let the circulation settle for 45 s of model time, dots and all, before anyone sees it:
+     the blood is then everywhere as saturated as the model makes it */
+  for (let i = 0; i < 450; i++) { const F = runCirc(M, 0.1); M.qEma = M.qEma || Object.assign({}, F); for (const b of BEDS) M.qEma[b.id] += (F[b.id] - M.qEma[b.id]) * 0.05; moveDots(M, SEG, DOTS, F, 0.1, RNG); MEANF = F;
+    if (i > 380) paintDiagram(F, meanVols()); }
+  for (const b of $$('#animalSeg [data-animal]')) b.setAttribute('aria-pressed', b.dataset.animal === animal);
+  $('btnHole').disabled = animal !== 'human' || !S.locked;
+  $('btnHole').setAttribute('aria-pressed', S.hole && animal === 'human');
+  paintDiagram(MEANF, meanVols());
+}
+const $$ = Play.$$;
+function meanVols(){ const v = {}; for (const id in M.C) v[id] = M.C[id].V; return v; }
+const EXNAME = e => e < 0.1 ? 'Resting' : e < 0.35 ? 'Walking' : e < 0.6 ? 'Jogging' : e < 0.85 ? 'Running' : 'Sprinting';
+$('ex').addEventListener('input', e => { S.ex = +e.target.value; M.ex = S.ex; applyLevers(M); $('exOut').textContent = EXNAME(S.ex); });
+$('ex').addEventListener('change', () => track('exercise', {ex: S.ex}));
+$('btnHole').addEventListener('click', () => {
+  S.hole = !S.hole; M.hole = S.hole; applyLevers(M);
+  $('btnHole').setAttribute('aria-pressed', S.hole); sound(S.hole ? 'oops' : 'pop'); track('hole', {on: S.hole});
+});
+for (const b of $$('#animalSeg [data-animal]')) b.addEventListener('click', () => {
+  if (b.dataset.animal === S.animal) return;
+  setup(b.dataset.animal); sound('whoosh'); track('animal', {animal: S.animal});
+  paintGraph(); drawPressureAxes();
+});
+for (const b of $$('#speedSeg [data-speed]')) b.addEventListener('click', () => {
+  S.speed = +b.dataset.speed;
+  for (const c of $$('#speedSeg [data-speed]')) c.setAttribute('aria-pressed', c === b);
+  sound('tick'); track('speed', {speed: S.speed});
+});
+
+/* Tag: drag the ring from the tray and drop it on the blood. The nearest dot is tagged. */
+drag($('tagHit'), svg, {
+  start(p){ if (!S.locked) return false; $('dragTag').setAttribute('opacity', 1); $('dragTag').setAttribute('transform', `translate(${p.x} ${p.y})`); },
+  move(p){ $('dragTag').setAttribute('transform', `translate(${p.x.toFixed(1)} ${p.y.toFixed(1)})`); },
+  end(p){
+    $('dragTag').setAttribute('opacity', 0);
+    if (p.x > 630) return;
+    let best = null, bd = 1e9;
+    for (const d of DOTS) { const dd = (d.x - p.x) ** 2 + (d.y - p.y) ** 2; if (dd < bd) { bd = dd; best = d; } }
+    if (!best || bd > 60 * 60) { toast('Drop the tag right on the blood.'); return; }
+    S.tagged = best.id; S.trail = [{t: M.t, sat: best.sat, seg: best.seg, s: best.s, cls: placeClass(best.seg)}];
+    S.journey = [{seg: best.seg, t: M.t, sat: best.sat}]; S.cur = null; S.gcur = null;
+    sound('pop'); track('tag', {seg: best.seg});
+    paintGraph();
+  },
+});
+/* Push blood backwards along the aorta: the pressure there rises by what you push. */
+drag($('pushHit'), svg, {
+  start(){ if (!S.locked) return false; S.pushing = true; },
+  move(p){
+    const g = G.ao, a = g.at(PUSH_S), q = g.at(PUSH_S - 0.25);
+    const dir = [q[0] - a[0], q[1] - a[1]], dl = Math.hypot(...dir) || 1;
+    pushOff = clamp(((p.x - a[0]) * dir[0] + (p.y + 20 - a[1]) * dir[1]) / dl, 0, 40);
+    M.push = pushOff * 3.5;                  // up to 140 mmHg: harder than the ventricle can push
+  },
+  end(){ S.pushing = false; track('push', {mmHg: +M.push.toFixed(0)}); pushOff = 0; M.push = 0; },
+});
+/* Scrub the graph: a ghost shows where the tagged cell was at that moment. */
+drag($('graphHit'), svg, {
+  start(p){ if (!S.trail.length) return false; S.gcur = GRT0() + (p.x - GR.x) / GR.w * GRT; paintGraph(); },
+  move(p){ S.gcur = GRT0() + clamp(p.x - GR.x, 0, GR.w) / GR.w * GRT; paintGraph(); },
+  end(){},
+});
+
+function lockControls(lock){
+  for (const id of ['ex', 'btnHole']) $(id).disabled = lock;
+  for (const b of $$('#animalSeg [data-animal], #speedSeg [data-speed]')) b.disabled = lock;
+  for (const id of ['tagHit', 'pushHit', 'graphHit']) $(id).style.pointerEvents = lock ? 'none' : '';
+  $('tray').setAttribute('opacity', lock ? 0.45 : 1);
+  $('gate').hidden = !lock;
+  if (!lock) $('btnHole').disabled = S.animal !== 'human';
+}
+
+/* ============================================================================
+   Start
+   ============================================================================ */
+findings($('finds'), [
+  {id: 'twoLoops', icon: '∞', label: 'Two loops, one heart', hint: 'Follow a cell all the way round'},
+  {id: 'o2',       icon: '🫁', label: 'Oxygen on in the lungs, off in the body', hint: 'Watch its oxygen on the graph'},
+  {id: 'valves',   icon: '⛔', label: 'Valves only let blood one way', hint: 'Push blood backwards along the aorta'},
+  {id: 'exercise', icon: '🏃', label: 'Exercise speeds the heart and the flow', hint: 'Go from rest to running'},
+  {id: 'fish',     icon: '🐟', label: 'A fish has one loop', hint: 'Follow a cell in a fish'},
+  {id: 'hole',     icon: '◌', label: 'A hole mixes the blood', hint: 'Make a hole in the septum'},
+], () => toast('All six. You have seen why a warm-blooded animal needs a heart with four chambers.', 4800));
+
+const POE = predict($('poe'), {
+  id: 'double',
+  q: 'A red blood cell leaves the left ventricle. How many times does it pass through the heart before it is back in the left ventricle?',
+  options: [
+    {id: 'once',    text: 'Once'},
+    {id: 'twice',   text: 'Twice', right: true},
+    {id: 'never',   text: 'Never: it goes round the body and straight back'},
+    {id: 'depends', text: 'It depends on which organ it visits'},
+  ],
+  onLock(){
+    S.locked = true;
+    lockControls(false);
+    $('veil').remove();
+    say('Now drag the tag onto the blood, and follow one red cell.');
+    paintNumbers(); paintGraph(); paintWhy();
+  },
+});
+setup(S.animal);
+$('ex').value = S.ex; $('exOut').textContent = EXNAME(S.ex);
+lockControls(!POE.locked);
+if (!Play.FF('predict')) S.locked = true;
+
+/* The model runs at real time (or 5 or 20 times faster). The dots move with the flow of each
+   frame. Under reduced motion it moves in half-second jumps. */
+const RM = reduced();
+let acc = 0, slowT = 0, trailT = 0;
+loop(dt => {
+  acc += dt;
+  if (RM && acc < 0.5) return;
+  const secs = acc * S.speed; acc = 0;
+  const vol0 = {}; for (const id in M.C) vol0[id] = 0;
+  /* integrate in chunks so the chamber sizes can be averaged over a time-lapse frame */
+  const chunks = S.speed > 1 ? 6 : 1, F = {}, avgV = {};
+  for (let c = 0; c < chunks; c++) {
+    const f = runCirc(M, secs / chunks);
+    for (const k in f) F[k] = (F[k] || 0) + f[k] / chunks;
+    for (const id in M.C) avgV[id] = (avgV[id] || 0) + M.C[id].V / chunks;
+  }
+  M.qEma = M.qEma || Object.assign({}, F);
+  for (const b of BEDS) M.qEma[b.id] += (F[b.id] - M.qEma[b.id]) * Math.min(1, secs / 2);
+  for (const k in F) MEANF[k] = (MEANF[k] == null ? F[k] : MEANF[k] + (F[k] - MEANF[k]) * Math.min(1, secs / 3));
+  moveDots(M, SEG, DOTS, F, secs, RNG, onEnter);
+  paintDiagram(F, S.speed > 1 ? avgV : meanVols());
+  $('speedNote').textContent = S.speed > 1 ? `Time-lapse ×${S.speed}: the heart beats too fast to see` : '';
+  if (S.tagged != null) {
+    trailT += secs;
+    if (trailT >= 0.1 || RM) { trailT = 0; const d = DOTS[S.tagged]; S.trail.push({t: M.t, sat: d.sat, seg: d.seg, s: d.s, cls: placeClass(d.seg)}); if (S.trail.length > 4000) S.trail.shift(); }
+  }
+  if (S.locked) { paintPressures(); }
+  check();
+  slowT += dt;
+  if (slowT > 0.25 || RM) { slowT = 0; if (S.locked) { paintNumbers(); paintGraph(); paintWhy(); } }
+});
+window.applyFeatures = () => {};
+window.PG_STATE = () => ({animal: S.animal, ex: S.ex, hole: S.hole, speed: S.speed, locked: S.locked, tagged: S.tagged,
+  tagSeg: S.tagged != null ? DOTS[S.tagged].seg : null, tagSat: S.tagged != null ? DOTS[S.tagged].sat : null,
+  circuits: S.circuits.map(c => ({animal: c.animal, dur: c.dur, passes: c.passes, lungs: c.lungs, body: c.body, rise: c.rise, drop: c.drop})),
+  push: M.push, t: M.t, meas: MEAS ? {hr: MEAS.hr, sv: MEAS.sv, co: MEAS.co, circuit: MEAS.circuit} : null,
+  sat: Object.assign({}, SATSEG), dots: DOTS.length, trail: S.trail.length, gcur: S.gcur});
+window.PG_MODEL = {buildCirc, applyLevers, runCirc, measure, segSpec, seedDots, moveDots, simulate, timing, BEDS, ANIMALS, BLOOD, DOT, SAT_LUNG, O2CAP};
+</script>
+</body>
+</html>

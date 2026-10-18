@@ -1,0 +1,503 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Correlation</title>
+<meta name="description" content="Class 11: drag the points of a scatter diagram and measure Karl Pearson's r, Spearman's rank correlation, the variance and standard deviation, and the least-squares line; set the law that makes the data, and find where correlation stops measuring a relationship.">
+<link rel="icon" href="../../favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600&family=Inter:wght@400;500;600;700&family=Nunito:wght@500;700;800&family=Newsreader:opsz,wght@6..72,400;6..72,500&family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="../../play.css">
+<style>
+/* Only what this page needs beyond play.css. */
+.pg-stage{align-self:start; min-height:0}
+svg text.m{font-family:var(--font-mono)}
+svg text.serif{font-family:"Newsreader",Georgia,serif}
+.gate{position:absolute; inset:0; display:grid; place-items:center; pointer-events:none}
+.gate span{background:rgba(29,35,39,.85); color:#fff; padding:10px 16px; border-radius:99px; font-weight:600; font-size:14px}
+.lab{font-size:11.5px; font-weight:700; color:var(--ink-3); letter-spacing:.06em; text-transform:uppercase; margin:10px 0 2px}
+.readout{display:grid; grid-template-columns:auto 1fr; gap:3px 12px; font-size:13px; align-items:baseline; margin-top:6px}
+.readout span{color:var(--ink-2)}
+.readout b{font-family:var(--font-mono); font-weight:600; font-size:12.5px; font-variant-numeric:tabular-nums; text-align:right; overflow-wrap:anywhere}
+.readout .h{grid-column:1/-1; font-size:11.5px; font-weight:700; color:var(--ink-3); letter-spacing:.06em; text-transform:uppercase; margin-top:6px}
+.formula{grid-column:1/-1; font-family:var(--font-mono); font-size:12px; color:var(--ink-2); background:var(--sunk); border-radius:8px; padding:6px 8px; line-height:1.55; overflow-wrap:anywhere}
+.big{font-family:"Newsreader",Georgia,serif; font-size:30px; line-height:1}
+.pair{display:grid; grid-template-columns:1fr 1fr; gap:10px}
+.pair .kicker{margin:0}
+.note{font-size:12.5px; color:var(--ink-3); margin:6px 0 0}
+.why p{font-size:14px; margin-bottom:.55em}
+.ctl output{min-width:56px; font-family:var(--font-mono); font-size:13px}
+.ctl{margin:4px 0}
+.checks{display:flex; flex-direction:column; gap:4px; margin-top:8px; font-size:13.5px}
+.checks label{display:flex; gap:8px; align-items:center; cursor:pointer}
+select{width:100%}
+.hit{cursor:grab}
+.hit.dragging{cursor:grabbing}
+.cr{color:#3057c9; font-weight:700} .cs{color:#b3261e; font-weight:700} .cl{color:#6a3fc2; font-weight:700}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]) .cr{color:#8aa6f0} :root:not([data-theme="light"]) .cs{color:#f07b73} :root:not([data-theme="light"]) .cl{color:#b39cf5} }
+:root[data-theme="dark"] .cr{color:#8aa6f0} :root[data-theme="dark"] .cs{color:#f07b73} :root[data-theme="dark"] .cl{color:#b39cf5}
+@media (max-width:1180px) and (min-width:981px){ .pg-main.wide-side{grid-template-columns:minmax(0,1fr) 360px} }
+</style>
+</head>
+<body>
+<header class="pg-top"></header>
+
+<div class="pg-intro">
+  <h1>Correlation</h1>
+  <p>A scatter diagram from the book: drag any point, or click to add one. Karl Pearson’s r, Spearman’s rank correlation, the standard deviations and the least-squares line are measured from the points as they stand.
+     Then write the law that makes the data yourself — a slope, a curve, some noise — and find out what r measures, and what it cannot see.</p>
+</div>
+
+<main class="pg-main wide-side">
+  <section class="pg-stage" id="stageWrap">
+    <svg id="stage" viewBox="0 0 1000 560" role="img" aria-label="A scatter diagram with draggable points, the least-squares line and your own line; beside it the same data as ranks, and the spread of X and of Y"></svg>
+    <div class="gate" id="gate"><span>Make your prediction first →</span></div>
+  </section>
+
+  <aside class="pg-side">
+    <div id="poe"></div>
+
+    <div class="card" id="cardData">
+      <div class="kicker">The data</div>
+      <select id="preset" aria-label="A data set from the book"></select>
+      <p class="note" id="presetNote" hidden></p>
+      <div class="lab">The law: Y = 10 + b(X − 5) + c(X − 5)² + noise</div>
+      <div class="ctl"><label for="gB">slope b</label><input type="range" id="gB" min="-2" max="2" step="0.1" value="1"><output id="gBo">1.0</output></div>
+      <div class="ctl"><label for="gC">curve c</label><input type="range" id="gC" min="-0.8" max="0.8" step="0.05" value="0"><output id="gCo">0.00</output></div>
+      <div class="ctl"><label for="gS">noise σ</label><input type="range" id="gS" min="0" max="6" step="0.25" value="2"><output id="gSo">2.00</output></div>
+      <div class="ctl"><label for="gN">points n</label><input type="range" id="gN" min="4" max="40" step="1" value="20"><output id="gNo">20</output></div>
+      <div class="row" style="margin-top:6px"><button class="btn sm" id="resample">New sample</button><button class="btn sm" id="reset">Put the points back</button></div>
+      <div class="checks">
+        <label><input type="checkbox" id="showLS"> Show the least-squares line</label>
+        <label><input type="checkbox" id="showRect"> Show the deviation rectangles (x − x̄)(y − ȳ)</label>
+      </div>
+    </div>
+
+    <div class="card" id="cardNum">
+      <div class="pair">
+        <div><div class="kicker">Karl Pearson’s r</div><div class="big cr" id="rBig">—</div></div>
+        <div><div class="kicker">Spearman’s r<sub>s</sub></div><div class="big cs" id="rsBig">—</div></div>
+      </div>
+      <div class="readout" id="readout"></div>
+    </div>
+
+    <div class="card" id="cardT">
+      <div class="kicker">Change of origin and scale</div>
+      <p class="note" style="margin-top:0">Replace every Y by Y′ = k·Y + c (the book’s step-deviation trick, backwards).</p>
+      <div class="ctl"><label for="tK">k</label><input type="range" id="tK" min="0" max="4" step="1" value="2"><output id="tKo">1</output></div>
+      <div class="ctl"><label for="tC">c</label><input type="range" id="tC" min="-100" max="100" step="10" value="0"><output id="tCo">0</output></div>
+      <div class="readout" id="tRead"></div>
+    </div>
+
+    <div class="card why" id="whyCard" hidden>
+      <div class="kicker">What is happening</div>
+      <div id="why"></div>
+    </div>
+
+    <div class="card"><div class="kicker">To find</div><div id="finds"></div></div>
+  </aside>
+</main>
+
+<script src="../../play.js"></script>
+<script>
+'use strict';
+const {$, esc, clamp, fmt, drag, sound, say, track, toast, predict, findings, discover, found,
+       shareState, sharedState, mount, reduced, mulberry32} = Play;
+mount({thread: 'data', band: 'theorist'});
+
+/* MODEL:start ==================================================================
+   NCERT Statistics for Economics, Class 11, Ch 6 Correlation, and Mathematics Class 11,
+   Ch 13 Statistics. N points (X, Y); x = X − X̄, y = Y − Ȳ.
+     σx² = Σx²/N,  σy² = Σy²/N,  Cov(X, Y) = Σxy/N                (the book divides by N)
+     Karl Pearson  r = Σxy / √(Σx² · Σy²)                          formula (2)
+     Spearman      r_s = 1 − 6(ΣD² + Σ(m³ − m)/12) / (n³ − n)      with average ranks for ties
+     mean deviation about the mean  M.D. = Σ|x| / N                (Maths Ch 13)
+     least squares  Y = a + bX,  b = Σxy/Σx²,  a = Ȳ − bX̄  — the line that makes Σ(residual²)
+                    smallest; its sum is compared with the learner's own line.
+   A best-fitting parabola (normal equations, 3 × 3) measures how well a CURVE fits, so the page
+   can show a perfect relation that r scores as 0.
+   The law generator draws X evenly spread over [0, 10] and Y = 10 + b(X−5) + c(X−5)² + σ·z, with
+   z a standard normal from a seeded generator (Box–Muller) — the sample is random, the law is yours.
+   ============================================================================ */
+const sum = a => a.reduce((s, v) => s + v, 0);
+function stats(X, Y){
+  const N = X.length, mx = sum(X) / N, my = sum(Y) / N;
+  let sxx = 0, syy = 0, sxy = 0, adx = 0, ady = 0;
+  for (let i = 0; i < N; i++) { const x = X[i] - mx, y = Y[i] - my; sxx += x * x; syy += y * y; sxy += x * y; adx += Math.abs(x); ady += Math.abs(y); }
+  const r = sxx > 0 && syy > 0 ? sxy / Math.sqrt(sxx * syy) : NaN;
+  const b = sxx > 0 ? sxy / sxx : NaN, a = my - b * mx;
+  return {N, mx, my, sxx, syy, sxy, varx: sxx / N, vary: syy / N, sdx: Math.sqrt(sxx / N), sdy: Math.sqrt(syy / N), cov: sxy / N,
+          mdx: adx / N, mdy: ady / N, r, a, b};
+}
+const pearson = (X, Y) => stats(X, Y).r;
+/* Ranks, 1 for the largest, ties sharing the mean of the ranks they would have taken (as in the book). */
+function ranks(V){
+  const idx = V.map((v, i) => i).sort((i, j) => V[j] - V[i]);
+  const R = new Array(V.length), groups = [];
+  for (let k = 0; k < idx.length;) {
+    let e = k; while (e + 1 < idx.length && V[idx[e + 1]] === V[idx[k]]) e++;
+    const avg = (k + e) / 2 + 1;
+    for (let t = k; t <= e; t++) R[idx[t]] = avg;
+    if (e > k) groups.push(e - k + 1);
+    k = e + 1;
+  }
+  return {R, groups};
+}
+function spearman(X, Y){
+  const n = X.length, rx = ranks(X), ry = ranks(Y);
+  const D2 = sum(rx.R.map((r, i) => (r - ry.R[i]) ** 2));
+  const corr = sum(rx.groups.concat(ry.groups).map(m => (m ** 3 - m) / 12));
+  return {rs: 1 - 6 * (D2 + corr) / (n ** 3 - n), D2, corr, Rx: rx.R, Ry: ry.R};
+}
+const ssr = (X, Y, a, b) => sum(X.map((x, i) => (Y[i] - a - b * x) ** 2));
+/* The best parabola Y = p + qX + sX², by least squares; returns R² (1 = a perfect curve). */
+function quadR2(X, Y){
+  const N = X.length, m = sum(X) / N, u = X.map(x => x - m);
+  const S = k => sum(u.map(v => v ** k)), T = k => sum(u.map((v, i) => v ** k * Y[i]));
+  const A = [[N, S(1), S(2)], [S(1), S(2), S(3)], [S(2), S(3), S(4)]], B = [T(0), T(1), T(2)];
+  const det = M => M[0][0] * (M[1][1] * M[2][2] - M[1][2] * M[2][1]) - M[0][1] * (M[1][0] * M[2][2] - M[1][2] * M[2][0]) + M[0][2] * (M[1][0] * M[2][1] - M[1][1] * M[2][0]);
+  const D = det(A); if (Math.abs(D) < 1e-12) return NaN;
+  const col = k => A.map((row, i) => row.map((v, j) => j === k ? B[i] : v));
+  const [p, q, s] = [0, 1, 2].map(k => det(col(k)) / D);
+  const my = sum(Y) / N, tot = sum(Y.map(y => (y - my) ** 2));
+  const res = sum(Y.map((y, i) => (y - p - q * u[i] - s * u[i] ** 2) ** 2));
+  return tot > 0 ? 1 - res / tot : NaN;
+}
+function gauss(rng){ const u = Math.max(1e-12, rng()), v = rng(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v); }
+function generate(n, b, c, sd, seed){
+  const rng = mulberry32(seed), X = [], Y = [];
+  for (let i = 0; i < n; i++) {
+    const x = n === 1 ? 5 : 10 * i / (n - 1);
+    X.push(Math.round(x * 100) / 100);
+    Y.push(Math.round((10 + b * (x - 5) + c * (x - 5) ** 2 + sd * gauss(rng)) * 100) / 100);
+  }
+  return {X, Y};
+}
+/* MODEL:end */
+
+/* ---- the book's data sets -------------------------------------------------- */
+const PRESETS = {
+  ex1:  {name: 'Example 1: farmers’ schooling and yield', xn: 'years of schooling', yn: 'yield per acre (’000 Rs)',
+         X: [0, 2, 4, 6, 8, 10, 12], Y: [4, 4, 6, 10, 10, 8, 7], xr: [0, 14, 2], yr: [0, 12, 2], sx: 1, sy: 1},
+  ex18: {name: 'Exercise 18: heights of fathers and sons', xn: 'father (inches)', yn: 'son (inches)',
+         X: [65, 66, 57, 67, 68, 69, 70, 72], Y: [67, 56, 65, 68, 72, 72, 69, 71], xr: [50, 80, 5], yr: [50, 80, 5], sx: 1, sy: 1},
+  ex19: {name: 'Exercise 19: X from −3 to 3, Y = X²', xn: 'X', yn: 'Y',
+         X: [-3, -2, -1, 1, 2, 3], Y: [9, 4, 1, 1, 4, 9], xr: [-4, 4, 1], yr: [-1, 11, 2], sx: 0.5, sy: 0.5},
+  ex20: {name: 'Exercise 20: Y = 2X', xn: 'X', yn: 'Y',
+         X: [1, 3, 4, 5, 7, 8], Y: [2, 6, 8, 10, 14, 16], xr: [0, 10, 2], yr: [0, 20, 4], sx: 0.5, sy: 0.5},
+  ex2:  {name: 'Example 2: price index and money supply', xn: 'price index', yn: 'money supply (Rs crore)',
+         X: [120, 150, 190, 220, 230], Y: [1800, 2000, 2500, 2700, 3000], xr: [100, 260, 20], yr: [1500, 3300, 300], sx: 5, sy: 50},
+  ex5:  {name: 'Example 5: X and Y with repeated values', xn: 'X', yn: 'Y',
+         X: [1200, 1150, 1000, 990, 800, 780, 760, 750, 730, 700, 620, 600], Y: [75, 65, 50, 100, 90, 85, 90, 40, 50, 60, 50, 75],
+         xr: [500, 1300, 100], yr: [30, 110, 10], sx: 10, sy: 5},
+  t62:  {name: 'Table 6.2: income growth and saving, 1992–2002', xn: 'growth of national income (%)', yn: 'gross domestic saving (% of GDP)',
+         X: [14, 17, 18, 17, 16, 12, 16, 11, 8, 10], Y: [24, 23, 26, 27, 25, 25, 23, 25, 24, 23], xr: [6, 20, 2], yr: [21, 29, 1], sx: 1, sy: 1},
+  law:  {name: 'Your law (the sliders below)', xn: 'X', yn: 'Y', X: [], Y: [], xr: [0, 10, 1], yr: [-30, 50, 10], sx: 0.1, sy: 0.1},
+};
+const KS = [0.1, 0.5, 1, 2, 10];
+
+/* ---- state: plain data --------------------------------------------------- */
+const S = {set: 'ex1', X: PRESETS.ex1.X.slice(), Y: PRESETS.ex1.Y.slice(), line: [5, 5], gen: {b: 1, c: 0, sd: 2, n: 20, seed: 11},
+           showLS: false, showRect: false, k: 2, c: 0, locked: false};
+const shared = sharedState();
+if (shared && PRESETS[shared.set] && Array.isArray(shared.X) && Array.isArray(shared.Y) && shared.X.length === shared.Y.length && shared.X.length >= 2 && shared.X.length <= 60) {
+  S.set = shared.set; S.X = shared.X.map(Number); S.Y = shared.Y.map(Number);
+  if (shared.gen) Object.assign(S.gen, shared.gen);
+}
+shareState(() => ({set: S.set, X: S.X, Y: S.Y, gen: S.gen}));
+const P = () => PRESETS[S.set];
+
+/* ============================================================================
+   The stage
+   ============================================================================ */
+const svg = $('stage');
+const INK = '#1d2327', FAINT = '#7c878c', DOT = '#2f7d9c', RC = '#3057c9', SC = '#b3261e', LC = '#6a3fc2', PAPER = '#fbfaf6', MEAN = '#d9730d';
+const NS = 'http://www.w3.org/2000/svg';
+const SC_ = {x0: 78, x1: 590, top: 50, base: 470};            // scatter plot area
+const RK = {x0: 660, x1: 960, top: 44, base: 244};            // ranks
+const SP = {x0: 650, x1: 970, y1: 378, y2: 470};              // spread strips
+const sx = v => SC_.x0 + (v - P().xr[0]) / (P().xr[1] - P().xr[0]) * (SC_.x1 - SC_.x0);
+const sy = v => SC_.base - (v - P().yr[0]) / (P().yr[1] - P().yr[0]) * (SC_.base - SC_.top);
+const xs = x => P().xr[0] + (x - SC_.x0) / (SC_.x1 - SC_.x0) * (P().xr[1] - P().xr[0]);
+const ys = y => P().yr[0] + (SC_.base - y) / (SC_.base - SC_.top) * (P().yr[1] - P().yr[0]);
+const snap = (v, s) => Math.round(v / s) * s;
+const mk = (tag, attrs, parent) => { const el = document.createElementNS(NS, tag); for (const k in attrs) el.setAttribute(k, attrs[k]); if (parent) parent.appendChild(el); return el; };
+const nice = v => Math.abs(v) >= 1000 ? Math.round(v).toLocaleString('en-IN') : +v.toFixed(2) + '';
+
+function build(){
+  svg.innerHTML = `
+  <rect width="1000" height="560" fill="${PAPER}"/>
+  <rect x="12" y="10" width="610" height="540" rx="10" fill="#fff" stroke="#e8e4d8"/>
+  <rect x="632" y="10" width="356" height="268" rx="10" fill="#fff" stroke="#e8e4d8"/>
+  <rect x="632" y="288" width="356" height="262" rx="10" fill="#fff" stroke="#e8e4d8"/>
+  <text x="28" y="34" font-size="17" class="serif" fill="${INK}">Scatter diagram</text>
+  <text id="setT" x="604" y="34" font-size="12" text-anchor="end" fill="${FAINT}"></text>
+  <g id="axes"></g>
+  <rect id="bg" x="${SC_.x0}" y="${SC_.top}" width="${SC_.x1 - SC_.x0}" height="${SC_.base - SC_.top}" fill="transparent" style="cursor:crosshair"/>
+  <g id="rects" pointer-events="none"></g>
+  <g id="means" pointer-events="none">
+    <line id="mxL" y1="${SC_.top}" y2="${SC_.base}" stroke="${MEAN}" stroke-dasharray="4 4"/>
+    <line id="myL" x1="${SC_.x0}" x2="${SC_.x1}" stroke="${MEAN}" stroke-dasharray="4 4"/>
+    <text id="mxT" y="${SC_.top - 6}" font-size="11.5" text-anchor="middle" fill="${MEAN}" class="m">X̄</text>
+    <text id="myT" x="${SC_.x1 + 4}" font-size="11.5" fill="${MEAN}" class="m">Ȳ</text>
+  </g>
+  <g id="resid" pointer-events="none"></g>
+  <line id="lsL" stroke="${RC}" stroke-width="2" stroke-dasharray="8 5" pointer-events="none"/>
+  <line id="myLine" stroke="${LC}" stroke-width="2.5" pointer-events="none"/>
+  <g id="pts"></g>
+  <circle id="hA" r="9" fill="#fff" stroke="${LC}" stroke-width="3" class="hit" role="slider" aria-label="Your line, left end: drag up or down"/>
+  <circle id="hB" r="9" fill="#fff" stroke="${LC}" stroke-width="3" class="hit" role="slider" aria-label="Your line, right end: drag up or down"/>
+  <text x="28" y="534" font-size="12" fill="${FAINT}">Drag a point, or click an empty spot to add one. The purple line is yours: drag its ends.</text>
+
+  <text x="648" y="34" font-size="17" class="serif" fill="${INK}">The same data, as ranks</text>
+  <g id="rkAxes"></g><g id="rkPts"></g>
+  <text id="rkT" x="972" y="34" font-size="12" text-anchor="end" fill="${SC}" class="m"></text>
+
+  <text x="648" y="312" font-size="17" class="serif" fill="${INK}">Spread: X̄ ± σ</text>
+  <g id="spread"></g>`;
+  $('bg').addEventListener('click', e => {
+    if (!S.locked || S.X.length >= 60) return;
+    const p = Play.svgPoint(svg, e);
+    S.X.push(snap(xs(p.x), P().sx)); S.Y.push(snap(ys(p.y), P().sy));
+    sound('pop'); track('addPoint', {n: S.X.length}); buildPts(); paint();
+  });
+  const handle = (id, k) => drag($(id), svg, {
+    start(){ if (!S.locked) return false; sound('tick'); },
+    move(p){ S.line[k] = clamp(ys(p.y), P().yr[0], P().yr[1]); paint(); },
+    end(){ track('myLine', {line: S.line}); checkLine(); },
+  });
+  handle('hA', 0); handle('hB', 1);
+}
+/* points: one circle each, rebuilt only when their number changes */
+let DRAG = null;
+function buildPts(){
+  const g = $('pts'); g.innerHTML = '';
+  S.X.forEach((_, i) => {
+    const c = mk('circle', {r: 8, fill: DOT, stroke: '#fff', 'stroke-width': 2, class: 'hit', id: 'pt' + i, role: 'slider', 'aria-label': 'A data point: drag it'}, g);
+    drag(c, svg, {
+      start(){ if (!S.locked) return false; DRAG = {i, r0: pearson(S.X, S.Y)}; sound('tick'); },
+      move(p){
+        S.X[i] = snap(clamp(xs(p.x), P().xr[0], P().xr[1]), P().sx);
+        S.Y[i] = snap(clamp(ys(p.y), P().yr[0], P().yr[1]), P().sy);
+        paint();
+      },
+      end(){
+        const r1 = pearson(S.X, S.Y);
+        if (S.locked && isFinite(DRAG.r0) && isFinite(r1) && Math.abs(r1 - DRAG.r0) >= 0.4) discover('outlier');
+        track('point', {i, x: S.X[i], y: S.Y[i]}); DRAG = null; paint();
+      },
+    });
+  });
+}
+const tLab = v => nice(KS[S.k] * v + S.c);
+function buildAxes(){
+  const p = P(); let a = '';
+  for (let t = p.xr[0]; t <= p.xr[1] + 1e-9; t += p.xr[2]) a += `<line x1="${sx(t)}" y1="${SC_.top}" x2="${sx(t)}" y2="${SC_.base}" stroke="#eeebe2"/><text x="${sx(t)}" y="${SC_.base + 18}" font-size="11.5" text-anchor="middle" fill="#4a555b" class="m">${nice(t)}</text>`;
+  for (let t = p.yr[0]; t <= p.yr[1] + 1e-9; t += p.yr[2]) a += `<line x1="${SC_.x0}" y1="${sy(t)}" x2="${SC_.x1}" y2="${sy(t)}" stroke="#eeebe2"/><text x="${SC_.x0 - 8}" y="${sy(t) + 4}" font-size="11.5" text-anchor="end" fill="${S.k !== 2 || S.c ? LC : '#4a555b'}" class="m">${tLab(t)}</text>`;
+  a += `<rect x="${SC_.x0}" y="${SC_.top}" width="${SC_.x1 - SC_.x0}" height="${SC_.base - SC_.top}" fill="none" stroke="#b9b4a8"/>`;
+  a += `<text x="${(SC_.x0 + SC_.x1) / 2}" y="${SC_.base + 40}" font-size="12.5" text-anchor="middle" fill="${INK}">${esc(p.xn)}</text>`;
+  a += `<text transform="translate(26 ${(SC_.top + SC_.base) / 2}) rotate(-90)" font-size="12.5" text-anchor="middle" fill="${INK}">${esc(S.k !== 2 || S.c ? `Y′ = ${KS[S.k]}·(${p.yn}) ${S.c < 0 ? '−' : '+'} ${Math.abs(S.c)}` : p.yn)}</text>`;
+  $('axes').innerHTML = a;
+  $('setT').textContent = p.name;
+}
+
+/* ---- paint ---------------------------------------------------------------- */
+function paint(){
+  const X = S.X, Y = S.Y, st = stats(X, Y), sp = spearman(X, Y), p = P();
+  X.forEach((x, i) => { const el = $('pt' + i); if (!el) return; el.setAttribute('cx', sx(x).toFixed(1)); el.setAttribute('cy', sy(Y[i]).toFixed(1)); el.setAttribute('fill', DRAG && DRAG.i === i ? '#174c63' : DOT); });
+  const on = S.locked;
+  /* means and deviation rectangles */
+  $('means').setAttribute('opacity', on ? 1 : 0);
+  for (const a of ['x1', 'x2']) $('mxL').setAttribute(a, sx(st.mx).toFixed(1));
+  for (const a of ['y1', 'y2']) $('myL').setAttribute(a, sy(st.my).toFixed(1));
+  $('mxT').setAttribute('x', sx(st.mx).toFixed(1)); $('myT').setAttribute('y', (sy(st.my) + 4).toFixed(1));
+  let rc = '';
+  if (on && S.showRect) X.forEach((x, i) => {
+    const pr = (x - st.mx) * (Y[i] - st.my), x0 = Math.min(sx(x), sx(st.mx)), y0 = Math.min(sy(Y[i]), sy(st.my));
+    rc += `<rect x="${x0.toFixed(1)}" y="${y0.toFixed(1)}" width="${Math.abs(sx(x) - sx(st.mx)).toFixed(1)}" height="${Math.abs(sy(Y[i]) - sy(st.my)).toFixed(1)}" fill="${pr >= 0 ? RC : SC}" opacity=".13" stroke="${pr >= 0 ? RC : SC}" stroke-opacity=".5"/>`;
+  });
+  $('rects').innerHTML = rc;
+  /* least-squares line and the learner's line, clipped to the x range */
+  const xa = p.xr[0], xb = p.xr[1];
+  const ok = on && isFinite(st.b);
+  $('lsL').setAttribute('opacity', ok && S.showLS ? 1 : 0);
+  if (ok) { $('lsL').setAttribute('x1', sx(xa)); $('lsL').setAttribute('x2', sx(xb)); $('lsL').setAttribute('y1', sy(st.a + st.b * xa).toFixed(1)); $('lsL').setAttribute('y2', sy(st.a + st.b * xb).toFixed(1)); }
+  const la = xa + 0.12 * (xb - xa), lb = xa + 0.88 * (xb - xa);
+  const mb = (S.line[1] - S.line[0]) / (lb - la), ma = S.line[0] - mb * la;
+  $('myLine').setAttribute('x1', sx(xa)); $('myLine').setAttribute('x2', sx(xb));
+  $('myLine').setAttribute('y1', sy(ma + mb * xa).toFixed(1)); $('myLine').setAttribute('y2', sy(ma + mb * xb).toFixed(1));
+  $('hA').setAttribute('cx', sx(la).toFixed(1)); $('hA').setAttribute('cy', sy(S.line[0]).toFixed(1));
+  $('hB').setAttribute('cx', sx(lb).toFixed(1)); $('hB').setAttribute('cy', sy(S.line[1]).toFixed(1));
+  for (const id of ['myLine', 'hA', 'hB']) $(id).setAttribute('opacity', on ? 1 : 0);
+  let rs = '';
+  if (on) X.forEach((x, i) => { rs += `<line x1="${sx(x).toFixed(1)}" y1="${sy(Y[i]).toFixed(1)}" x2="${sx(x).toFixed(1)}" y2="${sy(ma + mb * x).toFixed(1)}" stroke="${LC}" stroke-width="1" opacity=".45"/>`; });
+  $('resid').innerHTML = rs;
+
+  /* ranks */
+  const n = X.length, rw = (RK.x1 - RK.x0), rh = (RK.base - RK.top);
+  const rkx = r => RK.x0 + (n - r) / Math.max(1, n - 1) * rw, rky = r => RK.base - (n - r) / Math.max(1, n - 1) * rh;
+  let ra = `<rect x="${RK.x0}" y="${RK.top}" width="${rw}" height="${rh}" fill="none" stroke="#b9b4a8"/>`;
+  ra += `<text x="${RK.x0}" y="${RK.base + 16}" font-size="11" fill="#4a555b" class="m">rank ${n}</text><text x="${RK.x1}" y="${RK.base + 16}" font-size="11" text-anchor="end" fill="#4a555b" class="m">1 (largest X)</text>`;
+  ra += `<text x="${RK.x0 - 4}" y="${RK.base}" font-size="11" text-anchor="end" fill="#4a555b" class="m">${n}</text><text x="${RK.x0 - 4}" y="${RK.top + 9}" font-size="11" text-anchor="end" fill="#4a555b" class="m">1</text>`;
+  $('rkAxes').innerHTML = ra;
+  $('rkPts').innerHTML = sp.Rx.map((r, i) => `<circle cx="${rkx(r).toFixed(1)}" cy="${rky(sp.Ry[i]).toFixed(1)}" r="5" fill="${SC}" opacity=".85"/>`).join('');
+  $('rkT').textContent = on ? `r_s = ${fmt(sp.rs, 3)} · ΣD² = ${fmt(sp.D2, 2)}` : '';
+
+  /* spread strips */
+  const strip = (V, m, sd, y, name, lo, hi, lab) => {
+    const f = v => SP.x0 + (v - lo) / (hi - lo || 1) * (SP.x1 - SP.x0);
+    let s = `<line x1="${SP.x0}" y1="${y}" x2="${SP.x1}" y2="${y}" stroke="#b9b4a8"/>` +
+      `<text x="${SP.x0}" y="${y - 28}" font-size="12" fill="${INK}" font-weight="600">${name}</text>`;
+    if (on) s += `<rect x="${f(m - sd).toFixed(1)}" y="${y - 20}" width="${(f(m + sd) - f(m - sd)).toFixed(1)}" height="22" fill="${MEAN}" opacity=".12"/>` +
+      `<line x1="${f(m).toFixed(1)}" y1="${y - 22}" x2="${f(m).toFixed(1)}" y2="${y + 4}" stroke="${MEAN}" stroke-width="2"/>` +
+      `<text x="${SP.x1}" y="${y - 28}" font-size="11.5" text-anchor="end" fill="${MEAN}" class="m">${lab}</text>`;
+    s += V.map(v => `<circle cx="${f(v).toFixed(1)}" cy="${y - 7}" r="4" fill="${DOT}" opacity=".75"/>`).join('');
+    return s;
+  };
+  const K = KS[S.k], Yt = Y.map(v => K * v + S.c), stt = stats(X, Yt);
+  $('spread').innerHTML = strip(X, st.mx, st.sdx, SP.y1, 'X', p.xr[0], p.xr[1], `X̄ = ${nice(st.mx)}, σ = ${fmt(st.sdx, 3)}`) +
+    strip(Yt, stt.my, stt.sdy, SP.y2, S.k !== 2 || S.c ? 'Y′ = kY + c' : 'Y', K * p.yr[0] + S.c, K * p.yr[1] + S.c, `Ȳ = ${nice(stt.my)}, σ = ${fmt(stt.sdy, 3)}`) +
+    (on ? `<text x="${SP.x0}" y="${SP.y2 + 38}" font-size="11.5" fill="${FAINT}">The band is the mean ± one standard deviation.</text>` : '');
+
+  paintNumbers(st, sp);
+  paintT(st, stt);
+  paintWhy(st, sp);
+  check(st, sp, stt);
+}
+function paintNumbers(st, sp){
+  if (!S.locked) { $('rBig').textContent = '—'; $('rsBig').textContent = '—'; $('readout').innerHTML = '<p class="note" style="grid-column:1/-1;margin:0">The measurements appear once you have made a prediction.</p>'; return; }
+  $('rBig').textContent = isFinite(st.r) ? fmt(st.r, 3) : 'undefined';
+  $('rsBig').textContent = fmt(sp.rs, 3);
+  const la = P().xr[0] + 0.12 * (P().xr[1] - P().xr[0]), lb = P().xr[0] + 0.88 * (P().xr[1] - P().xr[0]);
+  const mb = (S.line[1] - S.line[0]) / (lb - la), ma = S.line[0] - mb * la;
+  const q = quadR2(S.X, S.Y);
+  $('readout').innerHTML =
+    `<div class="formula">r = Σxy / √(Σx²·Σy²) = ${fmt(st.sxy, 2)} / √(${fmt(st.sxx, 2)} × ${fmt(st.syy, 2)}) = <b class="cr">${isFinite(st.r) ? fmt(st.r, 3) : '—'}</b></div>` +
+    `<div class="formula">r<sub>s</sub> = 1 − 6(ΣD² + Σ(m³−m)/12)/(n³ − n) = 1 − 6(${fmt(sp.D2, 2)} + ${fmt(sp.corr, 2)})/${S.X.length ** 3 - S.X.length} = <b class="cs">${fmt(sp.rs, 3)}</b></div>` +
+    `<span>N</span><b>${st.N}</b><span>X̄, Ȳ</span><b>${nice(st.mx)}, ${nice(st.my)}</b>` +
+    `<span>σx, σy</span><b>${fmt(st.sdx, 3)}, ${fmt(st.sdy, 3)}</b><span>Cov(X, Y) = Σxy/N</span><b>${fmt(st.cov, 3)}</b>` +
+    `<div class="h">Lines</div>` +
+    `<span class="cr">Least squares</span><b>Y = ${fmt(st.a, 3)} ${st.b < 0 ? '−' : '+'} ${fmt(Math.abs(st.b), 3)}X</b>` +
+    `<span class="cr">its Σ(residual²)</span><b>${fmt(ssr(S.X, S.Y, st.a, st.b), 2)}</b>` +
+    `<span class="cl">Your line’s Σ(residual²)</span><b>${fmt(ssr(S.X, S.Y, ma, mb), 2)}</b>` +
+    `<span>Best parabola fits with R²</span><b>${isFinite(q) ? fmt(q, 3) : '—'}</b>`;
+}
+function paintT(st, stt){
+  const K = KS[S.k];
+  $('tKo').textContent = K; $('tCo').textContent = S.c;
+  if (!S.locked) { $('tRead').innerHTML = ''; return; }
+  $('tRead').innerHTML = `<span>σ of Y → σ of Y′</span><b>${fmt(st.sdy, 3)} → ${fmt(stt.sdy, 3)}</b>` +
+    `<span>variance of Y → of Y′</span><b>${fmt(st.vary, 3)} → ${fmt(stt.vary, 3)}</b>` +
+    `<span class="cr">r(X, Y) → r(X, Y′)</span><b>${fmt(st.r, 4)} → ${fmt(stt.r, 4)}</b>`;
+}
+function paintWhy(st, sp){
+  if (!S.locked) return;
+  $('whyCard').hidden = false;
+  const r = st.r, q = quadR2(S.X, S.Y), a = Math.abs(r);
+  let h = '';
+  if (!isFinite(r)) h = `<p>Every Y (or every X) is the same, so there is no spread to compare: σ = 0 and r is undefined.</p>`;
+  else {
+    const strength = a > 0.9999 ? 'perfect' : a >= 0.75 ? 'strong' : a >= 0.4 ? 'moderate' : a >= 0.15 ? 'weak' : 'almost no';
+    h = `<p>r = <b>${fmt(r, 3)}</b>: ${strength} ${a >= 0.15 ? (r > 0 ? 'positive' : 'negative') : ''} <i>linear</i> relation. ` +
+      (a > 0.9999 ? 'Every point sits on one straight line.' : `Points in the blue quadrants (both above or both below the means) push r up; points in the red ones push it down.`) + `</p>`;
+    if (a < 0.15 && q > 0.95) h += `<p><b>Yet the points lie on a curve</b> — the best parabola fits them with R² = ${fmt(q, 3)}. The left half rises as much as the right half falls, so the positive and negative products cancel. r only measures straight-line relations.</p>`;
+    if (Math.abs(r - sp.rs) >= 0.25) h += `<p>Pearson and Spearman disagree by ${fmt(Math.abs(r - sp.rs), 2)}. Ranks do not care how far away a point is, only its order — so an extreme value moves r much more than r<sub>s</sub>.</p>`;
+  }
+  $('why').innerHTML = h;
+}
+
+/* ---- findings: reached by the model --------------------------------------- */
+function check(st, sp, stt){
+  if (!S.locked) return;
+  const r = st.r, q = quadR2(S.X, S.Y);
+  if (isFinite(r) && Math.abs(r) > 0.9999 && S.X.length >= 3) discover('unity');
+  if (isFinite(r) && Math.abs(r) < 0.05 && q > 0.98 && S.X.length >= 4) { discover('zero'); maybeExplain(r, q); }
+  if (isFinite(r) && Math.abs(r - sp.rs) >= 0.25) discover('rank');
+  if ((S.k !== 2) && S.c !== 0 && isFinite(r) && Math.abs(stt.r - r) < 1e-9 && Math.abs(stt.sdy - KS[S.k] * st.sdy) < 1e-9) discover('scale');
+}
+function checkLine(){
+  if (!S.locked) return;
+  const st = stats(S.X, S.Y); if (!isFinite(st.b)) return;
+  const la = P().xr[0] + 0.12 * (P().xr[1] - P().xr[0]), lb = P().xr[0] + 0.88 * (P().xr[1] - P().xr[0]);
+  const mb = (S.line[1] - S.line[0]) / (lb - la), ma = S.line[0] - mb * la;
+  const mine = ssr(S.X, S.Y, ma, mb), best = ssr(S.X, S.Y, st.a, st.b);
+  if (mine <= best * 1.02 + 1e-9) discover('bestline');
+}
+let EXPLAINED = false;
+function maybeExplain(r, q){
+  if (EXPLAINED || !POE) return;
+  EXPLAINED = true;
+  const st = stats(S.X, S.Y);
+  POE.explain(`The model measures <b>r = ${fmt(r, 3)}</b> (Σxy = ${fmt(st.sxy, 2)}) for points that a parabola fits with R² = <b>${fmt(q, 3)}</b>. ` +
+    `Y is completely decided by X, yet there is no <i>linear</i> relation: as X rises Y first falls, then rises, and the two halves cancel. r = 0 means “no straight-line relation”, not “no relation”.`);
+}
+
+/* ============================================================================
+   Controls
+   ============================================================================ */
+build();
+$('preset').innerHTML = Object.entries(PRESETS).map(([k, p]) => `<option value="${k}">${esc(p.name)}</option>`).join('');
+$('preset').value = S.set;
+function lineToLS(){ const st = stats(S.X, S.Y); S.line = [st.my, st.my]; }
+function loadSet(k){
+  S.set = k;
+  if (k === 'law') { const g = generate(S.gen.n, S.gen.b, S.gen.c, S.gen.sd, S.gen.seed); S.X = g.X; S.Y = g.Y; }
+  else { S.X = PRESETS[k].X.slice(); S.Y = PRESETS[k].Y.slice(); }
+  const note = {ex18: 'The book prints r = 0.603 for this exercise, but its data as printed give r = 0.438 (worked by hand the same way). The model uses the printed data.'}[k];
+  $('presetNote').hidden = !note; $('presetNote').textContent = note || '';
+  lineToLS(); buildAxes(); buildPts(); paint();
+}
+$('preset').addEventListener('change', e => { loadSet(e.target.value); sound('pop'); track('preset', {set: S.set}); });
+const genCtl = (id, key, dp) => $(id).addEventListener('input', e => {
+  S.gen[key] = +e.target.value; $(id + 'o').textContent = fmt(S.gen[key], dp);
+  if (S.set !== 'law') { $('preset').value = 'law'; }
+  loadSet('law');
+});
+genCtl('gB', 'b', 1); genCtl('gC', 'c', 2); genCtl('gS', 'sd', 2); genCtl('gN', 'n', 0);
+$('resample').addEventListener('click', () => { S.gen.seed++; $('preset').value = 'law'; loadSet('law'); sound('whoosh'); track('resample', {seed: S.gen.seed}); });
+$('reset').addEventListener('click', () => { loadSet(S.set); sound('pop'); });
+$('showLS').addEventListener('change', e => { S.showLS = e.target.checked; paint(); });
+$('showRect').addEventListener('change', e => { S.showRect = e.target.checked; paint(); });
+$('tK').addEventListener('input', e => { S.k = +e.target.value; buildAxes(); paint(); });
+$('tC').addEventListener('input', e => { S.c = +e.target.value; buildAxes(); paint(); });
+function lockControls(lock){
+  for (const id of ['preset', 'gB', 'gC', 'gS', 'gN', 'resample', 'reset', 'showLS', 'showRect', 'tK', 'tC']) $(id).disabled = lock;
+  $('gate').hidden = !lock;
+}
+
+findings($('finds'), [
+  {id: 'unity',    icon: '╱', label: 'r = ±1: every point on one line', hint: 'Put every point on a straight line'},
+  {id: 'zero',     icon: '∪', label: 'A perfect curve with r = 0',       hint: 'A relation r cannot see'},
+  {id: 'outlier',  icon: '↗', label: 'One point swings r',               hint: 'Drag a single point far away'},
+  {id: 'rank',     icon: '№', label: 'Pearson and Spearman disagree',   hint: 'Find data with a far-off point'},
+  {id: 'bestline', icon: '—', label: 'No line beats least squares',      hint: 'Fit your own line as well as you can'},
+  {id: 'scale',    icon: '×', label: 'r has no unit and no origin',      hint: 'Change the origin and scale of Y'},
+], () => toast('All six found. You have measured correlation — and its limits.', 4200));
+
+const POE = predict($('poe'), {
+  id: 'parabola-r',
+  q: 'Exercise 19 of the book: X = −3, −2, −1, 1, 2, 3 and Y = X² (9, 4, 1, 1, 4, 9). Y is completely decided by X. What is Karl Pearson’s r?',
+  options: [
+    {id: 'one',  text: 'r = 1: Y depends on X exactly.'},
+    {id: 'high', text: 'r is high, about 0.8 or 0.9, but not quite 1.'},
+    {id: 'zero', text: 'r = 0.', right: true},
+    {id: 'neg',  text: 'r = −1.'},
+  ],
+  onLock(){
+    S.locked = true;
+    lockControls(false);
+    say('Now measure. Choose Exercise 19, or build the curve yourself.');
+    buildAxes(); paint();
+  },
+});
+lockControls(!POE.locked);
+if (!Play.FF('predict')) S.locked = true;
+lineToLS(); buildAxes(); buildPts(); paint();
+$('gBo').textContent = fmt(S.gen.b, 1); $('gCo').textContent = fmt(S.gen.c, 2); $('gSo').textContent = fmt(S.gen.sd, 2); $('gNo').textContent = S.gen.n;
+window.applyFeatures = () => paint();
+window.PG_STATE = () => JSON.parse(JSON.stringify(S));
+window.PG_MODEL = {stats, pearson, ranks, spearman, ssr, quadR2, generate, PRESETS};
+</script>
+</body>
+</html>

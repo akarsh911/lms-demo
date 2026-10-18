@@ -1,0 +1,437 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Computer Networks</title>
+<meta name="description" content="CBSE Class 12 Computer Science: build a star, bus, ring or mesh network, send a packet hop by hop across it, and see the transmission and propagation delay computed at every hop. Cut a link and watch the network reroute — or, for a star's hub, fail completely.">
+<link rel="icon" href="../../favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600&family=Inter:wght@400;500;600;700&family=Nunito:wght@500;700;800&family=Newsreader:opsz,wght@6..72,400;6..72,500&family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="../../play.css">
+<style>
+.pg-stage{align-self:start; min-height:0}
+svg text.m{font-family:var(--font-mono)}
+svg text.serif{font-family:"Newsreader",Georgia,serif}
+.gate{position:absolute; left:0; right:0; top:0; bottom:0; display:grid; place-items:center; pointer-events:none}
+.gate span{background:rgba(29,35,39,.85); color:#fff; padding:10px 16px; border-radius:99px; font-weight:600; font-size:14px}
+.chips{display:flex; flex-wrap:wrap; gap:6px; margin:4px 0 8px}
+.chip{border:1px solid var(--hair-2); background:var(--card); border-radius:99px; padding:4px 11px; font-size:12.5px; cursor:pointer; font-weight:600; color:var(--ink-2)}
+.chip[aria-pressed="true"]{background:var(--accent-soft); border-color:var(--accent); color:var(--ink)}
+.chip:disabled{opacity:.45; cursor:default}
+.note{font-size:12.5px; color:var(--ink-3); margin:6px 0 0}
+.why p{font-size:13.5px; margin-bottom:.55em}
+.row2{display:flex; gap:6px; align-items:center; margin:6px 0}
+svg .click{cursor:pointer}
+@media (max-width:1180px) and (min-width:981px){ .pg-main.wide-side{grid-template-columns:minmax(0,1fr) 340px} }
+</style>
+</head>
+<body>
+<header class="pg-top"></header>
+
+<div class="pg-intro">
+  <h1>Computer networks</h1>
+  <p>Pick a topology — star, bus, ring or mesh — and click two computers to send a packet between
+     them. The route is found hop by hop by a real routing model over whatever links are up, and
+     the transmission and propagation delay at every hop is computed from the bandwidth, the
+     packet size and the cable length you set, the way CBSE Class 12 Computer Science works them
+     out. Click a link (or, in a star, turn the switch off) to break it and watch what a topology
+     does when part of it fails: some reroute around the damage, and some do not.</p>
+</div>
+
+<main class="pg-main wide-side">
+  <section class="pg-stage" id="stageWrap">
+    <svg id="stage" viewBox="0 0 1000 700" role="img" aria-label="A network topology with computers and links; click two computers to route a packet between them, and click a link to break it"></svg>
+    <div class="gate" id="gate"><span>Make your prediction first →</span></div>
+  </section>
+
+  <aside class="pg-side">
+    <div id="poe"></div>
+
+    <div class="card" id="cardCtl">
+      <div class="kicker">Topology</div>
+      <div class="chips" id="topoChips"></div>
+      <div class="row2" id="hubRow">
+        <span style="font-size:13px;color:var(--ink-2)">Switch</span>
+        <button class="chip" id="hubToggle" aria-pressed="true">Powered</button>
+      </div>
+      <button class="btn sm" id="repairAll">Repair every link</button>
+      <div class="kicker" style="margin-top:8px">Bandwidth</div>
+      <div class="chips" id="bwChips"></div>
+      <div class="kicker">Packet size</div>
+      <div class="chips" id="pktChips"></div>
+      <p class="note">Click a computer, then another, to send a packet. Click a link to break or repair it.</p>
+    </div>
+
+    <div class="card why" id="whyCard" hidden>
+      <div class="kicker">What the model says</div>
+      <div id="why"></div>
+    </div>
+
+    <div class="card"><div class="kicker">To find</div><div id="finds"></div></div>
+  </aside>
+</main>
+
+<script src="../../play.js"></script>
+<script>
+'use strict';
+const {$, esc, clamp, sound, track, toast, predict, findings, discover, found,
+       shareState, sharedState, mount, reduced, tween, fmt} = Play;
+mount({thread: 'networks', band: 'theorist'});
+
+/* MODEL:start ==================================================================
+   Four small networks (CBSE Class 12 CS: topologies, switching, data communication). Routing is
+   real breadth-first search over whatever links are currently up — never a lookup of "what
+   should happen for this pair" — so cutting a link changes the graph the search runs on, and the
+   path (or lack of one) falls out of that search. A star's hub is not a link: turning it off
+   removes every spoke at once, which is exactly why a star has a single point of failure. A bus
+   is a shared cable: two computers on an intact stretch of it talk directly (one hop), and a
+   break splits the cable's computers into two groups that cannot reach each other at all.
+   Delay per hop is computed, not looked up: transmission time = packet size (bits) / bandwidth
+   (bits/s); propagation time = cable length / signal speed; every intermediate device that
+   forwards the packet (not the final destination) adds a fixed switching delay.
+   ============================================================================ */
+const PROP_SPEED_KM_S = 2e5;   // ~2x10^8 m/s, a typical guided-medium signal speed
+const SWITCH_DELAY_S = 10e-6;  // 10 microseconds of store-and-forward delay per intermediate device
+
+const TOPOS = {
+  star: {id: 'star', kind: 'graph', hub: 'H',
+    nodes: [
+      {id: 'H', label: 'Switch', x: 310, y: 300, device: true},
+      {id: 'A', label: 'PC-A', x: 310, y: 90}, {id: 'B', label: 'PC-B', x: 520, y: 210},
+      {id: 'C', label: 'PC-C', x: 460, y: 470}, {id: 'D', label: 'PC-D', x: 160, y: 470},
+      {id: 'E', label: 'PC-E', x: 100, y: 210},
+    ],
+    edges: [
+      {id: 'HA', a: 'H', b: 'A', km: 1.2}, {id: 'HB', a: 'H', b: 'B', km: 1.6}, {id: 'HC', a: 'H', b: 'C', km: 1.4},
+      {id: 'HD', a: 'H', b: 'D', km: 1.4}, {id: 'HE', a: 'H', b: 'E', km: 1.6},
+    ]},
+  bus: {id: 'bus', kind: 'bus',
+    nodes: [
+      {id: 'A', label: 'PC-A', x: 60, y: 260, pos: 0}, {id: 'B', label: 'PC-B', x: 210, y: 260, pos: 1.2},
+      {id: 'C', label: 'PC-C', x: 360, y: 260, pos: 2.4}, {id: 'D', label: 'PC-D', x: 510, y: 260, pos: 3.6},
+      {id: 'E', label: 'PC-E', x: 560, y: 260, pos: 4.2},
+    ],
+    segs: [{id: 'S1', a: 'A', b: 'B'}, {id: 'S2', a: 'B', b: 'C'}, {id: 'S3', a: 'C', b: 'D'}, {id: 'S4', a: 'D', b: 'E'}]},
+  ring: {id: 'ring', kind: 'graph',
+    nodes: [
+      {id: 'A', label: 'PC-A', x: 310, y: 80}, {id: 'B', label: 'PC-B', x: 500, y: 190}, {id: 'C', label: 'PC-C', x: 500, y: 410},
+      {id: 'D', label: 'PC-D', x: 310, y: 510}, {id: 'E', label: 'PC-E', x: 120, y: 410}, {id: 'F', label: 'PC-F', x: 120, y: 190},
+    ],
+    edges: [
+      {id: 'AB', a: 'A', b: 'B', km: 1.0}, {id: 'BC', a: 'B', b: 'C', km: 1.0}, {id: 'CD', a: 'C', b: 'D', km: 1.0},
+      {id: 'DE', a: 'D', b: 'E', km: 1.0}, {id: 'EF', a: 'E', b: 'F', km: 1.0}, {id: 'FA', a: 'F', b: 'A', km: 1.0},
+    ]},
+  mesh: {id: 'mesh', kind: 'graph',
+    nodes: [
+      {id: 'A', label: 'PC-A', x: 310, y: 80}, {id: 'B', label: 'PC-B', x: 540, y: 230}, {id: 'C', label: 'PC-C', x: 450, y: 480},
+      {id: 'D', label: 'PC-D', x: 170, y: 480}, {id: 'E', label: 'PC-E', x: 80, y: 230},
+    ],
+    edges: [
+      {id: 'AB', a: 'A', b: 'B', km: 1.4}, {id: 'BC', a: 'B', b: 'C', km: 1.6}, {id: 'CD', a: 'C', b: 'D', km: 1.2},
+      {id: 'DE', a: 'D', b: 'E', km: 1.6}, {id: 'EA', a: 'E', b: 'A', km: 1.4}, {id: 'AC', a: 'A', b: 'C', km: 2.0},
+      {id: 'BD', a: 'B', b: 'D', km: 2.0},
+    ]},
+};
+function bfsPath(adj, src, dst){
+  const prev = {}; const visited = new Set([src]); const q = [src]; prev[src] = null;
+  while (q.length) {
+    const u = q.shift();
+    if (u === dst) break;
+    for (const v of (adj[u] || [])) if (!visited.has(v)) { visited.add(v); prev[v] = u; q.push(v); }
+  }
+  if (!visited.has(dst)) return {path: null, reachable: visited};
+  const path = []; let cur = dst; while (cur !== null && cur !== undefined) { path.unshift(cur); cur = prev[cur]; }
+  return {path, reachable: visited};
+}
+function reachableFrom(adj, src){
+  const visited = new Set([src]); const q = [src];
+  while (q.length) { const u = q.shift(); for (const v of (adj[u] || [])) if (!visited.has(v)) { visited.add(v); q.push(v); } }
+  return visited;
+}
+function computeRoute(topo, broken, hubDown, src, dst){
+  if (topo.kind === 'bus') {
+    const alive = topo.segs.filter(s => !broken.has(s.id));
+    const adj = {}; topo.nodes.forEach(n => adj[n.id] = []);
+    alive.forEach(s => { adj[s.a].push(s.b); adj[s.b].push(s.a); });
+    const reach = reachableFrom(adj, src);
+    if (!reach.has(dst)) return {path: null, reachable: reach, hops: []};
+    const p1 = topo.nodes.find(n => n.id === src).pos, p2 = topo.nodes.find(n => n.id === dst).pos;
+    return {path: [src, dst], reachable: reach, hops: [{from: src, to: dst, km: Math.abs(p2 - p1), broadcast: true}]};
+  }
+  if (topo.id === 'star' && hubDown) return {path: null, reachable: new Set([src]), hops: []};
+  const alive = topo.edges.filter(e => !broken.has(e.id));
+  const adj = {}; topo.nodes.forEach(n => adj[n.id] = []);
+  const kmOf = {};
+  alive.forEach(e => { adj[e.a].push(e.b); adj[e.b].push(e.a); kmOf[e.a + '|' + e.b] = e.km; kmOf[e.b + '|' + e.a] = e.km; });
+  const {path, reachable} = bfsPath(adj, src, dst);
+  if (!path) return {path: null, reachable, hops: []};
+  const hops = [];
+  for (let i = 0; i < path.length - 1; i++) hops.push({from: path[i], to: path[i + 1], km: kmOf[path[i] + '|' + path[i + 1]]});
+  return {path, reachable, hops};
+}
+function computeDelay(hops, bandwidthMbps, packetBytes){
+  const bitsPerSec = bandwidthMbps * 1e6, bits = packetBytes * 8;
+  let cum = 0;
+  const rows = hops.map((h, i) => {
+    const Tt = bits / bitsPerSec, Tp = h.km / PROP_SPEED_KM_S;
+    const sw = i < hops.length - 1 ? SWITCH_DELAY_S : 0;
+    cum += Tt + Tp + sw;
+    return {from: h.from, to: h.to, km: h.km, Tt, Tp, sw, cum, broadcast: !!h.broadcast};
+  });
+  return {rows, total: cum};
+}
+/* MODEL:end */
+
+const INK = '#1d2327', FAINT = '#7c878c', HUE = '#1b4f72', AMB = '#e29a1c', GOOD = '#2f9e5b', BAD = '#c0392b', GRID = '#eeebe2', OFFCOL = '#b9c2c9';
+const us = s => s * 1e6;
+const fmtUs = s => fmt(us(s), 1) + ' µs';
+
+/* ---------- state ---------- */
+const S = {topo: 'star', locked: false, touched: false, broken: new Set(), hubDown: false,
+  src: null, dst: null, bandwidth: 100, packet: 1500, animT: 0, animPath: null, bwHistory: {}};
+const BW_OPTS = [25, 50, 100, 200], PKT_OPTS = [512, 1500, 4096];
+const shared = sharedState();
+if (shared) {
+  if (TOPOS[shared.topo]) S.topo = shared.topo;
+  if (BW_OPTS.includes(shared.bandwidth)) S.bandwidth = shared.bandwidth;
+  if (PKT_OPTS.includes(shared.packet)) S.packet = shared.packet;
+}
+shareState(() => ({topo: S.topo, bandwidth: S.bandwidth, packet: S.packet}));
+
+function curRoute(){
+  const topo = TOPOS[S.topo];
+  if (!S.src || !S.dst || S.src === S.dst) return null;
+  return computeRoute(topo, S.broken, S.hubDown, S.src, S.dst);
+}
+
+/* ---------- drawing ---------- */
+const DX = 20, DY = 55;
+function edgeList(topo){ return topo.kind === 'bus' ? topo.segs : topo.edges; }
+function nodeAt(topo, id){ return topo.nodes.find(n => n.id === id); }
+function edgePath(topo, e){ const a = nodeAt(topo, e.a), b = nodeAt(topo, e.b); return {x1: a.x + DX, y1: a.y + DY, x2: b.x + DX, y2: b.y + DY}; }
+function buildStage(){
+  $('stage').innerHTML = `<rect x="0" y="0" width="1000" height="700" fill="#fbfaf7"/>
+    <text x="20" y="34" font-size="19" fill="${INK}" class="serif" id="topoTitle"></text>
+    <g id="edgesG"></g><g id="nodesG"></g><g id="pktG" style="pointer-events:none"></g>
+    <g id="panel"></g>`;
+}
+function paintDiagram(){
+  const topo = TOPOS[S.topo], route = curRoute();
+  const onPath = new Set(), pathHops = new Set();
+  if (route && route.path) { route.path.forEach(id => onPath.add(id)); for (let i = 0; i < route.path.length - 1; i++) pathHops.add(route.path[i] + '|' + route.path[i + 1]); }
+  const titles = {star: 'Star: every computer wired to one switch', bus: 'Bus: every computer taps the same cable', ring: 'Ring: each computer wired to the next, in a loop', mesh: 'Mesh: several computers with more than one path between them'};
+  $('topoTitle').textContent = titles[S.topo];
+  let E = '';
+  for (const e of edgeList(topo)) {
+    const p = edgePath(topo, e), broke = S.broken.has(e.id);
+    const onR = pathHops.has(e.a + '|' + e.b) || pathHops.has(e.b + '|' + e.a);
+    const col = broke ? BAD : onR ? AMB : '#a9b2ba';
+    E += `<g class="click" data-link="${e.id}">
+      <line x1="${p.x1}" y1="${p.y1}" x2="${p.x2}" y2="${p.y2}" stroke="transparent" stroke-width="18"/>
+      <line x1="${p.x1}" y1="${p.y1}" x2="${p.x2}" y2="${p.y2}" stroke="${col}" stroke-width="${onR ? 4 : 2.4}" ${broke ? 'stroke-dasharray="7 6"' : ''}/>
+      ${broke ? `<circle cx="${(p.x1 + p.x2) / 2}" cy="${(p.y1 + p.y2) / 2}" r="11" fill="#fff" stroke="${BAD}" stroke-width="2"/><text x="${(p.x1 + p.x2) / 2}" y="${(p.y1 + p.y2) / 2 + 4}" font-size="13" text-anchor="middle" fill="${BAD}">✕</text>` : ''}
+    </g>`;
+  }
+  $('edgesG').innerHTML = E;
+  const reach = S.src ? (route ? route.reachable : reachableSet(topo)) : null;
+  let N = '';
+  for (const n of topo.nodes) {
+    const x = n.x + DX, y = n.y + DY;
+    const isSrc = n.id === S.src, isDst = n.id === S.dst;
+    const cut = S.src && reach && !reach.has(n.id) && n.id !== S.src;
+    const fill = isSrc ? HUE : isDst ? AMB : n.device ? (S.hubDown ? OFFCOL : '#fff') : '#fff';
+    const stroke = isSrc ? HUE : isDst ? AMB : cut ? OFFCOL : n.device ? (S.hubDown ? BAD : INK) : '#8b95a0';
+    const txt = isSrc || isDst ? '#fff' : cut ? OFFCOL : INK;
+    const r = n.device ? 30 : 26;
+    N += `<g class="click" data-node="${n.id}">
+      <circle cx="${x}" cy="${y}" r="${r}" fill="${fill}" stroke="${stroke}" stroke-width="${isSrc || isDst ? 3 : 2}"/>
+      ${n.device ? `<text x="${x}" y="${y - 2}" font-size="10" text-anchor="middle" fill="${S.hubDown ? INK : txt}" font-weight="700">HUB</text><text x="${x}" y="${y + 11}" font-size="9" text-anchor="middle" fill="${S.hubDown ? BAD : txt}" font-weight="${S.hubDown ? '700' : '400'}">${S.hubDown ? 'OFF' : 'on'}</text>`
+        : `<text x="${x}" y="${y + 5}" font-size="13" text-anchor="middle" fill="${txt}" font-weight="700" class="m">${n.label.split('-')[1]}</text>`}
+    </g>
+    <text x="${x}" y="${y + r + 16}" font-size="11.5" text-anchor="middle" fill="${cut ? OFFCOL : FAINT}">${esc(n.label)}</text>`;
+  }
+  $('nodesG').innerHTML = N;
+}
+function reachableSet(topo){
+  const alive = (topo.kind === 'bus' ? topo.segs : topo.edges).filter(e => !S.broken.has(e.id));
+  const adj = {}; topo.nodes.forEach(n => adj[n.id] = []);
+  alive.forEach(e => { const a = e.a, b = e.b; adj[a].push(b); adj[b].push(a); });
+  return reachableFrom(adj, S.src);
+}
+function panelSVG(){
+  const topo = TOPOS[S.topo], route = curRoute();
+  const x0 = 650, y0 = 40, w = 330;
+  let s = `<text x="${x0}" y="${y0}" font-size="14" font-weight="700" fill="${INK}">Sending a packet</text>`;
+  if (!S.src) { s += `<text x="${x0}" y="${y0 + 26}" font-size="12.5" fill="${FAINT}">Click a computer to choose where it starts.</text>`; }
+  else if (!S.dst) { s += `<text x="${x0}" y="${y0 + 26}" font-size="12.5" fill="${FAINT}">Now click another computer to send it to.</text>`; }
+  else if (!route || !route.path) {
+    s += `<text x="${x0}" y="${y0 + 26}" font-size="12.5" fill="${BAD}" font-weight="700">No path.</text>` +
+      `<text x="${x0}" y="${y0 + 46}" font-size="12" fill="${FAINT}">${esc(S.hubDown && S.topo === 'star' ? 'The switch is off: nothing can reach anything.' : 'These two computers are in different, disconnected pieces of the network.')}</text>`;
+  } else {
+    const names = route.path.map(id => nodeAt(topo, id).label);
+    s += `<text x="${x0}" y="${y0 + 24}" font-size="13" fill="${INK}" class="m">${esc(names.join(' → '))}</text>`;
+    const delay = computeDelay(route.hops, S.bandwidth, S.packet);
+    let y = y0 + 52;
+    s += `<text x="${x0}" y="${y}" font-size="11" font-weight="700" fill="${FAINT}">HOP</text>` +
+      `<text x="${x0 + 190}" y="${y}" font-size="11" font-weight="700" fill="${FAINT}" text-anchor="end">TRANSMIT</text>` +
+      `<text x="${x0 + 260}" y="${y}" font-size="11" font-weight="700" fill="${FAINT}" text-anchor="end">PROP.</text>` +
+      `<text x="${x0 + w}" y="${y}" font-size="11" font-weight="700" fill="${FAINT}" text-anchor="end">RUNNING</text>`;
+    y += 8;
+    delay.rows.forEach(r => {
+      y += 20;
+      const a = nodeAt(topo, r.from).label.split('-')[1] || nodeAt(topo, r.from).label, b = nodeAt(topo, r.to).label.split('-')[1] || nodeAt(topo, r.to).label;
+      s += `<text x="${x0}" y="${y}" font-size="12" fill="${INK}" class="m">${a}→${b}${r.broadcast ? ' (direct)' : ''}</text>` +
+        `<text x="${x0 + 190}" y="${y}" font-size="12" fill="${INK}" class="m" text-anchor="end">${fmtUs(r.Tt)}</text>` +
+        `<text x="${x0 + 260}" y="${y}" font-size="12" fill="${INK}" class="m" text-anchor="end">${fmtUs(r.Tp)}</text>` +
+        `<text x="${x0 + w}" y="${y}" font-size="12" fill="${INK}" class="m" text-anchor="end">${fmtUs(r.cum)}</text>`;
+      if (r.sw > 0) { y += 16; s += `<text x="${x0 + 12}" y="${y}" font-size="10.5" fill="${FAINT}">+ ${fmtUs(r.sw)} switching at ${esc(nodeAt(topo, r.to).label)}</text>`; }
+    });
+    y += 26;
+    s += `<line x1="${x0}" y1="${y}" x2="${x0 + w}" y2="${y}" stroke="${GRID}"/>`;
+    y += 24;
+    s += `<text x="${x0}" y="${y}" font-size="13" font-weight="700" fill="${INK}">Total end-to-end delay</text>` +
+      `<text x="${x0 + w}" y="${y}" font-size="15" font-weight="700" fill="${HUE}" text-anchor="end" class="m">${fmtUs(delay.total)}</text>`;
+    y += 22;
+    s += `<text x="${x0}" y="${y}" font-size="11" fill="${FAINT}">${route.hops.length} hop${route.hops.length === 1 ? '' : 's'}, ${S.bandwidth} Mbps, ${S.packet}-byte packet</text>`;
+  }
+  return s;
+}
+function paint(){
+  paintDiagram();
+  $('panel').innerHTML = panelSVG();
+  $('gate').hidden = S.locked;
+  $('hubRow').hidden = S.topo !== 'star';
+  $('hubToggle').setAttribute('aria-pressed', !S.hubDown);
+  $('hubToggle').textContent = S.hubDown ? 'Off' : 'Powered';
+  for (const b of $$('#topoChips .chip')) { b.setAttribute('aria-pressed', b.dataset.t === S.topo); b.disabled = !S.locked; }
+  for (const b of $$('#bwChips .chip')) { b.setAttribute('aria-pressed', +b.dataset.bw === S.bandwidth); b.disabled = !S.locked; }
+  for (const b of $$('#pktChips .chip')) { b.setAttribute('aria-pressed', +b.dataset.pk === S.packet); b.disabled = !S.locked; }
+  $('hubToggle').disabled = !S.locked; $('repairAll').disabled = !S.locked;
+  checkFindings();
+  paintWhy();
+}
+function $$(sel){ return document.querySelectorAll(sel); }
+
+/* ---------- packet animation ---------- */
+let animTok = 0;
+async function animatePacket(){
+  const tok = ++animTok; // invalidate any animation already in flight, even if this call has no route to show
+  const route = curRoute(); if (!route || !route.path || route.path.length < 2) { $('pktG').innerHTML = ''; return; }
+  const topo = TOPOS[S.topo];
+  const pts = route.path.map(id => { const n = nodeAt(topo, id); return {x: n.x + DX, y: n.y + DY}; });
+  if (reduced()) { $('pktG').innerHTML = `<circle cx="${pts[pts.length - 1].x}" cy="${pts[pts.length - 1].y}" r="7" fill="${AMB}" stroke="${INK}"/>`; return; }
+  for (let i = 0; i < pts.length - 1; i++) {
+    if (tok !== animTok) return;
+    await tween(0, 1, 420, t => { if (tok !== animTok) return; const x = pts[i].x + (pts[i + 1].x - pts[i].x) * t, y = pts[i].y + (pts[i + 1].y - pts[i].y) * t;
+      $('pktG').innerHTML = `<circle cx="${x}" cy="${y}" r="7" fill="${AMB}" stroke="${INK}" stroke-width="1.5"/>`; });
+  }
+  sound('chime');
+}
+
+/* ---------- findings ---------- */
+function checkFindings(){
+  if (!S.locked || !S.touched) return;
+  const route = curRoute(); if (!route) return;
+  if (S.topo === 'star') {
+    if (!S.hubDown && route.path && route.path.length === 3) discover('star-route');
+    if (S.hubDown && !route.path) {
+      const was = discover('star-single-point');
+      if (was && !POE.explained) POE.explain(`With the switch off, the routing search starting from <b>${nodeAt(TOPOS.star, S.src).label}</b> could not leave that computer at all — every spoke passes through the switch, and the switch is down. That is what makes a star's switch a <b>single point of failure</b>: one device going down disconnects the whole network, not just one link.`);
+    }
+  }
+  if (S.topo === 'bus') {
+    if (route.path && route.hops[0] && route.hops[0].broadcast) discover('bus-broadcast');
+    if (!route.path) discover('bus-partition');
+  }
+  if (S.topo === 'ring') {
+    if (route.path && S.broken.size >= 1 && route.path.length - 1 >= 3) discover('ring-resilient');
+    if (!route.path && S.broken.size >= 2) discover('ring-partition');
+  }
+  if (S.topo === 'mesh') {
+    const anyBroken = TOPOS.mesh.edges.some(e => S.broken.has(e.id) && (e.a === S.src || e.b === S.src || e.a === S.dst || e.b === S.dst));
+    if (route.path && anyBroken) discover('mesh-resilient');
+  }
+  if (route.path) {
+    const delay = computeDelay(route.hops, S.bandwidth, S.packet);
+    const bucket = (S.bwHistory[S.packet] = S.bwHistory[S.packet] || {});
+    bucket[S.bandwidth] = delay.rows[0] ? delay.rows[0].Tt : null;
+    for (const b1 of Object.keys(bucket)) {
+      const b2 = +b1 * 2;
+      if (bucket[b2] != null && bucket[b1] != null && Math.abs(bucket[b1] - 2 * bucket[b2]) < 1e-9) discover('delay-scaling');
+    }
+  }
+}
+function paintWhy(){
+  $('whyCard').hidden = !S.locked; if (!S.locked) return;
+  $('why').innerHTML = `<p>A star's spokes all meet at one switch, so any pair of computers is always exactly two hops apart through it — and if that switch is turned off, every spoke goes with it: there is no other way across, which is what "single point of failure" means.</p>
+    <p>A ring and a mesh both have more than one way between two points, so a routing search can go around a broken link. A bus has no alternative route at all: it is one shared cable, and a break splits it into two cables that never rejoin.</p>
+    <p>Transmission time (packet size ÷ bandwidth) and propagation time (cable length ÷ signal speed) are added at every hop a packet is forwarded through; halving the bandwidth doubles the transmission time, because you are pushing the same number of bits through half the pipe.</p>`;
+}
+
+/* ---------- controls ---------- */
+function setTopo(id){
+  S.topo = id; S.broken = new Set(); S.hubDown = false; S.src = null; S.dst = null; S.touched = true;
+  buildStage(); paint(); track('topology', {topo: id});
+}
+$('topoChips').innerHTML = Object.keys(TOPOS).map(id => `<button class="chip" data-t="${id}">${id[0].toUpperCase() + id.slice(1)}</button>`).join('');
+$('topoChips').addEventListener('click', e => { const b = e.target.closest('[data-t]'); if (!b || !S.locked) return; sound('tick'); setTopo(b.dataset.t); });
+$('bwChips').innerHTML = BW_OPTS.map(v => `<button class="chip" data-bw="${v}">${v} Mbps</button>`).join('');
+$('bwChips').addEventListener('click', e => { const b = e.target.closest('[data-bw]'); if (!b || !S.locked) return; S.bandwidth = +b.dataset.bw; S.touched = true; sound('tick'); paint(); animatePacket(); track('bandwidth', {mbps: S.bandwidth}); });
+$('pktChips').innerHTML = PKT_OPTS.map(v => `<button class="chip" data-pk="${v}">${v} B</button>`).join('');
+$('pktChips').addEventListener('click', e => { const b = e.target.closest('[data-pk]'); if (!b || !S.locked) return; S.packet = +b.dataset.pk; S.touched = true; sound('tick'); paint(); animatePacket(); track('packet', {bytes: S.packet}); });
+$('hubToggle').addEventListener('click', () => { if (!S.locked) return; S.hubDown = !S.hubDown; S.touched = true; sound(S.hubDown ? 'oops' : 'tick'); paint(); animatePacket(); track('hub', {down: S.hubDown}); });
+$('repairAll').addEventListener('click', () => { if (!S.locked) return; S.broken = new Set(); S.hubDown = false; S.touched = true; sound('whoosh'); paint(); animatePacket(); track('repair'); });
+$('stage').addEventListener('click', e => {
+  if (!S.locked) return;
+  const link = e.target.closest('[data-link]'), node = e.target.closest('[data-node]');
+  if (link) {
+    const id = link.dataset.link;
+    if (S.broken.has(id)) S.broken.delete(id); else S.broken.add(id);
+    S.touched = true; sound(S.broken.has(id) ? 'oops' : 'snap'); paint(); animatePacket(); track('link', {id, broken: S.broken.has(id)});
+    return;
+  }
+  if (node) {
+    const id = node.dataset.node; const topo = TOPOS[S.topo];
+    if (topo.id === 'star' && id === topo.hub) return; // the hub is a device, not an endpoint
+    if (!S.src || (S.src && S.dst)) { S.src = id; S.dst = null; }
+    else if (id !== S.src) { S.dst = id; }
+    S.touched = true; sound('tick'); paint(); animatePacket(); track('endpoint', {src: S.src, dst: S.dst});
+  }
+});
+
+findings($('finds'), [
+  {id: 'star-route',       icon: '✦', label: 'A star always routes through the switch: 2 hops', hint: 'Send a packet between two computers in a star'},
+  {id: 'star-single-point', icon: '✖', label: 'Turn the switch off: nobody can reach anybody', hint: 'Switch the star’s hub off and try again'},
+  {id: 'bus-broadcast',    icon: '↔', label: 'On a bus, two computers talk directly — one hop', hint: 'Send a packet on the bus'},
+  {id: 'bus-partition',    icon: '✂', label: 'A break in the bus splits it into two networks', hint: 'Break a segment of the bus between your two computers'},
+  {id: 'ring-resilient',   icon: '↻', label: 'One broken link: the ring still gets there, the long way', hint: 'Break one ring link and route across it'},
+  {id: 'ring-partition',   icon: '✕', label: 'Two broken links: the ring splits in two', hint: 'Break two links on opposite sides of the ring'},
+  {id: 'mesh-resilient',   icon: '⬡', label: 'A mesh reroutes around a broken link', hint: 'Break a link next to your computer in the mesh'},
+  {id: 'delay-scaling',    icon: '÷', label: 'Half the bandwidth: double the transmission time', hint: 'Send the same packet at 50 Mbps and 100 Mbps'},
+], () => toast('All eight: routing, resilience and delay, all computed.', 4200));
+
+const POE = predict($('poe'), {
+  id: 'star-single-point',
+  q: 'In a star topology, every computer is wired only to the central switch. If that switch fails, which computers can still talk to each other?',
+  options: [
+    {id: 'all', text: 'All of them — the computers still work fine.'},
+    {id: 'adjacent', text: 'Only the ones physically near each other.'},
+    {id: 'none', text: 'None: nothing can reach anything else.', right: true},
+    {id: 'half', text: 'About half, at random.'},
+  ],
+  onLock(){ S.locked = true; paint(); },
+});
+if (!Play.FF('predict')) S.locked = true;
+buildStage();
+paint();
+window.applyFeatures = () => paint();
+window.PG_STATE = () => {
+  const route = curRoute();
+  return {topo: S.topo, locked: S.locked, src: S.src, dst: S.dst, hubDown: S.hubDown, broken: [...S.broken],
+    bandwidth: S.bandwidth, packet: S.packet, path: route && route.path, reachable: route ? [...route.reachable] : null};
+};
+window.PG_MODEL = {TOPOS, computeRoute, computeDelay, bfsPath, reachableFrom, PROP_SPEED_KM_S, SWITCH_DELAY_S};
+</script>
+</body>
+</html>

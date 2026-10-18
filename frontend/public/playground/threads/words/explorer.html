@@ -1,0 +1,699 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Sentence Machine</title>
+<meta name="description" content="Class 3–5: snap word blocks into the sentence machine. A small grammar reads the sentence and draws the picture — swap one word and the picture changes.">
+<link rel="icon" href="../../favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600&family=Nunito:wght@500;700;800&display=swap">
+<link rel="stylesheet" href="../../play.css">
+<style>
+/* Only what this page needs beyond play.css. */
+html{scrollbar-gutter:stable}
+#stageWrap{align-self:start; min-height:0}
+.tblock, .mblock{cursor:grab}
+.tblock.dragging, .mblock.dragging{cursor:grabbing}
+.numBtn{cursor:pointer}
+.missions{list-style:none; margin:0; padding:0; display:grid; gap:8px}
+.missions li{display:grid; grid-template-columns:30px 1fr; gap:8px; align-items:center; font-weight:700; font-size:15px; line-height:1.3; color:var(--ink-2)}
+.missions li i{width:28px; height:28px; border-radius:50%; border:2.5px dashed var(--hair-2); display:grid; place-items:center; font-style:normal; font-size:15px; color:#fff}
+.missions li.done{color:var(--ink)}
+.missions li.done i{border:none; background:var(--good); animation:tickPop .5s var(--spring)}
+.missions li.done span{text-decoration:line-through; text-decoration-color:var(--good); text-decoration-thickness:2px}
+@keyframes tickPop{0%{transform:scale(.3)}100%{transform:scale(1)}}
+.says{font-size:16px; font-weight:700; line-height:1.45; min-height:46px}
+.says.bad{color:#b0352e}
+.says .w{display:inline-block; padding:0 7px; border-radius:7px; color:#fff; font-weight:800}
+.note{font-size:13px; color:var(--ink-3); margin:6px 0 0}
+</style>
+</head>
+<body>
+<header class="pg-top"></header>
+
+<div class="pg-intro">
+  <h1>The sentence machine</h1>
+  <p>Drag word blocks into the machine. If they make a sentence, the machine draws it! Swap one block and watch the picture change.</p>
+</div>
+
+<main class="pg-main">
+  <section class="pg-stage" id="stageWrap">
+    <svg id="stage" viewBox="0 0 1000 660" role="img" aria-label="A picture drawn from your sentence, the sentence machine, and a tray of word blocks"></svg>
+  </section>
+
+  <aside class="pg-side">
+    <div class="card">
+      <div class="kicker">The machine says</div>
+      <div class="says" id="says">I am hungry for words! Drag “the” into my slot.</div>
+    </div>
+    <div class="card">
+      <div class="kicker">Missions</div>
+      <ul class="missions" id="missions"></ul>
+      <div class="row" style="margin-top:10px"><button class="btn sm" id="btnClear">Empty the machine</button></div>
+    </div>
+    <div class="card"><div class="kicker">Discoveries</div><div id="finds"></div></div>
+  </aside>
+</main>
+
+<script src="../../play.js"></script>
+<script>
+'use strict';
+const {$, esc, clamp, drag, loop, sound, say, track, toast, tween, findings, discover, found,
+       shareState, sharedState, mount, reduced} = Play;
+mount({thread: 'words', band: 'explorer'});
+
+/* MODEL:start ==================================================================
+   A small, real grammar.
+
+     S   → NP VP
+     NP  → Det? Adj* N          (a/an/the/two; a bare noun only if it is plural)
+     VP  → Adv? V (Adv | PP)*   (at most one Adv and one PP)
+
+   Features are checked, not listed: a/an agree with the NEXT word's first sound;
+   a/an need one thing, "two" needs many; the verb agrees with the subject
+   (the dog runs / the dogs run; "fish" is the same for one and many, so both
+   agree). Word forms come from a tiny morphology engine (run → runs, fly → flies,
+   dog → dogs, fish → fish), not from a list of sentences. The parser returns a
+   tree, or the first place it went wrong and why, or what it is still waiting for.
+   The picture is drawn from that tree.
+   ============================================================================ */
+const LEX = {
+  D:   {a: {num: 'sg', an: false}, an: {num: 'sg', an: true}, the: {num: 'any'}, two: {num: 'pl'}},
+  A:   ['big', 'small', 'happy', 'sleepy', 'red', 'hungry'],
+  N:   {dog: {}, cat: {}, girl: {}, boy: {}, bird: {}, fish: {pl: 'fish'}, elephant: {}, owl: {}},
+  V:   ['run', 'sleep', 'jump', 'eat', 'sing', 'dance', 'swim', 'fly'],
+  Adv: ['quickly', 'slowly', 'loudly', 'happily'],
+  P:   ['under the tree', 'on the mat', 'in the pond', 'in the sky'],
+};
+const VOWEL = w => /^[aeiou]/i.test(w);         // first SOUND; true for every word in this lexicon
+function sEnding(w){                              // the -s rule shared by plurals and he/she/it verbs
+  if (/[^aeiou]y$/.test(w)) return w.slice(0, -1) + 'ies';
+  if (/(s|sh|ch|x|z|o)$/.test(w)) return w + 'es';
+  return w + 's';
+}
+const thirdSg = base => sEnding(base);
+const plural = n => (LEX.N[n] && LEX.N[n].pl) || sEnding(n);
+/* A token, from a block: {cat, lex, word, num (nouns), form (verbs)} */
+function token(cat, lex, opt = {}){
+  if (cat === 'N') { const num = opt.num || 'sg'; const same = plural(lex) === lex; return {cat, lex, num: same ? 'both' : num, word: num === 'pl' ? plural(lex) : lex}; }
+  if (cat === 'V') { const form = opt.form || '3sg'; return {cat, lex, form, word: form === '3sg' ? thirdSg(lex) : lex}; }
+  return {cat, lex, word: lex};
+}
+/* Words -> tokens (for tests and shared links). Longest match first, for the where-phrases. */
+function tokenize(text){
+  const ws = text.toLowerCase().replace(/[.!?]/g, '').split(/\s+/).filter(Boolean), out = [];
+  for (let i = 0; i < ws.length; i++) {
+    const three = ws.slice(i, i + 3).join(' ');
+    if (LEX.P.includes(three)) { out.push(token('P', three)); i += 2; continue; }
+    const w = ws[i];
+    if (LEX.D[w]) out.push(token('D', w));
+    else if (LEX.A.includes(w)) out.push(token('A', w));
+    else if (LEX.Adv.includes(w)) out.push(token('Adv', w));
+    else if (Object.keys(LEX.N).some(n => n === w || plural(n) === w)) { const n = Object.keys(LEX.N).find(n => n === w || plural(n) === w); out.push(token('N', n, {num: n === w ? 'sg' : 'pl'})); }
+    else if (LEX.V.some(v => v === w || thirdSg(v) === w)) { const v = LEX.V.find(v => v === w || thirdSg(v) === w); out.push(token('V', v, {form: v === w ? 'base' : '3sg'})); }
+    else out.push({cat: '?', lex: w, word: w});
+  }
+  return out;
+}
+const q = w => '‘' + w + '’';
+/* parse(tokens) -> {status: 'empty'|'incomplete'|'error'|'ok', tree, err: {at, msg}, need} */
+function parse(T){
+  const n = T.length, tree = {det: null, adjs: [], noun: null, verb: null, adv: null, pp: null, advPre: false, num: null, np: [], vp: []};
+  if (!n) return {status: 'empty', tree, need: 'Drag a word block into the machine.'};
+  const err = (at, msg) => ({status: 'error', tree, err: {at, msg}});
+  const inc = need => ({status: 'incomplete', tree, need});
+  let i = 0;
+  /* NP */
+  if (T[i].cat === 'D') { tree.det = T[i]; i++; }
+  while (i < n && T[i].cat === 'A') { tree.adjs.push(T[i]); i++; }
+  if (i >= n) return inc(tree.adjs.length ? `Now a naming word: ${q(tree.adjs[tree.adjs.length - 1].word)} what?` : `${q(T[0].word)} what? Add a naming word, like ${q('dog')}.`);
+  if (T[i].cat !== 'N') {
+    const c = T[i].cat;
+    if (c === 'D') return err(i, `Only one of ${q('a')}, ${q('an')}, ${q('the')} or ${q('two')}, right at the start.`);
+    if (c === 'V') return err(i, i === 0 ? `Who ${T[i].word}? Start with who the sentence is about, like ${q('the dog')}.` : `Who ${T[i].word}? Put a naming word before ${q(T[i].word)}.`);
+    if (c === 'Adv' || c === 'P') return err(i, `Start with who the sentence is about. ${q(T[i].word)} comes later.`);
+    return err(i, `The machine doesn’t know ${q(T[i].word)}.`);
+  }
+  tree.noun = T[i]; const nounAt = i; i++;
+  tree.np = T.slice(0, i);
+  /* Agreement inside the noun phrase */
+  const det = tree.det, nn = tree.noun.num;
+  if (det) {
+    const next = tree.adjs.length ? tree.adjs[0] : tree.noun;
+    if (det.lex === 'a' && VOWEL(next.word)) return err(0, `Say ${q('an')} before ${q(next.word)}: it starts with a vowel sound.`);
+    if (det.lex === 'an' && !VOWEL(next.word)) return err(0, `Say ${q('a')} before ${q(next.word)}: ${q('an')} is only for vowel sounds.`);
+    if (LEX.D[det.lex].num === 'sg' && nn === 'pl') return err(0, `${q(det.word)} means just one, but ${q(tree.noun.word)} means more than one.`);
+    if (LEX.D[det.lex].num === 'pl' && nn === 'sg') return err(nounAt, `${q('two')} needs the word for more than one: ${q(plural(tree.noun.lex))}.`);
+  } else if (nn === 'sg') return err(nounAt, `${q(tree.noun.word)} needs ${q('a')} or ${q('the')} in front of it.`);
+  const dn = det ? LEX.D[det.lex].num : 'any';
+  tree.num = dn !== 'any' ? dn : nn === 'both' ? (det ? 'both' : 'pl') : nn;
+  /* VP */
+  const vpStart = i;
+  if (i < n && T[i].cat === 'Adv' && i + 1 < n && T[i + 1].cat === 'V') { tree.adv = T[i]; tree.advPre = true; i++; }
+  if (i >= n) return inc(`Now a doing word! What does ${q(tree.noun.word)} do?`);
+  if (T[i].cat !== 'V') {
+    const c = T[i].cat;
+    if (c === 'N') return err(i, `Only one naming word here. Take ${q(T[i].word)} out, or swap it.`);
+    if (c === 'A') return err(i, `Describing words go before the naming word: ${q((det ? det.word + ' ' : '') + T[i].word + ' ' + tree.noun.word)}.`);
+    if (c === 'D') return err(i, `${q(T[i].word)} belongs at the very start.`);
+    if (c === 'Adv') return i + 1 >= n ? inc(`${q(T[i].word)} tells HOW. How does it do what? Add a doing word.`) : err(i, `${q(T[i].word)} tells how. Put it next to the doing word.`);
+    if (c === 'P') return err(i, `Where words come after the doing word. What does ${q(tree.noun.word)} do there?`);
+    return err(i, `The machine doesn’t know ${q(T[i].word)}.`);
+  }
+  tree.verb = T[i]; const verbAt = i; i++;
+  /* Subject–verb agreement */
+  if (tree.num === 'sg' && tree.verb.form !== '3sg') return err(verbAt, `${q(tree.noun.word)} is just one, so the doing word needs an -s: ${q(thirdSg(tree.verb.lex))}.`);
+  if (tree.num === 'pl' && tree.verb.form !== 'base') return err(verbAt, `${q((det ? det.word + ' ' : '') + tree.noun.word)} means more than one, so the doing word has no -s: ${q(tree.verb.lex)}.`);
+  while (i < n) {
+    const t = T[i];
+    if (t.cat === 'Adv') { if (tree.adv) return err(i, `One how word is enough. Take ${q(t.word)} out.`); tree.adv = t; }
+    else if (t.cat === 'P') { if (tree.pp) return err(i, `One where word is enough. Take ${q(t.word)} out.`); tree.pp = t; }
+    else if (t.cat === 'V') return err(i, `Just one doing word, please. Take ${q(t.word)} out.`);
+    else if (t.cat === 'N') return err(i, `Only one naming word here. Take ${q(t.word)} out.`);
+    else if (t.cat === 'A') return err(i, `Describing words go before the naming word.`);
+    else if (t.cat === 'D') return err(i, `${q(t.word)} belongs at the very start.`);
+    else return err(i, `The machine doesn’t know ${q(t.word)}.`);
+    i++;
+  }
+  tree.vp = T.slice(vpStart);
+  return {status: 'ok', tree};
+}
+const sentenceText = T => { const s = T.map(t => t.word).join(' '); return s.charAt(0).toUpperCase() + s.slice(1) + '.'; };
+/* What each creature can really do, and where it is at home: a sentence that breaks
+   these is still grammatical — it is just silly. */
+const ABLE = {dog: ['run', 'sleep', 'jump', 'eat', 'swim'], cat: ['run', 'sleep', 'jump', 'eat'],
+  girl: ['run', 'sleep', 'jump', 'eat', 'sing', 'dance', 'swim'], boy: ['run', 'sleep', 'jump', 'eat', 'sing', 'dance', 'swim'],
+  bird: ['fly', 'sing', 'eat', 'sleep', 'jump'], fish: ['swim', 'eat', 'sleep'], elephant: ['run', 'sleep', 'eat', 'swim'], owl: ['fly', 'sleep', 'eat']};
+const HOME = {'in the sky': ['bird', 'owl'], 'in the pond': ['fish', 'dog', 'elephant', 'girl', 'boy'],
+  'on the mat': ['dog', 'cat', 'girl', 'boy', 'bird', 'elephant', 'owl'], 'under the tree': ['dog', 'cat', 'girl', 'boy', 'bird', 'elephant', 'owl']};
+function silly(tree){
+  if (!tree.noun || !tree.verb) return null;
+  const n = tree.noun.lex, v = tree.verb.lex;
+  if (!ABLE[n].includes(v)) return `${plural(n) === n ? n : plural(n)} can’t really ${v}`;
+  if (tree.pp && !HOME[tree.pp.lex].includes(n) && !(tree.pp.lex === 'in the sky' && v === 'fly')) return `a ${n} is not usually ${tree.pp.lex}`;
+  return null;
+}
+/* MODEL:end */
+
+/* ---- colours: the thread's word-block colours ------------------------------ */
+const COLS = {D: '#8a94a6', A: '#2f9e5b', N: '#3f7fd8', V: '#d6453d', Adv: '#f29a1f', P: '#16a3a3'};
+const ROWS = [
+  {cat: 'D',   find: null,         name: 'Articles'},
+  {cat: 'A',   find: 'adjectives', name: 'Describing words'},
+  {cat: 'N',   find: 'nouns',      name: 'Naming words'},
+  {cat: 'V',   find: 'verbs',      name: 'Doing words'},
+  {cat: 'Adv', find: 'adverbs',    name: 'How words'},
+  {cat: 'P',   find: 'where',      name: 'Where words'},
+];
+
+/* ---- state: plain data --------------------------------------------------- */
+/* S.words holds the machine's blocks: {cat, lex, num?, form?} — the word itself is made by the model. */
+const S = {words: [], many: false, missions: {}, seenN: [], seenV: [], lastOk: ''};
+const shared = sharedState();
+if (shared && Array.isArray(shared.words)) {
+  S.words = shared.words.slice(0, 9).filter(w => w && COLS[w.cat]).map(w => ({cat: w.cat, lex: String(w.lex), num: w.num, form: w.form}))
+    .filter(w => w.cat === 'D' ? LEX.D[w.lex] : w.cat === 'N' ? LEX.N[w.lex] : LEX[w.cat].includes(w.lex));
+  S.many = !!shared.many;
+}
+shareState(() => ({words: S.words.map(w => Object.assign({}, w)), many: S.many}));
+const tokOf = w => token(w.cat, w.lex, {num: w.num, form: w.form});
+const tokens = () => S.words.map(tokOf);
+
+/* ============================================================================
+   The stage: scene (drawn from the parse), machine, tray. Built once, patched.
+   ============================================================================ */
+const svg = $('stage');
+const GROUND = 236, RAIL = {x: 62, y: 302, w: 800, h: 56}, BH = 40;
+const TRAY_Y = 418, ROW_H = 38;
+const bw = w => Math.round(String(w).length * 9.6 + 24);
+
+function blockSVG(cat, word, x, y, extra = ''){
+  const w = bw(word);
+  return `<rect x="${x}" y="${y}" width="${w}" height="${BH - 6}" rx="10" fill="${COLS[cat]}" ${extra}/>
+    <rect x="${x + 3}" y="${y + 3}" width="${w - 6}" height="9" rx="5" fill="#fff" opacity=".2" pointer-events="none"/>
+    <text x="${x + w / 2}" y="${y + 23}" text-anchor="middle" fill="#fff" font-size="16" font-weight="800" pointer-events="none">${esc(word)}</text>`;
+}
+function build(){
+  const rnd = Play.mulberry32(5);
+  let flowers = '';
+  for (let i = 0; i < 22; i++) { const x = (rnd() * 1000).toFixed(0), y = (GROUND - 16 + rnd() * 44).toFixed(0); flowers += `<circle cx="${x}" cy="${y}" r="3" fill="${['#ffd23f', '#ff7aa2', '#fff'][i % 3]}" opacity=".9"/>`; }
+  /* the tray */
+  let tray = '';
+  ROWS.forEach((r, ri) => {
+    const y = TRAY_Y + ri * ROW_H;
+    tray += `<circle cx="22" cy="${y + 17}" r="7" fill="${COLS[r.cat]}"/><text id="rowLab${r.cat}" x="36" y="${y + 22}" fill="#44586e" font-size="13.5" font-weight="800"></text>`;
+    let x = 186;
+    const words = r.cat === 'D' ? Object.keys(LEX.D) : r.cat === 'N' ? Object.keys(LEX.N) : LEX[r.cat];
+    for (const lex of words) {
+      tray += `<g class="tblock" data-cat="${r.cat}" data-lex="${esc(lex)}" data-key="${r.cat}:${esc(lex)}" id="t_${r.cat}_${lex.replace(/ /g, '_')}"></g>`;
+      x += bw(r.cat === 'N' ? (lex.length >= plural(lex).length ? lex : plural(lex)) : r.cat === 'V' ? thirdSg(lex) : lex) + 8;
+    }
+  });
+  svg.innerHTML = `
+  <defs>
+    <linearGradient id="gSky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#8fd0ff"/><stop offset="1" stop-color="#e3f4ff"/></linearGradient>
+    <linearGradient id="gMachine" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#5d7089"/><stop offset="1" stop-color="#3d4c61"/></linearGradient>
+    <linearGradient id="gPond" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#5ab4ea"/><stop offset="1" stop-color="#2d7fc0"/></linearGradient>
+    <clipPath id="clipScene"><rect width="1000" height="270"/></clipPath>
+    <clipPath id="clipPond"><rect x="0" y="-400" width="1000" height="${GROUND + 404}"/></clipPath>
+  </defs>
+  <g clip-path="url(#clipScene)">
+    <rect width="1000" height="270" fill="url(#gSky)"/>
+    <circle cx="90" cy="60" r="30" fill="#ffd23f"/><circle cx="90" cy="60" r="44" fill="#ffd23f" opacity=".25"/>
+    <g fill="#fff" opacity=".9"><path d="M720 60a18 18 0 0 1 33-8a15 15 0 0 1 25 10a12 12 0 0 1 0 24h-60a12 12 0 0 1 2-26z"/><path d="M260 44a14 14 0 0 1 26-6a12 12 0 0 1 20 8a10 10 0 0 1 0 19h-48a10 10 0 0 1 2-21z"/></g>
+    <path d="M0 210 Q180 190 360 206 T720 202 T1000 208 L1000 270 L0 270Z" fill="#8fd16a"/>
+    <rect x="0" y="${GROUND - 8}" width="1000" height="${270 - GROUND + 8}" fill="#7cc257"/>
+    <g>${flowers}</g>
+    <!-- props, shown by the where-phrase -->
+    <g id="propTree" opacity="0"><rect x="704" y="104" width="24" height="${GROUND - 102}" rx="6" fill="#8a5a2b"/>
+      <circle cx="716" cy="84" r="60" fill="#3f9e4d"/><circle cx="668" cy="106" r="40" fill="#4cae5a"/><circle cx="766" cy="104" r="42" fill="#4cae5a"/><circle cx="716" cy="52" r="38" fill="#56b964"/>
+      <circle cx="690" cy="94" r="6" fill="#e2493b"/><circle cx="742" cy="72" r="6" fill="#e2493b"/><circle cx="724" cy="116" r="6" fill="#e2493b"/></g>
+    <g id="propMat" opacity="0"><ellipse cx="470" cy="${GROUND + 6}" rx="120" ry="18" fill="#c2569b"/><ellipse cx="470" cy="${GROUND + 6}" rx="100" ry="13" fill="none" stroke="#ffd23f" stroke-width="3" stroke-dasharray="10 6"/></g>
+    <g id="propPond" opacity="0"><ellipse cx="470" cy="${GROUND + 4}" rx="200" ry="30" fill="url(#gPond)"/><ellipse cx="470" cy="${GROUND - 2}" rx="186" ry="20" fill="none" stroke="#bfe6ff" stroke-width="2" opacity=".6"/></g>
+    <g id="propSky" opacity="0"><path d="M400 146a26 26 0 0 1 48-12a22 22 0 0 1 38 14a18 18 0 0 1 0 36h-88a18 18 0 0 1 2-38z" fill="#fff" opacity=".85"/></g>
+    <g id="puddle" opacity="0"><ellipse cx="0" cy="0" rx="70" ry="12" fill="#5ab4ea"/></g>
+    <g id="bowl" opacity="0"><path d="M-16 0 L16 0 L12 12 L-12 12Z" fill="#e2493b"/><ellipse cx="0" cy="0" rx="16" ry="4" fill="#8a5a2b"/></g>
+    <g id="actorWrap"><g id="actor"></g></g>
+    <g id="pondFront" opacity="0"><path d="M270 ${GROUND + 4} A200 30 0 0 0 670 ${GROUND + 4}Z" fill="url(#gPond)" opacity=".85"/></g>
+    <g id="fx" pointer-events="none"></g>
+    <g id="caption"><rect id="capBox" x="300" y="12" width="400" height="40" rx="20" fill="#fff" opacity=".92"/>
+      <text id="capText" x="500" y="39" text-anchor="middle" fill="#1b2a3a" font-size="20" font-weight="800" style="font-family:Fredoka,Nunito,sans-serif"></text></g>
+    <g id="puzzled" opacity="0"><text x="500" y="176" text-anchor="middle" fill="#fff" font-size="120" font-weight="800" opacity=".9" style="font-family:Fredoka,Nunito,sans-serif">?</text></g>
+  </g>
+  <!-- the machine -->
+  <g id="machine">
+    <path d="M420 270 L420 284 M580 270 L580 284" stroke="#3d4c61" stroke-width="10"/>
+    <rect x="24" y="278" width="952" height="122" rx="22" fill="url(#gMachine)"/>
+    <g fill="#8fa1b8">${[44, 956].map(x => `<circle cx="${x}" cy="294" r="4"/><circle cx="${x}" cy="384" r="4"/>`).join('')}</g>
+    <g id="gear1" transform="translate(40 330)"><path d="${gearPath(14, 8)}" fill="#8fa1b8"/><circle r="4" fill="#3d4c61"/></g>
+    <rect x="${RAIL.x - 6}" y="${RAIL.y - 6}" width="${RAIL.w + 12}" height="${RAIL.h + 12}" rx="16" fill="#1d2733"/>
+    <rect id="railBg" x="${RAIL.x}" y="${RAIL.y}" width="${RAIL.w}" height="${RAIL.h}" rx="12" fill="#26323f" stroke="#4d5f75" stroke-dasharray="8 7"/>
+    <text id="railHint" x="${RAIL.x + RAIL.w / 2}" y="${RAIL.y + 34}" text-anchor="middle" fill="#7f93ab" font-size="15" font-weight="700" pointer-events="none">drop word blocks here</text>
+    <g id="brackets" pointer-events="none"></g>
+    <line id="caret" y1="${RAIL.y + 4}" y2="${RAIL.y + RAIL.h - 4}" stroke="#ffd23f" stroke-width="4" stroke-linecap="round" opacity="0"/>
+    <g id="rail"></g>
+    <g id="face" transform="translate(918 339)">
+      <circle r="40" fill="#e8eef5"/><circle id="lamp" r="40" fill="none" stroke="#8a94a6" stroke-width="6"/>
+      <g id="eyesOpen"><circle cx="-13" cy="-8" r="7" fill="#1b2a3a"/><circle cx="13" cy="-8" r="7" fill="#1b2a3a"/><circle cx="-11" cy="-10" r="2.2" fill="#fff"/><circle cx="15" cy="-10" r="2.2" fill="#fff"/></g>
+      <g id="eyesDizzy" opacity="0" stroke="#1b2a3a" stroke-width="2.5" fill="none"><path d="M-19 -8 a6 6 0 1 1 6 6 a3 3 0 1 1 -3 -3"/><path d="M7 -8 a6 6 0 1 1 6 6 a3 3 0 1 1 -3 -3"/></g>
+      <path id="faceMouth" d="M-12 12 Q0 20 12 12" stroke="#1b2a3a" stroke-width="3" fill="none" stroke-linecap="round"/>
+    </g>
+    <g id="smoke" opacity="0" fill="#b8c3d1"><circle cx="880" cy="268" r="12"/><circle cx="900" cy="254" r="16"/><circle cx="926" cy="244" r="20"/></g>
+  </g>
+  <!-- the tray -->
+  <rect x="8" y="${TRAY_Y - 8}" width="984" height="${ROWS.length * ROW_H + 10}" rx="18" fill="#f2f6fb" stroke="#d7e2ee"/>
+  <g id="tray">${tray}</g>
+  <g id="numToggle" transform="translate(700 ${TRAY_Y})">
+    <text x="0" y="22" fill="#44586e" font-size="14" font-weight="800">How many?</text>
+    <g class="numBtn" id="numOne" data-many="0"><rect x="86" y="0" width="70" height="34" rx="17" fill="#3f7fd8"/><text x="121" y="23" text-anchor="middle" fill="#fff" font-size="15" font-weight="800" pointer-events="none">one</text></g>
+    <g class="numBtn" id="numMany" data-many="1"><rect x="162" y="0" width="80" height="34" rx="17" fill="#fff" stroke="#3f7fd8" stroke-width="2"/><text x="202" y="23" text-anchor="middle" fill="#3f7fd8" font-size="15" font-weight="800" pointer-events="none">many</text></g>
+  </g>
+  <g id="ghost" pointer-events="none" opacity="0"></g>
+  `;
+}
+function gearPath(r, teeth){
+  let d = '';
+  for (let i = 0; i < teeth * 2; i++) { const a = i * Math.PI / teeth, rr = i % 2 ? r * 0.72 : r; d += (i ? 'L' : 'M') + (Math.cos(a) * rr).toFixed(1) + ' ' + (Math.sin(a) * rr).toFixed(1); }
+  return d + 'Z';
+}
+/* Tray blocks show the word the model makes for the chosen number (dog / dogs, runs / run). */
+function paintTray(){
+  for (const el of document.querySelectorAll('#tray .tblock')) {
+    const cat = el.dataset.cat, lex = el.dataset.lex, t = token(cat, lex, {num: S.many ? 'pl' : 'sg', form: S.many ? 'base' : '3sg'});
+    el.innerHTML = blockSVG(cat, t.word, 0, 0);
+    el.dataset.word = t.word;
+  }
+  /* lay the rows out again: the widths change with the words */
+  ROWS.forEach((r, ri) => {
+    let x = 186; const y = TRAY_Y + ri * ROW_H;
+    for (const el of document.querySelectorAll(`#tray .tblock[data-cat="${r.cat}"]`)) {
+      el.setAttribute('transform', `translate(${x} ${y})`); el.dataset.x = x; el.dataset.y = y; x += bw(el.dataset.word) + 8;
+    }
+    $('rowLab' + r.cat).textContent = !r.find || found(r.find) ? r.name : '???';
+  });
+  $('numOne').querySelector('rect').setAttribute('fill', S.many ? '#fff' : '#3f7fd8');
+  $('numOne').querySelector('rect').setAttribute('stroke', '#3f7fd8'); $('numOne').querySelector('rect').setAttribute('stroke-width', 2);
+  $('numOne').querySelector('text').setAttribute('fill', S.many ? '#3f7fd8' : '#fff');
+  $('numMany').querySelector('rect').setAttribute('fill', S.many ? '#3f7fd8' : '#fff');
+  $('numMany').querySelector('text').setAttribute('fill', S.many ? '#fff' : '#3f7fd8');
+}
+
+/* ---- the machine's rail: blocks laid out from the state ------------------- */
+let LAYOUT = [];     // [{x, w}] for each block in the machine
+function layoutRail(){
+  LAYOUT = []; let x = RAIL.x + 8;
+  for (const w of S.words) { const width = bw(tokOf(w).word); LAYOUT.push({x, w: width}); x += width + 6; }
+  return x;
+}
+function paintRail(res){
+  layoutRail();
+  const T = tokens();
+  let h = '';
+  S.words.forEach((w, i) => {
+    const L = LAYOUT[i], bad = res.status === 'error' && res.err.at === i;
+    h += `<g class="mblock" data-i="${i}">${blockSVG(w.cat, T[i].word, L.x, RAIL.y + 8)}
+      ${bad ? `<rect x="${L.x - 4}" y="${RAIL.y + 3}" width="${L.w + 8}" height="${BH + 4}" rx="13" fill="none" stroke="#ff5a4e" stroke-width="3.5" stroke-dasharray="7 4" pointer-events="none"/>
+        <circle cx="${L.x + L.w}" cy="${RAIL.y + 6}" r="11" fill="#ff5a4e" pointer-events="none"/><text x="${L.x + L.w}" y="${RAIL.y + 11}" text-anchor="middle" fill="#fff" font-size="15" font-weight="800" pointer-events="none">!</text>` : ''}</g>`;
+  });
+  $('rail').innerHTML = h;
+  $('railHint').setAttribute('opacity', S.words.length ? 0 : 1);
+  for (const el of document.querySelectorAll('#rail .mblock')) wireMachineBlock(el);
+  /* brackets under the blocks: the parse, made visible */
+  let br = '';
+  if (res.status === 'ok' || (res.status === 'incomplete' && res.tree.noun)) {
+    const np = res.tree.noun ? res.tree.np.length : 0;
+    const span = (a, b, label, col) => {
+      if (b <= a) return '';
+      const x0 = LAYOUT[a].x, x1 = LAYOUT[b - 1].x + LAYOUT[b - 1].w, y = RAIL.y + RAIL.h + 10;
+      return `<path d="M${x0 + 2} ${y - 5} L${x0 + 2} ${y} L${x1 - 2} ${y} L${x1 - 2} ${y - 5}" fill="none" stroke="${col}" stroke-width="2.5"/>
+        <text x="${(x0 + x1) / 2}" y="${y + 16}" text-anchor="middle" fill="${col}" font-size="12" font-weight="800" letter-spacing=".06em">${label}</text>`;
+    };
+    br += span(0, np, 'WHO', '#9cc2f5');
+    if (res.status === 'ok') br += span(np, S.words.length, 'WHAT HAPPENS', '#ffb3ad');
+  }
+  $('brackets').innerHTML = br;
+}
+
+/* ---- creatures, drawn in code ---------------------------------------------- */
+function eye(x, y, r, closed){
+  return closed ? `<path d="M${x - r} ${y} Q${x} ${y + r} ${x + r} ${y}" stroke="#1b2a3a" stroke-width="2.4" fill="none" stroke-linecap="round"/>`
+    : `<circle cx="${x}" cy="${y}" r="${r}" fill="#1b2a3a"/><circle cx="${x + r * .35}" cy="${y - r * .35}" r="${r * .35}" fill="#fff"/>`;
+}
+function mouth(x, y, m, s = 1){
+  if (m === 'grin') return `<path d="M${x - 6 * s} ${y} Q${x} ${y + 9 * s} ${x + 6 * s} ${y}Z" fill="#7a2a2a"/>`;
+  if (m === 'open') return `<ellipse cx="${x}" cy="${y + 2 * s}" rx="${4 * s}" ry="${5 * s}" fill="#7a2a2a"/><path d="M${x - 2 * s} ${y + 5 * s} q${2 * s} ${6 * s} ${4 * s} 0" fill="#ff7a8a"/>`;
+  if (m === 'yawn') return `<ellipse cx="${x}" cy="${y + 2 * s}" rx="${3 * s}" ry="${4 * s}" fill="#7a2a2a"/>`;
+  return `<path d="M${x - 5 * s} ${y} Q${x} ${y + 5 * s} ${x + 5 * s} ${y}" stroke="#7a2a2a" stroke-width="2.2" fill="none" stroke-linecap="round"/>`;
+}
+const DRAW = {
+  dog(o){ const c = o.col || '#c98b4f', d = o.col ? '#a3332a' : '#8a5a2b';
+    return `<path d="M-30 -34 Q-46 -48 -40 -60" stroke="${c}" stroke-width="7" fill="none" stroke-linecap="round"/>
+      ${[-24, -10, 8, 20].map(x => `<rect x="${x}" y="-20" width="8" height="20" rx="3" fill="${d}"/>`).join('')}
+      <ellipse cx="0" cy="-30" rx="32" ry="17" fill="${c}"/><circle cx="30" cy="-52" r="17" fill="${c}"/>
+      <ellipse cx="21" cy="-54" rx="7" ry="14" fill="${d}" transform="rotate(20 21 -54)"/>
+      <ellipse cx="43" cy="-46" rx="10" ry="8" fill="#ecc9a0"/><circle cx="51" cy="-49" r="3.6" fill="#2b1a12"/>
+      ${eye(34, -57, 3.2, o.sleepy)}${mouth(44, -41, o.mouth, .8)}`; },
+  cat(o){ const c = o.col || '#f0a04b', d = o.col ? '#a3332a' : '#c9772a';
+    return `<path d="M-30 -30 Q-52 -40 -44 -70" stroke="${c}" stroke-width="7" fill="none" stroke-linecap="round"/>
+      ${[-22, -9, 7, 18].map(x => `<rect x="${x}" y="-18" width="7" height="18" rx="3" fill="${d}"/>`).join('')}
+      <ellipse cx="0" cy="-28" rx="30" ry="15" fill="${c}"/><path d="M-12 -38 l8 -6 l8 6 M4 -40 l8 -6 l8 6" stroke="${d}" stroke-width="3" fill="none"/>
+      <circle cx="30" cy="-50" r="16" fill="${c}"/><path d="M18 -60 L20 -76 L30 -64Z M32 -64 L42 -76 L44 -60Z" fill="${c}"/><path d="M21 -64 L22 -71 L27 -65Z M36 -65 L41 -71 L41 -63Z" fill="#ffb3c1"/>
+      ${eye(26, -53, 3, o.sleepy)}${eye(37, -53, 3, o.sleepy)}<circle cx="32" cy="-46" r="2" fill="#e05b7a"/>
+      <path d="M36 -45 L52 -48 M36 -43 L52 -41 M28 -45 L12 -48 M28 -43 L12 -41" stroke="#6b4a2b" stroke-width="1"/>${mouth(32, -42, o.mouth, .6)}`; },
+  girl(o){ const c = o.col || '#c2569b';
+    return `<rect x="-8" y="-30" width="6" height="30" rx="3" fill="#8d5a3b"/><rect x="2" y="-30" width="6" height="30" rx="3" fill="#8d5a3b"/>
+      <path d="M-18 -26 L18 -26 L10 -64 L-10 -64Z" fill="${c}"/><path d="M-10 -60 Q-22 -48 -20 -36 M10 -60 Q22 -48 20 -36" stroke="#8d5a3b" stroke-width="6" fill="none" stroke-linecap="round"/>
+      <circle cx="0" cy="-78" r="15" fill="#a86a45"/><path d="M-16 -78 Q-16 -96 0 -95 Q16 -96 16 -78 Q10 -88 0 -87 Q-10 -88 -16 -78Z" fill="#2b1a12"/>
+      <path d="M-14 -76 Q-24 -62 -19 -48 M14 -76 Q24 -62 19 -48" stroke="#2b1a12" stroke-width="5" fill="none" stroke-linecap="round"/>
+      ${eye(-5, -79, 2.4, o.sleepy)}${eye(5, -79, 2.4, o.sleepy)}${mouth(0, -71, o.mouth, .8)}`; },
+  boy(o){ const c = o.col || '#2f9e5b';
+    return `<rect x="-9" y="-30" width="7" height="30" rx="3" fill="#8d5a3b"/><rect x="2" y="-30" width="7" height="30" rx="3" fill="#8d5a3b"/>
+      <rect x="-13" y="-38" width="26" height="14" rx="4" fill="#3f7fd8"/><rect x="-15" y="-64" width="30" height="30" rx="8" fill="${c}"/>
+      <path d="M-13 -60 Q-24 -48 -21 -36 M13 -60 Q24 -48 21 -36" stroke="#8d5a3b" stroke-width="6" fill="none" stroke-linecap="round"/>
+      <circle cx="0" cy="-78" r="15" fill="#a86a45"/><path d="M-15 -80 Q-14 -96 2 -95 Q16 -94 15 -80 Q8 -88 -2 -86 Q-10 -86 -15 -80Z" fill="#2b1a12"/>
+      ${eye(-5, -79, 2.4, o.sleepy)}${eye(5, -79, 2.4, o.sleepy)}${mouth(0, -71, o.mouth, .8)}`; },
+  bird(o){ const c = o.col || '#3f9fe0';
+    return `<path d="M-4 -12 L-6 0 M4 -12 L6 0" stroke="#e8890c" stroke-width="2.5"/><path d="M-20 -34 L-36 -44 L-32 -28Z" fill="${c}"/>
+      <circle cx="0" cy="-32" r="21" fill="${c}"/><ellipse cx="4" cy="-26" rx="12" ry="11" fill="#dff1ff"/>
+      <g class="wing" data-a="-6,-34"><ellipse cx="-6" cy="-34" rx="12" ry="8" fill="${o.col ? '#a3332a' : '#2c7cb8'}"/></g>
+      <path d="M18 -38 L30 -34 L18 -30Z" fill="#ffb400"/>${eye(10, -40, 3, o.sleepy)}${o.mouth === 'open' || o.mouth === 'grin' ? '<path d="M18 -34 L26 -30 L18 -30Z" fill="#7a2a2a"/>' : ''}`; },
+  fish(o){ const c = o.col || '#ff8c42';
+    return `<path d="M-26 -24 L-46 -38 L-46 -10Z" fill="${c}"/><ellipse cx="0" cy="-24" rx="30" ry="16" fill="${c}"/>
+      <path d="M-4 -38 Q4 -48 10 -38Z M-4 -10 Q4 0 10 -10Z" fill="${o.col ? '#a3332a' : '#e8690c'}"/><path d="M-8 -34 Q-2 -24 -8 -14" stroke="#fff" stroke-width="2" fill="none" opacity=".6"/>
+      ${eye(16, -28, 3.4, o.sleepy)}${mouth(26, -20, o.mouth, .6)}`; },
+  elephant(o){ const c = o.col || '#9aa7b8', d = o.col ? '#a3332a' : '#7f8c9e';
+    return `${[-34, -14, 10, 28].map(x => `<rect x="${x}" y="-30" width="15" height="30" rx="5" fill="${d}"/>`).join('')}
+      <path d="M-44 -50 Q-58 -44 -54 -32" stroke="${c}" stroke-width="4" fill="none"/>
+      <ellipse cx="0" cy="-50" rx="46" ry="30" fill="${c}"/><circle cx="42" cy="-66" r="24" fill="${c}"/>
+      <ellipse cx="30" cy="-64" rx="15" ry="22" fill="${d}"/><path d="M60 -62 Q76 -40 66 -18 Q64 -14 60 -18 Q68 -40 54 -56Z" fill="${c}"/>
+      <path d="M58 -52 Q66 -46 70 -48" stroke="#fffaf0" stroke-width="4" fill="none" stroke-linecap="round"/>
+      ${eye(50, -72, 3.4, o.sleepy)}${mouth(56, -56, o.mouth, .7)}`; },
+  owl(o){ const c = o.col || '#8b5e3c';
+    return `<path d="M-6 -4 L-6 0 M6 -4 L6 0" stroke="#e8890c" stroke-width="4" stroke-linecap="round"/>
+      <path d="M-20 -60 L-14 -74 L-6 -62Z M20 -60 L14 -74 L6 -62Z" fill="${c}"/>
+      <ellipse cx="0" cy="-34" rx="24" ry="30" fill="${c}"/><ellipse cx="0" cy="-26" rx="15" ry="18" fill="#e9c9a0"/>
+      <g class="wing" data-a="0,-32"><ellipse cx="-22" cy="-32" rx="7" ry="16" fill="${o.col ? '#a3332a' : '#6b4424'}"/><ellipse cx="22" cy="-32" rx="7" ry="16" fill="${o.col ? '#a3332a' : '#6b4424'}"/></g>
+      <circle cx="-9" cy="-46" r="9" fill="#fff"/><circle cx="9" cy="-46" r="9" fill="#fff"/>
+      ${o.sleepy ? eye(-9, -46, 5, true) + eye(9, -46, 5, true) : `<circle cx="-9" cy="-46" r="4.5" fill="#1b2a3a"/><circle cx="9" cy="-46" r="4.5" fill="#1b2a3a"/>`}
+      <path d="M-4 -38 L4 -38 L0 -30Z" fill="#ffb400"/>`; },
+};
+const WINGED = ['bird', 'owl'];
+/* Where to stick borrowed wings on a creature that has none (x, y of the shoulder). */
+const WING_AT = {dog: [-4, -44], cat: [-4, -40], girl: [-4, -60], boy: [-4, -60], fish: [-2, -38], elephant: [-6, -76]};
+const wingSVG = ([x, y]) => `<g class="wing" data-a="${x},${y}"><path d="M${x} ${y} Q${x - 30} ${y - 62} ${x - 66} ${y - 40} Q${x - 40} ${y - 30} ${x - 50} ${y - 12} Q${x - 24} ${y - 14} ${x} ${y + 6}Z" fill="#fff" stroke="#b9c7d6" stroke-width="2"/></g>`;
+/* The scene, built from the tree (only when the parse changes). */
+let SCENE = null;
+function buildScene(res){
+  const t = res.tree, ok = res.status === 'ok', hasNP = !!t.noun && res.status !== 'error';
+  $('puzzled').setAttribute('opacity', res.status === 'error' ? 1 : 0);
+  $('actorWrap').setAttribute('opacity', res.status === 'error' ? .25 : 1);
+  if (res.status === 'error') { $('fx').innerHTML = ''; $('caption').setAttribute('opacity', 0); return; }        // keep the old picture, faded, behind the "?"
+  const adj = new Set(t.adjs.map(a => a.lex));
+  const verb = ok ? t.verb.lex : null, adv = ok && t.adv ? t.adv.lex : null, pp = ok && t.pp ? t.pp.lex : null;
+  const scale = (adj.has('big') ? 1.45 : 1) * (adj.has('small') ? 0.6 : 1);
+  const o = {col: adj.has('red') ? '#e2493b' : null, sleepy: adj.has('sleepy') || verb === 'sleep',
+    mouth: adj.has('hungry') || verb === 'eat' ? 'open' : verb === 'sing' ? 'open' : adj.has('happy') || adv === 'happily' ? 'grin' : adj.has('sleepy') ? 'yawn' : 'smile'};
+  const count = !hasNP ? 0 : t.num === 'pl' ? 2 : 1;
+  let actor = '';
+  for (let j = 0; j < count; j++) {
+    const wings = verb === 'fly' && !WINGED.includes(t.noun.lex);
+    const legs = t.noun.lex === 'fish' && ['run', 'jump', 'dance'].includes(verb);
+    actor += `<g class="who" id="who${j}"><g class="body">
+      ${legs ? `<path d="M-6 -12 L-10 4 M8 -12 L12 4" stroke="#ff8c42" stroke-width="4" stroke-linecap="round"/>` : ''}
+      ${DRAW[t.noun.lex](o)}
+      ${wings ? wingSVG(WING_AT[t.noun.lex]) : ''}</g></g>`;
+  }
+  $('actor').innerHTML = actor;
+  /* props from the where-phrase */
+  $('propTree').setAttribute('opacity', pp === 'under the tree' ? 1 : 0);
+  $('propMat').setAttribute('opacity', pp === 'on the mat' ? 1 : 0);
+  $('propPond').setAttribute('opacity', pp === 'in the pond' ? 1 : 0);
+  $('pondFront').setAttribute('opacity', pp === 'in the pond' ? 1 : 0);
+  $('propSky').setAttribute('opacity', pp === 'in the sky' ? 1 : 0);
+  $('actor').setAttribute('clip-path', pp === 'in the pond' ? 'url(#clipPond)' : '');
+  const speed = adv === 'quickly' ? 2.4 : adv === 'slowly' ? 0.35 : 1;
+  SCENE = {count, noun: hasNP ? t.noun.lex : null, verb, adv, pp, adj, scale, speed, loud: adv === 'loudly', happy: adj.has('happy') || adv === 'happily',
+    baseX: pp === 'under the tree' ? 690 : 470, baseY: pp === 'in the sky' ? 128 : pp === 'in the pond' ? GROUND + 26 : GROUND, t0: performance.now() / 1000};
+  $('puddle').setAttribute('opacity', verb === 'swim' && pp !== 'in the pond' ? 1 : 0);
+  $('bowl').setAttribute('opacity', verb === 'eat' ? 1 : 0);
+  /* caption: the sentence the picture is drawn from */
+  const cap = ok ? sentenceText(tokens()) : hasNP ? sentenceText(tokens()).replace(/\.$/, ' …') : res.status === 'empty' ? 'Your sentence will be drawn here!' : '';
+  $('capText').textContent = cap;
+  const w = Math.max(160, cap.length * 11 + 40);
+  $('capBox').setAttribute('x', 500 - w / 2); $('capBox').setAttribute('width', w);
+  $('caption').setAttribute('opacity', cap ? 1 : 0);
+  animate(0);
+}
+/* One frame of the animation: the verb moves the body, the adverb sets the speed. */
+function animate(tNow){
+  const sc = SCENE; if (!sc || !sc.count) { $('fx').innerHTML = ''; return; }
+  const t = reduced() ? 0.6 : (tNow - sc.t0) * sc.speed;
+  const s = sc.scale, gap = 150 * s, spread = sc.count > 1 ? 0.45 : 1;
+  let fx = '';
+  const head = -95 * s;
+  for (let j = 0; j < sc.count; j++) {
+    const el = $('who' + j); if (!el) continue;
+    const ph = j * 0.9;
+    let dx = (j - (sc.count - 1) / 2) * gap, dy = 0, rot = 0, sx = 1, sy = 1;
+    const range = (sc.pp === 'under the tree' ? 40 : sc.pp === 'in the pond' ? 110 : sc.pp === 'on the mat' ? 50 : 170) * spread;
+    switch (sc.verb) {
+      case 'run': { const p = Math.sin(t * 1.3 + ph); dx += p * range; sx = Math.cos(t * 1.3 + ph) >= 0 ? 1 : -1; dy = -Math.abs(Math.sin(t * 9 + ph)) * 7; break; }
+      case 'jump': { const h = Math.abs(Math.sin(t * 3 + ph)); dy = -h * (sc.pp === 'under the tree' ? 26 : 80); sy = h < 0.12 ? 0.85 : 1.03; sx = 1 / sy; break; }
+      case 'sleep': { sy = 1 + Math.sin(t * 2 + ph) * 0.03; rot = sc.noun === 'fish' ? 0 : -6; break; }
+      case 'eat': { rot = Math.sin(t * 7 + ph) * 6; break; }
+      case 'sing': { rot = Math.sin(t * 2.5 + ph) * 6; dy = -Math.abs(Math.sin(t * 2.5)) * 4; break; }
+      case 'dance': { rot = Math.sin(t * 4 + ph) * 16; dy = -Math.abs(Math.sin(t * 8 + ph)) * 16; break; }
+      case 'swim': { dx += Math.sin(t * 1.1 + ph) * range * 0.6; sx = Math.cos(t * 1.1 + ph) >= 0 ? 1 : -1; dy = Math.sin(t * 3 + ph) * 5 + (sc.pp === 'in the pond' ? 0 : 6); break; }
+      case 'fly': { dx += Math.sin(t * 0.9 + ph) * range * 0.7; sx = Math.cos(t * 0.9 + ph) >= 0 ? 1 : -1; dy = (sc.pp === 'in the sky' ? -6 : sc.pp === 'under the tree' ? -26 : sc.pp === 'in the pond' ? -70 : -96) + Math.sin(t * 3 + ph) * 12; break; }
+      default: { sy = 1 + Math.sin(t * 2 + ph) * 0.015; }
+    }
+    const x = sc.baseX + dx, y = sc.baseY + dy;
+    el.setAttribute('transform', `translate(${x.toFixed(1)} ${y.toFixed(1)}) rotate(${rot.toFixed(1)}) scale(${(s * sx).toFixed(3)} ${(s * sy).toFixed(3)})`);
+    const flap = sc.verb === 'fly' ? 0.6 + Math.abs(Math.sin(t * 10 + ph)) * 0.5 : 1;
+    for (const w of el.querySelectorAll('.wing')) { const [ax, ay] = w.dataset.a.split(',').map(Number); w.setAttribute('transform', `translate(${ax} ${ay}) scale(1 ${flap.toFixed(2)}) translate(${-ax} ${-ay})`); }
+    if (j === 0) { $('puddle').setAttribute('transform', `translate(${x.toFixed(1)} ${GROUND + 2})`); $('bowl').setAttribute('transform', `translate(${(x + 62 * s * sx).toFixed(1)} ${GROUND - 12})`); }
+    /* effects, from the verb and the adverb */
+    const hx = x + 20 * s * sx, hy = y + head;
+    const big = sc.loud ? 1.9 : 1;
+    if (sc.verb === 'sleep') for (let k = 0; k < 3; k++) { const f = ((t * 0.5 + k / 3) % 1); fx += `<text x="${(hx + 10 + f * 30).toFixed(1)}" y="${(hy - f * 50).toFixed(1)}" fill="#3f5f8f" font-size="${((14 + f * 10) * big).toFixed(0)}" font-weight="800" opacity="${(1 - f).toFixed(2)}">z</text>`; }
+    if (sc.verb === 'sing') for (let k = 0; k < 3; k++) { const f = ((t * 0.6 + k / 3) % 1); fx += `<text x="${(hx + 18 + Math.sin(f * 6 + k) * 10).toFixed(1)}" y="${(hy - f * 60).toFixed(1)}" fill="${['#c2569b', '#7b5cd6', '#16a3a3'][k]}" font-size="${(20 * big).toFixed(0)}" font-weight="800" opacity="${(1 - f).toFixed(2)}">♪</text>`; }
+    if (sc.loud && sc.verb !== 'sing' && sc.verb !== 'sleep') { const p = 0.5 + 0.5 * Math.sin(t * 8); for (let k = 1; k <= 3; k++) fx += `<path d="M${(hx + 14 + k * 9).toFixed(1)} ${(hy + 20 - k * 8).toFixed(1)} q${6 + k * 2} ${k * 8} 0 ${k * 16}" stroke="#d6453d" stroke-width="3" fill="none" stroke-linecap="round" opacity="${(p * (1.1 - k * 0.25)).toFixed(2)}"/>`; }
+    if (sc.happy) for (let k = 0; k < 3; k++) { const a = t * 1.5 + k * 2.1; fx += `<text x="${(x + Math.cos(a) * 50 * s).toFixed(1)}" y="${(y + head * 0.55 + Math.sin(a) * 30 * s).toFixed(1)}" fill="#ffb400" font-size="18" text-anchor="middle">✦</text>`; }
+    if (sc.speed > 2 && ['run', 'swim', 'fly'].includes(sc.verb)) for (let k = 0; k < 3; k++) fx += `<line x1="${(x - sx * (40 + k * 6) * s).toFixed(1)}" y1="${(y - (20 + k * 18) * s).toFixed(1)}" x2="${(x - sx * (80 + k * 10) * s).toFixed(1)}" y2="${(y - (20 + k * 18) * s).toFixed(1)}" stroke="#fff" stroke-width="3" stroke-linecap="round" opacity=".8"/>`;
+    if (sc.adj.has('hungry') && sc.verb !== 'eat') fx += `<text x="${(x - 10).toFixed(1)}" y="${(y + head * 0.3).toFixed(1)}" fill="#8a5a2b" font-size="14" font-weight="800" opacity="${(0.5 + 0.5 * Math.sin(t * 6)).toFixed(2)}">grrr…</text>`;
+  }
+  $('fx').innerHTML = fx;
+}
+
+/* ---- the machine reads the sentence --------------------------------------- */
+let LAST = null;
+function run(changedBy){
+  const res = parse(tokens());
+  paintRail(res);
+  const key = JSON.stringify(S.words) + res.status;
+  const changed = key !== LAST; LAST = key;
+  buildScene(res);
+  const says = $('says');
+  says.classList.toggle('bad', res.status === 'error');
+  $('lamp').setAttribute('stroke', res.status === 'ok' ? '#2f9e5b' : res.status === 'error' ? '#ff5a4e' : res.status === 'incomplete' ? '#ffb400' : '#8a94a6');
+  $('eyesOpen').setAttribute('opacity', res.status === 'error' ? 0 : 1);
+  $('eyesDizzy').setAttribute('opacity', res.status === 'error' ? 1 : 0);
+  $('faceMouth').setAttribute('d', res.status === 'ok' ? 'M-13 8 Q0 24 13 8Z' : res.status === 'error' ? 'M-10 16 Q-5 10 0 16 Q5 22 10 16' : 'M-10 14 L10 14');
+  if (res.status === 'ok') {
+    const s = sentenceText(tokens());
+    says.innerHTML = `“${esc(s)}” — I can draw that!` + (silly(res.tree) ? ` <br><span style="color:var(--ink-3);font-size:14px">(Silly! ${esc(silly(res.tree))}.)</span>` : '');
+    if (changed && changedBy) { sound('chime'); if (s !== S.lastOk) say(s); S.lastOk = s; }
+    check(res);
+  } else if (res.status === 'error') {
+    says.innerHTML = 'Hmm… ' + esc(res.err.msg);
+    if (changed && changedBy) { sputter(); say(res.err.msg.replace(/[‘’]/g, '')); }
+  } else says.textContent = res.need;
+  track('parse', {status: res.status, sentence: tokens().map(t => t.word).join(' ')});
+  return res;
+}
+function sputter(){
+  sound('oops');
+  if (reduced()) return;
+  const m = $('machine'), sm = $('smoke');
+  tween(0, 1, 600, k => { m.setAttribute('transform', `translate(${(Math.sin(k * 40) * 6 * (1 - k)).toFixed(1)} 0)`); sm.setAttribute('opacity', (Math.sin(k * Math.PI)).toFixed(2)); sm.setAttribute('transform', `translate(0 ${(-k * 20).toFixed(1)})`); })
+    .then(() => { m.setAttribute('transform', ''); sm.setAttribute('opacity', 0); });
+}
+
+/* ---- missions and discoveries: reached when the parse says so -------------- */
+const MISSIONS = [
+  {id: 'sentence', text: 'Make a sentence the machine can draw'},
+  {id: 'sleepy',   text: 'Make the dog sleepy'},
+  {id: 'quickly',  text: 'Make something happen quickly'},
+  {id: 'tree',     text: 'Put someone under the tree'},
+  {id: 'silly',    text: 'Make the silliest sentence you can'},
+];
+function renderMissions(){
+  $('missions').innerHTML = MISSIONS.map(m => `<li class="${S.missions[m.id] ? 'done' : ''}"><i aria-hidden="true">${S.missions[m.id] ? '✓' : ''}</i><span>${esc(m.text)}</span></li>`).join('');
+}
+function tick(id){ if (S.missions[id]) return; S.missions[id] = true; renderMissions(); track('mission', {id}); }
+function sceneScreen(){
+  const m = svg.getScreenCTM(); if (!m || !SCENE) return null;
+  const p = svg.createSVGPoint(); p.x = SCENE.baseX; p.y = SCENE.baseY - 60; const r = p.matrixTransform(m); return {x: r.x, y: r.y};
+}
+function check(res){
+  const t = res.tree, at = sceneScreen();
+  tick('sentence');
+  if (!S.seenN.includes(t.noun.lex)) S.seenN.push(t.noun.lex);
+  if (!S.seenV.includes(t.verb.lex)) S.seenV.push(t.verb.lex);
+  if (S.seenN.length >= 2) discover('nouns', at);
+  if (S.seenV.length >= 2) discover('verbs', at);
+  if (t.adjs.length) discover('adjectives', at);
+  if (t.adv) discover('adverbs', at);
+  if (t.pp) discover('where', at);
+  if (t.noun.lex === 'dog' && t.adjs.some(a => a.lex === 'sleepy')) tick('sleepy');
+  if (t.adv && t.adv.lex === 'quickly') tick('quickly');
+  if (t.pp && t.pp.lex === 'under the tree') tick('tree');
+  if (silly(t)) { tick('silly'); discover('silly', at); }
+  paintTray();
+}
+
+/* ---- dragging blocks -------------------------------------------------------- */
+build();
+const ghost = $('ghost');
+let DR = null;
+function overRail(p){ return p.x > RAIL.x - 40 && p.x < 980 && p.y > 272 && p.y < 404; }
+function insertAt(p){
+  layoutRail();
+  let i = 0; for (const L of LAYOUT) { if (p.x > L.x + L.w / 2) i++; }
+  return i;
+}
+function showCaret(p){
+  if (!p || !overRail(p)) { $('caret').setAttribute('opacity', 0); return; }
+  const i = DR && DR.from != null ? null : insertAt(p);
+  const x = i == null ? p.x : i < LAYOUT.length ? LAYOUT[i].x - 3 : (LAYOUT.length ? LAYOUT[LAYOUT.length - 1].x + LAYOUT[LAYOUT.length - 1].w + 3 : RAIL.x + 5);
+  $('caret').setAttribute('x1', x); $('caret').setAttribute('x2', x); $('caret').setAttribute('opacity', 1);
+}
+function startGhost(cat, word, x0, y0, p){
+  DR.ox = p.x - x0; DR.oy = p.y - y0; DR.sx = p.x; DR.sy = p.y; DR.moved = false;
+  ghost.innerHTML = blockSVG(cat, word, 0, 0);
+  ghost.setAttribute('transform', `translate(${x0} ${y0})`); ghost.setAttribute('opacity', .95);
+}
+function moveGhost(p){
+  if (Math.hypot(p.x - DR.sx, p.y - DR.sy) > 6) DR.moved = true;
+  ghost.setAttribute('transform', `translate(${(p.x - DR.ox).toFixed(1)} ${(p.y - DR.oy).toFixed(1)})`);
+  showCaret(p);
+}
+function endGhost(){ ghost.setAttribute('opacity', 0); $('caret').setAttribute('opacity', 0); }
+const MAXW = 9;
+function addWord(w, at){
+  const x = layoutRail() + bw(tokOf(w).word);
+  if (S.words.length >= MAXW || x > RAIL.x + RAIL.w) { sound('boing'); $('says').textContent = 'I’m full! Take a block out first.'; return false; }
+  S.words.splice(at == null ? S.words.length : at, 0, w);
+  sound('snap'); track('addWord', {cat: w.cat, lex: w.lex});
+  run(true);
+  return true;
+}
+for (const el of document.querySelectorAll('#tray .tblock')) {
+  drag(el, svg, {
+    start(p){ DR = {cat: el.dataset.cat, lex: el.dataset.lex}; startGhost(DR.cat, el.dataset.word, +el.dataset.x, +el.dataset.y, p); sound('tick'); },
+    move(p){ if (DR) moveGhost(p); },
+    end(p){
+      if (!DR) return;
+      const w = {cat: DR.cat, lex: DR.lex};
+      if (w.cat === 'N') w.num = S.many ? 'pl' : 'sg';
+      if (w.cat === 'V') w.form = S.many ? 'base' : '3sg';
+      if (!DR.moved) addWord(w, null);                       // a tap puts the word at the end
+      else if (overRail(p)) addWord(w, insertAt(p));
+      endGhost(); DR = null;
+    },
+  });
+}
+/* Blocks in the machine: drag to move them along, drag out (or tap) to take them away. */
+function wireMachineBlock(el){
+  const i = +el.dataset.i;
+  drag(el, svg, {
+    start(p){ const L = LAYOUT[i]; DR = {from: i}; startGhost(S.words[i].cat, tokOf(S.words[i]).word, L.x, RAIL.y + 8, p); el.setAttribute('opacity', .3); sound('tick'); },
+    move(p){ if (DR) moveGhost(p); },
+    end(p){
+      if (!DR) return;
+      const from = DR.from, moved = DR.moved; endGhost(); DR = null;
+      requestAnimationFrame(() => {                              // re-render after the pointer is released
+        const w = S.words[from];
+        if (!moved || !overRail(p)) { S.words.splice(from, 1); sound('pop'); track('removeWord', {cat: w.cat, lex: w.lex}); run(true); return; }
+        let to = insertAt(p); if (to > from) to--;
+        S.words.splice(from, 1); S.words.splice(to, 0, w);
+        sound('snap'); track('moveWord', {from, to}); run(true);
+      });
+    },
+  });
+}
+for (const b of ['numOne', 'numMany']) $(b).addEventListener('click', () => {
+  S.many = b === 'numMany'; sound('tick'); paintTray(); track('number', {many: S.many});
+  say(S.many ? 'Now the words are for more than one.' : 'Now the words are for just one.');
+});
+$('btnClear').addEventListener('click', () => { if (!S.words.length) return; S.words = []; sound('whoosh'); run(true); });
+
+/* ============================================================================
+   Start
+   ============================================================================ */
+findings($('finds'), [
+  {id: 'nouns',      icon: '🔵', label: 'Naming words (nouns)',       hint: 'Swap who it is about', say: 'Naming words! They name a person, an animal or a thing.'},
+  {id: 'verbs',      icon: '🔴', label: 'Doing words (verbs)',        hint: 'Swap what they do', say: 'Doing words! They tell what someone does.'},
+  {id: 'adjectives', icon: '🟢', label: 'Describing words (adjectives)', hint: 'Change what it looks like', say: 'Describing words! They tell what someone is like.'},
+  {id: 'adverbs',    icon: '🟠', label: 'How words (adverbs)',        hint: 'Change how it happens', say: 'How words! They tell how something is done.'},
+  {id: 'where',      icon: '🌳', label: 'Where words',                hint: 'Put it somewhere', say: 'Where words! They tell where it happens.'},
+  {id: 'silly',      icon: '🤪', label: 'Silly sentence',             hint: 'Something that could never happen', say: 'That is a silly sentence! Correct, but it could never happen.'},
+], () => toast('All six found! You built sentences like a grammar engineer.', 4200));
+
+renderMissions();
+paintTray();
+run(false);
+loop((dt, t) => { if (SCENE && SCENE.count && !reduced()) animate(performance.now() / 1000); });
+say('This is the sentence machine. Drag word blocks into it, and it will draw your sentence!');
+window.applyFeatures = () => run(false);
+window.PG_STATE = () => ({words: S.words.map(w => Object.assign({}, w)), sentence: tokens().map(t => t.word).join(' '), many: S.many,
+  status: parse(tokens()).status, missions: Object.assign({}, S.missions), scene: SCENE ? {count: SCENE.count, noun: SCENE.noun, verb: SCENE.verb, adv: SCENE.adv, pp: SCENE.pp, scale: SCENE.scale, speed: SCENE.speed, adj: [...SCENE.adj]} : null});
+window.PG_MODEL = {parse, tokenize, token, thirdSg, plural, silly, sentenceText,
+  parseText: text => { const r = parse(tokenize(text)); return {status: r.status, at: r.err ? r.err.at : null, msg: r.err ? r.err.msg : r.need || null, num: r.tree.num,
+    noun: r.tree.noun && r.tree.noun.lex, verb: r.tree.verb && r.tree.verb.lex, adv: r.tree.adv && r.tree.adv.lex, pp: r.tree.pp && r.tree.pp.lex, adjs: r.tree.adjs.map(a => a.lex)}; }};
+window.PG_VIEW = {RAIL};   // geometry, read-only, for tests
+</script>
+</body>
+</html>

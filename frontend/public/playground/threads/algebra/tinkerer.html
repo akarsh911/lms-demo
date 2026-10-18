@@ -1,0 +1,764 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Balance and the Box</title>
+<meta name="description" content="Class 6–8: find the unknown box on a pan balance by doing the same thing to both pans, then see (a + b)², (a − b)² and a(b + c) as areas you can resize.">
+<link rel="icon" href="../../favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600&family=Inter:wght@400;500;600;700&family=Nunito:wght@500;700;800&family=Newsreader:opsz,wght@6..72,400;6..72,500&family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="../../play.css">
+<style>
+/* Only what this page needs beyond play.css. */
+.pg-stage{align-self:start; min-height:0}
+.tabs{display:flex; gap:4px; padding:10px 12px 0; border-bottom:1px solid var(--hair); background:var(--card)}
+.tab{border:1px solid transparent; border-bottom:none; background:none; padding:8px 16px; border-radius:10px 10px 0 0; cursor:pointer;
+  font-family:"Fredoka",var(--font-head); font-size:17px; color:var(--ink-3); margin-bottom:-1px}
+.tab[aria-selected="true"]{background:var(--card); border-color:var(--hair); color:var(--ink); border-bottom:1px solid var(--card)}
+.gate{position:absolute; left:0; right:0; top:50px; bottom:0; display:grid; place-items:center; pointer-events:none}
+.gate span{background:rgba(29,35,39,.85); color:#fff; padding:10px 16px; border-radius:99px; font-weight:600; font-size:14px}
+.chips{display:flex; flex-wrap:wrap; gap:6px; margin:4px 0 8px}
+.chip{border:1px solid var(--hair-2); background:var(--card); border-radius:99px; padding:5px 12px; font-size:13px; cursor:pointer; font-weight:600; color:var(--ink-2)}
+.chip[aria-pressed="true"]{background:var(--accent-soft); border-color:var(--accent); color:var(--ink)}
+.chip:disabled, .btn:disabled{opacity:.45; cursor:default}
+.lab{font-size:12px; font-weight:700; color:var(--ink-3); letter-spacing:.05em; text-transform:uppercase; margin-top:8px}
+.stepper{display:inline-grid; grid-template-columns:34px 44px 34px; align-items:center; gap:4px}
+.stepper output{font-family:"Fredoka",var(--font-head); font-size:22px; text-align:center; font-weight:600}
+.stepper .btn{padding:0; min-height:34px}
+.ops{display:grid; grid-template-columns:1fr 1fr; gap:6px; margin-top:10px}
+.ops .wide{grid-column:1/-1}
+.ops .btn{font-size:14px; line-height:1.2; padding:4px 10px}
+.msg{font-size:13px; margin:8px 0 0; min-height:1.4em; color:var(--ink-2)}
+.msg.warn{color:#b3361f}
+.readout{display:grid; grid-template-columns:1fr auto; gap:3px 12px; font-size:13.5px}
+.readout b{font-family:var(--font-mono); font-weight:600; font-variant-numeric:tabular-nums; text-align:right}
+.why p{font-size:14px; margin-bottom:.55em}
+.note{font-size:12.5px; color:var(--ink-3); margin:6px 0 0}
+select{width:100%}
+.hit{cursor:ew-resize}
+.hit.v{cursor:ns-resize}
+@media (max-width:1180px) and (min-width:981px){ .pg-main.wide-side{grid-template-columns:minmax(0,1fr) 330px} }
+</style>
+</head>
+<body>
+<header class="pg-top"></header>
+
+<div class="pg-intro">
+  <h1>The balance and the box</h1>
+  <p>A box of unknown weight sits on a pan balance. Take the same thing off both pans, or share both pans into equal groups, until one box stands alone.
+     Then turn to the box of a different kind: a square of side a + b. Drag its sides and count what is inside.</p>
+</div>
+
+<main class="pg-main wide-side">
+  <section class="pg-stage" id="stageWrap">
+    <div class="tabs" role="tablist">
+      <button class="tab" role="tab" id="tabBal" aria-selected="true">The balance</button>
+      <button class="tab" role="tab" id="tabBox" aria-selected="false">The box: (a + b)² as an area</button>
+    </div>
+    <svg id="stageB" viewBox="0 0 1000 640" role="img" aria-label="A pan balance with boxes of unknown weight and unit weights, the equation it stands for, and a graph of both pans' weights"></svg>
+    <svg id="stageA" viewBox="0 0 1000 510" role="img" aria-label="A square of side a plus b split into pieces whose areas are counted" hidden></svg>
+    <div class="gate" id="gate"><span>Make your prediction first →</span></div>
+  </section>
+
+  <aside class="pg-side">
+    <div id="poeB"></div>
+    <div id="poeA" hidden></div>
+
+    <div class="card" id="cardB">
+      <div class="kicker">Puzzle</div>
+      <select id="pz" aria-label="Choose a puzzle"></select>
+      <div class="lab">Where</div>
+      <div class="chips" id="whereChips">
+        <button class="chip" data-w="both" aria-pressed="true">Both pans</button>
+        <button class="chip" data-w="L" aria-pressed="false">Left pan only</button>
+        <button class="chip" data-w="R" aria-pressed="false">Right pan only</button>
+      </div>
+      <div class="row" style="justify-content:space-between">
+        <div><div class="lab" style="margin-top:0">How many</div>
+          <span class="stepper"><button class="btn" id="nDn" aria-label="Fewer">−</button><output id="nOut">1</output><button class="btn" id="nUp" aria-label="More">+</button></span></div>
+        <div><div class="lab" style="margin-top:0">Of what</div>
+          <div class="chips" id="whatChips" style="margin:0">
+            <button class="chip" data-t="box" aria-pressed="true">boxes</button>
+            <button class="chip" data-t="unit" aria-pressed="false">unit weights</button>
+          </div></div>
+      </div>
+      <div class="ops">
+        <button class="btn primary" id="opSub">Take away</button>
+        <button class="btn" id="opAdd">Add</button>
+        <button class="btn wide" id="opDiv"><span>Share into <span id="nDiv">1</span> equal groups, keep one</span></button>
+      </div>
+      <p class="msg" id="msg"></p>
+      <div class="row"><button class="btn sm" id="btnReset">Start this puzzle again</button></div>
+    </div>
+
+    <div class="card" id="cardTrial">
+      <div class="kicker">Trial and error</div>
+      <div class="ctl"><label for="guess">Try a weight</label><input type="range" id="guess" min="0" max="20" step="1" value="0"><output id="guessOut" class="num">0</output></div>
+      <div id="trialOut" class="note" style="margin-top:0"></div>
+    </div>
+
+    <div class="card" id="cardA" hidden>
+      <div class="kicker">Which box</div>
+      <div class="chips" id="modeChips">
+        <button class="chip" data-m="sq" aria-pressed="true">(a + b)²</button>
+        <button class="chip" data-m="diff" aria-pressed="false">(a − b)²</button>
+        <button class="chip" data-m="dist" aria-pressed="false">a(b + c)</button>
+      </div>
+      <div class="ctl"><label for="sa">a</label><input type="range" id="sa" min="1" max="70" step="1" value="60"><output id="saOut" class="num">60</output></div>
+      <div class="ctl"><label for="sb">b</label><input type="range" id="sb" min="0" max="40" step="1" value="5"><output id="sbOut" class="num">5</output></div>
+      <div class="ctl" id="rowC" hidden><label for="sc">c</label><input type="range" id="sc" min="0" max="40" step="1" value="1"><output id="scOut" class="num">1</output></div>
+      <div id="diffOps" hidden>
+        <div class="ops">
+          <button class="btn sm wide" id="cutR" aria-pressed="false">Take away the strip on the right (a × b)</button>
+          <button class="btn sm wide" id="cutB" aria-pressed="false">Take away the strip at the bottom (a × b)</button>
+          <button class="btn sm wide" id="addC" aria-pressed="false">Put back the corner (b × b)</button>
+        </div>
+      </div>
+      <p class="note">You can also drag the round handles on the drawing.</p>
+      <div class="readout" id="readA" style="margin-top:8px"></div>
+    </div>
+
+    <div class="card why" id="whyCard" hidden>
+      <div class="kicker">What is happening</div>
+      <div id="why"></div>
+    </div>
+
+    <div class="card"><div class="kicker">To find</div><div id="finds"></div></div>
+  </aside>
+</main>
+
+<script src="../../play.js"></script>
+<script>
+'use strict';
+const {$, esc, clamp, fmt, drag, sound, say, track, toast, predict, findings, discover, found,
+       shareState, sharedState, mount, reduced, tween, ease} = Play;
+mount({thread: 'algebra', band: 'tinkerer'});
+
+/* MODEL:start ==================================================================
+   1. The pan balance. Each pan holds some boxes (every box has the same true weight X,
+      which the page knows and the learner does not) and some unit weights. A pan weighs
+      boxes × X + units. The beam's tilt comes from the difference of the two real
+      weights, so a move made to one pan only tips it, and a move made to both pans
+      leaves it level whatever X is. Moves: take away or add n boxes or n unit weights,
+      or share a pan into n equal groups and keep one (only if both the boxes and the
+      weights on it split evenly). The unknown is found when one box stands alone.
+   2. The box. A square of side a + b (or a − b, or a rectangle a by b + c) is cut into
+      pieces, and every piece's area is COUNTED cell by cell on a unit grid, never taken
+      from the identity. For (a − b)² each unit cell keeps a tally: −1 for each strip that
+      is taken away over it, +1 when the corner is put back, so the running total and the
+      area really left can be compared.
+   ============================================================================ */
+const PUZZLES = [
+  {id: 'eggs',  name: 'Fried eggs and bread (Fig. 7.6): e + e = 2 + 2 + 2', letter: 'e', L: {x: 2, k: 0},  R: {x: 0, k: 6},  X: 3},
+  {id: 'sacks', name: 'Sacks and weights (Fig. 7.7): 4 + 2y = 16',          letter: 'y', L: {x: 2, k: 4},  R: {x: 0, k: 16}, X: 6},
+  {id: 'eq6',   name: 'Example 6: 6y + 7 = 4y + 21',                        letter: 'y', L: {x: 6, k: 7},  R: {x: 4, k: 21}, X: 7},
+  {id: 'yavat', name: 'Bījagaṇita: yā 3 rū 4 = yā 2 rū 8 (3x + 4 = 2x + 8)', letter: 'x', L: {x: 3, k: 4},  R: {x: 2, k: 8},  X: 4},
+  {id: 'n3',    name: 'Figure it Out: 3n = 10 + n',                          letter: 'n', L: {x: 3, k: 0},  R: {x: 1, k: 10}, X: 5},
+  {id: 'marb',  name: 'Marbles (Example 12): y + (y + 30) = 60',             letter: 'y', L: {x: 2, k: 30}, R: {x: 0, k: 60}, X: 15},
+  {id: 'myst',  name: 'A mystery puzzle (new each time)',                    letter: 'm'},
+];
+/* A mystery puzzle, built FROM a hidden weight: pick X, then weights that balance it. */
+function mystery(seed){
+  const r = Play.mulberry32(seed), pick = (lo, hi) => lo + Math.floor(r() * (hi - lo + 1));
+  const X = pick(2, 9), a = pick(3, 6), c = pick(1, a - 1), b = pick(0, 12);
+  return {L: {x: a, k: b}, R: {x: c, k: (a - c) * X + b}, X};
+}
+const weigh = (p, X) => p.x * X + p.k;
+/* Degrees of tilt; positive = the right pan goes down. A real beam, softened so it never flips over. */
+const tiltOf = (L, R, X) => 14 * Math.tanh((weigh(R, X) - weigh(L, X)) / 4);
+const PAN = {L: 'left', R: 'right'};
+/* One move, applied to a copy of the pans. Returns {L, R} or {err}. */
+function applyOp(L, R, op){
+  const out = {L: {...L}, R: {...R}}, n = op.n, sides = op.where === 'both' ? ['L', 'R'] : [op.where];
+  for (const s of sides) {
+    const p = out[s];
+    if (op.kind === 'sub') {
+      if (op.what === 'box' && p.x < n) return {err: `There ${p.x === 1 ? 'is only 1 box' : 'are only ' + p.x + ' boxes'} on the ${PAN[s]} pan.`};
+      if (op.what === 'unit' && p.k < n) return {err: `There ${p.k === 1 ? 'is only 1 unit weight' : 'are only ' + p.k + ' unit weights'} on the ${PAN[s]} pan.`};
+      if (op.what === 'box') p.x -= n; else p.k -= n;
+    } else if (op.kind === 'add') {
+      if (op.what === 'box') { if (p.x + n > 10) return {err: 'No more than 10 boxes fit on a pan.'}; p.x += n; }
+      else { if (p.k + n > 90) return {err: 'No more than 90 unit weights fit on a pan.'}; p.k += n; }
+    } else if (op.kind === 'div') {
+      if (n < 2) return {err: 'Sharing into 1 group changes nothing. Choose 2 or more.'};
+      if (p.x % n || p.k % n) return {err: `The ${PAN[s]} pan (${p.x} ${p.x === 1 ? 'box' : 'boxes'}, ${p.k} unit weights) cannot be shared into ${n} equal groups.`};
+      p.x /= n; p.k /= n;
+    }
+  }
+  return out;
+}
+/* The unknown stands alone: one box, nothing else, against weights only. */
+function aloneValue(L, R){
+  if (L.x === 1 && L.k === 0 && R.x === 0) return {side: 'L', v: R.k};
+  if (R.x === 1 && R.k === 0 && L.x === 0) return {side: 'R', v: L.k};
+  return null;
+}
+const side = (p, t) => { const a = []; if (p.x) a.push((p.x === 1 ? '' : p.x) + t); if (p.k || !p.x) a.push(String(p.k)); return a.join(' + '); };
+const eqText = (L, R, t, rel = '=') => `${side(L, t)} ${rel} ${side(R, t)}`;
+
+/* ---- the box: every piece counted on a unit grid ---- */
+function countPieces(mode, a, b, c, cuts = {r: false, bt: false, c: false}){
+  const cnt = {};
+  const add = (k, v = 1) => { cnt[k] = (cnt[k] || 0) + v; };
+  if (mode === 'sq') {
+    const s = a + b;
+    for (let i = 0; i < s; i++) for (let j = 0; j < s; j++) add((i < a ? 'a' : 'b') + (j < a ? 'a' : 'b'));
+    return {aa: cnt.aa || 0, ab: cnt.ba || 0, ba: cnt.ab || 0, bb: cnt.bb || 0, whole: s * s, sumSq: (cnt.aa || 0) + (cnt.bb || 0)};
+  }
+  if (mode === 'diff') {
+    let tally = 0, left = 0, twice = 0, strip = 0, corner = 0;
+    for (let i = 0; i < a; i++) for (let j = 0; j < a; j++) {
+      const inR = i >= a - b, inB = j >= a - b;              // i: column, j: row
+      let v = 1;
+      if (inR) strip++;
+      if (cuts.r && inR) v--;
+      if (cuts.bt && inB) v--;
+      if (cuts.c && inR && inB) v++;
+      if (inR && inB) corner++;
+      if (v < 0) twice++;
+      tally += v; if (v > 0) left++;
+    }
+    return {whole: a * a, strip, corner, tally, left, twice, inner: (a - b) * (a - b)};
+  }
+  /* dist: a rows by (b + c) columns */
+  let ab = 0, ac = 0;
+  for (let j = 0; j < a; j++) for (let i = 0; i < b + c; i++) { if (i < b) ab++; else ac++; }
+  return {ab, ac, whole: a * (b + c)};
+}
+/* MODEL:end */
+
+/* ---- state: plain data --------------------------------------------------- */
+const S = {tab: 'bal', pz: 'eq6', L: {x: 6, k: 7}, R: {x: 4, k: 21}, X: 7, letter: 'y', where: 'both', n: 1, what: 'box',
+           hist: [], log: [], guesses: [], guess: 0, solved: false, seed: 1, theta: 0,
+           mode: 'sq', a: 60, b: 5, c: 1, cuts: {r: false, bt: false, c: false}, pairs: [], dpairs: [],
+           lockedB: false, lockedA: false};
+function loadPuzzle(id, seed){
+  const P = PUZZLES.find(p => p.id === id) || PUZZLES[2];
+  S.pz = P.id; S.letter = P.letter;
+  if (P.id === 'myst') { S.seed = seed || (1 + Math.floor(Math.random() * 1e6)); const m = mystery(S.seed); S.L = m.L; S.R = m.R; S.X = m.X; }
+  else { S.L = {...P.L}; S.R = {...P.R}; S.X = P.X; }
+  S.hist = [{L: {...S.L}, R: {...S.R}}]; S.log = []; S.guesses = []; S.solved = false; S.start = {L: {...S.L}, R: {...S.R}};
+}
+loadPuzzle('eq6');
+const shared = sharedState();
+if (shared) {
+  if (PUZZLES.some(p => p.id === shared.pz)) loadPuzzle(shared.pz, +shared.seed || 0);
+  if (['bal', 'box'].includes(shared.tab)) S.tab = shared.tab;
+  if (['sq', 'diff', 'dist'].includes(shared.mode)) S.mode = shared.mode;
+  S.a = clamp(+shared.a || 60, 1, 70); S.b = clamp(+shared.b || 0, 0, 40); S.c = clamp(+shared.c || 0, 0, 40);
+}
+shareState(() => ({tab: S.tab, pz: S.pz, seed: S.seed, mode: S.mode, a: S.a, b: S.b, c: S.c}));
+
+/* ============================================================================
+   The balance stage
+   ============================================================================ */
+const sB = $('stageB');
+const PIV = {x: 500, y: 118}, ARM = 300, DROP = 150;
+const GB = {x: 580, y: 470, w: 370, h: 128};           // the graph
+const COL = {L: '#3f7fd8', R: '#e8890c', box: '#d6453d'};
+function buildB(){
+  sB.innerHTML = `
+  <defs>
+    <linearGradient id="gBeam" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#8a6a43"/><stop offset="1" stop-color="#5e4528"/></linearGradient>
+    <linearGradient id="gW" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#6b7479"/><stop offset=".45" stop-color="#b5bcc0"/><stop offset="1" stop-color="#5a6267"/></linearGradient>
+    <linearGradient id="gBox" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#e2604f"/><stop offset="1" stop-color="#b8352b"/></linearGradient>
+  </defs>
+  <rect x="0" y="0" width="1000" height="640" fill="#fbfaf6"/>
+  <text x="24" y="30" fill="#4a555b" font-size="12.5" font-weight="700" letter-spacing=".08em">THE PAN BALANCE</text>
+  <text id="heavy" x="976" y="30" text-anchor="end" fill="#4a555b" font-size="14" font-weight="700"></text>
+  <!-- the stand -->
+  <rect x="420" y="392" width="160" height="16" rx="6" fill="#6b4a2b"/>
+  <rect x="492" y="${PIV.y}" width="16" height="276" rx="4" fill="#7d5a36"/>
+  <path d="M 470 400 L 530 400 L 512 372 L 488 372 Z" fill="#5e4528"/>
+  <path id="dial" d="M 452 170 A 60 60 0 0 1 548 170" fill="none" stroke="#c9bfa9" stroke-width="3"/>
+  <line x1="500" y1="160" x2="500" y2="172" stroke="#8a7a5a" stroke-width="2"/>
+  <g id="panL"><g class="hang"></g><g class="items"></g></g>
+  <g id="panR"><g class="hang"></g><g class="items"></g></g>
+  <g id="beamG">
+    <rect x="${PIV.x - ARM - 14}" y="${PIV.y - 7}" width="${2 * ARM + 28}" height="14" rx="7" fill="url(#gBeam)"/>
+    <line x1="500" y1="${PIV.y}" x2="500" y2="${PIV.y + 58}" stroke="#3a2a1a" stroke-width="3" stroke-linecap="round"/>
+    <circle cx="${PIV.x - ARM}" cy="${PIV.y}" r="6" fill="#3a2a1a"/><circle cx="${PIV.x + ARM}" cy="${PIV.y}" r="6" fill="#3a2a1a"/>
+  </g>
+  <circle cx="${PIV.x}" cy="${PIV.y}" r="11" fill="#3a2a1a"/><circle cx="${PIV.x}" cy="${PIV.y}" r="4" fill="#d9c9a3"/>
+  <!-- the equation the balance stands for -->
+  <rect x="0" y="424" width="1000" height="216" fill="#f3f0e7"/>
+  <line x1="0" y1="424" x2="1000" y2="424" stroke="#e2ded2"/>
+  <text x="24" y="452" fill="#4a555b" font-size="12.5" font-weight="700" letter-spacing=".08em">THE EQUATION</text>
+  <text id="eqNow" x="280" y="500" text-anchor="middle" fill="#1d2327" font-size="34" font-family="Fredoka, sans-serif" font-weight="600"></text>
+  <text id="eqNote" x="280" y="528" text-anchor="middle" fill="#4a555b" font-size="13.5"></text>
+  <g id="logG" font-size="13"></g>
+  <text x="${GB.x}" y="452" fill="#4a555b" font-size="12.5" font-weight="700" letter-spacing=".08em" id="gTitle">EACH PAN’S WEIGHT, IF A BOX WEIGHS…</text>
+  <g id="gAxes"></g><g id="gLines"></g><g id="gDots"></g>
+  <text id="gVeil" x="${GB.x + GB.w / 2}" y="${GB.y + GB.h / 2}" text-anchor="middle" fill="#7c878c" font-size="13"></text>`;
+}
+/* Items on one pan, drawn upward from the plate (0,0 is the middle of the plate). */
+function panItems(p, letter, solved){
+  let s = '', y = 0;
+  const rowOf = (n, per, w, gap, h, draw) => {
+    for (let r = 0; r * per < n; r++) {
+      const m = Math.min(per, n - r * per), x0 = -(m * (w + gap) - gap) / 2;
+      y -= h + (r ? 3 : 0);
+      for (let i = 0; i < m; i++) s += draw(x0 + i * (w + gap), y);
+    }
+  };
+  rowOf(p.x, 5, 38, 5, 38, (x, yy) => `<g transform="translate(${x.toFixed(1)} ${yy})"><rect width="38" height="38" rx="5" fill="url(#gBox)" stroke="#8f2a22" stroke-width="1"/>` +
+    `<path d="M4 9 H34 M19 4 V9" stroke="#f6c7bf" stroke-width="1.4" opacity=".7"/>` +
+    `<text x="19" y="${solved ? 25 : 28}" text-anchor="middle" fill="#fff" font-size="${solved ? 14 : 19}" font-weight="700" font-family="Fredoka, sans-serif">${solved ? letter + '=' + solved : letter}</text></g>`);
+  if (p.x) y -= 3;
+  const tens = Math.floor(p.k / 10), units = p.k % 10;
+  rowOf(tens, 6, 30, 4, 34, (x, yy) => `<g transform="translate(${x.toFixed(1)} ${yy})"><path d="M3 34 L6 10 Q15 4 24 10 L27 34 Z" fill="url(#gW)" stroke="#4a5358"/>` +
+    `<path d="M10 9 Q15 -1 20 9" fill="none" stroke="#4a5358" stroke-width="2.4"/><text x="15" y="28" text-anchor="middle" fill="#1d2327" font-size="11" font-weight="700">10</text></g>`);
+  if (tens) y -= 3;
+  rowOf(units, 10, 15, 3, 15, (x, yy) => `<rect x="${x.toFixed(1)}" y="${yy}" width="15" height="15" rx="2.5" fill="#39434a" stroke="#1d2327"/>`);
+  return s;
+}
+function paintBalance(){
+  const th = S.theta * Math.PI / 180;
+  $('beamG').setAttribute('transform', `rotate(${S.theta.toFixed(2)} ${PIV.x} ${PIV.y})`);
+  for (const k of ['L', 'R']) {
+    const sg = k === 'L' ? -1 : 1, hx = PIV.x + sg * ARM * Math.cos(th), hy = PIV.y + sg * ARM * Math.sin(th);
+    const g = $('pan' + k);
+    g.setAttribute('transform', `translate(${hx.toFixed(1)} ${(hy + DROP).toFixed(1)})`);
+    g.querySelector('.hang').innerHTML = `<path d="M-125 0 L0 ${-DROP} L125 0" fill="none" stroke="#6f6a5e" stroke-width="1.6"/>` +
+      `<path d="M-132 0 Q0 30 132 0 Z" fill="#b89b62" stroke="#7d6538" stroke-width="1.5"/>`;
+  }
+}
+function paintItems(){
+  const sv = S.solved ? S.X : null;
+  $('panL').querySelector('.items').innerHTML = panItems(S.L, S.letter, sv);
+  $('panR').querySelector('.items').innerHTML = panItems(S.R, S.letter, sv);
+}
+let TW = 0;
+function settle(){
+  const target = tiltOf(S.L, S.R, S.X), from = S.theta, my = ++TW;
+  if (Math.abs(target - from) < 0.01) { S.theta = target; paintBalance(); return; }
+  tween(0, 1, 700, k => { if (my !== TW) return; S.theta = from + (target - from) * k; paintBalance(); }, ease.back);
+}
+const gx = v => GB.x + v / gXMax() * GB.w;
+const gXMax = () => Math.max(10, Math.ceil(S.X * 2 / 5) * 5, 20);
+let GYMAX = 100;
+const gy = v => GB.y + GB.h - v / GYMAX * GB.h;
+function paintGraph(){
+  const XM = gXMax();
+  GYMAX = Math.max(20, ...S.hist.map(h => Math.max(weigh(h.L, XM), weigh(h.R, XM))));
+  GYMAX = Math.ceil(GYMAX / 20) * 20;
+  let ax = `<line x1="${GB.x}" y1="${GB.y + GB.h}" x2="${GB.x + GB.w}" y2="${GB.y + GB.h}" stroke="#9aa3a6"/><line x1="${GB.x}" y1="${GB.y}" x2="${GB.x}" y2="${GB.y + GB.h}" stroke="#9aa3a6"/>`;
+  for (let v = 0; v <= XM; v += XM > 20 ? 10 : 5) ax += `<text x="${gx(v)}" y="${GB.y + GB.h + 15}" font-size="11" text-anchor="middle" fill="#7c878c">${v}</text>`;
+  ax += `<text x="${GB.x + GB.w}" y="${GB.y + GB.h + 30}" font-size="11" text-anchor="end" fill="#7c878c">weight of one box ${esc(S.letter)} →</text>`;
+  ax += `<text x="${GB.x - 6}" y="${GB.y + 4}" font-size="11" text-anchor="end" fill="#7c878c">${GYMAX}</text><text x="${GB.x - 6}" y="${GB.y + GB.h + 4}" font-size="11" text-anchor="end" fill="#7c878c">0</text>`;
+  $('gAxes').innerHTML = ax;
+  let ln = '';
+  const line = (p, col, w, op) => `<line x1="${gx(0)}" y1="${gy(weigh(p, 0)).toFixed(1)}" x2="${gx(XM)}" y2="${gy(weigh(p, XM)).toFixed(1)}" stroke="${col}" stroke-width="${w}" opacity="${op}"/>`;
+  if (S.solved) {
+    S.hist.forEach((h, i) => { const last = i === S.hist.length - 1; ln += line(h.L, COL.L, last ? 2.6 : 1.3, last ? 1 : .45) + line(h.R, COL.R, last ? 2.6 : 1.3, last ? 1 : .45); });
+    ln += `<line x1="${gx(S.X)}" y1="${GB.y}" x2="${gx(S.X)}" y2="${GB.y + GB.h}" stroke="#1d2327" stroke-dasharray="4 4"/>` +
+      `<text x="${gx(S.X) + 6}" y="${GB.y + 12}" font-size="12" font-weight="700" fill="#1d2327">${esc(S.letter)} = ${S.X}: every step’s two lines cross here</text>`;
+  }
+  $('gLines').innerHTML = ln;
+  let d = '';
+  for (const g of S.guesses) if (g.eq === S.hist.length - 1 || S.solved) {
+    const h = S.hist[Math.min(g.eq, S.hist.length - 1)];
+    if (g.v > XM) continue;
+    d += `<circle cx="${gx(g.v)}" cy="${gy(weigh(h.L, g.v)).toFixed(1)}" r="4" fill="${COL.L}"/><circle cx="${gx(g.v)}" cy="${gy(weigh(h.R, g.v)).toFixed(1)}" r="4" fill="${COL.R}"/>`;
+  }
+  $('gDots').innerHTML = d;
+  $('gVeil').textContent = !S.solved && !S.guesses.length ? 'Try a weight, or solve the balance.' : '';
+}
+function paintEq(){
+  const tip = Math.abs(weigh(S.L, S.X) - weigh(S.R, S.X)) > 1e-9;
+  $('eqNow').textContent = eqText(S.L, S.R, S.letter, tip ? '≠' : '=');
+  $('eqNow').setAttribute('fill', tip ? '#b3361f' : '#1d2327');
+  const al = aloneValue(S.L, S.R);
+  $('eqNote').textContent = tip ? 'The scale has tipped: this is no longer a true equation.'
+    : al ? `The box stands alone. ${S.letter} = ${al.v}.` : 'The scale balances: left pan = right pan.';
+  $('heavy').textContent = !S.lockedB ? '' : tip ? (weigh(S.L, S.X) > weigh(S.R, S.X) ? 'The left pan is heavier' : 'The right pan is heavier') : 'Balanced';
+  $('heavy').setAttribute('fill', tip ? '#b3361f' : '#2f7d4f');
+  let lg = `<text x="24" y="560" fill="#7c878c" font-size="12" font-weight="700" letter-spacing=".06em">WHAT YOU DID</text>`;
+  const rows = S.log.slice(-3);
+  if (!rows.length) lg += `<text x="24" y="582" fill="#7c878c">Nothing yet. Start: ${esc(eqText(S.start.L, S.start.R, S.letter))}</text>`;
+  rows.forEach((r, i) => lg += `<text x="24" y="${582 + i * 19}" fill="${r.tip ? '#b3361f' : '#1d2327'}">${esc(r.text)} <tspan fill="#7c878c">→</tspan> <tspan font-weight="700">${esc(r.eq)}</tspan></text>`);
+  $('logG').innerHTML = lg;
+}
+
+/* ============================================================================
+   The box stage
+   ============================================================================ */
+const sA = $('stageA');
+const FIG = {x: 70, y: 70, size: 400};
+let UMAX = 80;                                            // units the figure's side can show
+const U = () => FIG.size / UMAX;
+const PC = {aa: '#7fa8e8', ab: '#8fd0a4', bb: '#f4b86b', a: '#7fa8e8'};
+function niceMax(v){ for (const m of [10, 20, 40, 80]) if (v <= m) return m; return 80; }
+function extent(){ return S.mode === 'sq' ? S.a + S.b : S.mode === 'diff' ? S.a : Math.max(S.a, S.b + S.c); }
+function buildA(){
+  sA.innerHTML = `
+  <defs>
+    <pattern id="hatch" width="8" height="8" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="8" height="8" fill="#fde6e3"/><line x1="0" y1="0" x2="0" y2="8" stroke="#d6453d" stroke-width="2.4"/></pattern>
+    <pattern id="hatch2" width="8" height="8" patternUnits="userSpaceOnUse" patternTransform="rotate(-45)"><rect width="8" height="8" fill="url(#hatch)"/><line x1="0" y1="0" x2="0" y2="8" stroke="#8f1f18" stroke-width="2.4"/></pattern>
+  </defs>
+  <rect x="0" y="0" width="1000" height="510" fill="#fbfaf6"/>
+  <text x="24" y="32" fill="#4a555b" font-size="12.5" font-weight="700" letter-spacing=".08em" id="aTitle"></text>
+  <g id="figG"></g>
+  <g id="gridG" stroke="#1d2327" stroke-opacity=".16" stroke-width=".8"></g>
+  <g id="dimG" font-size="15" font-weight="700" fill="#1d2327"></g>
+  <g id="sumG"></g>
+  <circle class="hit" id="hA" r="12" fill="#d6453d" stroke="#fff" stroke-width="3"/>
+  <circle class="hit" id="hB" r="12" fill="#1d2327" stroke="#fff" stroke-width="3"/>
+  <circle class="hit" id="hC" r="12" fill="#16a3a3" stroke="#fff" stroke-width="3"/>`;
+}
+const rect = (x, y, w, h, fill, extra = '') => w > 0 && h > 0 ? `<rect x="${(FIG.x + x * U()).toFixed(1)}" y="${(FIG.y + y * U()).toFixed(1)}" width="${(w * U()).toFixed(1)}" height="${(h * U()).toFixed(1)}" fill="${fill}" stroke="#1d2327" stroke-width="1.3" ${extra}/>` : '';
+const lab = (x, y, t, size = 16) => `<text x="${(FIG.x + x * U()).toFixed(1)}" y="${(FIG.y + y * U() + size / 3).toFixed(1)}" text-anchor="middle" font-size="${size}" font-weight="700" fill="#1d2327" font-family="Fredoka, sans-serif">${t}</text>`;
+const n = v => v.toLocaleString('en-IN');
+function paintBox(){
+  const {a, b, c} = S, u = U(), locked = S.lockedA;
+  let fig = '', dims = '', sum = '', title = '';
+  const big = s => Math.min(22, Math.max(11, s * u / 5));
+  const hide = (id, on) => $(id).style.display = on ? '' : 'none';
+  if (S.mode === 'sq') {
+    const P = countPieces('sq', a, b);
+    title = `A SQUARE OF SIDE a + b = ${a} + ${b} = ${a + b}`;
+    fig += rect(0, 0, a, a, PC.aa) + rect(a, 0, b, a, PC.ab) + rect(0, a, a, b, PC.ab) + rect(a, a, b, b, PC.bb);
+    if (locked) {
+      if (a * u > 60) fig += lab(a / 2, a / 2, `a² = ${n(P.aa)}`, big(a));
+      if (b * u > 34 && a * u > 60) fig += lab(a + b / 2, a / 2, n(P.ab), 13) + lab(a / 2, a + b / 2, n(P.ba), 13);
+      if (b * u > 34) fig += lab(a + b / 2, a + b / 2, n(P.bb), 12);
+    }
+    dims += `<text x="${FIG.x + a * u / 2}" y="${FIG.y - 12}" text-anchor="middle">a = ${a}</text>` + (b ? `<text x="${FIG.x + (a + b / 2) * u}" y="${FIG.y - 12}" text-anchor="middle" fill="#9a5b00">b = ${b}</text>` : '');
+    dims += `<text x="${FIG.x - 12}" y="${FIG.y + a * u / 2}" text-anchor="end">${a}</text>` + (b ? `<text x="${FIG.x - 12}" y="${FIG.y + (a + b / 2) * u + 5}" text-anchor="end" fill="#9a5b00">${b}</text>` : '');
+    hideGrid(a + b, a + b);
+    if (locked) sum = sumBlock([
+      ['a × a', P.aa, PC.aa], ['a × b', P.ab, PC.ab], ['b × a', P.ba, PC.ab], ['b × b', P.bb, PC.bb],
+    ], P.whole, `(${a} + ${b})² = ${a + b} × ${a + b}`, [`a² + b² = ${n(P.sumSq)}`, `short by ${n(P.whole - P.sumSq)} = 2 × ${a} × ${b}`]);
+    handle('hA', a, 0); handle('hB', a + b, 0); hide('hC', false);
+  } else if (S.mode === 'diff') {
+    const P = countPieces('diff', a, b, 0, S.cuts);
+    title = `A SQUARE OF SIDE a = ${a}, AND INSIDE IT ONE OF SIDE a − b = ${a - b}`;
+    fig += rect(0, 0, a, a, PC.aa);
+    const st = (x, y, w, h, on, twice) => rect(x, y, w, h, twice ? 'url(#hatch2)' : on ? 'url(#hatch)' : 'none', on ? '' : 'stroke-dasharray="6 4"');
+    fig += st(a - b, 0, b, a, S.cuts.r) + st(0, a - b, a, b, S.cuts.bt);
+    if (S.cuts.r && S.cuts.bt && !S.cuts.c) fig += st(a - b, a - b, b, b, true, true);
+    if (S.cuts.c) fig += rect(a - b, a - b, b, b, PC.bb, 'opacity=".9"');
+    fig += `<rect x="${FIG.x}" y="${FIG.y}" width="${((a - b) * u).toFixed(1)}" height="${((a - b) * u).toFixed(1)}" fill="none" stroke="#d6453d" stroke-width="3"/>`;
+    if (locked && (a - b) * u > 60) fig += lab((a - b) / 2, (a - b) / 2, `(a − b)²`, big(a - b));
+    if (locked && S.cuts.r && S.cuts.bt && !S.cuts.c && b * u > 30) fig += lab(a - b / 2, a - b / 2, '×2', 13);
+    dims += `<text x="${FIG.x + a * u / 2}" y="${FIG.y - 12}" text-anchor="middle">a = ${a}</text>`;
+    dims += `<text x="${FIG.x + (a - b / 2) * u}" y="${FIG.y + a * u + 22}" text-anchor="middle" fill="#9a5b00">b = ${b}</text>`;
+    dims += `<text x="${FIG.x + (a - b) / 2 * u}" y="${FIG.y + a * u + 22}" text-anchor="middle" fill="#d6453d">a − b = ${a - b}</text>`;
+    hideGrid(a, a);
+    const terms = [['a × a', P.whole, PC.aa]];
+    if (S.cuts.r) terms.push(['− a × b', -P.strip, 'url(#hatch)']);
+    if (S.cuts.bt) terms.push(['− a × b', -P.strip, 'url(#hatch)']);
+    if (S.cuts.c) terms.push(['+ b × b', P.corner, PC.bb]);
+    if (locked) sum = sumBlock(terms, P.tally, 'running total', [
+      `area really left (cells counted) = ${n(P.left)}`,
+      P.twice ? `the corner ${b} × ${b} was taken away twice` : P.tally === P.inner && S.cuts.r && S.cuts.bt ? `= (a − b)² = ${a - b}² ✓` : `(a − b)² = ${n(P.inner)}`]);
+    handle('hA', a, 0); handle('hB', a - b, 0); hide('hC', false);
+  } else {
+    const P = countPieces('dist', a, b, c);
+    title = `A RECTANGLE a BY b + c = ${a} BY ${b} + ${c}`;
+    fig += rect(0, 0, b, a, PC.aa) + rect(b, 0, c, a, PC.ab);
+    if (locked && b * u > 60) fig += lab(b / 2, a / 2, `${a} × ${b} = ${n(P.ab)}`, 15);
+    if (locked && c * u > 44) fig += lab(b + c / 2, a / 2, n(P.ac), 13);
+    dims += `<text x="${FIG.x + b * u / 2}" y="${FIG.y - 12}" text-anchor="middle">b = ${b}</text>` + (c ? `<text x="${FIG.x + (b + c / 2) * u}" y="${FIG.y - 12}" text-anchor="middle" fill="#16837f">c = ${c}</text>` : '');
+    dims += `<text x="${FIG.x - 12}" y="${FIG.y + a * u / 2}" text-anchor="end" fill="#d6453d">a = ${a}</text>`;
+    hideGrid(b + c, a);
+    if (locked) sum = sumBlock([['a × b', P.ab, PC.aa], ['a × c', P.ac, PC.ab]], P.whole, `${a} × (${b} + ${c}) = ${a} × ${b + c}`,
+      [`making ${b} into ${b + c} adds ${n(P.ac)} = ${a} × ${c}`]);
+    handle('hB', b, 0); handle('hC', b + c, 0); handle('hA', 0, a); hide('hC', true);
+  }
+  $('hA').classList.toggle('v', S.mode === 'dist');
+  $('aTitle').textContent = title;
+  $('figG').innerHTML = fig; $('dimG').innerHTML = dims;
+  $('sumG').innerHTML = locked ? sum : `<text x="700" y="280" text-anchor="middle" fill="#7c878c" font-size="14">The areas appear once you have made a prediction.</text>`;
+}
+function handle(id, ux, uy){ const h = $(id); h.style.display = ''; h.setAttribute('cx', (FIG.x + ux * U()).toFixed(1)); h.setAttribute('cy', (FIG.y + uy * U()).toFixed(1)); }
+/* A unit grid, drawn only while the cells are big enough to count by eye. */
+function hideGrid(w, h){
+  const u = U(); let g = '';
+  if (u >= 12) {
+    for (let i = 1; i < w; i++) g += `<line x1="${FIG.x + i * u}" y1="${FIG.y}" x2="${FIG.x + i * u}" y2="${FIG.y + h * u}"/>`;
+    for (let j = 1; j < h; j++) g += `<line x1="${FIG.x}" y1="${FIG.y + j * u}" x2="${FIG.x + w * u}" y2="${FIG.y + j * u}"/>`;
+  }
+  $('gridG').innerHTML = g;
+}
+/* The pieces, as a sum you can read. */
+function sumBlock(terms, total, head, notes){
+  const X0 = 560; let s = `<text x="${X0}" y="100" font-size="13" font-weight="700" fill="#4a555b" letter-spacing=".06em">THE PIECES, COUNTED</text>`;
+  terms.forEach((t, i) => {
+    const y = 124 + i * 40;
+    s += `<rect x="${X0}" y="${y}" width="30" height="30" rx="5" fill="${t[2]}" stroke="#1d2327"/>` +
+      `<text x="${X0 + 44}" y="${y + 21}" font-size="16" fill="#1d2327">${esc(t[0])}</text>` +
+      `<text x="${X0 + 380}" y="${y + 21}" font-size="18" font-weight="700" text-anchor="end" fill="#1d2327" class="m">${n(t[1])}</text>`;
+  });
+  const yT = 124 + terms.length * 40 + 8;
+  s += `<line x1="${X0}" y1="${yT}" x2="${X0 + 380}" y2="${yT}" stroke="#1d2327" stroke-width="1.5"/>` +
+    `<text x="${X0}" y="${yT + 28}" font-size="16" fill="#1d2327">${esc(head)}</text>` +
+    `<text x="${X0 + 380}" y="${yT + 28}" font-size="22" font-weight="700" text-anchor="end" fill="#d6453d" class="m">${n(total)}</text>`;
+  notes.forEach((t, i) => s += `<text x="${X0}" y="${yT + 62 + i * 24}" font-size="14.5" fill="#4a555b">${esc(t)}</text>`);
+  return s;
+}
+
+/* ============================================================================
+   Narrator, findings, explanations
+   ============================================================================ */
+function paintWhy(){
+  const locked = S.tab === 'bal' ? S.lockedB : S.lockedA;
+  $('whyCard').hidden = !locked;
+  if (!locked) return;
+  let t = '';
+  if (S.tab === 'bal') {
+    const wl = weigh(S.L, S.X), wr = weigh(S.R, S.X), tip = wl !== wr, al = aloneValue(S.L, S.R), t0 = S.letter;
+    if (al) t = `<p><b>One box stands alone</b> on the ${PAN[al.side]} pan, against ${al.v} unit weights, and the scale is level. So <b>${t0} = ${al.v}</b>.</p>` +
+      `<p>Check it in the first equation: ${esc(eqText(S.start.L, S.start.R, t0))} becomes ${weigh(S.start.L, al.v)} = ${weigh(S.start.R, al.v)}. ` +
+      `In the graph, every equation you passed through has its two lines crossing at ${t0} = ${al.v}: no step changed the answer.</p>`;
+    else if (tip) t = `<p><b>The scale has tipped</b> towards the ${wl > wr ? 'left' : 'right'}. You changed one pan and not the other, so the two pans are no longer equal — and the equation is no longer true.</p>` +
+      `<p>Do the same thing to the other pan and it will level again.</p>`;
+    else {
+      const both = S.L.x && S.R.x;
+      t = `<p><b>Level.</b> Both pans weigh the same, though you cannot yet say how much, because you do not know ${t0}.</p>` +
+        (both ? `<p>There are boxes on both pans. Take the same number of boxes off both — the pans lose the same weight, whatever a box weighs.</p>`
+          : S.L.x + S.R.x > 1 && (S.L.k === 0 || S.R.k === 0 || S.L.x === 0 || S.R.x === 0) && (S.L.x ? S.L.k : S.R.k) ? `<p>Now take the loose unit weights away from the boxes’ pan — from both pans.</p>`
+          : S.L.x + S.R.x > 1 ? `<p>${S.L.x + S.R.x} boxes on one side and only weights on the other: share both pans into ${S.L.x + S.R.x} equal groups.</p>`
+          : `<p>Take the loose unit weights off the boxes’ pan — from both pans.</p>`);
+    }
+  } else if (S.mode === 'sq') {
+    const P = countPieces('sq', S.a, S.b);
+    t = `<p>The big square is <b>${S.a + S.b} × ${S.a + S.b} = ${n(P.whole)}</b> cells. Only ${n(P.aa)} + ${n(P.bb)} = ${n(P.sumSq)} of them are in the two squares a² and b². ` +
+      `The rest sit in <b>two rectangles of ${S.a} × ${S.b}</b>: ${n(P.ab + P.ba)} cells, which is 2ab.</p><p>So (a + b)² = a² + 2ab + b². It equals a² + b² only if one of a or b is 0.</p>`;
+  } else if (S.mode === 'diff') {
+    const P = countPieces('diff', S.a, S.b, 0, S.cuts);
+    t = `<p>The square inside has side ${S.a} − ${S.b} = ${S.a - S.b}. Start from ${S.a}² = ${n(P.whole)} and take away the two strips of ${S.a} × ${S.b}.</p>` +
+      (S.cuts.r && S.cuts.bt && !S.cuts.c ? `<p><b>The corner ${S.b} × ${S.b} has gone twice</b> (it is in both strips), so the total, ${n(P.tally)}, is ${n(P.left - P.tally)} too small. Put the corner back once.</p>`
+        : S.cuts.r && S.cuts.bt && S.cuts.c ? `<p>${n(P.whole)} − ${n(P.strip)} − ${n(P.strip)} + ${n(P.corner)} = <b>${n(P.tally)}</b>, and the cells really left number ${n(P.left)}. So (a − b)² = a² − 2ab + b².</p>`
+        : `<p>Use the buttons to take the strips away, one at a time.</p>`);
+  } else {
+    const P = countPieces('dist', S.a, S.b, S.c);
+    t = `<p>${S.a} rows of ${S.b + S.c} cells: the first ${S.b} columns hold ${n(P.ab)}, the last ${S.c} hold ${n(P.ac)}. So ${S.a} × (${S.b} + ${S.c}) = ${S.a} × ${S.b} + ${S.a} × ${S.c}: <b>a(b + c) = ab + ac</b>.</p>` +
+      `<p>Make c = 1 and you see the book’s question: making ${S.b} one bigger adds exactly ${S.a} to the product.</p>`;
+  }
+  $('why').innerHTML = t;
+}
+function afterOp(before, op){
+  const lvlBefore = weigh(before.L, S.X) === weigh(before.R, S.X), lvl = weigh(S.L, S.X) === weigh(S.R, S.X);
+  if (op.where === 'both' && lvlBefore && lvl) {
+    discover('still');
+    if (op.kind === 'sub' && op.what === 'box' && !EXPL.B) { EXPL.B = true; explainB(before, op); }
+    if (op.kind === 'div') discover('share');
+  }
+  if (op.where !== 'both' && !lvl) discover('tip');
+  const al = aloneValue(S.L, S.R);
+  if (al && lvl && !S.solved) {
+    S.solved = true; sound('tada');
+    discover('solved');
+    if (S.start.L.x && S.start.R.x) discover('bothsides');
+    if (!EXPL.B) { EXPL.B = true; explainB(null, null); }
+    track('solved', {pz: S.pz, value: al.v, steps: S.log.length});
+  }
+}
+const EXPL = {B: false, A: false};
+function explainB(before, op){
+  if (!POEB) return;
+  if (before) {
+    const after = {L: S.L, R: S.R};
+    POEB.explain(`You took ${op.n} ${op.n === 1 ? 'box' : 'boxes'} off <b>both</b> pans: <b>${esc(eqText(before.L, before.R, S.letter))}</b> became <b>${esc(eqText(after.L, after.R, S.letter))}</b>, and the beam did not move. ` +
+      `Each pan lost ${op.n} × ${esc(S.letter)} — the same weight, whatever ${esc(S.letter)} is — so you never needed to know it. That is the one rule of solving: <b>do the same to both sides</b>.`,
+      POEB.choice === 'level');
+  } else {
+    POEB.explain(`You solved it without ever tipping the scale: every move was made to both pans, so the pans stayed equal and the answer, ${esc(S.letter)} = ${S.X}, never changed.`, POEB.choice === 'level');
+  }
+}
+function checkBox(){
+  if (!S.lockedA) return;
+  if (S.mode === 'sq' && S.a >= 1 && S.b >= 1) {
+    const key = S.a + ',' + S.b;
+    if (!S.pairs.includes(key)) S.pairs.push(key);
+    if (S.pairs.length >= 2) discover('twoab');
+  }
+  if (S.mode === 'diff' && S.cuts.r && S.cuts.bt && S.cuts.c) {
+    const P = countPieces('diff', S.a, S.b, 0, S.cuts);
+    if (P.tally === P.inner && P.left === P.inner) discover('diff');
+  }
+  if (S.mode === 'dist' && S.c >= 1) {
+    const key = [S.a, S.b, S.c].join(',');
+    if (!S.dpairs.includes(key)) S.dpairs.push(key);
+    if (S.dpairs.length >= 2) discover('dist');
+  }
+}
+
+/* ============================================================================
+   Paint and controls
+   ============================================================================ */
+buildB(); buildA();
+function paint(){
+  const bal = S.tab === 'bal';
+  $('tabBal').setAttribute('aria-selected', bal); $('tabBox').setAttribute('aria-selected', !bal);
+  $('stageB').toggleAttribute('hidden', !bal); $('stageA').toggleAttribute('hidden', bal);
+  $('cardB').hidden = !bal; $('cardTrial').hidden = !bal; $('cardA').hidden = bal;
+  $('poeB').hidden = !bal; $('poeA').hidden = bal;
+  $('gate').hidden = bal ? S.lockedB : S.lockedA;
+  if (bal) { paintBalance(); paintEq(); paintGraph(); paintSide(); }
+  else { paintBox(); paintSideA(); checkBox(); }
+  paintWhy();
+}
+function paintSide(){
+  $('pz').value = S.pz;
+  $('nOut').textContent = S.n; $('nDiv').textContent = S.n;
+  document.querySelectorAll('#whereChips .chip').forEach(c => c.setAttribute('aria-pressed', c.dataset.w === S.where));
+  document.querySelectorAll('#whatChips .chip').forEach(c => c.setAttribute('aria-pressed', c.dataset.t === S.what));
+  $('opSub').textContent = `Take away ${S.n} ${S.what === 'box' ? (S.n === 1 ? 'box' : 'boxes') : (S.n === 1 ? 'unit weight' : 'unit weights')}`;
+  $('opAdd').textContent = `Add ${S.n} ${S.what === 'box' ? (S.n === 1 ? 'box' : 'boxes') : (S.n === 1 ? 'unit' : 'units')}`;
+  $('guess').value = S.guess; $('guessOut').textContent = S.guess;
+  const L = weigh(S.L, S.guess), R = weigh(S.R, S.guess);
+  $('trialOut').innerHTML = S.lockedB ? `If ${esc(S.letter)} = ${S.guess}: left pan <b>${L}</b>, right pan <b>${R}</b>. ${L === R ? '<b>Equal!</b>' : 'Not equal.'}` : 'Make your prediction first.';
+}
+function paintSideA(){
+  document.querySelectorAll('#modeChips .chip').forEach(c => c.setAttribute('aria-pressed', c.dataset.m === S.mode));
+  $('sa').value = S.a; $('saOut').textContent = S.a; $('sb').value = S.b; $('sbOut').textContent = S.b; $('sc').value = S.c; $('scOut').textContent = S.c;
+  $('rowC').hidden = S.mode !== 'dist'; $('diffOps').hidden = S.mode !== 'diff';
+  $('sb').min = S.mode === 'diff' ? 1 : 0; $('sb').max = S.mode === 'diff' ? Math.max(1, S.a - 1) : 40;
+  $('cutR').setAttribute('aria-pressed', S.cuts.r); $('cutB').setAttribute('aria-pressed', S.cuts.bt); $('addC').setAttribute('aria-pressed', S.cuts.c);
+  $('cutR').textContent = (S.cuts.r ? 'Put back' : 'Take away') + ' the strip on the right (a × b)';
+  $('cutB').textContent = (S.cuts.bt ? 'Put back' : 'Take away') + ' the strip at the bottom (a × b)';
+  $('addC').textContent = (S.cuts.c ? 'Remove' : 'Put back') + ' the corner (b × b)';
+  if (!S.lockedA) { $('readA').innerHTML = ''; return; }
+  let r = '';
+  if (S.mode === 'sq') { const P = countPieces('sq', S.a, S.b); r = `<span>(a + b)², counted</span><b>${n(P.whole)}</b><span>a² + b²</span><b>${n(P.sumSq)}</b><span>difference</span><b>${n(P.whole - P.sumSq)}</b><span>2ab</span><b>${n(2 * S.a * S.b)}</b>`; }
+  else if (S.mode === 'diff') { const P = countPieces('diff', S.a, S.b, 0, S.cuts); r = `<span>running total</span><b>${n(P.tally)}</b><span>cells really left</span><b>${n(P.left)}</b><span>(a − b)²</span><b>${n(P.inner)}</b>`; }
+  else { const P = countPieces('dist', S.a, S.b, S.c); r = `<span>a(b + c), counted</span><b>${n(P.whole)}</b><span>ab + ac</span><b>${n(P.ab)} + ${n(P.ac)}</b>`; }
+  $('readA').innerHTML = r;
+}
+function doOp(kind){
+  if (!S.lockedB) return;
+  const op = {kind, n: S.n, what: S.what, where: S.where};
+  const before = {L: {...S.L}, R: {...S.R}};
+  const res = applyOp(S.L, S.R, op);
+  if (res.err) { $('msg').textContent = res.err; $('msg').className = 'msg warn'; sound('oops'); return; }
+  S.L = res.L; S.R = res.R;
+  const where = op.where === 'both' ? 'both pans' : `the ${PAN[op.where]} pan only`;
+  const thing = op.what === 'box' ? `${op.n} ${op.n === 1 ? 'box' : 'boxes'}` : `${op.n} unit ${op.n === 1 ? 'weight' : 'weights'}`;
+  const text = kind === 'sub' ? `Took ${thing} off ${where}` : kind === 'add' ? `Added ${thing} to ${where}` : `Shared ${where} into ${op.n} groups, kept one`;
+  const tip = weigh(S.L, S.X) !== weigh(S.R, S.X);
+  S.log.push({text, eq: eqText(S.L, S.R, S.letter, tip ? '≠' : '='), tip});
+  if (!tip) S.hist.push({L: {...S.L}, R: {...S.R}});
+  $('msg').textContent = ''; $('msg').className = 'msg';
+  sound(tip ? 'boing' : 'pop');
+  track('balanceOp', {kind, n: op.n, what: op.what, where: op.where, tip});
+  afterOp(before, op); paintItems(); settle(); paint();
+}
+$('opSub').addEventListener('click', () => doOp('sub'));
+$('opAdd').addEventListener('click', () => doOp('add'));
+$('opDiv').addEventListener('click', () => doOp('div'));
+$('nDn').addEventListener('click', () => { S.n = Math.max(1, S.n - 1); sound('tick'); paint(); });
+$('nUp').addEventListener('click', () => { S.n = Math.min(30, S.n + 1); sound('tick'); paint(); });
+$('whereChips').addEventListener('click', e => { const c = e.target.closest('[data-w]'); if (!c || c.disabled) return; S.where = c.dataset.w; sound('tick'); paint(); });
+$('whatChips').addEventListener('click', e => { const c = e.target.closest('[data-t]'); if (!c || c.disabled) return; S.what = c.dataset.t; sound('tick'); paint(); });
+$('pz').addEventListener('change', e => { loadPuzzle(e.target.value); S.guess = 0; $('msg').textContent = ''; paintItems(); settle(); sound('pop'); paint(); track('puzzle', {pz: S.pz}); });
+$('btnReset').addEventListener('click', () => { loadPuzzle(S.pz, S.pz === 'myst' ? S.seed : 0); $('msg').textContent = ''; paintItems(); settle(); sound('whoosh'); paint(); });
+$('guess').addEventListener('input', e => {
+  S.guess = +e.target.value;
+  const eq = S.hist.length - 1;
+  if (!S.guesses.some(g => g.v === S.guess && g.eq === eq)) S.guesses.push({v: S.guess, eq});
+  paint();
+});
+$('guess').addEventListener('change', () => track('trial', {guess: S.guess}));
+$('tabBal').addEventListener('click', () => { S.tab = 'bal'; sound('tick'); paint(); track('tab', {tab: 'balance'}); });
+$('tabBox').addEventListener('click', () => { S.tab = 'box'; sound('tick'); paint(); track('tab', {tab: 'box'}); });
+$('modeChips').addEventListener('click', e => {
+  const c = e.target.closest('[data-m]'); if (!c || c.disabled) return;
+  S.mode = c.dataset.m;
+  if (S.mode === 'diff') { S.a = 60; S.b = 5; S.cuts = {r: false, bt: false, c: false}; }
+  if (S.mode === 'dist') { S.a = 23; S.b = 27; S.c = 1; }
+  if (S.mode === 'sq') { S.a = 60; S.b = 5; }
+  UMAX = niceMax(extent()); sound('pop'); paint(); track('boxMode', {mode: S.mode});
+});
+const fitScale = () => { UMAX = niceMax(extent()); };
+$('sa').addEventListener('input', e => { S.a = +e.target.value; if (S.mode === 'diff') S.b = Math.min(S.b, S.a - 1); fitScale(); paint(); });
+$('sb').addEventListener('input', e => { S.b = +e.target.value; fitScale(); paint(); });
+$('sc').addEventListener('input', e => { S.c = +e.target.value; fitScale(); paint(); });
+for (const [id, k] of [['cutR', 'r'], ['cutB', 'bt'], ['addC', 'c']]) $(id).addEventListener('click', () => { S.cuts[k] = !S.cuts[k]; sound(S.cuts[k] ? 'snap' : 'tick'); paint(); track('cut', {k, on: S.cuts[k]}); });
+
+/* Handles on the drawing: the pointer's position, in cells, sets a length. */
+const toU = v => Math.round(v / U());
+function dragH(id, onMove){
+  drag($(id), sA, {
+    start(){ if (!S.lockedA) return false; },
+    move(p){ onMove((p.x - FIG.x), (p.y - FIG.y)); paint(); },
+    end(){ const e = extent(); if (e >= 0.92 * UMAX || e <= UMAX / 2.2) fitScale(); paint(); track('dragBox', {mode: S.mode, a: S.a, b: S.b, c: S.c}); },
+  });
+}
+dragH('hA', (x, y) => {
+  if (S.mode === 'sq') S.a = clamp(toU(x), 1, Math.min(70, UMAX - S.b));
+  else if (S.mode === 'diff') { S.a = clamp(toU(x), 2, Math.min(70, UMAX)); S.b = Math.min(S.b, S.a - 1); }
+  else S.a = clamp(toU(y), 1, Math.min(70, UMAX));
+});
+dragH('hB', x => {
+  if (S.mode === 'sq') S.b = clamp(toU(x) - S.a, 0, Math.min(40, UMAX - S.a));
+  else if (S.mode === 'diff') S.b = clamp(S.a - toU(x), 1, S.a - 1);
+  else S.b = clamp(toU(x), 1, Math.min(40, UMAX - S.c));
+});
+dragH('hC', x => { S.c = clamp(toU(x) - S.b, 0, Math.min(40, UMAX - S.b)); });
+
+function lockB(lock){
+  for (const id of ['opSub', 'opAdd', 'opDiv', 'nDn', 'nUp', 'pz', 'btnReset', 'guess']) $(id).disabled = lock;
+  document.querySelectorAll('#whereChips .chip, #whatChips .chip').forEach(c => c.disabled = lock);
+}
+function lockA(lock){
+  for (const id of ['sa', 'sb', 'sc', 'cutR', 'cutB', 'addC']) $(id).disabled = lock;
+  document.querySelectorAll('#modeChips .chip').forEach(c => c.disabled = lock);
+  for (const id of ['hA', 'hB', 'hC']) $(id).style.pointerEvents = lock ? 'none' : '';
+}
+
+/* ============================================================================
+   Start
+   ============================================================================ */
+$('pz').innerHTML = PUZZLES.map(p => `<option value="${p.id}">${esc(p.name)}</option>`).join('');
+findings($('finds'), [
+  {id: 'still',     icon: '⚖', label: 'Same to both pans: still level', hint: 'Do something to both pans'},
+  {id: 'tip',       icon: '↘', label: 'One pan only: it tips',          hint: 'Change just one pan'},
+  {id: 'share',     icon: '÷', label: 'Share both pans into equal groups', hint: 'Divide both sides'},
+  {id: 'solved',    icon: '▣', label: 'A box stands alone: found it',   hint: 'Get one box alone on a pan'},
+  {id: 'bothsides', icon: '⇄', label: 'Unknowns on both sides, solved', hint: 'Solve a puzzle with boxes on both pans'},
+  {id: 'twoab',     icon: '◫', label: '(a + b)² always has 2ab more than a² + b²', hint: 'Resize the square'},
+  {id: 'diff',      icon: '◰', label: '(a − b)²: the corner goes twice, comes back once', hint: 'Cut two strips off a square'},
+  {id: 'dist',      icon: '▥', label: 'a(b + c) = ab + ac', hint: 'Split a rectangle'},
+], () => toast('All eight: you have solved equations the way Brahmagupta described, and seen identities as areas.', 4200));
+
+const POEB = predict($('poeB'), {
+  id: 'balance-both',
+  q: 'The scale balances with <b>6 boxes and 7 unit weights</b> on the left and <b>4 boxes and 21 unit weights</b> on the right. You take <b>4 boxes off each pan</b>. What does the scale do?',
+  options: [
+    {id: 'left',  text: 'It tips down on the left: the left had more boxes.'},
+    {id: 'right', text: 'It tips down on the right: the right has more weights left.'},
+    {id: 'level', text: 'It stays level.', right: true},
+    {id: 'cant',  text: 'You cannot tell until you know what a box weighs.'},
+  ],
+  onLock(){ S.lockedB = true; lockB(false); S.n = 4; say('Now try it.'); paint(); },
+});
+const POEA = predict($('poeA'), {
+  id: 'square-sum',
+  q: 'A square has side 65 = 60 + 5. Is its area 60 × 60 + 5 × 5 = 3625?',
+  options: [
+    {id: 'yes',  text: 'Yes: square each part and add.'},
+    {id: 'more', text: 'No: the area is more than 3625.', right: true},
+    {id: 'less', text: 'No: the area is less than 3625.'},
+    {id: 'some', text: 'It depends on how you split 65.'},
+  ],
+  onLock(){
+    S.lockedA = true; lockA(false); paint();
+    const P = countPieces('sq', 60, 5);
+    POEA.explain(`The model counted the square cell by cell: <b>${n(P.whole)}</b>. The two squares hold only ${n(P.aa)} + ${n(P.bb)} = ${n(P.sumSq)}; ` +
+      `the two rectangles of 60 × 5 hold the other <b>${n(P.ab + P.ba)}</b>. (60 + 5)² = 60² + 2 × 60 × 5 + 5². However you split 65, the pieces still add to ${n(P.whole)}.`);
+  },
+});
+lockB(!POEB.locked); lockA(!POEA.locked);
+if (!Play.FF('predict')) { S.lockedB = S.lockedA = true; }
+UMAX = niceMax(extent());
+S.theta = tiltOf(S.L, S.R, S.X);
+paintItems(); paint();
+window.applyFeatures = () => paint();
+window.PG_STATE = () => JSON.parse(JSON.stringify(S));
+window.PG_MODEL = {PUZZLES, mystery, weigh, tiltOf, applyOp, aloneValue, eqText, countPieces};
+</script>
+</body>
+</html>

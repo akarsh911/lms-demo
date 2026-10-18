@@ -1,0 +1,459 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>A Crore Grains Of Rice</title>
+<meta name="description" content="Class 7 and 8: zoom a grain of rice by ×10 all the way to a crore, in Indian and international names, then count on an odometer in base 10, 5 and 2 and watch the carries happen.">
+<link rel="icon" href="../../favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600&family=Inter:wght@400;500;600;700&family=Nunito:wght@500;700;800&family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="../../play.css">
+<style>
+.pg-stage{min-height:0}
+.tabs{display:flex; gap:4px; padding:10px 12px 0; border-bottom:1px solid var(--hair); background:var(--card); flex-wrap:wrap}
+.tab{border:1px solid transparent; border-bottom:none; background:none; padding:8px 14px; border-radius:10px 10px 0 0; cursor:pointer;
+  font-family:"Fredoka",var(--font-head); font-size:16px; color:var(--ink-3); margin-bottom:-1px}
+.tab[aria-selected="true"]{background:var(--card); border-color:var(--hair); color:var(--ink); border-bottom:1px solid var(--card)}
+.gate{position:absolute; left:0; right:0; top:50px; bottom:0; display:grid; place-items:center; pointer-events:none}
+.gate span{background:rgba(29,35,39,.85); color:#fff; padding:10px 16px; border-radius:99px; font-weight:600; font-size:14px}
+.chips{display:flex; flex-wrap:wrap; gap:6px; margin:4px 0}
+.chip{border:1px solid var(--hair-2); background:var(--card); border-radius:99px; padding:6px 14px; font-size:13px; cursor:pointer; font-weight:600; color:var(--ink-2)}
+.chip[aria-pressed="true"]{background:var(--accent-soft); border-color:var(--accent); color:var(--ink)}
+.chip:disabled,.btn:disabled{opacity:.45; cursor:default}
+.big{font-family:"Fredoka",var(--font-head); font-size:20px; font-weight:600; line-height:1.25}
+.note{font-size:12.5px; color:var(--ink-3); margin:6px 0 0}
+.why p{font-size:14px; margin-bottom:.55em}
+.why b{color:var(--ink)}
+.mono{font-family:"JetBrains Mono", monospace}
+.hit{cursor:pointer}
+svg [tabindex]:focus{outline:none}
+svg [tabindex]:focus-visible{outline:none; stroke:#2f7de1; stroke-width:3; stroke-dasharray:6 5}
+svg text{pointer-events:none}
+</style>
+</head>
+<body>
+<header class="pg-top"></header>
+
+<div class="pg-intro">
+  <h1>A crore grains of rice</h1>
+  <p>Zoom a single grain of rice by ×10, seven times, until it is a crore — in both the Indian and the international names.
+     Then count on an odometer in base ten, base five and base two, and watch exactly where the carries happen.</p>
+</div>
+
+<main class="pg-main wide-side">
+  <section class="pg-stage" id="stageWrap">
+    <div class="tabs" role="tablist">
+      <button class="tab" role="tab" id="tabZoom" aria-selected="true">Zooming by tens</button>
+      <button class="tab" role="tab" id="tabBase" aria-selected="false">Counting in another base</button>
+    </div>
+    <svg id="stageZoom" viewBox="0 0 1000 560" role="img" aria-label="A grain of rice zoomed out by ten each step, from one grain to a crore, with its Indian and international name."></svg>
+    <svg id="stageBase" viewBox="0 0 1000 560" role="img" aria-label="An odometer that counts up one at a time in a chosen base, showing every digit and every carry."></svg>
+    <div class="gate" id="gate"><span>Make your prediction first →</span></div>
+  </section>
+
+  <aside class="pg-side">
+    <div id="poeA"></div>
+    <div id="poeB" hidden></div>
+
+    <div class="card" id="cardA">
+      <div class="kicker">Zoom</div>
+      <div class="row" style="margin-top:2px">
+        <button class="btn sm" id="zoomOut">÷10 zoom out</button>
+        <button class="btn sm primary" id="zoomIn">×10 zoom in</button>
+      </div>
+      <div class="big num" id="aBig"></div>
+      <p class="note" id="aNote"></p>
+    </div>
+
+    <div class="card" id="cardB" hidden>
+      <div class="kicker">Choose a base</div>
+      <div class="chips" role="group" aria-label="Base">
+        <button class="chip" data-b="10" aria-pressed="true">Base 10</button>
+        <button class="chip" data-b="5" aria-pressed="false">Base 5</button>
+        <button class="chip" data-b="2" aria-pressed="false">Base 2</button>
+      </div>
+      <div class="row" style="margin-top:6px"><button class="btn sm primary" id="plusOne">+1</button><button class="btn sm" id="resetCounter">Back to 0</button></div>
+      <div class="big num mono" id="bBig"></div>
+      <p class="note">Landmark numbers of this base: <span class="mono" id="landmarks"></span></p>
+    </div>
+
+    <div class="card why" id="whyCard">
+      <div class="kicker">What is happening</div>
+      <div id="why"></div>
+    </div>
+
+    <div class="card"><div class="kicker">To find</div><div id="finds"></div></div>
+  </aside>
+</main>
+
+<script src="../../play.js"></script>
+<script>
+'use strict';
+const {$, $$, esc, clamp, fmt, sound, say, track, toast, predict, findings, discover, found,
+       shareState, sharedState, mount, reduced, mulberry32} = Play;
+mount({thread: 'bignumbers', band: 'tinkerer'});
+
+/* MODEL:start ==================================================================
+   1. Zooming by tens (Ganita Prakash 7, Ch 1 "Large Numbers Around Us", §1.3
+      "Of Crores and Crores"). Level k holds EXACTLY 10^k grains — a real
+      integer power, computed each time, never a string typed in. Its Indian
+      name (ones, tens, hundreds, thousand, ten thousand, lakh, ten lakh,
+      crore) and its international name (…, hundred thousand, million, ten
+      million) both come from that same number. Digit grouping for the
+      Indian display (3-2-2-2… from the right) is computed digit by digit.
+   2. Counting in another base (Ganita Prakash 8, Ch 3 "A Story of Numbers",
+      §3.3 "The Idea of a Base"). A counter's value in decimal is converted
+      to base b by real repeated division: the digits are ⌊n / b^i⌋ mod b.
+      A "carry" is counted by comparing the digit strings of n and n+1: the
+      number of trailing places where a digit was at its highest (b−1) and
+      rolled over to 0.
+   ============================================================================ */
+const LEVELS = [
+  {name: 'grain', hindi: 'a grain'}, {name: 'ten', hindi: 'ten'}, {name: 'hundred', hindi: 'a hundred'},
+  {name: 'thousand', hindi: 'a thousand'}, {name: 'ten thousand', hindi: 'ten thousand'},
+  {name: 'lakh', hindi: 'a lakh'}, {name: 'ten lakh', hindi: 'ten lakh'}, {name: 'crore', hindi: 'a crore'},
+];
+const AMERICAN = ['one', 'ten', 'hundred', 'one thousand', 'ten thousand', 'hundred thousand', 'one million', 'ten million'];
+/* Indian digit grouping: last 3 digits, then pairs, from the right — computed, not typed. */
+function indianCommas(n){
+  const s = String(n);
+  if (s.length <= 3) return s;
+  const head = s.slice(0, s.length - 3), tail = s.slice(-3);
+  const groups = [];
+  for (let i = head.length; i > 0; i -= 2) groups.unshift(head.slice(Math.max(0, i - 2), i));
+  return groups.join(',') + ',' + tail;
+}
+const grains = k => Math.pow(10, k);
+/* Convert a non-negative integer to base b: most-significant digit first. */
+function toBase(n, b){
+  if (n === 0) return [0];
+  const digits = [];
+  let m = n;
+  while (m > 0) { digits.unshift(m % b); m = Math.floor(m / b); }
+  return digits;
+}
+/* How many trailing digits roll over (were b-1, become 0) when n becomes n+1. */
+function carryLength(n, b){
+  const before = toBase(n, b), after = toBase(n + 1, b);
+  let k = 0;
+  for (let i = 1; i <= before.length; i++) { if (before[before.length - i] === b - 1) k++; else break; }
+  return k;
+}
+/* MODEL:end */
+
+const INK = '#1d2327', GOOD = '#1f8a55';
+const COL = ['#d68a12', '#c9622f', '#c0392b', '#a13a6e', '#7b5cd6', '#2f7de1', '#16a3a3', '#16a085'];
+
+/* ---- state -------------------------------------------------------------------- */
+const S = {tab: 'zoom', level: 0, lockedA: false, base: 10, counter: 0, lockedB: false, seenBases: new Set([10])};
+const shared = sharedState();
+if (shared) {
+  if (['zoom', 'base'].includes(shared.tab)) S.tab = shared.tab;
+  if (Number.isInteger(+shared.level)) S.level = clamp(+shared.level, 0, 7);
+  if ([10, 5, 2].includes(+shared.base)) S.base = +shared.base;
+  if (Number.isInteger(+shared.counter)) S.counter = clamp(+shared.counter, 0, 400);
+}
+shareState(() => ({tab: S.tab, level: S.level, base: S.base, counter: S.counter}));
+
+/* ============================================================================
+   Tab 1: zooming by tens
+
+   Every level draws the actual rice, not a stand-in block. Levels 0–3 place a
+   REAL grain for every one of the 1 / 10 / 100 / 1,000 grains (a neat grid —
+   cheap and exact for a static picture). From level 4 (ten thousand) up, that
+   is dishonest to attempt one-by-one, so the page says so in words and draws
+   a fixed, dense texture instead — a genuine drawing of "too many to count",
+   not a claim of an exact grain-by-grain picture.
+   A familiar container grows with the level (pinch → spoon → bowl → bucket →
+   sack → cart → truck) and, at every step, ten small copies of the PREVIOUS
+   container sit beside the new one, so the ×10 is something seen, not read.
+   ============================================================================ */
+const svgA = $('stageZoom');
+const HERO_SIZE = [50, 78, 108, 138, 166, 190, 210, 228];
+const SHELF_Y = 415;   /* every vessel sits with its base on this line */
+const heroCy = k => k === 0 ? 250 : SHELF_Y - HERO_SIZE[k] / 2;
+const VESSEL_NAME = ['a single grain', 'a pinch', 'a spoonful', 'a small bowl', 'a bucket', 'a sack', 'a hand-cart', 'a truckload'];
+const MAX_DRAWN = 1000;   /* the most individual grains this page will ever actually draw */
+function grainMark(x, y, r, rot){ return `<ellipse cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" rx="${r.toFixed(2)}" ry="${(r * 0.52).toFixed(2)}" fill="#e0a83c" stroke="#7a4c08" stroke-width="${Math.max(0.4, r * 0.16).toFixed(2)}" transform="rotate(${rot.toFixed(0)} ${x.toFixed(1)} ${y.toFixed(1)})"/>`; }
+/* An exact grid of `count` real grains inside a w×h box — used while count ≤ 1,000. */
+function grainGrid(cx, cy, w, h, count){
+  const cols = Math.ceil(Math.sqrt(count * w / h)), rows = Math.ceil(count / cols);
+  const r = clamp(Math.min(w / cols, h / rows) * 0.42, 0.7, 7);
+  let s = '';
+  for (let i = 0; i < count; i++) {
+    const col = i % cols, row = Math.floor(i / cols);
+    const x = cx - w / 2 + (col + 0.5) * (w / cols), y = cy - h / 2 + (row + 0.5) * (h / rows);
+    s += grainMark(x, y, r, ((i * 53) % 40) - 20);
+  }
+  return s;
+}
+/* A fixed, honest TEXTURE (not a count) for levels too large to draw grain by grain. */
+function grainTexture(cx, cy, w, h, seed){
+  const rnd = mulberry32(seed);
+  let s = '';
+  for (let i = 0; i < 240; i++) {
+    let x, y; do { x = rnd() * 2 - 1; y = rnd() * 2 - 1; } while (x * x + y * y > 1);
+    s += grainMark(cx + x * w / 2, cy + y * h / 2, 1.9 + rnd() * 1.1, rnd() * 360);
+  }
+  return s;
+}
+/* The vessel outline for a level — always drawn, always around real (or honestly
+   textured) grains, never an empty box standing in for a number. */
+function vesselArt(level, cx, cy, scale){
+  const s = HERO_SIZE[level] * scale, n = Math.min(grains(level), MAX_DRAWN);
+  const fillW = s * 0.74, fillH = s * 0.5;
+  const grainsHTML = level === 0 ? grainMark(cx, cy, s * 0.42, 8)
+    : grains(level) > MAX_DRAWN ? grainTexture(cx, cy - s * 0.06, fillW, fillH, level * 97 + 3)
+    : grainGrid(cx, cy - s * 0.06, fillW, fillH, n);
+  const ink = '#5a3a12';
+  let vessel = '';
+  if (level === 1) {                      /* a pinch: a fingertip cradling ten grains */
+    vessel = `<path d="M${cx - s * 0.5} ${cy + s * 0.32} Q${cx - s * 0.46} ${cy - s * 0.05} ${cx - s * 0.14} ${cy - s * 0.18} Q${cx} ${cy - s * 0.24} ${cx + s * 0.14} ${cy - s * 0.18} Q${cx + s * 0.46} ${cy - s * 0.05} ${cx + s * 0.5} ${cy + s * 0.32} Z" fill="#f3cf9c" stroke="${ink}" stroke-width="2"/>`;
+  } else if (level === 2) {               /* a spoon */
+    vessel = `<ellipse cx="${cx}" cy="${cy}" rx="${s * 0.5}" ry="${s * 0.32}" fill="#dfe6ea" stroke="${ink}" stroke-width="2.5"/>
+      <rect x="${cx + s * 0.32}" y="${cy - s * 0.06}" width="${s * 0.62}" height="${s * 0.12}" rx="${s * 0.06}" fill="#c9622f" stroke="${ink}" stroke-width="2"/>`;
+  } else if (level === 3) {               /* a small bowl */
+    vessel = `<path d="M${cx - s * 0.52} ${cy - s * 0.18} Q${cx - s * 0.5} ${cy + s * 0.42} ${cx} ${cy + s * 0.46} Q${cx + s * 0.5} ${cy + s * 0.42} ${cx + s * 0.52} ${cy - s * 0.18} Z" fill="#e8eef2" stroke="${ink}" stroke-width="2.5"/>
+      <ellipse cx="${cx}" cy="${cy - s * 0.18}" rx="${s * 0.52}" ry="${s * 0.13}" fill="#f6f9fb" stroke="${ink}" stroke-width="2.5"/>`;
+  } else if (level === 4) {               /* a bucket */
+    vessel = `<path d="M${cx - s * 0.4} ${cy - s * 0.32} L${cx - s * 0.32} ${cy + s * 0.46} Q${cx} ${cy + s * 0.54} ${cx + s * 0.32} ${cy + s * 0.46} L${cx + s * 0.4} ${cy - s * 0.32} Z" fill="#b7c4cc" stroke="${ink}" stroke-width="2.5"/>
+      <ellipse cx="${cx}" cy="${cy - s * 0.32}" rx="${s * 0.4}" ry="${s * 0.1}" fill="#cfd9df" stroke="${ink}" stroke-width="2.5"/>
+      <path d="M${cx - s * 0.3} ${cy - s * 0.34} Q${cx} ${cy - s * 0.66} ${cx + s * 0.3} ${cy - s * 0.34}" fill="none" stroke="${ink}" stroke-width="3"/>`;
+  } else if (level === 5) {               /* a tied sack */
+    vessel = `<path d="M${cx - s * 0.42} ${cy - s * 0.24} Q${cx - s * 0.5} ${cy + s * 0.5} ${cx} ${cy + s * 0.5} Q${cx + s * 0.5} ${cy + s * 0.5} ${cx + s * 0.42} ${cy - s * 0.24} Q${cx + s * 0.22} ${cy - s * 0.4} 0 ${cy - s * 0.44} L${cx} ${cy - s * 0.44} Q${cx - s * 0.22} ${cy - s * 0.4} ${cx - s * 0.42} ${cy - s * 0.24} Z" fill="#d9b073" stroke="${ink}" stroke-width="2.5"/>
+      <path d="M${cx - s * 0.16} ${cy - s * 0.44} Q${cx} ${cy - s * 0.5} ${cx + s * 0.16} ${cy - s * 0.44}" fill="none" stroke="${ink}" stroke-width="3"/>`;
+  } else if (level === 6) {               /* a hand-cart */
+    vessel = `<rect x="${cx - s * 0.46}" y="${cy - s * 0.26}" width="${s * 0.92}" height="${s * 0.5}" rx="6" fill="#c9622f" stroke="${ink}" stroke-width="2.5"/>
+      <circle cx="${cx - s * 0.28}" cy="${cy + s * 0.32}" r="${s * 0.12}" fill="#3a2a1a" stroke="${ink}" stroke-width="2"/>
+      <circle cx="${cx + s * 0.28}" cy="${cy + s * 0.32}" r="${s * 0.12}" fill="#3a2a1a" stroke="${ink}" stroke-width="2"/>`;
+  } else if (level === 7) {               /* a truckload */
+    vessel = `<rect x="${cx - s * 0.5}" y="${cy - s * 0.3}" width="${s * 0.72}" height="${s * 0.5}" rx="6" fill="#16a085" stroke="${ink}" stroke-width="2.5"/>
+      <rect x="${cx + s * 0.22}" y="${cy - s * 0.06}" width="${s * 0.3}" height="${s * 0.26}" rx="4" fill="#8fd9c8" stroke="${ink}" stroke-width="2.5"/>
+      <circle cx="${cx - s * 0.28}" cy="${cy + s * 0.26}" r="${s * 0.11}" fill="#2a2015"/><circle cx="${cx + s * 0.32}" cy="${cy + s * 0.26}" r="${s * 0.11}" fill="#2a2015"/>`;
+  }
+  return `<g>${vessel}${grainsHTML}</g>`;
+}
+function buildZoom(){
+  let ladder = '';
+  for (let i = 0; i <= 7; i++) ladder += `<g id="rungG${i}" class="hit" tabindex="0" role="button" transform="translate(${i * 118} 0)" aria-label="Jump to level ${i}, ${VESSEL_NAME[i]}">
+    <rect id="rungBg${i}" x="0" y="0" width="110" height="82" rx="10" fill="#fff" stroke="#d8d2c2" stroke-width="2"/>
+    <g id="rungIcon${i}" transform="translate(55 34)"></g>
+    <text id="rungTxt${i}" x="55" y="62" text-anchor="middle" font-size="10.5" font-weight="700" fill="#7c878c"></text>
+    <text x="55" y="75" text-anchor="middle" font-size="9.5" fill="#a8a294">Level ${i}</text></g>`;
+  svgA.innerHTML = `
+  <rect x="0" y="0" width="1000" height="560" fill="#fbf6e9"/>
+  <text x="30" y="30" font-size="13" font-weight="700" letter-spacing=".08em" fill="#4a555b">EACH STEP IS EXACTLY TEN TIMES THE LAST — DRAWN, NOT JUST NAMED</text>
+  <text id="zLevel" x="30" y="52" font-size="13.5" font-weight="600" fill="#7c878c"></text>
+  <text id="zHonest" x="500" y="82" text-anchor="middle" font-size="13.5" font-weight="700" fill="#b5541f" opacity="0"></text>
+  <rect id="zShelfL" x="70" y="${SHELF_Y}" width="330" height="10" rx="4" fill="#c9a06a"/>
+  <rect id="zShelfR" x="560" y="${SHELF_Y}" width="380" height="12" rx="4" fill="#c9a06a"/>
+  <g id="zLeft"></g>
+  <text id="zTimes" x="460" y="305" text-anchor="middle" font-size="30" font-weight="700" fill="${INK}" font-family="Fredoka, Inter, sans-serif">×10</text>
+  <path id="zArrow" d="M410 311 H510" stroke="${INK}" stroke-width="4" marker-end="url(#zArrowHead)"/>
+  <defs><marker id="zArrowHead" markerWidth="10" markerHeight="10" refX="8" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 Z" fill="${INK}"/></marker></defs>
+  <g id="zRight"></g>
+  <text id="zNum" x="740" y="30" text-anchor="middle" font-family="Fredoka, Inter, sans-serif" font-size="15" font-weight="600" fill="${INK}" opacity="0"></text>
+  <g id="zCaption"></g>
+  <g id="zLadder" transform="translate(28 452)">${ladder}</g>
+  `;
+  for (let i = 0; i <= 7; i++) {
+    $('rungIcon' + i).innerHTML = vesselArt(i, 0, 0, 44 / HERO_SIZE[i]);
+    $('rungG' + i).addEventListener('click', () => { if (S.lockedA) { S.level = i; sound('tick'); paintZoom(); track('zoom', {level: i}); } });
+  }
+}
+function paintZoom(){
+  const k = S.level, n = grains(k), L = LEVELS[k];
+  const heroX = k === 0 ? 500 : 760, heroY = heroCy(k);
+  if (k === 0) { $('zLeft').innerHTML = ''; }
+  else {
+    const miniSize = HERO_SIZE[k - 1] * 0.34, rowGap = miniSize * 1.08;
+    $('zLeft').innerHTML = Array.from({length: 10}, (_, i) => {
+      const col = i % 5, row = Math.floor(i / 5);
+      const x = 100 + col * 58, y = SHELF_Y - miniSize / 2 - (1 - row) * rowGap;
+      return `<g transform="translate(${x} ${y})">${vesselArt(k - 1, 0, 0, 0.34)}</g>`;
+    }).join('');
+  }
+  $('zRight').innerHTML = `<g transform="translate(${heroX} ${heroY})">${vesselArt(k, 0, 0, 1)}</g>`;
+  $('zArrow').setAttribute('opacity', k === 0 ? 0 : 1); $('zTimes').setAttribute('opacity', k === 0 ? 0 : 1);
+  $('zShelfL').setAttribute('opacity', k === 0 ? 0 : 1); $('zShelfR').setAttribute('opacity', k === 0 ? 0 : 1);
+  $('zLevel').textContent = `Level ${k} of 7 — ${VESSEL_NAME[k]}${k === 0 ? '' : `, made of 10 of level ${k - 1} (${VESSEL_NAME[k - 1]})`}`;
+  const tooMany = n > MAX_DRAWN;
+  $('zHonest').setAttribute('opacity', tooMany ? 1 : 0);
+  $('zHonest').textContent = tooMany ? `There are too many grains (${indianCommas(n)}) to draw one by one now — this is what that many looks like.` : '';
+  const textY = k === 0 ? 330 : 116;
+  $('zNum').setAttribute('opacity', 1);
+  $('zNum').setAttribute('x', heroX); $('zNum').setAttribute('y', textY);
+  $('zNum').setAttribute('font-size', 28);
+  $('zNum').innerHTML = `<tspan x="${heroX}" dy="0">${n === 1 ? '1 grain' : indianCommas(n) + ' grains'}</tspan>`;
+  const indianName = k === 0 ? 'one' : k === 1 ? 'ten' : k === 2 ? 'one hundred' : L.hindi === 'a lakh' ? 'one lakh' : L.hindi === 'a crore' ? 'one crore' : L.hindi;
+  $('zCaption').innerHTML = `
+    <text x="${heroX}" y="${textY + 24}" text-anchor="middle" font-size="15" font-weight="700" fill="#2f7de1">Indian: ${indianName}</text>
+    <text x="${heroX}" y="${textY + 46}" text-anchor="middle" font-size="13" fill="#7c878c">International: ${AMERICAN[k]}</text>
+    <text x="${heroX}" y="${textY + 70}" text-anchor="middle" font-size="13" font-weight="600" fill="${GOOD}">${k === 0 ? 'One grain of rice.' : `${indianCommas(grains(k - 1))} × 10 = ${indianCommas(n)}`}</text>`;
+  for (let i = 0; i <= 7; i++) {
+    $('rungBg' + i).setAttribute('fill', i === k ? '#fff3d6' : '#fff');
+    $('rungBg' + i).setAttribute('stroke', i === k ? '#d68a12' : '#d8d2c2');
+    $('rungBg' + i).setAttribute('stroke-width', i === k ? 3 : 2);
+    $('rungTxt' + i).textContent = LEVELS[i].name;
+  }
+  $('zoomOut').disabled = !S.lockedA || k === 0; $('zoomIn').disabled = !S.lockedA || k === 7;
+  $('aBig').textContent = n === 1 ? '1 grain' : `${indianCommas(n)} grains`;
+  $('aNote').textContent = k === 7 ? 'You have reached a crore.' : `Zoom in to make it ten times as many.`;
+  if (S.lockedA) {
+    if (k === 5) discover('reachLakh');
+    if (k === 7) discover('reachCrore');
+    if (k === 6) discover('twoNames');
+    if (k === 7) { const ratio = grains(7) / grains(5); if (ratio === 100) discover('crore100lakh'); }
+  }
+  paintWhy();
+}
+buildZoom();
+$('zoomIn').addEventListener('click', () => { if (S.level < 7) { S.level++; sound('pop'); paintZoom(); track('zoom', {level: S.level}); } });
+$('zoomOut').addEventListener('click', () => { if (S.level > 0) { S.level--; sound('tick'); paintZoom(); track('zoom', {level: S.level}); } });
+
+/* ============================================================================
+   Tab 2: counting in another base
+   ============================================================================ */
+const svgB = $('stageBase');
+function buildBase(){
+  svgB.innerHTML = `
+  <rect x="0" y="0" width="1000" height="560" fill="#fbfaf6"/>
+  <text x="30" y="40" font-size="13" font-weight="700" letter-spacing=".08em" fill="#4a555b">AN ODOMETER, COUNTING BY REAL DIVISION AND REMAINDER</text>
+  <g id="wheels"></g>
+  <text id="bEquation" x="500" y="330" text-anchor="middle" font-size="18" font-weight="600" fill="${INK}" font-family="JetBrains Mono, monospace"></text>
+  <text id="bCarry" x="500" y="366" text-anchor="middle" font-size="16" font-weight="700" fill="${GOOD}"></text>
+  <text id="bDecimal" x="500" y="440" text-anchor="middle" font-size="15" fill="#7c878c"></text>
+  `;
+}
+const WHEEL_N = 6;
+function paintBase(){
+  const digits = toBase(S.counter, S.base);
+  const padded = Array(WHEEL_N - digits.length).fill(null).concat(digits.map(String));
+  const w = 74, gap = 10, totalW = WHEEL_N * w + (WHEEL_N - 1) * gap, x0 = 500 - totalW / 2;
+  let wheels = '';
+  padded.forEach((d, i) => {
+    const x = x0 + i * (w + gap), lead = d === null;
+    wheels += `<rect x="${x}" y="150" width="${w}" height="90" rx="12" fill="${lead ? '#f1efe7' : '#fff'}" stroke="${lead ? '#d8d2c2' : INK}" stroke-width="2.5"/>
+      <text x="${x + w / 2}" y="213" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="40" font-weight="700" fill="${lead ? '#c9c3b2' : INK}">${lead ? '0' : d}</text>`;
+  });
+  $('wheels').innerHTML = wheels;
+  const powers = [0, 1, 2, 3].map(p => Math.pow(S.base, p));
+  $('landmarks').textContent = powers.map((p, i) => `${S.base}${i === 0 ? '⁰' : i === 1 ? '¹' : i === 2 ? '²' : '³'} = ${p}`).join(',  ');
+  $('bBig').textContent = `${toBase(S.counter, S.base).join('')} (base ${S.base})`;
+  const nextDigits = toBase(S.counter + 1, S.base);
+  $('bEquation').textContent = `${digits.join('')} + 1 = ${nextDigits.join('')}  (base ${S.base})`;
+  const cl = carryLength(S.counter, S.base);
+  $('bCarry').textContent = cl >= 2 ? `Pressing +1 next will carry ${cl} places at once!` : cl === 1 ? 'Pressing +1 next will carry one place.' : '';
+  $('bDecimal').textContent = `In base 10, that is the number ${S.counter}.`;
+  $('resetCounter').disabled = !S.lockedB || S.counter === 0;
+  $('plusOne').disabled = !S.lockedB;
+  $$('#cardB .chip').forEach(c => { c.setAttribute('aria-pressed', +c.dataset.b === S.base); c.disabled = !S.lockedB; });
+  paintWhy();
+}
+buildBase();
+function plusOne(){
+  if (!S.lockedB) return;
+  const cl = carryLength(S.counter, S.base);
+  S.counter = clamp(S.counter + 1, 0, 400);
+  sound(cl >= 2 ? 'chime' : 'tick');
+  if (cl >= 2) discover('doubleCarry');
+  if (cl >= 3) discover('tripleCarry');
+  paintBase();
+  track('count', {base: S.base, counter: S.counter});
+}
+$('plusOne').addEventListener('click', plusOne);
+$('resetCounter').addEventListener('click', () => { S.counter = 0; sound('tick'); paintBase(); });
+$$('#cardB .chip').forEach(el => el.addEventListener('click', () => {
+  if (el.disabled) return;
+  S.base = +el.dataset.b; sound('tick');
+  S.seenBases.add(S.base);
+  if (S.seenBases.size >= 2 && S.counter > 0) discover('sameValueDifferentDigits');
+  paintBase();
+  track('base', {base: S.base});
+}));
+
+/* ============================================================================
+   "What is happening"
+   ============================================================================ */
+function paintWhy(){
+  let h = '';
+  if (S.tab === 'zoom') {
+    if (!S.lockedA) h = '<p>Predict first, then zoom in ten times over.</p>';
+    else {
+      const k = S.level;
+      h = k === 0 ? '<p>One grain of rice. Zoom in and it becomes ten grains — exactly ten, counted, not guessed.</p>'
+        : `<p><b>${indianCommas(grains(k - 1))}</b> grains, ten times over, is <b>${indianCommas(grains(k))}</b> grains — that is ${k === 5 ? 'one lakh' : k === 7 ? 'one crore' : LEVELS[k].hindi}.</p>` +
+          (k === 6 ? `<p>Ten lakh (Indian) and one million (international) are the very same number: ${indianCommas(grains(6))}.</p>` : '') +
+          (k === 7 ? `<p>A crore is a hundred lakh: ${indianCommas(grains(7))} ÷ ${indianCommas(grains(5))} = ${grains(7) / grains(5)}.</p>` : '');
+    }
+  } else {
+    if (!S.lockedB) h = '<p>Predict first, then count up one at a time and watch the digits.</p>';
+    else {
+      const cl = carryLength(S.counter, S.base);
+      h = `<p>The counter shows <b>${toBase(S.counter, S.base).join('')}</b> in base ${S.base} — that is <b>${S.counter}</b> in base 10, worked out by dividing by ${S.base} again and again.</p>`;
+      h += cl >= 2 ? `<p>The next +1 will roll ${cl} digits back to 0 at once and carry into the place after them — just like 9999 + 1 = 10000 in base 10.</p>` : '<p>Press +1 to keep counting.</p>';
+    }
+  }
+  $('why').innerHTML = h;
+}
+
+/* ============================================================================
+   Wiring
+   ============================================================================ */
+function setTab(t){
+  S.tab = t;
+  $('tabZoom').setAttribute('aria-selected', t === 'zoom'); $('tabBase').setAttribute('aria-selected', t === 'base');
+  $('stageZoom').toggleAttribute('hidden', t !== 'zoom'); $('stageBase').toggleAttribute('hidden', t !== 'base');
+  $('cardA').hidden = t !== 'zoom'; $('cardB').hidden = t !== 'base';
+  $('poeA').hidden = t !== 'zoom'; $('poeB').hidden = t !== 'base';
+  $('gate').hidden = t === 'zoom' ? S.lockedA : S.lockedB;
+  if (t === 'zoom') paintZoom(); else paintBase();
+  track('tab', {tab: t});
+}
+$('tabZoom').addEventListener('click', () => { sound('tick'); setTab('zoom'); });
+$('tabBase').addEventListener('click', () => { sound('tick'); setTab('base'); });
+
+/* ============================================================================
+   Start
+   ============================================================================ */
+findings($('finds'), [
+  {id: 'reachLakh',    icon: '💯', label: 'A lakh: 1,00,000', hint: 'Zoom in to level 5'},
+  {id: 'reachCrore',   icon: '🏆', label: 'A crore: 1,00,00,000', hint: 'Zoom all the way to level 7'},
+  {id: 'twoNames',     icon: '🔁', label: 'Ten lakh = one million', hint: 'Zoom to level 6'},
+  {id: 'crore100lakh', icon: '÷', label: 'A crore is 100 lakh', hint: 'Compare the crore level with the lakh level'},
+  {id: 'doubleCarry',  icon: '↻', label: 'Two digits carry at once', hint: 'Find a number one less than a landmark, twice over'},
+  {id: 'tripleCarry',  icon: '↻', label: 'Three digits carry at once, in base 2', hint: 'Try base 2 and count past 7'},
+  {id: 'sameValueDifferentDigits', icon: '🔀', label: 'Same number, different digits', hint: 'Switch base without resetting the counter'},
+], () => say('Every number here was really computed — by powers of ten, or by dividing and taking the remainder.'));
+
+const POEA = predict($('poeA'), {
+  id: 'crore-zoom',
+  q: 'You start with one grain of rice and multiply by 10, seven times over. How many grains do you end up with?',
+  options: [
+    {id: 'lakh', text: 'A lakh (1,00,000)'},
+    {id: 'tenlakh', text: 'Ten lakh (10,00,000)'},
+    {id: 'crore', text: 'A crore (1,00,00,000)', right: true},
+    {id: 'tencrore', text: 'Ten crore (10,00,00,000)'},
+  ],
+  onLock(){ S.lockedA = true; $('gate').hidden = S.tab === 'zoom' ? true : S.lockedB; say('Zoom in, ten times over, and count the zeroes.'); paintZoom(); },
+});
+const POEB = predict($('poeB'), {
+  id: 'base5-carry',
+  q: 'In base 5, the digits are only 0, 1, 2, 3 and 4. What comes right after 44 (in base 5)?',
+  options: [
+    {id: '45', text: '45'},
+    {id: '50', text: '50'},
+    {id: '100', text: '100', right: true},
+    {id: '110', text: '110'},
+  ],
+  onLock(){ S.lockedB = true; if (S.tab === 'base') $('gate').hidden = true; say('Set the base to 5, count up to 24, and press +1.'); paintBase(); },
+});
+if (!Play.FF('predict')) { S.lockedA = S.lockedB = true; }
+setTab(S.tab);
+window.applyFeatures = () => setTab(S.tab);
+window.PG_STATE = () => ({tab: S.tab, level: S.level, grains: grains(S.level), base: S.base, counter: S.counter, digits: toBase(S.counter, S.base)});
+window.PG_MODEL = {grains, indianCommas, toBase, carryLength, LEVELS, AMERICAN};
+</script>
+</body>
+</html>

@@ -1,0 +1,758 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tens and Ones</title>
+<meta name="description" content="Class 1: take sticks from the jar, snap a rubber band round ten of them, and Mitthu the parrot reads the number off the bundles and the loose sticks — all the way to one hundred.">
+<link rel="icon" href="../../favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600&family=Inter:wght@400;500;600;700&family=Nunito:wght@500;700;800&display=swap">
+<link rel="stylesheet" href="../../play.css">
+<style>
+.pg-main.tiny-main{grid-template-columns:minmax(0,1fr) 250px; padding-top:12px; padding-bottom:12px}
+.tiny-main .pg-stage{align-self:start; min-height:0}
+.pg-intro{display:flex; align-items:baseline; gap:18px; flex-wrap:wrap; padding-top:12px}
+.pg-intro p{margin:0}
+#stage{background:#fff3dc}
+.hit{cursor:pointer}
+.dragHit{cursor:grab}
+.dragHit.dragging{cursor:grabbing}
+svg [tabindex]:focus{outline:none}
+svg [tabindex]:focus-visible{outline:none; stroke:#ff7a2f; stroke-width:4; stroke-dasharray:8 8}
+.hear{width:100%; min-height:76px; font-size:24px; font-family:var(--font-head); border-radius:var(--radius)}
+.hear .ic{font-size:30px}
+.try{padding:10px; text-align:center; cursor:pointer; border:2px solid var(--hair-2); transition:transform .2s var(--spring)}
+.try:hover{border-color:var(--accent)}
+.try:active{transform:scale(.97)}
+.try svg{display:block; width:100%; height:auto}
+.try .kicker{margin:2px 0 0}
+@media (max-width:980px){ .pg-main.tiny-main{grid-template-columns:1fr} }
+</style>
+</head>
+<body>
+<header class="pg-top"></header>
+
+<div class="pg-intro">
+  <h1>Tens and ones</h1>
+  <p>Bundle sticks into tens and count to 99.</p>
+</div>
+
+<main class="pg-main tiny-main">
+  <section class="pg-stage" id="stageWrap">
+    <svg id="stage" viewBox="0 0 1000 660" role="img" aria-label="Mitthu the parrot sits on a branch above a table. On the table: a blue mat for bundles of ten, an orange mat for loose sticks, a jar of sticks, a rubber band and a crate of bundles. A board shows the number."></svg>
+  </section>
+
+  <aside class="pg-side">
+    <button class="btn primary hear" id="hear" aria-label="Hear what to do"><span class="ic">🔊</span> Hear it</button>
+    <button class="card try" id="tryCard" aria-label="What to try next. Tap to hear it."><svg id="tryArt" viewBox="-80 -55 160 110"></svg><div class="kicker">Try this</div></button>
+    <div class="card"><h3>⭐ Found</h3><div id="finds"></div></div>
+  </aside>
+</main>
+
+<script src="../../play.js"></script>
+<script>
+'use strict';
+const {$, clamp, lerp, loop, tween, sleep, sound, tone, say, track, confetti, findings, discover, found,
+       shareState, sharedState, mount, reduced, drag, svgPoint, mulberry32, ease} = Play;
+mount({thread: 'numbers', band: 'tiny'});
+
+/* MODEL:start ==================================================================
+   Tens and ones (NCERT Joyful Mathematics, Class 1, Ch 8 "Fun with Numbers").
+   The table holds T bundles of ten and O loose sticks. The number is COUNTED from
+   them, never typed: N = 10·T + O. The only moves are the ones a child makes with
+   real sticks:
+     take a stick from the jar (O+1), put one back (O−1);
+     snap a rubber band round ten loose sticks (T+1, O−10) — only if there are ten;
+     untie a bundle (T−1, O+10) — the number does not change;
+     take or return a ready bundle from the crate (T±1).
+   The number name is built from the tens word and the ones word (twenty + three),
+   not looked up from a list of 99 names.
+   ============================================================================ */
+const MAX = 100, MAXO = 19;                       // one hundred sticks; the loose mat fits nineteen
+const ONES = ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten',
+              'eleven', 'twelve', 'thirteen', 'fourteen', 'fifteen', 'sixteen', 'seventeen', 'eighteen', 'nineteen'];
+const TENS = ['', 'ten', 'twenty', 'thirty', 'forty', 'fifty', 'sixty', 'seventy', 'eighty', 'ninety'];
+function numberName(n){
+  if (n === 100) return 'one hundred';
+  if (n < 20) return ONES[n];
+  const t = Math.floor(n / 10), o = n % 10;
+  return TENS[t] + (o ? '-' + ONES[o] : '');
+}
+const valueOf = s => 10 * s.T + s.O;
+const digits = n => ({tens: Math.floor(n / 10), ones: n % 10});
+const canBundle = s => s.O >= 10;
+function bundle(s){ return canBundle(s) ? {T: s.T + 1, O: s.O - 10} : {T: s.T, O: s.O}; }
+function unbundle(s){ return s.T >= 1 && s.O + 10 <= MAXO ? {T: s.T - 1, O: s.O + 10} : {T: s.T, O: s.O}; }
+const canAddStick = s => s.O < MAXO && valueOf(s) < MAX;
+const canAddBundle = s => valueOf(s) + 10 <= MAX;
+/* How Mitthu reads what is on the table: "Two tens and three ones. Twenty-three!" */
+function readTO(s){
+  const n = valueOf(s), name = numberName(n);
+  const cap = w => w[0].toUpperCase() + w.slice(1);
+  if (s.O > 9) return cap(name) + '!';                                     // too many loose to read as tens and ones
+  if (s.T === 0) return cap(name) + '!';
+  const t = s.T === 1 ? 'One ten' : cap(ONES[s.T] || 'ten') + ' tens';
+  if (s.T === 10 && s.O === 0) return 'Ten tens. One hundred!';
+  return s.O === 0 ? `${t}. ${cap(name)}!` : `${t} and ${ONES[s.O]} ${s.O === 1 ? 'one' : 'ones'}. ${cap(name)}!`;
+}
+/* The counting words when Mitthu counts a mat aloud. */
+const countOnes = o => Array.from({length: o}, (_, i) => ONES[i + 1]).join(', ');
+const countTens = t => Array.from({length: t}, (_, i) => numberName(10 * (i + 1))).join(', ');
+/* MODEL:end */
+
+/* ---- the world ------------------------------------------------------------ */
+const TENS_MAT = {x: 30, y: 286, w: 460, h: 196}, ONES_MAT = {x: 510, y: 286, w: 460, h: 196};
+const STICK_H = 150, STICK_BOT = 470;
+const tensX = i => 62 + i * 43;                    // centre of bundle slot i
+const onesX = i => 540 + i * 21 + Math.floor(i / 5) * 11;   // centre of loose stick i (a gap after every five)
+const JAR = {x: 880, y: 566}, BAND = {x: 690, y: 566}, CRATE = {x: 250, y: 566}, BROOM = {x: 78, y: 566};
+const PARROT = {x: 840, y: 128}, CARD = {x: 640, y: 150};
+const beadX = k => 64 + (k - 1) * 8.62 + Math.floor((k - 1) / 10) * 3.4;   // bead k = 1..100 on the ginladi
+const BEAD_Y = 636;
+
+/* ---- state: plain data ----------------------------------------------------- */
+const S = {T: 0, O: 0, crate: false, target: null, targets: 0, opened: 0, bundled: 0};
+const rng = mulberry32(21);
+function nextTarget(){
+  let n;
+  do { n = 21 + Math.floor(rng() * 79); } while (n % 10 === 0 || n === valueOf(S));
+  S.target = n; S.targets++;
+}
+const shared = sharedState();
+if (shared) {
+  const T = clamp(Math.round(+shared.T || 0), 0, 10), O = clamp(Math.round(+shared.O || 0), 0, MAXO);
+  if (10 * T + O <= MAX) { S.T = T; S.O = O; }
+  if (shared.crate) S.crate = true;
+}
+shareState(() => ({T: S.T, O: S.O, crate: S.crate}));
+
+/* ============================================================================
+   The stage: drawn once, then only patched.
+   ============================================================================ */
+const svg = $('stage');
+const f1 = n => (+n).toFixed(1);
+const NS = 'http://www.w3.org/2000/svg';
+
+const stickArt = (hue = 0) => `<rect x="-5" y="${-STICK_H}" width="10" height="${STICK_H}" rx="5" fill="${['#f0c982', '#eabf73', '#f4d193'][hue % 3]}" stroke="#a8742f" stroke-width="2"/>
+  <line x1="-1.5" y1="${-STICK_H + 10}" x2="-1.5" y2="-12" stroke="#fff4d6" stroke-width="2" stroke-linecap="round" opacity=".7"/>`;
+function bundleArt(){
+  let s = '';
+  for (let k = 0; k < 10; k++) {
+    const x = -15 + (k % 5) * 7.5 + (k >= 5 ? 3.5 : 0), back = k < 5;
+    s += `<rect x="${f1(x - 4.5)}" y="${-STICK_H + (back ? -3 : 2)}" width="9" height="${STICK_H - (back ? 0 : 2)}" rx="4.5" fill="${back ? '#dcae62' : '#f0c982'}" stroke="#a8742f" stroke-width="1.8"/>`;
+  }
+  return s + `<rect x="-22" y="${-STICK_H / 2 - 9}" width="44" height="17" rx="8" fill="#2f6fd0" stroke="#1d4f9e" stroke-width="2.5"/>
+    <rect x="-18" y="${-STICK_H / 2 - 6}" width="30" height="4" rx="2" fill="#8fbaf5" opacity=".8"/>`;
+}
+const bandArt = r => `<ellipse rx="${r}" ry="${r * 0.62}" fill="none" stroke="#2f6fd0" stroke-width="${Math.max(7, r * 0.2)}"/>
+  <ellipse rx="${r}" ry="${r * 0.62}" fill="none" stroke="#8fbaf5" stroke-width="${Math.max(2, r * 0.05)}" transform="translate(-2 -3)" opacity=".8"/>`;
+const handArt = `<path d="M-6 0 L-6 -34 Q-6 -42 1 -42 Q8 -42 8 -34 L8 -14 L20 -14 Q30 -14 30 -4 L30 16 Q30 30 16 30 L2 30 Q-12 30 -16 18 L-24 4 Q-27 -3 -20 -5 Q-14 -6 -10 2 Z" fill="#fff" stroke="#3a2a1a" stroke-width="3" stroke-linejoin="round"/>`;
+
+/* Mitthu, a rose-ringed parakeet. Facing left, towards the table and the board. */
+function parrotArt(){
+  return `
+  <g id="pBob">
+    <path d="M18 70 Q30 150 58 214 Q40 206 30 188 Q22 160 2 78 Z" fill="#1c8f63" stroke="#146b49" stroke-width="3" stroke-linejoin="round"/>
+    <path d="M6 72 Q8 150 22 222 Q8 214 2 196 Q-6 160 -10 76 Z" fill="#2aa7b0" stroke="#1b7b82" stroke-width="3" stroke-linejoin="round"/>
+    <ellipse cx="4" cy="34" rx="50" ry="64" fill="#3cc25a" stroke="#1f7a3a" stroke-width="4"/>
+    <ellipse cx="-8" cy="46" rx="30" ry="44" fill="#9ae68a"/>
+    <g id="pWing"><path d="M22 -6 Q70 30 52 96 Q30 104 16 80 Q8 40 22 -6 Z" fill="#27a64a" stroke="#1f7a3a" stroke-width="4" stroke-linejoin="round"/>
+      <path d="M30 40 Q44 58 42 84 M22 30 Q30 52 28 80" fill="none" stroke="#1f7a3a" stroke-width="2.5" stroke-linecap="round" opacity=".6"/></g>
+    <g id="pHead">
+      <circle cx="-4" cy="-44" r="44" fill="#48cf63" stroke="#1f7a3a" stroke-width="4"/>
+      <path d="M-40 -18 Q-6 8 34 -22" fill="none" stroke="#e0567a" stroke-width="6" stroke-linecap="round"/>
+      <path d="M-38 -12 Q-6 12 32 -16" fill="none" stroke="#2a1d12" stroke-width="3" stroke-linecap="round" opacity=".75"/>
+      <ellipse cx="-4" cy="-30" rx="10" ry="7" fill="#ff8aa0" opacity=".55"/>
+      <g id="pEyeOpen"><circle cx="-18" cy="-54" r="15" fill="#fff" stroke="#1f7a3a" stroke-width="2.5"/>
+        <g id="pLook"><circle cx="-20" cy="-54" r="8" fill="#2a1d12"/><circle cx="-17" cy="-57" r="2.8" fill="#fff"/></g>
+        <path id="pLid" d="M-34 -54 Q-18 -72 -2 -54 Z" fill="#48cf63" opacity="0"/></g>
+      <path id="pEyeHappy" d="M-31 -52 Q-18 -68 -5 -52" fill="none" stroke="#2a1d12" stroke-width="5" stroke-linecap="round" opacity="0"/>
+      <g id="pEyeWow" opacity="0"><circle cx="-18" cy="-54" r="17" fill="#fff" stroke="#1f7a3a" stroke-width="2.5"/><circle cx="-18" cy="-54" r="6" fill="#2a1d12"/></g>
+      <path d="M-44 -40 Q-66 -46 -70 -22 Q-72 -8 -62 2 Q-60 -16 -46 -18 Z" fill="#e8452c" stroke="#9e2a18" stroke-width="3" stroke-linejoin="round"/>
+      <g id="pJaw"><path d="M-46 -18 Q-58 -14 -56 -4 Q-46 -2 -40 -12 Z" fill="#b8321f" stroke="#7d1f10" stroke-width="2.5" stroke-linejoin="round"/></g>
+      <path d="M-14 -84 Q-26 -104 -8 -110 Q-4 -96 -2 -86 Z M0 -86 Q2 -108 20 -104 Q10 -94 10 -82 Z" fill="#3cc25a" stroke="#1f7a3a" stroke-width="3" stroke-linejoin="round"/>
+    </g>
+    <path d="M-16 94 q-6 10 -16 12 M-8 96 q-2 10 -8 14 M10 94 q-4 10 -12 14 M18 94 q2 10 -2 14" stroke="#8a8f99" stroke-width="5" stroke-linecap="round" fill="none"/>
+  </g>`;
+}
+
+function build(){
+  const r = mulberry32(3);
+  let grain = '';
+  for (let i = 0; i < 26; i++) { const y = 272 + r() * 330, x = r() * 1000; grain += `<path d="M${f1(x)} ${f1(y)} q40 ${f1(r() * 6 - 3)} 90 0" stroke="#b77a3f" stroke-width="2" fill="none" opacity=".35"/>`; }
+  let leaves = '';
+  for (let i = 0; i < 14; i++) { const x = 560 + i * 34 + r() * 12, y = 236 + Math.sin(i) * 8 - (i % 2) * 18; leaves += `<ellipse cx="${f1(x)}" cy="${f1(y)}" rx="20" ry="9" fill="${i % 2 ? '#4fb35a' : '#3a9c4a'}" transform="rotate(${f1(-30 + r() * 60)} ${f1(x)} ${f1(y)})"/>`; }
+  let bunting = '';
+  const cols = ['#e0567a', '#ffb400', '#2f9e5b', '#3f7fd8', '#ff7a2f'];
+  for (let i = 0; i < 8; i++) { const x = 440 + i * 30, y = 12 + 6 * Math.sin(i / 7 * Math.PI); bunting += `<path d="M${x} ${f1(y)} L${x + 26} ${f1(y + 2)} L${x + 13} ${f1(y + 26)} Z" fill="${cols[i % 5]}" opacity=".9"/>`; }
+  let beads = '';
+  for (let k = 1; k <= 100; k++) beads += `<circle id="bead${k}" cx="${f1(beadX(k))}" cy="${BEAD_Y}" r="4.3" fill="${Math.floor((k - 1) / 10) % 2 ? '#ffd23f' : '#e0463c'}" stroke="${Math.floor((k - 1) / 10) % 2 ? '#c99a0c' : '#9e2a22'}" stroke-width="1.2"/>`;
+  svg.innerHTML = `
+  <defs>
+    <linearGradient id="gWall" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#bfe6ff"/><stop offset="1" stop-color="#fff3dc"/></linearGradient>
+    <linearGradient id="gTable" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#e3a765"/><stop offset="1" stop-color="#c98a4b"/></linearGradient>
+    <linearGradient id="gJar" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#d6f0ff" stop-opacity=".9"/><stop offset=".5" stop-color="#ffffff" stop-opacity=".55"/><stop offset="1" stop-color="#bfe1f7" stop-opacity=".9"/></linearGradient>
+    <filter id="soft" x="-20%" y="-20%" width="140%" height="140%"><feDropShadow dx="0" dy="4" stdDeviation="4" flood-color="#6b3a10" flood-opacity=".22"/></filter>
+    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="6"/></filter>
+  </defs>
+  <rect width="1000" height="660" fill="url(#gWall)"/>
+  <g opacity=".9"><circle cx="505" cy="92" r="30" fill="#ffd36b"/><circle cx="505" cy="92" r="42" fill="#ffd36b" opacity=".3"/></g>
+  <g fill="#fff" opacity=".9"><ellipse cx="470" cy="170" rx="40" ry="16"/><ellipse cx="500" cy="160" rx="30" ry="18"/><ellipse cx="620" cy="60" rx="34" ry="13"/><ellipse cx="646" cy="52" rx="24" ry="14"/></g>
+  <path d="M430 14 Q560 30 690 12" fill="none" stroke="#b36b32" stroke-width="2.5"/>
+  <g>${bunting}</g>
+
+  <!-- the number board, hanging on a nail -->
+  <g filter="url(#soft)">
+    <path d="M230 4 L110 40 M230 4 L350 40" stroke="#8a5a2b" stroke-width="3"/>
+    <circle cx="230" cy="6" r="6" fill="#8a5a2b"/>
+    <rect x="34" y="36" width="392" height="222" rx="26" fill="#b36b32"/>
+    <rect x="48" y="50" width="364" height="194" rx="18" fill="#fffaf0"/>
+  </g>
+  <rect id="tensBox" x="94" y="64" width="128" height="126" rx="18" fill="#e6efff" stroke="#2f6fd0" stroke-width="4"/>
+  <rect id="onesBox" x="238" y="64" width="128" height="126" rx="18" fill="#fff0e0" stroke="#f07a1a" stroke-width="4"/>
+  <text id="dTens" x="158" y="168" text-anchor="middle" font-family="Fredoka, Nunito, sans-serif" font-size="112" font-weight="600" fill="#2f6fd0"></text>
+  <text id="dOnes" x="302" y="168" text-anchor="middle" font-family="Fredoka, Nunito, sans-serif" font-size="112" font-weight="600" fill="#f07a1a"></text>
+  <g id="dHundred" opacity="0"><rect x="60" y="64" width="340" height="126" rx="18" fill="#fff6d6" stroke="#ffb400" stroke-width="4"/>
+    <text x="230" y="168" text-anchor="middle" font-family="Fredoka, Nunito, sans-serif" font-size="112" font-weight="600" fill="#e0567a">100</text></g>
+  <g id="boardIcons"><g transform="translate(71 168) scale(.5)">${bundleArt()}</g>
+  <g transform="translate(389 168) scale(.5)">${stickArt(0)}</g></g>
+  <text id="dName" x="230" y="230" text-anchor="middle" font-family="Fredoka, Nunito, sans-serif" font-size="27" font-weight="600" fill="#6b5238"></text>
+  <rect id="boardHit" class="hit" x="34" y="36" width="392" height="222" rx="26" fill="transparent" role="button" tabindex="0" aria-label="The number board. Tap to hear the number."/>
+
+  <!-- the branch, Mitthu, and Mitthu's number card -->
+  <path d="M1010 238 Q800 226 560 248 Q540 250 528 244" fill="none" stroke="#8a5a2b" stroke-width="16" stroke-linecap="round"/>
+  <path d="M700 234 q-20 -30 -60 -34" fill="none" stroke="#8a5a2b" stroke-width="7" stroke-linecap="round"/>
+  <g>${leaves}</g>
+  <g id="cardG" opacity="0">
+    <path d="M${CARD.x} 244 L${CARD.x} 190" stroke="#8a5a2b" stroke-width="6" stroke-linecap="round"/>
+    <g id="cardSwing">
+      <rect x="${CARD.x - 58}" y="108" width="116" height="88" rx="16" fill="#fff" stroke="#e0567a" stroke-width="5" filter="url(#soft)"/>
+      <circle cx="${CARD.x}" cy="116" r="5" fill="#8a5a2b"/>
+      <text id="cardNum" x="${CARD.x}" y="180" text-anchor="middle" font-family="Fredoka, Nunito, sans-serif" font-size="58" font-weight="600" fill="#e0567a"></text>
+      <path d="M${CARD.x + 34} 124 q10 -6 16 2 q-6 10 -16 -2 Z" fill="#3cc25a"/>
+    </g>
+  </g>
+  <g id="parrot" transform="translate(${PARROT.x} ${PARROT.y})">${parrotArt()}</g>
+  <g id="bubble" opacity="0" pointer-events="none">
+    <path d="M600 14 h150 a18 18 0 0 1 18 18 v28 a18 18 0 0 1 -18 18 h-20 l30 22 l-54 -22 h-106 a18 18 0 0 1 -18 -18 v-28 a18 18 0 0 1 18 -18 Z" fill="#fff" stroke="#3cc25a" stroke-width="4"/>
+    <text id="bubbleT" x="675" y="57" text-anchor="middle" font-family="Fredoka, Nunito, sans-serif" font-size="30" font-weight="600" fill="#1f7a3a"></text>
+  </g>
+
+  <!-- the table and the two mats -->
+  <rect x="0" y="266" width="1000" height="340" fill="url(#gTable)"/>
+  <rect x="0" y="266" width="1000" height="10" fill="#efbf86"/>
+  <g>${grain}</g>
+  <rect x="0" y="596" width="1000" height="64" fill="#a86a33"/>
+  <rect x="0" y="614" width="1000" height="46" fill="#fff3dc"/>
+  <rect x="0" y="612" width="1000" height="4" fill="#8a5a2b"/>
+  <rect id="tensMat" x="${TENS_MAT.x}" y="${TENS_MAT.y}" width="${TENS_MAT.w}" height="${TENS_MAT.h}" rx="22" fill="#dbe8ff" stroke="#2f6fd0" stroke-width="4"/>
+  <rect id="onesMat" x="${ONES_MAT.x}" y="${ONES_MAT.y}" width="${ONES_MAT.w}" height="${ONES_MAT.h}" rx="22" fill="#ffe6cc" stroke="#f07a1a" stroke-width="4"/>
+  <rect id="onesGlow" x="${ONES_MAT.x - 4}" y="${ONES_MAT.y - 4}" width="${ONES_MAT.w + 8}" height="${ONES_MAT.h + 8}" rx="26" fill="none" stroke="#2f6fd0" stroke-width="8" opacity="0" stroke-dasharray="16 10"/>
+  <g opacity=".22">${Array.from({length: 10}, (_, i) => `<rect x="${tensX(i) - 20}" y="${STICK_BOT - STICK_H - 4}" width="40" height="${STICK_H + 8}" rx="10" fill="none" stroke="#2f6fd0" stroke-width="2.5" stroke-dasharray="6 6"/>`).join('')}</g>
+
+  <g id="bundles">${Array.from({length: 10}, (_, i) => `<g id="bd${i}" opacity="0"><g transform="translate(${tensX(i)} ${STICK_BOT})"><g id="bdJ${i}">${bundleArt()}</g></g></g>`).join('')}</g>
+  <g id="sticks">${Array.from({length: MAXO}, (_, i) => `<g id="st${i}" opacity="0"><g transform="translate(${f1(onesX(i))} ${STICK_BOT}) rotate(${((i * 37) % 7) - 3})"><g id="stJ${i}">${stickArt(i)}</g></g></g>`).join('')}</g>
+  <g id="bigBand" opacity="0" pointer-events="none"></g>
+
+  <!-- supplies: a broom, the crate of bundles, the rubber band, the jar of sticks -->
+  <g filter="url(#soft)">
+    <g transform="translate(${BROOM.x} ${BROOM.y})"><g id="broom">
+      <circle r="44" fill="#fff" stroke="#e8d4bb" stroke-width="4"/>
+      <path d="M14 -30 L-2 6" stroke="#8a5a2b" stroke-width="7" stroke-linecap="round"/>
+      <path d="M-4 2 L8 8 L-6 34 Q-22 34 -28 24 Z" fill="#f2c14e" stroke="#b58414" stroke-width="3" stroke-linejoin="round"/>
+      <path d="M-16 20 l-6 10 M-8 22 l-6 12 M0 20 l-4 12" stroke="#b58414" stroke-width="2"/>
+    </g></g>
+    <g transform="translate(${CRATE.x} ${CRATE.y})"><g id="crate">
+      <rect x="-70" y="-26" width="140" height="62" rx="10" fill="#c98a4b" stroke="#8a5a2b" stroke-width="4"/>
+      <path d="M-70 -6 h140 M-70 16 h140" stroke="#8a5a2b" stroke-width="3" opacity=".6"/>
+      <g id="crateFull" opacity="0">${[-46, -26, -6, 14, 34].map(x => `<g transform="translate(${x + 6} -18) scale(.42)">${bundleArt()}</g>`).join('')}</g>
+      <g id="crateLid"><rect x="-76" y="-40" width="152" height="22" rx="8" fill="#b77a3f" stroke="#8a5a2b" stroke-width="4"/>
+        <circle cx="0" cy="-29" r="6" fill="#ffd36b" stroke="#8a5a2b" stroke-width="2"/></g>
+    </g></g>
+    <g id="bandRest" transform="translate(${BAND.x} ${BAND.y})"><circle r="46" fill="#fff" stroke="#bcd3f5" stroke-width="4"/><g transform="rotate(-12)">${bandArt(26)}</g></g>
+    <g id="jar" transform="translate(${JAR.x} ${JAR.y})">
+      <g id="jarJ">
+        ${Array.from({length: 9}, (_, k) => `<rect x="${-30 + k * 7}" y="${-78 + (k % 3) * 6}" width="8" height="84" rx="4" fill="${['#f0c982', '#eabf73', '#f4d193'][k % 3]}" stroke="#a8742f" stroke-width="1.6" transform="rotate(${(k - 4) * 3} ${-26 + k * 7} 0)"/>`).join('')}
+        <path d="M-44 -34 Q-46 40 -34 42 L34 42 Q46 40 44 -34 Z" fill="url(#gJar)" stroke="#7fb3d6" stroke-width="4"/>
+        <rect x="-48" y="-44" width="96" height="14" rx="7" fill="#c9e4f5" stroke="#7fb3d6" stroke-width="3"/>
+      </g>
+    </g>
+  </g>
+
+  <!-- the ginladi: a string of 100 beads, ten red, ten yellow -->
+  <path d="M40 ${BEAD_Y} L975 ${BEAD_Y}" stroke="#5b3a1a" stroke-width="2"/>
+  <g id="beads">${beads}</g>
+  <g id="clip"><path d="M-7 -30 L7 -30 L5 -8 L0 -2 L-5 -8 Z" fill="#3f7fd8" stroke="#1d4f9e" stroke-width="2"/><circle cy="-22" r="2.5" fill="#fff"/></g>
+
+  <!-- effects, the drag ghosts and the hint hand, on top -->
+  <g id="fx" pointer-events="none"></g>
+  <g id="ghostStick" opacity="0" pointer-events="none">${stickArt(0)}</g>
+  <g id="ghostBundle" opacity="0" pointer-events="none">${bundleArt()}</g>
+  <g id="ghostBand" opacity="0" pointer-events="none">${bandArt(40)}</g>
+  <g id="hint" pointer-events="none" opacity="0"><g id="hintHand"><g transform="scale(1.3)">${handArt}</g></g></g>
+
+  <!-- hit targets that never move -->
+  <rect id="tensHit" class="dragHit" x="${TENS_MAT.x}" y="${TENS_MAT.y}" width="${TENS_MAT.w}" height="${TENS_MAT.h}" rx="22" fill="transparent" role="button" tabindex="0" aria-label="The bundles. Tap to count them in tens. Drag a bundle to the loose mat to untie it, or back to the crate."/>
+  <rect id="onesHit" class="dragHit" x="${ONES_MAT.x}" y="${ONES_MAT.y}" width="${ONES_MAT.w}" height="${ONES_MAT.h}" rx="22" fill="transparent" role="button" tabindex="0" aria-label="The loose sticks. Tap to count them. Drag a stick back to the jar."/>
+  <circle id="broomHit" class="hit" cx="${BROOM.x}" cy="${BROOM.y}" r="46" fill="transparent" role="button" tabindex="0" aria-label="Put everything back"/>
+  <rect id="crateHit" class="hit" x="${CRATE.x - 80}" y="${CRATE.y - 46}" width="160" height="90" rx="14" fill="transparent" role="button" tabindex="0" aria-label="The crate of bundles. Tap to take a bundle of ten."/>
+  <circle id="bandHit" class="dragHit" cx="${BAND.x}" cy="${BAND.y}" r="48" fill="transparent" role="button" tabindex="0" aria-label="The rubber band. Drag it onto the loose sticks, or tap it, to make a bundle of ten."/>
+  <rect id="jarHit" class="hit" x="${JAR.x - 58}" y="${JAR.y - 88}" width="116" height="136" rx="20" fill="transparent" role="button" tabindex="0" aria-label="The jar of sticks. Tap to take one stick."/>
+  <rect id="parrotHit" class="hit" x="${PARROT.x - 80}" y="${PARROT.y - 120}" width="160" height="230" rx="30" fill="transparent" role="button" tabindex="0" aria-label="Mitthu the parrot. Tap to hear the number."/>
+  <rect id="cardHit" class="hit" x="${CARD.x - 62}" y="104" width="124" height="98" rx="16" fill="transparent" role="button" tabindex="0" aria-label="Mitthu's number card" style="display:none"/>
+  `;
+}
+build();
+
+/* ---- paint: everything follows the state ------------------------------------ */
+function paint(){
+  const n = valueOf(S);
+  for (let i = 0; i < 10; i++) $('bd' + i).setAttribute('opacity', i < S.T ? 1 : 0);
+  for (let i = 0; i < MAXO; i++) $('st' + i).setAttribute('opacity', i < S.O ? 1 : 0);
+  /* the board: the number, counted from the table */
+  const hundred = n === 100;
+  $('dHundred').setAttribute('opacity', hundred ? 1 : 0);
+  for (const id of ['tensBox', 'onesBox', 'dTens', 'dOnes', 'boardIcons']) $(id).setAttribute('opacity', hundred ? 0 : 1);
+  const d = digits(n);
+  $('dTens').textContent = n >= 10 ? d.tens : '';
+  $('dOnes').textContent = d.ones;
+  $('dName').textContent = numberName(n);
+  /* the ginladi: beads up to n are bright, the clip sits on bead n */
+  for (let k = 1; k <= 100; k++) $('bead' + k).setAttribute('opacity', k <= n ? 1 : 0.28);
+  $('clip').setAttribute('transform', `translate(${f1(n ? beadX(n) : 50)} ${BEAD_Y - 4})`);
+  /* the crate: shut until the child has made a bundle of their own */
+  $('crateFull').setAttribute('opacity', S.crate ? 1 : 0);
+  $('crateLid').setAttribute('transform', S.crate ? 'translate(-40 -30) rotate(-14)' : '');
+  $('onesGlow').setAttribute('opacity', canBundle(S) ? 1 : 0);
+  $('cardG').setAttribute('opacity', S.target != null ? 1 : 0);
+  $('cardHit').style.display = S.target != null ? '' : 'none';
+  $('cardNum').textContent = S.target != null ? S.target : '';
+  paintTry();
+}
+
+/* ---- Mitthu: face, bob, wings ----------------------------------------------- */
+let FACE = 'open', faceT = 0, DRAGPOS = null, POINTER = null;
+function face(f, secs = 1.4){
+  FACE = f; faceT = secs;
+  $('pEyeOpen').setAttribute('opacity', f === 'open' ? 1 : 0);
+  $('pEyeHappy').setAttribute('opacity', f === 'happy' ? 1 : 0);
+  $('pEyeWow').setAttribute('opacity', f === 'wow' ? 1 : 0);
+  $('pJaw').setAttribute('transform', f === 'open' ? '' : 'rotate(-18 -44 -16)');
+}
+function flap(times = 2){
+  if (reduced()) return Promise.resolve();
+  return tween(0, times, 380 * times, t => {
+    const a = Math.sin(t * Math.PI * 2) * 34;
+    $('pWing').setAttribute('transform', `rotate(${f1(-Math.abs(a))} 26 0)`);
+  }, v => v).then(() => $('pWing').removeAttribute('transform'));
+}
+function hop(h = 16){
+  if (reduced()) return Promise.resolve();
+  return tween(0, 1, 420, t => $('pBob').setAttribute('transform', `translate(0 ${f1(-Math.sin(t * Math.PI) * h)})`), v => v)
+    .then(() => $('pBob').removeAttribute('transform'));
+}
+function squawk(){ tone(1150, 0.09, 'square', 0.035, 0, 1700); tone(1300, 0.1, 'square', 0.03, 0.11, 1900); }
+let bubbleTimer = 0;
+function bubble(text, ms = 2200){
+  $('bubbleT').textContent = text;
+  $('bubble').setAttribute('opacity', 1);
+  clearTimeout(bubbleTimer); bubbleTimer = setTimeout(() => $('bubble').setAttribute('opacity', 0), ms);
+}
+/* Mitthu says it and shows it: the words spoken, and the number in the bubble. */
+function mitthu(line, show, f = 'happy'){
+  say(line, {pitch: 1.3});
+  if (show != null) bubble(show);
+  face(f);
+  squawk();
+}
+
+/* ---- juice helpers ------------------------------------------------------------ */
+function clientOf(x, y){
+  const m = svg.getScreenCTM(); if (!m) return {x: innerWidth / 2, y: innerHeight / 2};
+  const p = svg.createSVGPoint(); p.x = x; p.y = y; const q = p.matrixTransform(m); return {x: q.x, y: q.y};
+}
+function squash(el, amt = 0.14, ms = 420){
+  if (reduced()) return Promise.resolve();
+  return tween(0, 1, ms, t => {
+    const k = Math.sin(t * Math.PI * 3) * (1 - t) * amt;
+    el.setAttribute('transform', `scale(${(1 - k).toFixed(3)} ${(1 + k).toFixed(3)})`);
+  }, v => v).then(() => el.removeAttribute('transform'));
+}
+/* Fly an element (its inner juice group) in from a point, in stage units, along an arc. */
+function flyIn(el, from, to, ms = 420, lift = 60){
+  if (reduced()) { el.removeAttribute('transform'); return Promise.resolve(); }
+  const dx = from.x - to.x, dy = from.y - to.y;
+  return tween(1, 0, ms, k => {
+    el.setAttribute('transform', `translate(${f1(dx * k)} ${f1(dy * k - Math.sin(k * Math.PI) * lift)})`);
+  }, ease.out).then(() => el.removeAttribute('transform'));
+}
+const outer = (id) => $(id).firstElementChild;     // the positioned group inside a slot
+
+/* ============================================================================
+   The moves. Each one changes the state by the model, then plays its juice.
+   ============================================================================ */
+function afterChange(kind){
+  paint();
+  check(kind);
+  track(kind, {T: S.T, O: S.O, n: valueOf(S)});
+}
+function takeStick(){
+  hello();
+  if (!canAddStick(S)) {
+    sound('boing'); squash($('jarJ'), 0.1);
+    if (valueOf(S) >= MAX) mitthu('One hundred! That is all the sticks we need.', '100', 'wow');
+    else mitthu('So many loose sticks! Put the rubber band round ten of them.', '🎀', 'wow');
+    return;
+  }
+  S.O++;
+  const i = S.O - 1;
+  sound('pop'); Play.sound('note', 392 * Math.pow(2, Math.min(S.O, 12) / 12), 0.12);
+  squash($('jarJ'), 0.07, 300);
+  afterChange('stick');
+  flyIn($('stJ' + i), {x: JAR.x, y: JAR.y - 30}, {x: onesX(i), y: STICK_BOT}, 380, 90);
+  if (S.O === 10) { mitthu('Ten loose sticks! Put the rubber band round them.', String(valueOf(S)), 'wow'); flap(2); setHint('band'); }
+  else { say(numberName(valueOf(S)) + '!', {pitch: 1.3}); bubble(String(valueOf(S)), 1400); }
+}
+function returnStick(){
+  if (S.O < 1) return;
+  S.O--;
+  sound('tick'); squash($('jarJ'), 0.07, 300);
+  afterChange('stickBack');
+  say(numberName(valueOf(S)) + '.', {pitch: 1.3}); bubble(String(valueOf(S)), 1400);
+}
+function takeBundle(){
+  hello();
+  if (!S.crate) { sound('boing'); squash($('crate'), 0.08); mitthu('The crate opens when you make a bundle yourself. Ten sticks and a rubber band!', '🎀', 'open'); return; }
+  if (!canAddBundle(S)) { sound('boing'); mitthu('That would be more than one hundred!', '100', 'wow'); return; }
+  S.T++;
+  const i = S.T - 1;
+  sound('pop'); setTimeout(() => sound('drum', true), 300);
+  afterChange('bundle+');
+  flyIn($('bdJ' + i), {x: CRATE.x, y: CRATE.y - 10}, {x: tensX(i), y: STICK_BOT}, 420, 80);
+  speakNumber();
+}
+function returnBundle(){
+  if (S.T < 1) return;
+  S.T--;
+  sound('tick');
+  afterChange('bundleBack');
+  speakNumber();
+}
+/* The rubber band goes round the loose sticks. Ten or more: a bundle. Fewer: it slips off. */
+function bandIt(){
+  hello();
+  if (S.O === 0) { sound('boing'); mitthu('No loose sticks yet. Tap the jar!', '?', 'wow'); setHint('jar'); return; }
+  if (!canBundle(S)) {
+    const o = S.O;
+    sound('boing');
+    slipBand();
+    mitthu(countOnes(o) + '. Only ' + ONES[o] + '! A bundle needs ten.', String(o), 'wow');
+    return;
+  }
+  const before = S.O;
+  const nb = bundle(S);
+  S.T = nb.T; S.O = nb.O; S.bundled++;
+  if (!S.crate) S.crate = true;
+  sound('snap'); setTimeout(() => sound('drum', true), 380);
+  afterChange('band');
+  bundleJuice(before);
+  flap(3); hop(18);
+  setHint('off');
+  const first = !found('bundle') ? '' : 'A bundle of ten! ';
+  setTimeout(() => { if (!Play.EVENTS.some(e => e.type === 'finding' && Date.now() - e.t < 400)) mitthu(first + readTO(S), String(valueOf(S))); }, 30);
+}
+/* Untie a bundle on the loose mat: ten sticks spill out, and the number stays the same. */
+function untie(){
+  hello();
+  if (S.T < 1) return;
+  if (S.O + 10 > MAXO) { sound('boing'); mitthu('Too many loose sticks already! Make a bundle first.', '🎀', 'wow'); return; }
+  const n0 = valueOf(S), from = S.O;
+  const nb = unbundle(S);
+  S.T = nb.T; S.O = nb.O; S.opened++;
+  sound('boing'); setTimeout(() => sound('pop'), 120);
+  afterChange('untie');
+  const at = {x: ONES_MAT.x + ONES_MAT.w / 2, y: STICK_BOT - 40};
+  for (let i = from; i < S.O; i++) flyIn($('stJ' + i), at, {x: onesX(i), y: STICK_BOT}, 360 + (i - from) * 30, 50);
+  if (valueOf(S) === n0 && !Play.EVENTS.some(e => e.type === 'finding' && Date.now() - e.t < 400))
+    mitthu(`Still ${numberName(n0)}! Ten loose sticks is the same as one bundle.`, String(n0));
+}
+function sweep(){
+  hello();
+  if (!S.T && !S.O) { sound('boing'); squash($('broom'), 0.1); return; }
+  S.T = 0; S.O = 0;
+  sound('whoosh');
+  squash($('broom'), 0.12);
+  afterChange('sweep');
+  mitthu('All back! Zero.', '0', 'open');
+}
+function speakNumber(){ say(readTO(S), {pitch: 1.3}); bubble(String(valueOf(S)), 1600); }
+
+/* ---- the juice for a bundle: ten sticks huddle, the band snaps, the bundle flies ---- */
+function bundleJuice(before){
+  const fx = $('fx');
+  const mid = ONES_MAT.x + ONES_MAT.w / 2;
+  const i = S.T - 1, bd = $('bdJ' + i);
+  if (reduced()) return;
+  bd.setAttribute('transform', `translate(${f1(mid - tensX(i))} 0)`);
+  $('bd' + i).setAttribute('opacity', 0);
+  const clones = [];
+  for (let k = 0; k < 10; k++) {
+    const g = document.createElementNS(NS, 'g');
+    g.innerHTML = stickArt(k);
+    g.setAttribute('transform', `translate(${f1(onesX(k))} ${STICK_BOT})`);
+    fx.appendChild(g); clones.push(g);
+  }
+  /* the leftover sticks slide left into place */
+  for (let k = 0; k < S.O; k++) flyIn($('stJ' + k), {x: onesX(k + 10), y: STICK_BOT}, {x: onesX(k), y: STICK_BOT}, 420, 0);
+  tween(0, 1, 320, t => clones.forEach((g, k) => {
+    const x = lerp(onesX(k), mid - 15 + (k % 5) * 7.5 + (k >= 5 ? 3.5 : 0), t);
+    g.setAttribute('transform', `translate(${f1(x)} ${STICK_BOT})`);
+  }), ease.inOut).then(() => {
+    clones.forEach(g => g.remove());
+    const band = $('bigBand');
+    band.innerHTML = bandArt(40);
+    band.setAttribute('opacity', 1);
+    tween(1, 0, 180, k => band.setAttribute('transform', `translate(${mid} ${STICK_BOT - STICK_H / 2}) scale(${f1(0.55 + k * 1.2)})`), v => v)
+      .then(() => {
+        band.setAttribute('opacity', 0);
+        $('bd' + i).setAttribute('opacity', i < S.T ? 1 : 0);
+        flyIn(bd, {x: mid, y: STICK_BOT}, {x: tensX(i), y: STICK_BOT}, 480, 110);
+        const c = clientOf(mid, STICK_BOT - 80); confetti(c.x, c.y, 24);
+      });
+  });
+}
+function slipBand(){
+  if (reduced()) return;
+  const band = $('bigBand'), mid = ONES_MAT.x + ONES_MAT.w / 2;
+  band.innerHTML = bandArt(50); band.setAttribute('opacity', 1);
+  tween(0, 1, 700, t => {
+    const y = STICK_BOT - STICK_H / 2 + t * t * 120, r = Math.sin(t * 9) * 12 * (1 - t);
+    band.setAttribute('transform', `translate(${mid} ${f1(y)}) rotate(${f1(r)}) scale(${f1(1.1 - t * 0.3)})`);
+    band.setAttribute('opacity', (1 - t * t).toFixed(2));
+  }, v => v).then(() => band.setAttribute('opacity', 0));
+  for (let k = 0; k < S.O; k++) setTimeout(() => squash($('stJ' + k), 0.1, 260), k * 60);
+}
+
+/* ---- counting a mat aloud ------------------------------------------------------ */
+function countMat(which){
+  hello();
+  if (which === 'ones') {
+    if (!S.O) { sound('boing'); mitthu('No loose sticks! Tap the jar.', '0', 'open'); return; }
+    say(countOnes(S.O) + (S.O > 1 ? '. ' + ONES[S.O] + ' loose sticks!' : ' loose stick!'), {pitch: 1.3, rate: 1});
+    for (let k = 0; k < S.O; k++) setTimeout(() => { squash($('stJ' + k), 0.14, 280); Play.sound('note', 392 * Math.pow(2, Math.min(k + 1, 12) / 12), 0.1); }, reduced() ? 0 : k * 380);
+    bubble(String(S.O), 400 * S.O + 800);
+  } else {
+    if (!S.T) { sound('boing'); mitthu('No bundles yet. Ten sticks make a bundle!', '0', 'open'); return; }
+    say(countTens(S.T) + '!', {pitch: 1.3, rate: 1});
+    for (let k = 0; k < S.T; k++) setTimeout(() => { squash($('bdJ' + k), 0.14, 300); Play.sound('drum', k === S.T - 1); }, reduced() ? 0 : k * 520);
+    bubble(String(10 * S.T), 540 * S.T + 800);
+  }
+  track('count', {mat: which, T: S.T, O: S.O});
+}
+
+/* ============================================================================
+   Discoveries: each one is a state the table reaches.
+   ============================================================================ */
+function check(kind){
+  const n = valueOf(S), proper = S.O <= 9;
+  const board = clientOf(230, 140);
+  if (kind === 'band') discover('bundle', clientOf(tensX(S.T - 1), 360));
+  if (proper && S.T >= 2 && S.O >= 1 && n <= 99) discover('tensOnes', board);
+  if (S.O === 0 && S.T >= 2 && S.T <= 9) discover('justTens', board);
+  if (kind === 'untie') discover('untie', clientOf(ONES_MAT.x + 230, 360));
+  if (n === 100 && S.T === 10) { if (discover('hundred', board)) { flap(4); hop(26); } }
+  if (S.target != null && proper && n === S.target) {
+    const got = S.target;
+    const wasNew = discover('match', clientOf(CARD.x, 140));
+    if (!wasNew) { sound('tada'); const c = clientOf(CARD.x, 140); confetti(c.x, c.y, 40); mitthu(`Yes! ${numberName(got)}! ${readTO(S)}`, String(got)); }
+    flap(3); hop(20);
+    S.target = null;
+    setTimeout(() => { nextTarget(); paint(); askTarget(); }, reduced() ? 50 : 2600);
+  }
+  if (found('bundle') && S.target == null && S.targets === 0) { nextTarget(); paint(); setTimeout(askTarget, 3200); }
+}
+function askTarget(){
+  if (S.target == null) return;
+  if (!reduced()) { const g = $('cardSwing'); tween(0, 1, 900, t => g.setAttribute('transform', `rotate(${f1(Math.sin(t * Math.PI * 4) * 8 * (1 - t))} ${CARD.x} 196)`), v => v); }
+  say('Can you make ' + numberName(S.target) + '?', {pitch: 1.3});
+}
+
+/* ============================================================================
+   Wiring. Hit targets never move.
+   ============================================================================ */
+const onTap = (id, fn) => { $(id).addEventListener('click', fn); $(id).addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fn(); } }); };
+onTap('jarHit', takeStick);
+onTap('crateHit', takeBundle);
+onTap('broomHit', sweep);
+onTap('parrotHit', () => { hello(); hop(); flap(1); squawk(); face('happy'); speakNumber(); });
+onTap('boardHit', () => { hello(); speakNumber(); squash($('dName'), 0.1); });
+onTap('cardHit', () => { hello(); askTarget(); });
+
+/* The rubber band: drag it onto the loose sticks, or just tap it. */
+{
+  let from = null, moved = 0, t0 = 0;
+  drag($('bandHit'), svg, {
+    start(p){ from = p; moved = 0; t0 = performance.now(); sound('pop'); },
+    move(p){
+      moved = Math.max(moved, Math.hypot(p.x - from.x, p.y - from.y));
+      if (moved < 8) return;
+      DRAGPOS = p;
+      $('ghostBand').setAttribute('opacity', 1); $('ghostBand').setAttribute('transform', `translate(${f1(p.x)} ${f1(p.y)})`);
+      $('bandRest').setAttribute('opacity', 0.35);
+    },
+    end(p){
+      DRAGPOS = null;
+      $('ghostBand').setAttribute('opacity', 0); $('bandRest').setAttribute('opacity', 1);
+      if (moved < 8) return bandIt();
+      if (inRect(p, ONES_MAT, 30)) bandIt(); else { sound('boing'); if (inRect(p, TENS_MAT, 0)) mitthu('The band goes round the loose sticks!', '🎀', 'open'); }
+    },
+  });
+  $('bandHit').addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); bandIt(); } });
+}
+const inRect = (p, r, pad = 0) => p.x > r.x - pad && p.x < r.x + r.w + pad && p.y > r.y - pad && p.y < r.y + r.h + pad;
+
+/* Loose sticks: tap to count them; drag one back to the jar. */
+{
+  let from = null, moved = 0;
+  drag($('onesHit'), svg, {
+    start(p){ from = p; moved = 0; },
+    move(p){
+      moved = Math.max(moved, Math.hypot(p.x - from.x, p.y - from.y));
+      if (moved < 10 || !S.O) return;
+      DRAGPOS = p;
+      $('st' + (S.O - 1)).setAttribute('opacity', 0.25);
+      $('ghostStick').setAttribute('opacity', 1); $('ghostStick').setAttribute('transform', `translate(${f1(p.x)} ${f1(p.y + STICK_H / 2)}) rotate(20)`);
+    },
+    end(p){
+      DRAGPOS = null;
+      $('ghostStick').setAttribute('opacity', 0);
+      if (moved < 10) return countMat('ones');
+      paint();
+      if (!S.O) return;
+      if (Math.hypot(p.x - JAR.x, p.y - (JAR.y - 20)) < 90) returnStick();
+      else sound('tick');
+    },
+  });
+  $('onesHit').addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); countMat('ones'); } });
+}
+/* Bundles: tap to count in tens; drag one onto the loose mat to untie it, or to the crate. */
+{
+  let from = null, moved = 0;
+  drag($('tensHit'), svg, {
+    start(p){ from = p; moved = 0; },
+    move(p){
+      moved = Math.max(moved, Math.hypot(p.x - from.x, p.y - from.y));
+      if (moved < 10 || !S.T) return;
+      DRAGPOS = p;
+      $('bd' + (S.T - 1)).setAttribute('opacity', 0.25);
+      $('ghostBundle').setAttribute('opacity', 1); $('ghostBundle').setAttribute('transform', `translate(${f1(p.x)} ${f1(p.y + STICK_H / 2)})`);
+    },
+    end(p){
+      DRAGPOS = null;
+      $('ghostBundle').setAttribute('opacity', 0);
+      if (moved < 10) return countMat('tens');
+      paint();
+      if (!S.T) return;
+      if (inRect(p, ONES_MAT, 20)) untie();
+      else if (Math.hypot(p.x - CRATE.x, p.y - CRATE.y) < 100) returnBundle();
+      else sound('tick');
+    },
+  });
+  $('tensHit').addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); countMat('tens'); } });
+}
+svg.addEventListener('pointermove', e => { POINTER = svgPoint(svg, e); });
+
+/* ---- the hint hand ------------------------------------------------------------- */
+let HINT = 'jar', T = 0;
+function setHint(h){ HINT = h; }
+function idle(dt){
+  T += dt;
+  /* Mitthu's eyes follow what is happening */
+  const tgt = DRAGPOS || POINTER || {x: ONES_MAT.x + 200, y: 380};
+  const dx = tgt.x - (PARROT.x - 18), dy = tgt.y - (PARROT.y - 54), L = Math.hypot(dx, dy) || 1;
+  $('pLook').setAttribute('transform', `translate(${f1(dx / L * 4.5)} ${f1(dy / L * 4.5)})`);
+  if (faceT > 0) { faceT -= dt; if (faceT <= 0) face('open', 0); }
+  if (!reduced()) {
+    const blink = (T % 3.7) < 0.13 && FACE === 'open';
+    $('pLid').setAttribute('opacity', blink ? 1 : 0);
+    $('pHead').setAttribute('transform', `rotate(${f1(Math.sin(T * 1.3) * 3)} 0 -10)`);
+  }
+  /* the hand shows what to do next, until the child has done it */
+  if (HINT === 'jar' && S.O > 0) HINT = S.O >= 10 ? 'band' : 'off';
+  if (HINT === 'band' && !canBundle(S)) HINT = 'off';
+  const h = $('hint');
+  if (HINT === 'off') { h.setAttribute('opacity', 0); return; }
+  let x, y;
+  if (HINT === 'jar') { const k = (T * 1.2) % 1; x = JAR.x + 6; y = JAR.y - 10 + (reduced() ? 0 : Math.abs(Math.sin(k * Math.PI)) * -22); }
+  else { const k = reduced() ? 0.5 : ease.inOut(clamp((T * 0.55 % 1) / 0.8, 0, 1)); x = lerp(BAND.x, ONES_MAT.x + 230, k); y = lerp(BAND.y, 380, k); }
+  $('hintHand').setAttribute('transform', `translate(${f1(x)} ${f1(y + 20)})`);
+  h.setAttribute('opacity', 0.95);
+}
+
+/* ---- the "Try this" card -------------------------------------------------------- */
+const miniStick = (x, y, s = 0.4) => `<g transform="translate(${x} ${y}) scale(${s})">${stickArt(0)}</g>`;
+const miniBundle = (x, y, s = 0.4) => `<g transform="translate(${x} ${y}) scale(${s})">${bundleArt()}</g>`;
+const TRY = {
+  bundle: {line: 'Tap the jar to take sticks. When you have ten, put the rubber band round them!',
+    art: `${Array.from({length: 10}, (_, k) => miniStick(-58 + k * 8, 30, 0.36)).join('')}<text x="12" y="14" font-family="Fredoka, sans-serif" font-size="30" font-weight="600" fill="#6b5238">→</text>${miniBundle(56, 30, 0.42)}`},
+  tensOnes: {line: 'Make two bundles and some loose sticks. Like twenty-three!',
+    art: `${miniBundle(-56, 36, 0.4)}${miniBundle(-30, 36, 0.4)}${miniStick(8, 36, 0.4)}${miniStick(20, 36, 0.4)}${miniStick(32, 36, 0.4)}
+      <text x="-40" y="-26" text-anchor="middle" font-family="Fredoka, sans-serif" font-size="30" font-weight="600" fill="#2f6fd0">2</text>
+      <text x="22" y="-26" text-anchor="middle" font-family="Fredoka, sans-serif" font-size="30" font-weight="600" fill="#f07a1a">3</text>`},
+  justTens: {line: 'Make a number with only bundles. No loose sticks at all!',
+    art: `${miniBundle(-52, 36, 0.4)}${miniBundle(-28, 36, 0.4)}${miniBundle(-4, 36, 0.4)}<circle cx="44" cy="4" r="22" fill="none" stroke="#f07a1a" stroke-width="4" stroke-dasharray="6 5"/>
+      <text x="44" y="15" text-anchor="middle" font-family="Fredoka, sans-serif" font-size="30" font-weight="600" fill="#f07a1a">0</text>`},
+  untie: {line: 'Drag a bundle onto the orange mat to untie it. Is it still the same number?',
+    art: `${miniBundle(-44, 36, 0.42)}<text x="-6" y="10" font-family="Fredoka, sans-serif" font-size="30" font-weight="600" fill="#6b5238">→</text>${Array.from({length: 10}, (_, k) => miniStick(26 + (k % 5) * 8 + Math.floor(k / 5) * 4, 36 - Math.floor(k / 5) * 0, 0.36)).join('')}`},
+  match: {line: 'Mitthu is holding a number card. Can you make that number?',
+    art: `<rect x="-40" y="-40" width="80" height="66" rx="12" fill="#fff" stroke="#e0567a" stroke-width="4"/><text x="0" y="10" text-anchor="middle" font-family="Fredoka, sans-serif" font-size="40" font-weight="600" fill="#e0567a">?</text>
+      <path d="M44 -10 q14 -10 22 2 q-8 14 -22 -2 Z" fill="#3cc25a"/><circle cx="50" cy="-8" r="2.5" fill="#2a1d12"/>`},
+  hundred: {line: 'Make ten bundles. How many sticks is that?',
+    art: `${Array.from({length: 10}, (_, k) => miniBundle(-66 + k * 14.6, 38, 0.32)).join('')}<text x="0" y="-22" text-anchor="middle" font-family="Fredoka, sans-serif" font-size="30" font-weight="600" fill="#e0567a">10</text>`},
+};
+const TRY_ORDER = ['bundle', 'tensOnes', 'justTens', 'untie', 'match', 'hundred'];
+const currentTry = () => TRY_ORDER.find(g => !found(g)) || null;
+let shownTry;
+function paintTry(){
+  const g = currentTry();
+  if (g === shownTry) return;
+  shownTry = g;
+  $('tryArt').innerHTML = g ? TRY[g].art : `<path d="M0 -40 L12 -12 L42 -10 L18 8 L26 38 L0 22 L-26 38 L-18 8 L-42 -10 L-12 -12 Z" fill="#ffc53d" stroke="#f29a1f" stroke-width="3" stroke-linejoin="round"/>`;
+  if (!reduced()) $('tryCard').animate([{transform: 'scale(.9)'}, {transform: 'scale(1.04)'}, {transform: 'scale(1)'}], {duration: 450, easing: 'ease-out'});
+}
+function sayTry(){
+  const g = currentTry();
+  let line = g ? TRY[g].line : 'You found everything! Keep counting.';
+  if (g === 'match' && S.target != null) line = 'Mitthu is holding a number card. Can you make ' + numberName(S.target) + '?';
+  say(line);
+  track('hear', {goal: g});
+}
+$('tryCard').addEventListener('click', () => { spoke = true; sayTry(); });
+$('hear').addEventListener('click', () => { spoke = true; sayTry(); });
+let spoke = false;
+function hello(){ if (spoke) return; spoke = true; setTimeout(() => { if (!Play.EVENTS.some(e => e.type === 'finding')) say('Hello! I am Mitthu. Let us count sticks. Ten sticks make one bundle!', {pitch: 1.3, interrupt: false}); }, 900); }
+
+/* ============================================================================
+   Start
+   ============================================================================ */
+findings($('finds'), [
+  {id: 'bundle',   icon: '🎀', label: 'A bundle of ten', say: 'A bundle of ten! Ten loose sticks became one bundle. One ten!'},
+  {id: 'tensOnes', icon: '🔢', label: 'Tens and ones',   say: 'Tens and ones! The bundles tell the first number, the loose sticks tell the second.'},
+  {id: 'justTens', icon: '🟦', label: 'Just tens',       say: 'Just tens, and no ones! So the ones number is zero.'},
+  {id: 'untie',    icon: '✂️', label: 'Untie a bundle',  say: 'You untied a bundle! Ten loose sticks, and the number is still the same.'},
+  {id: 'match',    icon: '🦜', label: 'Mitthu’s number', say: 'You made Mitthu’s number! Mitthu is so happy!'},
+  {id: 'hundred',  icon: '💯', label: 'One hundred!',    say: 'Ten bundles of ten! That is one hundred!'},
+], () => { say('You found them all! Ten ones make a ten, and ten tens make a hundred.', {pitch: 1.3}); paintTry(); });
+face('open', 0);
+paint();
+loop(idle);
+window.applyFeatures = () => paint();
+window.PG_STATE = () => ({T: S.T, O: S.O, n: valueOf(S), name: numberName(valueOf(S)), crate: S.crate, target: S.target,
+  opened: S.opened, bundled: S.bundled, goal: currentTry(), hint: HINT});
+window.PG_MODEL = {numberName, readTO, valueOf, digits, bundle, unbundle, canBundle, canAddStick, canAddBundle, countOnes, countTens,
+  MAX, MAXO, TENS_MAT, ONES_MAT, JAR, BAND, CRATE, BROOM, PARROT, CARD, STICK_BOT, STICK_H, tensX, onesX};
+</script>
+</body>
+</html>

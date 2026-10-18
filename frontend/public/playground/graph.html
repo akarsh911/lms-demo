@@ -1,0 +1,3176 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Graphing Calculator</title>
+<meta name="description" content="Type any function, equation, inequality or curve and see it — sliders, tables, intersections, roots, derivatives and integrals, all computed live, for any maths chapter from Class 8 to 12.">
+<link rel="icon" href="favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="play.css">
+<style>
+/* ---- this page only: a Desmos-grade calculator laid out beside the graph -- */
+:root, body{ --accent:#3f7fd8; --accent-soft:#e7eefb;
+  --grid-minor: rgba(30,40,50,.055); --grid-major: rgba(30,40,50,.13); --axis-ink:#6b7580; --paper:#ffffff; }
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]) body{ --accent-soft:#1b2c4a;
+  --grid-minor: rgba(255,255,255,.06); --grid-major: rgba(255,255,255,.14); --axis-ink:#9aa7b2; --paper:#1a2024; } }
+:root[data-theme="dark"] body{ --accent-soft:#1b2c4a;
+  --grid-minor: rgba(255,255,255,.06); --grid-major: rgba(255,255,255,.14); --axis-ink:#9aa7b2; --paper:#1a2024; }
+html, body{ height:100%; }
+body{ overflow:hidden; }
+
+/* ---- header: a slim strip, title left, icon buttons right --------------- */
+.gc-top{height:48px; display:flex; align-items:center; gap:10px; padding:0 14px; border-bottom:1px solid var(--hair); background:var(--card); flex-shrink:0}
+.gc-home{display:inline-flex; align-items:center; gap:8px; text-decoration:none; color:var(--ink-2); font-weight:600; font-size:13px; white-space:nowrap}
+.gc-home .dot{width:18px; height:18px; border-radius:50%; background:radial-gradient(circle at 35% 35%, #8fb4ee, var(--accent))}
+.gc-title{font-family:var(--font-head); font-size:15px; font-weight:700; white-space:nowrap; color:var(--ink)}
+.gc-sp{flex:1}
+.gc-headicons{display:flex; align-items:center; gap:2px}
+.gc-icon{width:34px; height:34px; border-radius:8px; border:1px solid transparent; background:none; cursor:pointer;
+  color:var(--ink-2); display:inline-flex; align-items:center; justify-content:center; font-size:16px; position:relative}
+.gc-icon:hover{background:var(--sunk); border-color:var(--hair-2)}
+.gc-icon[aria-pressed="true"]{background:var(--accent-soft); color:var(--accent)}
+.gc-icon svg{width:18px; height:18px; display:block}
+.gc-icon.sm{width:26px; height:26px; font-size:12px}
+.gc-icon.sm svg{width:14px; height:14px}
+.gc-icon:disabled{opacity:.35; cursor:default}
+
+.gc-wrap{display:grid; grid-template-columns:380px minmax(0,1fr); gap:0; padding:0; height:calc(100vh - 48px); min-height:0}
+@media (max-width:1023px){ .gc-wrap{grid-template-columns:1fr; height:auto; overflow:auto} .gc-list{max-height:46vh} .gc-stagecol{height:60vh} }
+
+/* ---- expression list: white, numbered gutter, + menu, undo/redo -------- */
+.gc-list{display:flex; flex-direction:column; min-height:0; background:var(--card); border-right:1px solid var(--hair); overflow:hidden}
+.gc-listhead{display:flex; gap:4px; padding:7px 8px; border-bottom:1px solid var(--hair); align-items:center}
+.gc-listbody{flex:1; overflow-y:auto; overflow-x:hidden; padding:2px 0 40px}
+.gc-addwrap{position:relative}
+.gc-addbtn{width:30px; height:30px; border-radius:50%; border:1px solid var(--hair-2); background:var(--card); color:var(--ink-2);
+  font-size:19px; line-height:1; cursor:pointer; display:inline-flex; align-items:center; justify-content:center}
+.gc-addbtn:hover{background:var(--sunk); border-color:var(--accent); color:var(--accent)}
+.gc-addmenu{position:absolute; top:36px; left:0; z-index:50; background:var(--card); border:1px solid var(--hair-2); border-radius:10px;
+  box-shadow:var(--shadow); min-width:180px; padding:4px; display:flex; flex-direction:column}
+.gc-addmenu button{display:flex; align-items:center; gap:9px; padding:8px 10px; border:0; background:none; text-align:left;
+  font-size:13px; color:var(--ink); border-radius:6px; cursor:pointer}
+.gc-addmenu button:hover{background:var(--sunk)}
+.gc-addmenu .ic{width:18px; text-align:center; color:var(--ink-3)}
+
+.gc-row{display:grid; grid-template-columns:10px 30px minmax(0,1fr) auto; gap:2px; align-items:start; padding:5px 6px 5px 2px; border-bottom:1px solid var(--hair); position:relative}
+.gc-row:hover{background:var(--sunk)}
+.gc-row.dragging{opacity:.5}
+.gc-grip{opacity:0; cursor:grab; background:none; border:0; color:var(--ink-3); font-size:10px; padding:9px 0; touch-action:none; line-height:1}
+.gc-row:hover .gc-grip{opacity:1}
+.gc-grip:active{cursor:grabbing}
+.gc-gutter{display:flex; flex-direction:column; align-items:center; gap:1px; padding-top:5px}
+.gc-num{font-family:var(--font-mono); font-size:11px; color:var(--ink-3)}
+.gc-disc{width:21px; height:21px; border-radius:50%; border:2px solid var(--c, var(--ink-3)); background:transparent;
+  color:var(--c, var(--ink-3)); font-size:10px; font-weight:700; font-family:var(--font-mono); display:flex; align-items:center;
+  justify-content:center; cursor:pointer; padding:0}
+.gc-disc.on{background:var(--c, var(--accent)); color:#fff}
+.gc-disc.plain{border-style:solid; border-color:var(--hair-2); color:var(--ink-3); cursor:default}
+/* The way to change a line's colour has to be visible. Hiding this caret until the row was
+   hovered meant anyone on a touch screen, or anyone who simply did not think to hover, had no
+   way to find it at all — and "I can't change the colour" is exactly what came back. */
+.gc-caret{opacity:.55; border:0; background:none; color:var(--ink-3); font-size:11px; cursor:pointer;
+  padding:0; line-height:1; width:21px; height:14px; border-radius:4px; display:flex; align-items:center; justify-content:center}
+.gc-caret:hover, .gc-row:hover .gc-caret, .gc-row:focus-within .gc-caret{opacity:1; background:var(--hair); color:var(--ink)}
+.gc-caret:focus-visible{outline:2px solid var(--accent); outline-offset:1px; opacity:1}
+
+.gc-body{min-width:0; display:flex; flex-direction:column; gap:2px; padding-top:1px; overflow:hidden}
+.gc-mathwrap{position:relative; min-height:27px}
+.gc-input{width:100%; border:1px solid transparent; background:transparent; font:inherit; font-family:var(--font-mono); font-size:14.5px;
+  color:var(--ink); padding:5px 5px; border-radius:6px; outline:none; position:relative; z-index:1; box-sizing:border-box}
+.gc-body:not(.editing) .gc-input{opacity:0; position:absolute; inset:0; z-index:2; cursor:text; padding:0; border:0}
+.gc-body.editing .gc-input{opacity:1; background:var(--sunk)}
+.gc-mathview{display:none; padding:6px 5px; font-size:15.5px; color:var(--ink); min-height:16px; line-height:1.3;
+  font-family:var(--font-head); flex-wrap:wrap; align-items:baseline; cursor:text}
+.gc-body:not(.editing) .gc-mathview{display:flex}
+.gc-mathview .gc-hint{color:var(--ink-3); opacity:.7; font-style:italic}
+.gc-row.err .gc-input{color:var(--bad)}
+.gc-err{font-size:11.5px; color:var(--bad); padding:2px 5px 4px; display:flex; flex-direction:column; gap:4px; align-items:flex-start}
+.gc-fixrow{display:flex; flex-wrap:wrap; gap:5px}
+.gc-fixbtn{border:1px solid var(--accent); color:var(--accent); background:var(--accent-soft); border-radius:99px; padding:2px 9px; font-size:11px; font-weight:700; cursor:pointer}
+.gc-fixbtn:hover{background:var(--accent); color:#fff}
+.gc-note{font-size:11.5px; color:var(--ink-3); padding:0 5px}
+.gc-acts{display:flex; flex-direction:column; gap:2px; align-items:center; padding-top:2px}
+.gc-mini{width:23px; height:21px; border:0; background:none; color:var(--ink-3); cursor:pointer; border-radius:6px; font-size:12px; font-family:var(--font-mono)}
+.gc-mini:hover{background:var(--hair); color:var(--ink)}
+.gc-mini.on{background:var(--accent); color:#fff}
+
+/* ---- math typesetting: superscripts, fractions, radicals, greek --------- */
+.mexpr{display:inline-flex; align-items:baseline; flex-wrap:wrap}
+.mvar{font-style:italic; font-family:var(--font-head)}
+.mfn{font-style:normal}
+.mop{padding:0 3px; color:var(--ink-2)}
+.mdot{padding:0 1px}
+.msup{display:inline-flex; align-items:baseline; vertical-align:super; font-size:.7em; position:relative; top:-.5em}
+.msub{display:inline-flex; align-items:baseline; vertical-align:sub; font-size:.7em; position:relative; top:.3em}
+.mfrac{display:inline-flex; flex-direction:column; align-items:center; justify-content:center; vertical-align:middle; margin:0 3px; font-size:.88em; line-height:1.1}
+.mfrac .mnumer{padding:0 3px 2px}
+.mfrac .mdenom{padding:2px 3px 0; border-top:1.3px solid currentColor}
+.msqrt{display:inline-flex; align-items:flex-start; margin:0 1px}
+.msqrt .mradsym{font-size:1.1em; transform:translateY(-2px) scaleY(1.1)}
+.msqrt .mradicand{border-top:1.3px solid currentColor; padding:1px 2px 0; margin-left:-1px}
+.mparen{padding:0 1px}
+
+.gc-slider{display:grid; grid-template-columns:auto minmax(0,1fr); gap:4px 8px; align-items:center; padding:2px 5px}
+.gc-slider input[type=range]{height:26px; min-width:0; width:100%}
+.gc-slider .val{font-family:var(--font-mono); font-weight:700; font-size:13px; min-width:52px; text-align:right}
+.gc-bounds{display:flex; gap:4px; align-items:center; font-size:11px; color:var(--ink-3); flex-wrap:wrap; min-width:0; padding:0 5px}
+.gc-bounds input{width:40px; min-width:0; font:inherit; font-size:11px; border:1px solid var(--hair-2); border-radius:6px; padding:2px 3px; background:var(--card); color:var(--ink)}
+.gc-mini-num{width:56px; font:inherit; font-size:11px; border:1px solid var(--hair-2); border-radius:6px; padding:2px 4px; background:var(--card); color:var(--ink)}
+.gc-inline{display:flex; gap:6px; align-items:center; flex-wrap:wrap; font-size:11px; color:var(--ink-3); padding:0 5px}
+.gc-noteedit{width:100%; border:1px solid transparent; background:transparent; font:inherit; font-family:var(--font-head); font-size:13.5px;
+  color:var(--ink-2); padding:5px; border-radius:6px; outline:none; resize:none; min-height:24px}
+.gc-noteedit:focus{background:var(--sunk); border-color:var(--hair-2)}
+.gc-stub{font-size:11.5px; color:var(--ink-3); padding:6px 5px; font-style:italic}
+
+.gc-pop{position:absolute; z-index:40; top:34px; left:24px; background:var(--card); border:1px solid var(--hair-2); border-radius:12px; box-shadow:var(--shadow); padding:10px; width:220px}
+.gc-swrow{display:flex; flex-wrap:wrap; gap:6px; margin-bottom:8px}
+.gc-sw{width:20px; height:20px; border-radius:50%; border:2px solid transparent; cursor:pointer}
+.gc-sw.sel{border-color:var(--ink)}
+.gc-pop label{display:block; font-size:11px; color:var(--ink-3); margin:6px 0 2px; font-weight:700; text-transform:uppercase; letter-spacing:.04em}
+.gc-pop select, .gc-pop input[type=range]{width:100%}
+.gc-pop input[type=text]{width:100%; font:inherit; padding:4px 6px; border:1px solid var(--hair-2); border-radius:6px; background:var(--card); color:var(--ink)}
+
+/* ---- the graph paper: white to the edges, zoom stack, keypad ------------- */
+.gc-stagecol{display:flex; flex-direction:column; min-width:0; min-height:0}
+.gc-stage{position:relative; flex:1; min-height:0; background:var(--paper); overflow:hidden}
+.gc-stage svg{display:block; width:100%; height:100%; touch-action:none; cursor:grab; background:var(--paper)}
+.gc-stage svg.panning{cursor:grabbing}
+.gc-stage svg.tracing{cursor:crosshair}
+.gc-corner{position:absolute; z-index:5}
+.gc-corner.tr{top:12px; right:12px; display:flex; flex-direction:column; align-items:flex-end; gap:8px}
+.gc-corner.br{bottom:12px; right:12px; display:flex; align-items:flex-end; gap:8px}
+.gc-corner.bl{bottom:12px; left:12px}
+.gc-zoomstack{display:flex; flex-direction:column; background:var(--card); border:1px solid var(--hair-2); border-radius:10px; box-shadow:var(--shadow); overflow:hidden}
+.gc-zoomstack button{width:32px; height:32px; border:0; background:none; border-bottom:1px solid var(--hair); color:var(--ink-2); font-size:16px; cursor:pointer; font-family:var(--font-head)}
+.gc-zoomstack button:last-child{border-bottom:0}
+.gc-zoomstack button:hover{background:var(--sunk)}
+.gc-fab{width:38px; height:38px; border-radius:50%; border:1px solid var(--hair-2); background:var(--card); box-shadow:var(--shadow);
+  color:var(--ink-2); font-size:16px; cursor:pointer; display:flex; align-items:center; justify-content:center; padding:0}
+.gc-fab[aria-pressed="true"]{background:var(--accent-soft); color:var(--accent); border-color:var(--accent)}
+.gc-fab svg{width:18px; height:18px}
+
+.gc-keypad{position:absolute; z-index:6; right:12px; bottom:60px; width:min(360px, calc(100% - 24px)); background:var(--card);
+  border:1px solid var(--hair-2); border-radius:12px; box-shadow:var(--shadow); overflow:hidden}
+.gc-kptabs{display:flex; border-bottom:1px solid var(--hair)}
+.gc-kptabs button{flex:1; padding:8px 0; border:0; background:none; font-size:12px; font-weight:700; color:var(--ink-3); cursor:pointer; font-family:var(--font-head)}
+.gc-kptabs button.active{color:var(--accent); box-shadow:inset 0 -2px 0 var(--accent)}
+.gc-kpgrid{display:grid; grid-template-columns:repeat(5,1fr); gap:4px; padding:8px}
+.gc-kpgrid button{height:36px; border-radius:8px; border:1px solid var(--hair-2); background:var(--card); font-size:14px; cursor:pointer; color:var(--ink); font-family:var(--font-head)}
+.gc-kpgrid button:hover{background:var(--sunk)}
+.gc-kpgrid button.wide{grid-column:span 2}
+
+.gc-help{position:absolute; z-index:60; top:44px; right:8px; background:var(--card); border:1px solid var(--hair-2); border-radius:12px; box-shadow:var(--shadow); padding:12px; width:250px; font-size:12.5px; color:var(--ink-2)}
+.gc-help h5{margin:8px 0 4px; font-size:11px; text-transform:uppercase; letter-spacing:.04em; color:var(--ink-3)}
+.gc-help h5:first-child{margin-top:0}
+.gc-help .row2{display:flex; justify-content:space-between; gap:8px; padding:3px 0}
+.gc-help kbd{font-family:var(--font-mono); background:var(--sunk); border:1px solid var(--hair-2); border-radius:4px; padding:0 5px; font-size:11px}
+
+.gc-readouts{display:flex; gap:8px; flex-wrap:wrap; max-height:150px; overflow-y:auto; padding:8px 12px}
+.gc-rcard{flex:1 1 180px; min-width:160px}
+.gc-rcard h4{font-size:11px; text-transform:uppercase; letter-spacing:.05em; color:var(--ink-3); margin:0 0 6px; font-weight:700}
+.gc-rcard .line{font-size:12.5px; font-family:var(--font-mono); display:flex; justify-content:space-between; gap:6px; padding:2px 0}
+.gc-rcard .empty{font-size:12px; color:var(--ink-3)}
+
+.gc-table{border-collapse:collapse; font-size:12.5px; font-family:var(--font-mono)}
+.gc-table td{padding:1px}
+.gc-table input{width:64px; font:inherit; font-size:12px; padding:2px 4px; border:1px solid var(--hair-2); border-radius:6px; background:var(--card); color:var(--ink)}
+.gc-table button{border:0; background:none; color:var(--ink-3); cursor:pointer; font-size:12px}
+
+.gc-settings{position:absolute; z-index:40; top:44px; right:8px; background:var(--card); border:1px solid var(--hair-2); border-radius:12px; box-shadow:var(--shadow); padding:12px; width:230px}
+.gc-settings label{display:block; font-size:11px; color:var(--ink-3); margin:6px 0 2px; font-weight:700}
+.gc-settings input{width:100%; font:inherit; font-size:12.5px; padding:4px 6px; border:1px solid var(--hair-2); border-radius:6px; background:var(--card); color:var(--ink)}
+.gc-settings .r2{display:grid; grid-template-columns:1fr 1fr; gap:6px}
+.gc-settings .chk{display:flex; align-items:center; gap:6px; font-size:12px; color:var(--ink-2); margin-top:8px}
+.gc-settings .chk input{width:auto}
+[hidden]{display:none!important}
+.gc-hint{font-size:12px; color:var(--ink-3); padding:2px 8px 6px}
+</style>
+</head>
+<body>
+<header class="gc-top">
+  <a class="gc-home" href="index.html"><span class="dot"></span></a>
+  <span class="gc-title">Graphing calculator</span>
+  <span class="gc-sp"></span>
+  <div class="gc-headicons" role="toolbar" aria-label="Graph tools">
+    <button class="gc-icon" id="btnShare" title="Save &amp; share a link" aria-label="Share">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.6" y1="10.6" x2="15.4" y2="6.4"/><line x1="8.6" y1="13.4" x2="15.4" y2="17.6"/></svg>
+    </button>
+    <button class="gc-icon" id="btnSettings" title="Graph settings" aria-label="Settings">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9c.14.31.4.55.72.66.31.11.53.15.88.15H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+    </button>
+    <button class="gc-icon" id="btnHelp" title="Keyboard shortcuts &amp; help" aria-label="Help">?</button>
+  </div>
+</header>
+
+<main class="gc-wrap">
+  <aside class="gc-list">
+    <div class="gc-listhead">
+      <div class="gc-addwrap">
+        <button class="gc-addbtn" id="btnAdd" title="Add item" aria-haspopup="true" aria-expanded="false">+</button>
+        <div class="gc-addmenu" id="addMenu" hidden>
+          <button data-add="expression"><span class="ic">ƒ</span> Expression</button>
+          <button data-add="note"><span class="ic">▤</span> Note</button>
+          <button data-add="table"><span class="ic">▦</span> Table</button>
+          <button data-add="folder"><span class="ic">▸</span> Folder</button>
+          <button data-add="image"><span class="ic">▢</span> Image</button>
+        </div>
+      </div>
+      <span class="gc-sp"></span>
+      <button class="gc-icon sm" id="btnUndo" title="Undo" aria-label="Undo">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10h10a5 5 0 0 1 0 10h-2"/><polyline points="7 5 3 10 7 15"/></svg>
+      </button>
+      <button class="gc-icon sm" id="btnRedo" title="Redo" aria-label="Redo">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10H11a5 5 0 0 0 0 10h2"/><polyline points="17 5 21 10 17 15"/></svg>
+      </button>
+    </div>
+    <div class="gc-listbody" id="rowList"></div>
+  </aside>
+
+  <section class="gc-stagecol">
+    <div class="gc-stage" id="stageWrap">
+      <svg id="stage" tabindex="0" role="img" aria-label="The graph"></svg>
+      <div class="gc-corner tr">
+        <div class="gc-zoomstack">
+          <button id="btnZoomIn" title="Zoom in" aria-label="Zoom in">+</button>
+          <button id="btnZoomOut" title="Zoom out" aria-label="Zoom out">&minus;</button>
+          <button id="btnHome" title="Reset the window" aria-label="Reset view">
+            <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/></svg>
+          </button>
+        </div>
+        <button class="gc-fab gc-autofit" id="btnAutoFit" aria-pressed="true" title="Auto-fit: keep whatever's typed nicely in view" aria-label="Auto-fit">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8V4h4M17 4h4v4M21 16v4h-4M7 20H3v-4"/></svg>
+        </button>
+      </div>
+      <div class="gc-corner bl">
+        <button class="gc-fab" id="btnTrace" aria-pressed="false" title="Trace a curve" aria-label="Trace">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><line x1="12" y1="2" x2="12" y2="5"/><line x1="12" y1="19" x2="12" y2="22"/><line x1="2" y1="12" x2="5" y2="12"/><line x1="19" y1="12" x2="22" y2="12"/></svg>
+        </button>
+      </div>
+      <div class="gc-corner br">
+        <button class="gc-fab" id="btnKeypad" aria-pressed="false" title="Show the on-screen keypad" aria-label="Keypad">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="6" y1="9" x2="6" y2="9"/><line x1="10" y1="9" x2="10" y2="9"/><line x1="14" y1="9" x2="14" y2="9"/><line x1="18" y1="9" x2="18" y2="9"/><line x1="6" y1="13" x2="18" y2="13"/></svg>
+        </button>
+      </div>
+      <div id="settingsPop"></div>
+      <div id="helpPop"></div>
+      <div id="keypadPop"></div>
+    </div>
+    <div class="gc-readouts">
+      <div class="card gc-rcard" id="cardTrace"><h4>Trace</h4><div class="empty" id="traceOut">Turn on Trace, then move over a curve.</div></div>
+      <div class="card gc-rcard" id="cardInter"><h4>Intersections</h4><div class="empty" id="interOut">None in view.</div></div>
+      <div class="card gc-rcard" id="cardRoots"><h4>Roots &amp; turning points</h4><div class="empty" id="rootsOut">None in view.</div></div>
+    </div>
+  </section>
+</main>
+
+<script src="play.js"></script>
+<script>
+'use strict';
+const {$, clamp, lerp, fmt, esc, reduced, loop, clock, tween, svgPoint, drag, store, shareState, sharedState, toast, track} = Play;
+
+/* ============================================================================
+   PART 1 — the math core: tokenizer, parser, evaluator, numerics.
+   Pure functions, no DOM. Unit-tested standalone before being pasted here
+   (see the report for the twenty-eight assertions this passed on its own).
+   MODEL:start ================================================================ */
+/* THIS LIST AND THE FUNCS TABLE ARE TWO HAND-WRITTEN LISTS OF THE SAME THING, and the
+   tokenizer reads this one. That is how "cosec" came to be missing: adding it to FUNCS
+   alone changes nothing, because a name the tokenizer does not know is split into
+   letters and "cosec x" is refused as an unknown variable "c". A check at the bottom of
+   the file now fails loudly if the two ever drift apart again. */
+const FUNC_NAMES = ['asinh','acosh','atanh','arcsinh','arccosh','arctanh','sinh','cosh','tanh','csch','sech','coth',
+  'cosech','arccosec','arccsc','arcsec','arccot','acosec','cosec',
+  'asin','acos','atan','arcsin','arccos','arctan','sin','cos','tan','csc','sec','cot',
+  'exp','ln','log','sqrt','nthroot','cbrt','abs','floor','ceil','round','sign','min','max','mod','gcd','lcm','nCr','nPr',
+  'mean','total','length','sort','stdev','stdevp','var','median','quartile','count','random','distance','midpoint'];
+const BIGOPS = ['integral','sum','prod'];
+const NAMED_MULTI = [].concat(FUNC_NAMES, ['pi', 'theta'], BIGOPS).sort((a, b) => b.length - a.length);
+const MULTI_ARG = new Set(['min', 'max', 'mod', 'gcd', 'lcm', 'nCr', 'nPr', 'nthroot', 'quartile', 'distance', 'midpoint']);
+const COMPARE_OPS = new Set(['<', '<=', '>', '>=', '=']);
+
+function tokenize(src){
+  const s = String(src);
+  const toks = []; let i = 0; const n = s.length;
+  const isAlpha = c => /[A-Za-zθ]/.test(c);
+  const isAlnum = c => /[A-Za-z0-9]/.test(c);
+  while (i < n) {
+    const c = s[i];
+    if (/\s/.test(c)) { i++; continue; }
+    if (c === '.' && s[i + 1] === '.' && s[i + 2] === '.') { toks.push({t: '...'}); i += 3; continue; }
+    if (c === '.' || /[0-9]/.test(c)) {
+      let j = i; let seenDot = false;
+      while (j < n && (/[0-9]/.test(s[j]) || (s[j] === '.' && s[j + 1] !== '.' && !seenDot && (seenDot = true)))) j++;
+      toks.push({t: 'num', v: parseFloat(s.slice(i, j))}); i = j; continue;
+    }
+    if (c === 'θ') { toks.push({t: 'ident', v: 'theta'}); i++; continue; }
+    if (isAlpha(c)) {
+      let matched = null;
+      for (const name of NAMED_MULTI) {
+        if (s.substr(i, name.length) === name) {
+          const next = s[i + name.length];
+          if (!next || !isAlnum(next)) { matched = name; break; }
+        }
+      }
+      if (matched) {
+        i += matched.length;
+        if (FUNC_NAMES.includes(matched)) {
+          if (matched === 'log' && s[i] === '_') {
+            i++;
+            let baseRaw;
+            if (s[i] === '(') {
+              let depth = 0, j = i;
+              do { if (s[j] === '(') depth++; else if (s[j] === ')') depth--; j++; } while (depth > 0 && j < n);
+              baseRaw = s.slice(i, j); i = j;
+            } else if (/[0-9.]/.test(s[i])) {
+              let j = i; while (j < n && /[0-9.]/.test(s[j])) j++; baseRaw = s.slice(i, j); i = j;
+            } else if (isAlpha(s[i])) {
+              baseRaw = s[i]; i++;
+              if (s[i] === '_') { let j = i + 1; const st = j; while (j < n && /[A-Za-z0-9]/.test(s[j])) j++; baseRaw += '_' + s.slice(st, j); i = j; }
+            } else baseRaw = '10';
+            toks.push({t: 'func', v: 'log_b', baseRaw});
+          } else toks.push({t: 'func', v: matched});
+        } else if (BIGOPS.includes(matched)) {
+          toks.push({t: 'bigop', v: matched});
+        } else if (matched === 'pi') {
+          toks.push({t: 'const', v: 'pi'});
+        } else if (matched === 'theta') {
+          toks.push({t: 'ident', v: 'theta'});
+        }
+        continue;
+      }
+      const base = c; i++;
+      let name = base;
+      /* A multi-letter word immediately followed by "(" (whitespace allowed)
+         is a function-call attempt, not a run of single-letter variables to
+         multiply — consume the whole word, so an unrecognised one becomes a
+         clear "not defined" error naming the word the student actually typed,
+         rather than being split into letters that quietly "multiply" and
+         blame only the first one. A bare run with nothing calling it (no
+         paren) keeps the old letter-by-letter reading, e.g. "xy" is x·y. */
+      {
+        let j = i;
+        while (j < n && /[A-Za-z]/.test(s[j])) j++;
+        if (j > i) {
+          let k = j; while (k < n && /\s/.test(s[k])) k++;
+          if (s[k] === '(') { name = base + s.slice(i, j); i = j; }
+        }
+      }
+      if (s[i] === '_') {
+        let j = i + 1, sub = '';
+        if (s[j] === '{') { j++; const st = j; while (j < n && s[j] !== '}') j++; sub = s.slice(st, j); if (s[j] === '}') j++; }
+        else { const st = j; while (j < n && /[A-Za-z0-9]/.test(s[j])) j++; sub = s.slice(st, j); }
+        if (sub) { name = base + '_' + sub; i = j; }
+      }
+      let prime = false;
+      if (s[i] === "'") { prime = true; i++; }
+      if (name === 'e' && !prime) { toks.push({t: 'const', v: 'e'}); continue; }
+      toks.push({t: 'ident', v: name, prime});
+      continue;
+    }
+    if (c === '(') { toks.push({t: '('}); i++; continue; }
+    if (c === ')') { toks.push({t: ')'}); i++; continue; }
+    if (c === '[') { toks.push({t: '['}); i++; continue; }
+    if (c === ']') { toks.push({t: ']'}); i++; continue; }
+    if (c === '{') { toks.push({t: '{'}); i++; continue; }
+    if (c === '}') { toks.push({t: '}'}); i++; continue; }
+    if (c === ',') { toks.push({t: ','}); i++; continue; }
+    if (c === ':') { toks.push({t: ':'}); i++; continue; }
+    if (c === '|') { toks.push({t: '|'}); i++; continue; }
+    if (c === '!') { toks.push({t: '!'}); i++; continue; }
+    if ('+-*/^'.includes(c)) { toks.push({t: c}); i++; continue; }
+    if (c === '×') { toks.push({t: '*'}); i++; continue; }
+    if (c === '÷') { toks.push({t: '/'}); i++; continue; }
+    if (c === '<') { if (s[i + 1] === '=') { toks.push({t: '<='}); i += 2; } else { toks.push({t: '<'}); i++; } continue; }
+    if (c === '>') { if (s[i + 1] === '=') { toks.push({t: '>='}); i += 2; } else { toks.push({t: '>'}); i++; } continue; }
+    if (c === '=') { toks.push({t: '='}); i++; continue; }
+    throw new Error('I do not know what to do with "' + c + '".');
+  }
+  return toks;
+}
+function insertImplicitMul(toks){
+  const LEFT_END = new Set(['num', 'ident', 'const', ')', ']', '}']);
+  const RIGHT_START = new Set(['ident', 'const', 'func', 'bigop', '(', '[', '{']);
+  const out = []; let pipeParity = 0;
+  for (const raw of toks) {
+    let cur = raw, curOpenPipe = false;
+    if (cur.t === '|') { curOpenPipe = pipeParity % 2 === 0; pipeParity++; cur = Object.assign({}, cur, {open: curOpenPipe}); }
+    if (out.length) {
+      const prev = out[out.length - 1];
+      const prevCloseP = prev.t === '|' && !prev.open;
+      const curOpenP = cur.t === '|' && cur.open;
+      const leftOK = LEFT_END.has(prev.t) || prevCloseP;
+      const rightOK = RIGHT_START.has(cur.t) || curOpenP;
+      const isCallShape = prev.t === 'ident' && cur.t === '(';
+      if (leftOK && rightOK && !isCallShape) out.push({t: '*'});
+    }
+    out.push(cur);
+  }
+  return out;
+}
+/* WHAT A TOKEN LOOKS LIKE TO WHOEVER TYPED IT.
+
+   The three throws in parse() used to JSON.stringify the token object, so a stray
+   digit in "x9+1" was answered with
+
+       Unexpected token near {"t":"num","v":9}
+
+   and "x**2" with Unexpected token {"t":"*"}. Six of nineteen malformed inputs
+   replied with parser internals. A learner reads that as the page being broken,
+   which is fair -- it is a stack trace wearing an error message's clothes. */
+function tokenText(tk){
+  if (!tk) return 'the end';
+  if (tk.t === 'num') return String(tk.v);
+  if (tk.t === 'ident' || tk.t === 'func' || tk.t === 'const' || tk.t === 'bigop') return String(tk.v);
+  return String(tk.t);
+}
+function parse(tokens){
+  let p = 0;
+  const peek = () => tokens[p];
+  const eat = t => {
+    if (!tokens[p] || tokens[p].t !== t)
+      throw new Error(tokens[p] ? 'I expected "' + t + '" here, but found "' + tokenText(tokens[p]) + '".'
+                                : 'This needs a closing "' + t + '".');
+    return tokens[p++];
+  };
+  function parseExpr(){
+    let node = parseTerm();
+    while (peek() && (peek().t === '+' || peek().t === '-')) { const op = eat(peek().t).t; node = {type: 'bin', op, a: node, b: parseTerm()}; }
+    return node;
+  }
+  function parseTerm(){
+    let node = parseUnary();
+    while (peek() && (peek().t === '*' || peek().t === '/')) { const op = eat(peek().t).t; node = {type: 'bin', op, a: node, b: parseUnary()}; }
+    return node;
+  }
+  function parseUnary(){
+    if (peek() && peek().t === '-') { eat('-'); return {type: 'neg', a: parseUnary()}; }
+    if (peek() && peek().t === '+') { eat('+'); return parseUnary(); }
+    return parsePower();
+  }
+  function parsePower(){
+    const base = parsePostfix();
+    if (peek() && peek().t === '^') { eat('^'); return {type: 'bin', op: '^', a: base, b: parseUnary()}; }
+    return base;
+  }
+  function parsePostfix(){
+    let node = parsePrimary();
+    while (peek() && peek().t === '!') { eat('!'); node = {type: 'fact', a: node}; }
+    return node;
+  }
+  function parseArgs(){
+    const args = [parseExpr()];
+    while (peek() && peek().t === ',') { eat(','); args.push(parseExpr()); }
+    return args;
+  }
+  function parseBraceBranch(){
+    const first = parseExpr();
+    if (peek() && COMPARE_OPS.has(peek().t)) {
+      const ops = [], vals = [first];
+      while (peek() && COMPARE_OPS.has(peek().t)) { const op = eat(peek().t).t; ops.push(op); vals.push(parseExpr()); }
+      const cond = {type: 'cond', ops, vals};
+      if (peek() && peek().t === ':') { eat(':'); return {cond, val: parseExpr()}; }
+      return {cond, val: null};
+    }
+    return {cond: null, val: first};
+  }
+  function parsePrimary(){
+    const tk = peek();
+    if (!tk) throw new Error('Expression ends unexpectedly');
+    if (tk.t === 'num') { eat('num'); return {type: 'num', value: tk.v}; }
+    if (tk.t === 'const') { eat('const'); return {type: 'const', name: tk.v}; }
+    if (tk.t === '(') { eat('('); const e = parseExpr(); eat(')'); return e; }
+    if (tk.t === '|') { eat('|'); const e = parseExpr(); eat('|'); return {type: 'call', name: 'abs', args: [e]}; }
+    if (tk.t === '[') {
+      eat('[');
+      const first = parseExpr();
+      if (peek() && peek().t === '...') { eat('...'); const to = parseExpr(); eat(']'); return {type: 'range', from: first, to}; }
+      const items = [first];
+      while (peek() && peek().t === ',') { eat(','); items.push(parseExpr()); }
+      eat(']');
+      return {type: 'list', items};
+    }
+    if (tk.t === '{') {
+      eat('{');
+      const branches = [parseBraceBranch()];
+      while (peek() && peek().t === ',') { eat(','); branches.push(parseBraceBranch()); }
+      eat('}');
+      return {type: 'piecewise', branches};
+    }
+    if (tk.t === 'bigop') {
+      eat('bigop'); eat('(');
+      const vtok = eat('ident');
+      /* Desmos's own linear typing for Σ/Π: sum(n=1)^(5)n rather than the
+         comma form sum(n,1,5,n) — both are accepted. */
+      if (peek() && peek().t === '=') {
+        eat('=');
+        const lo = parseExpr();
+        eat(')');
+        if (!peek() || peek().t !== '^') throw new Error('Expected "^" giving the upper limit, e.g. ' + tk.v + '(n=1)^(5)n');
+        eat('^');
+        let hi;
+        if (peek() && peek().t === '(') { eat('('); hi = parseExpr(); eat(')'); } else hi = parseUnary();
+        if (peek() && peek().t === '*') eat('*'); /* implicit-mult may have glued a '*' onto the body here */
+        const body = parseTerm();
+        return {type: 'bigop', op: tk.v, varName: vtok.v, lo, hi, body};
+      }
+      eat(',');
+      const lo = parseExpr(); eat(',');
+      const hi = parseExpr(); eat(',');
+      const body = parseExpr();
+      eat(')');
+      return {type: 'bigop', op: tk.v, varName: vtok.v, lo, hi, body};
+    }
+    if (tk.t === 'func') {
+      eat('func');
+      if (tk.v === 'log_b') {
+        const base = compile(tk.baseRaw);
+        eat('('); const arg = parseExpr(); eat(')');
+        return {type: 'logb', base, arg};
+      }
+      if (peek() && peek().t === '(') { eat('('); const args = (peek() && peek().t === ')') ? [] : parseArgs(); eat(')'); return {type: 'call', name: tk.v, args}; }
+      if (MULTI_ARG.has(tk.v)) throw new Error(tk.v + ' needs parentheses, e.g. ' + tk.v + '(a,b)');
+      return {type: 'call', name: tk.v, args: [parseUnary()]};
+    }
+    if (tk.t === 'ident') {
+      eat('ident');
+      if (peek() && peek().t === '(') {
+        eat('(');
+        const args = parseArgs();
+        eat(')');
+        return tk.prime ? {type: 'usercall_deriv', name: tk.v, arg: args[0]} : {type: 'usercall', name: tk.v, args};
+      }
+      return {type: 'var', name: tk.v};
+    }
+    /* The four things school students actually type, named rather than described. */
+    const before = tokens[p - 1];
+    if (tk.t === '*' && before && before.t === '*') throw new Error('Use ^ for a power, not ** — for example x^2.');
+    if (tk.t === '=') throw new Error('An equation takes one = sign, like y = x^2 or x^2 + y^2 = 25.');
+    if (tk.t === ')') throw new Error('There is a ) with no ( to match it.');
+    if (tk.t === '}' || tk.t === '{') throw new Error('Curly brackets are for a piecewise rule, like {x<0: -x, x}.');
+    throw new Error('"' + tokenText(tk) + '" cannot start a value here.');
+  }
+  const result = parseExpr();
+  if (p < tokens.length) {
+    const tk = tokens[p], before = tokens[p - 1];
+    /* "x9" and "3 4": a number straight after a name or another number is nearly always
+       a missing multiplication sign, so say that instead of refusing anonymously. */
+    if (tk.t === 'num' && before && (before.t === 'ident' || before.t === 'const' || before.t === 'num'))
+      throw new Error('I read "' + tokenText(before) + '" and "' + tokenText(tk) + '" as two things in a row. Write '
+                      + tokenText(before) + '*' + tokenText(tk) + ' to multiply them.');
+    if (tk.t === '=') throw new Error('An equation takes one = sign, like y = x^2 or x^2 + y^2 = 25.');
+    throw new Error('I read the expression up to "' + tokenText(before) + '" and cannot read "' + tokenText(tk) + '" after it.');
+  }
+  return result;
+}
+/* "sinx", "cosx", "sin2x", "sinx^2" — a trig (or ln/sqrt/…) function written the
+   way it's written on paper, with no brackets at all, the way a student always
+   tries it first. Desmos reads a known function name glued straight onto a
+   variable, a number-then-variable, or a power of one, as a call on that
+   whole "tightest" piece. The tokenizer's own boundary rule (a name only
+   matches when NOT glued to more letters) exists to stop "asinh" being read
+   as "a"+"sinh" or a genuine longer word being clipped — so this expansion
+   runs first, as a text rewrite, only for glued function names with nothing
+   already there to call on: sin(x) and sin (x) are untouched either way. */
+const BARE_ARG_RE = /^([0-9]*[A-Za-zθ])(\^(?:[0-9]+(?:\.[0-9]+)?|\([^()]*\)))?/;
+/* How many characters at the start of `str` form a bracket-less function call such as
+   "cosx" or "sinsinx" -- 0 when it is not one. Recursive, so a stack of them measures
+   as a whole. A call written WITH brackets returns 0: the ordinary path already reads
+   those, and treating them here would double-wrap the argument. */
+function bareCallLength(str, names){
+  const name = names.find(n => str.substr(0, n.length) === n);
+  if (!name) return 0;
+  const after = str.slice(name.length);
+  if (!after.length || after[0] === '(') return 0;
+  const inner = bareCallLength(after, names);
+  if (inner) return name.length + inner;
+  const m = BARE_ARG_RE.exec(after);
+  return (m && m[0]) ? name.length + m[0].length : 0;
+}
+function expandBareFunctionCalls(src){
+  const s = String(src);
+  const names = FUNC_NAMES.slice().sort((a, b) => b.length - a.length);
+  let out = '', i = 0;
+  /* TRUE RIGHT AFTER A BARE CALL WAS COMPLETED, e.g. the "x" in "sinx" having been
+     taken as sin's argument.
+
+     Without it, "sinxcosx" only expanded the first call. The guard below refuses to
+     start a function name when the PREVIOUS SOURCE CHARACTER is a letter -- which is
+     what stops "asin" being read as a-then-sin -- but after sin has swallowed the x,
+     that x is an argument and the "c" of cos begins a fresh name. So the second call
+     never expanded, the leftovers parsed as variables, and the row failed with
+     'Unknown variable "c"' while the previous curve stayed on screen: exactly the
+     "I write cos x twice and it turns into a straight line" report. */
+  let justClosed = false;
+  while (i < s.length) {
+    const prev = s[i - 1] || '';
+    const atBoundary = justClosed || !/[A-Za-z_]/.test(prev);
+    justClosed = false;
+    let matched = null;
+    if (/[A-Za-z]/.test(s[i]) && atBoundary) {
+      for (const name of names) { if (s.substr(i, name.length) === name) { matched = name; break; } }
+    }
+    if (matched) {
+      if (matched === 'log' && s[i + matched.length] === '_') { out += matched; i += matched.length; continue; }
+      const after = s.slice(i + matched.length);
+      const ws = after.match(/^\s*/)[0];
+      if (after[ws.length] === '(') { out += matched; i += matched.length; continue; }
+      /* "coscosx" and "sinsinx": the argument is itself a bare call, so measure how far
+         that call reaches and expand it, rather than letting BARE_ARG_RE swallow its
+         first letter as a one-letter variable -- which turned cos(cos(x)) into cos(c)osx
+         and then failed with 'Unknown variable "c"'. Only the nested call is taken, so
+         "coscosx+1" still ends up as cos(cos(x))+1 and not cos(cos(x)+1). */
+      const rest = after.slice(ws.length);
+      const nested = bareCallLength(rest, names);
+      if (nested) {
+        out += matched + '(' + expandBareFunctionCalls(rest.slice(0, nested)) + ')';
+        i += matched.length + ws.length + nested;
+        justClosed = true;
+        continue;
+      }
+      const m = BARE_ARG_RE.exec(after);
+      if (m && m[0]) { out += matched + '(' + m[0] + ')'; i += matched.length + m[0].length; justClosed = true; continue; }
+      out += matched; i += matched.length; continue;
+    }
+    out += s[i]; i++;
+  }
+  return out;
+}
+function compile(raw){ return parse(insertImplicitMul(tokenize(expandBareFunctionCalls(raw)))); }
+
+function gammaFn(z){
+  const g = 7;
+  const p = [0.99999999999980993, 676.5203681218851, -1259.1392167224028, 771.32342877765313,
+    -176.61502916214059, 12.507343278686905, -0.13857109526572012, 9.9843695780195716e-6, 1.5056327351493116e-7];
+  if (z < 0.5) return Math.PI / (Math.sin(Math.PI * z) * gammaFn(1 - z));
+  z -= 1;
+  let x = p[0];
+  for (let i = 1; i < g + 2; i++) x += p[i] / (z + i);
+  const t = z + g + 0.5;
+  return Math.sqrt(2 * Math.PI) * Math.pow(t, z + 0.5) * Math.exp(-t) * x;
+}
+function factorial(n){
+  if (Number.isInteger(n) && n >= 0) { let r = 1; for (let i = 2; i <= n; i++) r *= i; return r; }
+  if (Number.isInteger(n) && n < 0) return NaN;
+  return gammaFn(n + 1);
+}
+function gcd2(a, b){ a = Math.abs(Math.round(a)); b = Math.abs(Math.round(b)); while (b) { [a, b] = [b, a % b]; } return a; }
+function lcm2(a, b){ const g = gcd2(a, b); return g === 0 ? 0 : Math.abs(a * b) / g; }
+const toArr = v => Array.isArray(v) ? v : [v];
+const FUNCS = {
+  sin: (x, deg) => Math.sin(deg ? x * Math.PI / 180 : x),
+  cos: (x, deg) => Math.cos(deg ? x * Math.PI / 180 : x),
+  tan: (x, deg) => Math.tan(deg ? x * Math.PI / 180 : x),
+  asin: (x, deg) => { const r = Math.asin(x); return deg ? r * 180 / Math.PI : r; },
+  acos: (x, deg) => { const r = Math.acos(x); return deg ? r * 180 / Math.PI : r; },
+  atan: (x, deg) => { const r = Math.atan(x); return deg ? r * 180 / Math.PI : r; },
+  sinh: Math.sinh, cosh: Math.cosh, tanh: Math.tanh,
+  asinh: Math.asinh, acosh: Math.acosh, atanh: Math.atanh,
+  csc: (x, deg) => 1 / Math.sin(deg ? x * Math.PI / 180 : x),
+  sec: (x, deg) => 1 / Math.cos(deg ? x * Math.PI / 180 : x),
+  cot: (x, deg) => 1 / Math.tan(deg ? x * Math.PI / 180 : x),
+  /* COSEC, and not only csc. Every NCERT and CBSE text writes cosec x; csc is the
+     American spelling. A student typing the word printed in their own textbook was
+     told 'Unknown variable "c"', which reads as the page being broken rather than as
+     a spelling it happens not to know. Same for the hyperbolic and inverse forms. */
+  cosec: (x, deg) => 1 / Math.sin(deg ? x * Math.PI / 180 : x),
+  csch: x => 1 / Math.sinh(x), sech: x => 1 / Math.cosh(x), coth: x => 1 / Math.tanh(x),
+  cosech: x => 1 / Math.sinh(x),
+  arccosec: (x, deg) => { const r = Math.asin(1 / x); return deg ? r * 180 / Math.PI : r; },
+  acosec: (x, deg) => { const r = Math.asin(1 / x); return deg ? r * 180 / Math.PI : r; },
+  arccsc: (x, deg) => { const r = Math.asin(1 / x); return deg ? r * 180 / Math.PI : r; },
+  arcsec: (x, deg) => { const r = Math.acos(1 / x); return deg ? r * 180 / Math.PI : r; },
+  arccot: (x, deg) => { const r = Math.atan(1 / x); return deg ? r * 180 / Math.PI : r; },
+  exp: Math.exp, ln: Math.log,
+  log: x => Math.log(x) / Math.LN10,
+  sqrt: Math.sqrt, cbrt: Math.cbrt,
+  nthroot: (x, n) => { n = Math.round(n); if (x < 0) return n % 2 === 1 ? -Math.pow(-x, 1 / n) : NaN; return Math.pow(x, 1 / n); },
+  abs: x => Array.isArray(x) ? x.map(Math.abs) : Math.abs(x),
+  floor: Math.floor, ceil: Math.ceil,
+  round: (x, d) => d == null ? Math.round(x) : Math.round(x * Math.pow(10, d)) / Math.pow(10, d),
+  sign: Math.sign,
+  min: (...a) => a.length === 1 && Array.isArray(a[0]) ? Math.min(...a[0]) : Math.min(...a),
+  max: (...a) => a.length === 1 && Array.isArray(a[0]) ? Math.max(...a[0]) : Math.max(...a),
+  mod: (a, b) => a - b * Math.floor(a / b),
+  gcd: gcd2, lcm: lcm2,
+  nCr: (n, r) => { n = Math.round(n); r = Math.round(r); if (r < 0 || r > n) return 0; return Math.round(factorial(n) / (factorial(r) * factorial(n - r))); },
+  nPr: (n, r) => { n = Math.round(n); r = Math.round(r); if (r < 0 || r > n) return 0; return Math.round(factorial(n) / factorial(n - r)); },
+  mean: a => { a = toArr(a); return a.reduce((x, y) => x + y, 0) / a.length; },
+  total: a => { a = toArr(a); return a.reduce((x, y) => x + y, 0); },
+  length: a => toArr(a).length,
+  count: a => toArr(a).length,
+  sort: a => toArr(a).slice().sort((x, y) => x - y),
+  stdev: a => { a = toArr(a); const m = FUNCS.mean(a); return Math.sqrt(a.reduce((s, x) => s + (x - m) * (x - m), 0) / Math.max(1, a.length - 1)); },
+  stdevp: a => { a = toArr(a); const m = FUNCS.mean(a); return Math.sqrt(a.reduce((s, x) => s + (x - m) * (x - m), 0) / a.length); },
+  'var': a => { a = toArr(a); const m = FUNCS.mean(a); return a.reduce((s, x) => s + (x - m) * (x - m), 0) / Math.max(1, a.length - 1); },
+  median: a => { a = toArr(a).slice().sort((x, y) => x - y); const n = a.length; return n % 2 ? a[(n - 1) / 2] : (a[n / 2 - 1] + a[n / 2]) / 2; },
+  quartile: (a, q) => { a = toArr(a).slice().sort((x, y) => x - y); const n = a.length; const pos = (q / 4) * (n - 1); const lo = Math.floor(pos), hi = Math.ceil(pos); return a[lo] + (a[hi] - a[lo]) * (pos - lo); },
+  random: (a, b) => a == null ? Math.random() : (b == null ? Math.random() * a : a + Math.random() * (b - a)),
+  distance: (p, q) => Math.hypot(p[0] - q[0], p[1] - q[1]),
+  midpoint: (p, q) => [(p[0] + q[0]) / 2, (p[1] + q[1]) / 2],
+};
+FUNCS.arcsin = FUNCS.asin; FUNCS.arccos = FUNCS.acos; FUNCS.arctan = FUNCS.atan;
+FUNCS.arcsinh = FUNCS.asinh; FUNCS.arccosh = FUNCS.acosh; FUNCS.arctanh = FUNCS.atanh;
+const TRIG_DEG = new Set(['sin', 'cos', 'tan', 'asin', 'acos', 'atan', 'arcsin', 'arccos', 'arctan', 'csc', 'sec', 'cot']);
+function broadcast(a, b, fn){
+  if (Array.isArray(a) && Array.isArray(b)) { const n = Math.min(a.length, b.length); const r = []; for (let i = 0; i < n; i++) r.push(fn(a[i], b[i])); return r; }
+  if (Array.isArray(a)) return a.map(v => fn(v, b));
+  if (Array.isArray(b)) return b.map(v => fn(a, v));
+  return fn(a, b);
+}
+function compareOp(op, a, b){
+  switch (op) { case '<': return a < b; case '<=': return a <= b; case '>': return a > b; case '>=': return a >= b; case '=': return Math.abs(a - b) < 1e-9; }
+}
+function evalNode(node, scope, opts){
+  opts = opts || {};
+  const deg = !!opts.deg, funcs = opts.funcs || {}, depth = (opts.depth || 0);
+  if (depth > 200) throw new Error('Recursion too deep');
+  switch (node.type) {
+    case 'num': return node.value;
+    case 'const': return node.name === 'pi' ? Math.PI : Math.E;
+    case 'var': { const v = scope[node.name]; if (v === undefined) throw new Error('Unknown variable "' + node.name + '"'); return v; }
+    case 'neg': return broadcast(evalNode(node.a, scope, opts), null, x => -x);
+    case 'fact': return factorial(evalNode(node.a, scope, opts));
+    case 'range': { const a = Math.round(evalNode(node.from, scope, opts)), b = Math.round(evalNode(node.to, scope, opts)); const r = []; if (a <= b) for (let k = a; k <= b; k++) r.push(k); else for (let k = a; k >= b; k--) r.push(k); return r; }
+    case 'list': return node.items.map(it => evalNode(it, scope, opts));
+    case 'bin': {
+      const a = evalNode(node.a, scope, opts), b = evalNode(node.b, scope, opts);
+      switch (node.op) {
+        case '+': return broadcast(a, b, (x, y) => x + y);
+        case '-': return broadcast(a, b, (x, y) => x - y);
+        case '*': return broadcast(a, b, (x, y) => x * y);
+        case '/': return broadcast(a, b, (x, y) => x / y);
+        case '^': return broadcast(a, b, (x, y) => Math.pow(x, y));
+      }
+      break;
+    }
+    case 'logb': { const base = evalNode(node.base, scope, opts), arg = evalNode(node.arg, scope, opts); return Math.log(arg) / Math.log(base); }
+    case 'cond': {
+      for (let i = 0; i < node.ops.length; i++) {
+        const a = evalNode(node.vals[i], scope, opts), b = evalNode(node.vals[i + 1], scope, opts);
+        if (!compareOp(node.ops[i], a, b)) return false;
+      }
+      return true;
+    }
+    case 'piecewise': {
+      for (const br of node.branches) {
+        if (br.cond === null) return evalNode(br.val, scope, opts);
+        if (evalNode(br.cond, scope, opts)) return br.val === null ? 1 : evalNode(br.val, scope, opts);
+      }
+      return NaN;
+    }
+    case 'bigop': {
+      const lo = Math.round(evalNode(node.lo, scope, opts)), hi = Math.round(evalNode(node.hi, scope, opts));
+      if (node.op === 'sum') { let s = 0; for (let k = lo; k <= hi; k++) s += evalNode(node.body, Object.assign({}, scope, {[node.varName]: k}), opts); return s; }
+      if (node.op === 'prod') { let s = 1; for (let k = lo; k <= hi; k++) s *= evalNode(node.body, Object.assign({}, scope, {[node.varName]: k}), opts); return s; }
+      if (node.op === 'integral') { const f = v => evalNode(node.body, Object.assign({}, scope, {[node.varName]: v}), opts); return simpson(f, evalNode(node.lo, scope, opts), evalNode(node.hi, scope, opts), 200); }
+      break;
+    }
+    case 'call': {
+      const args = node.args.map(a => evalNode(a, scope, opts));
+      if (TRIG_DEG.has(node.name)) return FUNCS[node.name](args[0], deg);
+      const f = FUNCS[node.name];
+      if (!f) throw new Error('I don\'t know a function called "' + node.name + '"');
+      return f(...args);
+    }
+    case 'usercall': {
+      const uf = funcs[node.name + '/' + node.args.length] || funcs[node.name];
+      if (!uf) throw new Error('I don\'t know a function called "' + node.name + '" — define a row like ' + node.name + '(x) = … first, or check the spelling');
+      const args = node.args.map(a => evalNode(a, scope, opts));
+      const inner = Object.assign({}, scope);
+      uf.params.forEach((pn, i) => { inner[pn] = args[i]; });
+      return evalNode(uf.body, inner, Object.assign({}, opts, {depth: depth + 1}));
+    }
+    case 'usercall_deriv': {
+      const uf = funcs[node.name];
+      if (!uf) throw new Error('I don\'t know a function called "' + node.name + '" — define a row like ' + node.name + '(x) = … first, or check the spelling');
+      const x0 = evalNode(node.arg, scope, opts);
+      const f = v => { const inner = Object.assign({}, scope); inner[uf.params[0]] = v; return evalNode(uf.body, inner, Object.assign({}, opts, {depth: depth + 1})); };
+      return centralDiff(f, x0);
+    }
+  }
+  throw new Error('Bad AST node ' + node.type);
+}
+function centralDiff(f, x, h){
+  h = h || Math.max(1e-5, Math.abs(x) * 1e-6);
+  return (f(x + h) - f(x - h)) / (2 * h);
+}
+function simpson(f, a, b, n){
+  n = n || 200; if (n % 2 === 1) n++;
+  const h = (b - a) / n;
+  let sum = f(a) + f(b);
+  for (let i = 1; i < n; i++) { const x = a + i * h; sum += (i % 2 === 0 ? 2 : 4) * f(x); }
+  return sum * h / 3;
+}
+function bisect(f, a, b, tol, maxIter){
+  tol = tol || 1e-10; maxIter = maxIter || 100;
+  let fa = f(a), fb = f(b);
+  if (fa === 0) return a; if (fb === 0) return b;
+  if (!isFinite(fa) || !isFinite(fb) || fa * fb > 0) return null;
+  for (let i = 0; i < maxIter; i++) {
+    const m = (a + b) / 2, fm = f(m);
+    if (Math.abs(fm) < tol || (b - a) / 2 < tol) return m;
+    if (fa * fm < 0) { b = m; fb = fm; } else { a = m; fa = fm; }
+  }
+  return (a + b) / 2;
+}
+function isPoleBetween(f, x1, y1, x2, y2){
+  if (!isFinite(y1) || !isFinite(y2)) return true;
+  if (y1 === 0 || y2 === 0 || Math.sign(y1) === Math.sign(y2)) return false;
+  let a = x1, b = x2, fa = y1, fb = y2;
+  for (let i = 0; i < 50; i++) {
+    const m = (a + b) / 2; let fm; try { fm = f(m); } catch (e) { fm = NaN; }
+    if (!isFinite(fm)) return true;
+    if (fm === 0) return false;
+    if (Math.sign(fm) === Math.sign(fa)) { a = m; fa = fm; } else { b = m; fb = fm; }
+  }
+  return Math.abs(fa) > 1e6 || Math.abs(fb) > 1e6;
+}
+/* floor/ceil/round/sign (and anything built from them) are bounded but
+   genuinely discontinuous — the curve should stop and start again at the
+   step, not be joined across it by a vertical line. isPoleBetween can't see
+   this (it only looks for a sign change blowing up to infinity), so this is
+   a second, separate check: does the function ever take a value near the
+   midpoint between two adjacent samples? A smooth curve does; a step never
+   does, no matter how finely you split the interval. Only three extra
+   evaluations, and only run at all once a jump already looks suspiciously
+   large next to how fast the curve moves everywhere else. */
+function isJumpBetween(f, x1, y1, x2, y2){
+  const span = Math.abs(y2 - y1);
+  if (span < 1e-9) return false;
+  const dx = x2 - x1;
+  const target = (y1 + y2) / 2;
+  for (const t of [0.5, 0.25, 0.75]) {
+    const x = x1 + dx * t;
+    let y; try { y = f(x); } catch (e) { continue; }
+    if (isFinite(y) && Math.abs(y - target) < span * 0.35) return false; // took an in-between value: continuous
+  }
+  /* a genuine step is flat just before and just after it too — a fast but
+     continuous wiggle (sin(1/x) near 0) never is, so this is what tells the
+     two apart instead of one lucky/unlucky midpoint sample. */
+  let y1b, y2b;
+  try { y1b = f(x1 - dx * 0.5); } catch (e) { y1b = NaN; }
+  try { y2b = f(x2 + dx * 0.5); } catch (e) { y2b = NaN; }
+  const stableLeft = isFinite(y1b) && Math.abs(y1b - y1) < span * 0.35;
+  const stableRight = isFinite(y2b) && Math.abs(y2b - y2) < span * 0.35;
+  return stableLeft && stableRight;
+}
+function dedupe(arr, tol){
+  tol = tol || 1e-4; const out = [];
+  for (const v of arr.slice().sort((a, b) => a - b)) if (!out.length || Math.abs(v - out[out.length - 1]) > tol) out.push(v);
+  return out;
+}
+function findRoots(f, xmin, xmax, samples){
+  samples = samples || 2000;
+  const roots = []; const step = (xmax - xmin) / samples;
+  let px = xmin, py; try { py = f(px); } catch (e) { py = NaN; }
+  if (py === 0) roots.push(px);
+  for (let i = 1; i <= samples; i++) {
+    const x = xmin + i * step; let y; try { y = f(x); } catch (e) { y = NaN; }
+    if (isFinite(py) && isFinite(y)) {
+      if (y === 0) roots.push(x);
+      else if (py * y < 0 && !isPoleBetween(f, px, py, x, y)) {
+        const r = bisect(f, px, x);
+        if (r != null) roots.push(r);
+      }
+    }
+    px = x; py = y;
+  }
+  return dedupe(roots);
+}
+function findExtrema(f, xmin, xmax, samples){
+  samples = samples || 2000;
+  const h0 = (xmax - xmin) / samples / 4;
+  const df = x => centralDiff(f, x, h0);
+  const xs = findRoots(df, xmin, xmax, samples);
+  return xs.map(x => {
+    const h = (xmax - xmin) / samples;
+    const d2 = (f(x + h) - 2 * f(x) + f(x - h)) / (h * h);
+    return {x, y: f(x), kind: d2 < -1e-6 ? 'max' : d2 > 1e-6 ? 'min' : 'inflection'};
+  }).filter(e => isFinite(e.y));
+}
+function findIntersections(f, g, xmin, xmax, samples){
+  return findRoots(x => f(x) - g(x), xmin, xmax, samples).map(x => ({x, y: f(x)}));
+}
+function buildSegments(f, xmin, xmax, samples){
+  samples = Math.max(20, Math.round(samples || 1000));
+  const segs = []; let cur = [];
+  const step = (xmax - xmin) / samples;
+  /* a cheap, one-time sense of how fast this function normally moves per
+     sample, so a single step's jump can be told apart from ordinary — even
+     steep — smooth motion before paying for the extra isJumpBetween probes. */
+  let expectedFineJump = 1e-9;
+  {
+    const probes = 16, pstep = (xmax - xmin) / probes;
+    const jumps = [];
+    let px = xmin, py; try { py = f(px); } catch (e) { py = NaN; }
+    for (let i = 1; i <= probes; i++) {
+      const x = xmin + i * pstep; let y; try { y = f(x); } catch (e) { y = NaN; }
+      if (isFinite(py) && isFinite(y)) jumps.push(Math.abs(y - py));
+      px = x; py = y;
+    }
+    jumps.sort((a, b) => a - b);
+    const typicalCoarseJump = jumps.length ? jumps[Math.floor(jumps.length / 2)] : 0;
+    expectedFineJump = Math.max(typicalCoarseJump * (step / pstep), 1e-9);
+  }
+  let prevX = null, prevY = null, prevFinite = false;
+  for (let i = 0; i <= samples; i++) {
+    const x = xmin + i * step;
+    let y; try { y = f(x); } catch (e) { y = NaN; }
+    const finite = isFinite(y);
+    let cut = false;
+    if (finite && prevFinite) {
+      if (isPoleBetween(f, prevX, prevY, x, y)) cut = true;
+      else if (Math.abs(y - prevY) > expectedFineJump * 40 && isJumpBetween(f, prevX, prevY, x, y)) cut = true;
+    }
+    if (cut || !finite) { if (cur.length) segs.push(cur); cur = []; }
+    if (finite) cur.push([x, y]);
+    prevX = x; prevY = y; prevFinite = finite;
+  }
+  if (cur.length) segs.push(cur);
+  return segs;
+}
+function buildParamSegments(fx, fy, tmin, tmax, samples){
+  samples = Math.max(20, Math.round(samples || 1000));
+  const segs = []; let cur = [];
+  const step = (tmax - tmin) / samples;
+  for (let i = 0; i <= samples; i++) {
+    const t = tmin + i * step;
+    let x, y; try { x = fx(t); y = fy(t); } catch (e) { x = NaN; y = NaN; }
+    if (isFinite(x) && isFinite(y)) cur.push([x, y]);
+    else { if (cur.length) segs.push(cur); cur = []; }
+  }
+  if (cur.length) segs.push(cur);
+  return segs;
+}
+function marchingSquares(F, xmin, xmax, ymin, ymax, nx, ny){
+  nx = Math.max(4, nx || 80); ny = Math.max(4, ny || 60);
+  const xs = [], ys = [], val = [];
+  const dx = (xmax - xmin) / nx, dy = (ymax - ymin) / ny;
+  for (let i = 0; i <= nx; i++) xs.push(xmin + i * dx);
+  for (let j = 0; j <= ny; j++) ys.push(ymin + j * dy);
+  for (let j = 0; j <= ny; j++) { const row = []; for (let i = 0; i <= nx; i++) { let v; try { v = F(xs[i], ys[j]); } catch (e) { v = NaN; } row.push(v); } val.push(row); }
+  const lerp = (x1, v1, x2, v2) => v1 === v2 ? x1 : x1 + (x2 - x1) * (0 - v1) / (v2 - v1);
+  const segs = [];
+  for (let j = 0; j < ny; j++) {
+    for (let i = 0; i < nx; i++) {
+      const v00 = val[j][i], v10 = val[j][i + 1], v01 = val[j + 1][i], v11 = val[j + 1][i + 1];
+      if (!isFinite(v00) || !isFinite(v10) || !isFinite(v01) || !isFinite(v11)) continue;
+      let idx = 0; if (v00 > 0) idx |= 1; if (v10 > 0) idx |= 2; if (v11 > 0) idx |= 4; if (v01 > 0) idx |= 8;
+      if (idx === 0 || idx === 15) continue;
+      const xL = xs[i], xR = xs[i + 1], yB = ys[j], yT = ys[j + 1];
+      const eBot = () => [lerp(xL, v00, xR, v10), yB];
+      const eTop = () => [lerp(xL, v01, xR, v11), yT];
+      const eLeft = () => [xL, lerp(yB, v00, yT, v01)];
+      const eRight = () => [xR, lerp(yB, v10, yT, v11)];
+      const pairs = {
+        1: [[eLeft, eBot]], 2: [[eBot, eRight]], 3: [[eLeft, eRight]],
+        4: [[eRight, eTop]], 5: [[eLeft, eBot], [eRight, eTop]], 6: [[eBot, eTop]],
+        7: [[eLeft, eTop]], 8: [[eTop, eLeft]], 9: [[eTop, eBot]],
+        10: [[eBot, eLeft], [eTop, eRight]], 11: [[eTop, eRight]], 12: [[eLeft, eRight]],
+        13: [[eBot, eRight]], 14: [[eLeft, eBot]],
+      };
+      const list = pairs[idx] || [];
+      for (const [a, b] of list) segs.push([a(), b()]);
+    }
+  }
+  return segs;
+}
+function linreg(xs, ys){
+  const n = xs.length;
+  const mx = xs.reduce((a, b) => a + b, 0) / n, my = ys.reduce((a, b) => a + b, 0) / n;
+  let sxy = 0, sxx = 0, syy = 0;
+  for (let i = 0; i < n; i++) { const dx = xs[i] - mx, dy = ys[i] - my; sxy += dx * dy; sxx += dx * dx; syy += dy * dy; }
+  const slope = sxy / sxx, intercept = my - slope * mx;
+  const r2 = (sxx === 0 || syy === 0) ? 0 : (sxy * sxy) / (sxx * syy);
+  return {slope, intercept, r2};
+}
+const M = {
+  tokenize, insertImplicitMul, parse, compile, evalNode, FUNCS, FUNC_NAMES,
+  factorial, gammaFn, centralDiff, simpson, bisect, findRoots, findExtrema, findIntersections,
+  isPoleBetween, buildSegments, buildParamSegments, marchingSquares, linreg, dedupe,
+  evaluate(raw, scope, opts){ return evalNode(compile(raw), scope, opts); },
+};
+/* MODEL:end ================================================================= */
+
+/* ============================================================================
+   PART 2 — row classification: turns what a student typed into a plottable row.
+   ========================================================================== */
+const BUILTIN_NAMES = new Set(FUNC_NAMES);
+function splitTopLevel(str, sepChar){
+  const parts = []; let depth = 0, cur = '';
+  for (let i = 0; i < str.length; i++) {
+    const c = str[i];
+    if ('([{'.includes(c)) depth++;
+    if (')]}'.includes(c)) depth--;
+    if (c === sepChar && depth === 0) { parts.push(cur); cur = ''; } else cur += c;
+  }
+  parts.push(cur);
+  return parts;
+}
+function findTopLevelCompare(str){
+  let depth = 0;
+  for (let i = 0; i < str.length; i++) {
+    const c = str[i];
+    if ('([{'.includes(c)) depth++;
+    else if (')]}'.includes(c)) depth--;
+    else if (depth === 0) {
+      if ((c === '<' || c === '>') && str[i + 1] === '=') return {i, len: 2, op: c + '='};
+      if (c === '<' || c === '>') return {i, len: 1, op: c};
+    }
+  }
+  return null;
+}
+function findTopLevelEquals(str){
+  let depth = 0; const idxs = [];
+  for (let i = 0; i < str.length; i++) {
+    const c = str[i];
+    if ('([{'.includes(c)) depth++;
+    else if (')]}'.includes(c)) depth--;
+    else if (c === '=' && depth === 0) idxs.push(i);
+  }
+  return idxs;
+}
+function tryPointGroups(raw){
+  let i = 0; const groups = [];
+  const skip = () => { while (i < raw.length && /\s/.test(raw[i])) i++; };
+  skip();
+  if (raw[i] !== '(') return null;
+  while (i < raw.length) {
+    skip();
+    if (raw[i] !== '(') return null;
+    let depth = 0, start = i;
+    do { if (raw[i] === '(') depth++; else if (raw[i] === ')') depth--; i++; } while (depth > 0 && i <= raw.length);
+    if (depth !== 0) return null;
+    groups.push(raw.slice(start, i));
+    skip();
+    if (i < raw.length) { if (raw[i] === ',') { i++; } else return null; }
+  }
+  if (!groups.length) return null;
+  const pts = [];
+  for (const g of groups) {
+    const inner = g.slice(1, -1);
+    const parts = splitTopLevel(inner, ',');
+    if (parts.length !== 2) return null;
+    pts.push({xRaw: parts[0].trim(), yRaw: parts[1].trim()});
+  }
+  return pts;
+}
+function usesVar(node, name){
+  if (!node || typeof node !== 'object') return false;
+  if (node.type === 'var' && node.name === name) return true;
+  for (const k in node) {
+    if (k === 'type') continue;
+    const v = node[k];
+    if (Array.isArray(v)) { for (const it of v) if (usesVar(it, name)) return true; }
+    else if (v && typeof v === 'object' && usesVar(v, name)) return true;
+  }
+  return false;
+}
+function collectVarNames(node, set){
+  if (!node || typeof node !== 'object') return;
+  if (node.type === 'var') { set.add(node.name); return; }
+  for (const k in node) {
+    if (k === 'type') continue;
+    const v = node[k];
+    if (Array.isArray(v)) { for (const it of v) collectVarNames(it, set); }
+    else if (v && typeof v === 'object') collectVarNames(v, set);
+  }
+}
+/* Desmos's signature move for "y=x^2+C": a lone undefined letter isn't just
+   an error, it's an invitation — "add slider: C". Walk every AST the row
+   depends on, find every single-letter name that isn't already bound (the
+   row's own free variable, like x) or resolved (another row's param), and
+   offer to create it as a slider right there under the row. */
+function computeUndefinedVars(row, asts, boundNames, params){
+  const names = new Set();
+  for (const ast of asts) if (ast) collectVarNames(ast, names);
+  const out = [];
+  for (const nm of names) {
+    if (boundNames.has(nm)) continue;
+    if (!/^[A-Za-z]$/.test(nm)) continue;
+    if (params && Object.prototype.hasOwnProperty.call(params, nm)) {
+      const v = params[nm];
+      if (Array.isArray(v) || (typeof v === 'number' && isFinite(v))) continue;
+    }
+    out.push(nm);
+  }
+  out.sort();
+  /* i is not a letter waiting for a value — offering to make it a slider teaches the opposite of
+     what a Class 11 student needs to know. Say what it is and that this calculator plots real
+     functions. (i stays usable as a bound index, e.g. sum(i=1)^(5)i, because that is bound above.) */
+  const imag = out.indexOf('i');
+  if (imag >= 0){
+    out.splice(imag, 1);
+    row.error = 'i is the imaginary unit, not an unknown — this calculator plots real functions, so there is no value to give it.';
+  }
+  row.undefinedVars = out.length ? out : null;
+  if (out.length) {
+    row.error = out.length === 1 ? `"${out[0]}" isn't defined yet.` : out.map(v => `"${v}"`).join(', ') + ' aren\'t defined yet.';
+  }
+}
+const isConstName = n => /^[A-Za-z][A-Za-z0-9_]*$/.test(n);
+const flipOp = op => ({'<': '>', '<=': '>=', '>': '<', '>=': '<='}[op]);
+function classifyRow(row){
+  row.error = null;
+  const raw = (row.raw || '').trim();
+  if (row.manualKind) { row.kind = row.manualKind; return; }
+  if (!raw) { row.kind = 'empty'; return; }
+  try {
+    let m = raw.match(/^([A-Za-z][A-Za-z0-9_]*)\s*\(\s*([A-Za-z][A-Za-z0-9_]*(?:\s*,\s*[A-Za-z][A-Za-z0-9_]*)*)\s*\)\s*=\s*(.+)$/);
+    if (m && !BUILTIN_NAMES.has(m[1])) {
+      const name = m[1], params = m[2].split(',').map(s => s.trim());
+      row.name = name; row.params = params; row.bodyAst = compile(m[3]);
+      row.kind = 'funcdef'; row.plottable1D = params.length === 1;
+      return;
+    }
+    const groups = tryPointGroups(raw);
+    if (groups) {
+      const compiled = groups.map(g => ({xAst: compile(g.xRaw), yAst: compile(g.yRaw)}));
+      const isParam = groups.length === 1 && (usesVar(compiled[0].xAst, 't') || usesVar(compiled[0].yAst, 't'));
+      if (isParam) { row.kind = 'parametric'; row.xAst = compiled[0].xAst; row.yAst = compiled[0].yAst; return; }
+      row.kind = 'points'; row.groups = compiled; return;
+    }
+    const cmp = findTopLevelCompare(raw);
+    if (cmp) {
+      const lhs = raw.slice(0, cmp.i).trim(), rhs = raw.slice(cmp.i + cmp.len).trim();
+      const lhsAst = compile(lhs), rhsAst = compile(rhs);
+      const lhsIsY = lhs === 'y', rhsIsY = rhs === 'y';
+      if (lhsIsY || rhsIsY) {
+        row.kind = 'inequality'; row.fnAst = lhsIsY ? rhsAst : lhsAst; row.op = lhsIsY ? cmp.op : flipOp(cmp.op);
+        return;
+      }
+      row.kind = 'implicit-ineq'; row.lhsAst = lhsAst; row.rhsAst = rhsAst; row.op = cmp.op; return;
+    }
+    const eqIdx = findTopLevelEquals(raw);
+    if (eqIdx.length >= 1) {
+      const lhs = raw.slice(0, eqIdx[0]).trim(), rhs = raw.slice(eqIdx[0] + 1).trim();
+      if (isConstName(lhs)) {
+        if (lhs === 'y') { row.kind = 'function'; row.fnAst = compile(rhs); return; }
+        if (lhs === 'x') { row.kind = 'implicit-x'; row.rhsAst = compile(rhs); return; }
+        if (lhs === 'r') { row.kind = 'polar'; row.rAst = compile(rhs); return; }
+        const rhsAst = compile(rhs);
+        if (rhsAst.type === 'list' || rhsAst.type === 'range') { row.kind = 'list'; row.name = lhs; row.rhsAst = rhsAst; return; }
+        row.kind = 'param'; row.name = lhs; row.rhsAst = rhsAst; row.isSlider = rhsAst.type === 'num';
+        return;
+      }
+      row.kind = 'implicit'; row.lhsAst = compile(lhs); row.rhsAst = compile(rhs); return;
+    }
+    row.fnAst = compile(raw);
+    /* a bare expression with no "x" in it (e.g. "f(3)" or "3+4") isn't a curve —
+       it's just a value, and should be shown as one instead of a flat line
+       stretching across the whole graph. */
+    row.kind = usesVar(row.fnAst, 'x') ? 'function' : 'value';
+  } catch (e) {
+    row.kind = 'error'; row.error = e.message || String(e);
+  }
+}
+
+/* ============================================================================
+   PART 2.5 — math typesetting: turn an AST (or a raw row) into the nested
+   spans a numbered row shows when it isn't focused — exponents raised,
+   fractions stacked, radicals barred, pi/theta as glyphs, <= as ≤, * as ·.
+   Falls back to null (caller shows the raw text) if anything fails to parse.
+   ========================================================================== */
+function fmtNumDisplay(v){
+  if (!isFinite(v)) return String(v);
+  if (Number.isInteger(v)) return String(v);
+  let s = v.toFixed(6).replace(/0+$/, '').replace(/\.$/, '');
+  return s;
+}
+const GREEK_NAME = {theta: 'θ', pi: 'π'};
+const FN_DISPLAY = {
+  ln: 'ln', log: 'log', exp: 'exp', sin: 'sin', cos: 'cos', tan: 'tan',
+  asin: 'sin&#8315;&sup1;', acos: 'cos&#8315;&sup1;', atan: 'tan&#8315;&sup1;',
+  sinh: 'sinh', cosh: 'cosh', tanh: 'tanh', asinh: 'sinh&#8315;&sup1;', acosh: 'cosh&#8315;&sup1;', atanh: 'tanh&#8315;&sup1;',
+  floor: 'floor', ceil: 'ceil', round: 'round', sign: 'sgn', cbrt: 'cbrt',
+  min: 'min', max: 'max', mod: 'mod', gcd: 'gcd', lcm: 'lcm', nCr: 'nCr', nPr: 'nPr',
+  mean: 'mean', total: 'total', length: 'length', sort: 'sort',
+};
+const BIGOP_SYM = {sum: '&Sigma;', prod: '&Pi;', integral: '&int;'};
+function cmpSymbol(op){ return {'<=': '&le;', '>=': '&ge;', '=': '=', '<': '<', '>': '>'}[op] || esc(op); }
+function wrapParen(html){ return `<span class="mparen">(</span>${html}<span class="mparen">)</span>`; }
+function mVar(name){
+  if (GREEK_NAME[name]) return `<span class="mvar">${GREEK_NAME[name]}</span>`;
+  const us = name.indexOf('_');
+  if (us > 0) return `<span class="mvar">${esc(name.slice(0, us))}</span><span class="msub">${esc(name.slice(us + 1).replace(/[{}]/g, ''))}</span>`;
+  return `<span class="mvar">${esc(name)}</span>`;
+}
+function needsParens(node, ctx){
+  if (!node) return false;
+  const t = node.type;
+  if (ctx === 'pow-base' || ctx === 'fact-operand') return t === 'bin' || t === 'neg';
+  return t === 'bin' && (node.op === '+' || node.op === '-'); /* neg-operand, sub-right, mul-operand */
+}
+function astToHTML(node){
+  if (!node) return '';
+  switch (node.type) {
+    case 'num': return `<span class="mnum">${esc(fmtNumDisplay(node.value))}</span>`;
+    case 'const': return node.name === 'pi' ? '<span class="mvar">π</span>' : '<span class="mvar">e</span>';
+    case 'var': return mVar(node.name);
+    case 'neg': return '<span class="mop">&minus;</span>' + (needsParens(node.a, 'neg') ? wrapParen(astToHTML(node.a)) : astToHTML(node.a));
+    case 'fact': return (needsParens(node.a, 'fact-operand') ? wrapParen(astToHTML(node.a)) : astToHTML(node.a)) + '<span class="mop">!</span>';
+    case 'bin': {
+      const a = node.a, b = node.b;
+      if (node.op === '+') return astToHTML(a) + ' <span class="mop">+</span> ' + astToHTML(b);
+      if (node.op === '-') return astToHTML(a) + ' <span class="mop">&minus;</span> ' + (needsParens(b, 'sub-right') ? wrapParen(astToHTML(b)) : astToHTML(b));
+      if (node.op === '*') {
+        const ah = needsParens(a, 'mul') ? wrapParen(astToHTML(a)) : astToHTML(a);
+        const bh = needsParens(b, 'mul') ? wrapParen(astToHTML(b)) : astToHTML(b);
+        return ah + '<span class="mop mdot">&middot;</span>' + bh;
+      }
+      if (node.op === '/') return `<span class="mfrac"><span class="mnumer">${astToHTML(a)}</span><span class="mdenom">${astToHTML(b)}</span></span>`;
+      if (node.op === '^') {
+        const baseHTML = needsParens(a, 'pow-base') ? wrapParen(astToHTML(a)) : astToHTML(a);
+        return baseHTML + `<span class="msup">${astToHTML(b)}</span>`;
+      }
+      break;
+    }
+    case 'logb': return `<span class="mfn">log</span><span class="msub">${astToHTML(node.base)}</span>(${astToHTML(node.arg)})`;
+    case 'call': {
+      if (node.name === 'sqrt') return `<span class="msqrt"><span class="mradsym">&radic;</span><span class="mradicand">${node.args.map(astToHTML).join(', ')}</span></span>`;
+      if (node.name === 'abs') return `<span class="mparen">|</span>${node.args.map(astToHTML).join(', ')}<span class="mparen">|</span>`;
+      return `<span class="mfn">${FN_DISPLAY[node.name] || esc(node.name)}</span>(${node.args.map(astToHTML).join(', ')})`;
+    }
+    case 'usercall': return mVar(node.name) + '(' + node.args.map(astToHTML).join(', ') + ')';
+    case 'usercall_deriv': return mVar(node.name) + '<span class="msup">&prime;</span>(' + astToHTML(node.arg) + ')';
+    case 'list': return '[' + node.items.map(astToHTML).join(', ') + ']';
+    case 'range': return '[' + astToHTML(node.from) + '<span class="mop">&hellip;</span>' + astToHTML(node.to) + ']';
+    case 'cond': return condOpsHTML(node);
+    case 'piecewise': return '{' + node.branches.map(br => (br.cond ? condOpsHTML(br.cond) : '') + (br.val != null ? '<span class="mop">:</span>' + astToHTML(br.val) : '')).join('<span class="mop">,</span> ') + '}';
+    case 'bigop': return `<span class="mfn">${BIGOP_SYM[node.op] || esc(node.op)}</span><span class="msub">${mVar(node.varName)}<span class="mop">=</span>${astToHTML(node.lo)}</span><span class="msup">${astToHTML(node.hi)}</span>(${astToHTML(node.body)})`;
+  }
+  return esc(String(node.type || ''));
+}
+function condOpsHTML(cond){
+  let out = astToHTML(cond.vals[0]);
+  for (let i = 0; i < cond.ops.length; i++) out += ` <span class="mop">${cmpSymbol(cond.ops[i])}</span> ` + astToHTML(cond.vals[i + 1]);
+  return out;
+}
+function rawToDisplayHTML(raw){
+  raw = (raw || '').trim();
+  if (!raw) return '';
+  try {
+    let m = raw.match(/^([A-Za-z][A-Za-z0-9_]*)\s*\(\s*([A-Za-z][A-Za-z0-9_]*(?:\s*,\s*[A-Za-z][A-Za-z0-9_]*)*)\s*\)\s*=\s*(.+)$/);
+    if (m && !BUILTIN_NAMES.has(m[1])) {
+      return mVar(m[1]) + '(' + m[2].split(',').map(p => mVar(p.trim())).join(', ') + ') <span class="mop">=</span> ' + astToHTML(compile(m[3]));
+    }
+    const groups = tryPointGroups(raw);
+    if (groups) {
+      return groups.map(g => '(' + astToHTML(compile(g.xRaw)) + '<span class="mop">,</span> ' + astToHTML(compile(g.yRaw)) + ')').join('<span class="mop">,</span> ');
+    }
+    const cmp = findTopLevelCompare(raw);
+    if (cmp) {
+      const lhs = raw.slice(0, cmp.i).trim(), rhs = raw.slice(cmp.i + cmp.len).trim();
+      return astToHTML(compile(lhs)) + ` <span class="mop">${cmpSymbol(cmp.op)}</span> ` + astToHTML(compile(rhs));
+    }
+    const eqIdx = findTopLevelEquals(raw);
+    if (eqIdx.length >= 1) {
+      const lhs = raw.slice(0, eqIdx[0]).trim(), rhs = raw.slice(eqIdx[0] + 1).trim();
+      const lhsHTML = isConstName(lhs) ? mVar(lhs) : astToHTML(compile(lhs));
+      return lhsHTML + ' <span class="mop">=</span> ' + astToHTML(compile(rhs));
+    }
+    return astToHTML(compile(raw));
+  } catch (e) { return null; }
+}
+function mathViewHTML(row){
+  /* An empty row used to render nothing at all, and the <input> over it is
+     opacity:0 until it is focused — so a learner opening the page met a blank
+     white strip with no indication that it was the thing to type in. */
+  if (!row || !row.raw || !row.raw.trim()) return '<span class="gc-hint">y =</span>';
+  const html = rawToDisplayHTML(row.raw);
+  return `<span class="mexpr">${html != null ? html : esc(row.raw)}</span>`;
+}
+
+/* ============================================================================
+   PART 3 — state: rows, view, history. Plain data, exactly what gets shared
+   and stored.
+   ========================================================================== */
+const PALETTE = ['#3f7fd8', '#d6453d', '#2f9e5b', '#f29a1f', '#8a5cf6', '#e0567a', '#1f8a8a', '#c9821f', '#6a3fc2', '#16a3a3'];
+let uidN = 1, colorN = 0;
+const uid = () => 'r' + (uidN++);
+function newRow(raw, extra){
+  const color = (extra && extra.color) || PALETTE[colorN++ % PALETTE.length];
+  return Object.assign({
+    id: uid(), raw: raw || '', color, hidden: false, kind: 'empty',
+    lineStyle: 'solid', lineWidth: 2.4, pointStyle: 'filled', pointSize: 5, opacity: 1, label: '',
+    showDeriv: false, integral: null, trange: null, regression: null,
+  }, extra || {});
+}
+let rows = [newRow('')];
+let DEG = false, SQUARE = true, TRACE_ON = false, ANALYSIS_ON = true, AUTO_FIT = true;
+let view = {cx: 0, cy: 0, sx: 1 / 45, sy: 1 / 45};
+const INITIAL_VIEW = {cx: 0, cy: 0, sx: 1 / 45, sy: 1 / 45};
+let axisLabels = {x: 'x', y: 'y'};
+let axisStep = {x: null, y: null};
+let undoHistory = [], redoStack = [];
+let W = 900, H = 600;
+let selectedTraceRow = null;
+const clocks = {};
+/* Auto-fit's two ground rules live here as plain flags rather than inside
+   the render loop: `userAdjustedView` is set the instant a person pans,
+   zooms, pinches or types explicit bounds, and only cleared by an edit to an
+   expression — so auto-fit never fights a window the person chose by hand,
+   and never re-fits on every animation frame just because render() runs. */
+/* Shading alpha, set once per render. At a flat 0.22 each, four overlapping inequalities reach
+   about 63% opacity and their colours mix to mud — the plot stops reading as curves over a grid
+   and starts reading as a block of colour with lines through it. Fade each region as more of
+   them share the plot, so any number of them stay legible together. */
+let SHADE_ALPHA = 0.22;
+/* A point the learner clicked, held until they click elsewhere or press Escape. Reading a value
+   off a graph means finding where it meets each axis, so the point draws its own guides down to
+   x and across to y, with the numbers written where they land. */
+let PIN = null;
+let userAdjustedView = false;
+/* Which row the person last typed into. Fitting to every visible row at once is right when
+   they ask for it, but wrong straight after an edit: add y=1000x^2 beneath y=0.001sin(2x) and
+   a window spanning both turns the sine — the curve that was framed a moment ago — into a flat
+   line. Two curves whose scales differ by a thousand cannot both be readable on one linear
+   plot, so after an edit the thing just typed is the one that gets framed. */
+let lastEditedRowId = null;
+
+function snapshot(){
+  return JSON.parse(JSON.stringify({
+    rows: rows.map(r => ({id: r.id, raw: r.raw, color: r.color, hidden: r.hidden, lineStyle: r.lineStyle, lineWidth: r.lineWidth,
+      pointStyle: r.pointStyle, pointSize: r.pointSize, opacity: r.opacity, label: r.label, showDeriv: r.showDeriv,
+      integral: r.integral, trange: r.trange, value: r.value, min: r.min, max: r.max, step: r.step,
+      table: r.table, manualKind: r.manualKind, regression: r.regression, noteText: r.noteText})),
+    view, DEG, SQUARE, axisLabels, axisStep, AUTO_FIT,
+  }));
+}
+function restoreSnapshot(s){
+  rows = s.rows.map(rr => {
+    const r = newRow(rr.raw, rr); classifyRow(r);
+    /* the snapshot already carries the settled value/min/max/step for this
+       exact raw (that's what was on the slider when it was captured) — mark
+       it as up to date so buildParams doesn't immediately re-derive over it */
+    if (r.kind === 'param' && r.isSlider) r._paramSeed = r.raw;
+    return r;
+  });
+  view = s.view; DEG = s.DEG; SQUARE = s.SQUARE !== false; axisLabels = s.axisLabels || {x: 'x', y: 'y'}; axisStep = s.axisStep || {x: null, y: null};
+  AUTO_FIT = s.AUTO_FIT !== false;
+  userAdjustedView = true; /* a loaded/undone/shared view was already positioned on purpose — leave it alone until the next edit */
+  renderRowList(); scheduleRender(); syncToolbar();
+}
+function pushHistory(){
+  undoHistory.push(snapshot());
+  if (undoHistory.length > 60) undoHistory.shift();
+  redoStack = [];
+}
+function undo(){
+  if (!undoHistory.length) { toast('Nothing to undo.'); return; }
+  redoStack.push(snapshot());
+  restoreSnapshot(undoHistory.pop());
+  track('undo');
+}
+function redo(){
+  if (!redoStack.length) { toast('Nothing to redo.'); return; }
+  undoHistory.push(snapshot());
+  restoreSnapshot(redoStack.pop());
+  track('redo');
+}
+
+/* ============================================================================
+   PART 4 — resolving parameters, user functions and lists across every row.
+   ========================================================================== */
+function niceDefault(v){ const a = Math.abs(v) || 1; const step = Math.pow(10, Math.floor(Math.log10(a)) - 1) || 0.1; return step; }
+function buildFuncs(){
+  const funcs = {};
+  for (const r of rows) {
+    if (r.kind === 'funcdef') {
+      const entry = {params: r.params, body: r.bodyAst};
+      funcs[r.name + '/' + r.params.length] = entry;
+      funcs[r.name] = entry;
+    }
+  }
+  return funcs;
+}
+function buildParams(funcs){
+  const params = {};
+  for (let pass = 0; pass < 3; pass++) {
+    for (const r of rows) {
+      if (r.kind === 'param') {
+        if (r.isSlider) {
+          /* derive the value and bounds from the current literal whenever that
+             literal actually changes — not only the first time the row becomes
+             a slider. Comparing against the row's own raw text (rather than a
+             "value == null" check) is what makes this immune to a transient
+             kind, mid-edit, having already stamped r.value with NaN: a raw
+             that hasn't changed since the last successful derivation is left
+             alone, so dragging or stepping the slider is never clobbered. */
+          if (r._paramSeed !== r.raw) {
+            try { r.value = evalNode(r.rhsAst, params, {deg: DEG, funcs}); r.error = null; r.undefinedVars = null; }
+            catch (e) { r.value = (r.value != null && isFinite(r.value)) ? r.value : 0; r.error = e.message || String(e); computeUndefinedVars(r, [r.rhsAst], new Set(), params); }
+            r.min = +(r.value - 5).toFixed(4); r.max = +(r.value + 5).toFixed(4); r.step = niceDefault(r.value);
+            r._paramSeed = r.raw;
+          }
+          params[r.name] = r.value;
+        } else {
+          try { r.value = evalNode(r.rhsAst, params, {deg: DEG, funcs}); r.error = null; r.undefinedVars = null; }
+          catch (e) { r.value = (r.value != null ? r.value : NaN); r.error = e.message || String(e); computeUndefinedVars(r, [r.rhsAst], new Set(), params); }
+          params[r.name] = r.value;
+        }
+      } else if (r.kind === 'list') {
+        try { r.listValue = evalNode(r.rhsAst, params, {deg: DEG, funcs}); r.error = null; r.undefinedVars = null; }
+        catch (e) { r.listValue = r.listValue || []; r.error = e.message || String(e); computeUndefinedVars(r, [r.rhsAst], new Set(), params); }
+        params[r.name] = r.listValue;
+      }
+    }
+  }
+  return params;
+}
+function getPlotFn(row, ctx){
+  if (row.kind === 'function') return x => evalNode(row.fnAst, Object.assign({}, ctx.params, {x}), {deg: ctx.deg, funcs: ctx.funcs});
+  if (row.kind === 'funcdef' && row.plottable1D) {
+    const pname = row.params[0];
+    return x => evalNode(row.bodyAst, Object.assign({}, ctx.params, {[pname]: x}), {deg: ctx.deg, funcs: ctx.funcs});
+  }
+  if (row.kind === 'inequality') return x => evalNode(row.fnAst, Object.assign({}, ctx.params, {x}), {deg: ctx.deg, funcs: ctx.funcs});
+  return null;
+}
+function isFnRow(row){ return row.kind === 'function' || (row.kind === 'funcdef' && row.plottable1D) || row.kind === 'inequality'; }
+
+/* ============================================================================
+   PART 5 — the stage: coordinates, grid, ticks.
+   ========================================================================== */
+const svg = $('stage');
+const NS = 'http://www.w3.org/2000/svg';
+function el(tag, attrs){ const e = document.createElementNS(NS, tag); if (attrs) for (const k in attrs) e.setAttribute(k, attrs[k]); return e; }
+
+function toXpx(x){ return (x - view.cx) / view.sx + W / 2; }
+function toYpx(y){ return H / 2 - (y - view.cy) / view.sy; }
+function fromXpx(px){ return view.cx + (px - W / 2) * view.sx; }
+function fromYpx(py){ return view.cy - (py - H / 2) * view.sy; }
+function bounds(){ return {xmin: fromXpx(0), xmax: fromXpx(W), ymin: fromYpx(H), ymax: fromYpx(0)}; }
+
+function niceNum(range, round){
+  const exp = Math.floor(Math.log10(range));
+  const f = range / Math.pow(10, exp);
+  let nf;
+  if (round) nf = f < 1.5 ? 1 : f < 3 ? 2 : f < 7 ? 5 : 10;
+  else nf = f <= 1 ? 1 : f <= 2 ? 2 : f <= 5 ? 5 : 10;
+  return nf * Math.pow(10, exp);
+}
+function niceTicks(min, max, targetCount, forced){
+  if (forced) { const step = forced; const start = Math.ceil(min / step) * step; const ticks = []; for (let v = start; v <= max + step * 1e-6; v += step) ticks.push(Math.abs(v) < step * 1e-9 ? 0 : +v.toFixed(10)); return {ticks, step}; }
+  const range = niceNum(Math.max(max - min, 1e-9), false);
+  const step = niceNum(range / Math.max(1, targetCount - 1), true);
+  const start = Math.ceil(min / step) * step;
+  const ticks = [];
+  for (let v = start; v <= max + step * 1e-6; v += step) ticks.push(Math.abs(v) < step * 1e-9 ? 0 : +v.toFixed(10));
+  return {ticks, step};
+}
+
+function buildStageOnce(){
+  svg.appendChild(el('rect', {id: 'bg', x: 0, y: 0, width: 10, height: 10, fill: 'var(--paper)'}));
+  svg.appendChild(el('g', {id: 'gridLayer'}));
+  svg.appendChild(el('g', {id: 'axesLayer'}));
+  svg.appendChild(el('g', {id: 'shadeLayer'}));
+  svg.appendChild(el('g', {id: 'curvesLayer'}));
+  svg.appendChild(el('g', {id: 'pointsLayer'}));
+  svg.appendChild(el('g', {id: 'markLayer'}));
+  svg.appendChild(el('g', {id: 'pinLayer'}));
+  svg.appendChild(el('g', {id: 'handleLayer'}));
+  const tdot = el('g', {id: 'traceDot', opacity: 0});
+  tdot.appendChild(el('circle', {r: 5, fill: '#fff', stroke: 'var(--ink)', 'stroke-width': 2}));
+  tdot.appendChild(el('text', {id: 'traceLabel', y: -12, 'text-anchor': 'middle', 'font-size': 12, 'font-weight': 700, class: 'm', fill: 'var(--ink)'}));
+  svg.appendChild(tdot);
+  /* the background catcher: pan and pinch live here, built once so a drag in
+     progress never loses its pointer capture. */
+  const catcher = el('rect', {id: 'catcher', x: 0, y: 0, width: 10, height: 10, fill: 'transparent'});
+  svg.appendChild(catcher);
+}
+function resizeStage(){
+  const r = $('stageWrap').getBoundingClientRect();
+  W = Math.max(200, Math.round(r.width)); H = Math.max(160, Math.round(r.height));
+  svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+  svg.setAttribute('width', W); svg.setAttribute('height', H);
+  $('bg').setAttribute('width', W); $('bg').setAttribute('height', H);
+  $('catcher').setAttribute('width', W); $('catcher').setAttribute('height', H);
+}
+function paintGrid(V){
+  const targetX = Math.max(3, Math.round(W / 90)), targetY = Math.max(3, Math.round(H / 70));
+  const {ticks: xt, step: xs} = niceTicks(V.xmin, V.xmax, targetX, axisStep.x);
+  const {ticks: yt, step: ys} = niceTicks(V.ymin, V.ymax, targetY, axisStep.y);
+  let grid = '', axes = '';
+  /* Desmos's paper: very light minor lines subdividing each major cell five
+     ways, then the major lines a little darker, drawn after so they win any
+     overlap — no need to detect coincidence by hand. */
+  const xMinor = xs / 5, yMinor = ys / 5;
+  if (isFinite(xMinor) && xMinor > 0) {
+    const i0 = Math.floor(V.xmin / xMinor), i1 = Math.ceil(V.xmax / xMinor);
+    for (let i = i0; i <= i1; i++) { const px = toXpx(i * xMinor); if (px >= -1 && px <= W + 1) grid += `<line x1="${px.toFixed(1)}" y1="0" x2="${px.toFixed(1)}" y2="${H}" stroke="var(--grid-minor)" stroke-width="1"/>`; }
+  }
+  if (isFinite(yMinor) && yMinor > 0) {
+    const j0 = Math.floor(V.ymin / yMinor), j1 = Math.ceil(V.ymax / yMinor);
+    for (let j = j0; j <= j1; j++) { const py = toYpx(j * yMinor); if (py >= -1 && py <= H + 1) grid += `<line x1="0" y1="${py.toFixed(1)}" x2="${W}" y2="${py.toFixed(1)}" stroke="var(--grid-minor)" stroke-width="1"/>`; }
+  }
+  for (const x of xt) {
+    const px = toXpx(x);
+    grid += `<line x1="${px}" y1="0" x2="${px}" y2="${H}" stroke="var(--grid-major)" stroke-width="1"/>`;
+    if (x !== 0) axes += `<text x="${px + 3}" y="${clamp(toYpx(0) - 4, 12, H - 4)}" font-size="11" font-family="var(--font-head)" fill="var(--axis-ink)">${fmt(x, decimalsFor(xs))}</text>`;
+  }
+  for (const y of yt) {
+    const py = toYpx(y);
+    grid += `<line x1="0" y1="${py}" x2="${W}" y2="${py}" stroke="var(--grid-major)" stroke-width="1"/>`;
+    if (y !== 0) axes += `<text x="${clamp(toXpx(0) + 4, 4, W - 24)}" y="${py - 4}" font-size="11" font-family="var(--font-head)" fill="var(--axis-ink)">${fmt(y, decimalsFor(ys))}</text>`;
+  }
+  const ox = clamp(toXpx(0), 0, W), oy = clamp(toYpx(0), 0, H);
+  axes += `<line x1="0" y1="${oy}" x2="${W}" y2="${oy}" stroke="var(--axis-ink)" stroke-width="1.4"/>`;
+  axes += `<line x1="${ox}" y1="0" x2="${ox}" y2="${H}" stroke="var(--axis-ink)" stroke-width="1.4"/>`;
+  axes += `<text x="${W - 14}" y="${oy - 6}" font-size="13" font-weight="700" font-family="var(--font-head)" fill="var(--ink-2)">${esc(axisLabels.x)}</text>`;
+  axes += `<text x="${ox + 16}" y="16" font-size="13" font-weight="700" font-family="var(--font-head)" fill="var(--ink-2)">${esc(axisLabels.y)}</text>`;
+  /* The origin's 0, and only when the origin is actually IN FRAME. This used to be
+     drawn unconditionally at x="4", which pinned it to the left edge of the plot
+     whatever the view — so on the default view a 0 sat on the x axis a whole screen
+     away from x = 0, while the real origin had no label at all. Below-left of the
+     crossing, because up-and-right is where the first x tick and the first y tick
+     already are. */
+  if (toXpx(0) >= 0 && toXpx(0) <= W && toYpx(0) >= 0 && toYpx(0) <= H)
+    axes += `<text x="${clamp(ox - 11, 2, W - 10).toFixed(1)}" y="${clamp(oy + 14, 12, H - 2).toFixed(1)}" font-size="10.5" font-family="var(--font-head)" fill="var(--axis-ink)">0</text>`;
+  $('gridLayer').innerHTML = grid;
+  $('axesLayer').innerHTML = axes;
+}
+function decimalsFor(step){ if (step >= 1) return 0; if (step >= 0.1) return 1; if (step >= 0.01) return 2; return 3; }
+
+/* ---- path building --------------------------------------------------------- */
+function segPath(segs){
+  return segs.map(seg => 'M' + seg.map(([x, y]) => toXpx(x).toFixed(2) + ' ' + toYpx(y).toFixed(2)).join('L')).join(' ');
+}
+function dashFor(row, opStrict){
+  if (opStrict) return '6 5';
+  if (row.lineStyle === 'dashed') return '8 6';
+  if (row.lineStyle === 'dotted') return '1.6 5';
+  return null;
+}
+function pathFromSegments(segs, row, opts){
+  opts = opts || {};
+  const d = segPath(segs);
+  if (!d) return '';
+  const dash = dashFor(row, opts.strict);
+  const path = `<path d="${d}" fill="none" stroke="${row.color}" stroke-width="${opts.deriv ? Math.max(1.2, row.lineWidth - 1) : row.lineWidth}"
+    stroke-opacity="${opts.deriv ? row.opacity * 0.7 : row.opacity}" stroke-linecap="round" stroke-linejoin="round"
+    ${dash ? `stroke-dasharray="${dash}"` : ''}/>`;
+  /* The style panel offers a label on every row and says it is "shown on the curve", but only
+     parametric rows ever drew one — so typing a label on an ordinary curve did nothing at all.
+     Put it on the curve itself: the last point that is comfortably inside the plot, so the text
+     sits at the end of the line the way a legend-free graph wants it. */
+  if (row.label && !opts.deriv) {
+    let best = null;
+    for (const seg of segs) for (const [x, y] of seg) {
+      const px = toXpx(x), py = toYpx(y);
+      if (px > 40 && px < W - 90 && py > 20 && py < H - 24 && (!best || px > best[0])) best = [px, py];
+    }
+    if (best) return path + `<text x="${(best[0] + 8).toFixed(1)}" y="${(best[1] - 8).toFixed(1)}" font-size="12"
+      font-weight="700" fill="${row.color}" opacity="${row.opacity}" paint-order="stroke" stroke="var(--card)"
+      stroke-width="3.5">${esc(row.label)}</text>`;
+  }
+  return path;
+}
+function vlineSVG(xv, row, V){
+  if (!isFinite(xv)) return '';
+  const px = toXpx(xv);
+  const dash = dashFor(row, false);
+  return `<line x1="${px}" y1="0" x2="${px}" y2="${H}" stroke="${row.color}" stroke-width="${row.lineWidth}" stroke-opacity="${row.opacity}" ${dash ? `stroke-dasharray="${dash}"` : ''}/>`;
+}
+function implicitPathSVG(segs, row){
+  const d = segs.map(([[x1, y1], [x2, y2]]) => `M${toXpx(x1).toFixed(2)} ${toYpx(y1).toFixed(2)}L${toXpx(x2).toFixed(2)} ${toYpx(y2).toFixed(2)}`).join(' ');
+  if (!d) return '';
+  return `<path d="${d}" fill="none" stroke="${row.color}" stroke-width="${row.lineWidth}" stroke-opacity="${row.opacity}" stroke-linecap="round"/>`;
+}
+function inequalityShadeSVG(segs, row, V){
+  const edgeY = (row.op === '<' || row.op === '<=') ? V.ymin : V.ymax;
+  let d = '';
+  for (const seg of segs) {
+    if (seg.length < 2) continue;
+    const pts = seg.map(([x, y]) => [toXpx(x), toYpx(y)]);
+    const first = seg[0], last = seg[seg.length - 1];
+    d += 'M' + pts.map(p => p[0].toFixed(2) + ' ' + p[1].toFixed(2)).join('L');
+    d += `L${toXpx(last[0]).toFixed(2)} ${toYpx(edgeY).toFixed(2)}L${toXpx(first[0]).toFixed(2)} ${toYpx(edgeY).toFixed(2)}Z`;
+  }
+  if (!d) return '';
+  return `<path d="${d}" fill="${row.color}" fill-opacity="${SHADE_ALPHA * row.opacity}" stroke="none"/>`;
+}
+function implicitIneqSVG(F, op, row, V, grid){
+  const {nx, ny} = grid;
+  const dx = (V.xmax - V.xmin) / nx, dy = (V.ymax - V.ymin) / ny;
+  /* Every scanline run used to be its own <rect>, each padded slightly so no hairline gap showed
+     between neighbours. With a semi-transparent fill every overlap is painted twice and darkens,
+     so a shaded region filled up with horizontal seam lines — a block of colour ruled with
+     stripes, which is what "it turned into a rectangle with coloured lines" was describing. One
+     path filled once has neither problem: overlapping subpaths inside a single fill are painted
+     exactly once, and it is one element instead of thousands. */
+  let d = '';
+  for (let j = 0; j < ny; j++) {
+    const cy = V.ymin + (j + 0.5) * dy;
+    const y0 = V.ymin + j * dy;
+    const pa = toYpx(y0 + dy), pb = toYpx(y0);
+    const top = Math.min(pa, pb), bot = Math.max(pa, pb);
+    let runStart = -1;
+    const flush = stop => {
+      if (runStart < 0) return;
+      const xa = toXpx(V.xmin + runStart * dx), xb = toXpx(V.xmin + stop * dx);
+      const l = Math.min(xa, xb), r = Math.max(xa, xb);
+      d += 'M' + l.toFixed(1) + ' ' + top.toFixed(1) + 'H' + r.toFixed(1) + 'V' + bot.toFixed(1) + 'H' + l.toFixed(1) + 'Z';
+      runStart = -1;
+    };
+    for (let i = 0; i < nx; i++) {
+      const cx = V.xmin + (i + 0.5) * dx;
+      let v; try { v = F(cx, cy); } catch (e) { v = NaN; }
+      const inside = isFinite(v) && (op === '<' ? v < 0 : op === '<=' ? v <= 0 : op === '>' ? v > 0 : v >= 0);
+      if (inside) { if (runStart < 0) runStart = i; }
+      else flush(i);
+    }
+    flush(nx);
+  }
+  const rects = d ? '<path d="' + d + '" fill="' + row.color + '" fill-opacity="' + (SHADE_ALPHA * row.opacity) + '" stroke="none"/>' : '';
+  const segs = marchingSquares(F, V.xmin, V.xmax, V.ymin, V.ymax, Math.min(nx * 2, 200), Math.min(ny * 2, 200));
+  return `<g>${rects}</g>` + implicitPathSVG(segs, row);
+}
+function pointMarker(x, y, row){
+  const px = toXpx(x), py = toYpx(y);
+  if (row.pointStyle === 'open') return `<circle cx="${px}" cy="${py}" r="${row.pointSize}" fill="var(--card)" stroke="${row.color}" stroke-width="2" opacity="${row.opacity}"/>`;
+  if (row.pointStyle === 'cross') {
+    const r = row.pointSize;
+    return `<path d="M${px - r} ${py - r}L${px + r} ${py + r}M${px - r} ${py + r}L${px + r} ${py - r}" stroke="${row.color}" stroke-width="2.4" opacity="${row.opacity}"/>`;
+  }
+  return `<circle cx="${px}" cy="${py}" r="${row.pointSize}" fill="${row.color}" opacity="${row.opacity}"/>`;
+}
+function pointsSVG(row, params, ctx){
+  let out = '';
+  for (const g of row.groups) {
+    let xv, yv;
+    try { xv = evalNode(g.xAst, params, {deg: DEG, funcs: ctx.funcs}); yv = evalNode(g.yAst, params, {deg: DEG, funcs: ctx.funcs}); } catch (e) { continue; }
+    if (Array.isArray(xv) && Array.isArray(yv)) {
+      const n = Math.min(xv.length, yv.length);
+      for (let i = 0; i < n; i++) if (isFinite(xv[i]) && isFinite(yv[i])) out += pointMarker(xv[i], yv[i], row);
+    } else if (isFinite(xv) && isFinite(yv)) out += pointMarker(xv, yv, row);
+  }
+  if (row.label) {
+    const g0 = row.groups[0];
+    try { const x0 = evalNode(g0.xAst, params, {deg: DEG}); const y0 = evalNode(g0.yAst, params, {deg: DEG}); out += `<text x="${toXpx(x0) + 9}" y="${toYpx(y0) - 8}" font-size="12" font-weight="700" fill="${row.color}">${esc(row.label)}</text>`; } catch (e) {}
+  }
+  return out;
+}
+function tablePointsSVG(row){
+  let out = '';
+  const cols = row.table;
+  for (let i = 0; i < cols.x.length; i++) {
+    const x = parseFloat(cols.x[i]), y = parseFloat(cols.y[i]);
+    if (isFinite(x) && isFinite(y)) out += pointMarker(x, y, row);
+  }
+  return out;
+}
+function tableXY(row){
+  const xs = [], ys = [];
+  for (let i = 0; i < row.table.x.length; i++) {
+    const x = parseFloat(row.table.x[i]), y = parseFloat(row.table.y[i]);
+    if (isFinite(x) && isFinite(y)) { xs.push(x); ys.push(y); }
+  }
+  return {xs, ys};
+}
+function regressionForTable(row){
+  const {xs, ys} = tableXY(row);
+  if (xs.length < 2) return null;
+  return linreg(xs, ys);
+}
+
+/* ---- integral bound handles: persistent draggable elements ---------------- */
+function ensureIntegralHandles(row){
+  if ($('intA-' + row.id)) return;
+  const mk = (id, edge) => {
+    const g = el('g', {id, class: 'gc-handle'});
+    g.appendChild(el('path', {d: 'M-7,-10 L7,-10 L0,4 Z', fill: 'var(--warm)', stroke: '#fff', 'stroke-width': 1.5}));
+    $('handleLayer').appendChild(g);
+    drag(g, svg, {
+      start(){ return true; },
+      move(p){
+        const xv = fromXpx(p.x);
+        if (edge === 'a') row.integral.a = Math.min(xv, row.integral.b - 1e-6);
+        else row.integral.b = Math.max(xv, row.integral.a + 1e-6);
+        scheduleRender();
+      },
+      end(){ pushHistory(); },
+    });
+  };
+  mk('intA-' + row.id, 'a'); mk('intB-' + row.id, 'b');
+}
+function positionIntegralHandles(row){
+  const ha = $('intA-' + row.id), hb = $('intB-' + row.id);
+  if (ha) ha.setAttribute('transform', `translate(${toXpx(row.integral.a)},${toYpx(0)})`);
+  if (hb) hb.setAttribute('transform', `translate(${toXpx(row.integral.b)},${toYpx(0)})`);
+}
+function removeIntegralHandles(row){
+  const ha = $('intA-' + row.id), hb = $('intB-' + row.id);
+  if (ha) ha.remove(); if (hb) hb.remove();
+}
+function integralShadeSVG(row, f, V){
+  const a = row.integral.a, b = row.integral.b;
+  const segs = buildSegments(f, Math.max(a, V.xmin - 1e6), Math.min(b, V.xmax + 1e6), Math.max(60, Math.round(W / 3)));
+  let d = '';
+  for (const seg of segs) {
+    if (seg.length < 2) continue;
+    d += 'M' + seg.map(([x, y]) => toXpx(x).toFixed(2) + ' ' + toYpx(y).toFixed(2)).join('L');
+    d += `L${toXpx(seg[seg.length - 1][0]).toFixed(2)} ${toYpx(0).toFixed(2)}L${toXpx(seg[0][0]).toFixed(2)} ${toYpx(0).toFixed(2)}Z`;
+  }
+  row.integral.value = simpson(f, a, b, 400);
+  if (!d) return '';
+  return `<path d="${d}" fill="${row.color}" fill-opacity="0.28" stroke="none"/>`;
+}
+
+/* ============================================================================
+   PART 6 — the main render pass.
+   ========================================================================== */
+buildStageOnce();
+let renderScheduled = false;
+function scheduleRender(){ if (renderScheduled) return; renderScheduled = true; requestAnimationFrame(() => { renderScheduled = false; render(); }); }
+
+function gridN(interacting){
+  const base = interacting ? 46 : Math.max(60, Math.round(Math.min(W, H) / 6));
+  return {nx: base, ny: Math.round(base * H / W)};
+}
+let interacting = false;
+
+/* A row that parses fine can still fail to draw at runtime — most often
+   because it depends on another row (a slider, a function) that currently
+   has no value. buildSegments already swallows per-sample throws so the
+   curve just quietly has nothing in it; probing once here, outside that
+   swallow, is what turns "empty graph, no explanation" into a message on
+   the row that caused it. Only a genuine thrown error counts (an unresolved
+   name) — an ordinary domain gap like sqrt(-1) returns NaN without throwing
+   and must stay silent, that's just the curve having a gap. */
+function probeThrow(fn){ try { fn(); return null; } catch (e) { return e.message || String(e); } }
+
+function render(){
+  const funcs = buildFuncs();
+  const params = buildParams(funcs);
+  const ctx = {params, funcs, deg: DEG};
+  const V = bounds();
+  Object.assign(V, {}); view.xmin = V.xmin; view.xmax = V.xmax; view.ymin = V.ymin; view.ymax = V.ymax;
+  paintGrid(V);
+  const curvesHTML = [], pointsHTML = [], shadeHTML = [];
+  const shadedRows = rows.filter(r => !r.hidden && !r.error && (r.kind === 'inequality' || r.kind === 'implicit-ineq')).length;
+  SHADE_ALPHA = shadedRows <= 1 ? 0.22 : shadedRows === 2 ? 0.18 : shadedRows === 3 ? 0.14 : Math.max(0.07, 0.42 / shadedRows);
+  const fnRows = [];
+  const activeIntegralIds = new Set();
+  for (const row of rows) {
+    if (row.kind === 'empty' || row.kind === 'error' || row.kind === 'note' || row.kind === 'folder' || row.kind === 'image') continue;
+    if (row.hidden) { if (row.integral) removeIntegralHandles(row); continue; }
+    try {
+      switch (row.kind) {
+        case 'function': case 'funcdef': {
+          if (row.kind === 'funcdef' && !row.plottable1D) break;
+          const f = getPlotFn(row, ctx);
+          row.error = probeThrow(() => f((V.xmin + V.xmax) / 2));
+          if (row.error) computeUndefinedVars(row, [row.fnAst || row.bodyAst], new Set(row.kind === 'funcdef' ? row.params : ['x']), params);
+          else row.undefinedVars = null;
+          const segs = buildSegments(f, V.xmin, V.xmax, Math.max(300, Math.round(W * 1.6)));
+          curvesHTML.push(pathFromSegments(segs, row));
+          if (row.showDeriv) {
+            const df = x => centralDiff(f, x);
+            const segs2 = buildSegments(df, V.xmin, V.xmax, Math.max(220, Math.round(W)));
+            curvesHTML.push(pathFromSegments(segs2, row, {deriv: true}));
+          }
+          if (row.integral && row.integral.on) {
+            activeIntegralIds.add(row.id);
+            shadeHTML.push(integralShadeSVG(row, f, V));
+            ensureIntegralHandles(row); positionIntegralHandles(row);
+          }
+          fnRows.push({row, f});
+          break;
+        }
+        case 'implicit-x': { const xv = evalNode(row.rhsAst, params, {deg: DEG, funcs}); curvesHTML.push(vlineSVG(xv, row, V)); break; }
+        case 'polar': {
+          const f = theta => evalNode(row.rAst, Object.assign({}, params, {theta}), {deg: DEG, funcs});
+          const tr = row.trange || {min: 0, max: 2 * Math.PI};
+          row.error = probeThrow(() => f((tr.min + tr.max) / 2));
+          if (row.error) computeUndefinedVars(row, [row.rAst], new Set(['theta']), params); else row.undefinedVars = null;
+          const segs = buildParamSegments(t => f(t) * Math.cos(t), t => f(t) * Math.sin(t), tr.min, tr.max, Math.max(500, Math.round(W * 2)));
+          curvesHTML.push(pathFromSegments(segs, row));
+          break;
+        }
+        case 'parametric': {
+          const fx = t => evalNode(row.xAst, Object.assign({}, params, {t}), {deg: DEG, funcs});
+          const fy = t => evalNode(row.yAst, Object.assign({}, params, {t}), {deg: DEG, funcs});
+          const tr = row.trange || {min: 0, max: 2 * Math.PI};
+          row.error = probeThrow(() => { fx((tr.min + tr.max) / 2); fy((tr.min + tr.max) / 2); });
+          if (row.error) computeUndefinedVars(row, [row.xAst, row.yAst], new Set(['t']), params); else row.undefinedVars = null;
+          const segs = buildParamSegments(fx, fy, tr.min, tr.max, Math.max(500, Math.round(W * 2)));
+          curvesHTML.push(pathFromSegments(segs, row));
+          break;
+        }
+        case 'points': pointsHTML.push(pointsSVG(row, params, ctx)); break;
+        case 'inequality': {
+          const f = getPlotFn(row, ctx);
+          row.error = probeThrow(() => f((V.xmin + V.xmax) / 2));
+          if (row.error) computeUndefinedVars(row, [row.fnAst], new Set(['x']), params); else row.undefinedVars = null;
+          const segs = buildSegments(f, V.xmin, V.xmax, Math.max(300, Math.round(W * 1.4)));
+          shadeHTML.push(inequalityShadeSVG(segs, row, V));
+          curvesHTML.push(pathFromSegments(segs, row, {strict: row.op.length === 1}));
+          fnRows.push({row, f});
+          break;
+        }
+        case 'implicit': {
+          const F = (x, y) => evalNode(row.lhsAst, Object.assign({}, params, {x, y}), {deg: DEG, funcs}) - evalNode(row.rhsAst, Object.assign({}, params, {x, y}), {deg: DEG, funcs});
+          row.error = probeThrow(() => F((V.xmin + V.xmax) / 2, (V.ymin + V.ymax) / 2));
+          if (row.error) computeUndefinedVars(row, [row.lhsAst, row.rhsAst], new Set(['x', 'y']), params); else row.undefinedVars = null;
+          const g = gridN(interacting);
+          const segs = marchingSquares(F, V.xmin, V.xmax, V.ymin, V.ymax, g.nx, g.ny);
+          curvesHTML.push(implicitPathSVG(segs, row));
+          break;
+        }
+        case 'implicit-ineq': {
+          const F = (x, y) => evalNode(row.lhsAst, Object.assign({}, params, {x, y}), {deg: DEG, funcs}) - evalNode(row.rhsAst, Object.assign({}, params, {x, y}), {deg: DEG, funcs});
+          row.error = probeThrow(() => F((V.xmin + V.xmax) / 2, (V.ymin + V.ymax) / 2));
+          if (row.error) computeUndefinedVars(row, [row.lhsAst, row.rhsAst], new Set(['x', 'y']), params); else row.undefinedVars = null;
+          const g = gridN(interacting);
+          shadeHTML.push(implicitIneqSVG(F, row.op, row, V, g));
+          break;
+        }
+        case 'table': {
+          pointsHTML.push(tablePointsSVG(row));
+          if (row.regression && row.regression.on) {
+            const fit = regressionForTable(row);
+            row.regression.fit = fit;
+            if (fit) curvesHTML.push(pathFromSegments(buildSegments(x => fit.slope * x + fit.intercept, V.xmin, V.xmax, 40), row, {}));
+          }
+          break;
+        }
+        case 'value': {
+          try { row.value = evalNode(row.fnAst, params, {deg: DEG, funcs}); row.error = null; row.undefinedVars = null; }
+          catch (e) { row.value = NaN; row.error = e.message || String(e); computeUndefinedVars(row, [row.fnAst], new Set(), params); }
+          break;
+        }
+      }
+    } catch (e) { /* one row's trouble never stops the rest of the graph */ }
+    if (row.integral && row.integral.on && !activeIntegralIds.has(row.id)) removeIntegralHandles(row);
+  }
+  for (const row of rows) if (!(row.integral && row.integral.on)) removeIntegralHandles(row);
+
+  /* intersections among visible function-like rows */
+  const marks = [];
+  const interList = [];
+  if (ANALYSIS_ON) {
+    for (let i = 0; i < fnRows.length; i++) for (let j = i + 1; j < fnRows.length; j++) {
+      const A = fnRows[i], B = fnRows[j];
+      let pts = [];
+      try { pts = findIntersections(A.f, B.f, V.xmin, V.xmax, 900); } catch (e) {}
+      for (const p of pts) if (isFinite(p.y) && p.y > V.ymin - (V.ymax - V.ymin) && p.y < V.ymax + (V.ymax - V.ymin)) { interList.push(p); marks.push({x: p.x, y: p.y, kind: 'inter'}); }
+    }
+    for (const {row, f} of fnRows) {
+      let roots = [], extrema = [];
+      try { roots = findRoots(f, V.xmin, V.xmax, 1200); } catch (e) {}
+      try { extrema = findExtrema(f, V.xmin, V.xmax, 1200); } catch (e) {}
+      row._roots = roots; row._extrema = extrema;
+      for (const rx of roots) marks.push({x: rx, y: 0, kind: 'root', color: row.color});
+      for (const ex of extrema) marks.push({x: ex.x, y: ex.y, kind: ex.kind, color: row.color});
+    }
+  }
+  let markHTML = '';
+  /* Mark density, not mark count, is what makes a graph unreadable. Zoom out on y=cos(x) and
+     there are forty-odd roots and forty-odd turning points in view: every one got a circle or a
+     triangle, and the row of markers merged into a solid band of symbols with the curve lost
+     inside it. Keep a marker only where there is room to read it — nothing within MARK_GAP
+     pixels of one already drawn — and stop after MARK_MAX. Intersections are kept first because
+     they are the ones a learner is usually hunting for. */
+  const MARK_GAP = 26, MARK_MAX = 60;
+  const placed = [];
+  const roomFor = (px, py) => {
+    for (const q of placed) if (Math.abs(q[0] - px) < MARK_GAP && Math.abs(q[1] - py) < MARK_GAP) return false;
+    return true;
+  };
+  const order = marks.slice().sort((a, b) => (a.kind === 'inter' ? 0 : 1) - (b.kind === 'inter' ? 0 : 1));
+  for (const mrk of order) {
+    const px = toXpx(mrk.x), py = toYpx(mrk.y);
+    if (px < -20 || px > W + 20 || py < -20 || py > H + 20) continue;
+    if (placed.length >= MARK_MAX || !roomFor(px, py)) continue;
+    placed.push([px, py]);
+    if (mrk.kind === 'inter') markHTML += `<circle cx="${px}" cy="${py}" r="5.5" fill="var(--ink)" stroke="#fff" stroke-width="2"/>`;
+    else if (mrk.kind === 'root') markHTML += `<circle cx="${px}" cy="${py}" r="4.5" fill="var(--card)" stroke="${mrk.color}" stroke-width="2.2"/>`;
+    else markHTML += `<path d="M${px - 5},${py + (mrk.kind === 'max' ? 4 : -4)} L${px + 5},${py + (mrk.kind === 'max' ? 4 : -4)} L${px},${py + (mrk.kind === 'max' ? -5 : 5)} Z" fill="${mrk.color}"/>`;
+  }
+
+  $('curvesLayer').innerHTML = curvesHTML.join('');
+  $('pointsLayer').innerHTML = pointsHTML.join('');
+  $('shadeLayer').innerHTML = shadeHTML.join('');
+  $('markLayer').innerHTML = markHTML;
+  drawPin();
+  updateReadouts(interList);
+  updateRowReadouts();
+}
+function updateReadouts(interList){
+  const V = bounds();
+  const io = $('interOut');
+  if (!interList.length) io.innerHTML = '<span class="empty">None in view.</span>';
+  else io.innerHTML = interList.slice(0, 12).map(p => `<div class="line"><span>(x, y)</span><span>(${fmt(p.x, 3)}, ${fmt(p.y, 3)})</span></div>`).join('');
+  const ro = $('rootsOut');
+  const lines = [];
+  for (const row of rows) {
+    if (row.hidden || !isFnRow(row)) continue;
+    /* A periodic curve has dozens of roots in view; listing the first six found means listing
+       whichever happen to lie furthest left, which is rarely what the learner is looking at.
+       Show the ones nearest the middle of the window, and say how many were left out. */
+    const mid = (V.xmin + V.xmax) / 2;
+    const nearest = (arr, key) => arr.slice().sort((a, b) => Math.abs(key(a) - mid) - Math.abs(key(b) - mid));
+    const rts = row._roots || [], exs = row._extrema || [];
+    for (const rx of nearest(rts, v => v).slice(0, 6)) lines.push(`<div class="line"><span style="color:${row.color}">root</span><span>x = ${fmt(rx, 4)}</span></div>`);
+    if (rts.length > 6) lines.push(`<div class="line"><span class="empty">and ${rts.length - 6} more roots in view</span><span></span></div>`);
+    for (const ex of nearest(exs, v => v.x).slice(0, 6)) lines.push(`<div class="line"><span style="color:${row.color}">${ex.kind}</span><span>(${fmt(ex.x, 3)}, ${fmt(ex.y, 3)})</span></div>`);
+    if (exs.length > 6) lines.push(`<div class="line"><span class="empty">and ${exs.length - 6} more turning points in view</span><span></span></div>`);
+  }
+  ro.innerHTML = lines.length ? lines.slice(0, 16).join('') : '<span class="empty">None in view.</span>';
+}
+function updateRowReadouts(){
+  for (const row of rows) {
+    /* a row that parsed fine but can't currently be evaluated (a runtime
+       error caught in render()/buildParams, e.g. it depends on a slider
+       that has no value yet) must say so — never just draw nothing and stay
+       quiet about why. Sync that onto the same error strip a parse error
+       uses, since render() runs far more often than the list is rebuilt. */
+    const rowEl = document.querySelector(`.gc-row[data-id="${row.id}"]`);
+    if (rowEl) {
+      const errEl = rowEl.querySelector('[data-role="err"]');
+      const sig = (row.error || '') + '|' + (row.undefinedVars ? row.undefinedVars.join(',') : '');
+      if (errEl && errEl.dataset.sig !== sig) { errEl.hidden = !row.error; errEl.innerHTML = errorRowHTML(row); errEl.dataset.sig = sig; }
+      rowEl.classList.toggle('err', !!row.error);
+    }
+    /* A slider's markup is written once, before its bounds have been derived, and the row body
+       is deliberately never rebuilt while the person is typing — so the min/max/step boxes were
+       left showing nothing at all, and the range's own limits were stale. Sync them here, and
+       never touch the box the person is editing. This sits above the `ro` guard below, because
+       a slider row has no readout element and would otherwise never be reached. */
+    if (row.kind === 'param' && row.isSlider && row.min != null){
+      const rng = document.getElementById('range-' + row.id);
+      if (rng){
+        rng.min = row.min; rng.max = row.max; rng.step = row.step;
+        if (document.activeElement !== rng) rng.value = row.value;
+      }
+      const host = rng && rng.closest('.gc-row');
+      for (const k of ['min', 'max', 'step']){
+        const box = host && host.querySelector(`[data-act="${k}"]`);
+        if (box && document.activeElement !== box && box.value !== String(row[k])) box.value = row[k];
+      }
+      const v = document.getElementById('val-' + row.id);
+      if (v) v.textContent = fmt(row.value, 4);
+    }
+    const ro = document.getElementById('ro-' + row.id);
+    if (!ro) continue;
+    if (row.kind === 'param') ro.textContent = row.isSlider ? '' : (row.error ? '' : '= ' + fmt(row.value, 4));
+    else if (row.kind === 'value') ro.textContent = row.error ? '' : '= ' + fmt(row.value, 6);
+    else if (row.kind === 'list') ro.textContent = '= [' + (row.listValue || []).slice(0, 8).map(v => fmt(v, 2)).join(', ') + ((row.listValue || []).length > 8 ? ', …' : '') + ']';
+    else if (row.kind === 'table' && row.regression && row.regression.on && row.regression.fit) {
+      const f = row.regression.fit;
+      ro.textContent = `slope ${fmt(f.slope, 4)}  intercept ${fmt(f.intercept, 4)}  r² ${fmt(f.r2, 4)}`;
+    } else if (row.integral && row.integral.on) ro.textContent = `∫ = ${fmt(row.integral.value, 4)} on [${fmt(row.integral.a, 2)}, ${fmt(row.integral.b, 2)}]`;
+    const valEl = document.getElementById('val-' + row.id);
+    if (valEl && row.kind === 'param' && row.isSlider) valEl.textContent = fmt(row.value, 4);
+  }
+}
+
+/* ============================================================================
+   PART 7 — pan, zoom, pinch, trace.
+   ========================================================================== */
+function homeView(){ view = Object.assign({}, INITIAL_VIEW); userAdjustedView = true; scheduleRender(); }
+function zoomAt(px, py, factor, axis){
+  const dataX = fromXpx(px), dataY = fromYpx(py);
+  if (!SQUARE && axis === 'x') view.sx *= factor;
+  else if (!SQUARE && axis === 'y') view.sy *= factor;
+  else { view.sx *= factor; view.sy *= factor; }
+  view.cx = dataX - (px - W / 2) * view.sx;
+  view.cy = dataY + (py - H / 2) * view.sy;
+}
+svg.addEventListener('wheel', e => {
+  e.preventDefault();
+  const r = svg.getBoundingClientRect();
+  const px = e.clientX - r.left, py = e.clientY - r.top;
+  const factor = Math.pow(1.0016, e.deltaY);
+  const axis = e.shiftKey ? 'x' : e.altKey ? 'y' : null;
+  zoomAt(px, py, factor, axis);
+  userAdjustedView = true;
+  scheduleRender();
+}, {passive: false});
+
+let panActive = false, panStart = null, panOrigin = null;
+let pointers = new Map();
+let pinchStartDist = 0, pinchStartView = null, pinchAxis = null, pinchStartDX = 1, pinchStartDY = 1;
+function ptrPos(e){ const r = svg.getBoundingClientRect(); return {x: e.clientX - r.left, y: e.clientY - r.top}; }
+$('catcher').addEventListener('pointerdown', e => {
+  if (e.button != null && e.button !== 0) return;
+  pointers.set(e.pointerId, ptrPos(e));
+  try { $('catcher').setPointerCapture(e.pointerId); } catch (err) {}
+  if (pointers.size === 1) {
+    pointerDownAt = ptrPos(e);
+    if (TRACE_ON) { interacting = true; updateTrace(ptrPos(e)); return; }
+    panActive = true; interacting = true; svg.classList.add('panning');
+    panStart = ptrPos(e); panOrigin = {cx: view.cx, cy: view.cy};
+  } else if (pointers.size === 2) {
+    panActive = false;
+    userAdjustedView = true; /* a pinch is as deliberate as a drag or a scroll */
+    const pts = [...pointers.values()];
+    pinchStartDist = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y) || 1;
+    pinchStartDX = Math.abs(pts[0].x - pts[1].x) || 1;
+    pinchStartDY = Math.abs(pts[0].y - pts[1].y) || 1;
+    pinchStartView = Object.assign({}, view);
+    /* a pinch with both fingers hugging one axis stretches only that axis —
+       the way Desmos lets you unlock the aspect ratio on one dimension */
+    const ox = toXpx(0), oy = toYpx(0);
+    const nearY = pts.every(p => Math.abs(p.x - ox) < 64);
+    const nearX = pts.every(p => Math.abs(p.y - oy) < 64);
+    pinchAxis = nearY && !nearX ? 'y' : (nearX && !nearY ? 'x' : null);
+  }
+});
+$('catcher').addEventListener('pointermove', e => {
+  if (!pointers.has(e.pointerId)) { if (TRACE_ON && !panActive) updateTrace(ptrPos(e)); return; }
+  pointers.set(e.pointerId, ptrPos(e));
+  if (pointers.size === 2) {
+    const pts = [...pointers.values()];
+    if (pinchAxis === 'y') {
+      const dy = Math.abs(pts[0].y - pts[1].y) || 1;
+      view.sy = pinchStartView.sy * (pinchStartDY / dy);
+      if (view.sy !== pinchStartView.sy) SQUARE = false;
+    } else if (pinchAxis === 'x') {
+      const dx = Math.abs(pts[0].x - pts[1].x) || 1;
+      view.sx = pinchStartView.sx * (pinchStartDX / dx);
+      if (view.sx !== pinchStartView.sx) SQUARE = false;
+    } else {
+      const dist = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y) || 1;
+      const factor = pinchStartDist / dist;
+      view.sx = pinchStartView.sx * factor; view.sy = pinchStartView.sy * factor;
+    }
+    scheduleRender();
+    return;
+  }
+  if (TRACE_ON) { updateTrace(ptrPos(e)); return; }
+  if (panActive) {
+    const p = ptrPos(e);
+    view.cx = panOrigin.cx - (p.x - panStart.x) * view.sx;
+    view.cy = panOrigin.cy + (p.y - panStart.y) * view.sy;
+    userAdjustedView = true;
+    scheduleRender();
+  }
+});
+function endPointer(e){
+  const down = pointerDownAt;
+  const up = ptrPos(e);
+  /* panActive is set the moment a finger goes down, before it is known whether this is a drag,
+     so it cannot be used to tell a tap from a pan — measure how far the pointer actually went. */
+  const isTap = !!down && Math.hypot(up.x - down.x, up.y - down.y) < 5;
+  pointers.delete(e.pointerId);
+  if (pointers.size < 2) { pinchStartDist = 0; pinchAxis = null; }
+  if (pointers.size === 0) {
+    if (panActive) {
+      panActive = false; svg.classList.remove('panning'); interacting = false;
+      if (!isTap) pushHistory();           /* a tap moved nothing: keep it out of undo */
+      render();
+    }
+    else if (TRACE_ON) { interacting = false; }
+    if (isTap && !TRACE_ON) setPin(up);
+  }
+  pointerDownAt = null;
+}
+let pointerDownAt = null;
+/* snap to the nearest curve if the tap was near one, otherwise read the bare coordinates */
+function setPin(p){
+  const funcs = buildFuncs(), params = buildParams(funcs);
+  let best = null, bestD = Infinity;
+  for (const row of rows) {
+    if (row.hidden || !isFnRow(row)) continue;
+    const f = getPlotFn(row, {params, funcs, deg: DEG});
+    for (let dxp = -24; dxp <= 24; dxp += 2) {
+      const xx = fromXpx(p.x + dxp);
+      let yy; try { yy = f(xx); } catch (err) { continue; }
+      if (!isFinite(yy)) continue;
+      const d = Math.hypot(toXpx(xx) - p.x, toYpx(yy) - p.y);
+      if (d < bestD) { bestD = d; best = {x: xx, y: yy, color: row.color}; }
+    }
+  }
+  PIN = (best && bestD <= 22) ? best : {x: fromXpx(p.x), y: fromYpx(p.y), color: null};
+  drawPin();
+}
+function drawPin(){
+  const g = $('pinLayer');
+  if (!g) return;
+  if (!PIN) { g.innerHTML = ''; return; }
+  const px = toXpx(PIN.x), py = toYpx(PIN.y);
+  if (!isFinite(px) || !isFinite(py) || px < -40 || px > W + 40 || py < -40 || py > H + 40) { g.innerHTML = ''; return; }
+  const col = PIN.color || 'var(--ink)';
+  const ax = Math.max(6, Math.min(W - 6, toXpx(0)));      // where the y-axis sits, clamped on screen
+  const ay = Math.max(6, Math.min(H - 6, toYpx(0)));      // and the x-axis
+  const chip = (x, y, text, anchor) =>
+    `<text x="${x.toFixed(1)}" y="${y.toFixed(1)}" text-anchor="${anchor}" font-size="12" font-weight="700"
+       fill="${col}" paint-order="stroke" stroke="var(--card)" stroke-width="4">${esc(text)}</text>`;
+  g.innerHTML =
+    `<line x1="${px.toFixed(1)}" y1="${py.toFixed(1)}" x2="${px.toFixed(1)}" y2="${ay.toFixed(1)}"
+       stroke="${col}" stroke-width="1.4" stroke-dasharray="4 4" opacity=".75"/>` +
+    `<line x1="${px.toFixed(1)}" y1="${py.toFixed(1)}" x2="${ax.toFixed(1)}" y2="${py.toFixed(1)}"
+       stroke="${col}" stroke-width="1.4" stroke-dasharray="4 4" opacity=".75"/>` +
+    `<circle cx="${ax.toFixed(1)}" cy="${py.toFixed(1)}" r="3.5" fill="${col}"/>` +
+    `<circle cx="${px.toFixed(1)}" cy="${ay.toFixed(1)}" r="3.5" fill="${col}"/>` +
+    chip(ax + (px > ax ? -8 : 8), py - 7, fmt(PIN.y, 4), px > ax ? 'end' : 'start') +
+    chip(px, ay + (py > ay ? -9 : 17), fmt(PIN.x, 4), 'middle') +
+    `<circle cx="${px.toFixed(1)}" cy="${py.toFixed(1)}" r="5.5" fill="var(--card)" stroke="${col}" stroke-width="2.5"/>` +
+    chip(px + 9, py - 10, `(${fmt(PIN.x, 3)}, ${fmt(PIN.y, 3)})`, 'start');
+}
+$('catcher').addEventListener('pointerup', endPointer);
+$('catcher').addEventListener('pointercancel', endPointer);
+
+function updateTrace(p){
+  const x = fromXpx(p.x);
+  let best = null, bestD = Infinity;
+  const funcs = buildFuncs(), params = buildParams(funcs);
+  for (const row of rows) {
+    if (row.hidden || !isFnRow(row)) continue;
+    const f = getPlotFn(row, {params, funcs, deg: DEG});
+    let y; try { y = f(x); } catch (e) { continue; }
+    if (!isFinite(y)) continue;
+    const d = Math.abs(toYpx(y) - p.y);
+    if (d < bestD) { bestD = d; best = {row, x, y}; }
+  }
+  const dot = $('traceDot');
+  if (best && bestD < 60) {
+    dot.setAttribute('opacity', 1);
+    dot.setAttribute('transform', `translate(${toXpx(best.x)},${toYpx(best.y)})`);
+    dot.querySelector('circle').setAttribute('stroke', best.row.color);
+    $('traceLabel').textContent = `(${fmt(best.x, 3)}, ${fmt(best.y, 3)})`;
+    $('traceOut').innerHTML = `<div class="line"><span style="color:${best.row.color}">(x, y)</span><span>(${fmt(best.x, 4)}, ${fmt(best.y, 4)})</span></div>`;
+  } else {
+    dot.setAttribute('opacity', 0);
+    $('traceOut').innerHTML = '<span class="empty">Move over a curve.</span>';
+  }
+}
+svg.addEventListener('pointerleave', () => { if (TRACE_ON) { $('traceDot').setAttribute('opacity', 0); } });
+
+/* ============================================================================
+   PART 8 — the expression list: build, edit, style, reorder, undo/redo.
+   ========================================================================== */
+/* Deliberately empty, and it must stay empty: the input is 302px and any sentence
+   long enough to be useful was clipped mid-word, which is what `tests/graph.test.js`
+   pins. The invitation a new learner needs lives in `.gc-mathview` instead, which
+   wraps and is what is actually on screen before the row is focused. */
+function kindPlaceholder(){ return ''; }
+function canDeriv(row){ return row.kind === 'function' || (row.kind === 'funcdef' && row.plottable1D); }
+function canIntegral(row){ return row.kind === 'function'; }
+function fmtNum(v){ return fmt(v, 4); }
+/* rows that draw something get a coloured, numbered disc in the gutter; a
+   note, folder, image or empty row just gets a plain grey number */
+function rowIsColored(row){ return !['empty', 'error', 'note', 'folder', 'image'].includes(row.kind); }
+const STUB_TEXT = {
+  folder: 'Folders are not built yet. In Desmos a folder groups the rows placed under it and can be collapsed to tidy a long list — this row is a placeholder for that.',
+  image: 'Image upload is not built yet. In Desmos this drops a picture onto the graph as a reference layer you can move, resize and trace over — this row is a placeholder for that.',
+};
+
+function rowExtraHTML(row){
+  let extra = '';
+  if (row.kind === 'param') {
+    if (row.isSlider) {
+      extra = `<div class="gc-slider">
+        <span class="mono" style="font-weight:700">${esc(row.name)} =</span>
+        <input type="range" id="range-${row.id}" min="${row.min}" max="${row.max}" step="${row.step}" value="${row.value}">
+        <span></span><span class="val mono" id="val-${row.id}">${fmtNum(row.value)}</span>
+      </div>
+      <div class="gc-bounds">
+        min <input type="number" data-act="min" value="${row.min}" step="any">
+        max <input type="number" data-act="max" value="${row.max}" step="any">
+        step <input type="number" data-act="step" value="${row.step}" step="any">
+        <span id="clk-${row.id}" style="margin-left:4px"></span>
+      </div>`;
+    } else {
+      extra = `<div class="gc-inline"><span class="mono" style="font-weight:700;color:var(--ink)">${esc(row.name)}</span><span class="mono" id="ro-${row.id}"></span> <em>(computed from other rows)</em></div>`;
+    }
+  } else if (row.kind === 'value') {
+    extra = `<div class="gc-inline"><span class="mono" id="ro-${row.id}" style="font-weight:700"></span></div>`;
+  } else if (row.kind === 'list') {
+    extra = `<div class="gc-note mono" id="ro-${row.id}"></div>`;
+  } else if (row.kind === 'polar' || row.kind === 'parametric') {
+    const tr = row.trange || {min: 0, max: +(2 * Math.PI).toFixed(4)};
+    const varName = row.kind === 'polar' ? 'θ' : 't';
+    extra = `<div class="gc-inline">${varName} from <input class="gc-mini-num" data-act="tmin" type="number" step="any" value="${tr.min}"> to
+      <input class="gc-mini-num" data-act="tmax" type="number" step="any" value="${tr.max}"></div>`;
+  } else if (row.kind === 'funcdef') {
+    extra = `<div class="gc-note">defines <span class="mono">${esc(row.name)}(${row.params.join(', ')})</span>${row.plottable1D ? ' — also plotted' : ' — used by other rows'}</div>`;
+  }
+  if (row.integral && row.integral.on) extra += `<div class="gc-note mono" id="ro-${row.id}"></div>`;
+  return extra;
+}
+function errorRowHTML(row){
+  if (!row.error) return '';
+  let html = `<span class="gc-errtext">${esc(row.error)}</span>`;
+  if (row.undefinedVars && row.undefinedVars.length) {
+    html += '<span class="gc-fixrow">' +
+      row.undefinedVars.map(v => `<button class="gc-fixbtn" data-act="addslider" data-var="${esc(v)}">add slider: ${esc(v)}</button>`).join('') +
+      (row.undefinedVars.length > 1 ? `<button class="gc-fixbtn" data-act="addallsliders" data-vars="${esc(row.undefinedVars.join(','))}">add all sliders</button>` : '') +
+      '</span>';
+  }
+  return html;
+}
+function rowBodyHTML(row){
+  if (row.manualKind === 'table') return tableBodyHTML(row);
+  if (row.manualKind === 'note') return `<textarea class="gc-noteedit" data-act="notetext" placeholder="Write a note…" rows="1">${esc(row.noteText || '')}</textarea>`;
+  if (row.manualKind === 'folder' || row.manualKind === 'image') return `<div class="gc-stub">${esc(STUB_TEXT[row.manualKind])}</div>`;
+  const mathHTML = mathViewHTML(row);
+  return `<div class="gc-mathwrap">
+      <div class="gc-mathview">${mathHTML}</div>
+      <input class="gc-input" data-act="raw" value="${esc(row.raw)}" placeholder="${esc(kindPlaceholder())}" spellcheck="false" autocomplete="off">
+    </div>
+    <div class="gc-extra" data-role="extra">${rowExtraHTML(row)}</div>
+    <div class="gc-err" data-role="err"${row.error ? '' : ' hidden'}>${errorRowHTML(row)}</div>`;
+}
+function tableBodyHTML(row){
+  const t = row.table;
+  let rowsHTML = '';
+  for (let i = 0; i < t.x.length; i++) {
+    rowsHTML += `<tr><td><input data-act="tx" data-i="${i}" value="${esc(t.x[i])}"></td><td><input data-act="ty" data-i="${i}" value="${esc(t.y[i])}"></td>
+      <td><button data-act="trm" data-i="${i}" title="Remove row">✕</button></td></tr>`;
+  }
+  const reg = row.regression;
+  return `<table class="gc-table"><tbody>${rowsHTML}</tbody></table>
+    <div class="row" style="gap:6px;margin-top:4px">
+      <button class="btn sm" data-act="taddrow">+ row</button>
+      <button class="gc-mini${reg && reg.on ? ' on' : ''}" data-act="regress" title="Linear regression">y=mx+c</button>
+    </div>
+    ${(reg && reg.on) ? `<div class="gc-note mono" id="ro-${row.id}"></div>` : ''}`;
+}
+function rowGutterHTML(row, idx){
+  const num = idx + 1;
+  if (!rowIsColored(row)) return `<div class="gc-gutter"><span class="gc-disc plain">${num}</span></div>`;
+  return `<div class="gc-gutter">
+    <button class="gc-disc${row.hidden ? '' : ' on'}" data-act="eye" style="--c:${row.color}" aria-pressed="${!row.hidden}" title="${row.hidden ? 'Show' : 'Hide'}">${num}</button>
+    <button class="gc-caret" data-act="swatch" title="Colour, width, dashes and label" aria-label="Colour and style for row ${num}">&#9662;</button>
+  </div>`;
+}
+function actsInnerHTML(row){
+  return `${canDeriv(row) ? `<button class="gc-mini${row.showDeriv ? ' on' : ''}" data-act="deriv" title="Derivative curve">f&prime;</button>` : ''}
+    ${canIntegral(row) ? `<button class="gc-mini${row.integral && row.integral.on ? ' on' : ''}" data-act="integral" title="Shaded definite integral">∫</button>` : ''}
+    <button class="gc-mini" data-act="dup" title="Duplicate">⧉</button>
+    <button class="gc-mini" data-act="del" title="Delete">✕</button>`;
+}
+function rowHTML(row, idx){
+  return `<div class="gc-row${row.error ? ' err' : ''}" data-id="${row.id}" data-idx="${idx}">
+    <button class="gc-grip" data-act="grip" title="Drag to reorder" tabindex="-1">&#8942;</button>
+    ${rowGutterHTML(row, idx)}
+    <div class="gc-body">${rowBodyHTML(row)}</div>
+    <div class="gc-acts">${actsInnerHTML(row)}</div>
+  </div>`;
+}
+function renderRowList(){
+  $('rowList').innerHTML = rows.map((r, i) => rowHTML(r, i)).join('');
+  for (const row of rows) {
+    if (row.kind === 'param' && row.isSlider) {
+      const mount = document.getElementById('clk-' + row.id);
+      if (mount) mountClock(row, mount);
+    }
+  }
+  updateRowReadouts();
+}
+function mountClock(row, mount){
+  if (row._clock) { try { row._clock.stop(); } catch (e) {} }
+  row._clock = clock({
+    mount, speeds: [0.25, 0.5, 1, 2], step: 0.15, playing: false,
+    onTick(dt){
+      const span = (row.max - row.min) || 1;
+      const rate = span / 4;
+      if (row.animDir == null) row.animDir = 1;
+      let v = row.value + row.animDir * rate * dt;
+      if (v >= row.max) { v = row.max; row.animDir = -1; }
+      if (v <= row.min) { v = row.min; row.animDir = 1; }
+      row.value = v;
+      const rangeEl = document.getElementById('range-' + row.id); if (rangeEl) rangeEl.value = v;
+      const valEl = document.getElementById('val-' + row.id); if (valEl) valEl.textContent = fmtNum(v);
+      scheduleRender();
+    },
+  });
+}
+
+/* ---- row mutation helpers --------------------------------------------------- */
+function addRow(raw, opts){
+  const row = newRow(raw || '', opts);
+  classifyRow(row);
+  rows.push(row);
+  return row;
+}
+function rowById(id){ return rows.find(r => r.id === id); }
+function reclassifyAndRedraw(row){ classifyRow(row); scheduleRender(); }
+
+/* ---- the round "+" button: expression, note, table, folder, image -------- */
+const addMenu = $('addMenu');
+function closeAddMenu(){ addMenu.hidden = true; $('btnAdd').setAttribute('aria-expanded', 'false'); }
+$('btnAdd').addEventListener('click', e => {
+  e.stopPropagation();
+  const willOpen = addMenu.hidden;
+  closeAllPanels(); closeStylePopover();
+  if (willOpen) { addMenu.hidden = false; $('btnAdd').setAttribute('aria-expanded', 'true'); } else closeAddMenu();
+});
+addMenu.addEventListener('click', e => {
+  const btn = e.target.closest('button[data-add]'); if (!btn) return;
+  const kind = btn.dataset.add;
+  closeAddMenu();
+  if (kind === 'expression') { pushHistory(); addRow(''); renderRowList(); focusRow(rows[rows.length - 1].id); track('addRow'); }
+  else if (kind === 'table') { pushHistory(); addRow('', {manualKind: 'table', kind: 'table', table: {x: ['1', '2', '3'], y: ['', '', '']}}); renderRowList(); track('addTable'); }
+  else if (kind === 'note') { pushHistory(); addRow('', {manualKind: 'note', kind: 'note', noteText: ''}); renderRowList(); focusRow(rows[rows.length - 1].id); track('addNote'); }
+  else if (kind === 'folder') { pushHistory(); addRow('', {manualKind: 'folder', kind: 'folder'}); renderRowList(); track('addFolder'); toast('Folders are not built yet — added a placeholder row that explains what one would do.'); }
+  else if (kind === 'image') { pushHistory(); addRow('', {manualKind: 'image', kind: 'image'}); renderRowList(); track('addImage'); toast('Image upload is not built yet — added a placeholder row that explains what one would do.'); }
+});
+document.addEventListener('click', e => { if (!addMenu.hidden && !addMenu.contains(e.target) && e.target !== $('btnAdd') && !$('btnAdd').contains(e.target)) closeAddMenu(); });
+function focusRow(id){
+  requestAnimationFrame(() => { const el2 = document.querySelector(`.gc-row[data-id="${id}"] .gc-input, .gc-row[data-id="${id}"] .gc-noteedit`); if (el2) el2.focus(); });
+}
+
+/* ---- delegated events on the row list --------------------------------------- */
+let dragState = null;
+let lastActiveInput = null;
+let suppressDiscClick = false;
+$('rowList').addEventListener('click', e => {
+  const rowEl = e.target.closest('.gc-row'); if (!rowEl) return;
+  const id = rowEl.dataset.id, row = rowById(id); if (!row) return;
+  const act = e.target.closest('[data-act]'); if (!act) return;
+  const a = act.dataset.act;
+  if (a === 'eye') { if (suppressDiscClick) { suppressDiscClick = false; return; } pushHistory(); row.hidden = !row.hidden; renderRowList(); scheduleRender(); track('toggleHide'); }
+  else if (a === 'del') { pushHistory(); rows = rows.filter(r => r.id !== id); if (!rows.length) rows.push(newRow('')); removeIntegralHandles(row); if (row._clock) row._clock.stop(); renderRowList(); scheduleRender(); track('deleteRow'); }
+  else if (a === 'dup') { pushHistory(); const idx = rows.findIndex(r => r.id === id); const copy = newRow(row.raw, Object.assign({}, row, {id: undefined})); copy.id = uid(); classifyRow(copy); rows.splice(idx + 1, 0, copy); renderRowList(); scheduleRender(); track('dupRow'); }
+  else if (a === 'deriv') { pushHistory(); row.showDeriv = !row.showDeriv; renderRowList(); scheduleRender(); track('toggleDeriv'); }
+  else if (a === 'integral') {
+    pushHistory();
+    if (row.integral && row.integral.on) { row.integral.on = false; removeIntegralHandles(row); }
+    else { const V = bounds(); const span = (V.xmax - V.xmin) / 4; row.integral = {on: true, a: -span, b: span, value: 0}; }
+    renderRowList(); scheduleRender(); track('toggleIntegral');
+  }
+  else if (a === 'swatch') { openStylePopover(row, act); }
+  else if (a === 'taddrow') { pushHistory(); row.table.x.push(''); row.table.y.push(''); renderRowList(); }
+  else if (a === 'trm') { pushHistory(); const i = +act.dataset.i; row.table.x.splice(i, 1); row.table.y.splice(i, 1); if (!row.table.x.length) { row.table.x.push(''); row.table.y.push(''); } renderRowList(); scheduleRender(); }
+  else if (a === 'regress') { pushHistory(); row.regression = row.regression && row.regression.on ? {on: false} : {on: true}; renderRowList(); scheduleRender(); }
+  else if (a === 'grip') { /* handled by pointerdown for real drag-reorder */ }
+  else if (a === 'addslider') { pushHistory(); addRow(act.dataset.var + ' = 1'); renderRowList(); scheduleRender(); track('addSliderFix', {name: act.dataset.var}); }
+  else if (a === 'addallsliders') { pushHistory(); act.dataset.vars.split(',').forEach(v => addRow(v + ' = 1')); renderRowList(); scheduleRender(); track('addAllSlidersFix'); }
+});
+/* long-press (or click-and-hold) on the coloured disc also opens the style popover */
+let discPressTimer = null;
+$('rowList').addEventListener('pointerdown', e => {
+  const disc = e.target.closest('.gc-disc:not(.plain)'); if (!disc) return;
+  const rowEl = disc.closest('.gc-row'); const row = rowById(rowEl.dataset.id); if (!row) return;
+  discPressTimer = setTimeout(() => { discPressTimer = null; suppressDiscClick = true; openStylePopover(row, rowEl.querySelector('.gc-caret') || disc); }, 480);
+});
+$('rowList').addEventListener('pointerup', () => { if (discPressTimer) { clearTimeout(discPressTimer); discPressTimer = null; } });
+$('rowList').addEventListener('pointerleave', () => { if (discPressTimer) { clearTimeout(discPressTimer); discPressTimer = null; } }, true);
+/* focus / blur: the raw input is edited while focused, and shows as typeset
+   maths the instant it isn't — the DOM node itself is never destroyed while
+   a person is mid-keystroke (that used to blow away focus on every key). */
+$('rowList').addEventListener('focusin', e => {
+  if (!e.target.classList || !e.target.classList.contains('gc-input')) return;
+  const body = e.target.closest('.gc-body'); if (body) body.classList.add('editing');
+  lastActiveInput = e.target;
+});
+$('rowList').addEventListener('focusout', e => {
+  if (!e.target.classList || !e.target.classList.contains('gc-input')) return;
+  const body = e.target.closest('.gc-body'); if (!body) return;
+  body.classList.remove('editing');
+  const rowEl = e.target.closest('.gc-row'); const row = rowEl && rowById(rowEl.dataset.id);
+  const mv = body.querySelector('.gc-mathview');
+  if (mv && row) mv.innerHTML = mathViewHTML(row);
+});
+$('rowList').addEventListener('input', e => {
+  const rowEl = e.target.closest('.gc-row'); if (!rowEl) return;
+  const id = rowEl.dataset.id, row = rowById(id); if (!row) return;
+  const act = e.target.dataset.act;
+  if (act === 'raw') {
+    row.raw = e.target.value; classifyRow(row);
+    rowEl.classList.toggle('err', !!row.error);
+    /* refresh everything EXCEPT the mathwrap that holds the focused input —
+       the gutter's colour/number, the derivative/integral/etc buttons, the
+       type-specific controls and the error line all need to track the row's
+       kind live as it's typed, but the input itself must never be recreated
+       or focus and cursor position would be lost on every keystroke */
+    const gutterEl = rowEl.querySelector('.gc-gutter'); if (gutterEl) gutterEl.outerHTML = rowGutterHTML(row, +rowEl.dataset.idx);
+    const actsEl = rowEl.querySelector('.gc-acts'); if (actsEl) actsEl.innerHTML = actsInnerHTML(row);
+    const extraEl = rowEl.querySelector('[data-role="extra"]');
+    if (extraEl) extraEl.innerHTML = rowExtraHTML(row);
+    const errEl = rowEl.querySelector('[data-role="err"]');
+    /* classifyRow only just ran, so a parse error is known now; a runtime one
+       (an undefined variable, say) is only found once render() below runs —
+       clearing the cached signature makes sure that later, richer version
+       (with its "add slider" buttons) isn't skipped as "no change" against
+       whatever plain text sits here in the meantime. */
+    if (errEl) { errEl.hidden = !row.error; errEl.innerHTML = errorRowHTML(row); delete errEl.dataset.sig; }
+    if (row.kind === 'param' && row.isSlider) { const mount = document.getElementById('clk-' + row.id); if (mount) mountClock(row, mount); }
+    /* a fresh edit re-arms auto-fit — the window is no longer "the user's"
+       just because they adjusted it before typing this — and (debounced)
+       checks whether the window still makes sense for what's typed now */
+    userAdjustedView = false;
+    lastEditedRowId = row.id;
+    scheduleAutoFitCheck();
+    scheduleRender();
+    maybeAppendTrailingRow();
+  } else if (act === 'notetext') {
+    row.noteText = e.target.value;
+  } else if (act === 'min' || act === 'max' || act === 'step') {
+    row[act] = +e.target.value; scheduleRender();
+  } else if (act === 'tmin' || act === 'tmax') {
+    row.trange = row.trange || {min: 0, max: 2 * Math.PI};
+    row.trange[act === 'tmin' ? 'min' : 'max'] = +e.target.value; scheduleRender();
+  } else if (act === 'tx' || act === 'ty') {
+    const i = +e.target.dataset.i; row.table[act === 'tx' ? 'x' : 'y'][i] = e.target.value; scheduleRender();
+  }
+});
+$('rowList').addEventListener('change', e => {
+  const rowEl = e.target.closest('.gc-row'); if (!rowEl) return;
+  if (e.target.type === 'range' || e.target.dataset.act === 'min' || e.target.dataset.act === 'max' || e.target.dataset.act === 'step') pushHistory();
+});
+$('rowList').addEventListener('input', e => {
+  if (e.target.type === 'range') {
+    const rowEl = e.target.closest('.gc-row'); const row = rowById(rowEl.dataset.id);
+    row.value = +e.target.value;
+    const valEl = document.getElementById('val-' + row.id); if (valEl) valEl.textContent = fmtNum(row.value);
+    scheduleRender();
+  }
+});
+function maybeAppendTrailingRow(){
+  const last = rows[rows.length - 1];
+  if (last.kind !== 'empty' && last.manualKind !== 'table') {
+    /* append the new row's markup directly rather than rebuilding the whole
+       list, or the input the person is still typing in would be destroyed */
+    const row = addRow('');
+    $('rowList').insertAdjacentHTML('beforeend', rowHTML(row, rows.length - 1));
+  }
+}
+$('rowList').addEventListener('keydown', e => {
+  if (e.target.dataset.act !== 'raw') return;
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    const rowEl = e.target.closest('.gc-row'); const idx = +rowEl.dataset.idx;
+    /* ENTER INSERTS A ROW BELOW THIS ONE. It used to add a row only when you were
+       already on the LAST row and that row was non-empty, and otherwise just moved
+       the caret down the list. Since a blank row is always kept at the bottom, that
+       meant Enter on the last real row walked you into the blank instead of making
+       a new one, and Enter anywhere in the middle did nothing you could see. Pressing
+       it repeatedly, expecting rows, got you a caret wandering down the list -- which
+       is exactly what "I add several and one disappears" looks like from the outside. */
+    pushHistory();
+    const fresh = newRow('');
+    classifyRow(fresh);
+    rows.splice(idx + 1, 0, fresh);
+    renderRowList();
+    focusRow(fresh.id);
+  } else if (e.key === 'Escape') { e.target.blur(); if (PIN) { PIN = null; drawPin(); } }
+});
+
+/* ---- drag-to-reorder ---------------------------------------------------------- */
+$('rowList').addEventListener('pointerdown', e => {
+  const grip = e.target.closest('[data-act="grip"]'); if (!grip) return;
+  const rowEl = e.target.closest('.gc-row'); const id = rowEl.dataset.id;
+  dragState = {id, startY: e.clientY};
+  rowEl.classList.add('dragging');
+  const move = ev => {
+    const els = [...$('rowList').querySelectorAll('.gc-row')];
+    const overEl = els.find(el2 => { const r = el2.getBoundingClientRect(); return ev.clientY >= r.top && ev.clientY <= r.bottom; });
+    if (overEl && overEl.dataset.id !== dragState.id) {
+      const fromIdx = rows.findIndex(r => r.id === dragState.id);
+      const toIdx = rows.findIndex(r => r.id === overEl.dataset.id);
+      const [item] = rows.splice(fromIdx, 1);
+      rows.splice(toIdx, 0, item);
+      renderRowList();
+      const again = $('rowList').querySelector(`.gc-row[data-id="${dragState.id}"]`); if (again) again.classList.add('dragging');
+    }
+  };
+  const up = () => {
+    document.removeEventListener('pointermove', move); document.removeEventListener('pointerup', up);
+    const el2 = $('rowList').querySelector(`.gc-row[data-id="${dragState.id}"]`); if (el2) el2.classList.remove('dragging');
+    dragState = null; pushHistory(); scheduleRender();
+  };
+  document.addEventListener('pointermove', move); document.addEventListener('pointerup', up);
+});
+
+/* ---- style popover: colour, line style/width, point style, opacity, label ---- */
+let openPop = null;
+function closeStylePopover(){ if (openPop) { openPop.remove(); openPop = null; } }
+function openStylePopover(row, anchor){
+  closeStylePopover();
+  const pop = document.createElement('div');
+  pop.className = 'gc-pop';
+  const swatches = PALETTE.map(c => `<button class="gc-sw${c === row.color ? ' sel' : ''}" data-c="${c}" style="background:${c}"></button>`).join('');
+  const showPoint = row.kind === 'points' || row.manualKind === 'table';
+  pop.innerHTML = `
+    <label>Colour</label>
+    <div class="gc-swrow">${swatches}<input type="color" id="popCustom" value="${row.color}" style="width:26px;height:26px;padding:0;border:0;background:none"></div>
+    <label>Line style</label>
+    <select id="popStyle">
+      <option value="solid"${row.lineStyle === 'solid' ? ' selected' : ''}>Solid</option>
+      <option value="dashed"${row.lineStyle === 'dashed' ? ' selected' : ''}>Dashed</option>
+      <option value="dotted"${row.lineStyle === 'dotted' ? ' selected' : ''}>Dotted</option>
+    </select>
+    <label>Line width (${row.lineWidth})</label>
+    <input type="range" id="popWidth" min="1" max="6" step="0.5" value="${row.lineWidth}">
+    ${showPoint ? `<label>Point style</label>
+    <select id="popPoint">
+      <option value="filled"${row.pointStyle === 'filled' ? ' selected' : ''}>Filled</option>
+      <option value="open"${row.pointStyle === 'open' ? ' selected' : ''}>Open</option>
+      <option value="cross"${row.pointStyle === 'cross' ? ' selected' : ''}>Cross</option>
+    </select>
+    <label>Point size (${row.pointSize})</label>
+    <input type="range" id="popPSize" min="2" max="10" step="1" value="${row.pointSize}">` : ''}
+    <label>Opacity (${Math.round(row.opacity * 100)}%)</label>
+    <input type="range" id="popOpacity" min="0.1" max="1" step="0.05" value="${row.opacity}">
+    <label>Label</label>
+    <input type="text" id="popLabel" value="${esc(row.label || '')}" placeholder="shown on the curve">
+  `;
+  const rowEl = anchor.closest('.gc-row') || anchor.parentElement;
+  rowEl.appendChild(pop);
+  openPop = pop;
+  const discEl = rowEl.querySelector('.gc-disc');
+  const setDiscColor = c => { if (discEl) discEl.style.setProperty('--c', c); };
+  const commit = () => { pushHistory(); scheduleRender(); };
+  pop.querySelectorAll('.gc-sw').forEach(b => b.addEventListener('click', () => { row.color = b.dataset.c; b.parentElement.querySelectorAll('.gc-sw').forEach(x => x.classList.remove('sel')); b.classList.add('sel'); setDiscColor(row.color); commit(); }));
+  pop.querySelector('#popCustom').addEventListener('input', e => { row.color = e.target.value; setDiscColor(row.color); scheduleRender(); });
+  pop.querySelector('#popStyle').addEventListener('change', e => { row.lineStyle = e.target.value; commit(); });
+  pop.querySelector('#popWidth').addEventListener('input', e => { row.lineWidth = +e.target.value; scheduleRender(); });
+  pop.querySelector('#popOpacity').addEventListener('input', e => { row.opacity = +e.target.value; scheduleRender(); });
+  pop.querySelector('#popLabel').addEventListener('input', e => { row.label = e.target.value; scheduleRender(); });
+  const pointSel = pop.querySelector('#popPoint'); if (pointSel) pointSel.addEventListener('change', e => { row.pointStyle = e.target.value; commit(); });
+  const psize = pop.querySelector('#popPSize'); if (psize) psize.addEventListener('input', e => { row.pointSize = +e.target.value; scheduleRender(); });
+  setTimeout(() => document.addEventListener('click', onDocClick), 0);
+  function onDocClick(e){ if (!pop.contains(e.target) && e.target !== anchor) { closeStylePopover(); document.removeEventListener('click', onDocClick); } }
+}
+
+/* ============================================================================
+   PART 9 — chrome: undo/redo, trace, the zoom stack, the keypad, settings
+   (degrees, square, analysis, bounds), help, share.
+   ========================================================================== */
+function syncToolbar(){
+  $('btnTrace').setAttribute('aria-pressed', TRACE_ON);
+  svg.classList.toggle('tracing', TRACE_ON);
+  $('btnAutoFit').setAttribute('aria-pressed', String(AUTO_FIT));
+}
+$('btnUndo').addEventListener('click', undo);
+$('btnRedo').addEventListener('click', redo);
+$('btnTrace').addEventListener('click', () => { TRACE_ON = !TRACE_ON; if (!TRACE_ON) $('traceDot').setAttribute('opacity', 0); syncToolbar(); track('toggleTrace'); });
+$('btnHome').addEventListener('click', () => { pushHistory(); homeView(); track('home'); });
+$('btnZoomIn').addEventListener('click', () => { pushHistory(); zoomAt(W / 2, H / 2, 0.8, null); userAdjustedView = true; scheduleRender(); track('zoomIn'); });
+$('btnZoomOut').addEventListener('click', () => { pushHistory(); zoomAt(W / 2, H / 2, 1.25, null); userAdjustedView = true; scheduleRender(); track('zoomOut'); });
+$('btnAutoFit').addEventListener('click', () => {
+  pushHistory();
+  AUTO_FIT = !AUTO_FIT;
+  $('btnAutoFit').setAttribute('aria-pressed', String(AUTO_FIT));
+  if (AUTO_FIT) { userAdjustedView = false; scheduleAutoFitCheck(); }
+  track('toggleAutoFit', {autoFit: AUTO_FIT});
+});
+
+/* ============================================================================
+   AUTO-FIT — "the only thing wrong is the window doesn't adjust so plots are
+   visible." A fixed ±10 window makes a correct curve read as broken: a steep
+   parabola is a wall, a shallow line is the x-axis, a shifted one is nothing
+   at all. This is deliberately built ON zoomToFit rather than beside it —
+   the manual "Zoom to fit" button and the automatic version share every line
+   of the actual fitting logic; only whether it's triggered, and whether it
+   pushes its own undo step, differ.
+   ========================================================================== */
+function robustRange(vals){
+  if (!vals || !vals.length) return null;
+  const s = vals.slice().sort((a, b) => a - b);
+  const n = s.length;
+  const lo = s[Math.max(0, Math.floor(n * 0.05))];
+  const hi = s[Math.min(n - 1, Math.ceil(n * 0.95))];
+  return {lo, hi};
+}
+/* every row kind that draws something in the plane, sampled over a given
+   domain — the one function both "is this well-framed?" (sampled over the
+   CURRENT window) and "where does this actually live?" (sampled over a wide
+   search box) are built from, so they can never disagree with each other. */
+function rowPointsForFit(row, ctx, domain, dense){
+  domain = domain || {};
+  try {
+    switch (row.kind) {
+      case 'function': case 'funcdef': case 'inequality': {
+        const f = getPlotFn(row, ctx);
+        if (!f || !(domain.xmax > domain.xmin)) return null;
+        const N = dense ? 3000 : 500;
+        const step = (domain.xmax - domain.xmin) / N;
+        const xs = [], ys = [];
+        for (let i = 0; i <= N; i++) {
+          const x = domain.xmin + i * step;
+          let y; try { y = f(x); } catch (e) { y = NaN; }
+          if (isFinite(y)) { xs.push(x); ys.push(y); }
+        }
+        return {xs, ys};
+      }
+      case 'parametric': {
+        const fx = t => evalNode(row.xAst, Object.assign({}, ctx.params, {t}), {deg: ctx.deg, funcs: ctx.funcs});
+        const fy = t => evalNode(row.yAst, Object.assign({}, ctx.params, {t}), {deg: ctx.deg, funcs: ctx.funcs});
+        const tr = row.trange || {min: 0, max: 2 * Math.PI};
+        const N = dense ? 3000 : 800;
+        const step = (tr.max - tr.min) / N;
+        const xs = [], ys = [];
+        for (let i = 0; i <= N; i++) {
+          const t = tr.min + i * step;
+          let x, y; try { x = fx(t); y = fy(t); } catch (e) { x = NaN; y = NaN; }
+          if (isFinite(x) && isFinite(y)) { xs.push(x); ys.push(y); }
+        }
+        return {xs, ys};
+      }
+      case 'polar': {
+        const f = theta => evalNode(row.rAst, Object.assign({}, ctx.params, {theta}), {deg: ctx.deg, funcs: ctx.funcs});
+        const tr = row.trange || {min: 0, max: 2 * Math.PI};
+        const N = dense ? 3000 : 800;
+        const step = (tr.max - tr.min) / N;
+        const xs = [], ys = [];
+        for (let i = 0; i <= N; i++) {
+          const t = tr.min + i * step;
+          let r, x, y; try { r = f(t); x = r * Math.cos(t); y = r * Math.sin(t); } catch (e) { x = NaN; y = NaN; }
+          if (isFinite(x) && isFinite(y)) { xs.push(x); ys.push(y); }
+        }
+        return {xs, ys};
+      }
+      case 'implicit': case 'implicit-ineq': {
+        if (!(domain.xmax > domain.xmin) || !(domain.ymax > domain.ymin)) return null;
+        const F = (x, y) => evalNode(row.lhsAst, Object.assign({}, ctx.params, {x, y}), {deg: ctx.deg, funcs: ctx.funcs}) - evalNode(row.rhsAst, Object.assign({}, ctx.params, {x, y}), {deg: ctx.deg, funcs: ctx.funcs});
+        const g = dense ? 220 : 90;
+        const segs = marchingSquares(F, domain.xmin, domain.xmax, domain.ymin, domain.ymax, g, g);
+        const xs = [], ys = [];
+        for (const seg of segs) for (const [x, y] of seg) { xs.push(x); ys.push(y); }
+        return {xs, ys};
+      }
+      case 'points': {
+        const xs = [], ys = [];
+        for (const gr of row.groups) {
+          let xv, yv;
+          try { xv = evalNode(gr.xAst, ctx.params, {deg: ctx.deg, funcs: ctx.funcs}); yv = evalNode(gr.yAst, ctx.params, {deg: ctx.deg, funcs: ctx.funcs}); } catch (e) { continue; }
+          if (Array.isArray(xv) && Array.isArray(yv)) { const n = Math.min(xv.length, yv.length); for (let i = 0; i < n; i++) if (isFinite(xv[i]) && isFinite(yv[i])) { xs.push(xv[i]); ys.push(yv[i]); } }
+          else if (isFinite(xv) && isFinite(yv)) { xs.push(xv); ys.push(yv); }
+        }
+        return {xs, ys};
+      }
+      case 'table': { const {xs, ys} = tableXY(row); return {xs, ys}; }
+    }
+  } catch (e) {}
+  return null;
+}
+const AUTO_FIT_PLANAR = new Set(['implicit', 'implicit-ineq', 'parametric', 'polar', 'points', 'table']);
+function axisFraction(lo, hi, vmin, vmax){
+  const overlap = Math.max(0, Math.min(hi, vmax) - Math.max(lo, vmin));
+  return {overlap, ratioOfData: hi > lo ? overlap / (hi - lo) : (lo >= vmin && lo <= vmax ? 1 : 0), ratioOfView: overlap / (vmax - vmin)};
+}
+/* HOW MUCH OF THE WINDOW THE CURVE HAS TO FILL BEFORE IT COUNTS AS FRAMED.
+
+   This was 0.05, and 5% of the height is not a curve a person can read -- it is a
+   thick horizontal line. y = cos x is exactly that case: its range is [-1, 1], the
+   window opens at y +/-7.8, so the whole cosine was drawn 90px tall in a 770px stage.
+   Every test of "is it on screen" passed, because it was on screen; it just could not
+   be seen. "Visible" and "readable" are not the same measurement, and only the first
+   one was being taken.
+
+   0.2 is the floor: a fifth of the height is enough to show a turning point. */
+const WELL_FRAMED_MIN_VIEW = 0.2;
+function axisWellFramed(lo, hi, vmin, vmax){
+  if (!(hi > lo)) return lo >= vmin && lo <= vmax;
+  const a = axisFraction(lo, hi, vmin, vmax);
+  return a.overlap > 0 && a.ratioOfData >= 0.5 && a.ratioOfView >= WELL_FRAMED_MIN_VIEW && a.ratioOfView <= 1.0;
+}
+function rowIsWellFramed(row, ctx, V){
+  const planar = AUTO_FIT_PLANAR.has(row.kind);
+  const pts = rowPointsForFit(row, ctx, {xmin: V.xmin, xmax: V.xmax, ymin: V.ymin, ymax: V.ymax});
+  if (!pts || !pts.ys.length) {
+    /* an implicit curve sampled directly over the current window and found
+       nothing at all — unlike a function (which is always evaluable
+       everywhere and would show up as "empty" only when genuinely broken),
+       that almost always means a valid curve, like a radius-100 circle, that
+       simply doesn't reach the window it's being asked about. Needs a fit,
+       not a shrug. */
+    if (row.kind === 'implicit' || row.kind === 'implicit-ineq') return false;
+    return true; /* otherwise: nothing drawable yet — never force a fit over an empty or broken row */
+  }
+  const yr = robustRange(pts.ys);
+  if (!axisWellFramed(yr.lo, yr.hi, V.ymin, V.ymax)) return false;
+  if (planar) {
+    const xr = robustRange(pts.xs);
+    if (!axisWellFramed(xr.lo, xr.hi, V.xmin, V.xmax)) return false;
+  } else {
+    /* A y-span test alone calls a curve "well framed" when it merely crosses the window
+       vertically in a sliver of x. Type y=0.001sin(2x), let it fit to y ±0.0013, then add
+       y=1000x^2: the parabola passes through the origin, so it does touch the window and its
+       y-span fills it top to bottom — while being visible over 0.002 of the x-range, i.e. a
+       vertical line. That is precisely the "looks wrong" this feature exists to prevent, and
+       it is what made auto-fit appear to work once and then stop. A function must also be on
+       screen across a usable width. */
+    const onscreen = pts.xs.filter((x, i) => pts.ys[i] >= V.ymin && pts.ys[i] <= V.ymax && isFinite(pts.ys[i]));
+    if (onscreen.length) {
+      const wide = (Math.max(...onscreen) - Math.min(...onscreen)) / (V.xmax - V.xmin);
+      if (wide < 0.04) return false;
+    }
+  }
+  return true;
+}
+/* rule 2 lives almost entirely outside this function — needsFit() is only
+   ever called from the debounced check below, never from the render loop
+   itself, so panning, zooming, dragging a slider or letting one animate can
+   never trigger it no matter how many frames they render. */
+function needsFit(){
+  const funcs = buildFuncs(), params = buildParams(funcs);
+  const ctx = {params, funcs, deg: DEG};
+  const V = bounds();
+  for (const row of rows) {
+    if (row.hidden || row.error) continue;
+    if (!rowIsWellFramed(row, ctx, V)) return true;
+  }
+  return false;
+}
+/* rule 7: a plain function keeps the window's own x-range if the interesting
+   part is already inside it; only when it isn't does this go looking, over a
+   wide box centred on the current view, and recentre x on wherever the
+   robust y-band it finds actually occurs. */
+/* A blind "sample a huge domain, take a percentile" search — the first thing
+   tried here — turns out to be the wrong tool for an unbounded, monotonic
+   curve (x^2, e^x): scaling x^2 up by k^2 while x scales by k reproduces the
+   exact same normalised shape at any window size, so a percentile over a
+   wide box never converges back down — it just finds "everything from tiny
+   to enormous belongs", and the window it returns is enormous too.
+   geometricAspectFit instead grows (or shrinks) the half-width geometrically
+   from a small seed and stops the moment the LOCAL steepness (y-span per
+   x-unit) crosses a threshold — the scale at which the curve stops looking
+   like a wall — using a light trim rather than raw min/max so a lone sample
+   next to a pole (1/x, tan(x)) can't dominate the answer. */
+function geometricAspectFit(f, anchor, seedHalf){
+  const N = 150, MAXASPECT = 18;
+  function evalHalf(half){
+    const ys = [];
+    for (let i = 0; i <= N; i++) {
+      const x = anchor - half + (2 * half) * i / N;
+      let y; try { y = f(x); } catch (e) { y = NaN; }
+      if (isFinite(y)) ys.push(y);
+    }
+    if (ys.length < N * 0.3) return null;
+    ys.sort((a, b) => a - b);
+    const trim = Math.floor(ys.length * 0.03);
+    const lo = ys[trim], hi = ys[ys.length - 1 - trim];
+    if (!(hi > lo)) return null;
+    return {ylo: lo, yhi: hi, aspect: (hi - lo) / (2 * half)};
+  }
+  let half = Math.max(seedHalf, 1e-6);
+  let r = evalHalf(half);
+  let out = (r && r.aspect <= MAXASPECT) ? {half, r} : null;
+  if (r && r.aspect > MAXASPECT) {
+    for (let i = 0; i < 60 && half > 1e-12; i++) {
+      half /= 2.2;
+      const r2 = evalHalf(half);
+      if (!r2) continue;
+      out = {half, r: r2};
+      if (r2.aspect <= MAXASPECT) break;
+    }
+  } else {
+    for (let i = 0; i < 60 && half < 1e12; i++) {
+      half *= 2.2;
+      const r2 = evalHalf(half);
+      if (!r2) break;
+      if (r2.aspect > MAXASPECT) break;
+      out = {half, r: r2};
+    }
+  }
+  if (!out) return null;
+  return {xlo: anchor - out.half, xhi: anchor + out.half, ylo: out.r.ylo, yhi: out.r.yhi};
+}
+/* rule 4 for the anchor a shifted curve needs (y=(x-500)^2): a coarse scan
+   for wherever |f| comes closest to zero — the natural home of a root or a
+   vertex — searched over a box wide enough to still find a shift like this
+   without (for e^x, which is never near zero) dragging the anchor off to
+   the edge of the search box for no benefit; that's what the "far from
+   zero, relative to its own scale" check back in the caller guards against. */
+function findMinAbsAnchor(f, half){
+  const N = 800;
+  let bestX = 0, bestAbs = Infinity;
+  for (let i = 0; i <= N; i++) {
+    const x = -half + (2 * half) * i / N;
+    let y; try { y = f(x); } catch (e) { y = NaN; }
+    if (isFinite(y) && Math.abs(y) < bestAbs) { bestAbs = Math.abs(y); bestX = x; }
+  }
+  return bestX;
+}
+function fitBoundsForRow(row, ctx, V, o){
+  const fresh = !!(o && o.fresh);
+  const kind = row.kind;
+  if (kind === 'function' || kind === 'funcdef' || kind === 'inequality') {
+    const f = getPlotFn(row, ctx);
+    if (!f) return null;
+    /* rule 7: try the window's own x-range first */
+    const cur = rowPointsForFit(row, ctx, {xmin: V.xmin, xmax: V.xmax});
+    let keepX = null;
+    if (cur && cur.ys.length) {
+      const yr = robustRange(cur.ys);
+      if (yr.hi > yr.lo) {
+        /* Keep this as a FALLBACK for the bottom of the function: framing y on the
+           curve over the window's own x is always a defensible answer, and it is the
+           one to use if the geometric search below runs away. It is not used in place
+           of that search, because the search is what shifts x to find the vertex of
+           something like y = (x - 500)^2. */
+        keepX = {xlo: V.xmin, xhi: V.xmax, ylo: yr.lo, yhi: yr.hi};
+        /* axisWellFramed and not ratioOfData alone: "all of the curve is inside the
+           window" was the whole test, so y = cos x -- entirely inside a window eight
+           times its height -- was declared already framed and left as a flat line. */
+        if (axisWellFramed(yr.lo, yr.hi, V.ymin, V.ymax)) return keepX;
+      } else {
+        return {xlo: V.xmin, xhi: V.xmax, ylo: yr.lo - 1, yhi: yr.hi + 1};
+      }
+    }
+    const seedHalf = Math.max((V.xmax - V.xmin) / 20, 1e-3);
+    let fit = geometricAspectFit(f, 0, seedHalf);
+    const tooFar = b => !b || Math.min(Math.abs(b.ylo), Math.abs(b.yhi)) > Math.max(Math.abs(b.yhi - b.ylo), 1) * 3;
+    if (tooFar(fit)) {
+      const anchor = findMinAbsAnchor(f, Math.max(2000, (V.xmax - V.xmin) * 100));
+      if (anchor !== 0) {
+        const fit2 = geometricAspectFit(f, anchor, seedHalf);
+        if (fit2 && !tooFar(fit2)) fit = fit2; else if (fit2 && !fit) fit = fit2;
+      }
+    }
+    /* A FIT THAT RAN AWAY SHOWS NOTHING, so prefer the honest fallback over it.
+       sin(x) + 50 never crosses zero, so tooFar() read "far from y = 0" as failure and
+       findMinAbsAnchor went hunting for a crossing that does not exist; the geometric
+       search then widened until the window was 2.9e12 units across and the sine was an
+       invisible flat line. Curves with an offset and no root -- a temperature, a cost,
+       a height above sea level -- are all this case. Framing y over the window's own x
+       is the right answer for them, and (x - 500)^2 still gets its vertex because its
+       search succeeds and is kept. */
+    /* A fit can run away in EITHER direction and both end up looking like a straight
+       line. Too wide was sin(x)+50 at 2.9e12 units across. Too narrow is y = 100 sin x:
+       the aspect search balances the curve's slope, 100 at the origin, by shrinking x
+       until it looks like 1 -- which drove the window to x +/-7e-13 and y +/-7e-11, a
+       zoom of ~10^13, where a sine through the origin is a straight diagonal. A curve
+       that is perfectly readable at ordinary scale should never need thirteen orders of
+       magnitude to frame, so a floor rejects it the same way the ceiling does. */
+    const SANE_SPAN = 1e7, SANE_MIN_SPAN = 1e-6;
+    const ranAway = b => {
+      if (!b) return true;
+      const sx = b.xhi - b.xlo, sy = b.yhi - b.ylo;
+      if (!isFinite(sx) || !isFinite(sy)) return true;
+      if (sx > SANE_SPAN || sy > SANE_SPAN) return true;
+      if (sx < SANE_MIN_SPAN || sy < SANE_MIN_SPAN) return true;
+      return false;
+    };
+    if (ranAway(fit) && keepX) return keepX;
+    return fit;
+  }
+  if (kind === 'implicit' || kind === 'implicit-ineq') {
+    const span = Math.max(V.xmax - V.xmin, V.ymax - V.ymin, 1e-6);
+    const cx = (V.xmin + V.xmax) / 2, cy = (V.ymin + V.ymax) / 2;
+    const half = Math.max(1000, span * 50);
+    let pts = rowPointsForFit(row, ctx, {xmin: cx - half, xmax: cx + half, ymin: cy - half, ymax: cy + half}, true);
+    if (!pts || !pts.xs.length) return null;
+    let xr = robustRange(pts.xs), yr = robustRange(pts.ys);
+    /* one more pass, zoomed into the box just found, so a huge search box
+       (needed to find a radius-100 circle) doesn't leave the circle itself
+       coarsely sampled */
+    const pad2 = Math.max((xr.hi - xr.lo) * 0.3, (yr.hi - yr.lo) * 0.3, 1e-6);
+    const refined = rowPointsForFit(row, ctx, {xmin: xr.lo - pad2, xmax: xr.hi + pad2, ymin: yr.lo - pad2, ymax: yr.hi + pad2}, true);
+    if (refined && refined.xs.length) { xr = robustRange(refined.xs); yr = robustRange(refined.ys); }
+    return {xlo: xr.lo, xhi: xr.hi, ylo: yr.lo, yhi: yr.hi};
+  }
+  if (kind === 'parametric' || kind === 'polar') {
+    const pts = rowPointsForFit(row, ctx, {}, true);
+    if (!pts || !pts.xs.length) return null;
+    const xr = robustRange(pts.xs), yr = robustRange(pts.ys);
+    return {xlo: xr.lo, xhi: xr.hi, ylo: yr.lo, yhi: yr.hi};
+  }
+  if (kind === 'points' || kind === 'table') {
+    const pts = rowPointsForFit(row, ctx, {});
+    if (!pts || !pts.xs.length) return null;
+    return {xlo: Math.min(...pts.xs), xhi: Math.max(...pts.xs), ylo: Math.min(...pts.ys), yhi: Math.max(...pts.ys)};
+  }
+  return null;
+}
+function zoomToFit(opts){
+  opts = opts || {};
+  if (!opts.silent) pushHistory();
+  const funcs = buildFuncs(), params = buildParams(funcs);
+  const ctx = {params, funcs, deg: DEG};
+  const V = bounds();
+  let xlo = Infinity, xhi = -Infinity, ylo = Infinity, yhi = -Infinity, found = false;
+  const focus = opts.focusRowId ? rows.filter(r => r.id === opts.focusRowId && !r.hidden && !r.error) : [];
+  const consider = focus.length ? focus : rows;
+  /* Judge a freshly edited row against the window it would get on a blank page, not the one the
+     previous row left behind: after framing y=1000x^2 at x ±0.04, that stale range makes a sine
+     look like a straight line and seeds the search far too small. Searching without any window
+     at all is worse — an oscillating curve's steepness never crosses the threshold as the window
+     widens, and the fit runs away to x ±10^12. The default window is the honest middle. */
+  const VF = focus.length
+    ? {xmin: INITIAL_VIEW.cx - INITIAL_VIEW.sx * W / 2, xmax: INITIAL_VIEW.cx + INITIAL_VIEW.sx * W / 2,
+       ymin: INITIAL_VIEW.cy - INITIAL_VIEW.sy * H / 2, ymax: INITIAL_VIEW.cy + INITIAL_VIEW.sy * H / 2}
+    : V;
+  for (const row of consider) {
+    if (row.hidden || row.error) continue;
+    const b = fitBoundsForRow(row, ctx, VF, {fresh: focus.length > 0});
+    if (!b) continue;
+    found = true;
+    xlo = Math.min(xlo, b.xlo); xhi = Math.max(xhi, b.xhi);
+    ylo = Math.min(ylo, b.ylo); yhi = Math.max(yhi, b.yhi);
+  }
+  if (found) {
+    if (!(xhi > xlo)) { xlo -= 1; xhi += 1; }
+    if (!(yhi > ylo)) { ylo -= 1; yhi += 1; }
+    /* A LAST NET, because a fit that runs away is worse than one that gives up: past
+       about 1e9 units across, the tick labels stop being distinguishable and every
+       curve is a flat line, so such a "fit" shows the learner nothing. If any path
+       ever produces one again, fall back to the window the page opens with rather
+       than to nonsense. */
+    const FIT_MAX_SPAN = 1e9;
+    if (!isFinite(xhi - xlo) || !isFinite(yhi - ylo) ||
+        (xhi - xlo) > FIT_MAX_SPAN || (yhi - ylo) > FIT_MAX_SPAN) {
+      xlo = INITIAL_VIEW.cx - INITIAL_VIEW.sx * W / 2; xhi = INITIAL_VIEW.cx + INITIAL_VIEW.sx * W / 2;
+      ylo = INITIAL_VIEW.cy - INITIAL_VIEW.sy * H / 2; yhi = INITIAL_VIEW.cy + INITIAL_VIEW.sy * H / 2;
+    }
+    const padX = (xhi - xlo) * 0.15, padY = (yhi - ylo) * 0.15;
+    xlo -= padX; xhi += padX; ylo -= padY; yhi += padY;
+    view.cx = (xlo + xhi) / 2; view.cy = (ylo + yhi) / 2;
+    const sxNeeded = (xhi - xlo) / W, syNeeded = (yhi - ylo) / H;
+    /* rule 5: Square means a circle stays round — fit BOTH axes to whichever
+       scale the tighter dimension needs, never stretch one to match the
+       other's pixel count. But forcing that when the content genuinely
+       needs wildly different x and y scales (a steep parabola, not a
+       circle) is exactly what used to blow the window out to billions —
+       rule 5 allows that mismatch explicitly ("that is fine when Square is
+       off"), so a big enough mismatch turns Square off instead, the same
+       way stretching one axis by hand already does. */
+    const ratio = sxNeeded > syNeeded ? sxNeeded / Math.max(syNeeded, 1e-300) : syNeeded / Math.max(sxNeeded, 1e-300);
+    if (SQUARE && ratio <= 5) { const s = Math.max(sxNeeded, syNeeded); view.sx = s; view.sy = s; }
+    else { view.sx = sxNeeded; view.sy = syNeeded; if (SQUARE) SQUARE = false; }
+  } else if (!opts.silent) toast('Nothing plottable to fit yet.');
+  scheduleRender();
+  if (!opts.silent) track('zoomToFit');
+}
+/* rule 1 + rule 2, tied together: debounced so a fit happens at most once
+   per edit (never per keystroke), and skipped outright the instant the
+   person has taken the window into their own hands. */
+let autoFitTimer = null;
+function scheduleAutoFitCheck(){
+  clearTimeout(autoFitTimer);
+  autoFitTimer = setTimeout(() => {
+    if (!AUTO_FIT || userAdjustedView) return;
+    if (needsFit()) zoomToFit({silent: true, focusRowId: lastEditedRowId});
+  }, 550);
+}
+
+/* ---- three panels share the same "only one open at a time" logic --------- */
+let openPanel = null; /* 'settings' | 'help' | 'keypad' | null */
+function closePanel(name){
+  if (name === 'settings') $('settingsPop').innerHTML = '';
+  if (name === 'help') $('helpPop').innerHTML = '';
+  if (name === 'keypad') { $('keypadPop').innerHTML = ''; $('btnKeypad').setAttribute('aria-pressed', 'false'); }
+  if (openPanel === name) openPanel = null;
+}
+function closeAllPanels(){ closePanel('settings'); closePanel('help'); closePanel('keypad'); }
+/* stop a click anywhere inside a panel from bubbling to the document-level
+   "click outside closes it" listener below — without this, a click that
+   itself rebuilds the panel's innerHTML (e.g. switching a keypad tab) detaches
+   its own target before the bubbled event is checked, so the panel it just
+   rebuilt closes itself. */
+$('settingsPop').addEventListener('click', e => e.stopPropagation());
+$('helpPop').addEventListener('click', e => e.stopPropagation());
+$('keypadPop').addEventListener('click', e => e.stopPropagation());
+
+function buildSettingsPopover(){
+  const V = bounds();
+  $('settingsPop').innerHTML = `<div class="gc-settings">
+    <label>Window bounds</label>
+    <div class="r2"><input id="setXmin" type="number" step="any" value="${fmt(V.xmin, 3)}" placeholder="xmin">
+    <input id="setXmax" type="number" step="any" value="${fmt(V.xmax, 3)}" placeholder="xmax"></div>
+    <div class="r2" style="margin-top:4px"><input id="setYmin" type="number" step="any" value="${fmt(V.ymin, 3)}" placeholder="ymin">
+    <input id="setYmax" type="number" step="any" value="${fmt(V.ymax, 3)}" placeholder="ymax"></div>
+    <label>Axis step (blank = auto)</label>
+    <div class="r2"><input id="setXStep" type="number" step="any" value="${axisStep.x || ''}" placeholder="x step">
+    <input id="setYStep" type="number" step="any" value="${axisStep.y || ''}" placeholder="y step"></div>
+    <label>Axis labels</label>
+    <div class="r2"><input id="setXLabel" type="text" value="${esc(axisLabels.x)}"><input id="setYLabel" type="text" value="${esc(axisLabels.y)}"></div>
+    <label class="chk"><input type="checkbox" id="setDeg"${DEG ? ' checked' : ''}> Degrees (unchecked = radians)</label>
+    <label class="chk"><input type="checkbox" id="setSquare"${SQUARE ? ' checked' : ''}> Equal axis scales (square)</label>
+    <label class="chk"><input type="checkbox" id="setAnalysis"${ANALYSIS_ON ? ' checked' : ''}> Show roots, extrema &amp; intersections</label>
+    <div class="row" style="margin-top:8px;gap:6px"><button class="btn sm" id="setFit">Zoom to fit</button><button class="btn sm primary" id="setApply">Apply</button></div>
+  </div>`;
+  $('setApply').addEventListener('click', () => {
+    pushHistory();
+    const xmin = +$('setXmin').value, xmax = +$('setXmax').value, ymin = +$('setYmin').value, ymax = +$('setYmax').value;
+    if (xmax > xmin && ymax > ymin) { view.cx = (xmin + xmax) / 2; view.cy = (ymin + ymax) / 2; view.sx = (xmax - xmin) / W; view.sy = SQUARE ? view.sx : (ymax - ymin) / H; }
+    axisStep.x = $('setXStep').value ? +$('setXStep').value : null;
+    axisStep.y = $('setYStep').value ? +$('setYStep').value : null;
+    axisLabels.x = $('setXLabel').value || 'x'; axisLabels.y = $('setYLabel').value || 'y';
+    userAdjustedView = true; /* typed-in bounds are exactly as deliberate as a drag */
+    closePanel('settings'); scheduleRender(); track('applySettings');
+  });
+  $('setFit').addEventListener('click', () => { zoomToFit(); userAdjustedView = false; closePanel('settings'); });
+  $('setDeg').addEventListener('change', e => { pushHistory(); DEG = e.target.checked; scheduleRender(); track('toggleDeg', {deg: DEG}); });
+  $('setSquare').addEventListener('change', e => { pushHistory(); SQUARE = e.target.checked; if (SQUARE) view.sy = view.sx; scheduleRender(); track('toggleSquare'); });
+  $('setAnalysis').addEventListener('change', e => { pushHistory(); ANALYSIS_ON = e.target.checked; scheduleRender(); track('toggleAnalysis'); });
+}
+$('btnSettings').addEventListener('click', e => {
+  e.stopPropagation();
+  const wasOpen = openPanel === 'settings'; closeAllPanels(); closeAddMenu();
+  if (!wasOpen) { openPanel = 'settings'; buildSettingsPopover(); }
+});
+
+function buildHelpPopover(){
+  $('helpPop').innerHTML = `<div class="gc-help">
+    <h5>Mouse &amp; touch</h5>
+    <div class="row2"><span>Pan</span><span>Drag the graph</span></div>
+    <div class="row2"><span>Zoom</span><span>Scroll, or +/&minus;</span></div>
+    <div class="row2"><span>Zoom one axis</span><span>Shift or Alt + scroll</span></div>
+    <div class="row2"><span>Trace a curve</span><span>The target icon, then hover</span></div>
+    <h5>Keyboard</h5>
+    <div class="row2"><span>Undo</span><span><kbd>Ctrl</kbd>+<kbd>Z</kbd></span></div>
+    <div class="row2"><span>Redo</span><span><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Z</kbd></span></div>
+    <div class="row2"><span>Next row</span><span><kbd>Enter</kbd></span></div>
+    <h5>Typing maths</h5>
+    <div class="row2"><span>Power</span><span class="mono">x^2</span></div>
+    <div class="row2"><span>Pi, theta</span><span class="mono">pi, theta</span></div>
+    <div class="row2"><span>Fraction</span><span class="mono">(x+1)/2</span></div>
+  </div>`;
+}
+$('btnHelp').addEventListener('click', e => {
+  e.stopPropagation();
+  const wasOpen = openPanel === 'help'; closeAllPanels(); closeAddMenu();
+  if (!wasOpen) { openPanel = 'help'; buildHelpPopover(); }
+});
+
+/* ---- the on-screen keypad: 123 / ABC / f(x), types into the focused row -- */
+const KEYPAD_RAW = {
+  '123': ['7', '8', '9', '÷', '(', '4', '5', '6', '×', ')', '1', '2', '3', '-', '^', '0', '.', '=', ',', '+', {label: '⌫', act: 'back'}],
+  'ABC': ['x', 'y', 'a', 'b', 'c', 'd', 'e', 'f', 'θ', '(', ')', ',', {label: '⌫', act: 'back'}],
+  'f(x)': [
+    {label: 'sin', ins: 'sin()', cur: 4}, {label: 'cos', ins: 'cos()', cur: 4}, {label: 'tan', ins: 'tan()', cur: 4},
+    {label: '&radic;', ins: 'sqrt()', cur: 5}, {label: '|x|', ins: 'abs()', cur: 4},
+    {label: 'ln', ins: 'ln()', cur: 3}, {label: 'log', ins: 'log()', cur: 4}, {label: 'π', ins: 'pi'},
+    {label: 'x&sup2;', ins: '^2'}, {label: 'x!', ins: '!'},
+  ],
+};
+const KEYPAD_MAP = {'÷': '/', '×': '*'};
+let kpTab = '123';
+function normKey(k){ return typeof k === 'string' ? {label: k, ins: KEYPAD_MAP[k] || k} : k; }
+function buildKeypad(){
+  const keys = KEYPAD_RAW[kpTab].map(normKey);
+  $('keypadPop').innerHTML = `<div class="gc-keypad">
+    <div class="gc-kptabs">${Object.keys(KEYPAD_RAW).map(t => `<button data-tab="${esc(t)}" class="${t === kpTab ? 'active' : ''}">${esc(t)}</button>`).join('')}</div>
+    <div class="gc-kpgrid">${keys.map(k => k.act === 'back' ? `<button data-act="kpback" title="Backspace">⌫</button>` : `<button data-ins="${esc(k.ins)}"${k.cur != null ? ` data-cur="${k.cur}"` : ''}>${k.label}</button>`).join('')}</div>
+  </div>`;
+  $('keypadPop').querySelectorAll('[data-tab]').forEach(b => b.addEventListener('click', () => { kpTab = b.dataset.tab; buildKeypad(); }));
+  $('keypadPop').querySelectorAll('[data-ins]').forEach(b => b.addEventListener('click', () => keypadInsert(b.dataset.ins, b.dataset.cur != null ? +b.dataset.cur : null)));
+  const backBtn = $('keypadPop').querySelector('[data-act="kpback"]'); if (backBtn) backBtn.addEventListener('click', keypadBackspace);
+}
+function activeMathInput(){
+  if (lastActiveInput && document.body.contains(lastActiveInput)) return lastActiveInput;
+  let last = rows[rows.length - 1];
+  if (last.manualKind) { last = addRow(''); renderRowList(); }
+  return document.querySelector(`.gc-row[data-id="${last.id}"] .gc-input`);
+}
+function keypadInsert(text, curFromStart){
+  const input = activeMathInput(); if (!input) return;
+  input.focus();
+  const start = input.selectionStart != null ? input.selectionStart : input.value.length;
+  const end = input.selectionEnd != null ? input.selectionEnd : input.value.length;
+  input.value = input.value.slice(0, start) + text + input.value.slice(end);
+  const pos = curFromStart != null ? start + curFromStart : start + text.length;
+  input.setSelectionRange(pos, pos);
+  input.dispatchEvent(new Event('input', {bubbles: true}));
+}
+function keypadBackspace(){
+  const input = activeMathInput(); if (!input) return;
+  input.focus();
+  const start = input.selectionStart != null ? input.selectionStart : input.value.length;
+  const end = input.selectionEnd != null ? input.selectionEnd : input.value.length;
+  const from = start === end ? Math.max(0, start - 1) : start;
+  input.value = input.value.slice(0, from) + input.value.slice(end);
+  input.setSelectionRange(from, from);
+  input.dispatchEvent(new Event('input', {bubbles: true}));
+}
+$('btnKeypad').addEventListener('click', e => {
+  e.stopPropagation();
+  const wasOpen = openPanel === 'keypad'; closeAllPanels(); closeAddMenu();
+  if (!wasOpen) { openPanel = 'keypad'; buildKeypad(); $('btnKeypad').setAttribute('aria-pressed', 'true'); }
+});
+document.addEventListener('click', e => {
+  if (openPanel === 'settings' && !$('settingsPop').contains(e.target) && !e.target.closest('#btnSettings')) closePanel('settings');
+  if (openPanel === 'help' && !$('helpPop').contains(e.target) && !e.target.closest('#btnHelp')) closePanel('help');
+  if (openPanel === 'keypad' && !$('keypadPop').contains(e.target) && !e.target.closest('#btnKeypad')) closePanel('keypad');
+});
+
+function shareURL(){
+  const s = btoa(unescape(encodeURIComponent(JSON.stringify(snapshot()))));
+  return location.href.split('#')[0] + '#s=' + encodeURIComponent(s);
+}
+shareState(() => snapshot());
+$('btnShare').addEventListener('click', async () => {
+  const url = shareURL();
+  try { await navigator.clipboard.writeText(url); toast('Link copied — it opens exactly this graph.'); }
+  catch (e) { history.replaceState(null, '', url); toast('The link is in the address bar.'); }
+  track('share');
+});
+
+document.addEventListener('keydown', e => {
+  if (document.activeElement && ['INPUT', 'SELECT', 'TEXTAREA'].includes(document.activeElement.tagName)) return;
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z' && !e.shiftKey) { e.preventDefault(); undo(); }
+  else if ((e.ctrlKey || e.metaKey) && (e.key.toLowerCase() === 'y' || (e.key.toLowerCase() === 'z' && e.shiftKey))) { e.preventDefault(); redo(); }
+});
+
+/* ============================================================================
+   PART 10 — boot.
+   ========================================================================== */
+const ro = new ResizeObserver(() => { resizeStage(); scheduleRender(); });
+ro.observe($('stageWrap'));
+
+(function boot(){
+  const shared = sharedState();
+  const saved = shared || store.get('graph:state', null);
+  if (saved && saved.rows && saved.rows.length) {
+    try { restoreSnapshot(saved); } catch (e) { rows = [newRow('')]; renderRowList(); }
+  } else {
+    renderRowList();
+  }
+  resizeStage();
+  syncToolbar();
+  render();
+  addEventListener('pointerdown', () => {}, {once: true});
+})();
+
+/* Autosave to this browser so a reopened tab is where the student left it. */
+let saveT = 0;
+function scheduleSave(){ clearTimeout(saveT); saveT = setTimeout(() => store.set('graph:state', snapshot()), 500); }
+const _origSchedule = scheduleRender;
+scheduleRender = function(){ scheduleSave(); _origSchedule(); };
+
+track('open');
+
+/* ============================================================================
+   PART 11 — expose for tests.
+   ========================================================================== */
+/* The two lists of function names must agree. FUNC_NAMES is what the tokenizer matches
+   and FUNCS is what evaluation calls, so a name in one and not the other is either a
+   function nobody can type or a name that tokenizes and then cannot be evaluated. This
+   is a console.error and not a throw: shipping a page that refuses to load over a
+   missing alias would be worse than the alias being missing. */
+(() => {
+  const named = new Set(FUNC_NAMES), impl = new Set(Object.keys(FUNCS));
+  const noImpl = [...named].filter(n => !impl.has(n));
+  const noName = [...impl].filter(n => !named.has(n));
+  if (noImpl.length || noName.length)
+    console.error('graph.html: FUNC_NAMES and FUNCS disagree —' +
+      (noImpl.length ? ' typable but not implemented: ' + noImpl.join(', ') + '.' : '') +
+      (noName.length ? ' implemented but not typable: ' + noName.join(', ') + '.' : ''));
+})();
+window.PG_MODEL = M;
+window.PG_STATE = () => {
+  const V = bounds();
+  return {
+    rows: rows.map(r => ({
+      id: r.id, raw: r.raw, kind: r.kind, error: r.error, color: r.color, hidden: r.hidden,
+      value: r.value, min: r.min, max: r.max, step: r.step, isSlider: r.isSlider,
+      showDeriv: r.showDeriv, integral: r.integral ? Object.assign({}, r.integral) : null,
+      roots: r._roots || [], extrema: r._extrema || [],
+      listValue: r.listValue, regression: r.regression, noteText: r.noteText, undefinedVars: r.undefinedVars,
+    })),
+    view: {xmin: V.xmin, xmax: V.xmax, ymin: V.ymin, ymax: V.ymax, cx: view.cx, cy: view.cy, sx: view.sx, sy: view.sy},
+    initialView: INITIAL_VIEW,
+    deg: DEG, square: SQUARE, traceOn: TRACE_ON, analysisOn: ANALYSIS_ON, autoFit: AUTO_FIT, userAdjustedView,
+  };
+};
+/* Escape clears the pinned point wherever the focus happens to be — the row-level handler only
+   fires while an expression input is focused, which is exactly where the learner is not when
+   they have just clicked on the graph. */
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && PIN) { PIN = null; drawPin(); }
+});
+window.PG_PIN = () => PIN;
+window.PG_ACTIONS = {undo, redo, homeView, zoomToFit, needsFit};
+</script>
+</body>
+</html>

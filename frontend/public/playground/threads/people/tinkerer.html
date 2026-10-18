@@ -1,0 +1,596 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dynamics of Population</title>
+<meta name="description" content="Class 8: a village of a thousand people, each one aged, born and buried by the model. Set how many children families have, how long people live and who moves away, then watch the village, its population pyramid and its birth and death rates change year by year.">
+<link rel="icon" href="../../favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600&family=Inter:wght@400;500;600;700&family=Nunito:wght@500;700;800&family=Newsreader:opsz,wght@6..72,400;6..72,500&family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="../../play.css">
+<style>
+/* Only what this page needs beyond play.css. */
+.pg-stage{min-height:0; background:#fbf7ec}
+.gate{position:absolute; left:0; right:0; top:0; height:62%; display:grid; place-items:center; pointer-events:none}
+.gate span{background:rgba(40,32,16,.84); color:#fff; padding:10px 16px; border-radius:99px; font-weight:600; font-size:14px}
+.ctl{grid-template-columns:128px 1fr 64px; margin:2px 0}
+.ctl label{font-size:12.5px; line-height:1.2}
+.ctl output{font-size:13px; font-weight:700; min-width:0}
+.sub{font-size:11px; letter-spacing:.07em; text-transform:uppercase; font-weight:700; color:var(--ink-3); margin:10px 0 4px}
+.note{font-size:12.5px; color:var(--ink-3); margin:6px 0 0}
+.presets{display:flex; flex-wrap:wrap; gap:6px}
+.presets .btn{font-size:12.5px}
+.tog[aria-pressed="true"]{background:var(--accent-soft); border-color:var(--accent)}
+.clock{font-family:"Fredoka",var(--font-head); font-size:24px; font-weight:600; line-height:1}
+.nums{display:grid; grid-template-columns:1fr auto; gap:3px 12px; font-size:13px}
+.nums span{color:var(--ink-2)}
+.nums b{font-variant-numeric:tabular-nums; text-align:right}
+.nums .sep{grid-column:1/-1; height:1px; background:var(--hair); margin:3px 0}
+.why p{font-size:13.5px; margin-bottom:.55em}
+.why b{color:var(--ink)}
+</style>
+</head>
+<body>
+<header class="pg-top"></header>
+
+<div class="pg-intro">
+  <h1>Dynamics of population</h1>
+  <p>This village has a thousand people, and the model keeps track of every one of them: each year it decides who is born, who dies and who moves away.
+     You set three things only: how many children a woman has in her lifetime (the fertility rate), how long people live (life expectancy), and how many people move in or out.
+     Watch the village, its population pyramid and its birth and death rates change, year by year.</p>
+</div>
+
+<main class="pg-main wide-side">
+  <section class="pg-stage" id="stageWrap">
+    <svg id="stage" viewBox="0 0 1000 700" role="img" aria-label="A village whose houses grow with its population, its population pyramid, and a graph of birth rate, death rate and population over the years"></svg>
+    <div class="gate" id="gate"><span>Make your prediction first →</span></div>
+  </section>
+
+  <aside class="pg-side">
+    <div id="poe"></div>
+
+    <div class="card" id="ctlCard">
+      <div class="row" style="justify-content:space-between">
+        <div><div class="kicker" style="margin:0">Year</div><div class="clock num" id="clock">0</div></div>
+        <div class="row" style="gap:6px">
+          <button class="btn sm" id="btnRun">▶ Run</button>
+          <button class="btn sm tog" id="btnFast" aria-pressed="false">Fast ⏩</button>
+          <button class="btn sm" id="btnRestart">↺ Start again</button>
+        </div>
+      </div>
+      <div class="sub">What you control</div>
+      <div class="ctl"><label for="tfr">Children per woman (fertility rate)</label><input type="range" id="tfr" min="1" max="7.5" step="0.1" value="5.7"><output id="tfrOut" class="num">5.7</output></div>
+      <div class="ctl"><label for="e0">Life expectancy</label><input type="range" id="e0" min="25" max="85" step="1" value="30"><output id="e0Out" class="num">30 y</output></div>
+      <div class="ctl"><label for="mig">People moving each year</label><input type="range" id="mig" min="-30" max="30" step="1" value="0"><output id="migOut" class="num">0</output></div>
+      <p class="note" id="migNote">Left of the middle: young people (18–35) leave for the city. Right: they arrive.</p>
+      <div class="sub">From the book</div>
+      <div class="presets">
+        <button class="btn sm" id="pre1950" title="Fertility 5.7 in 1950; life expectancy 30 at independence">India, around 1950</button>
+        <button class="btn sm" id="pre2025" title="Fertility 1.9 in 2025; life expectancy 70 in 2024">India, around 2025</button>
+        <button class="btn sm" id="preRep" title="Replacement level fertility">Replacement: 2.1</button>
+        <button class="btn sm tog" id="btnBook" aria-pressed="false" title="Exercise 11: India's age groups, estimated for 2021">Outline India 2021 on the pyramid</button>
+      </div>
+    </div>
+
+    <div class="card" id="numCard">
+      <div class="kicker">Counted this year</div>
+      <div class="nums" id="nums"></div>
+    </div>
+
+    <div class="card why" id="whyCard">
+      <div class="kicker">What is happening</div>
+      <div id="why"></div>
+    </div>
+
+    <div class="card"><div class="kicker">To find</div><div id="finds"></div></div>
+  </aside>
+</main>
+
+<script src="../../play.js"></script>
+<script>
+'use strict';
+const {$, esc, clamp, fmt, loop, sound, say, track, toast, predict, findings, discover, found,
+       shareState, sharedState, mount, reduced, mulberry32} = Play;
+mount({thread: 'people', band: 'tinkerer'});
+
+/* MODEL:start ==================================================================
+   A village of individual people. Nothing here is a curve drawn to look right:
+   every birth, death and move is decided for one person at a time, and every
+   rate on the page is COUNTED from what happened.
+
+   Deaths. Each person of age x dies this year with probability q(x), from a
+   mortality schedule (high for babies, low for young adults, rising with age)
+   scaled until the life table gives exactly the life expectancy you set.
+   Births. Each woman aged 15–49 has a baby this year with probability
+   TFR × w(x), where w(x) says at what ages women have their children and adds
+   up to 1 — so over a lifetime a woman has, on average, TFR children.
+   Migration. Movers are young adults, 18–35, as the chapter describes.
+   The book's definitions:
+     birth rate  = live births in a year per 1,000 people
+     death rate  = deaths in a year per 1,000 people
+     working-age = 15 to 64 years
+   ============================================================================ */
+const MAXA = 100;
+/* hazard of death at exact age x (per year), for a mortality level k */
+const hazard = (x, k) => Math.pow(k, 1.8) * 0.045 * Math.exp(-2.2 * x) + k * (0.0015 + 0.00003 * Math.exp(0.1 * x));
+function lifeTableK(k){
+  const l = [1], q = []; let e0 = 0;
+  for (let x = 0; x <= MAXA; x++) {
+    let H = 0; const n = 12;
+    for (let i = 0; i < n; i++) H += hazard(x + (i + .5) / n, k) / n;
+    const qq = x === MAXA ? 1 : 1 - Math.exp(-H);
+    q.push(qq); l.push(l[x] * (1 - qq));
+    e0 += x === MAXA ? l[x] : (l[x] + l[x + 1]) / 2;
+  }
+  return {l, q, e0, u5: 1000 * (1 - l[5])};
+}
+const LT = new Map();
+/* the life table whose life expectancy at birth is e0 (bisection on the level k) */
+function lifeTable(e0){
+  if (LT.has(e0)) return LT.get(e0);
+  let lo = 0.01, hi = 200;
+  for (let i = 0; i < 50; i++) { const m = Math.sqrt(lo * hi); if (lifeTableK(m).e0 > e0) lo = m; else hi = m; }
+  const t = lifeTableK(Math.sqrt(lo * hi)); LT.set(e0, t); return t;
+}
+/* at what ages women have their children: a hump from 15 to 49 that adds up to 1 */
+const W = (() => { const w = []; let s = 0; for (let x = 0; x <= MAXA; x++) { const v = x >= 15 && x <= 49 ? Math.pow(x - 14, 2.5) * Math.exp(-(x - 14) / 4.2) : 0; w.push(v); s += v; } return w.map(v => v / s); })();
+/* Lotka: the growth factor λ a population settles into under these rates (half of babies are girls). */
+function lotka(tfr, e0){
+  const L = lifeTable(e0);
+  const f = lam => { let s = 0; for (let x = 15; x <= 49; x++) s += Math.pow(lam, -(x + 1)) * L.l[x] * tfr * W[x] * 0.5; return s - 1; };
+  let lo = 0.8, hi = 1.2;
+  for (let i = 0; i < 60; i++) { const m = (lo + hi) / 2; if (f(m) > 0) lo = m; else hi = m; }
+  return (lo + hi) / 2;
+}
+/* a village that has lived under these rates for a long time: ages drawn from the stable age mix */
+function makeVillage(n, tfr, e0, seed){
+  const rnd = mulberry32(seed), L = lifeTable(e0), lam = lotka(tfr, e0);
+  const c = []; let s = 0;
+  for (let x = 0; x <= MAXA; x++) { const v = Math.pow(lam, -x) * L.l[x]; c.push(v); s += v; }
+  const people = [];
+  for (let i = 0; i < n; i++) {
+    let u = rnd() * s, x = 0;
+    while (x < MAXA && u > c[x]) { u -= c[x]; x++; }
+    people.push({age: x, f: rnd() < 0.5});
+  }
+  return {people, year: 0, rnd, hist: []};
+}
+/* one year, person by person */
+function stepYear(V, par){
+  const L = lifeTable(par.e0), rnd = V.rnd, P0 = V.people.length;
+  let B = 0, D = 0, In = 0, Out = 0;
+  const next = [], babies = [];
+  for (const p of V.people) {
+    if (p.f && p.age >= 15 && p.age <= 49 && rnd() < par.tfr * W[p.age]) { B++; babies.push({age: 0, f: rnd() < 0.5}); }
+    if (rnd() < L.q[p.age]) { D++; continue; }
+    p.age = Math.min(MAXA, p.age + 1); next.push(p);
+  }
+  V.people = next.concat(babies);
+  if (par.mig < 0) {
+    const young = []; V.people.forEach((p, i) => { if (p.age >= 18 && p.age <= 35) young.push(i); });
+    const n = Math.min(-par.mig, young.length), gone = new Set();
+    for (let k = 0; k < n; k++) { const j = k + Math.floor(rnd() * (young.length - k)); [young[k], young[j]] = [young[j], young[k]]; gone.add(young[k]); }
+    V.people = V.people.filter((p, i) => !gone.has(i)); Out = n;
+  } else if (par.mig > 0) {
+    for (let k = 0; k < par.mig; k++) V.people.push({age: 18 + Math.floor(rnd() * 18), f: rnd() < 0.5});
+    In = par.mig;
+  }
+  V.year++;
+  const Pm = (P0 + V.people.length) / 2;              // the book divides by the mid-year population
+  const rec = {year: V.year, P0, P: V.people.length, B, D, In, Out, cbr: 1000 * B / Pm, cdr: 1000 * D / Pm,
+               growth: 100 * (V.people.length - P0) / P0, tfr: par.tfr, e0: par.e0, mig: par.mig};
+  Object.assign(rec, structure(V.people));
+  V.hist.push(rec);
+  return rec;
+}
+/* the population's make-up: counts by 5-year group and sex, the book's three big age groups, the median age */
+function structure(people){
+  const m = new Array(17).fill(0), f = new Array(17).fill(0);
+  let kids = 0, work = 0, old = 0;
+  const byAge = new Array(MAXA + 1).fill(0);
+  for (const p of people) {
+    const g = Math.min(16, Math.floor(p.age / 5));
+    (p.f ? f : m)[g]++;
+    byAge[p.age]++;
+    if (p.age < 15) kids++; else if (p.age < 65) work++; else old++;
+  }
+  const n = people.length || 1;
+  let acc = 0, med = 0;
+  for (let x = 0; x <= MAXA; x++) { if (acc + byAge[x] >= n / 2) { med = x + (n / 2 - acc) / Math.max(1, byAge[x]); break; } acc += byAge[x]; }
+  return {m, f, kids, work, old, median: med};
+}
+/* percentage tables like the book's (each sex as % of that sex, 17 groups 0–4 … 80+) */
+const shareOf = (col, a, b) => { let s = 0; for (let g = a; g <= b; g++) s += col[g]; return s; };
+function medianOfGroups(col){
+  const n = col.reduce((a, b) => a + b, 0); let acc = 0;
+  for (let g = 0; g < col.length; g++) { if (acc + col[g] >= n / 2) return 5 * g + 5 * (n / 2 - acc) / col[g]; acc += col[g]; }
+  return 80;
+}
+/* the book's table: India, estimated for 2021 (Exercise 11) */
+const INDIA2021 = {
+  m: [8.6, 8.9, 8.7, 9.3, 9.5, 9, 8.1, 7.1, 6.3, 5.7, 5, 4.2, 3.2, 2.4, 1.8, 1.2, 0.9],
+  f: [8.2, 8.4, 8.6, 9, 9.1, 8.6, 8, 7.4, 6.7, 6, 5.2, 4.2, 3.3, 2.7, 2.1, 1.4, 1.2],
+};
+/* averages over the last n years of the record */
+function recent(hist, n){
+  const h = hist.slice(-n); if (!h.length) return null;
+  const P = h.reduce((a, r) => a + (r.P0 + r.P) / 2, 0);
+  const B = h.reduce((a, r) => a + r.B, 0), D = h.reduce((a, r) => a + r.D, 0), M = h.reduce((a, r) => a + r.In - r.Out, 0);
+  const g = 100 * (Math.pow(h[h.length - 1].P / h[0].P0, 1 / h.length) - 1);
+  return {cbr: 1000 * B / P, cdr: 1000 * D / P, nat: 100 * (B - D) / P, net: 100 * M / P, g, n: h.length};
+}
+/* the stage of the demographic transition, read from the counted rates (Fig. 6.12) */
+function stageOf(cbr, cdr){
+  if (cbr < cdr - 1) return 0;                   // fewer births than deaths: shrinking
+  if (cbr >= 25 && cdr >= 15) return 1;
+  if (cbr >= 25) return 2;
+  return 3;
+}
+/* MODEL:end */
+
+const STAGE_TXT = ['Births below deaths: shrinking', 'Stage 1: high births, high deaths', 'Stage 2: deaths fall, births stay high', 'Stage 3: deaths low, births falling'];
+const COL = {male: '#3f7fd8', fem: '#c2569b', birth: '#2f9e5b', death: '#d6453d', pop: '#1d2327', kids: '#f29a1f', work: '#1f8a70', old: '#7b5cd6'};
+const INK = '#1d2327', FAINT = '#7c878c', MID = '#4a555b', HAIR = '#e6dfcc', PAPER = '#fffdf7';
+
+/* ---- state: plain data --------------------------------------------------- */
+const DEF = {tfr: 5.7, e0: 30, mig: 0};
+const S = {par: Object.assign({}, DEF), running: false, fast: false, locked: false, seed: 11, runs: 0,
+           V: null, migRun: 0, migStartOld: null, early: null};
+const shared = sharedState();
+if (shared && shared.par) {
+  S.par.tfr = clamp(+shared.par.tfr || 5.7, 1, 7.5); S.par.e0 = clamp(Math.round(+shared.par.e0 || 30), 25, 85); S.par.mig = clamp(Math.round(+shared.par.mig || 0), -30, 30);
+}
+shareState(() => ({par: Object.assign({}, S.par)}));
+function newVillage(){
+  S.runs++;
+  /* The village starts settled under India's rates around 1950, whatever the sliders say: that is the village you change. */
+  S.V = makeVillage(1000, 5.7, 30, S.seed * 7919 + S.runs);
+  S.migRun = 0; S.migStartOld = null; S.early = null;
+}
+
+/* ============================================================================
+   The stage: built once, then patched.
+   ============================================================================ */
+const svg = $('stage');
+const VIL = {w: 540, h: 360, cx: 262, cy: 196};
+const PY = {x: 566, y: 44, w: 420, h: 323, cx: 776};           // pyramid
+const GR = {x: 62, y: 452, w: 860, h: 190};                    // graph
+const XMAX = 16;                                               // % at the edge of the pyramid
+const HOUSES = [];
+let riverPts = [];
+
+function riverY(x){ return 60 + 0.00055 * Math.pow(x - 40, 2) + 22 * Math.sin(x / 70); }
+function build(){
+  const rnd = mulberry32(5);
+  /* fields: a patchwork, drawn once */
+  let fields = '';
+  const fc = ['#cfe3a0', '#dfe9b0', '#e9dc9c', '#c6dd95', '#d9e7a8', '#efe2a8'];
+  for (let gx = 0; gx < 9; gx++) for (let gy = 0; gy < 6; gy++) {
+    fields += `<rect x="${gx * 60}" y="${gy * 60}" width="60" height="60" fill="${fc[Math.floor(rnd() * fc.length)]}"/>`;
+    for (let r = 0; r < 4; r++) fields += `<line x1="${gx * 60 + 4}" y1="${gy * 60 + 10 + r * 13}" x2="${gx * 60 + 56}" y2="${gy * 60 + 10 + r * 13}" stroke="#b7c98a" stroke-width="1" opacity=".5"/>`;
+  }
+  let rv = 'M-10 ' + riverY(-10).toFixed(1);
+  for (let x = 0; x <= 560; x += 10) rv += ' L' + x + ' ' + riverY(x).toFixed(1);
+  /* house plots, nearest the chowk first; none on the river or the roads */
+  const cand = [];
+  for (let x = 12; x < VIL.w - 8; x += 17) for (let y = 14; y < VIL.h - 44; y += 15) {
+    const jx = x + (rnd() - .5) * 5, jy = y + (rnd() - .5) * 4;
+    if (Math.abs(jy - riverY(jx)) < 20) continue;
+    if (Math.abs(jy - VIL.cy) < 12 || Math.abs(jx - VIL.cx) < 11) continue;
+    if (jx > 300 && jx < 372 && jy > 118 && jy < 176) continue;   // school
+    if (jx > 158 && jx < 226 && jy > 214 && jy < 266) continue;   // health centre
+    cand.push({x: jx, y: jy, d: Math.hypot(jx - VIL.cx, (jy - VIL.cy) * 1.2) + rnd() * 18});
+  }
+  cand.sort((a, b) => a.d - b.d);
+  HOUSES.length = 0; cand.slice(0, 600).forEach(c => HOUSES.push(c));
+  let hs = '';
+  HOUSES.forEach((h, i) => hs += `<use id="h${i}" href="#house" x="${h.x.toFixed(1)}" y="${h.y.toFixed(1)}" visibility="hidden"/>`);
+
+  svg.innerHTML = `
+  <defs>
+    <g id="house"><rect x="-5.5" y="-3" width="11" height="8" fill="#f4e3c3" stroke="#a0784a" stroke-width=".8"/><path d="M-7 -2.5 L0 -8 L7 -2.5 Z" fill="#c0573a"/><rect x="-1.2" y="1" width="2.6" height="4" fill="#7a5230"/></g>
+    <g id="block"><rect x="-7" y="-10" width="14" height="16" fill="#d8d3cb" stroke="#8b857c" stroke-width=".8"/>${[-7, -3, 1].map(y => `<rect x="-4.5" y="${y}" width="3" height="2.4" fill="#6f87a8"/><rect x="1.5" y="${y}" width="3" height="2.4" fill="#6f87a8"/>`).join('')}</g>
+    <clipPath id="clipVil"><rect x="0" y="0" width="${VIL.w}" height="${VIL.h}"/></clipPath>
+  </defs>
+  <rect x="0" y="0" width="1000" height="700" fill="#fbf7ec"/>
+  <g clip-path="url(#clipVil)">
+    ${fields}
+    <path d="${rv}" fill="none" stroke="#7fb6dd" stroke-width="22" stroke-linecap="round"/>
+    <path d="${rv}" fill="none" stroke="#a9d2ee" stroke-width="10" stroke-linecap="round" opacity=".7"/>
+    <rect x="0" y="${VIL.cy - 6}" width="${VIL.w}" height="12" fill="#d9c7a3"/>
+    <rect x="${VIL.cx - 6}" y="0" width="12" height="${VIL.h}" fill="#d9c7a3"/>
+    <rect x="${VIL.cx - 30}" y="${VIL.cy - 6}" width="60" height="12" fill="#cbb58c"/>
+    <g id="houses">${hs}</g>
+    <!-- school: one classroom for every 40 children aged 5–14 -->
+    <g id="school"><rect id="schoolR" x="306" y="128" height="36" fill="#f6d77a" stroke="#a6822e" stroke-width="1.2"/><path id="schoolRoof" fill="#b5462f"/>
+      <text id="schoolT" x="306" y="178" font-size="10.5" font-weight="700" fill="#5a4410" stroke="#fffdf7" stroke-width="3" paint-order="stroke"></text></g>
+    <!-- health centre: one bed for every 15 people aged 65 and over -->
+    <g id="clinic"><rect id="clinicR" x="164" y="222" height="32" fill="#ffffff" stroke="#8a9aa5" stroke-width="1.2"/><rect x="170" y="229" width="14" height="4" fill="#d6453d"/><rect x="175" y="224" width="4" height="14" fill="#d6453d"/>
+      <text id="clinicT" x="164" y="267" font-size="10.5" font-weight="700" fill="#3c4a52" stroke="#fffdf7" stroke-width="3" paint-order="stroke"></text></g>
+    <rect x="0" y="${VIL.h - 34}" width="${VIL.w}" height="34" fill="#fffdf7" opacity=".9"/>
+    <text id="vilLine" x="14" y="${VIL.h - 12}" font-size="14" font-weight="700" fill="${INK}"></text>
+    <text id="vilLine2" x="${VIL.w - 14}" y="${VIL.h - 12}" font-size="12" fill="${MID}" text-anchor="end"></text>
+  </g>
+  <rect x="0" y="0" width="${VIL.w}" height="${VIL.h}" fill="none" stroke="${HAIR}"/>
+  <g id="movers"></g>
+
+  <!-- pyramid -->
+  <text x="${PY.x}" y="20" font-size="13" font-weight="700" fill="${MID}" letter-spacing=".08em">POPULATION PYRAMID</text>
+  <text x="${PY.cx - 26}" y="${PY.y - 6}" font-size="12" font-weight="700" fill="${COL.male}" text-anchor="end">males</text>
+  <text x="${PY.cx + 26}" y="${PY.y - 6}" font-size="12" font-weight="700" fill="${COL.fem}">females</text>
+  <g id="pyBands"></g><g id="pyBars"></g><g id="pyBook"></g><g id="pyAxes"></g>
+  <text id="pyShape" x="${PY.cx}" y="${PY.y + PY.h + 44}" font-size="13" font-weight="700" text-anchor="middle"></text>
+
+  <!-- graph -->
+  <text x="${GR.x - 40}" y="${GR.y - 26}" font-size="13" font-weight="700" fill="${MID}" letter-spacing=".08em">BIRTH RATE, DEATH RATE AND POPULATION, YEAR BY YEAR</text>
+  <g id="grKey" font-size="12"></g>
+  <g id="grAxes"></g><g id="grStages"></g>
+  <path id="grGap" opacity=".18"/>
+  <path id="grB" fill="none" stroke="${COL.birth}" stroke-width="2.4" stroke-linejoin="round"/>
+  <path id="grD" fill="none" stroke="${COL.death}" stroke-width="2.4" stroke-linejoin="round"/>
+  <path id="grP" fill="none" stroke="${COL.pop}" stroke-width="1.8" stroke-dasharray="6 4"/>
+  <text id="grEmpty" x="${GR.x + GR.w / 2}" y="${GR.y + GR.h / 2}" font-size="14" fill="${FAINT}" text-anchor="middle">Press Run: the rates are counted as the years go by.</text>
+  `;
+  $('grKey').innerHTML = `<line x1="${GR.x + 460}" y1="${GR.y - 30}" x2="${GR.x + 484}" y2="${GR.y - 30}" stroke="${COL.birth}" stroke-width="2.4"/><text x="${GR.x + 490}" y="${GR.y - 26}" fill="#20774a">birth rate</text>` +
+    `<line x1="${GR.x + 566}" y1="${GR.y - 30}" x2="${GR.x + 590}" y2="${GR.y - 30}" stroke="${COL.death}" stroke-width="2.4"/><text x="${GR.x + 596}" y="${GR.y - 26}" fill="#b0332c">death rate</text>` +
+    `<line x1="${GR.x + 674}" y1="${GR.y - 30}" x2="${GR.x + 698}" y2="${GR.y - 30}" stroke="${COL.pop}" stroke-width="1.8" stroke-dasharray="6 4"/><text x="${GR.x + 704}" y="${GR.y - 26}" fill="${MID}">population</text>` +
+    `<text x="${GR.x - 40}" y="${GR.y - 8}" fill="${FAINT}" font-size="11">per 1,000</text>`;
+}
+
+/* ---- paint ---------------------------------------------------------------- */
+function paint(){
+  const V = S.V, st = structure(V.people), N = V.people.length;
+  /* houses: each holds 5 people; when the plots run out, the middle turns into blocks of flats for 40 */
+  let blocks = 0;
+  if (N / 5 > HOUSES.length) blocks = Math.min(HOUSES.length, Math.ceil((N - 5 * HOUSES.length) / 35));
+  const used = blocks ? HOUSES.length : Math.min(HOUSES.length, Math.ceil(N / 5));
+  HOUSES.forEach((h, i) => {
+    const el = $('h' + i);
+    el.setAttribute('visibility', i < used ? 'visible' : 'hidden');
+    el.setAttribute('href', i < blocks ? '#block' : '#house');
+  });
+  const kids5 = V.people.filter(p => p.age >= 5 && p.age < 15).length;
+  const rooms = Math.max(1, Math.ceil(kids5 / 40)), beds = Math.max(1, Math.ceil(st.old / 15));
+  const sw = clamp(20 + rooms * 4, 24, 64), cw = clamp(24 + beds * 2, 28, 60);
+  $('schoolR').setAttribute('width', sw);
+  $('schoolRoof').setAttribute('d', `M302 128 L${306 + sw / 2} 116 L${310 + sw} 128 Z`);
+  $('schoolT').textContent = `School: ${rooms} classroom${rooms > 1 ? 's' : ''}`;
+  $('clinicR').setAttribute('width', cw);
+  $('clinicT').textContent = `Health centre: ${beds} bed${beds > 1 ? 's' : ''}`;
+  $('vilLine').textContent = `${N.toLocaleString('en-IN')} people`;
+  $('vilLine2').textContent = blocks ? `${blocks} block${blocks > 1 ? 's' : ''} of flats, ${used - blocks} houses: the farmland is filling up` : `${used} houses, 5 people each`;
+
+  paintPyramid(st, N);
+  paintGraph();
+  paintNums(st, N);
+  paintWhy(st, N);
+  $('clock').textContent = V.year;
+  for (const k of ['tfr', 'e0', 'mig']) $(k).value = S.par[k];
+  $('tfrOut').textContent = fmt(S.par.tfr, 1);
+  $('e0Out').textContent = S.par.e0 + ' y';
+  $('migOut').textContent = (S.par.mig > 0 ? '+' : '') + S.par.mig;
+}
+function paintPyramid(st, N){
+  const rowH = PY.h / 17, half = PY.w / 2 - 26, bx = v => clamp(v, 0, XMAX) / XMAX * half;
+  const nm = st.m.reduce((a, b) => a + b, 0) || 1, nf = st.f.reduce((a, b) => a + b, 0) || 1;
+  let bands = '', bars = '', ax = '';
+  const zone = [[0, 2, '#f8ecd2', 'children 0–14'], [3, 12, '#e3efe8', 'working age 15–64'], [13, 16, '#ece6f5', 'elderly 65+']];
+  for (const [a0, a1, c, lab] of zone) {
+    const y0 = PY.y + PY.h - (a1 + 1) * rowH, h = (a1 - a0 + 1) * rowH;
+    bands += `<rect x="${PY.x}" y="${y0.toFixed(1)}" width="${PY.w}" height="${h.toFixed(1)}" fill="${c}"/><text x="${PY.x + PY.w - 4}" y="${(y0 + 13).toFixed(1)}" font-size="11" fill="${FAINT}" text-anchor="end">${lab}</text>`;
+  }
+  for (let g = 0; g < 17; g++) {
+    const y = PY.y + PY.h - (g + 1) * rowH + 1.5, h = rowH - 3;
+    const pm = 100 * st.m[g] / nm, pf = 100 * st.f[g] / nf;
+    bars += `<rect x="${(PY.cx - 26 - bx(pm)).toFixed(1)}" y="${y.toFixed(1)}" width="${bx(pm).toFixed(1)}" height="${h.toFixed(1)}" rx="2" fill="${COL.male}"/>`;
+    bars += `<rect x="${PY.cx + 26}" y="${y.toFixed(1)}" width="${bx(pf).toFixed(1)}" height="${h.toFixed(1)}" rx="2" fill="${COL.fem}"/>`;
+    bars += `<text x="${PY.cx}" y="${(y + h / 2 + 4).toFixed(1)}" font-size="10.5" fill="${MID}" text-anchor="middle">${g === 16 ? '80+' : (5 * g) + '–' + (5 * g + 4)}</text>`;
+  }
+  for (const v of [0, 4, 8, 12, 16]) {
+    ax += `<text x="${(PY.cx + 26 + bx(v)).toFixed(1)}" y="${PY.y + PY.h + 15}" font-size="10.5" fill="${FAINT}" text-anchor="middle">${v}</text>`;
+    ax += `<text x="${(PY.cx - 26 - bx(v)).toFixed(1)}" y="${PY.y + PY.h + 15}" font-size="10.5" fill="${FAINT}" text-anchor="middle">${v}</text>`;
+  }
+  ax += `<text x="${PY.cx}" y="${PY.y + PY.h + 28}" font-size="11" fill="${FAINT}" text-anchor="middle">per cent of all males · per cent of all females</text>`;
+  $('pyBands').innerHTML = bands; $('pyBars').innerHTML = bars; $('pyAxes').innerHTML = ax;
+  /* the book's table for India, 2021, as a dashed outline to compare shapes */
+  let bk = '';
+  if (S.book) {
+    const side = (col, sgn) => { let d = ''; for (let g = 0; g < 17; g++) { const yb = PY.y + PY.h - g * rowH, yt = yb - rowH, x = PY.cx + sgn * (26 + bx(col[g])); d += (g ? 'L' : 'M') + x.toFixed(1) + ' ' + yb.toFixed(1) + 'L' + x.toFixed(1) + ' ' + yt.toFixed(1); } return d; };
+    bk = `<path d="${side(INDIA2021.m, -1)}" fill="none" stroke="${INK}" stroke-width="1.6" stroke-dasharray="4 3"/><path d="${side(INDIA2021.f, 1)}" fill="none" stroke="${INK}" stroke-width="1.6" stroke-dasharray="4 3"/>` +
+      `<text x="${PY.x + 4}" y="${PY.y + 14}" font-size="11" font-weight="700" fill="${INK}">- - India, 2021 (book)</text>`;
+  }
+  $('pyBook').innerHTML = bk;
+  /* the shape, read from the pyramid */
+  const base = st.kids, top = st.old;
+  const R = (st.m[0] + st.m[1] + st.m[2] + st.f[0] + st.f[1] + st.f[2]) / Math.max(1, st.m[3] + st.m[4] + st.m[5] + st.f[3] + st.f[4] + st.f[5]);
+  const waist = (st.m[4] + st.m[5] + st.m[6] + st.f[4] + st.f[5] + st.f[6]) < (st.m[7] + st.m[8] + st.m[9] + st.f[7] + st.f[8] + st.f[9]) && S.par.mig < 0;
+  const txt = top > base ? 'More elderly than children: an ageing village' : waist ? 'A pinched waist: the young adults have left' : R > 1.15 ? 'A wide base: a young, growing village' : R < 0.87 ? 'A narrowing base: fewer children each year' : 'Straight sides: a steady village';
+  $('pyShape').textContent = txt;
+  $('pyShape').setAttribute('fill', top > base || waist ? '#6b46b8' : R > 1.15 ? '#20774a' : R < 0.87 ? '#b0332c' : '#3d5f95');
+}
+function paintGraph(){
+  const H = S.V.hist;
+  $('grEmpty').setAttribute('visibility', H.length ? 'hidden' : 'visible');
+  const span = Math.max(60, H.length ? H[H.length - 1].year : 0), y0 = Math.max(0, span - 100), y1 = Math.max(60, y0 + (span - y0 > 60 ? span - y0 : 60));
+  const gx = y => GR.x + (y - y0) / (y1 - y0) * GR.w;
+  const RMAX = 60, gyR = v => GR.y + GR.h - clamp(v, 0, RMAX) / RMAX * GR.h;
+  /* 5-year running average: a thousand people give noisy yearly counts */
+  const sm = [];
+  H.forEach((r, i) => { if (r.year < y0) return; const a = recent(H.slice(Math.max(0, i - 4), i + 1), 5); sm.push({year: r.year, b: a.cbr, d: a.cdr, P: r.P}); });
+  let pMax = 1000; for (const q of sm) pMax = Math.max(pMax, q.P);
+  const PMAX = niceMax(pMax * 1.1), gyP = v => GR.y + GR.h - v / PMAX * GR.h;
+  let ax = `<rect x="${GR.x}" y="${GR.y}" width="${GR.w}" height="${GR.h}" fill="${PAPER}" stroke="${HAIR}"/>`;
+  for (const v of [0, 15, 25, 35, 50]) ax += `<line x1="${GR.x}" y1="${gyR(v)}" x2="${GR.x + GR.w}" y2="${gyR(v)}" stroke="#f0eadb"/><text x="${GR.x - 6}" y="${gyR(v) + 4}" font-size="11" fill="${FAINT}" text-anchor="end">${v}</text>`;
+  for (const f of [0.5, 1]) ax += `<text x="${GR.x + GR.w + 6}" y="${gyP(PMAX * f) + 4}" font-size="11" fill="${MID}">${Math.round(PMAX * f).toLocaleString('en-IN')}</text>`;
+  const stepY = (y1 - y0) > 70 ? 20 : 10;
+  for (let y = Math.ceil(y0 / stepY) * stepY; y <= y1; y += stepY) ax += `<text x="${gx(y)}" y="${GR.y + GR.h + 16}" font-size="11" fill="${FAINT}" text-anchor="middle">${y}</text>`;
+  ax += `<text x="${GR.x + GR.w}" y="${GR.y + GR.h + 32}" font-size="11" fill="${FAINT}" text-anchor="end">years →</text>`;
+  $('grAxes').innerHTML = ax;
+  const line = k => sm.map((q, i) => (i ? 'L' : 'M') + gx(q.year).toFixed(1) + ' ' + (k === 'P' ? gyP(q.P) : gyR(q[k])).toFixed(1)).join('');
+  $('grB').setAttribute('d', line('b')); $('grD').setAttribute('d', line('d')); $('grP').setAttribute('d', line('P'));
+  /* the gap between births and deaths is the natural increase */
+  const gap = sm.length ? sm.map((q, i) => (i ? 'L' : 'M') + gx(q.year).toFixed(1) + ' ' + gyR(q.b).toFixed(1)).join('') + sm.slice().reverse().map(q => 'L' + gx(q.year).toFixed(1) + ' ' + gyR(q.d).toFixed(1)).join('') + 'Z' : '';
+  $('grGap').setAttribute('d', gap);
+  const last = sm[sm.length - 1];
+  $('grGap').setAttribute('fill', last && last.d > last.b ? COL.death : COL.birth);
+  /* stage bands along the top, from the counted rates */
+  let stg = '', cur = null, from = null;
+  const flush = (to) => { if (cur == null) return; const xa = gx(from), xb = gx(to); if (xb - xa < 2) return;
+    stg += `<rect x="${xa.toFixed(1)}" y="${GR.y + 1}" width="${(xb - xa).toFixed(1)}" height="16" fill="${['#f6dcd8', '#efe7d2', '#dcefe2', '#e2e9f6'][cur]}"/>` +
+      (xb - xa > (cur ? 52 : 64) ? `<text x="${((xa + xb) / 2).toFixed(1)}" y="${GR.y + 13}" font-size="10.5" font-weight="700" fill="${MID}" text-anchor="middle">${cur ? 'Stage ' + cur : 'shrinking'}</text>` : ''); };
+  sm.forEach(q => { const s = stageOf(q.b, q.d); if (s !== cur) { flush(q.year); cur = s; from = q.year - 1; } });
+  if (sm.length) flush(sm[sm.length - 1].year);
+  $('grStages').innerHTML = stg;
+}
+function niceMax(v){ const p = Math.pow(10, Math.floor(Math.log10(v))); for (const m of [1, 1.5, 2, 2.5, 3, 4, 5, 6, 8, 10]) if (m * p >= v) return m * p; return 10 * p; }
+function paintNums(st, N){
+  const H = S.V.hist, r = H[H.length - 1], a = recent(H, 5);
+  if (!S.locked) { $('nums').innerHTML = '<p class="note" style="margin:0;grid-column:1/-1">The counts appear once you have made a prediction.</p>'; return; }
+  const row = (k, v) => `<span>${k}</span><b>${v}</b>`;
+  const pc = v => fmt(100 * v / Math.max(1, N), 0) + '%';
+  $('nums').innerHTML =
+    row('Born this year', r ? r.B : '—') + row('Died this year', r ? r.D : '—') + row('Moved in / moved out', r ? `${r.In} / ${r.Out}` : '—') +
+    `<span class="sep"></span>` +
+    row('Birth rate (5-year average)', a ? fmt(a.cbr, 1) + ' per 1,000' : '—') +
+    row('Death rate (5-year average)', a ? fmt(a.cdr, 1) + ' per 1,000' : '—') +
+    row('Population growth', a ? (a.g > 0 ? '+' : '') + fmt(a.g, 2) + '% a year' : '—') +
+    `<span class="sep"></span>` +
+    row('Children, 0–14', `${st.kids} (${pc(st.kids)})`) + row('Working age, 15–64', `${st.work} (${pc(st.work)})`) + row('Elderly, 65+', `${st.old} (${pc(st.old)})`) +
+    row('Median age', fmt(st.median, 0) + ' years');
+}
+/* The narrator: it describes THIS state, in words, from the counts. */
+function paintWhy(st, N){
+  const H = S.V.hist, a = recent(H, 5), L = lifeTable(S.par.e0);
+  if (!S.locked) { $('why').innerHTML = '<p class="note" style="margin:0">Make your prediction first. Then press Run.</p>'; return; }
+  if (!a) { $('why').innerHTML = `<p>The village is settled into India’s rates around 1950: about <b>5.7 children</b> per woman and a life expectancy of <b>30 years</b>. Press <b>Run</b> and watch it for a few years first.</p>`; return; }
+  const stg = stageOf(a.cbr, a.cdr);
+  let t = `<p><b>${STAGE_TXT[stg]}.</b> Over the last ${a.n} years, ${fmt(a.cbr, 0)} babies were born and ${fmt(a.cdr, 0)} people died for every 1,000 people in the village. `;
+  t += a.nat >= 0 ? `So births add <b>${fmt(a.nat, 1)}%</b> a year more than deaths take away.` : `Deaths now outnumber births: the village loses <b>${fmt(-a.nat, 1)}%</b> a year.`;
+  if (Math.abs(a.net) > 0.05) t += ` Migration ${a.net > 0 ? 'adds' : 'takes away'} another <b>${fmt(Math.abs(a.net), 1)}%</b>.`;
+  t += `</p><p>With a life expectancy of ${S.par.e0} years, <b>${fmt(L.u5, 0)}</b> of every 1,000 babies die before they are five. `;
+  t += S.par.tfr > 2.2 ? `Each woman has ${fmt(S.par.tfr, 1)} children, more than the <b>2.1</b> needed to replace her and her partner, so each generation is bigger than the last.`
+     : S.par.tfr < 2.0 ? `Each woman has ${fmt(S.par.tfr, 1)} children, fewer than the <b>2.1</b> needed to replace her and her partner, so each generation is smaller than the last.`
+     : `Each woman has about <b>2.1</b> children, just enough to replace her and her partner.`;
+  t += `</p>`;
+  const kidsP = 100 * st.kids / Math.max(1, N), oldP = 100 * st.old / Math.max(1, N);
+  t += `<p>${fmt(kidsP, 0)}% are children and ${fmt(oldP, 0)}% are elderly: ` + (st.kids > 2 * st.old ? 'the village needs schools more than hospital beds.' : st.old > st.kids ? 'the village needs more health care than classrooms.' : 'the village needs both schools and health care.') + `</p>`;
+  if (S.par.mig < 0) t += `<p>${-S.par.mig} young people leave every year. The ones who stay are older, and fewer babies are born in the village.</p>`;
+  $('why').innerHTML = t;
+}
+
+/* ---- findings: reached by the counts, never by a button ------------------- */
+function check(){
+  if (!S.locked) return;
+  const V = S.V, H = V.hist, a = recent(H, 5), st = structure(V.people), N = V.people.length;
+  if (!a || a.n < 5) return;
+  const stg = stageOf(a.cbr, a.cdr);
+  if (!S.early && H.length >= 5 && H.slice(-5).every(r => r.e0 <= 35)) S.early = {g: a.g, cbr: a.cbr, cdr: a.cdr};
+  if (stg === 2 && a.g >= 2.5) discover('boom');
+  if (found('boom') && stg === 3) discover('stage3');
+  if (st.old > st.kids && N > 50) discover('ageing');
+  if (S.par.mig === 0 && H.slice(-5).every(r => r.mig === 0) && a.nat < -0.1) discover('shrink');
+  if (N > 0 && st.work / N >= 0.65) discover('dividend');
+  const a10 = recent(H, 10);
+  if (S.par.tfr >= 2.0 && S.par.tfr <= 2.2 && S.par.e0 >= 60 && H.slice(-10).every(r => r.mig === 0 && Math.abs(r.tfr - 2.1) < 0.15) && Math.abs(a10.nat) < 0.3) discover('replace');
+  if (S.par.mig <= -10) {
+    S.migRun++;
+    const g2034 = st.m[4] + st.m[5] + st.m[6] + st.f[4] + st.f[5] + st.f[6], g3549 = st.m[7] + st.m[8] + st.m[9] + st.f[7] + st.f[8] + st.f[9];
+    if (S.migRun >= 10 && g2034 < g3549) discover('leave');
+  } else S.migRun = 0;
+  maybeExplain(a);
+}
+let EXPLAINED = false;
+function maybeExplain(a){
+  if (EXPLAINED || !POE || !S.early) return;
+  const H = S.V.hist, last = H.slice(-10);
+  if (last.length < 10 || !last.every(r => r.e0 >= 60 && r.tfr >= 4.5)) return;
+  EXPLAINED = true;
+  POE.explain(`In the old village, ${fmt(S.early.cbr, 0)} were born and ${fmt(S.early.cdr, 0)} died per 1,000 each year, so it grew by <b>${fmt(S.early.g, 1)}%</b> a year. ` +
+    `Now people live longer: deaths have fallen to <b>${fmt(a.cdr, 0)}</b> per 1,000, but births are still <b>${fmt(a.cbr, 0)}</b>. ` +
+    `The gap is wider than ever, and the village grows by <b>${fmt(a.g, 1)}%</b> a year. This is Stage 2 of the demographic transition, what happened in India after 1951.`);
+}
+
+/* ============================================================================
+   Running
+   ============================================================================ */
+build();
+let ANIM = null, ACC = 0;
+const CAP = 30000;
+function tick(){
+  if (S.V.people.length >= CAP) { setRunning(false); toast('The village has become a town of 30,000. Start again to try other rates.'); return; }
+  stepYear(S.V, S.par);
+  check();
+}
+function setRunning(on){
+  S.running = on;
+  $('btnRun').textContent = on ? '❚❚ Pause' : '▶ Run';
+  if (ANIM) { ANIM.stop(); ANIM = null; }
+  if (on) ANIM = loop(dt => {
+    /* Reduced motion: the same years, five at a time, without the in-between frames. */
+    const rate = S.fast ? 14 : 3;
+    ACC += dt * rate;
+    const chunk = reduced() ? 5 : 1;
+    let did = false;
+    while (ACC >= chunk && S.running) { for (let i = 0; i < chunk && S.running; i++) tick(); ACC -= chunk; did = true; }
+    if (did) paint();
+  });
+}
+function lockControls(lock){
+  for (const id of ['tfr', 'e0', 'mig', 'btnRun', 'btnFast', 'btnRestart', 'pre1950', 'pre2025', 'preRep', 'btnBook']) $(id).disabled = lock;
+  $('gate').hidden = !lock;
+}
+function setPar(k, v){ S.par[k] = v; paint(); track('set', {k, v}); }
+$('tfr').addEventListener('input', e => { S.par.tfr = +e.target.value; paint(); });
+$('e0').addEventListener('input', e => { S.par.e0 = +e.target.value; paint(); });
+$('mig').addEventListener('input', e => { S.par.mig = +e.target.value; paint(); });
+for (const k of ['tfr', 'e0', 'mig']) $(k).addEventListener('change', () => track('set', {k, v: S.par[k]}));
+$('btnRun').addEventListener('click', () => { setRunning(!S.running); sound('tick'); track('run', {on: S.running}); });
+$('btnFast').addEventListener('click', () => { S.fast = !S.fast; $('btnFast').setAttribute('aria-pressed', S.fast); sound('tick'); });
+$('btnRestart').addEventListener('click', () => { newVillage(); ACC = 0; paint(); sound('whoosh'); track('restart'); });
+$('pre1950').addEventListener('click', () => { S.par.tfr = 5.7; S.par.e0 = 30; sound('pop'); setPar('preset', '1950'); });
+$('pre2025').addEventListener('click', () => { S.par.tfr = 1.9; S.par.e0 = 70; sound('pop'); setPar('preset', '2025'); });
+$('btnBook').addEventListener('click', () => { S.book = !S.book; $('btnBook').setAttribute('aria-pressed', S.book); sound('tick'); paint(); track('bookOutline', {on: S.book}); });
+$('preRep').addEventListener('click', () => { S.par.tfr = 2.1; sound('pop'); setPar('preset', 'replacement'); });
+
+findings($('finds'), [
+  {id: 'boom',     icon: '↗', label: 'Deaths fall, births stay high: the village booms', hint: 'Let people live longer'},
+  {id: 'stage3',   icon: '↘', label: 'Births fall too: growth slows (Stage 3)', hint: 'After the boom, have fewer children'},
+  {id: 'dividend', icon: '⚒', label: 'Two in three are of working age: a demographic dividend', hint: 'Watch the middle of the pyramid'},
+  {id: 'replace',  icon: '=', label: 'Replacement level: 2.1 children hold the village steady', hint: 'What keeps numbers level?'},
+  {id: 'ageing',   icon: '☂', label: 'More elderly than children', hint: 'Can the top outgrow the base?'},
+  {id: 'shrink',   icon: '▼', label: 'Fewer births than deaths: the village shrinks', hint: 'Go below replacement, and wait'},
+  {id: 'leave',    icon: '→', label: 'Young people leave: a pinched waist', hint: 'Send young people to the city'},
+], () => toast('All seven found. You have walked a village through the whole demographic transition.', 4200));
+
+const POE = predict($('poe'), {
+  id: 'people-longer-lives',
+  q: 'The village gets vaccines, clean water and a health centre, so people live much longer. Families still have as many children as before. What happens to the population?',
+  options: [
+    {id: 'same',   text: 'It stays about the same.'},
+    {id: 'faster', text: 'It grows faster than ever.', right: true},
+    {id: 'shrink', text: 'It shrinks, because fewer children are needed.'},
+    {id: 'upDown', text: 'It grows for a year or two, then falls back.'},
+  ],
+  onLock(){
+    S.locked = true;
+    lockControls(false);
+    say('Press Run. Watch the village for a few years, then raise life expectancy to seventy.');
+    toast('Press Run. After a few years, raise life expectancy to 70 and keep 5.7 children.', 4200);
+    paint();
+  },
+});
+newVillage();
+lockControls(!POE.locked);
+if (!Play.FF('predict')) S.locked = true;
+paint();
+window.PG_STATE = () => {
+  const V = S.V, st = structure(V.people), H = V.hist;
+  return {par: Object.assign({}, S.par), running: S.running, fast: S.fast, locked: S.locked, year: V.year, N: V.people.length,
+    kids: st.kids, work: st.work, old: st.old, median: st.median, last: H[H.length - 1] || null, avg5: recent(H, 5), early: S.early,
+    stage: (() => { const a = recent(H, 5); return a ? stageOf(a.cbr, a.cdr) : null; })()};
+};
+window.PG_MODEL = {lifeTable, lotka, makeVillage, stepYear, structure, shareOf, medianOfGroups, INDIA2021, recent, stageOf, W};
+</script>
+</body>
+</html>

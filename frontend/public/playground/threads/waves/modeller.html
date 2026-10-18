@@ -1,0 +1,781 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sound Waves</title>
+<meta name="description" content="Class 9: a loudspeaker pushes on a column of air parcels joined like springs. Compressions travel while each parcel only jiggles; hear pitch and loudness change, measure v = fλ, and time an echo.">
+<link rel="icon" href="../../favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600&family=Inter:wght@400;500;600;700&family=Nunito:wght@500;700;800&family=Newsreader:opsz,wght@6..72,400;6..72,500&family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="../../play.css">
+<style>
+/* Only what this page needs beyond play.css. */
+.pg-stage{align-self:start; min-height:0}
+.gate{position:absolute; inset:0; display:grid; place-items:center; pointer-events:none}
+.gate span{background:rgba(13,42,52,.86); color:#fff; padding:10px 16px; border-radius:99px; font-weight:600; font-size:14px}
+.seg{display:grid; grid-template-columns:1fr 1fr; gap:4px; background:var(--sunk); padding:4px; border-radius:var(--radius-sm); margin-bottom:8px}
+.seg.three{grid-template-columns:1fr 1fr 1fr}
+.seg button{border:0; background:transparent; border-radius:7px; min-height:30px; font-weight:600; font-size:13px; cursor:pointer; color:var(--ink-2)}
+.seg button[aria-pressed="true"]{background:var(--card); color:var(--ink); box-shadow:var(--shadow)}
+.seg button:disabled{opacity:.5; cursor:default}
+.ctl{grid-template-columns:96px 1fr 84px; margin:4px 0}
+.ctl label{font-size:12.5px; line-height:1.2}
+.ctl output{font-family:var(--font-mono); font-size:12.5px; font-weight:600; min-width:0}
+.nums{display:grid; grid-template-columns:1fr auto; gap:3px 12px; font-size:13.5px}
+.nums span{color:var(--ink-2)}
+.nums b{font-family:var(--font-mono); font-weight:600; font-size:12.5px; font-variant-numeric:tabular-nums; text-align:right}
+.nums .eq{grid-column:1/-1; font-family:var(--font-mono); font-size:11.5px; color:var(--ink-3); margin:-2px 0 4px}
+.nums .sep{grid-column:1/-1; height:1px; background:var(--hair); margin:3px 0}
+.why p{font-size:13.5px; margin-bottom:.5em}
+.note{font-size:12.5px; color:var(--ink-3); margin:6px 0 0}
+.kicker2{font-size:11px; letter-spacing:.07em; text-transform:uppercase; font-weight:700; color:var(--ink-3); margin:8px 0 2px}
+#micHit, #lamHit, #wallHit, #echoHit{cursor:grab}
+#micHit.dragging, #lamHit.dragging, #wallHit.dragging, #echoHit.dragging{cursor:grabbing}
+</style>
+</head>
+<body>
+<header class="pg-top"></header>
+
+<div class="pg-intro">
+  <h1>Sound waves</h1>
+  <p>A loudspeaker pushes and pulls on the air in a tube. Each thin slice of air is joined to the next like a spring, and the page works out how every slice moves, many times a frame.
+     Watch the squeezes (compressions) and stretches (rarefactions) travel while the air itself stays put, hear what frequency and amplitude do to the note, measure
+     speed = frequency × wavelength, and time an echo off a wall. NCERT Class 9 Science, Chapter 10.</p>
+</div>
+
+<main class="pg-main wide-side">
+  <section class="pg-stage" id="stageWrap">
+    <svg id="stage" viewBox="0 0 1000 700" role="img" aria-label="A loudspeaker driving air parcels along a tube, with graphs of pressure along the tube and pressure at a microphone"></svg>
+    <div class="gate" id="gate"><span>Make your prediction first →</span></div>
+  </section>
+
+  <aside class="pg-side">
+    <div id="poe"></div>
+
+    <div class="card" id="ctlCard">
+      <div class="seg">
+        <button id="tabWave" aria-pressed="true">The wave</button>
+        <button id="tabEcho" aria-pressed="false">Echo</button>
+      </div>
+      <div id="ctlWave">
+        <div class="kicker2" style="margin-top:0">The sound travels through</div>
+        <div class="seg three" id="media">
+          <button data-m="air" aria-pressed="true">Air</button>
+          <button data-m="water" aria-pressed="false">Water</button>
+          <button data-m="steel" aria-pressed="false">Steel</button>
+        </div>
+        <div class="ctl"><label for="freq">Frequency</label><input type="range" id="freq" min="70" max="460" step="1" value="250"><output id="freqOut">316 Hz</output></div>
+        <div class="ctl"><label for="amp">Loudness</label><input type="range" id="amp" min="20" max="110" step="1" value="60"><output id="ampOut">60 dB</output></div>
+        <div class="ctl" id="tempRow"><label for="temp">Air temperature</label><input type="range" id="temp" min="-20" max="45" step="1" value="22"><output id="tempOut">22 °C</output></div>
+        <div class="row">
+          <button class="btn primary sm" id="btnListen">🔊 Listen</button>
+          <button class="btn sm" id="btnPause">❚❚ Pause</button>
+        </div>
+        <p class="note">Drag the microphone along the tube. Drag the end of the λ bracket on the graph to set the wavelength: the frequency follows.</p>
+      </div>
+      <div id="ctlEcho" hidden>
+        <div class="ctl"><label for="dist">Wall distance</label><input type="range" id="dist" min="3" max="150" step="1" value="40"><output id="distOut">40 m</output></div>
+        <div class="ctl"><label for="temp2">Air temperature</label><input type="range" id="temp2" min="-20" max="45" step="1" value="15"><output id="temp2Out">15 °C</output></div>
+        <div class="kicker2">The wall is covered with</div>
+        <div class="seg" id="surf">
+          <button data-s="hard" aria-pressed="true">Bare concrete</button>
+          <button data-s="soft" aria-pressed="false">Thick curtains</button>
+        </div>
+        <div class="row"><button class="btn primary sm" id="btnClap">👏 Clap</button></div>
+        <p class="note">Drag the wall, or drag the echo along the time graph: the model moves the wall to where that echo would come from.</p>
+      </div>
+    </div>
+
+    <div class="card" id="numCard">
+      <div class="kicker" id="numKick">Measured in the tube</div>
+      <div id="nums"></div>
+    </div>
+
+    <div class="card why" id="whyCard" hidden>
+      <div class="kicker">What is happening</div>
+      <div id="why"></div>
+    </div>
+
+    <div class="card"><div class="kicker">To find</div><div id="finds"></div></div>
+  </aside>
+</main>
+
+<script src="../../play.js"></script>
+<script>
+'use strict';
+const {$, esc, clamp, lerp, fmt, drag, loop, sound, tone, say, track, toast, predict, findings, discover, found,
+       shareState, sharedState, mount, reduced} = Play;
+mount({thread: 'waves', band: 'modeller'});
+
+/* MODEL:start ==================================================================
+   THE TUBE. The medium is cut into NC thin slices, each joined to the next by the
+   springiness of the medium. Slice i is displaced u_i along the tube, and Newton's
+   second law for it is
+        m ü_i = K (u_{i+1} − 2u_i + u_{i−1}),
+   which is the wave equation on a chain: disturbances travel at v = a√(K/m), where
+   a is the slice thickness. v is set from the medium: in air it comes from the
+   temperature, v = 331 √(T / 273 K) m/s (331 m/s at 0 °C, 344 m/s at 22 °C, the
+   book's numbers); water 1500 m/s and steel 5000 m/s (the book's Table 10.1).
+   Slice 0 is the loudspeaker cone, moved as u_0 = s₀ sin(2πft). The far end lets
+   the wave out without reflecting (a matched, absorbing end).
+   Integrated with the leapfrog scheme, one slice per time step.
+
+   Nothing about the wavelength is put in: the page MEASURES λ as the spacing between
+   compressions in the chain, and the period at the microphone from its own trace.
+
+   Pressure: the air is squeezed where slices crowd together, p = −ρv² ∂u/∂x.
+   Loudness: the level in decibels is L = 20 log₁₀(p₀ / 20 µPa); a slice's real
+   swing is s₀ = p₀ / (ρ v 2πf).
+
+   THE ECHO. A clap is a pulse whose front moves at v; it is stepped through time,
+   turned round by the wall, and the time it reaches the ear again is recorded. The
+   ear hears two separate sounds only if they arrive at least 0.1 s apart (the book).
+   ============================================================================ */
+const NC = 600;                                    // slices in the tube
+const P_REF = 20e-6;                               // Pa, the quietest sound a young ear hears (0 dB)
+const MEDIA = {
+  air:   {name: 'air',   rho: T => 1.293 * 273.15 / T},
+  water: {name: 'water', v: 1500, rho: () => 1000},
+  steel: {name: 'steel', v: 5000, rho: () => 7800},
+};
+const vAir = tc => 331 * Math.sqrt((tc + 273.15) / 273.15);
+const speedIn = (m, tc) => m === 'air' ? vAir(tc) : MEDIA[m].v;
+const densityOf = (m, tc) => MEDIA[m].rho(tc + 273.15);
+const pAmp = dB => P_REF * Math.pow(10, dB / 20);
+const swing = (dB, f, m, tc) => pAmp(dB) / (densityOf(m, tc) * speedIn(m, tc) * 2 * Math.PI * f);
+const audible = f => f >= 20 && f <= 20000;
+const VIEWS = [0.02, 0.05, 0.2, 0.5, 2, 5, 20, 50, 200];   // tube lengths shown, m
+const viewFor = lam => VIEWS.find(V => V >= 3.5 * lam) || 200;   // at least three and a half waves in view
+const slowFor = V => 2000 / V;                     // the picture is slowed so sound in air crosses any view in ~6 s
+
+function makeTube(o){
+  return {V: o.V, a: o.V / NC, f: o.f, v: o.v, t: 0, phase: 0, u: new Float64Array(NC + 1), up: new Float64Array(NC + 1), un: new Float64Array(NC + 1),
+          tChange: 0, xFront: 0};
+}
+/* advance the chain by dt seconds of real (not slowed) time. The step is exactly one slice
+   per step (Courant number 1), for which the leapfrog scheme carries a wave without any
+   numerical spreading; leftover time is carried to the next call. */
+function stepTube(tb, dt){
+  tb.acc = (tb.acc || 0) + dt;
+  const h = tb.a / tb.v;
+  while (tb.acc >= h) {
+    tb.acc -= h;
+    const {u, up, un} = tb;
+    tb.phase += 2 * Math.PI * tb.f * h;
+    const ramp = tb.t < 1 / tb.f ? Math.sin(Math.PI / 2 * tb.t * tb.f) ** 2 : 1;   // the speaker starts gently
+    un[0] = ramp * Math.sin(tb.phase);
+    for (let i = 1; i < NC; i++) un[i] = u[i + 1] + u[i - 1] - up[i];
+    un[NC] = u[NC - 1];                                   // the far end lets the wave out
+    tb.up = u; tb.u = un; tb.un = up;
+    tb.t += h;
+  }
+  tb.xFront = Math.min(tb.V, tb.v * tb.t);
+}
+/* pressure along the tube, in units of the pressure amplitude: −(∂u/∂x)/k */
+function pressureProfile(tb){
+  const k = 2 * Math.PI * tb.f / tb.v, out = new Float64Array(NC);
+  for (let i = 0; i < NC; i++) out[i] = -(tb.u[i + 1] - tb.u[i]) / tb.a / k;
+  return out;
+}
+/* the wavelength, measured: mean spacing of the compressions (pressure peaks) in the stretch
+   of tube filled since the frequency was last changed */
+function measureLambda(tb){
+  const p = pressureProfile(tb);
+  /* keep clear of the front, where the wave starts abruptly */
+  const iEnd = Math.floor((Math.min(tb.xFront, tb.v * (tb.t - tb.tChange)) - 0.3 * tb.v / tb.f) / tb.a) - 3;
+  const peaks = [];
+  for (let i = 3; i < Math.min(iEnd, NC - 3); i++)
+    if (p[i] > 0.5 && p[i] >= p[i - 1] && p[i] > p[i + 1]) {
+      /* parabolic refinement of the peak position */
+      const d = (p[i - 1] - p[i + 1]) / (2 * (p[i - 1] - 2 * p[i] + p[i + 1]));
+      const x = (i + 0.5 + (isFinite(d) ? d : 0)) * tb.a;
+      if (!peaks.length || x - peaks[peaks.length - 1] > tb.a * 4) peaks.push(x);
+    }
+  if (peaks.length < 3) return null;
+  return {lambda: (peaks[peaks.length - 1] - peaks[0]) / (peaks.length - 1), n: peaks.length, peaks};
+}
+/* run a tube on its own, for a test or a check: f, medium, temperature; returns what it measures */
+function runTube(o){
+  const v = speedIn(o.medium || 'air', o.tc == null ? 22 : o.tc), lam = v / o.f, V = o.V || viewFor(lam);
+  const tb = makeTube({V, f: o.f, v});
+  stepTube(tb, 1.05 * V / v);
+  const m = measureLambda(tb);
+  return {v, V, lambda: m && m.lambda, crests: m && m.n, fl: m && o.f * m.lambda, front: tb.xFront};
+}
+/* the clap and its echo: step the pulse front until it is back at the ear */
+function echoRun(d, v, R = 0.9, dt = 1e-4){
+  let x = 0, dir = 1, t = 0, path = 0;
+  while (t < 10) {
+    x += dir * v * dt; path += v * dt; t += dt;
+    if (dir > 0 && x >= d) { x = 2 * d - x; dir = -1; }
+    if (dir < 0 && x <= 0) break;
+  }
+  /* the exact crossing, interpolated inside the last step */
+  const over = -x / v;
+  t -= over;
+  const clapDb = 100;                                  // a clap, 1 m from the ear
+  return {t, echoDb: clapDb + 20 * Math.log10(R / (2 * d)), clapDb, separate: t >= 0.1};
+}
+const echoDistanceFor = (t, v) => v * t / 2;
+const minEchoDistance = v => v * 0.1 / 2;
+/* MODEL:end */
+
+/* ---- state ------------------------------------------------------------------- */
+const S = {tab: 'wave', medium: 'air', fk: 250, db: 60, tc: 22, running: true, locked: false,
+           mic: 0.55, listens: [], meas: [], dist: 40, tc2: 15, surf: 'hard', claps: [], echo: null, echoT: 0, echoRunning: false};
+const shared = sharedState();
+if (shared) {
+  if (MEDIA[shared.medium]) S.medium = shared.medium;
+  S.fk = clamp(+shared.fk || 250, 70, 460); S.db = clamp(+shared.db || 60, 20, 110); S.tc = clamp(+shared.tc || 22, -20, 45);
+  S.dist = clamp(+shared.dist || 40, 3, 150); if (shared.tab === 'echo') S.tab = 'echo';
+}
+shareState(() => ({tab: S.tab, medium: S.medium, fk: S.fk, db: S.db, tc: S.tc, dist: S.dist}));
+const freqOf = fk => { const f = Math.pow(10, fk / 100); const p = Math.pow(10, Math.floor(Math.log10(f)) - 2); return Math.round(f / p) * p; };
+const F = () => freqOf(S.fk);
+const V_ = () => speedIn(S.medium, S.tc);
+let TB = null;
+function newTube(){ const v = V_(), f = F(); TB = makeTube({V: viewFor(v / f), f, v}); MIC.length = 0; }
+const MIC = [];                                          // {t, p} samples at the microphone
+
+/* ============================================================================
+   The stage: built once, then patched.
+   ============================================================================ */
+const svg = $('stage');
+const TX0 = 100, TX1 = 950, TY0 = 86, TY1 = 214;           // tube, where the parcels sit
+const COLS = 110, ROWS = 8;
+const PG = {x: TX0, y: 338, w: TX1 - TX0, h: 110};          // pressure along the tube
+const MG = {x: TX0, y: 530, w: TX1 - TX0, h: 86};           // pressure at the microphone
+const HS = {x: TX0, y: 672, w: TX1 - TX0};                  // hearing range strip
+const xT = x => TX0 + x / TB.V * (TX1 - TX0);               // metres along the tube → px
+const INK = '#1d2327', INK2 = '#4a555b', INK3 = '#7c878c', TEAL = '#16a3a3', RED = '#d6453d', BLUE = '#2f6fd0';
+
+function build(){
+  const rnd = Play.mulberry32(9);
+  let dots = '';
+  for (let c = 0; c < COLS; c++) for (let r = 0; r < ROWS; r++) {
+    const y = TY0 + 12 + (r + 0.5) * (TY1 - TY0 - 24) / ROWS + (rnd() - .5) * 6;
+    const tracer = c === 22 && r === 3;
+    dots += `<circle class="pc" data-c="${c}" cy="${y.toFixed(1)}" r="${tracer ? 5.5 : 3.2}" fill="${tracer ? RED : '#2a7f8f'}" ${tracer ? 'id="tracer" stroke="#fff" stroke-width="1.5"' : `opacity="${(0.55 + rnd() * .35).toFixed(2)}"`}/>`;
+  }
+  svg.innerHTML = `
+  <defs>
+    <marker id="ar" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="${INK}"/></marker>
+    <marker id="arT" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="${TEAL}"/></marker>
+    <linearGradient id="gSky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#bfe3f5"/><stop offset="1" stop-color="#e9f5fb"/></linearGradient>
+    <linearGradient id="gCone" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#3b4750"/><stop offset="1" stop-color="#76848d"/></linearGradient>
+  </defs>
+  <rect x="0" y="0" width="1000" height="700" fill="#fbfaf6"/>
+
+  <!-- ===== the wave ===== -->
+  <g id="vWave">
+    <text x="24" y="30" font-size="13" font-weight="700" letter-spacing=".08em" fill="${INK2}">THE MEDIUM IN A TUBE</text>
+    <text id="waveSub" x="24" y="48" font-size="11.5" fill="${INK3}"></text>
+    <rect x="${TX0 - 14}" y="${TY0}" width="${TX1 - TX0 + 28}" height="${TY1 - TY0}" rx="14" id="tubeBg" fill="#e8f3f4" stroke="#b9d7da"/>
+    <g id="bands"></g>
+    <g id="crLabels" font-size="12" font-weight="700" text-anchor="middle"></g>
+    <line id="home" x1="0" x2="0" y1="${TY0 + 4}" y2="${TY1 - 4}" stroke="${RED}" stroke-width="1.2" stroke-dasharray="3 3" opacity=".7"/>
+    <g id="dots">${dots}</g>
+    <g id="speaker">
+      <rect x="20" y="${TY0 + 6}" width="44" height="${TY1 - TY0 - 12}" rx="6" fill="#2b343a"/>
+      <path id="cone" fill="url(#gCone)"/>
+      <circle id="coneCap" r="7" fill="#9aa7af"/>
+    </g>
+    <text x="42" y="${TY1 + 20}" font-size="11" text-anchor="middle" fill="${INK3}" id="srcLab">speaker</text>
+    <g id="micG">
+      <line id="micLine" y1="${TY0}" y2="${PG.y + PG.h}" stroke="${BLUE}" stroke-width="1.2" stroke-dasharray="4 4" opacity=".7"/>
+      <rect id="micBody" y="${TY1 + 6}" width="14" height="22" rx="7" fill="${BLUE}"/>
+      <rect id="micStem" y="${TY1 + 27}" width="3" height="9" fill="${BLUE}"/>
+      <text id="micLab" y="${TY1 + 52}" font-size="11" font-weight="700" text-anchor="middle" fill="${BLUE}">mic</text>
+    </g>
+    <g id="scale"></g>
+    <text id="frontLab" font-size="11" fill="${INK3}" y="${TY0 - 8}" text-anchor="end"></text>
+
+    <text x="24" y="${PG.y - 18}" font-size="13" font-weight="700" letter-spacing=".08em" fill="${INK2}">PRESSURE ALONG THE TUBE, RIGHT NOW</text>
+    <g id="pAxes"></g>
+    <path id="pCurve" fill="none" stroke="${TEAL}" stroke-width="2.4"/>
+    <g id="lamG">
+      <line id="lamLine" stroke="${INK}" stroke-width="1.5" marker-start="url(#ar)" marker-end="url(#ar)"/>
+      <text id="lamText" font-size="12.5" font-weight="700" text-anchor="middle" fill="${INK}"></text>
+      <circle id="lamKnob" r="7" fill="#fff" stroke="${INK}" stroke-width="2"/>
+    </g>
+    <rect id="lamHit" width="30" height="30" fill="transparent" role="slider" aria-label="Drag to set the wavelength"/>
+
+    <text x="24" y="${MG.y - 18}" font-size="13" font-weight="700" letter-spacing=".08em" fill="${INK2}">PRESSURE AT THE MICROPHONE, OVER TIME</text>
+    <g id="mAxes"></g>
+    <path id="mCurve" fill="none" stroke="${BLUE}" stroke-width="2.2"/>
+    <g id="tBracket"></g>
+
+    <g id="hear"></g>
+    <rect id="micHit" y="${TY0}" width="34" height="${TY1 - TY0 + 44}" fill="transparent" role="slider" aria-label="Microphone position: drag along the tube"/>
+    <rect id="veilW" x="0" y="${PG.y - 40}" width="1000" height="${700 - PG.y + 40}" fill="#fbfaf6" opacity=".92"/>
+    <text id="veilWt" x="500" y="${PG.y + 120}" font-size="15" text-anchor="middle" fill="${INK3}">The graphs and numbers appear once you have made a prediction.</text>
+  </g>
+
+  <!-- ===== the echo ===== -->
+  <g id="vEcho" display="none">
+    <rect x="0" y="0" width="1000" height="330" fill="url(#gSky)"/>
+    <rect x="0" y="286" width="1000" height="44" fill="#cdbf9f"/>
+    <text x="24" y="30" font-size="13" font-weight="700" letter-spacing=".08em" fill="#20404f">CLAP IN FRONT OF A WALL</text>
+    <text id="echoSub" x="24" y="48" font-size="11.5" fill="#3d5f6e"></text>
+    <g id="person" transform="translate(70 0)">
+      <circle cx="0" cy="206" r="15" fill="#f0c49a" stroke="#6b4a2e" stroke-width="1.5"/>
+      <path d="M-14 226 Q0 218 14 226 L12 262 L-12 262Z" fill="#3f7fd8"/>
+      <path d="M-12 262 L-10 286 M12 262 L10 286" stroke="#2b343a" stroke-width="7" stroke-linecap="round"/>
+      <path id="arms" d="M-12 232 L14 228 M12 232 L22 226" stroke="#f0c49a" stroke-width="6" stroke-linecap="round"/>
+    </g>
+    <g id="pulses" fill="none"></g>
+    <g id="wallG">
+      <rect id="wall" y="96" width="40" height="190" fill="#9aa1a6" stroke="#6f777c"/>
+      <g id="bricks"></g>
+      <g id="curtain"></g>
+    </g>
+    <rect id="wallHit" y="96" width="70" height="190" fill="transparent" role="slider" aria-label="Wall distance: drag"/>
+    <g id="dScale"></g>
+    <text id="echoBig" x="500" y="84" font-size="20" font-weight="700" text-anchor="middle" fill="#20404f"></text>
+
+    <text x="24" y="376" font-size="13" font-weight="700" letter-spacing=".08em" fill="${INK2}">WHAT REACHES YOUR EAR</text>
+    <text x="24" y="394" font-size="11.5" fill="${INK3}">Sound level against time after the clap, as the model works it out.</text>
+    <g id="eAxes"></g>
+    <g id="eMarks"></g>
+    <rect id="echoHit" width="40" height="150" fill="transparent" role="slider" aria-label="Echo time: drag along the graph"/>
+    <g id="eHist"></g>
+  </g>
+  `;
+}
+
+/* ---- the wave ------------------------------------------------------------------ */
+const pAx = v => PG.y + PG.h / 2 - clamp(v, -1.35, 1.35) / 1.35 * PG.h / 2;
+function niceLen(m){
+  if (m >= 1) return fmt(m, m < 10 ? 2 : 1) + ' m';
+  if (m >= 0.01) return fmt(m * 100, m < 0.1 ? 2 : 1) + ' cm';
+  return fmt(m * 1000, 2) + ' mm';
+}
+const niceT = s => s >= 1 ? fmt(s, 2) + ' s' : s >= 1e-3 ? fmt(s * 1000, s < 0.01 ? 2 : 1) + ' ms' : fmt(s * 1e6, 1) + ' µs';
+const niceF = f => f >= 1000 ? fmt(f / 1000, f < 10000 ? 2 : 1) + ' kHz' : fmt(f, f < 100 ? 1 : 0) + ' Hz';
+function drawWaveAxes(){
+  /* scale bar under the tube, in real metres */
+  let sc = '';
+  for (let i = 0; i <= 4; i++) {
+    const x = TX0 + i / 4 * (TX1 - TX0);
+    sc += `<line x1="${x}" y1="${TY1 + 62}" x2="${x}" y2="${TY1 + 68}" stroke="${INK3}"/><text x="${x}" y="${TY1 + 81}" font-size="11" text-anchor="middle" fill="${INK3}">${i === 0 ? '0' : niceLen(TB.V * i / 4)}</text>`;
+  }
+  sc += `<line x1="${TX0}" y1="${TY1 + 65}" x2="${TX1}" y2="${TY1 + 65}" stroke="${INK3}"/>`;
+  $('scale').innerHTML = sc;
+  let ax = `<line x1="${PG.x}" y1="${pAx(0)}" x2="${PG.x + PG.w}" y2="${pAx(0)}" stroke="#9aa3a6"/><line x1="${PG.x}" y1="${PG.y}" x2="${PG.x}" y2="${PG.y + PG.h}" stroke="#9aa3a6"/>`;
+  const p0 = pAmp(S.db);
+  for (const v of [-1, 1]) ax += `<line x1="${PG.x}" y1="${pAx(v)}" x2="${PG.x + PG.w}" y2="${pAx(v)}" stroke="#ece8dc"/><text x="${PG.x - 6}" y="${pAx(v) + 4}" font-size="10.5" text-anchor="end" fill="${INK3}">${v > 0 ? '+' : '−'}${sciP(p0)}</text>`;
+  ax += `<text x="${PG.x - 6}" y="${pAx(0) + 4}" font-size="10.5" text-anchor="end" fill="${INK3}">0</text>`;
+  ax += `<text x="${PG.x + PG.w}" y="${PG.y - 4}" font-size="10.5" text-anchor="end" fill="${INK3}">extra pressure (Pa) · above the line: squeezed (C) · below: stretched (R)</text>`;
+  $('pAxes').innerHTML = ax;
+}
+const sciP = p => p >= 1 ? fmt(p, 1) : p >= 0.01 ? fmt(p, 3) : p.toExponential(1).replace('e-', '×10⁻').replace(/⁻(\d)/, (m, d) => '⁻' + '⁰¹²³⁴⁵⁶⁷⁸⁹'[d]);
+const COLI = c => Math.round((c + 0.5) / COLS * NC);
+function paintWave(){
+  if (!TB) newTube();
+  const f = TB.f, v = TB.v, lamTrue = v / f, V = TB.V;
+  const colPx = (TX1 - TX0) / COLS, gain = 0.42 * colPx * lerp(0.25, 1, (S.db - 20) / 90);
+  /* parcels */
+  const dots = svg.querySelectorAll('#dots .pc');
+  for (const d of dots) {
+    const c = +d.dataset.c, i = COLI(c);
+    d.setAttribute('cx', (TX0 + (c + 0.5) * colPx + TB.u[i] * gain).toFixed(1));
+  }
+  const iT = COLI(22);
+  $('home').setAttribute('x1', (TX0 + 22.5 * colPx).toFixed(1)); $('home').setAttribute('x2', (TX0 + 22.5 * colPx).toFixed(1));
+  /* the cone */
+  const cx = 64 + TB.u[0] * gain;
+  $('cone').setAttribute('d', `M58 ${TY0 + 30} L${cx.toFixed(1)} ${TY0 + 14} L${cx.toFixed(1)} ${TY1 - 14} L58 ${TY1 - 30}Z`);
+  $('coneCap').setAttribute('cx', (cx - 4).toFixed(1)); $('coneCap').setAttribute('cy', (TY0 + TY1) / 2);
+  $('srcLab').textContent = S.medium === 'air' ? 'speaker' : S.medium === 'water' ? 'underwater speaker' : 'vibrator on a rail';
+  /* density shading, compressions darker */
+  const p = pressureProfile(TB);
+  let bands = '';
+  const NB = 110;
+  for (let b = 0; b < NB; b++) {
+    const i = Math.round((b + 0.5) / NB * NC), q = clamp(p[Math.min(NC - 1, i)], -1.2, 1.2);
+    if (Math.abs(q) < 0.08) continue;
+    bands += `<rect x="${(TX0 + b / NB * (TX1 - TX0)).toFixed(1)}" y="${TY0 + 1}" width="${((TX1 - TX0) / NB + 0.6).toFixed(1)}" height="${TY1 - TY0 - 2}" fill="${q > 0 ? '#0f6f7c' : '#ffffff'}" opacity="${(Math.abs(q) * (q > 0 ? .28 : .6)).toFixed(2)}"/>`;
+  }
+  $('bands').innerHTML = bands;
+  /* C and R labels at the model's own pressure extremes */
+  let cr = '';
+  const iEnd = Math.floor(TB.xFront / TB.a) - 2;
+  for (let i = 3; i < Math.min(iEnd, NC - 3); i++) {
+    if (p[i] > 0.7 && p[i] >= p[i - 1] && p[i] > p[i + 1]) cr += `<text x="${xT((i + .5) * TB.a).toFixed(1)}" y="${TY0 - 8}" fill="#0f6f7c">C</text>`;
+    if (p[i] < -0.7 && p[i] <= p[i - 1] && p[i] < p[i + 1]) cr += `<text x="${xT((i + .5) * TB.a).toFixed(1)}" y="${TY0 - 8}" fill="#b0305a">R</text>`;
+  }
+  $('crLabels').innerHTML = S.locked && lamTrue > V / 40 ? cr : '';
+  $('frontLab').textContent = TB.xFront < V * 0.98 ? 'still undisturbed →' : '';
+  $('frontLab').setAttribute('x', (TX1 - 4));
+  $('waveSub').textContent = `${esc(MEDIA[S.medium].name[0].toUpperCase() + MEDIA[S.medium].name.slice(1))} · tube ${niceLen(V)} long · slowed ${Math.round(slowFor(V)).toLocaleString('en-IN')}× · swings drawn far larger than real`;
+  /* the microphone */
+  const mx = TX0 + S.mic * (TX1 - TX0);
+  $('micLine').setAttribute('x1', mx); $('micLine').setAttribute('x2', mx);
+  $('micBody').setAttribute('x', mx - 7); $('micStem').setAttribute('x', mx - 1.5); $('micLab').setAttribute('x', mx);
+  $('micHit').setAttribute('x', mx - 17);
+  if (!S.locked) { paintSide(); return; }
+  /* pressure along the tube */
+  let d = '';
+  for (let i = 0; i < NC; i += 2) d += (d ? 'L' : 'M') + xT((i + .5) * TB.a).toFixed(1) + ' ' + pAx(p[i]).toFixed(1);
+  $('pCurve').setAttribute('d', d);
+  /* the λ bracket, between two compressions the model made */
+  const m = measureLambda(TB);
+  if (m) {
+    const x1 = m.peaks[0], x2 = m.peaks[1], y = PG.y + PG.h + 16;
+    $('lamLine').setAttribute('x1', xT(x1)); $('lamLine').setAttribute('x2', xT(x2)); $('lamLine').setAttribute('y1', y); $('lamLine').setAttribute('y2', y);
+    $('lamText').setAttribute('x', (xT(x1) + xT(x2)) / 2); $('lamText').setAttribute('y', y + 17);
+    $('lamText').textContent = `λ = ${niceLen(m.lambda)}`;
+    $('lamKnob').setAttribute('cx', xT(x2)); $('lamKnob').setAttribute('cy', y);
+    $('lamG').setAttribute('opacity', 1);
+    if (!LAMDRAG) { $('lamHit').setAttribute('x', xT(x2) - 15); $('lamHit').setAttribute('y', y - 15); }
+  } else {
+    $('lamG').setAttribute('opacity', 0);
+    if (!LAMDRAG) { $('lamHit').setAttribute('x', -100); }
+  }
+  /* the microphone's trace: the last three periods */
+  const T = 1 / f, W = 3 * T, tNow = TB.t;
+  let ax = `<line x1="${MG.x}" y1="${MG.y + MG.h / 2}" x2="${MG.x + MG.w}" y2="${MG.y + MG.h / 2}" stroke="#9aa3a6"/><line x1="${MG.x}" y1="${MG.y}" x2="${MG.x}" y2="${MG.y + MG.h}" stroke="#9aa3a6"/>`;
+  for (let k = 0; k <= 3; k++) ax += `<line x1="${MG.x + k / 3 * MG.w}" y1="${MG.y + MG.h}" x2="${MG.x + k / 3 * MG.w}" y2="${MG.y + MG.h + 5}" stroke="${INK3}"/><text x="${MG.x + k / 3 * MG.w}" y="${MG.y + MG.h + 18}" font-size="10.5" text-anchor="middle" fill="${INK3}">${k === 3 ? 'now' : '−' + niceT((3 - k) * T)}</text>`;
+  $('mAxes').innerHTML = ax;
+  const my = q => MG.y + MG.h / 2 - clamp(q, -1.35, 1.35) / 1.35 * MG.h / 2;
+  let md = '';
+  for (const s of MIC) if (s.t >= tNow - W) md += (md ? 'L' : 'M') + (MG.x + (s.t - (tNow - W)) / W * MG.w).toFixed(1) + ' ' + my(s.p).toFixed(1);
+  $('mCurve').setAttribute('d', md);
+  const per = measurePeriod();
+  let tb = '';
+  if (per) {
+    const xa = MG.x + (per.t0 - (tNow - W)) / W * MG.w, xb = MG.x + (per.t0 + per.T - (tNow - W)) / W * MG.w;
+    if (xa > MG.x) tb = `<line x1="${xa}" y1="${MG.y - 4}" x2="${xb}" y2="${MG.y - 4}" stroke="${BLUE}" stroke-width="1.5" marker-start="url(#ar)" marker-end="url(#ar)"/><text x="${(xa + xb) / 2}" y="${MG.y - 9}" font-size="12" font-weight="700" text-anchor="middle" fill="${BLUE}">T = ${niceT(per.T)}</text>`;
+  }
+  $('tBracket').innerHTML = tb;
+  paintHear(f);
+  paintSide(m, per);
+}
+/* the period, measured at the microphone: mean time between upward zero-crossings */
+function measurePeriod(){
+  const ups = [];
+  if (!MIC.length || Math.max(...MIC.map(q => Math.abs(q.p))) < 0.3) return null;     // nothing has reached the mic yet
+  for (let k = 1; k < MIC.length; k++) {
+    const a = MIC[k - 1], b = MIC[k];
+    if (a.p < 0 && b.p >= 0) ups.push(a.t + (b.t - a.t) * (-a.p) / (b.p - a.p));
+  }
+  if (ups.length < 3) return null;
+  const n = Math.min(ups.length - 1, 6), last = ups.slice(-n - 1);
+  return {T: (last[last.length - 1] - last[0]) / n, t0: last[last.length - 2]};
+}
+/* the range of human hearing, on a log scale */
+const hx = f => HS.x + (Math.log10(f) - Math.log10(5)) / (Math.log10(50000) - Math.log10(5)) * HS.w;
+function paintHear(f){
+  let h = `<text x="24" y="${HS.y - 16}" font-size="11" font-weight="700" letter-spacing=".06em" fill="${INK2}">WHO HEARS IT</text>`;
+  h += `<rect x="${hx(5)}" y="${HS.y - 8}" width="${hx(20) - hx(5)}" height="16" fill="#e7dcf5"/><rect x="${hx(20)}" y="${HS.y - 8}" width="${hx(20000) - hx(20)}" height="16" fill="#d8efe9"/><rect x="${hx(20000)}" y="${HS.y - 8}" width="${hx(50000) - hx(20000)}" height="16" fill="#fde2d6"/>`;
+  h += `<text x="${(hx(5) + hx(20)) / 2}" y="${HS.y + 4}" font-size="10.5" text-anchor="middle" fill="#5b3f8c">infrasound · elephants</text>`;
+  h += `<text x="${(hx(20) + hx(20000)) / 2}" y="${HS.y + 4}" font-size="10.5" text-anchor="middle" fill="#1f6b5d">human hearing, 20 Hz to 20 kHz</text>`;
+  h += `<text x="${(hx(20000) + hx(50000)) / 2}" y="${HS.y + 4}" font-size="10.5" text-anchor="middle" fill="#9a4a21">ultrasound · bats, dogs</text>`;
+  for (const t of [20, 200, 2000, 20000]) h += `<text x="${hx(t)}" y="${HS.y + 22}" font-size="10" text-anchor="middle" fill="${INK3}">${niceF(t)}</text>`;
+  h += `<path d="M${hx(f)} ${HS.y - 10} l-6 -9 h12z" fill="${INK}"/>`;
+  $('hear').innerHTML = h;
+}
+function paintSide(m, per){
+  if (!S.locked) { $('nums').innerHTML = '<p style="font-size:13px;color:var(--ink-3);margin:0">The measurements appear once you have made a prediction.</p>'; return; }
+  const f = TB.f, v = TB.v, db = S.db, s0 = swing(db, f, S.medium, S.tc);
+  $('numKick').textContent = 'Measured in the tube';
+  $('nums').innerHTML = `<div class="nums">
+    <span>Frequency set, f</span><b>${niceF(f)}</b>
+    <span>Period at the mic, T</span><b>${per ? niceT(per.T) : '—'}</b>
+    <span class="eq">${per ? `1/T = ${niceF(1 / per.T)}` : 'let a few waves reach the mic'}</span>
+    <span>Wavelength, λ (measured)</span><b>${m ? niceLen(m.lambda) : '—'}</b>
+    <span>Speed of sound in ${MEDIA[S.medium].name}${S.medium === 'air' ? ` at ${S.tc} °C` : ''}</span><b>${fmt(v, 0)} m/s</b>
+    <span class="eq">${m ? `f × λ = ${fmt(f, f < 100 ? 1 : 0)} Hz × ${fmt(m.lambda, 4)} m = ${fmt(f * m.lambda, 0)} m/s` : 'f × λ appears once three compressions have formed'}</span>
+    <i class="sep"></i>
+    <span>Loudness</span><b>${db} dB</b>
+    <span>Pressure swing, p₀</span><b>${sciP(pAmp(db))} Pa</b>
+    <span>How far each bit of ${MEDIA[S.medium].name} moves</span><b>${s0 >= 1e-3 ? fmt(s0 * 1000, 2) + ' mm' : s0 >= 1e-6 ? fmt(s0 * 1e6, 2) + ' µm' : fmt(s0 * 1e9, 2) + ' nm'}</b>
+    <span>Can a person hear it?</span><b>${audible(f) ? 'yes' : f < 20 ? 'no, infrasound' : 'no, ultrasound'}</b>
+  </div>`;
+  paintWhy(m);
+}
+function paintWhy(m){
+  if (!S.locked) return;
+  $('whyCard').hidden = false;
+  const f = TB.f, v = TB.v, s0 = swing(S.db, f, S.medium, S.tc), crossed = TB.xFront >= TB.V * 0.98;
+  const lamT = v / f;
+  let t = `<p>The speaker pushes the first slice ${fmt(f, f < 100 ? 1 : 0)} times a second. Each push squeezes the next slice, which pushes the next: the <b>squeeze travels at ${fmt(v, 0)} m/s</b>, ${crossed ? `and has already crossed the whole ${niceLen(TB.V)} tube.` : `and has reached ${niceLen(TB.xFront)} so far.`}
+    The red slice has not gone anywhere: it swings back and forth about the dashed line, by only ${s0 >= 1e-6 ? fmt(s0 * 1e6, 2) + ' µm' : fmt(s0 * 1e9, 1) + ' nm'} in reality.</p>`;
+  if (m) t += `<p>Compressions are <b>${niceLen(m.lambda)}</b> apart: one wave leaves the speaker every ${niceT(1 / f)}, and in that time the squeeze has moved on ${niceLen(v / f)}. That is why <span class="mono">v = f λ</span>.</p>`;
+  else if (lamT > TB.V) t += `<p>At this low a frequency one wavelength (${niceLen(lamT)}) is longer than the tube shown.</p>`;
+  if (!audible(f)) t += `<p>${f < 20 ? 'Below 20 Hz the ear cannot hear it: infrasound. Elephants can.' : 'Above 20 kHz the ear cannot hear it: ultrasound. Bats and dogs can.'}</p>`;
+  $('why').innerHTML = t;
+}
+
+/* ---- the echo ------------------------------------------------------------------ */
+const EX0 = 70, EX1 = 930;
+const dx = d => EX0 + d / 150 * (EX1 - EX0 - 60) + 20;
+const EG = {x: 100, y: 424, w: 850, h: 190};
+let EMAX = 1;
+const etx = t => EG.x + t / EMAX * EG.w;
+const ety = db => EG.y + EG.h - clamp(db / 110, 0, 1) * EG.h;
+function paintEcho(){
+  const v = vAir(S.tc2), R = S.surf === 'hard' ? 0.9 : 0.12;
+  const wx = dx(S.dist);
+  $('wall').setAttribute('x', wx); $('wallHit').setAttribute('x', wx - 15);
+  let br = '';
+  if (S.surf === 'hard') for (let r = 0; r < 9; r++) br += `<line x1="${wx}" y1="${96 + r * 21}" x2="${wx + 40}" y2="${96 + r * 21}" stroke="#7d858a" stroke-width="1"/><line x1="${wx + (r % 2 ? 13 : 26)}" y1="${96 + r * 21}" x2="${wx + (r % 2 ? 13 : 26)}" y2="${117 + r * 21}" stroke="#7d858a"/>`;
+  $('bricks').innerHTML = br;
+  let cu = '';
+  if (S.surf === 'soft') for (let k = 0; k < 6; k++) cu += `<path d="M${wx - 4 + k * 8} 96 q-5 95 0 190" stroke="#a23b52" stroke-width="7" fill="none" opacity=".9"/>`;
+  $('curtain').innerHTML = cu;
+  /* distance scale along the ground */
+  let sc = `<line x1="${EX0}" y1="306" x2="${wx}" y2="306" stroke="#20404f" stroke-width="1.5" marker-start="url(#ar)" marker-end="url(#ar)"/>`;
+  sc += `<text x="${(EX0 + wx) / 2}" y="322" font-size="12.5" font-weight="700" text-anchor="middle" fill="#20404f">${S.dist} m</text>`;
+  $('dScale').innerHTML = sc;
+  $('echoSub').textContent = `Speed of sound at ${S.tc2} °C: ${fmt(v, 1)} m/s · the picture is slowed 10×; the sound you hear is real time`;
+  /* the pulse, stepped by the model */
+  let pu = '';
+  if (S.echo && S.echoRunning) {
+    const tt = S.echoT, x = v * tt;                       // how far the clap has gone
+    const out = Math.min(x, S.dist);
+    if (x < S.dist) pu += `<path d="M${dx(out) - 6} 150 q14 58 0 116" stroke="#20404f" stroke-width="3" opacity=".8"/>`;
+    else {
+      const back = S.dist - (x - S.dist);
+      if (back > 0) pu += `<path d="M${dx(back) + 6} 150 q-14 58 0 116" stroke="${R > .5 ? '#20404f' : '#8aa0ab'}" stroke-width="${R > .5 ? 3 : 1.5}" opacity=".8"/>`;
+    }
+  }
+  $('pulses').innerHTML = pu;
+  $('arms').setAttribute('d', S.echoRunning && S.echoT < 0.02 ? 'M-12 232 L6 222 M12 232 L6 222' : 'M-12 232 L14 228 M12 232 L22 226');
+  /* the time graph */
+  const e = echoRun(S.dist, v, R);
+  EMAX = Math.max(0.6, Math.ceil(e.t * 1.25 * 10) / 10);
+  let ax = `<line x1="${EG.x}" y1="${EG.y + EG.h}" x2="${EG.x + EG.w}" y2="${EG.y + EG.h}" stroke="#9aa3a6"/><line x1="${EG.x}" y1="${EG.y}" x2="${EG.x}" y2="${EG.y + EG.h}" stroke="#9aa3a6"/>`;
+  ax += `<rect x="${EG.x}" y="${EG.y}" width="${etx(0.1) - EG.x}" height="${EG.h}" fill="#f3d9c9" opacity=".6"/>`;
+  ax += `<text x="${etx(0.1) + 6}" y="${EG.y + 14}" font-size="11" fill="#9a4a21">← within 0.1 s the brain hears one sound</text>`;
+  const step = EMAX > 3 ? 0.5 : EMAX > 1.2 ? 0.2 : 0.1;
+  for (let t = 0; t <= EMAX + 1e-9; t += step) ax += `<line x1="${etx(t)}" y1="${EG.y + EG.h}" x2="${etx(t)}" y2="${EG.y + EG.h + 5}" stroke="${INK3}"/><text x="${etx(t)}" y="${EG.y + EG.h + 18}" font-size="10.5" text-anchor="middle" fill="${INK3}">${fmt(t, 1)} s</text>`;
+  for (const db of [0, 50, 100]) ax += `<text x="${EG.x - 6}" y="${ety(db) + 4}" font-size="10.5" text-anchor="end" fill="${INK3}">${db} dB</text>`;
+  $('eAxes').innerHTML = ax;
+  let mk = '';
+  if (S.locked) {
+    mk += `<rect x="${etx(0) + 1}" y="${ety(e.clapDb)}" width="6" height="${EG.y + EG.h - ety(e.clapDb)}" fill="#20404f"/><text x="${etx(0) + 12}" y="${ety(e.clapDb) + 4}" font-size="11.5" font-weight="700" fill="#20404f">clap</text>`;
+    const ex = etx(e.t);
+    mk += `<rect x="${ex - 3}" y="${ety(e.echoDb)}" width="6" height="${EG.y + EG.h - ety(e.echoDb)}" fill="${e.separate ? TEAL : '#c0703f'}"/>`;
+    mk += `<text x="${ex}" y="${ety(e.echoDb) - 8}" font-size="12" font-weight="700" text-anchor="middle" fill="${e.separate ? '#0e6f6f' : '#9a4a21'}">echo at ${fmt(e.t, 3)} s</text>`;
+    mk += `<circle cx="${ex}" cy="${EG.y + EG.h}" r="7" fill="#fff" stroke="${INK}" stroke-width="2"/>`;
+    $('echoHit').setAttribute('x', ex - 20); $('echoHit').setAttribute('y', EG.y);
+  } else $('echoHit').setAttribute('x', -100);
+  $('eMarks').innerHTML = mk;
+  $('echoBig').textContent = !S.locked ? '' : e.separate ? `Two sounds: the echo comes ${fmt(e.t, 2)} s after the clap` : `One blurred sound: the echo is back after only ${fmt(e.t, 3)} s`;
+  /* the claps so far */
+  let hs = '';
+  if (S.locked && S.claps.length) {
+    hs = `<text x="24" y="668" font-size="11" font-weight="700" letter-spacing=".06em" fill="${INK2}">YOUR CLAPS</text>`;
+    S.claps.slice(-6).forEach((c, i) => { hs += `<text x="${130 + i * 140}" y="668" font-size="11.5" fill="${c.separate ? '#0e6f6f' : '#9a4a21'}" font-family="JetBrains Mono, monospace">${c.d} m → ${fmt(c.t, 3)} s</text>`; });
+  }
+  $('eHist').innerHTML = hs;
+  paintEchoSide(e, v, R);
+}
+function paintEchoSide(e, v, R){
+  if (!S.locked) { $('nums').innerHTML = '<p style="font-size:13px;color:var(--ink-3);margin:0">The measurements appear once you have made a prediction.</p>'; return; }
+  $('numKick').textContent = 'The clap and its echo';
+  $('nums').innerHTML = `<div class="nums">
+    <span>Speed of sound at ${S.tc2} °C</span><b>${fmt(v, 1)} m/s</b>
+    <span>Wall distance, d</span><b>${S.dist} m</b>
+    <span>Echo returns after, t</span><b>${fmt(e.t, 3)} s</b>
+    <span class="eq">d = v t / 2 = ${fmt(v, 1)} × ${fmt(e.t, 3)} / 2 = ${fmt(echoDistanceFor(e.t, v), 1)} m</span>
+    <span>Echo level at your ear</span><b>${fmt(e.echoDb, 0)} dB</b>
+    <span>Nearest wall for a clear echo</span><b>${fmt(minEchoDistance(v), 1)} m</b>
+    <span class="eq">v × 0.1 s / 2 = ${fmt(v * 0.1, 1)} m / 2</span>
+  </div>`;
+  $('whyCard').hidden = false;
+  $('why').innerHTML = `<p>The clap has to go to the wall <b>and back</b>: ${2 * S.dist} m at ${fmt(v, 0)} m/s takes ${fmt(e.t, 3)} s.
+    ${e.separate ? 'That is more than 0.1 s, so your brain hears the echo as a second sound.' : 'That is less than 0.1 s, so it merges with the clap: in a small room there is no echo, only a fuller sound.'}</p>
+    <p>${R < .5 ? 'The curtains soak up most of the sound: the echo is about 18 dB quieter than from bare concrete.' : 'A hard, smooth wall sends back most of the sound.'} Warmer air carries sound faster, so the echo comes back a little sooner.</p>`;
+}
+
+/* ---- paint ------------------------------------------------------------------- */
+function paint(){
+  $('vWave').setAttribute('display', S.tab === 'wave' ? '' : 'none'); $('vEcho').setAttribute('display', S.tab === 'echo' ? '' : 'none');
+  $('ctlWave').hidden = S.tab !== 'wave'; $('ctlEcho').hidden = S.tab !== 'echo';
+  $('tabWave').setAttribute('aria-pressed', S.tab === 'wave'); $('tabEcho').setAttribute('aria-pressed', S.tab === 'echo');
+  $('veilW').setAttribute('display', S.locked ? 'none' : ''); $('veilWt').setAttribute('display', S.locked ? 'none' : '');
+  svg.setAttribute('aria-label', S.tab === 'wave' ? 'A loudspeaker driving slices of the medium along a tube, with graphs of pressure along the tube and at a microphone' : 'A person clapping in front of a wall, and a graph of the clap and its echo against time');
+  syncControls();
+  if (S.tab === 'wave') paintWave(); else paintEcho();
+}
+function syncControls(){
+  $('freq').value = S.fk; $('freqOut').textContent = niceF(F());
+  $('amp').value = S.db; $('ampOut').textContent = S.db + ' dB';
+  $('temp').value = S.tc; $('tempOut').textContent = S.tc + ' °C';
+  $('tempRow').style.opacity = S.medium === 'air' ? 1 : .45; $('temp').disabled = !S.locked || S.medium !== 'air';
+  document.querySelectorAll('#media button').forEach(b => b.setAttribute('aria-pressed', b.dataset.m === S.medium));
+  $('dist').value = S.dist; $('distOut').textContent = S.dist + ' m';
+  $('temp2').value = S.tc2; $('temp2Out').textContent = S.tc2 + ' °C';
+  document.querySelectorAll('#surf button').forEach(b => b.setAttribute('aria-pressed', b.dataset.s === S.surf));
+  $('btnPause').textContent = S.running ? '❚❚ Pause' : '▶ Run';
+}
+
+/* ---- findings, reached by the model ---------------------------------------------- */
+function check(){
+  if (!S.locked) return;
+  if (S.tab === 'wave' && TB) {
+    if (TB.xFront >= TB.V * 0.98 && TB.t > 0) discover('jiggle');
+    const m = measureLambda(TB);
+    if (m) {
+      const rec = {medium: S.medium, f: TB.f, lambda: m.lambda, v: TB.v, fl: TB.f * m.lambda};
+      const last = S.meas[S.meas.length - 1];
+      if (!last || last.medium !== rec.medium || Math.abs(last.f - rec.f) > 1e-9) S.meas.push(rec); else S.meas[S.meas.length - 1] = rec;
+      const same = S.meas.filter(q => q.medium === rec.medium && Math.abs(q.v - rec.v) < 0.5);
+      if (same.some(q => q.f / rec.f >= 1.9 || rec.f / q.f >= 1.9) && same.every(q => Math.abs(q.fl / rec.fl - 1) < 0.03)) discover('vfl');
+      const air = S.meas.filter(q => q.medium === 'air'), dense = S.meas.filter(q => q.medium !== 'air');
+      if (air.length && dense.length) discover('media');
+    }
+  }
+  if (S.tab === 'echo') {
+    if (S.claps.some(c => !c.separate) && S.claps.some(c => c.separate)) discover('echo');
+  }
+  maybeExplain();
+}
+let EXPLAINED = false;
+function maybeExplain(){
+  if (EXPLAINED || !POE || !found('jiggle')) return;
+  EXPLAINED = true;
+  const s0 = swing(S.db, TB.f, S.medium, S.tc);
+  POE.explain(`The compressions crossed all ${niceLen(TB.V)} of the tube at ${fmt(TB.v, 0)} m/s, yet the red slice only swung back and forth about its dashed line and stayed where it was:
+    in reality it moves just ${s0 >= 1e-6 ? fmt(s0 * 1e6, 2) + ' µm' : fmt(s0 * 1e9, 1) + ' nm'} each way at ${S.db} dB. Sound is a <b>longitudinal wave</b>: the medium passes the squeeze along, it does not flow.`);
+}
+
+/* ============================================================================
+   Controls
+   ============================================================================ */
+build();
+function setF(fk, byDrag){
+  S.fk = clamp(fk, 70, 460);
+  const f = F(), V = viewFor(V_() / f);
+  if (!TB || V !== TB.V) newTube();
+  else { TB.f = f; TB.tChange = TB.t; }
+  if (!byDrag) drawWaveAxes();
+  paint();
+}
+$('freq').addEventListener('input', e => setF(+e.target.value));
+$('freq').addEventListener('change', () => track('frequency', {f: F()}));
+$('amp').addEventListener('input', e => { S.db = +e.target.value; drawWaveAxes(); paint(); });
+$('temp').addEventListener('input', e => { S.tc = +e.target.value; if (TB) { TB.v = V_(); TB.tChange = TB.t; } paint(); });
+$('media').addEventListener('click', e => {
+  const b = e.target.closest('[data-m]'); if (!b || !S.locked || b.dataset.m === S.medium) return;
+  S.medium = b.dataset.m; sound('pop'); newTube(); drawWaveAxes(); paint(); track('medium', {medium: S.medium});
+});
+$('btnPause').addEventListener('click', () => { S.running = !S.running; sound('tick'); syncControls(); });
+$('btnListen').addEventListener('click', () => {
+  const f = F(), db = S.db, heard = audible(f);
+  const g = clamp(0.004 * Math.pow(10, (db - 40) / 40), 0.002, 0.3);
+  if (heard) tone(f, 1.4, 'sine', g); else sound('tick');
+  S.listens.push({f, db, heard});
+  toast(heard ? `🔊 ${niceF(f)} at ${db} dB` : `🔇 Silence: ${niceF(f)} is ${f < 20 ? 'infrasound, below' : 'ultrasound, above'} human hearing`);
+  const L = S.listens;
+  if (!heard) discover('range');
+  if (L.some(a => a.heard && L.some(b => b.heard && Math.abs(b.f / a.f - 1) < 0.01 && b.db - a.db >= 20))) discover('loud');
+  track('listen', {f, db, heard});
+});
+/* drag the microphone along the tube */
+drag($('micHit'), svg, {start(){ if (!S.locked) return false; }, move(p){ S.mic = clamp((p.x - TX0) / (TX1 - TX0), 0.02, 0.98); MIC.length = 0; paint(); }});
+/* drag the end of the λ bracket: the model's speed turns the wavelength into a frequency */
+let LAMDRAG = null;
+drag($('lamHit'), svg, {
+  start(){ if (!S.locked || !TB) return false; const m = measureLambda(TB); if (!m) return false; LAMDRAG = {x1: m.peaks[0]}; },
+  move(p){
+    const x = (p.x - TX0) / (TX1 - TX0) * TB.V, lam = clamp(x - LAMDRAG.x1, TB.V / 14, TB.V / 1.3);
+    const fk = Math.round(100 * Math.log10(V_() / lam));
+    if (fk !== S.fk) { S.fk = clamp(fk, 70, 460); const f = F(); if (viewFor(V_() / f) === TB.V) { TB.f = f; TB.tChange = TB.t; } paint(); }
+    $('lamHit').setAttribute('x', p.x - 15);
+  },
+  end(){ LAMDRAG = null; setF(S.fk); track('wavelength-drag', {f: F()}); },
+});
+$('dist').addEventListener('input', e => { S.dist = +e.target.value; paint(); });
+$('temp2').addEventListener('input', e => { S.tc2 = +e.target.value; paint(); });
+$('surf').addEventListener('click', e => { const b = e.target.closest('[data-s]'); if (!b || !S.locked) return; S.surf = b.dataset.s; sound('tick'); paint(); });
+let GRAB = 0;                                            // where on the wall it was picked up
+drag($('wallHit'), svg, {start(p){ if (!S.locked) return false; GRAB = p.x - dx(S.dist); },
+  move(p){ S.dist = clamp(Math.round((p.x - GRAB - EX0 - 20) / (EX1 - EX0 - 60) * 150), 3, 150); paint(); }});
+drag($('echoHit'), svg, {start(){ if (!S.locked) return false; },
+  move(p){ const t = clamp((p.x - EG.x) / EG.w * EMAX, 0, 5); S.dist = clamp(Math.round(echoDistanceFor(t, vAir(S.tc2))), 3, 150); paint(); }});
+$('btnClap').addEventListener('click', () => {
+  const v = vAir(S.tc2), R = S.surf === 'hard' ? 0.9 : 0.12, e = echoRun(S.dist, v, R);
+  const g = 0.22, ge = clamp(g * Math.pow(10, (e.echoDb - e.clapDb) / 40), 0.004, g);
+  tone(1500, 0.05, 'triangle', g, 0, 250); tone(260, 0.06, 'square', g * 0.3);
+  tone(1500, 0.05, 'triangle', ge, e.t, 250); tone(260, 0.06, 'square', ge * 0.3, e.t);
+  S.claps.push({d: S.dist, t: e.t, separate: e.separate, v});
+  S.echo = e; S.echoT = 0; S.echoRunning = true;
+  if (reduced()) { S.echoT = e.t; S.echoRunning = false; }
+  track('clap', {d: S.dist, t: e.t, separate: e.separate});
+  paint(); check();
+});
+function setTab(t){ S.tab = t; sound('tick'); if (t === 'wave') drawWaveAxes(); paint(); check(); track('tab', {tab: t}); }
+$('tabWave').addEventListener('click', () => setTab('wave'));
+$('tabEcho').addEventListener('click', () => setTab('echo'));
+function lockControls(lock){
+  for (const id of ['tabWave', 'tabEcho', 'freq', 'amp', 'temp', 'btnListen', 'btnPause', 'dist', 'temp2', 'btnClap']) $(id).disabled = lock;
+  document.querySelectorAll('#media button, #surf button').forEach(b => b.disabled = lock);
+  for (const id of ['micHit', 'lamHit', 'wallHit', 'echoHit']) $(id).style.pointerEvents = lock ? 'none' : '';
+  $('gate').hidden = !lock;
+}
+
+/* ============================================================================
+   Start
+   ============================================================================ */
+findings($('finds'), [
+  {id: 'jiggle', icon: '〰', label: 'The air jiggles; the wave travels', hint: 'Let the sound cross the whole tube; watch the red slice'},
+  {id: 'vfl',    icon: 'λ', label: 'Speed stays, wavelength changes: v = fλ', hint: 'Measure λ at two frequencies an octave or more apart'},
+  {id: 'loud',   icon: '📢', label: 'Bigger amplitude, louder sound', hint: 'Listen to one note, quiet and then 20 dB louder'},
+  {id: 'range',  icon: '🦇', label: 'Too low or too high to hear', hint: 'Listen below 20 Hz or above 20 kHz'},
+  {id: 'media',  icon: '⚙', label: 'Faster in water and steel', hint: 'Measure λ in air, then in water or steel'},
+  {id: 'echo',   icon: '🧱', label: 'An echo needs the wall 17 m away', hint: 'Clap near a wall, then far from it'},
+], () => toast('All six. Sound is a travelling squeeze: v = fλ, and an echo is that squeeze coming back.', 4200));
+
+const POE = predict($('poe'), {
+  id: 'what-air-does',
+  q: 'A loudspeaker plays a steady note to someone 10 m away. What does the air between them do?',
+  options: [
+    {id: 'flow',   text: 'It flows from the speaker to the listener, like a wind.'},
+    {id: 'jiggle', text: 'Each bit of air moves back and forth about its own place; the squeezes travel.', right: true},
+    {id: 'updown', text: 'It moves up and down, like a wave on water.'},
+    {id: 'still',  text: 'Nothing moves at all; only energy travels.'},
+  ],
+  onLock(){
+    S.locked = true; lockControls(false);
+    say('Now watch the red slice of air while the sound crosses the tube.');
+    newTube(); drawWaveAxes(); paint();
+  },
+});
+lockControls(!POE.locked);
+if (!Play.FF('predict')) S.locked = true;
+newTube(); drawWaveAxes(); paint();
+
+/* The chain runs in slowed time. Under reduced motion it moves in half-second jumps. */
+const RM = reduced();
+let acc = 0;
+loop(dt => {
+  if (S.tab === 'echo') {
+    if (S.echoRunning) { S.echoT += dt / 10; if (S.echoT >= S.echo.t) { S.echoT = S.echo.t; S.echoRunning = false; } paint(); }
+    return;
+  }
+  if (!S.running || !TB || !S.locked) return;
+  acc += dt;
+  if (RM && acc < 0.5) return;
+  const real = acc / slowFor(TB.V), n = Math.max(1, Math.round(acc / (1 / 60)));
+  for (let k = 0; k < n; k++) {
+    stepTube(TB, real / n);
+    const iM = Math.min(NC - 1, Math.round(S.mic * NC)), k0 = 2 * Math.PI * TB.f / TB.v;
+    MIC.push({t: TB.t, p: -(TB.u[iM + 1] - TB.u[iM]) / TB.a / k0});
+  }
+  acc = 0;
+  const keep = TB.t - 4 / TB.f;
+  while (MIC.length && MIC[0].t < keep) MIC.shift();
+  paint(); check();
+});
+window.applyFeatures = () => paint();
+window.PG_STATE = () => ({tab: S.tab, medium: S.medium, f: F(), fk: S.fk, db: S.db, tc: S.tc, running: S.running, locked: S.locked, mic: S.mic,
+  view: TB && TB.V, t: TB && TB.t, front: TB && TB.xFront, v: TB && TB.v, lambda: TB && (measureLambda(TB) || {}).lambda || null,
+  period: (measurePeriod() || {}).T || null, meas: S.meas.slice(), listens: S.listens.slice(), dist: S.dist, tc2: S.tc2, surf: S.surf, claps: S.claps.slice()});
+window.PG_MODEL = {NC, vAir, speedIn, pAmp, swing, audible, viewFor, slowFor, makeTube, stepTube, pressureProfile, measureLambda, runTube, echoRun, echoDistanceFor, minEchoDistance};
+</script>
+</body>
+</html>

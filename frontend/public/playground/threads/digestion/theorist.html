@@ -1,0 +1,362 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Digestion, Zone By Zone</title>
+<meta name="description" content="Class 11: a meal moving through the alimentary canal, its starch, protein and fat broken down step by step, each step run only by the enzyme that owns it, only while the zone's pH suits that enzyme. Chew longer and more starch turns to maltose before you swallow; take away bile and fat digestion stalls; every curve is the model integrating its own rate equation, never drawn.">
+<link rel="icon" href="../../favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600&family=Inter:wght@400;500;600;700&family=Nunito:wght@500;700;800&family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="../../play.css">
+<style>
+/* Only what this page needs beyond play.css. */
+.pg-stage{background:#fbfaf6}
+.gate{position:absolute; inset:0 0 0 0; display:grid; place-items:center; pointer-events:none}
+.gate span{background:rgba(29,35,39,.86); color:#fff; padding:10px 16px; border-radius:99px; font-weight:600; font-size:14px}
+.clockbar{display:flex; align-items:center; gap:8px; padding:7px 10px; background:var(--sunk); border-bottom:1px solid var(--hair)}
+.clockbar .lbl{font-size:11px; font-weight:700; color:var(--ink-2); letter-spacing:.05em; text-transform:uppercase}
+.seg{display:flex; flex-wrap:wrap; background:var(--sunk); border-radius:9px; padding:3px; gap:3px; margin:6px 0}
+.seg button{flex:1 1 auto; border:0; background:transparent; border-radius:7px; padding:6px 6px; font-weight:600; font-size:12px; cursor:pointer; color:var(--ink-2)}
+.seg button[aria-pressed="true"]{background:var(--card); color:var(--ink); box-shadow:var(--shadow)}
+.seg button:disabled{cursor:default; opacity:.5}
+.ctl{grid-template-columns:104px 1fr 74px; margin:2px 0}
+.ctl label{font-size:12.5px; line-height:1.2}
+.ctl output{font-family:var(--font-mono); font-size:12.5px; font-weight:600; min-width:0}
+.readout{display:grid; grid-template-columns:1fr auto; gap:2px 12px; font-size:13px; align-items:baseline}
+.readout span{color:var(--ink-2)}
+.readout b{font-family:var(--font-mono); font-weight:600; font-size:12.5px; font-variant-numeric:tabular-nums; text-align:right}
+.readout .sep{grid-column:1/-1; height:1px; background:var(--hair); margin:4px 0}
+.why p{font-size:13.5px; margin-bottom:.5em}
+.why b{color:var(--ink)}
+.note{font-size:12px; color:var(--ink-3); margin:6px 0 0}
+.btn[aria-pressed="true"]{background:var(--accent-soft); border-color:var(--accent)}
+svg text.m{font-family:var(--font-mono)}
+</style>
+</head>
+<body>
+<header class="pg-top"></header>
+
+<div class="pg-intro">
+  <h1>Digestion, zone by zone</h1>
+  <p>A meal is three cascades run side by side: starch → maltose → glucose, protein → proteoses/peptones → dipeptides → amino acids, fat → di/monoglycerides → fatty acids
+     and glycerol. Every arrow is its own rate equation, and every rate is gated by the same rule: an enzyme only turns over its substrate while the zone it is in has the
+     pH that enzyme needs. Nothing here is timed to "look right" — the mouth's amylase stalling the moment the bolus meets stomach acid, and pepsin doing the same the
+     moment it meets the intestine's alkali, both fall out of one pH function, never a script.</p>
+  <div class="syl">CBSE Class 11 Biology · Digestion and Absorption</div>
+</div>
+
+<main class="pg-main wide-side">
+  <section class="pg-stage" id="stageWrap">
+    <div class="clockbar" id="clockbarMeal"><span class="lbl">The meal's clock</span><div id="clockMeal"></div></div>
+    <svg id="stage" viewBox="0 0 1000 700" role="img" aria-label="A meal's carbohydrate, protein and fat broken down step by step as it passes through the mouth, stomach, small intestine and large intestine, plotted against time since swallowing"></svg>
+    <div class="gate" id="gate"><span>Make your prediction first →</span></div>
+  </section>
+
+  <aside class="pg-side">
+    <div id="poe"></div>
+
+    <div class="card" id="ctlCard">
+      <div class="kicker">Before you swallow</div>
+      <div class="ctl"><label for="chew">How long you chew</label><input type="range" id="chew" min="5" max="60" step="5" value="25"><output id="chewOut">25 s</output></div>
+      <p class="note">The book: about 30% of starch is hydrolysed by salivary amylase (optimum pH 6.8) before it reaches the stomach.</p>
+      <div class="kicker" style="margin-top:8px">Bile</div>
+      <div class="seg" id="bileSeg"><button data-bile="1" aria-pressed="true">Present</button><button data-bile="0" aria-pressed="false">Removed</button></div>
+      <p class="note">Bile emulsifies fat into micelles and activates lipase — it carries no enzyme of its own.</p>
+      <div class="row" style="justify-content:flex-end; margin-top:6px">
+        <button class="btn sm" id="btnReset">↺ New meal</button>
+      </div>
+    </div>
+
+    <div class="card" id="measureCard">
+      <div class="kicker">Measured</div>
+      <div id="measureVeil" class="note">The readouts appear once you have made a prediction.</div>
+      <div id="measure" hidden>
+        <div class="readout">
+          <span>Zone</span><b id="mZone">—</b>
+          <span>pH here</span><b id="mPH">—</b>
+          <span>Time since swallowing</span><b id="mT">—</b>
+          <i class="sep"></i>
+          <span>Starch remaining</span><b id="mStarch">—</b>
+          <span>Protein remaining</span><b id="mProt">—</b>
+          <span>Fat remaining</span><b id="mFat">—</b>
+          <i class="sep"></i>
+          <span>Absorbed into blood (sugar+amino acids)</span><b id="mBlood">—</b>
+          <span>Absorbed into lymph (fat, as chylomicrons)</span><b id="mLymph">—</b>
+        </div>
+      </div>
+    </div>
+
+    <div class="card why" id="whyCard" hidden>
+      <div class="kicker">What the model says</div>
+      <div id="why"></div>
+    </div>
+
+    <div class="card"><div class="kicker">To find</div><div id="finds"></div></div>
+  </aside>
+</main>
+
+<script src="../../play.js"></script>
+<script>
+'use strict';
+const {$, $$, clamp, fmt, loop, sound, say, track, toast, predict, findings, discover, found,
+       shareState, sharedState, mount, reduced} = Play;
+mount({thread: 'digestion', band: 'theorist'});
+
+/* MODEL:start ==================================================================
+   Three cascades, each a chain of first-order steps: dA/dt = -k(zone)·A, dB/dt = k(zone)·A - k'(zone)·B, ...
+   so the total in each cascade (carbohydrate, protein, fat) is conserved exactly — nothing
+   is absorbed or destroyed except through the named steps below.
+     Carbohydrate: starch --amylase--> maltose --maltase--> glucose --(absorption)--> blood
+     Protein:      protein --pepsin/trypsin--> proteoses/peptones --trypsin--> dipeptides --dipeptidase--> amino acids --(absorption)--> blood
+     Fat:          fat --lipase--> di/monoglycerides --lipase--> fatty acids + glycerol --(absorption, as chylomicrons)--> lymph
+   Every k above is an enzyme's own maximum rate multiplied by phFrac(pH-here, that enzyme's
+   own optimum pH) — a bell centred on the optimum, essentially zero two units away. Salivary
+   amylase (optimum 6.8) is the only enzyme active in the mouth; the moment the bolus reaches
+   the stomach's pH 1.8, its own phFrac collapses and starch digestion simply stops, exactly as
+   the mouth's phFrac collapses for pepsin (optimum 1.8) the moment the bolus reaches the small
+   intestine's pH 7.8. Pancreatic amylase, trypsin, dipeptidases and lipase all have their
+   optimum at that same 7.8, so they switch on together. Bile does not appear as an enzyme: it
+   multiplies lipase's rate (poor emulsification without it), which is the whole of what it does
+   here. The mouth's own digestion is this same equation solved over the time you chew, before
+   the clock below starts at zero.
+   ============================================================================ */
+const PH = {mouth: 6.8, stomach: 1.8, intestine: 7.8};
+const STOMACH_END = 270, INTESTINE_END = 510;                 // minutes: NCERT's 4-5 h in the stomach; ~4 h in the small intestine
+function phFrac(pH, opt, width){ width = width || 1.4; return 1 / (1 + Math.pow(10, opt - width - pH) + Math.pow(10, pH - opt - width)); }
+const K = {
+  amylaseSaliva: 0.85, amylasePanc: 0.15, maltase: 0.3,
+  pepsin: 0.008, trypsin: 0.1, dipept: 0.2,
+  gastricLipase: 0.001, lipaseBase: 0.08, lipaseNoBileMul: 0.04, lipaseFinal: 0.2,
+  absSugar: 0.15, absAA: 0.12, absFat: 0.1,
+};
+function zoneAt(t){ return t < STOMACH_END ? 'stomach' : t < INTESTINE_END ? 'intestine' : 'colon'; }
+function mouthPhase(chewSec){
+  const k = K.amylaseSaliva * phFrac(PH.mouth, 6.8), frac = 1 - Math.exp(-k * (chewSec / 60));
+  return {starch: 1 - frac, maltose: frac, glucose: 0};
+}
+function makeMeal(chewSec){
+  const c = mouthPhase(chewSec);
+  return {carb: {starch: c.starch, maltose: c.maltose, glucose: 0}, prot: {protein: 1, pepto: 0, dipep: 0, aa: 0},
+          fat: {fat: 1, digly: 0, ffa: 0}, absorbed: {sugar: 0, aa: 0, fat: 0}, t: 0, chewSec};
+}
+function stepMeal(M, dt, bile){
+  const zone = zoneAt(M.t), pH = PH[zone] || PH.intestine, inStom = zone === 'stomach', inInt = zone === 'intestine';
+  const k1 = inInt ? K.amylasePanc * phFrac(pH, 7.8) : 0, k2 = inInt ? K.maltase * phFrac(pH, 7.8) : 0;
+  const dStarch = k1 * M.carb.starch, dMaltose = k2 * M.carb.maltose;
+  M.carb.starch -= dStarch * dt; M.carb.maltose += (dStarch - dMaltose) * dt; M.carb.glucose += dMaltose * dt;
+  const k3 = inStom ? K.pepsin * phFrac(pH, 1.8) : 0, k4 = inInt ? K.trypsin * phFrac(pH, 7.8) : 0, k5 = inInt ? K.dipept * phFrac(pH, 7.8) : 0;
+  const dProt = (k3 + k4) * M.prot.protein, dPepto = k4 * M.prot.pepto, dDipep = k5 * M.prot.dipep;
+  M.prot.protein -= dProt * dt; M.prot.pepto += (dProt - dPepto) * dt; M.prot.dipep += (dPepto - dDipep) * dt; M.prot.aa += dDipep * dt;
+  const k6 = inStom ? K.gastricLipase : inInt ? K.lipaseBase * (bile ? 1 : K.lipaseNoBileMul) * phFrac(pH, 7.8) : 0;
+  const k7 = inInt ? K.lipaseFinal * phFrac(pH, 7.8) : 0;
+  const dFat = k6 * M.fat.fat, dDigly = k7 * M.fat.digly;
+  M.fat.fat -= dFat * dt; M.fat.digly += (dFat - dDigly) * dt; M.fat.ffa += dDigly * dt;
+  if (inInt) {
+    const aS = K.absSugar * M.carb.glucose, aA = K.absAA * M.prot.aa, aF = K.absFat * M.fat.ffa;
+    M.carb.glucose -= aS * dt; M.absorbed.sugar += aS * dt;
+    M.prot.aa -= aA * dt; M.absorbed.aa += aA * dt;
+    M.fat.ffa -= aF * dt; M.absorbed.fat += aF * dt;
+  }
+  M.t += dt;
+}
+/* MODEL:end */
+
+/* ---- state ------------------------------------------------------------------ */
+const S = {locked: false, chew: 25, bile: true, meal: makeMeal(25), tr: [], chewTried: new Set([25])};
+const shared = sharedState();
+if (shared) Object.assign(S, {chew: shared.chew || 25});
+shareState(() => ({chew: S.chew}));
+
+/* ============================================================================
+   Stage
+   ============================================================================ */
+const svg = $('stage');
+const TOTAL = 560;
+const TL = {x: 60, y: 50, w: 900, h: 34};
+const G1 = {x: 60, y: 154, w: 900, h: 110};
+const G2 = {x: 60, y: 336, w: 900, h: 110};
+const G3 = {x: 60, y: 518, w: 900, h: 110};
+const tx = t => TL.x + clamp(t, 0, TOTAL) / TOTAL * TL.w;
+function build(){
+  svg.innerHTML = `
+  <rect x="0" y="0" width="1000" height="700" fill="#fbfaf6"/>
+  <text x="20" y="24" fill="#8a4a1a" font-size="12" font-weight="700" letter-spacing=".08em">THE MEAL, MINUTE BY MINUTE SINCE SWALLOWING</text>
+  <g id="tl"></g>
+  <g id="tlMarker"></g>
+  <text x="20" y="146" fill="#4a555b" font-size="12" font-weight="700" letter-spacing=".08em">CARBOHYDRATE: STARCH → MALTOSE → GLUCOSE → BLOOD</text>
+  <g id="g1Axes"></g><g id="g1Lines"></g><g id="g1Now"></g>
+  <text x="20" y="328" fill="#4a555b" font-size="12" font-weight="700" letter-spacing=".08em">PROTEIN: PROTEIN → PROTEOSES/PEPTONES → DIPEPTIDES → AMINO ACIDS → BLOOD</text>
+  <g id="g2Axes"></g><g id="g2Lines"></g><g id="g2Now"></g>
+  <text x="20" y="510" fill="#4a555b" font-size="12" font-weight="700" letter-spacing=".08em">FAT: FAT → DI/MONOGLYCERIDES → FATTY ACIDS + GLYCEROL → LYMPH</text>
+  <g id="g3Axes"></g><g id="g3Lines"></g><g id="g3Now"></g>
+  <rect id="veil" x="0" y="0" width="1000" height="700" fill="#fbfaf6" opacity=".95"/>
+  <text id="veilT" x="500" y="350" text-anchor="middle" fill="#7c878c" font-size="14" font-weight="600">The plots switch on once you have made a prediction.</text>
+  `;
+}
+function drawTimeline(){
+  const zones = [['stomach', 0, STOMACH_END, '#f7d9d3', 'STOMACH · pH 1.8'], ['intestine', STOMACH_END, INTESTINE_END, '#dcefe0', 'SMALL INTESTINE · pH 7.8'], ['colon', INTESTINE_END, TOTAL, '#e6e6ea', 'LARGE INTESTINE · pH ~7.8, no digestion']];
+  let h = `<rect x="${TL.x}" y="${TL.y}" width="${TL.w}" height="${TL.h}" fill="#fff" stroke="#e2ded2"/>`;
+  for (const [id, a, b, col, label] of zones) { const x1 = tx(a), x2 = tx(b);
+    h += `<rect x="${x1.toFixed(1)}" y="${TL.y}" width="${(x2 - x1).toFixed(1)}" height="${TL.h}" fill="${col}"/>` +
+         `<text x="${((x1 + x2) / 2).toFixed(1)}" y="${TL.y + TL.h / 2 + 4}" text-anchor="middle" font-size="10.5" font-weight="700" fill="#5c4530">${label}</text>`;
+  }
+  h += `<line x1="${tx(STOMACH_END)}" y1="${TL.y}" x2="${tx(STOMACH_END)}" y2="${TL.y + TL.h}" stroke="#00000022"/><line x1="${tx(INTESTINE_END)}" y1="${TL.y}" x2="${tx(INTESTINE_END)}" y2="${TL.y + TL.h}" stroke="#00000022"/>`;
+  h += `<rect x="${TL.x}" y="${TL.y}" width="${TL.w}" height="${TL.h}" fill="none" stroke="#c9b9a6"/>`;
+  for (const t of [0, 60, 120, 180, 240, 300, 360, 420, 480, 540]) h += `<text x="${tx(t).toFixed(1)}" y="${TL.y + TL.h + 14}" text-anchor="middle" fill="#7c878c" font-size="9.5" class="m">${t}</text>`;
+  h += `<text x="${TL.x + TL.w}" y="${TL.y + TL.h + 28}" text-anchor="end" fill="#7c878c" font-size="10">minutes since swallowing →</text>`;
+  $('tl').innerHTML = h;
+}
+function gy(B, v){ return B.y + B.h - clamp(v, 0, 1) * B.h; }
+function drawAxesG(B, id){
+  let a = `<rect x="${B.x}" y="${B.y}" width="${B.w}" height="${B.h}" fill="#fff" stroke="#e2ded2"/>`;
+  for (const v of [0, 0.5, 1]) a += `<line x1="${B.x}" y1="${gy(B, v)}" x2="${B.x + B.w}" y2="${gy(B, v)}" stroke="#f0ede4"/><text x="${B.x - 5}" y="${gy(B, v) + 4}" fill="#7c878c" font-size="10" text-anchor="end" class="m">${v}</text>`;
+  a += `<line x1="${tx(STOMACH_END)}" y1="${B.y}" x2="${tx(STOMACH_END)}" y2="${B.y + B.h}" stroke="#00000018" stroke-dasharray="3 3"/><line x1="${tx(INTESTINE_END)}" y1="${B.y}" x2="${tx(INTESTINE_END)}" y2="${B.y + B.h}" stroke="#00000018" stroke-dasharray="3 3"/>`;
+  $(id).innerHTML = a;
+}
+const CARB_KEYS = [['starch', '#e8c468'], ['maltose', '#d99a3a'], ['glucose', '#3f7fd8']];
+const PROT_KEYS = [['protein', '#bcd0ea'], ['pepto', '#7fa8dd'], ['dipep', '#4a78c0'], ['aa', '#243f6e']];
+const FAT_KEYS = [['fat', '#f2b8c6'], ['digly', '#e0728f'], ['ffa', '#a3305a']];
+function pathFor(keys, field, B){
+  return keys.map(([k, col]) => {
+    let d = ''; for (const q of S.tr) { const x = tx(q.t), y = gy(B, q[field][k]); d += (d ? 'L' : 'M') + x.toFixed(1) + ' ' + y.toFixed(1); }
+    return `<path d="${d}" fill="none" stroke="${col}" stroke-width="2"/>`;
+  }).join('');
+}
+function keyRow(keys, B){
+  const widths = keys.map(([k]) => 16 + k.length * 5.6 + 16);
+  const total = widths.reduce((a, b) => a + b, 0);
+  let x = B.x + B.w - total, h = '';
+  keys.forEach(([k, col], i) => { h += `<line x1="${x.toFixed(1)}" y1="${B.y + 13}" x2="${(x + 14).toFixed(1)}" y2="${B.y + 13}" stroke="${col}" stroke-width="2.6"/><text x="${(x + 18).toFixed(1)}" y="${B.y + 17}" fill="${col}" font-size="9.5">${k}</text>`; x += widths[i]; });
+  return h;
+}
+function paint(){
+  const M = S.meal, x = tx(M.t);
+  $('tlMarker').innerHTML = `<path d="M${x.toFixed(1)} ${TL.y - 3} l -6 -9 l 12 0 Z" fill="#1d2327"/><line x1="${x.toFixed(1)}" y1="${TL.y}" x2="${x.toFixed(1)}" y2="${G3.y + G3.h}" stroke="#1d2327" stroke-dasharray="2 3" opacity=".5"/>`;
+  $('g1Lines').innerHTML = pathFor(CARB_KEYS, 'carb', G1) + keyRow(CARB_KEYS, G1);
+  $('g2Lines').innerHTML = pathFor(PROT_KEYS, 'prot', G2) + keyRow(PROT_KEYS, G2);
+  $('g3Lines').innerHTML = pathFor(FAT_KEYS, 'fat', G3) + keyRow(FAT_KEYS, G3);
+  const dot = (B, field, keys) => keys.map(([k, col]) => `<circle cx="${x.toFixed(1)}" cy="${gy(B, M[field][k]).toFixed(1)}" r="3.4" fill="${col}" stroke="#fff" stroke-width="1"/>`).join('');
+  $('g1Now').innerHTML = dot(G1, 'carb', CARB_KEYS); $('g2Now').innerHTML = dot(G2, 'prot', PROT_KEYS); $('g3Now').innerHTML = dot(G3, 'fat', FAT_KEYS);
+}
+function paintMeasure(){
+  if (!S.locked) return;
+  const M = S.meal, zone = zoneAt(M.t);
+  $('mZone').textContent = zone === 'stomach' ? 'stomach' : zone === 'intestine' ? 'small intestine' : 'large intestine';
+  $('mPH').textContent = fmt(PH[zone] || PH.intestine, 1);
+  $('mT').textContent = `${fmt(M.t, 0)} min (${fmt(M.t / 60, 1)} h)`;
+  $('mStarch').textContent = `${fmt(M.carb.starch * 100, 0)}%`;
+  $('mProt').textContent = `${fmt(M.prot.protein * 100, 0)}%`;
+  $('mFat').textContent = `${fmt(M.fat.fat * 100, 0)}%`;
+  $('mBlood').textContent = `${fmt((M.absorbed.sugar + M.absorbed.aa) * 50, 0)}%`;
+  $('mLymph').textContent = `${fmt(M.absorbed.fat * 100, 0)}%`;
+}
+function paintWhy(){
+  if (!S.locked) return;
+  $('whyCard').hidden = false;
+  const M = S.meal, zone = zoneAt(M.t);
+  let t = `<p>Right now the bolus is in the <b>${zone === 'stomach' ? 'stomach' : zone === 'intestine' ? 'small intestine' : 'large intestine'}</b>, at pH ${fmt(PH[zone] || PH.intestine, 1)}.</p>`;
+  if (zone === 'stomach') t += `<p>Salivary amylase's own phFrac at this pH is <b class="mono">${fmt(phFrac(PH.stomach, 6.8), 3)}</b> — essentially off — so starch stays at <b class="mono">${fmt(M.carb.starch * 100, 0)}%</b>, exactly what chewing left it at. Pepsin's phFrac here is <b class="mono">${fmt(phFrac(PH.stomach, 1.8), 2)}</b>, close to its maximum, so protein is falling.</p>`;
+  else if (zone === 'intestine') t += `<p>Pepsin's phFrac at pH 7.8 is <b class="mono">${fmt(phFrac(PH.intestine, 1.8), 3)}</b> — it has stopped — but trypsin, pancreatic amylase, dipeptidases and lipase all have their optimum right here, so all three cascades are running.</p>`;
+  else t += `<p>No more digestion happens here (NCERT): whatever was not absorbed moves on as faeces, after water is taken back.</p>`;
+  $('why').innerHTML = t;
+}
+
+/* ---- controls ---------------------------------------------------------------------- */
+function reset(){ S.meal = makeMeal(S.chew); S.tr = []; }
+$('chew').addEventListener('input', e => { S.chew = +e.target.value; $('chewOut').textContent = S.chew + ' s'; });
+$('chew').addEventListener('change', () => { S.chewTried.add(S.chew); reset(); track('set', {k: 'chew', v: S.chew}); checkChew(); });
+$('bileSeg').addEventListener('click', e => { const b = e.target.closest('button'); if (!b || b.disabled) return;
+  S.bile = b.dataset.bile === '1'; $$('#bileSeg button').forEach(x => x.setAttribute('aria-pressed', x === b)); sound('tick'); track('bile', {on: S.bile}); });
+$('btnReset').addEventListener('click', () => { reset(); sound('whoosh'); });
+function lockControls(lock){
+  for (const id of ['chew', 'btnReset']) $(id).disabled = lock;
+  $$('#bileSeg button').forEach(b => b.disabled = lock);
+  $('gate').hidden = !lock;
+}
+
+/* ---- findings ---------------------------------------------------------------------- */
+let stomachSeen = null;
+function checkChew(){ if (S.chewTried.size >= 2) { const fr = [...S.chewTried].map(c => mouthPhase(c).maltose);
+  if (Math.max(...fr) - Math.min(...fr) > 0.15) discover('chewmore'); } }
+function check(){
+  const M = S.meal, zone = zoneAt(M.t);
+  if (M.carb.maltose + M.carb.glucose >= 0.15) discover('mouth');
+  if (zone === 'stomach' && M.t > 30) stomachSeen = {starch: M.carb.starch, maltose: M.carb.maltose};
+  if (zone === 'stomach' && M.t > STOMACH_END - 20 && stomachSeen && Math.abs(M.carb.starch - stomachSeen.starch) < 0.02) discover('stomachstall');
+  if (zone === 'stomach' && M.t > STOMACH_END - 20 && M.prot.protein < 0.85) discover('protstomach');
+  if (M.t >= INTESTINE_END - 5 && S.bile && M.absorbed.sugar > 0.85 && M.absorbed.aa > 0.85 && M.absorbed.fat > 0.85) discover('finish');
+  if (M.t >= INTESTINE_END - 5 && !S.bile && M.absorbed.fat < 0.75) discover('nobile');
+}
+
+/* ============================================================================
+   Start
+   ============================================================================ */
+build(); drawTimeline(); drawAxesG(G1, 'g1Axes'); drawAxesG(G2, 'g2Axes'); drawAxesG(G3, 'g3Axes');
+findings($('finds'), [
+  {id: 'mouth',       icon: '🦷', label: 'Some starch turns to maltose before you swallow', hint: 'Just watch — it happens at t = 0'},
+  {id: 'stomachstall', icon: '⏸', label: 'Amylase stalls the moment it meets stomach acid', hint: 'Watch the starch line through the stomach'},
+  {id: 'protstomach', icon: '🥩', label: 'Protein starts breaking down in the stomach', hint: 'Watch the protein line through the stomach'},
+  {id: 'finish',      icon: '✓', label: 'All three finish in the small intestine', hint: 'Run it through to the end, with bile'},
+  {id: 'nobile',      icon: '🚫', label: 'No bile: fat digestion stalls', hint: 'Remove the bile and run it through'},
+  {id: 'chewmore',    icon: '⏱', label: 'Chew longer, more maltose before you swallow', hint: 'Try two very different chew times'},
+], () => toast('All six — a meal, digested the way the chapter explains it.', 4800));
+
+const POE = predict($('poe'), {
+  id: 'amylase',
+  q: 'Salivary amylase starts breaking down starch in your mouth. What happens to that once the food reaches the stomach?',
+  options: [
+    {id: 'slower', text: 'It keeps working, just more slowly'},
+    {id: 'stops',  text: "It stops almost completely — the enzyme's shape only suits the mouth's pH", right: true},
+    {id: 'faster', text: 'It works even faster in the acid'},
+    {id: 'swap',   text: 'It turns into a different enzyme automatically'},
+  ],
+  onLock(){
+    S.locked = true; lockControls(false);
+    for (const id of ['veil', 'veilT']) { const el = document.getElementById(id); if (el) el.remove(); }
+    $('measureVeil').hidden = true; $('measure').hidden = false;
+    say('Watch the starch line stall the moment it enters the stomach.');
+    paintWhy();
+  },
+});
+lockControls(!POE.locked);
+if (!Play.FF('predict')) S.locked = true;
+
+let explained = false;
+function maybeExplain(){
+  if (explained || !POE || zoneAt(S.meal.t) !== 'stomach' || S.meal.t < 60) return;
+  explained = true;
+  const f = phFrac(PH.stomach, 6.8);
+  POE.explain(`The model's own number: at pH ${PH.stomach}, salivary amylase's activity function is <b>${fmt(f, 3)}</b> of its maximum — essentially zero. ` +
+    `Starch has stayed at <b>${fmt(S.meal.carb.starch * 100, 0)}%</b> since it was swallowed at <b>${fmt(S.meal.carb.starch * 100 + S.meal.carb.maltose * 0, 0)}%</b> — the pH did not slow the enzyme, it switched it off.`);
+}
+
+/* Time is the learner's: one clock, mounted right above the stage it moves. onTick already
+   carries the chosen speed; BASE_RATE_MEAL is only a fixed minutes-per-real-second calibration
+   (the same at every speed). The minutes handed to us are still cut into half-minute sub-steps,
+   for the same reason the model was always stepped that finely — accuracy through the pH cliffs
+   at each zone boundary, not stability of the clock. */
+const BASE_RATE_MEAL = 22;
+const clockMeal = Play.clock({
+  mount: $('clockMeal'), step: 0.3,
+  onTick(dt){
+    if (!S.locked || S.meal.t >= TOTAL) return;
+    let minutes = dt * BASE_RATE_MEAL;
+    while (minutes > 0 && S.meal.t < TOTAL) {
+      const h = Math.min(0.5, minutes); minutes -= h;
+      stepMeal(S.meal, h, S.bile);
+    }
+    S.tr.push({t: S.meal.t, carb: Object.assign({}, S.meal.carb), prot: Object.assign({}, S.meal.prot), fat: Object.assign({}, S.meal.fat)});
+    while (S.tr.length > 400) S.tr.shift();
+    check(); maybeExplain();
+  },
+});
+
+loop(() => { paint(); paintMeasure(); paintWhy(); });
+
+window.PG_STATE = () => ({locked: S.locked, chew: S.chew, bile: S.bile, t: S.meal.t, zone: zoneAt(S.meal.t),
+  carb: Object.assign({}, S.meal.carb), prot: Object.assign({}, S.meal.prot), fat: Object.assign({}, S.meal.fat), absorbed: Object.assign({}, S.meal.absorbed)});
+window.PG_MODEL = {makeMeal, stepMeal, mouthPhase, phFrac, zoneAt, PH, STOMACH_END, INTESTINE_END, K};
+</script>
+</body>
+</html>

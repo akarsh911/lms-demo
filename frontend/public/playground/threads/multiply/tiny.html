@@ -1,0 +1,598 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Counting in Groups</title>
+<meta name="description" content="Class 2: help Surbhi thread seashells into rings of two, bracelets of five and necklaces of ten, then count them in groups — faster than Kekdu the crab, who counts one by one.">
+<link rel="icon" href="../../favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600&family=Inter:wght@400;500;600;700&family=Nunito:wght@500;700;800&display=swap">
+<link rel="stylesheet" href="../../play.css">
+<style>
+.pg-main.tiny-main{grid-template-columns:minmax(0,1fr) 250px; padding-top:12px; padding-bottom:12px}
+.tiny-main .pg-stage{align-self:start; min-height:0}
+.pg-intro{display:flex; align-items:baseline; gap:18px; flex-wrap:wrap; padding-top:12px}
+.pg-intro p{margin:0}
+#stage{background:#bfe6ff}
+.hit{cursor:pointer}
+svg [tabindex]:focus{outline:none}
+svg [tabindex]:focus-visible{outline:none; stroke:#ff7a2f; stroke-width:4; stroke-dasharray:8 8}
+.hear{width:100%; min-height:76px; font-size:24px; font-family:var(--font-head); border-radius:var(--radius)}
+.hear .ic{font-size:30px}
+.try{padding:10px; text-align:center; cursor:pointer; border:2px solid var(--hair-2); transition:transform .2s var(--spring)}
+.try:hover{border-color:var(--accent)}
+.try:active{transform:scale(.97)}
+.try svg{display:block; width:100%; height:auto}
+.try .kicker{margin:2px 0 0}
+@media (max-width:980px){ .pg-main.tiny-main{grid-template-columns:1fr} }
+</style>
+</head>
+<body>
+<header class="pg-top"></header>
+
+<div class="pg-intro">
+  <h1>Counting in groups</h1>
+  <p>Thread shells in twos, fives and tens — then count them fast.</p>
+</div>
+
+<main class="pg-main tiny-main">
+  <section class="pg-stage" id="stageWrap">
+    <svg id="stage" viewBox="0 0 1000 660" role="img" aria-label="A beach. Surbhi stands by her shell stall holding a string. Thirty seashells lie on the sand. Kekdu the crab sits by the sea. Three buttons choose rings of two, bracelets of five or necklaces of ten."></svg>
+  </section>
+
+  <aside class="pg-side">
+    <button class="btn primary hear" id="hear" aria-label="Hear what to do"><span class="ic">🔊</span> Hear it</button>
+    <button class="card try" id="tryCard" aria-label="What to try next. Tap to hear it."><svg id="tryArt" viewBox="-80 -55 160 110"></svg><div class="kicker">Try this</div></button>
+    <div class="card"><h3>⭐ Found</h3><div id="finds"></div></div>
+  </aside>
+</main>
+
+<script src="../../play.js"></script>
+<script>
+'use strict';
+const {$, clamp, lerp, loop, tween, sound, tone, say, track, confetti, findings, discover, found,
+       shareState, sharedState, mount, reduced, drag, svgPoint, mulberry32, ease} = Play;
+mount({thread: 'multiply', band: 'tiny'});
+
+/* MODEL:start ==================================================================
+   Counting in groups (NCERT Joyful Mathematics, Class 2, Ch 1 "A Day at the Beach").
+   Surbhi threads N shells, one tap at a time, onto strings that each hold the same
+   number of shells: a ring holds 2, a bracelet 5, a necklace 10 (the book's
+   necklaces have ten shells each). The shells she has are split, by the model, into
+   full groups and loose shells:
+       groups = floor(N / size),  loose = N mod size.
+   Counting in groups says one word per group (size, 2·size, 3·size …) and then one
+   word per loose shell; counting one by one says one word per shell. The race
+   between Surbhi and Kekdu the crab is just those two lists of words, said at the
+   same pace. Changing the string re-groups the SAME shells; the total never changes.
+   ============================================================================ */
+const TOTAL = 30;                                   // shells on the beach
+const SIZES = [2, 5, 10];
+const ONES = ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten',
+              'eleven', 'twelve', 'thirteen', 'fourteen', 'fifteen', 'sixteen', 'seventeen', 'eighteen', 'nineteen'];
+const TENS = ['', 'ten', 'twenty', 'thirty', 'forty', 'fifty'];
+function numberName(n){
+  if (n < 20) return ONES[n];
+  const t = Math.floor(n / 10), o = n % 10;
+  return TENS[t] + (o ? '-' + ONES[o] : '');
+}
+const groupsOf = (n, size) => ({groups: Math.floor(n / size), loose: n % size});
+/* The words Surbhi says: one per group, then one per loose shell. */
+function skipWords(n, size){
+  const {groups, loose} = groupsOf(n, size), w = [];
+  for (let g = 1; g <= groups; g++) w.push(g * size);
+  for (let l = 1; l <= loose; l++) w.push(groups * size + l);
+  return w;
+}
+/* The words Kekdu says. */
+const oneByOne = n => Array.from({length: n}, (_, i) => i + 1);
+const maxGroups = size => Math.floor(TOTAL / size);
+const cap = s => s[0].toUpperCase() + s.slice(1);
+function sayCount(n, size){
+  const w = skipWords(n, size).map(numberName);
+  return cap(w.join(', ')) + '. ' + cap(numberName(n)) + (n === 1 ? ' shell!' : ' shells!');
+}
+const STRING_NAME = {2: 'ring', 5: 'bracelet', 10: 'necklace'};
+/* MODEL:end */
+
+/* ---- the world (stage units) ------------------------------------------------ */
+const BAR_Y = 250, BAR_X0 = 185, BAR_W = 510;
+const hookX = (g, size) => BAR_X0 + BAR_W / maxGroups(size) * (g + 0.5);
+const OC = {x: 785, y: 430};                       // the string Surbhi is threading
+const SURBHI = {x: 905, y: 560}, CRAB = {x: 92, y: 352};
+const BTN = {2: {x: 745, y: 608}, 5: {x: 845, y: 608}, 10: {x: 945, y: 608}};
+const SHELL_R = 30;
+const rng0 = mulberry32(7);
+const SAND = Array.from({length: TOTAL}, (_, i) => {
+  const r = Math.floor(i / 10), c = i % 10;
+  return {x: 60 + c * 64 + (r % 2) * 16 + (rng0() * 14 - 7), y: 494 + r * 60 + (rng0() * 10 - 5), rot: Math.round(rng0() * 50 - 25)};
+});
+/* Where shell number j of a hanging string sits, from its hook. */
+function hangPos(size, j){
+  if (size === 2) { const a = (j ? 60 : 120) * Math.PI / 180; return {x: 17 * Math.cos(a), y: 32 + 17 * Math.sin(a)}; }
+  if (size === 5) { const a = (90 + (j - 2) * 42) * Math.PI / 180; return {x: 33 * Math.cos(a), y: 56 + 33 * Math.sin(a)}; }
+  const a = (18 + j * 16) * Math.PI / 180; return {x: -70 * Math.cos(a), y: 20 + 108 * Math.sin(a)};
+}
+/* Where shell number j sits on the string in Surbhi's hands. */
+function openPos(size, j){
+  if (size === 2) { const a = (j ? 55 : 125) * Math.PI / 180; return {x: 36 * Math.cos(a), y: 36 * Math.sin(a)}; }
+  if (size === 5) { const a = (-90 + j * 72) * Math.PI / 180; return {x: 50 * Math.cos(a), y: 50 * Math.sin(a)}; }
+  const a = (10 + j * 160 / 9) * Math.PI / 180; return {x: -72 * Math.cos(a), y: -40 + 88 * Math.sin(a)};
+}
+const itemH = size => size === 2 ? 58 : size === 5 ? 96 : 136;
+
+/* ---- state: plain data ----------------------------------------------------- */
+const S = {size: 2, strung: [], counting: false, counted: {}, last: null, counts: 0};
+const shared = sharedState();
+if (shared) {
+  if (SIZES.includes(+shared.size)) S.size = +shared.size;
+  const n = clamp(Math.round(+shared.n || 0), 0, TOTAL);
+  for (let i = 0; i < n; i++) S.strung.push(i);
+}
+shareState(() => ({size: S.size, n: S.strung.length}));
+const N = () => S.strung.length;
+
+/* ============================================================================
+   The stage: drawn once, then only patched.
+   ============================================================================ */
+const svg = $('stage');
+const f1 = n => (+n).toFixed(1);
+const FONT = 'font-family="Fredoka, Nunito, sans-serif" font-weight="600"';
+const SHELL_COL = [['#ffb8c6', '#d84d72'], ['#ffd6a3', '#d9822f'], ['#fff0d2', '#bf9656'], ['#dccdff', '#7f62cc']];
+function shellArt(c){
+  const [f, s] = SHELL_COL[c % 4];
+  return `<path d="M-6 10 L-10 15 L10 15 L6 10 Z" fill="${f}" stroke="${s}" stroke-width="2" stroke-linejoin="round"/>
+    <path d="M0 12 C-16 10 -20 -6 -13 -13 Q0 -22 13 -13 C20 -6 16 10 0 12 Z" fill="${f}" stroke="${s}" stroke-width="2.4" stroke-linejoin="round"/>
+    <path d="M0 11 L-11 -8 M0 11 L-5 -15 M0 11 L0 -17 M0 11 L5 -15 M0 11 L11 -8" stroke="${s}" stroke-width="1.6" opacity=".65" stroke-linecap="round"/>`;
+}
+/* the empty string for a group size, drawn at a point; open = in Surbhi's hands */
+function stringArt(size, open){
+  const st = `fill="none" stroke="#c0763a" stroke-width="${open ? 3 : 2.4}" stroke-linecap="round"`;
+  if (open) {
+    if (size === 2) return `<circle r="36" ${st}/>`;
+    if (size === 5) return `<circle r="50" ${st}/>`;
+    return `<path d="M-72 -40 A72 88 0 0 0 72 -40" ${st}/><path d="M-72 -40 Q0 -70 72 -40" ${st} stroke-dasharray="4 5"/>`;
+  }
+  if (size === 2) return `<path d="M0 0 L0 15" ${st}/><circle cy="32" r="17" ${st}/>`;
+  if (size === 5) return `<path d="M0 0 L0 23" ${st}/><circle cy="56" r="33" ${st}/>`;
+  return `<path d="M-70 20 L0 0 L70 20" ${st}/><path d="M-70 20 A70 108 0 0 0 70 20" ${st}/>`;
+}
+const handArt = `<path d="M-6 0 L-6 -34 Q-6 -42 1 -42 Q8 -42 8 -34 L8 -14 L20 -14 Q30 -14 30 -4 L30 16 Q30 30 16 30 L2 30 Q-12 30 -16 18 L-24 4 Q-27 -3 -20 -5 Q-14 -6 -10 2 Z" fill="#fff" stroke="#3a2a1a" stroke-width="3" stroke-linejoin="round"/>`;
+
+function surbhiArt(){
+  return `
+  <g id="sBob">
+    <path d="M-20 -72 L-22 -6 M20 -72 L22 -6" stroke="#8d5a3b" stroke-width="13" stroke-linecap="round"/>
+    <ellipse cx="-26" cy="-2" rx="16" ry="7" fill="#e0567a"/><ellipse cx="26" cy="-2" rx="16" ry="7" fill="#e0567a"/>
+    <path d="M-30 -196 Q0 -206 30 -196 L60 -64 Q0 -48 -60 -64 Z" fill="#ffc93c" stroke="#d99a12" stroke-width="3.5" stroke-linejoin="round"/>
+    <path d="M-50 -90 Q0 -76 50 -90" stroke="#2f9e5b" stroke-width="7" fill="none" stroke-linecap="round"/>
+    <circle cx="-16" cy="-150" r="5" fill="#e0567a"/><circle cx="14" cy="-126" r="5" fill="#3f7fd8"/><circle cx="24" cy="-164" r="5" fill="#2f9e5b"/>
+    <g id="sArmL"><path d="M-26 -188 Q-70 -160 -104 -142" stroke="#8d5a3b" stroke-width="12" stroke-linecap="round" fill="none"/><circle cx="-106" cy="-141" r="10" fill="#8d5a3b"/></g>
+    <g id="sArmR"><path d="M26 -188 Q40 -140 30 -112" stroke="#8d5a3b" stroke-width="12" stroke-linecap="round" fill="none"/><circle cx="29" cy="-108" r="10" fill="#8d5a3b"/></g>
+    <rect x="-9" y="-214" width="18" height="20" fill="#8d5a3b"/>
+    <g id="sHead">
+      <path d="M-40 -238 Q-58 -196 -48 -168 M40 -238 Q58 -196 48 -168" stroke="#2b1b12" stroke-width="13" stroke-linecap="round" fill="none"/>
+      <circle cx="-48" cy="-164" r="8" fill="#e0567a"/><circle cx="48" cy="-164" r="8" fill="#e0567a"/>
+      <circle cy="-250" r="44" fill="#a86c46" stroke="#6b3f24" stroke-width="3"/>
+      <path d="M-45 -254 Q-44 -300 0 -298 Q44 -300 45 -254 Q30 -276 0 -272 Q-26 -276 -45 -254 Z" fill="#2b1b12"/>
+      <ellipse cx="-22" cy="-236" rx="9" ry="6" fill="#ff8f8f" opacity=".5"/><ellipse cx="22" cy="-236" rx="9" ry="6" fill="#ff8f8f" opacity=".5"/>
+      <g id="sEyeOpen"><circle cx="-15" cy="-252" r="8.5" fill="#fff"/><circle cx="15" cy="-252" r="8.5" fill="#fff"/>
+        <g id="sLook"><circle cx="-15" cy="-252" r="5" fill="#2b1b12"/><circle cx="15" cy="-252" r="5" fill="#2b1b12"/></g>
+        <path id="sLid" d="M-25 -254 Q-15 -264 -5 -254 M5 -254 Q15 -264 25 -254" stroke="#a86c46" stroke-width="9" opacity="0"/></g>
+      <path id="sEyeHappy" d="M-23 -250 Q-15 -260 -7 -250 M7 -250 Q15 -260 23 -250" stroke="#2b1b12" stroke-width="4" fill="none" stroke-linecap="round" opacity="0"/>
+      <g id="sEyeWow" opacity="0"><circle cx="-15" cy="-252" r="10" fill="#fff"/><circle cx="15" cy="-252" r="10" fill="#fff"/><circle cx="-15" cy="-252" r="4" fill="#2b1b12"/><circle cx="15" cy="-252" r="4" fill="#2b1b12"/></g>
+      <path id="sMouth" d="M-10 -228 Q0 -220 10 -228" stroke="#6b2a1a" stroke-width="3" fill="none" stroke-linecap="round"/>
+      <path d="M-4 -296 q-10 -16 4 -18 q10 6 0 18 Z" fill="#ff7a2f"/>
+    </g>
+  </g>`;
+}
+function crabArt(){
+  const legs = [-1, 1].map(s => [0, 1, 2].map(k => `<path d="M${s * 36} ${2 + k * 8} q${s * 22} ${-4 + k * 6} ${s * 30} ${16 + k * 6}" stroke="#c2412a" stroke-width="6" fill="none" stroke-linecap="round"/>`).join('')).join('');
+  const claw = s => `<g id="claw${s < 0 ? 'L' : 'R'}"><path d="M${s * 38} -8 Q${s * 52} -20 ${s * 56} -34" stroke="#c2412a" stroke-width="7" fill="none" stroke-linecap="round"/>
+    <path d="M${s * 56} -34 m${-s * 14} -2 a16 14 0 1 0 ${s * 28} 0 l${-s * 12} 4 Z" fill="#ff6b4a" stroke="#c2412a" stroke-width="3" stroke-linejoin="round"/></g>`;
+  return `<g id="cBob">${legs}${claw(-1)}${claw(1)}
+    <ellipse rx="48" ry="30" fill="#ff6b4a" stroke="#c2412a" stroke-width="4"/>
+    <ellipse cx="-12" cy="-10" rx="18" ry="8" fill="#ffa184" opacity=".7"/>
+    <path d="M-14 -24 L-18 -52 M14 -24 L18 -52" stroke="#c2412a" stroke-width="5" stroke-linecap="round"/>
+    <circle cx="-18" cy="-58" r="11" fill="#fff" stroke="#c2412a" stroke-width="3"/><circle cx="18" cy="-58" r="11" fill="#fff" stroke="#c2412a" stroke-width="3"/>
+    <g id="cLook"><circle cx="-18" cy="-58" r="5" fill="#2b1b12"/><circle cx="18" cy="-58" r="5" fill="#2b1b12"/></g>
+    <path id="cMouth" d="M-12 6 Q0 16 12 6" stroke="#7d1f10" stroke-width="3.5" fill="none" stroke-linecap="round"/>
+    <ellipse cx="-26" cy="4" rx="6" ry="4" fill="#ff9f8a"/><ellipse cx="26" cy="4" rx="6" ry="4" fill="#ff9f8a"/></g>`;
+}
+function btnArt(size){
+  let s = `<circle r="46" fill="#fffaf0" stroke="#e8c48f" stroke-width="4"/><g transform="translate(0 ${size === 10 ? -12 : -14}) scale(${size === 10 ? .5 : .62})">${stringArt(size, true)}`;
+  for (let j = 0; j < size; j++) { const p = openPos(size, j); s += `<g transform="translate(${f1(p.x)} ${f1(p.y)}) scale(.9)">${shellArt(j)}</g>`; }
+  return s + `</g><circle cx="26" cy="30" r="16" fill="#ff7a2f"/><text x="26" y="37.5" text-anchor="middle" ${FONT} font-size="${size === 10 ? 17 : 20}" fill="#fff">${size}</text>`;
+}
+
+function build(){
+  const r = mulberry32(5);
+  let dots = '';
+  for (let i = 0; i < 70; i++) dots += `<circle cx="${f1(r() * 1000)}" cy="${f1(214 + r() * 440)}" r="${f1(1 + r() * 2)}" fill="#d9b27a" opacity=".6"/>`;
+  let waves = '';
+  for (let k = 0; k < 3; k++) { let d = `M0 ${150 + k * 20}`; for (let x = 0; x <= 1000; x += 50) d += ` q25 ${k % 2 ? 6 : -6} 50 0`; waves += `<path d="${d}" stroke="#fff" stroke-width="3" fill="none" opacity="${0.5 - k * 0.12}"/>`; }
+  svg.innerHTML = `
+  <defs>
+    <linearGradient id="gSky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#8fd3ff"/><stop offset="1" stop-color="#d8f1ff"/></linearGradient>
+    <linearGradient id="gSea" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2a9fd8"/><stop offset="1" stop-color="#5cc6e8"/></linearGradient>
+    <linearGradient id="gSand" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffe2a8"/><stop offset="1" stop-color="#f6cb82"/></linearGradient>
+    <filter id="soft" x="-20%" y="-20%" width="140%" height="140%"><feDropShadow dx="0" dy="4" stdDeviation="4" flood-color="#8a5a1a" flood-opacity=".22"/></filter>
+  </defs>
+  <rect width="1000" height="660" fill="url(#gSky)"/>
+  <g id="sunG"><circle cx="90" cy="62" r="34" fill="#ffd23f"/><circle cx="90" cy="62" r="50" fill="#ffd23f" opacity=".25"/></g>
+  <g fill="#fff" opacity=".95"><ellipse cx="330" cy="58" rx="46" ry="16"/><ellipse cx="364" cy="48" rx="30" ry="18"/><ellipse cx="640" cy="42" rx="40" ry="14"/><ellipse cx="668" cy="34" rx="24" ry="14"/></g>
+  <g transform="translate(520 116)"><path d="M-34 0 L34 0 L24 12 L-24 12 Z" fill="#b5542c"/><path d="M0 0 L0 -40 L26 -6 Z" fill="#fff"/><path d="M-2 0 L-2 -34 L-22 -6 Z" fill="#ffd23f"/></g>
+  <rect y="120" width="1000" height="96" fill="url(#gSea)"/>
+  <g id="waves">${waves}</g>
+  <path id="foam" d="M0 206 Q125 196 250 206 T500 206 T750 206 T1000 206 L1000 222 L0 222 Z" fill="#fff" opacity=".85"/>
+  <rect y="216" width="1000" height="444" fill="url(#gSand)"/>
+  <g>${dots}</g>
+  <path id="bigWave" d="" fill="#9fe0f5" opacity="0" pointer-events="none"/>
+
+  <!-- Surbhi's stall: a bamboo bar with a striped awning -->
+  <g filter="url(#soft)">
+    <path d="M${BAR_X0 - 12} 214 L${BAR_X0 + BAR_W + 12} 214 L${BAR_X0 + BAR_W + 26} 240 L${BAR_X0 - 26} 240 Z" fill="#fff"/>
+    ${Array.from({length: 9}, (_, k) => { const w = (BAR_W + 52) / 9, x = BAR_X0 - 26 + k * w; return k % 2 ? '' : `<path d="M${f1(x + 14 - k * 1.5)} 214 L${f1(x + w + 14 - (k + 1) * 1.5)} 214 L${f1(x + w)} 240 L${f1(x)} 240 Z" fill="#ff7a5c"/>`; }).join('')}
+    <path d="M${BAR_X0 - 26} 240 ${Array.from({length: 9}, (_, k) => { const w = (BAR_W + 52) / 9; return `q${f1(w / 2)} 14 ${f1(w)} 0`; }).join(' ')}" fill="#ff7a5c"/>
+    <rect x="${BAR_X0 - 10}" y="240" width="12" height="208" rx="5" fill="#c9a15a" stroke="#98733a" stroke-width="2.5"/>
+    <rect x="${BAR_X0 + BAR_W - 2}" y="240" width="12" height="208" rx="5" fill="#c9a15a" stroke="#98733a" stroke-width="2.5"/>
+    <rect x="${BAR_X0 - 12}" y="${BAR_Y - 6}" width="${BAR_W + 24}" height="12" rx="6" fill="#d9b268" stroke="#98733a" stroke-width="2.5"/>
+    ${[0.25, 0.5, 0.75].map(k => `<path d="M${f1(BAR_X0 + BAR_W * k)} ${BAR_Y - 6} v12" stroke="#98733a" stroke-width="2"/>`).join('')}
+  </g>
+  <g id="hooks"></g>
+  <g id="items" pointer-events="none"></g>
+  <g id="tags" pointer-events="none"></g>
+
+  <!-- Kekdu the crab, and his bubble -->
+  <g id="crab" transform="translate(${CRAB.x} ${CRAB.y})">${crabArt()}</g>
+  <g id="cBubble" opacity="0" pointer-events="none">
+    <path d="M22 216 h140 a16 16 0 0 1 16 16 v22 a16 16 0 0 1 -16 16 h-60 l-14 18 l-4 -18 h-62 a16 16 0 0 1 -16 -16 v-22 a16 16 0 0 1 16 -16 Z" fill="#fff" stroke="#ff6b4a" stroke-width="4"/>
+    <text id="cBubbleT" x="92" y="254" text-anchor="middle" ${FONT} font-size="28" fill="#c2412a"></text>
+  </g>
+
+  <!-- Surbhi, her string, and her bubble -->
+  <g id="openG" transform="translate(${OC.x} ${OC.y})"><g id="openJ"></g></g>
+  <g id="surbhi" transform="translate(${SURBHI.x} ${SURBHI.y})">${surbhiArt()}</g>
+  <g id="sBubble" opacity="0" pointer-events="none">
+    <path d="M770 138 h204 a18 18 0 0 1 18 18 v30 a18 18 0 0 1 -18 18 h-60 l-14 30 l-16 -30 h-114 a18 18 0 0 1 -18 -18 v-30 a18 18 0 0 1 18 -18 Z" fill="#fff" stroke="#ffb400" stroke-width="4"/>
+    <text id="sBubbleT" x="872" y="184" text-anchor="middle" ${FONT} font-size="34" fill="#b86a00"></text>
+  </g>
+  <g id="flag" opacity="0" pointer-events="none"><path d="M968 92 v44" stroke="#6b3f24" stroke-width="4"/><path d="M968 92 l30 9 l-30 9 Z" fill="#2f9e5b"/></g>
+
+  <!-- the three strings to choose -->
+  ${SIZES.map(s => `<g id="btn${s}" transform="translate(${BTN[s].x} ${BTN[s].y})" filter="url(#soft)"><g id="btnJ${s}">${btnArt(s)}</g></g>`).join('')}
+  <circle id="btnRing" cx="0" cy="0" r="52" fill="none" stroke="#ff7a2f" stroke-width="6" pointer-events="none"/>
+
+  <!-- the shells -->
+  <g id="shells" pointer-events="none">${SAND.map((p, i) => `<g id="sh${i}" transform="translate(${f1(p.x)} ${f1(p.y)}) rotate(${p.rot}) scale(1.35)"><g id="shJ${i}">${shellArt(i)}</g></g>`).join('')}</g>
+  <g id="fx" pointer-events="none"></g>
+  <g id="hint" pointer-events="none" opacity="0"><g id="hintHand"><g transform="scale(1.3)">${handArt}</g></g></g>
+
+  <!-- hit targets that never move -->
+  <rect id="seaHit" class="hit" x="0" y="118" width="1000" height="88" fill="transparent" role="button" tabindex="0" aria-label="The sea. Tap it and a wave washes all the shells back onto the sand."/>
+  <rect id="rackHit" class="hit" x="${BAR_X0 - 12}" y="${BAR_Y - 10}" width="${BAR_W + 24}" height="200" fill="transparent" role="button" tabindex="0" aria-label="Surbhi's stall. Tap to count the shells in groups."/>
+  <circle id="crabHit" class="hit" cx="${CRAB.x}" cy="${CRAB.y - 16}" r="62" fill="transparent" role="button" tabindex="0" aria-label="Kekdu the crab. He counts one by one."/>
+  <rect id="surbhiHit" class="hit" x="${SURBHI.x - 62}" y="${SURBHI.y - 350}" width="150" height="350" rx="30" fill="transparent" role="button" tabindex="0" aria-label="Surbhi. Tap her to count the shells in groups."/>
+  ${SIZES.map(s => `<circle id="pick${s}" class="hit" cx="${BTN[s].x}" cy="${BTN[s].y}" r="48" fill="transparent" role="button" tabindex="0" aria-label="${s === 2 ? 'Rings of two shells' : s === 5 ? 'Bracelets of five shells' : 'Necklaces of ten shells'}"/>`).join('')}
+  ${SAND.map((p, i) => `<circle id="shHit${i}" class="hit shHit" cx="${f1(p.x)}" cy="${f1(p.y)}" r="${SHELL_R}" fill="transparent" role="button" tabindex="0" aria-label="A seashell. Tap to give it to Surbhi."/>`).join('')}
+  `;
+}
+build();
+
+/* ---- where every shell is now ------------------------------------------------ */
+function shellTarget(i){
+  const k = S.strung.indexOf(i);
+  if (k < 0) return {x: SAND[i].x, y: SAND[i].y, rot: SAND[i].rot, s: 1.35};
+  const size = S.size, g = Math.floor(k / size), j = k % size, G = Math.floor(N() / size);
+  if (g < G) { const p = hangPos(size, j); return {x: hookX(g, size) + p.x, y: BAR_Y + p.y, rot: 0, s: 0.68}; }
+  const q = openPos(size, j); return {x: OC.x + q.x, y: OC.y + q.y, rot: 0, s: 0.9};
+}
+const CUR = SAND.map((p, i) => ({x: p.x, y: p.y, rot: p.rot, s: 1.35}));
+const ANIM = SAND.map(() => 0);
+const setT = (i, p) => { CUR[i] = p; $('sh' + i).setAttribute('transform', `translate(${f1(p.x)} ${f1(p.y)}) rotate(${f1(p.rot)}) scale(${p.s.toFixed(3)})`); };
+function moveShell(i, delay = 0, lift = 70, ms = 420){
+  const to = shellTarget(i), from = Object.assign({}, CUR[i]);
+  const tok = ++ANIM[i];
+  if (reduced() || (Math.abs(from.x - to.x) < 0.5 && Math.abs(from.y - to.y) < 0.5 && Math.abs(from.s - to.s) < 0.01)) { setT(i, to); return; }
+  setTimeout(() => {
+    if (tok !== ANIM[i]) return;
+    tween(0, 1, ms, t => {
+      if (tok !== ANIM[i]) return;
+      setT(i, {x: lerp(from.x, to.x, t), y: lerp(from.y, to.y, t) - Math.sin(t * Math.PI) * lift, rot: lerp(from.rot, to.rot, t), s: lerp(from.s, to.s, t)});
+    }, ease.inOut).then(() => { if (tok === ANIM[i]) setT(i, to); });
+  }, delay);
+}
+
+/* ---- paint: everything follows the state ------------------------------------ */
+function paint(){
+  const size = S.size, {groups: G, loose: L} = groupsOf(N(), size);
+  let items = '';
+  for (let g = 0; g < G; g++) items += `<g transform="translate(${f1(hookX(g, size))} ${BAR_Y})">${stringArt(size, false)}</g>`;
+  $('items').innerHTML = items;
+  let open = stringArt(size, true);
+  for (let j = L; j < size; j++) { const q = openPos(size, j); open += `<circle cx="${f1(q.x)}" cy="${f1(q.y)}" r="${size === 10 ? 11 : 13}" fill="#fff" fill-opacity=".55" stroke="#c0763a" stroke-width="2.5" stroke-dasharray="5 4"/>`; }
+  $('openJ').innerHTML = open;
+  $('btnRing').setAttribute('transform', `translate(${BTN[size].x} ${BTN[size].y})`);
+  for (let i = 0; i < TOTAL; i++) $('shHit' + i).style.display = S.strung.includes(i) ? 'none' : '';
+  paintTry();
+}
+function clearTags(){ $('tags').innerHTML = ''; }
+
+/* ---- Surbhi and Kekdu: faces, bubbles ------------------------------------------ */
+let FACE = 'open', faceT = 0, POINTER = null;
+function face(f, secs = 1.4){
+  FACE = f; faceT = secs;
+  $('sEyeOpen').setAttribute('opacity', f === 'open' ? 1 : 0);
+  $('sEyeHappy').setAttribute('opacity', f === 'happy' ? 1 : 0);
+  $('sEyeWow').setAttribute('opacity', f === 'wow' ? 1 : 0);
+  $('sMouth').setAttribute('d', f === 'wow' ? 'M-8 -228 Q0 -214 8 -228 Q0 -234 -8 -228 Z' : f === 'happy' ? 'M-13 -230 Q0 -214 13 -230' : 'M-10 -228 Q0 -220 10 -228');
+}
+function hop(el, h = 14, ms = 420){
+  if (reduced()) return Promise.resolve();
+  return tween(0, 1, ms, t => el.setAttribute('transform', `translate(0 ${f1(-Math.sin(t * Math.PI) * h)})`), v => v).then(() => el.removeAttribute('transform'));
+}
+function squash(el, amt = 0.14, ms = 420){
+  if (reduced()) return Promise.resolve();
+  return tween(0, 1, ms, t => {
+    const k = Math.sin(t * Math.PI * 3) * (1 - t) * amt;
+    el.setAttribute('transform', `scale(${(1 - k).toFixed(3)} ${(1 + k).toFixed(3)})`);
+  }, v => v).then(() => el.removeAttribute('transform'));
+}
+function wave(el, cx, cy, times = 2){
+  if (reduced()) return;
+  tween(0, times, 300 * times, t => el.setAttribute('transform', `rotate(${f1(Math.sin(t * Math.PI * 2) * 18)} ${cx} ${cy})`), v => v).then(() => el.removeAttribute('transform'));
+}
+const timers = {s: 0, c: 0};
+function sBubble(text, ms = 2200){ $('sBubbleT').textContent = text; $('sBubble').setAttribute('opacity', 1); clearTimeout(timers.s); if (ms) timers.s = setTimeout(() => $('sBubble').setAttribute('opacity', 0), ms); }
+function cBubble(text, ms = 2200){ $('cBubbleT').textContent = text; $('cBubble').setAttribute('opacity', 1); clearTimeout(timers.c); if (ms) timers.c = setTimeout(() => $('cBubble').setAttribute('opacity', 0), ms); }
+function surbhi(line, show, f = 'happy'){ say(line, {pitch: 1.3}); if (show != null) sBubble(show); face(f); hop($('sBob'), 10); }
+function clientOf(x, y){
+  const m = svg.getScreenCTM(); if (!m) return {x: innerWidth / 2, y: innerHeight / 2};
+  const p = svg.createSVGPoint(); p.x = x; p.y = y; const q = p.matrixTransform(m); return {x: q.x, y: q.y};
+}
+
+/* ============================================================================
+   The moves. Each one changes the state, then plays its juice.
+   ============================================================================ */
+let RACE = [];                                     // timers of a count in progress
+function stopCount(){ RACE.forEach(clearTimeout); RACE = []; S.counting = false; $('flag').setAttribute('opacity', 0); }
+
+function takeShell(i){
+  hello();
+  if (S.strung.includes(i)) return;
+  stopCount(); clearTags();
+  S.strung.push(i);
+  const size = S.size, n = N(), {groups: G, loose: L} = groupsOf(n, size);
+  sound('pop'); Play.sound('note', 392 * Math.pow(2, (L || size) / 12), 0.12);
+  paint();
+  if (L === 0) {                                   // this shell finished a group: the whole string goes up on a hook
+    for (let k = n - size; k < n; k++) moveShell(S.strung[k], k === n - 1 ? 0 : 380, k === n - 1 ? 70 : 90, 480);
+    setTimeout(() => { sound('snap'); Play.sound('drum', true); }, reduced() ? 0 : 420);
+    const words = skipWords(G * size, size).map(numberName).join(', ');
+    surbhi(`A ${STRING_NAME[size]}! ${cap(words)}!`, String(n), 'happy');
+    wave($('sArmR'), 26, -188, 1);
+    if (G === 1 && S.counts === 0) HINT = 'count';
+  } else {
+    moveShell(i);
+    say(numberName(L), {pitch: 1.3});
+    sBubble(String(L), 1300);
+    face('open');
+  }
+  if (G >= maxGroups(size) && L === 0) setTimeout(() => surbhi('The stall is full! Tap me to count.', '✔', 'wow'), reduced() ? 0 : 1500);
+  track('shell', {n, size, groups: G, loose: L});
+}
+function pickSize(size){
+  hello();
+  if (size === S.size) { squash($('btnJ' + size), 0.12); say(`${cap(STRING_NAME[size])}s of ${numberName(size)}!`, {pitch: 1.3}); return; }
+  stopCount(); clearTags();
+  S.size = size;
+  sound('whoosh');
+  squash($('btnJ' + size), 0.16);
+  paint();
+  S.strung.forEach((i, k) => moveShell(i, reduced() ? 0 : k * 25, 50, 460));
+  const {groups: G, loose: L} = groupsOf(N(), size);
+  let line = `${cap(STRING_NAME[size])}s of ${numberName(size)}!`;
+  if (N()) line += ` ${cap(numberName(G))} ${STRING_NAME[size]}${G === 1 ? '' : 's'}` + (L ? ` and ${numberName(L)} more.` : '.');
+  surbhi(line, `${G} × ${size}` + (L ? ` + ${L}` : ''), 'wow');
+  track('size', {size, n: N(), groups: G, loose: L});
+}
+function washBack(){
+  hello();
+  stopCount(); clearTags();
+  if (!N()) { sound('whoosh'); say('Splash!', {pitch: 1.3}); bigWave(); return; }
+  const had = S.strung.slice();
+  S.strung = [];
+  sound('whoosh');
+  bigWave();
+  paint();
+  had.forEach((i, k) => moveShell(i, reduced() ? 0 : 200 + k * 20, 40, 520));
+  surbhi('Whoosh! The wave took the shells back to the sand.', '0', 'wow');
+  track('wave');
+}
+function bigWave(){
+  if (reduced()) return;
+  const w = $('bigWave');
+  tween(0, 1, 1100, t => {
+    const y = 210 + Math.sin(t * Math.PI) * 250;
+    let d = `M0 200 L0 ${f1(y)}`;
+    for (let x = 0; x <= 1000; x += 100) d += ` Q${x + 50} ${f1(y + 18 * Math.sin(x / 90 + t * 6))} ${x + 100} ${f1(y)}`;
+    w.setAttribute('d', d + ' L1000 200 Z');
+    w.setAttribute('opacity', (0.6 * Math.sin(t * Math.PI)).toFixed(2));
+  }, v => v).then(() => w.setAttribute('opacity', 0));
+}
+function crabHello(){
+  hello();
+  sound('boing');
+  wave($('clawL'), -38, -8, 2); wave($('clawR'), 38, -8, 2); hop($('cBob'), 16);
+  cBubble('1, 2, 3…', 1800);
+  say('I am Kekdu! I count one… by… one.', {pitch: 1.6, rate: 0.95});
+  track('crab');
+}
+
+/* ---- the count: Surbhi in groups, Kekdu one by one, at the same pace ---------------- */
+const BEAT = 460;
+function count(){
+  hello();
+  if (S.counting) { squash($('sBob'), 0.06); return; }
+  const n = N(), size = S.size;
+  if (!n) { surbhi('Tap the shells on the sand first!', '🐚', 'wow'); HINT = 'shell'; return; }
+  stopCount(); clearTags();
+  S.counting = true;
+  const sw = skipWords(n, size), cw = oneByOne(n), G = groupsOf(n, size).groups;
+  const last = {n, size, surbhiWords: sw.length, crabWords: cw.length};
+  S.last = last; S.counts++;
+  (S.counted[n] = S.counted[n] || []).includes(size) || S.counted[n].push(size);
+  say(sayCount(n, size), {pitch: 1.3, rate: 0.95});
+  face('happy', 99);
+  const dt = reduced() ? 0 : BEAT;
+  const at = (ms, fn) => RACE.push(setTimeout(fn, ms));
+  let tags = '';
+  sw.forEach((v, b) => at(b * dt, () => {
+    sBubble(String(v), 0);
+    if (b < G) {
+      const x = hookX(b, size), y = BAR_Y + itemH(size) + 22;
+      tags += `<g transform="translate(${f1(x)} ${y})"><rect x="-19" y="-17" width="38" height="30" rx="10" fill="#ffb400"/><text y="6" text-anchor="middle" ${FONT} font-size="20" fill="#fff">${v}</text></g>`;
+      $('tags').innerHTML = tags;
+      Play.sound('drum', true);
+      for (let j = 0; j < size; j++) squash($('shJ' + S.strung[b * size + j]), 0.2, 320);
+    } else {
+      Play.sound('note', 523, 0.1);
+      squash($('shJ' + S.strung[G * size + (b - G)]), 0.25, 320);
+    }
+  }));
+  cw.forEach((v, b) => at(b * dt + (reduced() ? 1 : 30), () => {
+    cBubble(String(v), 0);
+    squash($('shJ' + S.strung[b]), 0.12, 220);
+    if (b % 2 === 0) Play.sound('tick');
+  }));
+  /* Surbhi is done after her last word */
+  at(sw.length * dt, () => {
+    face('happy', 1.5);
+    sBubble(n + '!', 2600);
+    if (sw.length < cw.length) { $('flag').setAttribute('opacity', 1); hop($('sBob'), 22); const c = clientOf(900, 200); confetti(c.x, c.y, 30); }
+    checkCount(last);
+  });
+  at(cw.length * dt + (reduced() ? 2 : 200), () => {
+    S.counting = false;
+    cBubble(n + '!', 2400);
+    if (sw.length < cw.length) { squash($('cBob'), 0.2, 600); $('cMouth').setAttribute('d', 'M-12 12 Q0 2 12 12'); setTimeout(() => $('cMouth').setAttribute('d', 'M-12 6 Q0 16 12 6'), 1800); }
+    setTimeout(() => $('flag').setAttribute('opacity', 0), 2400);
+  });
+  if (HINT === 'count') HINT = 'off';
+  track('count', {n, size, groups: G, loose: n % size, surbhiWords: sw.length, crabWords: cw.length});
+}
+
+/* ============================================================================
+   Discoveries: each one is a state the count reaches.
+   ============================================================================ */
+function checkCount(c){
+  const {groups: G, loose: L} = groupsOf(c.n, c.size), at = clientOf(440, 300), q = [];
+  if (c.size === 2 && G >= 3) q.push('twos');
+  if (c.size === 5 && G >= 2) q.push('fives');
+  if (c.size === 10 && G >= 2) q.push('tens');
+  if (G >= 1 && L >= 1) q.push('loose');
+  if (c.n >= 12 && c.surbhiWords < c.crabWords) q.push('faster');
+  if (c.n >= 10 && (S.counted[c.n] || []).length >= 2) q.push('same');
+  q.filter(id => !found(id)).forEach((id, k) => setTimeout(() => discover(id, at), reduced() ? k * 30 : k * 1700));
+}
+
+/* ============================================================================
+   Wiring. Hit targets never move.
+   ============================================================================ */
+const onTap = (id, fn) => { $(id).addEventListener('click', fn); $(id).addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fn(); } }); };
+for (let i = 0; i < TOTAL; i++) onTap('shHit' + i, () => takeShell(i));
+SIZES.forEach(s => onTap('pick' + s, () => pickSize(s)));
+onTap('surbhiHit', count);
+onTap('rackHit', count);
+onTap('seaHit', washBack);
+onTap('crabHit', crabHello);
+svg.addEventListener('pointermove', e => { POINTER = svgPoint(svg, e); });
+
+/* ---- idle: blinking, eyes that follow, the hint hand ------------------------------- */
+let HINT = 'shell', T = 0;
+function idle(dt){
+  T += dt;
+  const tgt = POINTER || {x: 400, y: 520};
+  let dx = tgt.x - (SURBHI.x), dy = tgt.y - (SURBHI.y - 252), L = Math.hypot(dx, dy) || 1;
+  $('sLook').setAttribute('transform', `translate(${f1(dx / L * 3)} ${f1(dy / L * 3)})`);
+  dx = tgt.x - CRAB.x; dy = tgt.y - (CRAB.y - 58); L = Math.hypot(dx, dy) || 1;
+  $('cLook').setAttribute('transform', `translate(${f1(dx / L * 4)} ${f1(dy / L * 4)})`);
+  if (faceT > 0) { faceT -= dt; if (faceT <= 0) face('open', 0); }
+  if (!reduced()) {
+    $('sLid').setAttribute('opacity', (T % 3.9) < 0.13 && FACE === 'open' ? 1 : 0);
+    $('waves').setAttribute('transform', `translate(${f1(Math.sin(T * 0.8) * 14)} 0)`);
+    $('foam').setAttribute('transform', `translate(0 ${f1(Math.sin(T * 1.1) * 3)})`);
+  }
+  if (HINT === 'shell' && N() > 0) HINT = 'off';
+  if (HINT === 'count' && S.counts > 0) HINT = 'off';
+  const h = $('hint');
+  if (HINT === 'off' || S.counting) { h.setAttribute('opacity', 0); return; }
+  let x, y;
+  const bob = reduced() ? 0 : Math.abs(Math.sin(T * 3.6)) * -20;
+  if (HINT === 'shell') { const i = SAND.findIndex((_, k) => !S.strung.includes(k)); if (i < 0) { h.setAttribute('opacity', 0); return; } x = SAND[i].x + 4; y = SAND[i].y + 4 + bob; }
+  else { x = SURBHI.x - 8; y = SURBHI.y - 120 + bob; }
+  $('hintHand').setAttribute('transform', `translate(${f1(x)} ${f1(y)})`);
+  h.setAttribute('opacity', 0.95);
+}
+
+/* ---- the "Try this" card ----------------------------------------------------------- */
+const miniShell = (x, y, s = .8, c = 0) => `<g transform="translate(${x} ${y}) scale(${s})">${shellArt(c)}</g>`;
+const T_ = (x, y, t, c = '#b86a00', fs = 26) => `<text x="${x}" y="${y}" text-anchor="middle" font-family="Fredoka, sans-serif" font-weight="600" font-size="${fs}" fill="${c}">${t}</text>`;
+const TRY = {
+  twos: {line: 'Tap the shells to make rings of two. Then tap Surbhi to count them!',
+    art: [0, 1, 2].map(g => `<circle cx="${-46 + g * 46}" cy="6" r="15" fill="none" stroke="#c0763a" stroke-width="2.5"/>${miniShell(-54 + g * 46, 18, .6, g)}${miniShell(-38 + g * 46, 18, .6, g + 1)}${T_(-46 + g * 46, -22, 2 * (g + 1))}`).join('')},
+  fives: {line: 'Tap the bracelet. Make two bracelets of five, and count!',
+    art: [0, 1].map(g => `<circle cx="${-34 + g * 68}" cy="10" r="26" fill="none" stroke="#c0763a" stroke-width="2.5"/>` + [0, 1, 2, 3, 4].map(j => { const a = (-90 + j * 72) * Math.PI / 180; return miniShell(f1(-34 + g * 68 + 26 * Math.cos(a)), f1(10 + 26 * Math.sin(a)), .55, j); }).join('') + T_(-34 + g * 68, -26, 5 * (g + 1))).join('')},
+  tens: {line: 'Tap the necklace. Ten shells on each. Make two necklaces!',
+    art: [0, 1].map(g => `<path d="M${-68 + g * 72} -10 A32 42 0 0 0 ${-4 + g * 72} -10" fill="none" stroke="#c0763a" stroke-width="2.5"/>` + Array.from({length: 10}, (_, j) => { const a = (10 + j * 160 / 9) * Math.PI / 180; return miniShell(f1(-36 + g * 72 - 32 * Math.cos(a)), f1(-10 + 42 * Math.sin(a)), .42, j); }).join('') + T_(-36 + g * 72, -24, 10 * (g + 1))).join('')},
+  loose: {line: 'Make some groups, and a few shells more. Count them all!',
+    art: `<circle cx="-40" cy="4" r="24" fill="none" stroke="#c0763a" stroke-width="2.5"/>${[0, 1, 2, 3, 4].map(j => { const a = (-90 + j * 72) * Math.PI / 180; return miniShell(f1(-40 + 24 * Math.cos(a)), f1(4 + 24 * Math.sin(a)), .5, j); }).join('')}${T_(-40, -30, 5)}${miniShell(18, 10, .7, 1)}${miniShell(46, 10, .7, 2)}${T_(18, -14, 6)}${T_(46, -14, 7)}`},
+  faster: {line: 'Collect lots of shells, and count them. Who finishes first, Surbhi or Kekdu the crab?',
+    art: `<g transform="translate(-40 24) scale(.55)">${crabArt()}</g>${T_(-40, -34, '1, 2, 3…', '#c2412a', 18)}${T_(34, -20, '10, 20!', '#b86a00', 22)}<path d="M36 -4 v40" stroke="#6b3f24" stroke-width="3"/><path d="M36 -4 l22 7 l-22 7 Z" fill="#2f9e5b"/>`},
+  same: {line: 'Count your shells. Then choose different groups, and count the same shells again!',
+    art: `${T_(-40, -18, '10 × 2')}${T_(40, -18, '2 × 10')}${T_(0, 30, '= 20 = ', '#2f9e5b', 26)}`},
+};
+const TRY_ORDER = ['twos', 'fives', 'tens', 'loose', 'faster', 'same'];
+const currentTry = () => TRY_ORDER.find(g => !found(g)) || null;
+let shownTry;
+function paintTry(){
+  const g = currentTry();
+  if (g === shownTry) return;
+  shownTry = g;
+  $('tryArt').innerHTML = g ? TRY[g].art : `<path d="M0 -40 L12 -12 L42 -10 L18 8 L26 38 L0 22 L-26 38 L-18 8 L-42 -10 L-12 -12 Z" fill="#ffc53d" stroke="#f29a1f" stroke-width="3" stroke-linejoin="round"/>`;
+  if (!reduced()) $('tryCard').animate([{transform: 'scale(.9)'}, {transform: 'scale(1.04)'}, {transform: 'scale(1)'}], {duration: 450, easing: 'ease-out'});
+}
+function sayTry(){ const g = currentTry(); say(g ? TRY[g].line : 'You found everything! Keep counting in groups.'); track('hear', {goal: g}); }
+let spoke = false;
+$('tryCard').addEventListener('click', () => { spoke = true; sayTry(); });
+$('hear').addEventListener('click', () => { spoke = true; sayTry(); });
+function hello(){ if (spoke) return; spoke = true; setTimeout(() => { if (!Play.EVENTS.some(e => e.type === 'finding' || e.type === 'count')) say('Hello! I am Surbhi. Give me shells, and I will make rings of two!', {pitch: 1.3, interrupt: false}); }, 1200); }
+
+/* ============================================================================
+   Start
+   ============================================================================ */
+findings($('finds'), [
+  {id: 'twos',   icon: '💍', label: 'Counting in twos',     say: 'Two, four, six! Counting in twos.'},
+  {id: 'fives',  icon: '📿', label: 'Counting in fives',    say: 'Five, ten! Counting in fives is quick.'},
+  {id: 'tens',   icon: '🐚', label: 'Counting in tens',     say: 'Ten, twenty! Necklaces of ten.'},
+  {id: 'loose',  icon: '➕', label: 'Groups and loose ones', say: 'Groups first, then the loose shells, one by one.'},
+  {id: 'faster', icon: '🏁', label: 'Groups are faster',    say: 'Surbhi finished first! Counting in groups is faster than one by one.'},
+  {id: 'same',   icon: '🟰', label: 'Same shells, new groups', say: 'Different groups, the same number of shells!'},
+], () => { say('You found them all! Twos, fives and tens make counting fast.', {pitch: 1.3}); paintTry(); });
+face('open', 0);
+paint();
+for (let i = 0; i < TOTAL; i++) setT(i, shellTarget(i));
+loop(idle);
+window.applyFeatures = () => paint();
+window.PG_STATE = () => {
+  const n = N(), g = groupsOf(n, S.size);
+  return {size: S.size, n, groups: g.groups, loose: g.loose, onSand: TOTAL - n, strung: S.strung.slice(), counting: S.counting,
+    last: S.last && Object.assign({}, S.last), counted: JSON.parse(JSON.stringify(S.counted)), counts: S.counts, goal: currentTry(), hint: HINT};
+};
+window.PG_MODEL = {numberName, groupsOf, skipWords, oneByOne, sayCount, maxGroups, hookX, hangPos, openPos,
+  TOTAL, SAND, SURBHI, CRAB, BTN, OC, BEAT, BAR_Y};
+</script>
+</body>
+</html>

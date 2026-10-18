@@ -1,0 +1,429 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Round and Round</title>
+<meta name="description" content="Class 9: drag a point around a circle and measure the inscribed angle against the central angle; then cut a circle into sectors and watch the rearrangement approach a πr by r rectangle.">
+<link rel="icon" href="../../favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="../../play.css">
+<style>
+.tabs{display:flex; gap:8px; padding:10px 12px; background:var(--sunk); border-bottom:1px solid var(--hair)}
+.tab{flex:1; min-height:44px; border-radius:var(--radius-sm); border:2px solid transparent; background:var(--card); cursor:pointer;
+  font-family:var(--font-head); font-size:15px; font-weight:600; color:var(--ink-2)}
+.tab[aria-selected="true"]{border-color:#1abc9c; color:var(--ink); box-shadow:0 2px 0 #1abc9c}
+.chips{display:flex; flex-wrap:wrap; gap:6px}
+.chip{padding:6px 10px; border-radius:99px; border:1.5px solid var(--hair-2); background:var(--card); cursor:pointer; font-size:12.5px; font-weight:600; color:var(--ink-2)}
+.chip[aria-pressed="true"]{background:#1abc9c; border-color:#1abc9c; color:#fff}
+.four{display:grid; grid-template-columns:repeat(2,1fr); gap:6px}
+.four div{border-radius:10px; background:var(--sunk); padding:6px 8px; font-size:12.5px; color:var(--ink-2)}
+.four div b{display:block; font-family:var(--font-mono); font-size:16px; color:var(--ink)}
+.verdict2{margin-top:8px; padding:8px 10px; border-radius:10px; background:var(--sunk); font-size:13.5px}
+.verdict2.good{background:var(--good-soft)} .verdict2.warm{background:var(--warm-soft)}
+.note{font-size:12.5px; color:var(--ink-3); margin:6px 0 0}
+.why p{font-size:14px; margin-bottom:.5em}
+.why b{color:var(--ink)}
+.gate{position:absolute; left:0; right:0; top:66px; bottom:0; display:grid; place-items:center; pointer-events:none}
+.gate span{background:rgba(15,26,43,.84); color:#fff; padding:10px 16px; border-radius:99px; font-weight:600; font-size:14px}
+svg text{pointer-events:none}
+.hnd{cursor:grab} .hnd.dragging{cursor:grabbing}
+@media (max-width:1240px) and (min-width:981px){ .pg-main.wide-side{grid-template-columns:minmax(0,1fr) 340px} }
+</style>
+</head>
+<body>
+<header class="pg-top"></header>
+
+<div class="pg-intro">
+  <h1>Round and round</h1>
+  <p>A circle keeps two secrets in this page. Drag a point around its rim and an angle at the centre appears to stay locked to half of it, wherever
+     you put the point — measure it and see. Then cut the same circle into sectors, lay them out alternately, and watch the wobbly strip you get
+     straighten into a rectangle as the sectors get thinner: its width and height are exactly the numbers the area of a circle is built from.</p>
+</div>
+
+<main class="pg-main wide-side">
+  <section class="pg-stage" id="stageWrap">
+    <div class="tabs" role="tablist">
+      <button class="tab" id="tabG" role="tab" aria-selected="true">◠ Angles in a circle</button>
+      <button class="tab" id="tabR" role="tab" aria-selected="false">◐ Circle into a rectangle</button>
+    </div>
+    <svg id="stG" viewBox="0 0 1000 620" role="img" aria-label="A circle with a fixed chord AB, a centre O, and two draggable points P and Q on the rim, whose angles to A and B are measured live."></svg>
+    <svg id="stR" viewBox="0 0 1000 480" role="img" aria-label="A circle cut into n coloured sectors on the left, and on the right the same sectors laid alternately up and down into a strip that approaches a rectangle as n grows."></svg>
+    <div class="gate" id="gate"><span>Make your prediction first →</span></div>
+  </section>
+
+  <aside class="pg-side">
+    <div id="poe"></div>
+
+    <div class="card" id="cardG">
+      <div class="kicker">Chord AB, and two points on the rim</div>
+      <div class="row"><button class="chip" id="btnDiam">Make AB a diameter</button><button class="chip" id="btnDiamOff" aria-pressed="true">Free chord</button></div>
+      <div class="four" id="numsG"></div>
+      <p class="note" id="whichArc"></p>
+      <div class="verdict2" id="verdictG"></div>
+    </div>
+
+    <div class="card" id="cardR" hidden>
+      <div class="kicker">Cut it into n sectors</div>
+      <div class="ctl"><label for="nSl"><i style="background:#1abc9c"></i>n</label><input type="range" id="nSl" min="2" max="60" step="2" value="8"><output id="nOut" class="num">8</output></div>
+      <div class="ctl"><label for="rSl"><i style="background:#8a5cf6"></i>r</label><input type="range" id="rSl" min="2" max="6" step="0.2" value="4"><output id="rOut" class="num">4.0 cm</output></div>
+      <div class="four" id="numsR"></div>
+      <div class="verdict2" id="verdictR"></div>
+    </div>
+
+    <div class="card why" id="whyCard">
+      <div class="kicker">What is happening</div>
+      <div id="why"></div>
+    </div>
+
+    <div class="card"><div class="kicker">To find</div><div id="finds"></div></div>
+  </aside>
+</main>
+
+<script src="../../play.js"></script>
+<script>
+'use strict';
+const {$, esc, clamp, fmt, drag, svgPoint, sound, say, track, toast, predict, findings, discover, found,
+       shareState, sharedState, mount, reduced, tween} = Play;
+mount({thread: 'circles', band: 'modeller'});
+
+/* MODEL:start ==================================================================
+   ANGLES: a circle of radius R about O. A and B sit on the rim; P and Q are dragged
+   anywhere on the rim. The central angle for the arc AWAY FROM a rim point X is
+   measured from the actual angular positions of A, B and X (not looked up) — the
+   arc CCW from A to B has some length; X sits on it or it doesn't, and the far arc
+   is whatever is left of 360°. The inscribed angle ∠AXB is then measured directly
+   from the triangle AXB, and compared with half the far arc: they always agree,
+   because that IS the inscribed angle theorem, and the page checks it rather than
+   asserting it.
+
+   RECTANGLE: n congruent sectors of the same circle, each of apex angle δ = 360°/n,
+   are re-laid edge to edge, alternately pointing up and down, each new sector's
+   apex placed at the free end of the previous one's outer edge (a real hinge, not a
+   picture of one). The resulting strip's boundary is sampled from the actual arcs
+   and its own area is computed by the shoelace formula on that sampled boundary —
+   not from πr² — so the page can show that area stays the circle's whatever n is,
+   while only the STRIP'S SHAPE (width and height) closes in on πr by r.
+   ============================================================================ */
+const D2R = Math.PI / 180, R2D = 180 / Math.PI;
+const P = (x, y) => ({x, y});
+const dist = (u, v) => Math.hypot(u.x - v.x, u.y - v.y);
+const norm360 = a => ((a % 360) + 360) % 360;
+function angleAt(V, Q, R){
+  const ux = Q.x - V.x, uy = Q.y - V.y, wx = R.x - V.x, wy = R.y - V.y;
+  const c = (ux * wx + uy * wy) / (Math.hypot(ux, uy) * Math.hypot(wx, wy));
+  return Math.acos(clamp(c, -1, 1)) * R2D;
+}
+const onCircle = (O, R, deg) => P(O.x + R * Math.cos(deg * D2R), O.y + R * Math.sin(deg * D2R));
+/* which of the two arcs cut by A,B (in degrees, 0-360) a point at angle φX sits on */
+function arcInfo(phiA, phiB, phiX){
+  const arcCCW = norm360(phiB - phiA), rel = norm360(phiX - phiA);
+  const onCCW = rel > 1e-6 && rel < arcCCW - 1e-6;
+  return {arcCCW, onCCW, farArc: 360 - (onCCW ? arcCCW : 360 - arcCCW)};
+}
+/* Re-lay n sectors of radius r (apex angle 360/n) alternately up/down, hinge by hinge.
+   Returns the joint chain Q[0..n], the exposed left point L0, and the n arcs (each an
+   {apex, fromA, toA} pair of angles about its own apex, ready to sample). */
+function assemble(n, r){
+  const delta = 360 / n;
+  const Q = [P(0, 0)];
+  for (let k = 0; k < n; k++) {
+    const bearing = (k % 2 === 0) ? (90 - delta / 2) : (270 + delta / 2);
+    const prev = Q[k];
+    Q.push(P(prev.x + r * Math.cos(bearing * D2R), prev.y + r * Math.sin(bearing * D2R)));
+  }
+  const L0 = onCircle(Q[0], r, 90 + delta / 2);
+  const arcs = [];
+  for (let k = 0; k < n; k++) {
+    const up = k % 2 === 0, bisector = up ? 90 : 270;
+    const fromA = up ? bisector + delta / 2 : bisector - delta / 2;   // toward the earlier joint
+    const toA = up ? bisector - delta / 2 : bisector + delta / 2;     // toward the later joint
+    arcs.push({apex: Q[k], fromA, toA, up});
+  }
+  return {Q, L0, arcs, delta};
+}
+function sampleArc(apex, r, fromA, toA, steps){
+  const pts = [];
+  for (let i = 0; i <= steps; i++) { const a = fromA + (toA - fromA) * i / steps; pts.push(onCircle(apex, r, a)); }
+  return pts;
+}
+/* the strip's own boundary, sampled from the real arcs, and its shoelace area */
+function stripBoundary(n, r, stepsPerArc){
+  const {Q, L0, arcs} = assemble(n, r);
+  let top = [L0];
+  for (let k = 0; k < n; k += 2) { const a = arcs[k]; sampleArc(a.apex, r, a.fromA, a.toA, stepsPerArc).slice(1).forEach(p => top.push(p)); }
+  let bot = [];
+  for (let k = n - 1; k >= 1; k -= 2) { const a = arcs[k]; sampleArc(a.apex, r, a.toA, a.fromA, stepsPerArc).forEach(p => bot.push(p)); }
+  const pts = top.concat(bot);
+  let area2 = 0;
+  for (let i = 0; i < pts.length; i++) { const a = pts[i], b = pts[(i + 1) % pts.length]; area2 += a.x * b.y - b.x * a.y; }
+  return {top, bot, pts, area: Math.abs(area2) / 2, Q};
+}
+/* MODEL:end */
+
+const S = {tab: 'g', locked: false,
+  O: P(0, 0), R: 4, phiA: 200, phiB: -20, phiP: 60, phiQ: 260, diam: false,
+  n: 8, r: 4, areaRef: null, nTouched: false};
+const shared = sharedState();
+if (shared) {
+  ['phiA', 'phiB', 'phiP', 'phiQ', 'n', 'r'].forEach(k => { if (typeof shared[k] === 'number') S[k] = shared[k]; });
+  if (shared.diam) S.diam = true;
+  if (shared.tab === 'r') S.tab = 'r';
+}
+shareState(() => ({phiA: S.phiA, phiB: S.phiB, phiP: S.phiP, phiQ: S.phiQ, diam: S.diam, n: S.n, r: S.r, tab: S.tab}));
+
+findings($('finds'), [
+  {id: 'inscribed_half', icon: '½', label: 'Inscribed angle = half the far central angle', hint: 'Drag P around the rim'},
+  {id: 'same_arc_equal', icon: '=', label: 'Same arc, same angle', hint: 'Put P and Q on the same side of AB'},
+  {id: 'cyclic_180', icon: '+', label: 'Cyclic quadrilateral: opposite angles sum to 180°', hint: 'Put P and Q on opposite sides of AB'},
+  {id: 'semicircle_90', icon: '∟', label: 'Angle in a semicircle is 90°', hint: 'Make AB a diameter'},
+  {id: 'sector_stack', icon: '⬚', label: 'The sectors rebuilt into a strip', hint: 'Change n on the rectangle tab'},
+  {id: 'rectangle_close', icon: '▭', label: 'Thin sectors: the strip is almost a rectangle', hint: 'Push n up past 24'},
+  {id: 'area_conserved', icon: '=', label: 'Same pieces, same total area, any n', hint: 'Compare the measured area at two different n'},
+]);
+
+const gate = $('gate');
+const poe = predict($('poe'), {
+  id: 'sectors', confidence: false,
+  q: 'Cut a circle into more and more, thinner and thinner sectors, and lay them alternately up and down. What happens to the shape they make?',
+  options: [
+    {id: 'star', text: 'It stays a wobbly, star-like strip, however thin the sectors are.'},
+    {id: 'rect', text: 'It closes in on a rectangle, width πr and height r.', right: true},
+    {id: 'shrink', text: 'It becomes a smaller circle.'},
+    {id: 'less', text: 'Its total area gets smaller as you cut more pieces.'},
+  ],
+  onLock(){ S.locked = true; gate.style.display = 'none'; $('nSl').disabled = false; paintR(); },
+});
+if (poe.locked) { gate.style.display = 'none'; }
+if (!$('nSl')) {} // no-op guard
+
+/* ---- tabs -------------------------------------------------------------------- */
+function setTab(t){
+  S.tab = t;
+  $('tabG').setAttribute('aria-selected', t === 'g');
+  $('tabR').setAttribute('aria-selected', t === 'r');
+  $('stG').toggleAttribute('hidden', t !== 'g');
+  $('stR').toggleAttribute('hidden', t !== 'r');
+  $('cardG').toggleAttribute('hidden', t !== 'g');
+  $('cardR').toggleAttribute('hidden', t !== 'r');
+  gate.style.display = (t === 'r' && !S.locked) ? 'grid' : 'none';
+  $('nSl').disabled = !S.locked;
+  if (t === 'r') paintR(); else paintG();
+  paintWhy();
+}
+$('tabG').addEventListener('click', () => setTab('g'));
+$('tabR').addEventListener('click', () => setTab('r'));
+
+/* ---- Tab 1: angles in a circle ------------------------------------------------ */
+const svgG = $('stG');
+const CX = 330, CY = 300, RPX = 230;
+const toG = p => P(CX + p.x, CY - p.y);
+const fromG = q => P(q.x - CX, CY - q.y);
+function buildG(){
+  svgG.innerHTML = `
+  <rect width="1000" height="620" fill="#fbf8f2"/>
+  <text x="18" y="28" fill="#1a5c52" font-size="13" font-weight="700" letter-spacing=".08em">DRAG A, B, P OR Q AROUND THE RIM</text>
+  <circle cx="${CX}" cy="${CY}" r="${RPX}" fill="none" stroke="#c9c0ac" stroke-width="1.6"/>
+  <circle cx="${CX}" cy="${CY}" r="3.5" fill="#6d4a5c"/><text x="${CX + 8}" y="${CY - 8}" fill="#6d4a5c" font-size="14" font-weight="700">O</text>
+  <line id="segAO" stroke="#8a94a6" stroke-width="1.3" stroke-dasharray="4 4"/>
+  <line id="segBO" stroke="#8a94a6" stroke-width="1.3" stroke-dasharray="4 4"/>
+  <path id="centralArc" fill="none" stroke="#8a5cf6" stroke-width="3"/>
+  <g id="polyP"></g><g id="polyQ"></g>
+  <line id="segAB" stroke="#3a2a33" stroke-width="2"/>
+  <circle id="hA" class="hnd" r="10" fill="#fff" stroke="#3a2a33" stroke-width="3"/>
+  <circle id="hB" class="hnd" r="10" fill="#fff" stroke="#3a2a33" stroke-width="3"/>
+  <circle id="hP" class="hnd" r="10" fill="#fff" stroke="#b83f79" stroke-width="3"/>
+  <circle id="hQ" class="hnd" r="10" fill="#fff" stroke="#2f7de1" stroke-width="3"/>
+  <text id="lA" fill="#3a2a33" font-size="15" font-weight="700" text-anchor="middle">A</text>
+  <text id="lB" fill="#3a2a33" font-size="15" font-weight="700" text-anchor="middle">B</text>
+  <text id="lP" fill="#b83f79" font-size="15" font-weight="700" text-anchor="middle">P</text>
+  <text id="lQ" fill="#2f7de1" font-size="15" font-weight="700" text-anchor="middle">Q</text>
+  `;
+  const mkDrag = (id, key) => drag($(id), svgG, {move(pt){ const m = fromG(pt); S[key] = norm360(Math.atan2(m.y, m.x) * R2D); if (key === 'phiA' || key === 'phiB') S.diam = false; paintG(); }});
+  mkDrag('hA', 'phiA'); mkDrag('hB', 'phiB'); mkDrag('hP', 'phiP'); mkDrag('hQ', 'phiQ');
+}
+function paintG(){
+  const O = S.O, R = S.R * RPX / S.R; // px radius fixed at RPX regardless of S.R (kept for future use)
+  const A = onCircle(P(0, 0), RPX, S.phiA), B = onCircle(P(0, 0), RPX, S.phiB);
+  const Pp = onCircle(P(0, 0), RPX, S.phiP), Qp = onCircle(P(0, 0), RPX, S.phiQ);
+  const put = (id, p, dx, dy) => { $(id).setAttribute('cx', toG(p).x); $(id).setAttribute('cy', toG(p).y); const t = $('l' + id.slice(1)); if (t) { t.setAttribute('x', toG(p).x + dx); t.setAttribute('y', toG(p).y + dy); } };
+  put('hA', A, 0, -16); put('hB', B, 0, -16); put('hP', Pp, 0, -16); put('hQ', Qp, 0, -16);
+  const setSeg = (id, a, b) => { const e = $(id); const A2 = toG(a), B2 = toG(b); e.setAttribute('x1', A2.x); e.setAttribute('y1', A2.y); e.setAttribute('x2', B2.x); e.setAttribute('y2', B2.y); };
+  setSeg('segAB', A, B); setSeg('segAO', A, P(0, 0)); setSeg('segBO', B, P(0, 0));
+  const Ot = toG(P(0, 0));
+  $('segAO').setAttribute('x1', toG(A).x); $('segAO').setAttribute('y1', toG(A).y); $('segAO').setAttribute('x2', Ot.x); $('segAO').setAttribute('y2', Ot.y);
+  $('segBO').setAttribute('x1', toG(B).x); $('segBO').setAttribute('y1', toG(B).y); $('segBO').setAttribute('x2', Ot.x); $('segBO').setAttribute('y2', Ot.y);
+
+  const tri = (id, X, col) => {
+    const Ax = toG(A), Bx = toG(B), Xx = toG(X);
+    $(id).innerHTML = `<path d="M${Ax.x} ${Ax.y}L${Bx.x} ${Bx.y}L${Xx.x} ${Xx.y}Z" fill="${col}" opacity=".08" stroke="${col}" stroke-width="2"/>`;
+  };
+  tri('polyP', Pp, '#b83f79'); tri('polyQ', Qp, '#2f7de1');
+
+  const angP = angleAt(Pp, A, B), angQ = angleAt(Qp, A, B);
+  const infoP = arcInfo(S.phiA, S.phiB, S.phiP), infoQ = arcInfo(S.phiA, S.phiB, S.phiQ);
+  const farArcP = infoP.farArc, farArcQ = infoQ.farArc;
+
+  /* the far-arc (central) marker for P, drawn as an arc round O */
+  /* the far arc (not containing P) always runs CCW (increasing angle) from its start —
+     from B round to A when P sits on arc A→B, or from A round to B otherwise. */
+  const farStart = infoP.onCCW ? S.phiB : S.phiA, farSweep = farArcP;
+  const a0 = toG(onCircle(P(0, 0), RPX * 0.42, farStart));
+  let d = `M${a0.x.toFixed(1)} ${a0.y.toFixed(1)}`;
+  for (let i = 1; i <= 24; i++) { const a = farStart + farSweep * i / 24; const q = toG(onCircle(P(0, 0), RPX * 0.42, a)); d += `L${q.x.toFixed(1)} ${q.y.toFixed(1)}`; }
+  $('centralArc').setAttribute('d', d);
+
+  const sameSide = infoP.onCCW === infoQ.onCCW;
+  const sumPQ = angP + angQ;
+  $('numsG').innerHTML = `
+    <div><span>Central angle, far arc (from P)</span><b>${fmt(farArcP, 1)}°</b></div>
+    <div><span>∠APB, measured</span><b>${fmt(angP, 1)}°</b></div>
+    <div><span>Central angle, far arc (from Q)</span><b>${fmt(farArcQ, 1)}°</b></div>
+    <div><span>∠AQB, measured</span><b>${fmt(angQ, 1)}°</b></div>`;
+  $('whichArc').textContent = `½ × ${fmt(farArcP, 1)}° = ${fmt(farArcP / 2, 1)}°, and ∠APB measures ${fmt(angP, 1)}° — ${sameSide ? 'P and Q are on the same arc' : 'P and Q are on opposite arcs'}.`;
+
+  if (S.diam) {
+    $('verdictG').className = 'verdict2 good';
+    $('verdictG').textContent = `AB is now a diameter, so every far arc is a semicircle (180°): ∠APB measures ${fmt(angP, 1)}°, a right angle, wherever P is.`;
+    if (Math.abs(angP - 90) < 0.3) discover('semicircle_90');
+  } else if (sameSide) {
+    $('verdictG').className = 'verdict2';
+    $('verdictG').textContent = `Same arc: ∠APB = ${fmt(angP, 1)}° and ∠AQB = ${fmt(angQ, 1)}° — the same, however far apart P and Q are on it.`;
+    if (Math.abs(angP - angQ) < 0.3 && Math.abs(norm360(S.phiP - S.phiQ)) > 8 && Math.abs(norm360(S.phiP - S.phiQ) - 360) > 8) discover('same_arc_equal');
+  } else {
+    $('verdictG').className = 'verdict2 warm';
+    $('verdictG').textContent = `Opposite arcs: ∠APB + ∠AQB = ${fmt(angP, 1)}° + ${fmt(angQ, 1)}° = ${fmt(sumPQ, 1)}° — APBQ is a cyclic quadrilateral, and its opposite angles are supplementary.`;
+    if (Math.abs(sumPQ - 180) < 0.5) discover('cyclic_180');
+  }
+  if (Math.abs(angP - farArcP / 2) < 0.3 && farArcP > 2 && farArcP < 358) discover('inscribed_half');
+  paintWhy();
+}
+$('btnDiam').addEventListener('click', () => { S.diam = true; S.phiB = norm360(S.phiA + 180); sound('tick'); paintG(); });
+$('btnDiamOff').addEventListener('click', () => { S.diam = false; sound('tick'); paintG(); });
+
+/* ---- Tab 2: sectors into a rectangle ------------------------------------------ */
+const svgR = $('stR');
+const CIRC = {cx: 210, cy: 240, R: 175};
+const BOXR = {x0: 460, y0: 55, x1: 975, y1: 385};
+let FITR = {K: 1, ox: 0, oy: 0};
+function fitBox(pts, box){
+  const pad = 0.4 * CIRC.R / 30;
+  let minX = Math.min(...pts.map(p => p.x)) - pad, maxX = Math.max(...pts.map(p => p.x)) + pad;
+  let minY = Math.min(...pts.map(p => p.y)) - pad, maxY = Math.max(...pts.map(p => p.y)) + pad;
+  const w = Math.max(maxX - minX, 1e-6), h = Math.max(maxY - minY, 1e-6);
+  const K = Math.min((box.x1 - box.x0) / w, (box.y1 - box.y0) / h);
+  const ox = box.x0 + ((box.x1 - box.x0) - w * K) / 2 - minX * K;
+  const oy = box.y0 + ((box.y1 - box.y0) - h * K) / 2 + maxY * K;
+  return {K, ox, oy};
+}
+function buildR(){
+  svgR.innerHTML = `
+  <rect width="1000" height="480" fill="#fbf8f2"/>
+  <text x="18" y="28" fill="#1a5c52" font-size="13" font-weight="700" letter-spacing=".08em">THE CIRCLE, CUT INTO n SECTORS</text>
+  <g id="pie"></g>
+  <text x="420" y="28" fill="#1a5c52" font-size="13" font-weight="700" letter-spacing=".08em">THE SAME SECTORS, RE-LAID ALTERNATELY</text>
+  <g id="strip"></g>
+  <line id="targetW" stroke="#8a5cf6" stroke-width="1.6" stroke-dasharray="6 5"/>
+  <line id="targetH" stroke="#8a5cf6" stroke-width="1.6" stroke-dasharray="6 5"/>
+  <text id="targetWL" fill="#6a3fc2" font-size="12" font-weight="700" text-anchor="middle"></text>
+  <text id="targetHL" fill="#6a3fc2" font-size="12" font-weight="700" text-anchor="middle"></text>
+  `;
+}
+const COL_UP = '#1abc9c', COL_DOWN = '#0f8a72';
+function paintR(){
+  const n = S.n, r = S.r;
+  const cx = CIRC.cx, cy = CIRC.cy, R = CIRC.R, delta = 360 / n;
+  let pie = '';
+  for (let k = 0; k < n; k++) {
+    const a0 = -90 + k * delta, a1 = a0 + delta;
+    const p0 = P(cx + R * Math.cos(a0 * D2R), cy + R * Math.sin(a0 * D2R));
+    const p1 = P(cx + R * Math.cos(a1 * D2R), cy + R * Math.sin(a1 * D2R));
+    const large = delta > 180 ? 1 : 0;
+    pie += `<path d="M${cx} ${cy}L${p0.x.toFixed(1)} ${p0.y.toFixed(1)}A${R} ${R} 0 ${large} 1 ${p1.x.toFixed(1)} ${p1.y.toFixed(1)}Z" fill="${k % 2 === 0 ? COL_UP : COL_DOWN}" opacity=".8" stroke="#fbf8f2" stroke-width="1.5"/>`;
+  }
+  pie += `<circle cx="${cx}" cy="${cy}" r="3" fill="#3a2a33"/>`;
+  $('pie').innerHTML = pie;
+
+  const strip = stripBoundary(n, r, n > 24 ? 3 : 8);
+  const allPts = strip.Q;
+  FITR = fitBox(allPts, BOXR);
+  const toR = p => P(FITR.ox + p.x * FITR.K, FITR.oy - p.y * FITR.K);
+  let sp = '';
+  const {arcs} = assemble(n, r);
+  for (let k = 0; k < n; k++) {
+    const a = arcs[k];
+    const from = a.up ? (k === 0 ? assemble(n, r).L0 : strip.Q[k - 1]) : strip.Q[k - 1];
+    const pts = sampleArc(a.apex, r, a.fromA, a.toA, n > 24 ? 4 : 10).map(toR);
+    const apexS = toR(a.apex);
+    let d = `M${apexS.x.toFixed(1)} ${apexS.y.toFixed(1)}`;
+    pts.forEach(q => d += `L${q.x.toFixed(1)} ${q.y.toFixed(1)}`);
+    d += 'Z';
+    sp += `<path d="${d}" fill="${a.up ? COL_UP : COL_DOWN}" opacity=".8" stroke="#fbf8f2" stroke-width="1"/>`;
+  }
+  $('strip').innerHTML = sp;
+
+  const xs = allPts.map(p => p.x), ys = strip.top.concat(strip.bot).map(p => p.y);
+  const width = Math.max(...xs) - Math.min(...xs);
+  const height = Math.max(...ys) - Math.min(...ys);
+  const topWobble = Math.max(...strip.top.map(p => p.y)) - Math.min(...strip.top.map(p => p.y));
+  const targetW = Math.PI * r;
+  const wErrPct = Math.abs(width - targetW) / targetW * 100;
+  const wobblePct = topWobble / height * 100;
+
+  const tw0 = toR(P(Math.min(...xs), 0)), tw1 = toR(P(Math.max(...xs), 0));
+  $('targetW').setAttribute('x1', tw0.x); $('targetW').setAttribute('x2', tw1.x); $('targetW').setAttribute('y1', BOXR.y1 + 22); $('targetW').setAttribute('y2', BOXR.y1 + 22);
+  $('targetWL').setAttribute('x', (tw0.x + tw1.x) / 2); $('targetWL').setAttribute('y', BOXR.y1 + 40);
+  $('targetWL').textContent = `width ${fmt(width, 2)} cm  (target πr = ${fmt(targetW, 2)} cm)`;
+  const th0 = toR(P(Math.min(...xs) - 0.001, Math.max(...ys))), th1 = toR(P(Math.min(...xs) - 0.001, Math.min(...ys)));
+  $('targetH').setAttribute('x1', BOXR.x0 - 14); $('targetH').setAttribute('x2', BOXR.x0 - 14); $('targetH').setAttribute('y1', th0.y); $('targetH').setAttribute('y2', th1.y);
+  $('targetHL').setAttribute('x', BOXR.x0 - 14); $('targetHL').setAttribute('y', (th0.y + th1.y) / 2);
+  $('targetHL').setAttribute('transform', `rotate(-90 ${BOXR.x0 - 14} ${(th0.y + th1.y) / 2})`);
+  $('targetHL').textContent = `height ${fmt(height, 2)} cm (target r = ${fmt(r, 2)} cm)`;
+
+  $('numsR').innerHTML = `
+    <div><span>sector angle 360°/n</span><b>${fmt(delta, 1)}°</b></div>
+    <div><span>strip width</span><b>${fmt(width, 2)} cm</b></div>
+    <div><span>target πr</span><b>${fmt(targetW, 2)} cm</b></div>
+    <div><span>strip height</span><b>${fmt(height, 2)} cm</b></div>
+    <div><span>target r</span><b>${fmt(r, 2)} cm</b></div>
+    <div><span>measured area</span><b>${fmt(strip.area, 2)} cm²</b></div>`;
+  const target = 'π' + 'r²';
+  if (S.areaKeyR !== r) { S.areaRef = null; S.areaKeyR = r; }
+  if (S.areaRef == null) S.areaRef = strip.area;
+  const areaMatch = Math.abs(strip.area - S.areaRef) / S.areaRef < 0.004;
+  $('verdictR').className = 'verdict2 ' + (S.locked && wErrPct < 3 ? 'good' : '');
+  $('verdictR').textContent = S.locked
+    ? `n = ${n}: width is ${fmt(wErrPct, 1)}% off πr, and the top edge wobbles by ${fmt(wobblePct, 1)}% of the height. The measured area, ${fmt(strip.area, 2)} cm², is the same ${n === S.nFirst ? '' : 'as it was at a different n, '}πr² = ${fmt(Math.PI * r * r, 2)} cm² worth of circle, cut up however you like.`
+    : '';
+  if (S.locked) {
+    if (S.nTouched) discover('sector_stack');
+    if (n >= 24 && wobblePct < 4) discover('rectangle_close');
+    if (areaMatch && S.nFirst != null && S.nFirst !== n) discover('area_conserved');
+    if (S.nFirst == null) S.nFirst = n;
+    if (!poe.explained) poe.explain(`At n = ${n}, the strip's width is ${fmt(width, 2)} cm against a target of πr = ${fmt(targetW, 2)} cm — push n higher on the slider and the gap keeps shrinking.`);
+  }
+  paintWhy();
+}
+$('nSl').addEventListener('input', e => { S.n = +e.target.value; S.nTouched = true; $('nOut').textContent = S.n; sound('tick'); paintR(); });
+$('rSl').addEventListener('input', e => { S.r = +e.target.value; $('rOut').textContent = S.r.toFixed(1) + ' cm'; paintR(); });
+
+function paintWhy(){
+  if (S.tab === 'g') {
+    $('why').innerHTML = `<p>Whatever arc a rim point sits on, the angle it sees AB under is exactly half of the OTHER arc's central angle — the model measures both and checks they agree, for any position you drag P or Q to.</p>
+      <p>Two points on the same arc measure the same angle; two on opposite arcs measure angles that add to 180° (a cyclic quadrilateral). A diameter makes both arcs semicircles, so the angle is always 90°.</p>`;
+  } else {
+    $('why').innerHTML = `<p>Each sector is rigidly moved, not redrawn — its two straight edges and its arc keep their exact lengths. Laid alternately, the straight edges hinge together and the arcs become the strip's wavy top and bottom.</p>
+      <p>As n grows, each sector's angle 360°/n shrinks, the hinges barely turn, and the wavy edges flatten: width → πr (half the circumference), height → r. The total area never changes — it is still the same circle, just cut differently.</p>`;
+  }
+}
+
+buildG(); buildR();
+paintG(); setTab(S.tab);
+
+window.PG_STATE = () => ({tab: S.tab, phiA: S.phiA, phiB: S.phiB, phiP: S.phiP, phiQ: S.phiQ, diam: S.diam, n: S.n, r: S.r, locked: S.locked});
+window.PG_MODEL = {angleAt, dist, arcInfo, onCircle, assemble, sampleArc, stripBoundary, norm360, P};
+</script>
+</body>
+</html>

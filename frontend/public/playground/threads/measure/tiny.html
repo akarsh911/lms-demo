@@ -1,0 +1,599 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Long, Short, Round</title>
+<meta name="description" content="Class 1: slide the flute, pencil, spoon and crayon up to the red post to find the longest, then put a ball, a dholak, a box and a carrom striker on the slope — which roll to Grandmother's house, and which slide?">
+<link rel="icon" href="../../favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600&family=Inter:wght@400;500;600;700&family=Nunito:wght@500;700;800&display=swap">
+<link rel="stylesheet" href="../../play.css">
+<style>
+.pg-main.tiny-main{grid-template-columns:minmax(0,1fr) 250px; padding-top:12px; padding-bottom:12px}
+.tiny-main .pg-stage{align-self:start; min-height:0}
+.pg-intro{display:flex; align-items:baseline; gap:18px; flex-wrap:wrap; padding-top:12px}
+.pg-intro p{margin:0}
+#stage{background:#cdeeff}
+.hit{cursor:pointer}
+.dragHit{cursor:grab}
+.dragHit.dragging{cursor:grabbing}
+svg [tabindex]:focus{outline:none}
+svg [tabindex]:focus-visible{outline:none; stroke:#ff7a2f; stroke-width:4; stroke-dasharray:8 8}
+.hear{width:100%; min-height:76px; font-size:24px; font-family:var(--font-head); border-radius:var(--radius)}
+.hear .ic{font-size:30px}
+.try{padding:10px; text-align:center; cursor:pointer; border:2px solid var(--hair-2); transition:transform .2s var(--spring)}
+.try:hover{border-color:var(--accent)}
+.try:active{transform:scale(.97)}
+.try svg{display:block; width:100%; height:auto}
+.try .kicker{margin:2px 0 0}
+@media (max-width:980px){ .pg-main.tiny-main{grid-template-columns:1fr} }
+</style>
+</head>
+<body>
+<header class="pg-top"></header>
+
+<div class="pg-intro">
+  <h1>Long, short, round</h1>
+  <p>Line up the toys to find the longest. Then see what rolls down the hill.</p>
+</div>
+
+<main class="pg-main tiny-main">
+  <section class="pg-stage" id="stageWrap">
+    <svg id="stage" viewBox="0 0 1000 660" role="img" aria-label="Top: a long bench with a flute, a pencil, a spoon and a crayon, and a red post at its left end. Mimi the lamb watches. Bottom: a slope down a hill to Grandmother's house, and a table with a ball, a dholak, a box and a carrom striker."></svg>
+  </section>
+
+  <aside class="pg-side">
+    <button class="btn primary hear" id="hear" aria-label="Hear what to do"><span class="ic">🔊</span> Hear it</button>
+    <button class="card try" id="tryCard" aria-label="What to try next. Tap to hear it."><svg id="tryArt" viewBox="-80 -55 160 110"></svg><div class="kicker">Try this</div></button>
+    <div class="card"><h3>⭐ Found</h3><div id="finds"></div></div>
+  </aside>
+</main>
+
+<script src="../../play.js"></script>
+<script>
+'use strict';
+const {$, clamp, lerp, loop, tween, sound, tone, say, track, confetti, findings, discover, found,
+       shareState, sharedState, mount, reduced, drag, svgPoint, mulberry32, ease} = Play;
+mount({thread: 'measure', band: 'tiny'});
+
+/* MODEL:start ==================================================================
+   Long and round (NCERT Joyful Mathematics, Class 1, Ch 2 "What is Long? What is
+   Round?").
+
+   LONG. Every toy has a real length (in stage units, drawn to that length). Two
+   toys can only be compared fairly when one end of each is lined up: then the
+   one whose other end reaches further is longer. If the ends are not lined up,
+   the toy that sticks out furthest need not be the longest — the page lets that
+   happen, and Mimi says so.
+
+   ROUND. Whether a thing rolls or slides depends on the face it rests on: a curved
+   face rolls, a flat face slides. The ball is curved all over; the box is flat all
+   over; the dholak and the carrom striker roll on their curved edge and slide on a
+   flat face. The motion is then integrated on the slope (angle θ):
+     sliding:  a = g (sin θ − μ cos θ) down the slope, and a = −μ g on flat ground;
+     rolling:  a = g sin θ / (1 + k) down the slope (k = 2/5 for a ball, 1/2 for a
+               drum or disc), and only a tiny rolling drag on flat ground.
+   So round things keep going across the ground to Grandmother's house, and flat
+   things stop soon after the slope ends. Nothing here is a clip.
+   ============================================================================ */
+const G = 1400, MU = 0.4, CRR = 0.02;               // gravity (units/s²), sliding friction, rolling drag
+const R0 = {x: 40, y: 352}, R1 = {x: 470, y: 612};  // the slope, top to bottom
+const FLOOR = 612, HOUSE_X = 858, TABLE_Y = 500;
+const RL = Math.hypot(R1.x - R0.x, R1.y - R0.y), TH = Math.atan2(R1.y - R0.y, R1.x - R0.x);
+const U = {x: Math.cos(TH), y: Math.sin(TH)}, NRM = {x: Math.sin(TH), y: -Math.cos(TH)};
+/* The toys on the bench: their true lengths. */
+const TOYS = [
+  {id: 'flute',  name: 'flute',  len: 340, lane: 0},
+  {id: 'pencil', name: 'pencil', len: 220, lane: 1},
+  {id: 'spoon',  name: 'spoon',  len: 170, lane: 2},
+  {id: 'crayon', name: 'crayon', len: 110, lane: 3},
+];
+const WALL = 88;                                     // the red post: the line-up point
+const aligned = t => Math.abs(t.x - WALL) < 0.5;
+const rightEnd = t => t.x + t.len;
+function longestOf(ts){ return ts.reduce((a, b) => b.len > a.len ? b : a); }
+function shortestOf(ts){ return ts.reduce((a, b) => b.len < a.len ? b : a); }
+/* What sticks out furthest — the unfair way to compare. */
+function furthestOf(ts){ return ts.reduce((a, b) => rightEnd(b) > rightEnd(a) ? b : a); }
+/* The things for the slope. */
+const OBJS = {
+  ball:    {name: 'ball',    k: 2 / 5},
+  dholak:  {name: 'dholak',  k: 1 / 2},
+  box:     {name: 'box',     k: 0},
+  striker: {name: 'striker', k: 1 / 2},
+};
+/* Which face touches the ground — the whole rule. */
+function contactFace(kind, turned){
+  if (kind === 'ball') return 'curved';
+  if (kind === 'box') return 'flat';
+  return turned ? 'flat' : 'curved';                // the dholak lies on its side, the striker stands on its edge; turned, each rests on a flat face
+}
+const motionOf = (kind, turned) => contactFace(kind, turned) === 'curved' ? 'roll' : 'slide';
+/* half-height of the thing as it rests (so it sits ON the ground) and its rolling radius */
+function halfH(kind, turned){
+  if (kind === 'ball') return 26;
+  if (kind === 'dholak') return turned ? 32 : 27;
+  if (kind === 'box') return turned ? 29 : 23;
+  return turned ? 5 : 23;
+}
+/* Integrate the motion from s0 along the slope. Returns frames {t, x, y, rot} and where it stopped. */
+function simulate(kind, turned, s0, stopAt = HOUSE_X, dt = 1 / 120){
+  const m = motionOf(kind, turned), h = halfH(kind, turned), k = OBJS[kind].k;
+  const aRamp = m === 'roll' ? G * Math.sin(TH) / (1 + k) : G * (Math.sin(TH) - MU * Math.cos(TH));
+  const aFloor = m === 'roll' ? -CRR * G : -MU * G;
+  let s = s0, v = 0, t = 0, onRamp = true, x = 0, roll = 0;
+  const frames = [], stopX = stopAt - h;
+  const place = () => {
+    let px, py, rot;
+    if (onRamp) { px = R0.x + U.x * s + NRM.x * h; py = R0.y + U.y * s + NRM.y * h; }
+    else { px = x; py = FLOOR - h; }
+    rot = m === 'roll' ? roll * 180 / Math.PI : (onRamp ? TH * 180 / Math.PI : 0);
+    frames.push({t, x: px, y: py, rot});
+  };
+  place();
+  if (aRamp <= 0) return {frames, motion: 'still', home: false, end: frames[0], s0};
+  for (let i = 0; i < 20000; i++) {
+    t += dt;
+    if (onRamp) {
+      v += aRamp * dt; s += v * dt;
+      if (s >= RL) { onRamp = false; x = R1.x + (s - RL); }
+    } else {
+      v += aFloor * dt; if (v <= 0) { v = 0; place(); break; }
+      x += v * dt;
+      if (x >= stopX) { x = stopX; place(); return {frames, motion: m, home: true, end: frames[frames.length - 1], s0, v: v}; }
+    }
+    if (m === 'roll') roll += v * dt / h;
+    place();
+  }
+  return {frames, motion: m, home: false, end: frames[frames.length - 1], s0};
+}
+/* MODEL:end */
+
+/* ---- state: plain data ----------------------------------------------------- */
+const START_X = {flute: 96, pencil: 360, spoon: 250, crayon: 572};   // ends NOT lined up: the crayon sticks out furthest
+const S = {
+  toys: TOYS.map(t => Object.assign({}, t, {x: START_X[t.id]})),
+  objs: [
+    {id: 'ball',    turned: false, where: 'table', x: 590, did: {}},
+    {id: 'dholak',  turned: false, where: 'table', x: 668, did: {}},
+    {id: 'box',     turned: false, where: 'table', x: 748, did: {}},
+    {id: 'striker', turned: false, where: 'table', x: 818, did: {}},
+  ],
+  runs: 0, homes: 0,
+};
+S.objs.forEach(o => { o.y = TABLE_Y - halfH(o.id, o.turned); o.rot = 0; });
+const shared = sharedState();
+if (shared && shared.x) S.toys.forEach(t => { if (isFinite(shared.x[t.id])) t.x = clamp(+shared.x[t.id], WALL, 780 - t.len); });
+shareState(() => ({x: Object.fromEntries(S.toys.map(t => [t.id, Math.round(t.x)]))}));
+const laneY = l => 120 + l * 54;
+const objOf = id => S.objs.find(o => o.id === id);
+
+/* ============================================================================
+   The stage: drawn once, then only patched.
+   ============================================================================ */
+const svg = $('stage');
+const f1 = n => (+n).toFixed(1);
+const FONT = 'font-family="Fredoka, Nunito, sans-serif" font-weight="600"';
+/* toys, drawn from their left end (x = 0) to their true length, centred on y = 0 */
+function toyArt(id){
+  if (id === 'flute') return `<rect x="0" y="-9" width="340" height="18" rx="9" fill="#e3c27a" stroke="#9a7430" stroke-width="2.5"/>
+    ${[70, 150, 250].map(x => `<rect x="${x}" y="-10" width="6" height="20" rx="2" fill="#c9a152"/>`).join('')}
+    <rect x="18" y="-10" width="16" height="20" fill="#d6453d"/><rect x="306" y="-10" width="12" height="20" fill="#d6453d"/>
+    <ellipse cx="52" cy="0" rx="5" ry="4" fill="#5a3a12"/>${[180, 202, 224, 262, 284].map(x => `<circle cx="${x}" cy="0" r="3.6" fill="#5a3a12"/>`).join('')}`;
+  if (id === 'pencil') return `<rect x="0" y="-10" width="20" height="20" rx="5" fill="#ff8fa6" stroke="#c9566f" stroke-width="2"/>
+    <rect x="18" y="-10" width="12" height="20" fill="#c3c9cf" stroke="#8a939b" stroke-width="2"/>
+    <rect x="30" y="-10" width="160" height="20" fill="#ffc93c" stroke="#d99a12" stroke-width="2"/><path d="M30 -3 H190" stroke="#e6ad1f" stroke-width="2"/>
+    <path d="M190 -10 L214 -2.5 L214 2.5 L190 10 Z" fill="#f2d3a2" stroke="#b58a52" stroke-width="2" stroke-linejoin="round"/><path d="M211 -3.4 L220 0 L211 3.4 Z" fill="#3a3a3a"/>`;
+  if (id === 'spoon') return `<path d="M0 -5 Q60 -7 108 -4 Q118 -3 124 -8 Q134 -18 152 -18 Q170 -16 170 0 Q170 16 152 18 Q134 18 124 8 Q118 3 108 4 Q60 7 0 5 Q-4 0 0 -5 Z" fill="#dfe6ec" stroke="#8a97a3" stroke-width="2.5" stroke-linejoin="round"/>
+    <ellipse cx="150" cy="-2" rx="11" ry="7" fill="#fff" opacity=".7"/>`;
+  return `<path d="M0 -12 H86 L110 -2 V2 L86 12 H0 Q-4 0 0 -12 Z" fill="#3f7fd8" stroke="#1d4f9e" stroke-width="2.5" stroke-linejoin="round"/>
+    <rect x="12" y="-12" width="62" height="24" fill="#fff" opacity=".9"/><path d="M18 -5 H68 M18 5 H68" stroke="#3f7fd8" stroke-width="3" stroke-linecap="round"/>`;
+}
+/* things for the slope, drawn round their centre */
+function objArt(id, turned){
+  if (id === 'ball') return `<circle r="26" fill="#e0463c" stroke="#9e2a22" stroke-width="3"/><path d="M-26 0 Q0 -14 26 0 M-26 0 Q0 14 26 0" stroke="#fff" stroke-width="4" fill="none"/><circle cx="-9" cy="-11" r="6" fill="#fff" opacity=".5"/>`;
+  if (id === 'dholak') {
+    if (!turned) return `<circle r="27" fill="#f3e2c0" stroke="#8a5a2b" stroke-width="4"/><circle r="20" fill="none" stroke="#c98a4b" stroke-width="2.5"/>
+      ${Array.from({length: 8}, (_, i) => { const a = i * Math.PI / 4; return `<circle cx="${f1(23.5 * Math.cos(a))}" cy="${f1(23.5 * Math.sin(a))}" r="2.8" fill="#d6453d"/>`; }).join('')}<path d="M-8 -8 L8 8 M8 -8 L-8 8" stroke="#c98a4b" stroke-width="2"/>`;
+    return `<rect x="-26" y="-32" width="52" height="64" rx="10" fill="#b5542c" stroke="#7a3217" stroke-width="3"/>
+      <path d="M-26 -22 L-8 22 L8 -22 L26 22" stroke="#ffd23f" stroke-width="3" fill="none"/><ellipse cy="-30" rx="26" ry="6" fill="#f3e2c0" stroke="#8a5a2b" stroke-width="2.5"/>`;
+  }
+  if (id === 'box') {
+    const w = turned ? 46 : 56, h = turned ? 58 : 46;
+    return `<rect x="${-w / 2}" y="${-h / 2}" width="${w}" height="${h}" rx="4" fill="#7b5cd6" stroke="#4d3596" stroke-width="3"/>
+      <rect x="-5" y="${-h / 2}" width="10" height="${h}" fill="#ffd23f"/><rect x="${-w / 2}" y="-5" width="${w}" height="10" fill="#ffd23f"/>
+      <path d="M0 ${-h / 2} q-14 -12 -16 -2 q2 6 16 2 q14 -12 16 -2 q-2 6 -16 2" fill="#ffd23f" stroke="#d99a12" stroke-width="2"/>`;
+  }
+  if (!turned) return `<circle r="23" fill="#f7f1e3" stroke="#6b5238" stroke-width="3"/><circle r="15" fill="none" stroke="#d6453d" stroke-width="3"/><circle r="6" fill="#2f9e5b"/>`;
+  return `<ellipse rx="23" ry="5" fill="#f7f1e3" stroke="#6b5238" stroke-width="2.5"/><path d="M-15 -1 H15" stroke="#d6453d" stroke-width="2.5"/>`;
+}
+const handArt = `<path d="M-6 0 L-6 -34 Q-6 -42 1 -42 Q8 -42 8 -34 L8 -14 L20 -14 Q30 -14 30 -4 L30 16 Q30 30 16 30 L2 30 Q-12 30 -16 18 L-24 4 Q-27 -3 -20 -5 Q-14 -6 -10 2 Z" fill="#fff" stroke="#3a2a1a" stroke-width="3" stroke-linejoin="round"/>`;
+function lambArt(){
+  let fluff = '';
+  const pts = [[-40, -60], [-20, -76], [4, -80], [28, -74], [44, -58], [48, -36], [36, -20], [10, -14], [-16, -16], [-40, -24], [-50, -42]];
+  for (const [x, y] of pts) fluff += `<circle cx="${x}" cy="${y}" r="20" fill="#fff" stroke="#c9c2b4" stroke-width="3"/>`;
+  return `<g id="lBob">
+    <path d="M-30 -24 V0 M-10 -20 V0 M16 -20 V0 M34 -24 V0" stroke="#3a2a1a" stroke-width="8" stroke-linecap="round"/>
+    ${fluff}<ellipse cx="0" cy="-46" rx="44" ry="30" fill="#fff"/>
+    <g id="lHead" transform="translate(-54 -86)">
+      <ellipse cx="-24" cy="-6" rx="16" ry="8" fill="#3a2a1a" transform="rotate(-24 -24 -6)"/><ellipse cx="24" cy="-6" rx="16" ry="8" fill="#3a2a1a" transform="rotate(24 24 -6)"/>
+      <ellipse cx="0" cy="4" rx="24" ry="28" fill="#4a3526"/>
+      <circle cx="-4" cy="-24" r="12" fill="#fff" stroke="#c9c2b4" stroke-width="2"/><circle cx="10" cy="-26" r="10" fill="#fff" stroke="#c9c2b4" stroke-width="2"/>
+      <g id="lEyeOpen"><circle cx="-9" cy="0" r="6.5" fill="#fff"/><circle cx="9" cy="0" r="6.5" fill="#fff"/>
+        <g id="lLook"><circle cx="-9" cy="0" r="3.6" fill="#1b1b1b"/><circle cx="9" cy="0" r="3.6" fill="#1b1b1b"/></g></g>
+      <path id="lEyeHappy" d="M-15 1 Q-9 -6 -3 1 M3 1 Q9 -6 15 1" stroke="#fff" stroke-width="3.5" fill="none" stroke-linecap="round" opacity="0"/>
+      <g id="lEyeWow" opacity="0"><circle cx="-9" cy="0" r="8" fill="#fff"/><circle cx="9" cy="0" r="8" fill="#fff"/><circle cx="-9" cy="0" r="3" fill="#1b1b1b"/><circle cx="9" cy="0" r="3" fill="#1b1b1b"/></g>
+      <ellipse cx="-14" cy="12" rx="5" ry="3" fill="#ff8f8f" opacity=".6"/><ellipse cx="14" cy="12" rx="5" ry="3" fill="#ff8f8f" opacity=".6"/>
+      <path id="lMouth" d="M-6 18 Q0 23 6 18" stroke="#ffb3c6" stroke-width="3" fill="none" stroke-linecap="round"/>
+    </g></g>`;
+}
+function build(){
+  const r = mulberry32(9);
+  let flowers = '';
+  for (let i = 0; i < 12; i++) { const x = 500 + r() * 360, y = 336 + r() * 30; flowers += `<g transform="translate(${f1(x)} ${f1(y)})"><path d="M0 0 v10" stroke="#2f8a3e" stroke-width="2"/><circle r="4.5" fill="${['#ff7aa2', '#ffd23f', '#fff'][i % 3]}"/></g>`; }
+  let trees = '';
+  for (let i = 0; i < 5; i++) { const x = 120 + i * 70, y = 318; trees += `<g transform="translate(${x} ${y})"><rect x="-4" y="-6" width="8" height="18" fill="#8a5a2b"/><circle cy="-22" r="${16 + (i % 2) * 5}" fill="${i % 2 ? '#3a9c4a' : '#4fb35a'}"/></g>`; }
+  svg.innerHTML = `
+  <defs>
+    <linearGradient id="gSky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#9fdcff"/><stop offset="1" stop-color="#e6f7ff"/></linearGradient>
+    <linearGradient id="gHill" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#7cc462"/><stop offset="1" stop-color="#58a845"/></linearGradient>
+    <linearGradient id="gWood" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f0c98c"/><stop offset="1" stop-color="#d9a766"/></linearGradient>
+    <filter id="soft" x="-20%" y="-20%" width="140%" height="140%"><feDropShadow dx="0" dy="3" stdDeviation="3" flood-color="#5a3510" flood-opacity=".22"/></filter>
+  </defs>
+  <rect width="1000" height="660" fill="url(#gSky)"/>
+  <g fill="#fff" opacity=".9"><ellipse cx="520" cy="36" rx="44" ry="15"/><ellipse cx="552" cy="26" rx="28" ry="16"/><ellipse cx="760" cy="30" rx="34" ry="12"/></g>
+  <rect y="322" width="1000" height="338" fill="#a6e08a"/>
+  <g>${trees}</g><g>${flowers}</g>
+
+  <!-- the bench: four lanes and the red post -->
+  <rect x="40" y="84" width="740" height="222" rx="18" fill="url(#gWood)" stroke="#a8742f" stroke-width="3" filter="url(#soft)"/>
+  ${[0, 1, 2, 3].map(l => `<rect x="${WALL}" y="${laneY(l) - 22}" width="${780 - WALL - 10}" height="44" rx="10" fill="#fff4dc" opacity=".55"/>`).join('')}
+  <g id="post"><rect x="${WALL - 30}" y="70" width="30" height="244" rx="8" fill="#e0463c" stroke="#9e2a22" stroke-width="3"/>
+    <path d="M${WALL - 15} 92 v200" stroke="#fff" stroke-width="4" stroke-dasharray="10 12" opacity=".8"/></g>
+  <g id="toys">${S.toys.map(t => `<g id="toy_${t.id}" transform="translate(${t.x} ${laneY(t.lane)})"><g id="toyJ_${t.id}">${toyArt(t.id)}</g></g>`).join('')}</g>
+  <g id="endLine" opacity="0" pointer-events="none"><path id="endLineP" d="" stroke="#2f9e5b" stroke-width="3" stroke-dasharray="8 7"/></g>
+  <g id="crown" opacity="0" pointer-events="none"><path d="M-22 10 L-24 -12 L-11 0 L0 -18 L11 0 L24 -12 L22 10 Z" fill="#ffd23f" stroke="#d99a12" stroke-width="3" stroke-linejoin="round"/><circle cy="-18" r="4" fill="#e0567a"/></g>
+
+  <!-- Mimi the lamb and her bubble -->
+  <g id="lamb" transform="translate(905 312)">${lambArt()}</g>
+  <g id="bubble" opacity="0" pointer-events="none">
+    <path d="M800 70 h176 a14 14 0 0 1 14 14 v36 a14 14 0 0 1 -14 14 h-80 l-18 22 l-4 -22 h-74 a14 14 0 0 1 -14 -14 v-36 a14 14 0 0 1 14 -14 Z" fill="#fff" stroke="#e0567a" stroke-width="4"/>
+    <text id="bubbleT" x="888" y="112" text-anchor="middle" ${FONT} font-size="26" fill="#9e2a4f"></text>
+  </g>
+
+  <!-- the hill, the slope, Grandmother's house, the table -->
+  <path d="M0 ${R0.y - 4} H${R0.x} L${R1.x} ${FLOOR} H0 Z" fill="url(#gHill)"/>
+  <path d="M${R0.x - 40} ${R0.y} L${R0.x} ${R0.y} L${R1.x} ${R1.y}" stroke="#8a5a2b" stroke-width="10" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M${R0.x} ${R0.y - 5} L${R1.x} ${R1.y - 5}" stroke="#d9a766" stroke-width="3" fill="none"/>
+  <rect y="${FLOOR}" width="1000" height="${660 - FLOOR}" fill="#c98a4b"/><rect y="${FLOOR}" width="1000" height="6" fill="#a86a33"/>
+  <g filter="url(#soft)">
+    <rect x="552" y="${TABLE_Y}" width="296" height="14" rx="6" fill="#b77a3f" stroke="#8a5a2b" stroke-width="2.5"/>
+    <rect x="566" y="${TABLE_Y + 12}" width="12" height="${FLOOR - TABLE_Y - 12}" fill="#9a6433"/><rect x="822" y="${TABLE_Y + 12}" width="12" height="${FLOOR - TABLE_Y - 12}" fill="#9a6433"/>
+  </g>
+  <g id="house" filter="url(#soft)">
+    <rect x="${HOUSE_X}" y="486" width="126" height="${FLOOR - 486}" fill="#ffe0a8" stroke="#b5542c" stroke-width="3"/>
+    <path d="M${HOUSE_X - 14} 492 L${HOUSE_X + 63} 424 L${HOUSE_X + 140} 492 Z" fill="#d6453d" stroke="#8e2a22" stroke-width="3" stroke-linejoin="round"/>
+    <rect x="${HOUSE_X + 70}" y="540" width="38" height="${FLOOR - 540}" rx="4" fill="#8a5a2b"/><circle cx="${HOUSE_X + 100}" cy="578" r="3" fill="#ffd23f"/>
+    <rect x="${HOUSE_X + 14}" y="508" width="42" height="36" rx="4" fill="#9fdcff" stroke="#b5542c" stroke-width="3"/>
+    <g id="granny" opacity="0"><circle cx="${HOUSE_X + 35}" cy="530" r="12" fill="#a86c46"/><path d="M${HOUSE_X + 22} 526 Q${HOUSE_X + 35} 508 ${HOUSE_X + 48} 526" fill="#e8e8e8"/>
+      <circle cx="${HOUSE_X + 31}" cy="530" r="1.8" fill="#1b1b1b"/><circle cx="${HOUSE_X + 39}" cy="530" r="1.8" fill="#1b1b1b"/><path d="M${HOUSE_X + 31} 536 q4 3 8 0" stroke="#6b2a1a" stroke-width="1.6" fill="none"/></g>
+    <path d="M${HOUSE_X + 14} 526 H${HOUSE_X + 56} M${HOUSE_X + 35} 508 V544" stroke="#b5542c" stroke-width="2.5"/>
+  </g>
+  <g id="objs">${S.objs.map(o => `<g id="obj_${o.id}"><g id="objJ_${o.id}">${objArt(o.id, o.turned)}</g></g>`).join('')}</g>
+  <g id="fx" pointer-events="none"></g>
+  <g id="ghost" opacity="0" pointer-events="none"></g>
+  <g id="hint" pointer-events="none" opacity="0"><g id="hintHand"><g transform="scale(1.3)">${handArt}</g></g></g>
+
+  <!-- hit targets that never move -->
+  <rect id="benchHit" class="dragHit" x="${WALL}" y="92" width="${780 - WALL}" height="212" fill="transparent" role="button" tabindex="0" aria-label="The bench with four toys. Drag a toy along it to the red post."/>
+  <rect id="postHit" class="hit" x="${WALL - 44}" y="66" width="46" height="252" rx="10" fill="transparent" role="button" tabindex="0" aria-label="The red post. Tap it and Mimi pushes every toy up to it."/>
+  <rect id="lambHit" class="hit" x="800" y="160" width="190" height="156" rx="30" fill="transparent" role="button" tabindex="0" aria-label="Mimi the lamb. Tap her to hear which toy is longest."/>
+  <rect id="playHit" class="dragHit" x="0" y="330" width="1000" height="330" fill="transparent" role="button" tabindex="0" aria-label="The hill. Drag the ball, the dholak, the box or the striker onto the slope and let go. Tap one to turn it."/>
+  `;
+}
+build();
+
+/* ---- paint ------------------------------------------------------------------ */
+function paintToys(){
+  for (const t of S.toys) $('toy_' + t.id).setAttribute('transform', `translate(${f1(t.x)} ${laneY(t.lane)})`);
+  const lined = S.toys.filter(aligned);
+  if (lined.length === 4) {
+    const L = longestOf(S.toys);
+    $('crown').setAttribute('opacity', 1); $('crown').setAttribute('transform', `translate(${f1(rightEnd(L) + 24)} ${laneY(L.lane) - 4})`);
+  } else $('crown').setAttribute('opacity', 0);
+  $('endLine').setAttribute('opacity', lined.length >= 2 ? 1 : 0);
+  $('endLineP').setAttribute('d', `M${WALL} 96 V300`);
+}
+function paintObj(o){
+  $('obj_' + o.id).setAttribute('transform', `translate(${f1(o.x)} ${f1(o.y)}) rotate(${f1(o.rot)})`);
+}
+function paint(){ paintToys(); S.objs.forEach(paintObj); paintTry(); }
+
+/* ---- Mimi --------------------------------------------------------------------- */
+let FACE = 'open', faceT = 0, POINTER = null, DRAGPOS = null;
+function face(f, secs = 1.6){
+  FACE = f; faceT = secs;
+  $('lEyeOpen').setAttribute('opacity', f === 'open' ? 1 : 0);
+  $('lEyeHappy').setAttribute('opacity', f === 'happy' ? 1 : 0);
+  $('lEyeWow').setAttribute('opacity', f === 'wow' ? 1 : 0);
+  $('lMouth').setAttribute('d', f === 'wow' ? 'M-5 16 Q0 26 5 16 Q0 12 -5 16 Z' : f === 'happy' ? 'M-8 16 Q0 26 8 16' : 'M-6 18 Q0 23 6 18');
+}
+function hop(el, h = 16, ms = 420){
+  if (reduced()) return Promise.resolve();
+  return tween(0, 1, ms, t => el.setAttribute('transform', `translate(0 ${f1(-Math.sin(t * Math.PI) * h)})`), v => v).then(() => el.removeAttribute('transform'));
+}
+function squash(el, amt = 0.14, ms = 420){
+  if (reduced()) return Promise.resolve();
+  return tween(0, 1, ms, t => { const k = Math.sin(t * Math.PI * 3) * (1 - t) * amt; el.setAttribute('transform', `scale(${(1 - k).toFixed(3)} ${(1 + k).toFixed(3)})`); }, v => v).then(() => el.removeAttribute('transform'));
+}
+function baa(){ tone(420, 0.12, 'sawtooth', 0.03, 0, 380); tone(400, 0.28, 'sawtooth', 0.03, 0.1, 360); }
+let bubbleTimer = 0;
+function bubble(text, ms = 2400){ $('bubbleT').textContent = text; $('bubble').setAttribute('opacity', 1); clearTimeout(bubbleTimer); bubbleTimer = setTimeout(() => $('bubble').setAttribute('opacity', 0), ms); }
+function mimi(line, show, f = 'happy'){ say(line, {pitch: 1.35}); if (show != null) bubble(show); face(f); baa(); hop($('lBob'), 12); }
+function clientOf(x, y){
+  const m = svg.getScreenCTM(); if (!m) return {x: innerWidth / 2, y: innerHeight / 2};
+  const p = svg.createSVGPoint(); p.x = x; p.y = y; const q = p.matrixTransform(m); return {x: q.x, y: q.y};
+}
+/* several discoveries at once are spaced out, so each is heard */
+let DQ = 0;
+function discoverSoon(id, at){ if (found(id)) return; const d = Math.max(0, DQ - Date.now()); DQ = Date.now() + d + (reduced() ? 30 : 1700); setTimeout(() => discover(id, at), d); }
+
+/* ============================================================================
+   The bench: slide toys along their lanes; the post lines them all up.
+   ============================================================================ */
+function benchSay(){
+  const lined = S.toys.filter(aligned);
+  if (lined.length === 4) { const L = longestOf(S.toys), Sh = shortestOf(S.toys); mimi(`The ends are lined up. The ${L.name} is the longest! The ${Sh.name} is the shortest.`, '👑 ' + L.name); return; }
+  const F = furthestOf(S.toys), L = longestOf(S.toys);
+  if (F !== L) mimi(`The ${F.name} sticks out the most… but is it really the longest? Line up the ends at the red post!`, '🤔', 'wow');
+  else mimi('Line up the ends at the red post, then we can see which is longest!', '👉 |', 'open');
+}
+function afterBench(kind){
+  paintToys(); paintTry();
+  const lined = S.toys.filter(aligned);
+  const at = clientOf(WALL + 160, 190);
+  if (lined.length >= 2) discoverSoon('ends', at);
+  if (lined.length === 4) { discoverSoon('longest', clientOf(rightEnd(longestOf(S.toys)), 110)); hop($('lBob'), 20); }
+  track('bench', {kind, lined: lined.length, x: Object.fromEntries(S.toys.map(t => [t.id, Math.round(t.x)]))});
+}
+function lineUpAll(){
+  hello();
+  const from = S.toys.map(t => t.x);
+  if (S.toys.every(aligned)) { squash($('post'), 0.06); benchSay(); return; }
+  sound('whoosh');
+  const done = () => { S.toys.forEach(t => t.x = WALL); sound('snap'); afterBench('post'); setTimeout(benchSay, reduced() ? 0 : 400); };
+  if (reduced()) return done();
+  tween(0, 1, 600, k => { S.toys.forEach((t, i) => t.x = lerp(from[i], WALL, k)); paintToys(); }, ease.inOut).then(done);
+}
+{
+  let toy = null, grab = 0, moved = 0, p0 = null;
+  drag($('benchHit'), svg, {
+    start(p){
+      hello();
+      const lane = clamp(Math.round((p.y - 120) / 54), 0, 3);
+      toy = S.toys.find(t => t.lane === lane && p.x >= t.x - 24 && p.x <= rightEnd(t) + 24) || null;
+      p0 = p; moved = 0;
+      if (toy) { grab = p.x - toy.x; sound('pop'); }
+    },
+    move(p){
+      if (!toy) return;
+      moved = Math.max(moved, Math.abs(p.x - p0.x));
+      DRAGPOS = p;
+      toy.x = clamp(p.x - grab, WALL, 780 - toy.len);
+      paintToys();
+    },
+    end(){
+      DRAGPOS = null;
+      if (!toy) return;
+      if (moved < 6) { squash($('toyJ_' + toy.id), 0.12); say(`The ${toy.name}.`, {pitch: 1.3}); toy = null; return; }
+      if (toy.x - WALL < 22) { toy.x = WALL; sound('snap'); squash($('post'), 0.05, 300); }
+      else sound('tick');
+      afterBench('drag');
+      toy = null;
+    },
+  });
+  $('benchHit').addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); lineUpAll(); } });
+}
+
+/* ============================================================================
+   The slope: drop a thing on it and the model moves it.
+   ============================================================================ */
+const RUNS = {};
+function projectOnRamp(p){
+  const s = (p.x - R0.x) * U.x + (p.y - R0.y) * U.y, d = (p.x - R0.x) * NRM.x + (p.y - R0.y) * NRM.y;
+  return {s, d};
+}
+function tableSlot(id){ return {ball: 590, dholak: 668, box: 748, striker: 818}[id]; }
+function rest(o, where, x){
+  o.where = where;
+  if (where === 'table') { o.x = tableSlot(o.id); o.y = TABLE_Y - halfH(o.id, o.turned); o.rot = 0; }
+  if (where === 'floor') { o.x = clamp(x, R1.x + 30, HOUSE_X - halfH(o.id, o.turned)); o.y = FLOOR - halfH(o.id, o.turned); o.rot = 0; }
+  paintObj(o);
+}
+function release(o, s){
+  s = clamp(s, 24, RL - 30);
+  const queue = S.objs.filter(q => q !== o && q.atDoor).reduce((w, q) => w + 2 * halfH(q.id, q.turned) + 4, 0);
+  const sim = simulate(o.id, o.turned, s, HOUSE_X - queue);
+  o.where = 'moving'; o.atDoor = false;
+  S.runs++;
+  const tok = RUNS[o.id] = (RUNS[o.id] || 0) + 1;
+  const m = sim.motion;
+  sound(m === 'roll' ? 'whoosh' : 'tick');
+  const finish = () => {
+    if (RUNS[o.id] !== tok) return;
+    const e = sim.end;
+    o.x = e.x; o.y = e.y; o.rot = m === 'roll' ? e.rot % 360 : e.rot; o.where = 'floor'; o.atDoor = sim.home;
+    paintObj(o);
+    o.did[m] = true;
+    arrive(o, sim);
+  };
+  if (reduced()) return finish();
+  let k = 0;
+  const t0 = performance.now();
+  const L = loop(() => {
+    if (RUNS[o.id] !== tok) { L.stop(); return; }
+    const t = (performance.now() - t0) / 1000;
+    while (k < sim.frames.length - 1 && sim.frames[k + 1].t <= t) k++;
+    const f = sim.frames[k];
+    o.x = f.x; o.y = f.y; o.rot = f.rot; paintObj(o);
+    if (k >= sim.frames.length - 1) { L.stop(); finish(); }
+  });
+  track('release', {obj: o.id, turned: o.turned, face: contactFace(o.id, o.turned), motion: m, s: Math.round(s), home: sim.home});
+}
+function arrive(o, sim){
+  const at = clientOf(o.x, o.y - 40), name = OBJS[o.id].name;
+  if (sim.motion === 'roll') {
+    discoverSoon('roll', at);
+    if (sim.home) {
+      S.homes++;
+      sound('drum', true); setTimeout(() => sound('drum', true), 180);
+      $('granny').setAttribute('opacity', 1); setTimeout(() => $('granny').setAttribute('opacity', 0), 2600);
+      squash($('objJ_' + o.id), 0.2);
+      mimi(`Knock knock! The ${name} rolled all the way to Grandmother's house!`, '🏠', 'wow');
+      discoverSoon('home', clientOf(HOUSE_X + 60, 520));
+    } else mimi(`The ${name} rolled! It is round where it touches.`, '⚪ ➜', 'happy');
+  } else {
+    discoverSoon('slide', at);
+    mimi(`The ${name} slid, and stopped. It is flat where it touches.`, '▭ ➜', 'wow');
+  }
+  if (o.did.roll && o.did.slide) discoverSoon('both', at);
+}
+function turn(o){
+  hello();
+  if (o.where === 'moving') return;
+  if (o.id === 'ball') { sound('boing'); spin(o); mimi('A ball is round all over. Turn it any way — still round!', '⚽', 'happy'); return; }
+  o.turned = !o.turned; o.atDoor = false;
+  $('objJ_' + o.id).innerHTML = objArt(o.id, o.turned);
+  if (o.where === 'table') rest(o, 'table');
+  else rest(o, 'floor', o.x);
+  sound('pop'); squash($('objJ_' + o.id), 0.18);
+  const f = contactFace(o.id, o.turned);
+  if (o.id === 'box') mimi('A box has flat faces all round.', '▭', 'open');
+  else mimi(f === 'flat' ? `Now the ${o.id} rests on a flat face.` : `Now the ${o.id} rests on its round edge.`, f === 'flat' ? '▭' : '⚪', 'wow');
+  track('turn', {obj: o.id, turned: o.turned, face: f});
+}
+function spin(o){
+  if (reduced()) return;
+  const r0 = o.rot;
+  tween(0, 360, 600, a => { o.rot = r0 + a; paintObj(o); }, ease.out).then(() => { o.rot = r0; paintObj(o); });
+}
+{
+  let obj = null, moved = 0, p0 = null;
+  drag($('playHit'), svg, {
+    start(p){
+      hello();
+      p0 = p; moved = 0;
+      let best = null, bd = 56;
+      for (const o of S.objs) { const d = Math.hypot(o.x - p.x, o.y - p.y); if (d < bd) { bd = d; best = o; } }
+      obj = best;
+      if (obj) obj.atDoor = false;
+      if (obj && obj.where === 'moving') { RUNS[obj.id]++; obj.where = 'floor'; }
+      if (obj) sound('pop');
+    },
+    move(p){
+      if (!obj) return;
+      moved = Math.max(moved, Math.hypot(p.x - p0.x, p.y - p0.y));
+      if (moved < 8) return;
+      DRAGPOS = p;
+      obj.x = p.x; obj.y = p.y; obj.rot = 0; obj.where = 'held';
+      /* show where it would sit on the slope */
+      const q = projectOnRamp(p);
+      if (q.s > 0 && q.s < RL && Math.abs(q.d) < 70) { const s = clamp(q.s, 24, RL - 30), h = halfH(obj.id, obj.turned); obj.x = R0.x + U.x * s + NRM.x * h; obj.y = R0.y + U.y * s + NRM.y * h; obj.rot = motionOf(obj.id, obj.turned) === 'slide' ? TH * 180 / Math.PI : 0; }
+      paintObj(obj);
+    },
+    end(p){
+      DRAGPOS = null;
+      if (!obj) return;
+      const o = obj; obj = null;
+      if (moved < 8) { if (o.where === 'held') o.where = 'floor'; turn(o); return; }
+      const q = projectOnRamp(p);
+      if (q.s > 0 && q.s < RL && Math.abs(q.d) < 70) { release(o, q.s); if (HINT === 'ramp') HINT = 'off'; return; }
+      if (p.y > FLOOR - 90 && p.x > R1.x) { rest(o, 'floor', p.x); sound('tick'); mimi(`On flat ground the ${OBJS[o.id].name} stays still. Put it on the slope!`, '⛰️', 'open'); return; }
+      rest(o, 'table'); sound('tick');
+    },
+  });
+  $('playHit').addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); const o = objOf('ball'); if (o.where !== 'moving') release(o, RL * 0.2); } });
+}
+
+/* ============================================================================
+   Wiring, idle, the hint hand
+   ============================================================================ */
+const onTap = (id, fn) => { $(id).addEventListener('click', fn); $(id).addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fn(); } }); };
+onTap('postHit', lineUpAll);
+onTap('lambHit', () => { hello(); benchSay(); });
+svg.addEventListener('pointermove', e => { POINTER = svgPoint(svg, e); });
+
+let HINT = 'bench', T = 0;
+function idle(dt){
+  T += dt;
+  const tgt = DRAGPOS || POINTER || {x: 400, y: 200};
+  const hx = 905 - 54, hy = 312 - 86;
+  const dx = tgt.x - hx, dy = tgt.y - hy, L = Math.hypot(dx, dy) || 1;
+  $('lLook').setAttribute('transform', `translate(${f1(dx / L * 2.6)} ${f1(dy / L * 2.6)})`);
+  if (faceT > 0) { faceT -= dt; if (faceT <= 0) face('open', 0); }
+  if (HINT === 'bench' && S.toys.some(aligned)) HINT = found('roll') || found('slide') ? 'off' : 'ramp';
+  if (HINT === 'ramp' && S.runs > 0) HINT = 'off';
+  const h = $('hint');
+  if (HINT === 'off') { h.setAttribute('opacity', 0); return; }
+  let x, y;
+  const k = reduced() ? 0.5 : ease.inOut(clamp((T * 0.5 % 1) / 0.8, 0, 1));
+  if (HINT === 'bench') { const c = S.toys.find(t => t.id === 'crayon'); x = lerp(c.x + 40, WALL + 30, k); y = laneY(c.lane) + 58; }
+  else { const b = objOf('ball'); x = lerp(b.x, 140, k); y = lerp(b.y, 400, k) + 50; }
+  $('hintHand').setAttribute('transform', `translate(${f1(x)} ${f1(y)})`);
+  h.setAttribute('opacity', 0.95);
+}
+
+/* ---- the "Try this" card ---- */
+const mini = (id, x, y, s, turned) => `<g transform="translate(${x} ${y}) scale(${s})">${objArt(id, turned)}</g>`;
+const miniToy = (id, x, y, s) => `<g transform="translate(${x} ${y}) scale(${s})">${toyArt(id)}</g>`;
+const slope = `<path d="M-70 -30 L10 34 H70" stroke="#8a5a2b" stroke-width="4" fill="none"/>`;
+const TRY = {
+  ends:    {line: 'Drag a toy to the red post, so its end touches the post!',
+            art: `<rect x="-66" y="-40" width="8" height="80" rx="3" fill="#e0463c"/>${miniToy('crayon', -30, -14, .5)}<path d="M-34 -14 h-16" stroke="#ff7a2f" stroke-width="4" stroke-linecap="round"/><path d="M-48 -21 l-9 7 l9 7" fill="none" stroke="#ff7a2f" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>${miniToy('pencil', -58, 16, .5)}`},
+  longest: {line: 'Line up all four toys at the red post. Which one is the longest?',
+            art: `<rect x="-66" y="-44" width="8" height="88" rx="3" fill="#e0463c"/>${miniToy('flute', -58, -30, .36)}${miniToy('pencil', -58, -10, .36)}${miniToy('spoon', -58, 10, .36)}${miniToy('crayon', -58, 30, .36)}<path d="M72 -40 L70 -50 L64 -44 L58 -52 L52 -44 L46 -50 L44 -40 Z" fill="#ffd23f" stroke="#d99a12" stroke-width="2"/>`},
+  roll:    {line: 'Drag the ball onto the slope, and let go!', art: `${slope}${mini('ball', -46, -30, .7)}`},
+  slide:   {line: 'Put the box on the slope. Does it roll, or slide?', art: `${slope}<g transform="translate(-40 -26) rotate(39)">${objArt('box', false)}</g>`},
+  both:    {line: 'Tap the dholak to stand it up, then put it on the slope. What does it do now?', art: `${mini('dholak', -34, 0, .75, false)}<text x="0" y="8" text-anchor="middle" font-family="Fredoka" font-weight="600" font-size="30" fill="#ff7a2f">↻</text>${mini('dholak', 36, 0, .75, true)}`},
+  home:    {line: 'Can you roll something all the way to Grandmother’s house?', art: `${slope}${mini('ball', 30, 18, .5)}<path d="M44 34 V6 L58 -8 L72 6 V34 Z" fill="#ffe0a8" stroke="#b5542c" stroke-width="2"/><path d="M40 8 L58 -12 L76 8" fill="none" stroke="#d6453d" stroke-width="4"/>`},
+};
+const TRY_ORDER = ['ends', 'longest', 'roll', 'slide', 'both', 'home'];
+const currentTry = () => TRY_ORDER.find(g => !found(g)) || null;
+let shownTry;
+function paintTry(){
+  const g = currentTry();
+  if (g === shownTry) return;
+  shownTry = g;
+  $('tryArt').innerHTML = g ? TRY[g].art : `<path d="M0 -40 L12 -12 L42 -10 L18 8 L26 38 L0 22 L-26 38 L-18 8 L-42 -10 L-12 -12 Z" fill="#ffc53d" stroke="#f29a1f" stroke-width="3" stroke-linejoin="round"/>`;
+  if (!reduced()) $('tryCard').animate([{transform: 'scale(.9)'}, {transform: 'scale(1.04)'}, {transform: 'scale(1)'}], {duration: 450, easing: 'ease-out'});
+}
+function sayTry(){ const g = currentTry(); say(g ? TRY[g].line : 'You found everything! Round things roll, flat things slide.'); track('hear', {goal: g}); }
+let spoke = false;
+$('tryCard').addEventListener('click', () => { spoke = true; sayTry(); });
+$('hear').addEventListener('click', () => { spoke = true; sayTry(); });
+function hello(){ if (spoke) return; spoke = true; setTimeout(() => { if (!Play.EVENTS.some(e => e.type === 'finding')) say('Hello! I am Mimi the lamb. Which toy is the longest? Line them up at the red post!', {pitch: 1.35, interrupt: false}); }, 1200); }
+
+/* ============================================================================
+   Start
+   ============================================================================ */
+findings($('finds'), [
+  {id: 'ends',    icon: '📏', label: 'Line up the ends',    say: 'Ends together at the post! Now we can compare fairly.'},
+  {id: 'longest', icon: '👑', label: 'Longest and shortest', say: 'The flute is the longest, and the crayon is the shortest!'},
+  {id: 'roll',    icon: '⚽', label: 'It rolls!',            say: 'It rolls! Round things roll.'},
+  {id: 'slide',   icon: '📦', label: 'It slides!',           say: 'It slides! Flat things slide.'},
+  {id: 'both',    icon: '🥁', label: 'Rolls and slides',     say: 'The same thing can roll and slide. It depends on which face touches the ground!'},
+  {id: 'home',    icon: '🏠', label: 'Rolled home',          say: 'It rolled all the way home, like the lamb in the dholak!'},
+], () => { say('You found them all! Line up the ends to compare, and round things roll.', {pitch: 1.35}); paintTry(); });
+face('open', 0);
+paint();
+loop(idle);
+window.applyFeatures = () => paint();
+window.PG_STATE = () => JSON.parse(JSON.stringify({toys: S.toys.map(t => ({id: t.id, x: t.x, len: t.len, lane: t.lane, aligned: aligned(t), right: rightEnd(t)})),
+  objs: S.objs, runs: S.runs, homes: S.homes, goal: currentTry(), hint: HINT, laneY: [0, 1, 2, 3].map(laneY)}));
+window.PG_MODEL = {TOYS, WALL, aligned, rightEnd, longestOf, shortestOf, furthestOf, contactFace, motionOf, halfH, simulate,
+  G, MU, CRR, R0, R1, RL, TH, FLOOR, HOUSE_X, TABLE_Y, START_X};
+</script>
+</body>
+</html>

@@ -1,0 +1,319 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Braille: Writing You Can Touch</title>
+<meta name="description" content="Class 4: press dots to form a Braille letter and the page reads it back by touch; type a word and watch it appear on the slate; meet Louis Braille.">
+<link rel="icon" href="../../favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600&family=Nunito:wght@500;700;800&family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="../../play.css">
+<style>
+/* Only what this page needs beyond play.css. */
+.dot{cursor:pointer}
+.storyBtn{cursor:pointer}
+.missions{list-style:none; margin:0; padding:0; display:grid; gap:8px}
+.missions li{display:grid; grid-template-columns:28px 1fr; gap:8px; align-items:center; font-weight:700; font-size:14px; line-height:1.3; color:var(--ink-2)}
+.missions li i{width:26px; height:26px; border-radius:50%; border:2.5px dashed var(--hair-2); display:grid; place-items:center; font-style:normal; font-size:14px; color:#fff}
+.missions li.done{color:var(--ink)}
+.missions li.done i{border:none; background:var(--good); animation:tickPop .5s var(--spring)}
+.missions li.done span{text-decoration:line-through; text-decoration-color:var(--good); text-decoration-thickness:2px}
+@keyframes tickPop{0%{transform:scale(.3)}100%{transform:scale(1)}}
+.wordInput{width:100%; min-height:var(--tap); border-radius:var(--radius-sm); border:1px solid var(--hair-2); padding:0 12px; font-size:16px; font-weight:700; font-family:inherit}
+.quickRow{display:flex; gap:6px; flex-wrap:wrap; margin-top:8px}
+.storyStops{display:flex; gap:6px; margin-bottom:8px}
+.storyStops button{flex:1; min-height:34px; border-radius:8px; border:1px solid var(--hair-2); background:var(--card); font-size:11.5px; font-weight:700; cursor:pointer}
+.storyStops button.seen{background:var(--good-soft); border-color:transparent}
+.storyText{font-size:13px; line-height:1.5; color:var(--ink-2); min-height:70px}
+.newWord{color:var(--accent); font-weight:800}
+</style>
+</head>
+<body>
+<header class="pg-top"></header>
+
+<div class="pg-intro">
+  <h1>Braille: writing you can touch</h1>
+  <p>Press the dots to raise them. The page reads your pattern by touch, the same way a finger would, and tells you
+     which letter it is — if it is a letter at all. Then type a word to see it appear, cell by cell, on the slate.</p>
+</div>
+
+<main class="pg-main wide-side">
+  <section class="pg-stage" id="stageWrap">
+    <svg id="stage" viewBox="0 0 1000 680" role="img" aria-label="A reading desk with a large six-dot Braille cell to press, a decoded-letter card beside it, and a slate below that spells a typed word"></svg>
+  </section>
+
+  <aside class="pg-side">
+    <div class="card">
+      <div class="kicker">Read by touch</div>
+      <p id="readOut" style="font-size:14px; font-weight:700; min-height:40px; margin:0">Press some dots on the big cell.</p>
+      <div class="row"><button class="btn sm" id="btnClearCell">Flatten all six dots</button></div>
+    </div>
+
+    <div class="card">
+      <div class="kicker">Write on the slate</div>
+      <input class="wordInput" id="wordIn" maxlength="14" placeholder="Type a word&hellip;" autocomplete="off" spellcheck="false">
+      <div class="quickRow">
+        <button class="btn sm" data-w="cat">Cat</button>
+        <button class="btn sm" data-w="man">Man</button>
+        <button class="btn sm" data-w="boy">Boy</button>
+        <button class="btn sm" data-w="jug">Jug</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="kicker">Missions</div>
+      <ul class="missions" id="missions"></ul>
+    </div>
+
+    <div class="card">
+      <div class="kicker">Louis Braille&rsquo;s story</div>
+      <div class="storyStops" id="storyStops"></div>
+      <div class="storyText" id="storyText">Tap a stop to read.</div>
+    </div>
+
+    <div class="card"><div class="kicker">To find</div><div id="finds"></div></div>
+  </aside>
+</main>
+
+<script src="../../play.js"></script>
+<script>
+'use strict';
+const {$, $$, esc, clamp, sound, say, track, toast, findings, discover, found,
+       shareState, sharedState, mount, reduced} = Play;
+mount({thread: 'codes', band: 'explorer'});
+
+/* MODEL:start ==================================================================
+   The real 6-dot English Braille alphabet (dots numbered 1-4-2-5-3-6, top to
+   bottom, left column then right):
+     1 4
+     2 5
+     3 6
+   decode() takes whichever dots the learner has actually raised — any subset
+   of the six, in any order — and looks for the ONE letter whose pattern
+   matches exactly. Most presses match nothing, and the page says so; it never
+   pretends a random pattern is a letter. encode() is the same table read the
+   other way, for the slate. Both directions share one small table: nothing
+   about a specific interaction is pre-computed or looked up per click.
+   ============================================================================ */
+const BRAILLE = {
+  a: [1], b: [1, 2], c: [1, 4], d: [1, 4, 5], e: [1, 5], f: [1, 2, 4], g: [1, 2, 4, 5], h: [1, 2, 5], i: [2, 4], j: [2, 4, 5],
+  k: [1, 3], l: [1, 2, 3], m: [1, 3, 4], n: [1, 3, 4, 5], o: [1, 3, 5], p: [1, 2, 3, 4], q: [1, 2, 3, 4, 5], r: [1, 2, 3, 5],
+  s: [2, 3, 4], t: [2, 3, 4, 5], u: [1, 3, 6], v: [1, 2, 3, 6], w: [2, 4, 5, 6], x: [1, 3, 4, 6], y: [1, 3, 4, 5, 6], z: [1, 3, 5, 6],
+};
+const key = arr => arr.slice().sort((a, b) => a - b).join(',');
+const BY_PATTERN = Object.fromEntries(Object.entries(BRAILLE).map(([l, d]) => [key(d), l]));
+const decode = dots => BY_PATTERN[key(dots)] || null;
+const encode = letter => BRAILLE[letter.toLowerCase()] || [];
+/* MODEL:end */
+
+const BOOK_WORDS = ['cat', 'man', 'boy', 'jug'];
+const STORY = [
+  {t: 'Age 3, France', body: 'Louis was playing near his father’s blacksmith workshop. A sharp tool pierced his eye. Within a few days he was blind in one eye — and soon after, blind in both.'},
+  {t: 'Age 10, Paris, 1819', body: 'Louis joined the Royal Institute for Young Blind Persons. He learned letters shaped from wood, cloth, or pins arranged in pincushions.'},
+  {t: 'Night Writing', body: 'An army officer, Captain Charles Barbier, had invented raised dots and dashes so soldiers could read messages in the dark. It was too difficult, and it did not succeed.'},
+  {t: 'A teenager’s idea', body: 'Louis simplified Barbier’s idea into a 6-dot alphabet — one pattern for each of the 26 letters. A blind person taught the world to see.'},
+];
+
+/* ---- state: plain data ------------------------------------------------------ */
+const S = {pressed: [false, false, false, false, false, false], word: '', storySeen: [false, false, false, false]};
+const shared = sharedState();
+if (shared && typeof shared.word === 'string') S.word = shared.word.toLowerCase().replace(/[^a-z]/g, '').slice(0, 14);
+shareState(() => ({word: S.word}));
+
+/* ============================================================================
+   The stage: a reading desk, one big practice cell, a decoded-letter card,
+   and a slate that spells the typed word. Everything sits on the same desk.
+   ============================================================================ */
+const svg = $('stage');
+/* The big practice cell, sized so pressing a dot is unmistakable: 38 px dots on a
+   100/90 px grid. Dot centres are relative to CELL.x/CELL.y (dot 1's position). */
+const CELL = {x: 165, y: 190, dx: 100, dy: 90, r: 38};
+const DOT_XY = i => ({x: CELL.x + (i % 2) * CELL.dx, y: CELL.y + Math.floor(i / 2) * CELL.dy});   // i=0..5 -> dots 1..6 (col-major)
+const CELL_FRAME = {x0: CELL.x - CELL.r - 32, y0: CELL.y - CELL.r - 32, x1: CELL.x + CELL.dx + CELL.r + 32, y1: CELL.y + CELL.dy * 2 + CELL.r + 32};
+/* The decoded-letter card sits directly beside the cell — same top and bottom
+   edge — so the two read as one unit, not two things adrift on an empty desk. */
+const CARD = {x: CELL_FRAME.x1 + 26, y: CELL_FRAME.y0, w: 300, h: CELL_FRAME.y1 - CELL_FRAME.y0};
+const SLATE = {x: 40, y: 520, w: 920, h: 110};
+
+function build(){
+  const dots = Array.from({length: 6}, (_, i) => { const p = DOT_XY(i); return `<g class="dot" id="dot${i}" data-i="${i}" transform="translate(${p.x} ${p.y})">
+    <circle r="${CELL.r + 6}" fill="#00000000"/></g>`; }).join('');
+  svg.innerHTML = `
+  <defs>
+    <linearGradient id="gWall" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#eef2f8"/><stop offset="1" stop-color="#e2e9f2"/></linearGradient>
+    <linearGradient id="gDesk" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#8a5a2b"/><stop offset="1" stop-color="#6b4420"/></linearGradient>
+    <radialGradient id="gLampGlow" cx="50%" cy="10%"><stop offset="0" stop-color="#fff3c4" stop-opacity=".8"/><stop offset="1" stop-color="#fff3c4" stop-opacity="0"/></radialGradient>
+    <radialGradient id="gDotUp" cx="32%" cy="28%"><stop offset="0" stop-color="#fff"/><stop offset=".55" stop-color="#dce6f0"/><stop offset="1" stop-color="#aebccb"/></radialGradient>
+  </defs>
+  <rect width="1000" height="500" fill="url(#gWall)"/>
+  <!-- a desk lamp, top-left, its glow falling on the practice cell -->
+  <ellipse cx="150" cy="70" rx="220" ry="180" fill="url(#gLampGlow)"/>
+  <g id="lamp">
+    <ellipse cx="60" cy="182" rx="26" ry="7" fill="#00000022"/>
+    <circle cx="60" cy="176" r="16" fill="#5a6472"/><circle cx="60" cy="176" r="16" fill="none" stroke="#3d4650" stroke-width="2"/>
+    <rect x="55" y="60" width="10" height="118" rx="4" fill="#7b8794" transform="rotate(-8 60 176)"/>
+    <circle cx="52" cy="62" r="7" fill="#3d4650"/>
+    <path d="M22 30 L82 30 L98 64 L6 64 Z" fill="#e8890c"/>
+    <path d="M22 30 L82 30 L79 38 L25 38 Z" fill="#c9720a"/>
+    <ellipse cx="52" cy="64" rx="46" ry="8" fill="#ffe066" opacity=".7"/>
+  </g>
+  <!-- bookshelf, top-right, so the frame is not empty -->
+  <rect x="740" y="26" width="220" height="150" rx="4" fill="#6b4420"/>
+  <rect x="750" y="34" width="200" height="66" fill="#a9754a"/><rect x="750" y="106" width="200" height="62" fill="#a9754a"/>
+  <g>${['#d6453d', '#3f7fd8', '#2f9e5b', '#f29a1f', '#8a5cf6', '#16a3a3'].map((c, i) => `<rect x="${758 + i * 32}" y="40" width="24" height="54" rx="2" fill="${c}"/>`).join('')}
+  ${['#e0567a', '#3f7fd8', '#c9995c', '#2f9e5b', '#f29a1f'].map((c, i) => `<rect x="${758 + i * 38}" y="112" width="30" height="50" rx="2" fill="${c}"/>`).join('')}</g>
+  <text x="30" y="24" fill="#7c8aa0" font-size="13" font-weight="700" letter-spacing=".06em">THE READING DESK</text>
+
+  <!-- desk -->
+  <rect x="0" y="500" width="1000" height="34" fill="url(#gDesk)"/><rect x="0" y="500" width="1000" height="6" fill="#a9754a" opacity=".5"/>
+  <rect x="0" y="534" width="1000" height="146" fill="#4a2f16"/><rect x="0" y="534" width="1000" height="6" fill="#5c3a1d"/>
+
+  <!-- the big practice cell -->
+  <g id="cellFrame">
+    <rect x="${CELL_FRAME.x0}" y="${CELL_FRAME.y0}" width="${CELL_FRAME.x1 - CELL_FRAME.x0}" height="${CELL_FRAME.y1 - CELL_FRAME.y0}" rx="24" fill="#3d4c61"/>
+    <rect x="${CELL_FRAME.x0 + 10}" y="${CELL_FRAME.y0 + 10}" width="${CELL_FRAME.x1 - CELL_FRAME.x0 - 20}" height="${CELL_FRAME.y1 - CELL_FRAME.y0 - 20}" rx="16" fill="#26323f"/>
+  </g>
+  <g id="dotsLayer">${dots}</g>
+  <text x="${(CELL_FRAME.x0 + CELL_FRAME.x1) / 2}" y="${CELL_FRAME.y0 - 16}" text-anchor="middle" fill="#5a4a34" font-size="15" font-weight="700" letter-spacing=".03em">PRESS THE DOTS</text>
+  <g id="handIcon" transform="translate(${(CELL_FRAME.x0 + CELL_FRAME.x1) / 2} ${CELL_FRAME.y1 + 34})" opacity=".92">
+    <ellipse cx="0" cy="10" rx="34" ry="18" fill="#e9c9a0"/>
+    ${[-25, -9, 7, 23].map((x, i) => `<rect x="${x - 7}" y="${-16 - i % 2 * 4}" width="14" height="30" rx="7" fill="#e9c9a0"/>`).join('')}
+  </g>
+
+  <!-- decoded letter card: same top and bottom edge as the cell, right next to it -->
+  <g id="letterCard">
+    <rect x="${CARD.x}" y="${CARD.y}" width="${CARD.w}" height="${CARD.h}" rx="12" fill="#fff" stroke="#d7e2ee" stroke-width="2"/>
+    <text id="bigLetter" x="${CARD.x + CARD.w / 2}" y="${CARD.y + CARD.h / 2 + 46}" text-anchor="middle" font-size="120" font-weight="800" fill="#1b2a3a" font-family="Fredoka, sans-serif">?</text>
+    <text id="dotsSaid" x="${CARD.x + CARD.w / 2}" y="${CARD.y + 34}" text-anchor="middle" font-size="13.5" font-weight="700" fill="#7c878c"></text>
+    <text id="matchSaid" x="${CARD.x + CARD.w / 2}" y="${CARD.y + CARD.h - 20}" text-anchor="middle" font-size="12.5" fill="#7c878c"></text>
+  </g>
+  <!-- a jar of pencils, filling the desk beside the card -->
+  <g transform="translate(${CARD.x + CARD.w + 90} ${CARD.y + CARD.h - 40})" opacity=".95">
+    <rect x="-30" y="-70" width="60" height="70" rx="6" fill="#cfe6f7" opacity=".6" stroke="#9fb9cc" stroke-width="2"/>
+    <rect x="-16" y="-140" width="8" height="80" rx="3" fill="#ffb400" transform="rotate(-6 -12 -100)"/>
+    <rect x="-2" y="-150" width="8" height="90" rx="3" fill="#2f9e5b" transform="rotate(4 2 -105)"/>
+    <rect x="12" y="-135" width="8" height="75" rx="3" fill="#d6453d" transform="rotate(-2 16 -97)"/>
+  </g>
+
+  <!-- the slate, full width, below the cell and the card -->
+  <rect x="${SLATE.x - 14}" y="${SLATE.y - 14}" width="${SLATE.w + 28}" height="${SLATE.h + 40}" rx="10" fill="#2f3b30"/>
+  <text x="${SLATE.x + SLATE.w / 2}" y="${SLATE.y + 8}" text-anchor="middle" fill="#eaf3ff" font-size="13.5" font-weight="700" letter-spacing=".05em">THE SLATE</text>
+  <g id="slateCells"></g>
+  <text id="slatePlaceholder" x="${SLATE.x + SLATE.w / 2}" y="${SLATE.y + SLATE.h / 2 + 6}" text-anchor="middle" fill="#8fa08f" font-size="14" font-weight="700">Type a word to see it here</text>
+  `;
+  for (let i = 0; i < 6; i++) $('dot' + i).addEventListener('click', () => { S.pressed[i] = !S.pressed[i]; sound('tick'); paintCell(); });
+}
+
+/* ---- rendering --------------------------------------------------------------- */
+/* A raised dot must look raised: a bump lit from the top-left, with its own
+   drop shadow, popping out of a dark socket. A flat dot is just the socket. */
+function paintCell(){
+  for (let i = 0; i < 6; i++) {
+    const g = $('dot' + i), r = CELL.r;
+    g.innerHTML = S.pressed[i]
+      ? `<circle r="${r}" fill="#141b24" stroke="#0a0f16" stroke-width="2"/>
+         <circle cx="3" cy="4" r="${r - 7}" fill="#050a10" opacity=".55"/>
+         <circle r="${r - 7}" fill="url(#gDotUp)" stroke="#7f93ab" stroke-width="1.5"/>
+         <ellipse cx="${-(r - 7) * .3}" cy="${-(r - 7) * .35}" rx="${(r - 7) * .38}" ry="${(r - 7) * .26}" fill="#fff" opacity=".85"/>`
+      : `<circle r="${r}" fill="#141b24" stroke="#0a0f16" stroke-width="2"/>
+         <circle r="${r - 7}" fill="#1c2732"/>
+         <path d="M ${-(r - 7) * .7} ${-(r - 7) * .5} A ${r - 7} ${r - 7} 0 0 1 ${(r - 7) * .7} ${-(r - 7) * .5}" stroke="#0a0f16" stroke-width="3" fill="none" opacity=".5"/>`;
+  }
+  const pressed = S.pressed.map((v, i) => v ? i + 1 : null).filter(Boolean);
+  const letter = decode(pressed);
+  $('dotsSaid').textContent = pressed.length ? 'Dots pressed: ' + pressed.join(', ') : 'No dots pressed yet';
+  $('bigLetter').textContent = letter ? letter.toUpperCase() : (pressed.length ? '–' : '?');
+  $('matchSaid').textContent = pressed.length === 0 ? '' : letter ? `That is the letter "${letter}"` : 'No English letter uses exactly this pattern';
+  $('readOut').textContent = pressed.length === 0 ? 'Press some dots on the big cell.'
+    : letter ? `You pressed dots ${pressed.join(', ')} — that reads as "${letter}".`
+    : `You pressed dots ${pressed.join(', ')} — no letter matches. Try again!`;
+  if (pressed.length) {
+    if (letter) { sound('chime'); discover('firstLetter'); if (key(pressed) === key([1])) discover('oneDot'); }
+    else { sound('oops'); discover('noMatch'); }
+  }
+  paintMissions();
+  track('cell', {dots: pressed, letter});
+}
+function paintSlate(){
+  const w = S.word;
+  $('slatePlaceholder').setAttribute('opacity', w.length ? 0 : 1);
+  const cw = 54, gap = 8, total = w.length * cw + Math.max(0, w.length - 1) * gap;
+  const x0 = SLATE.x + (SLATE.w - total) / 2;
+  let h = '';
+  for (let i = 0; i < w.length; i++) {
+    const cx = x0 + i * (cw + gap) + cw / 2, cy = SLATE.y + 34;
+    const dots = encode(w[i]);
+    for (let d = 1; d <= 6; d++) {
+      const dx = cx + ((d - 1) % 2 === 0 ? -12 : 12), dy = cy + Math.floor((d - 1) / 2) * 20;
+      h += `<circle cx="${dx}" cy="${dy}" r="7.5" fill="${dots.includes(d) ? '#fff6c9' : '#3a473a'}" stroke="${dots.includes(d) ? '#ffd23f' : '#4c5a4c'}" stroke-width="1.2"/>`;
+    }
+    h += `<text x="${cx}" y="${SLATE.y + 92}" text-anchor="middle" fill="#eaf3ff" font-size="16" font-weight="800" font-family="Fredoka, sans-serif">${esc(w[i])}</text>`;
+  }
+  $('slateCells').innerHTML = h;
+}
+
+/* ---- word input --------------------------------------------------------------- */
+function setWord(w, spoken){
+  S.word = w.toLowerCase().replace(/[^a-z]/g, '').slice(0, 14);
+  $('wordIn').value = S.word;
+  paintSlate();
+  if (S.word.length >= 2) {
+    if (BOOK_WORDS.includes(S.word)) discover('bookWord'); else discover('yourName');
+    if (spoken) say(S.word);
+    sound('pop');
+  }
+  paintMissions();
+  track('word', {word: S.word});
+}
+$('wordIn').addEventListener('input', e => setWord(e.target.value, false));
+$('wordIn').addEventListener('change', () => say(S.word));
+$$('.quickRow [data-w]').forEach(btn => btn.addEventListener('click', () => setWord(btn.dataset.w, true)));
+$('btnClearCell').addEventListener('click', () => { S.pressed = [false, false, false, false, false, false]; paintCell(); sound('tick'); });
+
+/* ---- missions ------------------------------------------------------------------ */
+const MISSIONS = [
+  {id: 'firstLetter', text: 'Read your first letter by touch'},
+  {id: 'oneDot',      text: 'Find the simplest letter — just one dot'},
+  {id: 'noMatch',     text: 'Find a pattern that is not a letter'},
+  {id: 'bookWord',    text: 'Spell one of the book’s words: cat, man, boy or jug'},
+  {id: 'yourName',    text: 'Write your own name on the slate'},
+  {id: 'louisStory',  text: 'Read Louis Braille’s whole story'},
+];
+function paintMissions(){ $('missions').innerHTML = MISSIONS.map(m => `<li class="${found(m.id) ? 'done' : ''}"><i>${found(m.id) ? '✓' : ''}</i><span>${esc(m.text)}</span></li>`).join(''); }
+
+/* ---- Louis Braille's story ------------------------------------------------------ */
+function buildStory(){
+  $('storyStops').innerHTML = STORY.map((s, i) => `<button data-i="${i}">${i + 1}</button>`).join('');
+  $$('#storyStops button').forEach((btn, i) => btn.addEventListener('click', () => {
+    S.storySeen[i] = true; btn.classList.add('seen');
+    $('storyText').innerHTML = `<b>${esc(STORY[i].t)}</b><br>${esc(STORY[i].body)}`;
+    sound('tick'); track('story', {stop: i});
+    if (S.storySeen.every(Boolean)) discover('louisStory');
+    paintMissions();
+  }));
+}
+
+/* ============================================================================
+   Start
+   ============================================================================ */
+build(); buildStory();
+findings($('finds'), [
+  {id: 'firstLetter', icon: '☉', label: 'Read a letter by touch', hint: 'Press dots on the big cell'},
+  {id: 'oneDot',      icon: '•', label: 'The simplest letter: just one dot', hint: 'What is dot 1 alone?'},
+  {id: 'noMatch',     icon: '✕', label: 'Not every pattern is a letter', hint: 'Press dots 4 and 5 alone'},
+  {id: 'bookWord',    icon: '📖', label: 'Spelled one of the book’s words', hint: 'Try Cat, Man, Boy or Jug'},
+  {id: 'yourName',    icon: '✍', label: 'Wrote your own name',        hint: 'Type your name on the slate'},
+  {id: 'louisStory',  icon: '👤', label: 'Met Louis Braille',    hint: 'Read all four stops of his story'},
+], () => toast('All six found! You can read and write a little Braille now.', 4200));
+paintMissions();
+paintCell();
+paintSlate();
+
+window.applyFeatures = () => { paintCell(); paintSlate(); };
+window.PG_STATE = () => ({pressed: S.pressed.slice(), word: S.word, storySeen: S.storySeen.slice()});
+window.PG_MODEL = {BRAILLE, decode, encode};
+</script>
+</body>
+</html>

@@ -1,0 +1,702 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Slope Fields</title>
+<meta name="description" content="Class 12: draw the slope field of a differential equation from the NCERT chapter, launch solution curves by stepping along it with Euler's method or RK4, measure how the error shrinks with the step, then zoom into piecewise functions to see continuity and differentiability.">
+<link rel="icon" href="../../favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600&family=Inter:wght@400;500;600;700&family=Nunito:wght@500;700;800&family=Newsreader:opsz,wght@6..72,400;6..72,500&family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="../../play.css">
+<style>
+.pg-stage{align-self:start; min-height:0}
+svg text.m{font-family:var(--font-mono)}
+svg text.serif{font-family:"Newsreader",Georgia,serif}
+.tabs{display:flex; gap:4px; padding:10px 12px 0; border-bottom:1px solid var(--hair); background:var(--card)}
+.tab{border:1px solid transparent; border-bottom:none; background:none; padding:8px 14px; border-radius:8px 8px 0 0; cursor:pointer;
+  font-family:"Newsreader",Georgia,serif; font-size:17px; color:var(--ink-3); margin-bottom:-1px}
+.tab[aria-selected="true"]{background:var(--card); border-color:var(--hair); color:var(--ink); border-bottom:1px solid var(--card)}
+.gate{position:absolute; left:0; right:0; top:48px; bottom:0; display:grid; place-items:center; pointer-events:none}
+.gate span{background:rgba(29,35,39,.85); color:#fff; padding:10px 16px; border-radius:99px; font-weight:600; font-size:14px}
+.chips{display:flex; flex-wrap:wrap; gap:6px; margin:4px 0 8px}
+.chip{border:1px solid var(--hair-2); background:var(--card); border-radius:99px; padding:4px 11px; font-size:13px; cursor:pointer; font-weight:600; color:var(--ink-2)}
+.chip.m{font-family:var(--font-mono); font-weight:600; font-size:12.5px}
+.chip[aria-pressed="true"]{background:var(--accent-soft); border-color:var(--accent); color:var(--ink)}
+.chip:disabled{opacity:.45; cursor:default}
+.readout{display:grid; grid-template-columns:auto 1fr; gap:3px 12px; font-size:13px; align-items:baseline; margin-top:8px}
+.readout span{color:var(--ink-2)}
+.readout b{font-family:var(--font-mono); font-weight:600; font-size:12.5px; font-variant-numeric:tabular-nums; text-align:right; overflow-wrap:anywhere}
+.note{font-size:12.5px; color:var(--ink-3); margin:6px 0 0}
+.why p{font-size:13.5px; margin-bottom:.55em}
+.ctl output{min-width:70px; font-family:var(--font-mono); font-size:13px}
+table.lim{width:100%; border-collapse:collapse; font-family:var(--font-mono); font-size:12px; margin-top:8px; font-variant-numeric:tabular-nums}
+table.lim th{font-family:var(--font); font-weight:600; color:var(--ink-3); font-size:11.5px; text-align:right; padding:2px 4px; border-bottom:1px solid var(--hair)}
+table.lim td{text-align:right; padding:2px 4px}
+table.lim th:first-child, table.lim td:first-child{text-align:left}
+.verdict-line{margin-top:8px; font-weight:600; font-size:13.5px}
+.verdict-line.yes{color:#2f7d4f} .verdict-line.no{color:#c0392b}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]) .verdict-line.yes{color:#6fcf94} :root:not([data-theme="light"]) .verdict-line.no{color:#f07b73} }
+:root[data-theme="dark"] .verdict-line.yes{color:#6fcf94} :root[data-theme="dark"] .verdict-line.no{color:#f07b73}
+.hit{cursor:crosshair}
+.hand{cursor:ns-resize}
+@media (max-width:1180px) and (min-width:981px){ .pg-main.wide-side{grid-template-columns:minmax(0,1fr) 340px} }
+</style>
+</head>
+<body>
+<header class="pg-top"></header>
+
+<div class="pg-intro">
+  <h1>Slope fields</h1>
+  <p>A differential equation dy/dx = F(x, y) does not tell you a curve; it tells you the slope of every curve at every point. Draw those slopes as a field,
+     then launch a solution from any point by stepping along it, with Euler's method or the finer RK4, and check each curve against the book's exact solution.
+     Halve the step and measure what happens to the error. Then zoom in on piecewise functions: a smooth join turns straight, but a corner stays a corner.</p>
+</div>
+
+<main class="pg-main wide-side">
+  <section class="pg-stage" id="stageWrap">
+    <div class="tabs" role="tablist">
+      <button class="tab" role="tab" id="tabF" aria-selected="true">Slope field</button>
+      <button class="tab" role="tab" id="tabZ" aria-selected="false">Zoom in</button>
+    </div>
+    <svg id="stageF" viewBox="0 0 1000 640" role="img" aria-label="The slope field of a differential equation, with solution curves stepped along it and a log-log plot of their error"></svg>
+    <svg id="stageZ" viewBox="0 0 1000 640" role="img" aria-label="A piecewise function and a zoomed view of the point where its two pieces meet" hidden></svg>
+    <div class="gate" id="gate"><span>Make your prediction first →</span></div>
+  </section>
+
+  <aside class="pg-side">
+    <div id="poeF"></div>
+    <div id="poeZ" hidden></div>
+
+    <div class="card" id="cardF">
+      <div class="kicker">The equation (NCERT Class 12, Ch 9)</div>
+      <div class="chips" id="eqChips"></div>
+      <div class="ctl" id="kRow"><label for="kIn">rate k</label><input type="range" id="kIn" min="1" max="10" step="1" value="5"><output id="kOut">5%</output></div>
+      <div class="kicker" style="margin-top:6px">Stepping method</div>
+      <div class="chips" id="mChips">
+        <button class="chip" data-m="euler" aria-pressed="true">Euler</button>
+        <button class="chip" data-m="rk4" aria-pressed="false">RK4</button>
+      </div>
+      <div class="ctl"><label for="hIn">step h</label><input type="range" id="hIn" min="0" max="4" step="1" value="1"><output id="hOut">0.25</output></div>
+      <div class="row"><button class="btn sm" id="clearBtn">Clear curves</button></div>
+      <p class="note">Click the field to launch a solution through that point.</p>
+      <div class="readout" id="readF"></div>
+    </div>
+
+    <div class="card" id="cardZ" hidden>
+      <div class="kicker">The function (NCERT Class 12, Ch 5)</div>
+      <div class="chips" id="pwChips"></div>
+      <div class="ctl" id="pkRow"><label for="pkIn">k</label><input type="range" id="pkIn" min="0" max="3" step="0.05" value="1"><output id="pkOut">1</output></div>
+      <div class="ctl"><label for="zIn">zoom</label><input type="range" id="zIn" min="0" max="3" step="0.5" value="0"><output id="zOut">×1</output></div>
+      <p class="note" id="pwNote"></p>
+      <div id="limT"></div>
+      <div id="verdZ"></div>
+    </div>
+
+    <div class="card why" id="whyCard" hidden>
+      <div class="kicker">What the model says</div>
+      <div id="why"></div>
+    </div>
+
+    <div class="card"><div class="kicker">To find</div><div id="finds"></div></div>
+  </aside>
+</main>
+
+<script src="../../play.js"></script>
+<script>
+'use strict';
+const {$, esc, clamp, fmt, sound, track, toast, predict, findings, discover, found,
+       shareState, sharedState, mount, reduced} = Play;
+mount({thread: 'calculus', band: 'theorist'});
+
+/* MODEL:start ==================================================================
+   1. Slope fields (NCERT Class 12, Ch 9). Each equation is dy/dx = F(x, y), taken from the
+      chapter's worked examples. A solution curve is NOT drawn from a formula: it is built by
+      stepping from the learner's point along the field, forwards and backwards,
+        Euler:  y ← y + h·F(x, y)
+        RK4:    y ← y + h/6·(k1 + 2k2 + 2k3 + k4)
+      and stops when it leaves the window or the slope runs away (a vertical tangent).
+   2. The book's exact particular solution through the same point is computed separately
+      (variables separable, or the integrating factor), and the error of the stepped curve is
+      measured at x₀ + D. The order of the method is MEASURED as the slope of log(error) against
+      log(h): about 1 for Euler, 4 for RK4.
+   3. Continuity and differentiability (Ch 5): f is two pieces meeting at x = c. Left and right
+      limits are f(c ∓ 10⁻⁹); the left and right derivatives are difference quotients
+      (f(c) − f(c − h))/h and (f(c + h) − f(c))/h with h = 10⁻⁶. The zoom window shows the true
+      graph around (c, f(c)); the "turn" at the join is the angle between the two chords that
+      span the window, which shrinks to 0 only where the derivative exists.
+   ============================================================================ */
+const H = [0.5, 0.25, 0.125, 0.0625, 0.03125];
+const EQS = {
+  ex18: {tex: 'dy/dx = x + xy', src: 'Example 18', F: (x, y) => x + x * y, win: {x0: -2.5, x1: 2.5, y0: -4, y1: 6}, D: 1, snap: [0.1, 0.1],
+    kind: 'linear: dy/dx − xy = x, I.F. = e^(−x²/2)',
+    exact(x0, y0){ const C = (y0 + 1) * Math.exp(-x0 * x0 / 2); return {C, y: x => C * Math.exp(x * x / 2) - 1, text: `y = C·e^(x²/2) − 1`}; }},
+  ex6: {tex: 'dy/dx = −4xy²', src: 'Example 6', F: (x, y) => -4 * x * y * y, win: {x0: -2, x1: 2, y0: -2, y1: 2}, D: 1, snap: [0.1, 0.1],
+    kind: 'variables separable: dy/y² = −4x dx',
+    exact(x0, y0){
+      if (y0 === 0) return {C: null, y: () => 0, text: 'y = 0'};
+      const C = 1 / y0 - 2 * x0 * x0;
+      /* the solution lives on the interval round x₀ where 2x² + C keeps its sign */
+      const lim = C < 0 ? Math.sqrt(-C / 2) : Infinity, inside = Math.abs(x0) < lim;
+      return {C, y: x => ((Math.abs(x) < lim) === inside ? 1 / (2 * x * x + C) : NaN), text: 'y = 1/(2x² + C)'};
+    }},
+  ex14: {tex: 'dy/dx = y + cos x', src: 'Example 14', F: (x, y) => y + Math.cos(x), win: {x0: -4, x1: 3, y0: -4, y1: 4}, D: 1, snap: [0.1, 0.1],
+    kind: 'linear: dy/dx − y = cos x, I.F. = e^(−x)',
+    exact(x0, y0){ const C = (y0 - (Math.sin(x0) - Math.cos(x0)) / 2) * Math.exp(-x0); return {C, y: x => (Math.sin(x) - Math.cos(x)) / 2 + C * Math.exp(x), text: 'y = (sin x − cos x)/2 + C·eˣ'}; }},
+  ex4: {tex: 'dy/dx = (x + 1)/(2 − y)', src: 'Example 4', F: (x, y) => (x + 1) / (2 - y), win: {x0: -5, x1: 3, y0: -2, y1: 6}, D: 1, snap: [0.1, 0.1],
+    kind: 'variables separable: (2 − y) dy = (x + 1) dx',
+    guard: (y, y0) => (y - 2) * (y0 - 2) > 0, steep: 60,
+    exact(x0, y0){
+      const r2 = (x0 + 1) ** 2 + (y0 - 2) ** 2, s = Math.sign(y0 - 2);
+      return {C: -(x0 * x0 + y0 * y0 + 2 * x0 - 4 * y0), y: x => { const q = r2 - (x + 1) ** 2; return q >= 0 ? 2 + s * Math.sqrt(q) : NaN; }, text: 'x² + y² + 2x − 4y + C = 0'};
+    }},
+  ex9: {tex: 'dP/dt = kP', src: 'Example 9', F: null, win: {x0: 0, x1: 30, y0: 0, y1: 5000}, D: 10, snap: [0.5, 50], xv: 't', yv: 'P',
+    kind: 'variables separable: dP/P = k dt',
+    exact(x0, y0, k){ const C = y0 * Math.exp(-k * x0); return {C, y: x => C * Math.exp(k * x), text: 'P = C·e^(kt)'}; }},
+};
+const EQ_ORDER = ['ex18', 'ex6', 'ex14', 'ex4', 'ex9'];
+const Fof = (id, k) => id === 'ex9' ? (x, y) => k * y : EQS[id].F;
+function stepFn(F, method){
+  if (method === 'euler') return (x, y, h) => y + h * F(x, y);
+  return (x, y, h) => {
+    const k1 = F(x, y), k2 = F(x + h / 2, y + h / 2 * k1), k3 = F(x + h / 2, y + h / 2 * k2), k4 = F(x + h, y + h * k3);
+    return y + h / 6 * (k1 + 2 * k2 + 2 * k3 + k4);
+  };
+}
+/* Step from (x0, y0) towards xEnd. Returns the points, stopping where the curve leaves or breaks. */
+function march(id, k, x0, y0, h, method, xEnd){
+  const E = EQS[id], F = Fof(id, k), step = stepFn(F, method), W = E.win, span = W.y1 - W.y0;
+  const dir = Math.sign(xEnd - x0), n = Math.round(Math.abs(xEnd - x0) / h + 1e-9);
+  const pts = [[x0, y0]];
+  let x = x0, y = y0;
+  for (let i = 0; i < n; i++) {
+    const y2 = step(x, y, dir * h), x2 = x0 + dir * h * (i + 1);
+    if (!Number.isFinite(y2) || y2 < W.y0 - span || y2 > W.y1 + span) break;
+    if (E.guard && !E.guard(y2, y0)) break;
+    if (E.steep && Math.abs(F(x2, y2)) > E.steep) { pts.push([x2, y2]); break; }
+    x = x2; y = y2; pts.push([x, y]);
+  }
+  return pts;
+}
+function solveCurve(id, k, x0, y0, h, method){
+  const W = EQS[id].win;
+  const back = march(id, k, x0, y0, h, method, x0 - Math.ceil((x0 - W.x0) / h - 1e-9) * h);
+  const fwd = march(id, k, x0, y0, h, method, x0 + Math.ceil((W.x1 - x0) / h - 1e-9) * h);
+  return back.slice(1).reverse().concat(fwd);
+}
+/* The error of the stepped solution at x₀ + D, against the book's exact solution. */
+function errAt(id, k, x0, y0, h, method){
+  const E = EQS[id], xe = x0 + E.D, pts = march(id, k, x0, y0, h, method, xe);
+  const last = pts[pts.length - 1];
+  if (Math.abs(last[0] - xe) > 1e-9) return null;
+  const ex = E.exact(x0, y0, k).y(xe);
+  if (!Number.isFinite(ex)) return null;
+  return {num: last[1], exact: ex, err: Math.abs(last[1] - ex)};
+}
+/* Least-squares slope of log10(err) against log10(h). */
+function fitSlope(pairs){
+  const P = pairs.filter(p => p[1] > 0);
+  if (P.length < 2) return null;
+  const X = P.map(p => Math.log10(p[0])), Y = P.map(p => Math.log10(p[1]));
+  const mx = X.reduce((a, b) => a + b) / X.length, my = Y.reduce((a, b) => a + b) / Y.length;
+  let sxy = 0, sxx = 0; X.forEach((x, i) => { sxy += (x - mx) * (Y[i] - my); sxx += (x - mx) ** 2; });
+  return sxx ? sxy / sxx : null;
+}
+/* The time for the stepped curve to double, read off the curve itself. */
+function doublingTime(pts){
+  const P0 = pts[0][1];
+  for (let i = 1; i < pts.length; i++) if (pts[i][1] >= 2 * P0) {
+    const [ta, pa] = pts[i - 1], [tb, pb] = pts[i];
+    return ta + (2 * P0 - pa) / (pb - pa) * (tb - ta) - pts[0][0];
+  }
+  return null;
+}
+
+/* Piecewise functions from the chapter's examples and exercises. */
+const PW = {
+  abs:  {tex: 'f(x) = |x|', src: 'Example 7', c: 0, L: x => -x, R: x => x, win: {x0: -3, x1: 3, y0: -1, y1: 4},
+         text: () => 'f(x) = −x for x ≤ 0, x for x > 0'},
+  ex29: {tex: 'kx + 1 | 3x − 5', src: 'Exercise 5.1, Q29', c: 5, L: (x, p) => p.k * x + 1, R: x => 3 * x - 5, win: {x0: 0, x1: 8, y0: -2, y1: 20}, k: [0, 3],
+         text: p => `f(x) = ${fk(p.k)}x + 1 for x ≤ 5, 3x − 5 for x > 5`},
+  ex27: {tex: 'kx² | 3', src: 'Exercise 5.1, Q27', c: 2, L: (x, p) => p.k * x * x, R: () => 3, win: {x0: 0, x1: 4, y0: -1, y1: 8}, k: [0, 3],
+         text: p => `f(x) = ${fk(p.k)}x² for x ≤ 2, 3 for x > 2`},
+  join: {tex: 'x² | your line', src: 'Build a join', c: 1, L: x => x * x, R: (x, p) => p.m * (x - 1) + p.b, win: {x0: -1, x1: 3, y0: -1, y1: 6},
+         text: p => `f(x) = x² for x ≤ 1, ${fk(p.m)}(x − 1) + ${fk(p.b)} for x > 1`},
+};
+const PW_ORDER = ['abs', 'ex29', 'ex27', 'join'];
+const fk = v => (Math.abs(v - Math.round(v)) < 1e-9 ? String(Math.round(v)) : (+v.toFixed(2)).toString()).replace('-', '−');
+function pwEval(id, p, x){ const P = PW[id]; return x <= P.c ? P.L(x, p) : P.R(x, p); }
+function analyse(id, p){
+  const P = PW[id], c = P.c, f = x => pwEval(id, p, x);
+  const fc = f(c), lhl = f(c - 1e-9), rhl = f(c + 1e-9), h = 1e-6;
+  const dl = (fc - f(c - h)) / h, dr = (f(c + h) - fc) / h;
+  const cont = Math.abs(lhl - fc) < 1e-6 && Math.abs(rhl - fc) < 1e-6;
+  const diff = cont && Math.abs(dl - dr) < 1e-3;
+  return {c, fc, lhl, rhl, dl, dr, cont, diff};
+}
+/* The turn at the join, as seen in a window of half-width w: the angle between the chords. */
+function turnAt(id, p, w, aspect = 1){
+  const P = PW[id], c = P.c, fc = pwEval(id, p, c);
+  const sl = (fc - pwEval(id, p, c - w)) / w, sr = (pwEval(id, p, c + w) - fc) / w;
+  return Math.abs(Math.atan(sr * aspect) - Math.atan(sl * aspect)) * 180 / Math.PI;
+}
+/* MODEL:end */
+
+const num = (v, dp = 4) => v == null || !Number.isFinite(v) ? '—' : (Math.abs(v) < 5e-13 ? 0 : v).toFixed(dp).replace('-', '−');
+const sci = v => { if (v == null || !Number.isFinite(v)) return '—'; if (v === 0) return '0'; const [m, e] = v.toExponential(2).split('e'); return m.replace('-', '−') + ' × 10' + sup(+e); };
+const INK = '#1d2327', FAINT = '#7c878c', HUE = '#c05621', GRID = '#eeebe2', CE = '#c05621', CR = '#6a3fc2';
+const CURVE = ['#c05621', '#3057c9', '#2f9e5b', '#6a3fc2', '#b83280', '#0f7c86'];
+
+/* ---- state ---------------------------------------------------------------- */
+const S = {tab: 'F', eq: 'ex18', k: 5, method: 'euler', hIdx: 1, curves: [], rec: {euler: [], rk4: []}, recKey: null,
+           pw: 'abs', pk: {ex29: 1, ex27: 1.5}, join: {m: 1, b: 2}, zoom: 0,
+           locked: {F: false, Z: false}, touched: {F: false, Z: false}};
+const shared = sharedState();
+if (shared) {
+  if (['F', 'Z'].includes(shared.tab)) S.tab = shared.tab;
+  if (EQS[shared.eq]) S.eq = shared.eq;
+  if (['euler', 'rk4'].includes(shared.method)) S.method = shared.method;
+  if (Number.isFinite(+shared.hIdx)) S.hIdx = clamp(Math.round(+shared.hIdx), 0, 4);
+  if (Number.isFinite(+shared.k)) S.k = clamp(Math.round(+shared.k), 1, 10);
+  if (PW[shared.pw]) S.pw = shared.pw;
+  if (Number.isFinite(+shared.zoom)) S.zoom = clamp(+shared.zoom, 0, 3);
+}
+shareState(() => ({tab: S.tab, eq: S.eq, method: S.method, hIdx: S.hIdx, k: S.k, pw: S.pw, zoom: S.zoom}));
+const kNow = () => S.k / 100;
+const hNow = () => H[S.hIdx];
+const pNow = () => S.pw === 'join' ? {m: S.join.m, b: S.join.b} : {k: S.pk[S.pw] || 0};
+
+/* ============================================================================
+   Stage 1: the slope field
+   ============================================================================ */
+const sF = $('stageF');
+const PF = {x: 70, y: 56, w: 560, h: 520};
+const fx = x => PF.x + (x - EQS[S.eq].win.x0) / (EQS[S.eq].win.x1 - EQS[S.eq].win.x0) * PF.w;
+const fy = y => PF.y + PF.h - (y - EQS[S.eq].win.y0) / (EQS[S.eq].win.y1 - EQS[S.eq].win.y0) * PF.h;
+const ufx = X => EQS[S.eq].win.x0 + (X - PF.x) / PF.w * (EQS[S.eq].win.x1 - EQS[S.eq].win.x0);
+const ufy = Y => EQS[S.eq].win.y0 + (PF.y + PF.h - Y) / PF.h * (EQS[S.eq].win.y1 - EQS[S.eq].win.y0);
+const LL = {x: 710, y: 330, w: 250, h: 220, hx0: -1.6, hx1: -0.2, e0: -12, e1: 1};
+const lx = lh => LL.x + (lh - LL.hx0) / (LL.hx1 - LL.hx0) * LL.w, ly = le => LL.y + LL.h - (clamp(le, LL.e0, LL.e1) - LL.e0) / (LL.e1 - LL.e0) * LL.h;
+function buildF(){
+  let g = '';
+  for (let e = LL.e0; e <= LL.e1; e += 2) g += `<line x1="${LL.x}" y1="${ly(e)}" x2="${LL.x + LL.w}" y2="${ly(e)}" stroke="${GRID}"/><text x="${LL.x - 6}" y="${ly(e) + 4}" font-size="10.5" text-anchor="end" fill="${FAINT}" class="m">10${sup(e)}</text>`;
+  for (const h of H) g += `<line x1="${lx(Math.log10(h))}" y1="${LL.y}" x2="${lx(Math.log10(h))}" y2="${LL.y + LL.h}" stroke="${GRID}"/><text x="${lx(Math.log10(h))}" y="${LL.y + LL.h + 15}" font-size="10.5" text-anchor="middle" fill="${FAINT}" class="m">${h}</text>`;
+  sF.innerHTML = `
+  <rect x="0" y="0" width="1000" height="640" fill="#fbfaf7"/>
+  <text x="${PF.x}" y="38" font-size="19" fill="${INK}" class="serif" id="fTitle"></text>
+  <rect x="${PF.x}" y="${PF.y}" width="${PF.w}" height="${PF.h}" fill="#fff" stroke="#e3dfd3"/>
+  <g id="fGrid"></g>
+  <g id="fField"></g>
+  <defs><clipPath id="clipF"><rect x="${PF.x}" y="${PF.y}" width="${PF.w}" height="${PF.h}"/></clipPath></defs>
+  <g clip-path="url(#clipF)"><g id="fExact"></g><g id="fCurves"></g></g>
+  <g id="fDots"></g>
+  <text id="fHint" x="${PF.x + PF.w / 2}" y="${PF.y + PF.h + 50}" font-size="13" fill="${FAINT}" text-anchor="middle">Click anywhere in the field to launch a solution.</text>
+  <rect class="hit" id="hitF" x="${PF.x}" y="${PF.y}" width="${PF.w}" height="${PF.h}" fill="transparent"/>
+
+  <text x="${LL.x - 40}" y="80" font-size="19" fill="${INK}" class="serif">Measure the error</text>
+  <text x="${LL.x - 40}" y="104" font-size="12.5" fill="${FAINT}" id="llSub"></text>
+  <g id="llNums"></g>
+  <text x="${LL.x - 40}" y="${LL.y - 20}" font-size="13" fill="${INK}">error at x₀ + D against step h (log–log)</text>
+  <rect x="${LL.x}" y="${LL.y}" width="${LL.w}" height="${LL.h}" fill="#fff" stroke="#e3dfd3"/>
+  ${g}
+  <g id="llPts"></g>
+  <text x="${LL.x + LL.w / 2}" y="${LL.y + LL.h + 34}" font-size="11.5" text-anchor="middle" fill="${FAINT}">step h</text>
+  <text id="llFit" x="${LL.x - 40}" y="${LL.y + LL.h + 62}" font-size="13" fill="${INK}" class="m"></text>`;
+}
+const SUP = {'-': '⁻', '0': '⁰', '1': '¹', '2': '²', '3': '³', '4': '⁴', '5': '⁵', '6': '⁶', '7': '⁷', '8': '⁸', '9': '⁹'};
+function sup(n){ return String(n).split('').map(c => SUP[c] || c).join(''); }
+function pathOf(pts, X, Y){
+  let d = '';
+  pts.forEach(([x, y], i) => { d += (i ? 'L' : 'M') + X(x).toFixed(1) + ' ' + clamp(Y(y), -2000, 3000).toFixed(1); });
+  return d;
+}
+function exactPath(id, k, x0, y0){
+  const E = EQS[id], ex = E.exact(x0, y0, k), W = E.win, span = W.y1 - W.y0;
+  let d = '', pen = false, prev = null;
+  for (let i = 0; i <= 600; i++) {
+    const x = W.x0 + (W.x1 - W.x0) * i / 600, y = ex.y(x);
+    if (!Number.isFinite(y) || y < W.y0 - span || y > W.y1 + span || (prev != null && Math.abs(y - prev) > span)) { pen = false; prev = Number.isFinite(y) ? y : null; continue; }
+    d += (pen ? 'L' : 'M') + fx(x).toFixed(1) + ' ' + fy(y).toFixed(1); pen = true; prev = y;
+  }
+  return d;
+}
+function paintFieldGrid(){
+  const E = EQS[S.eq], W = E.win, k = kNow(), F = Fof(S.eq, k);
+  const xs = niceTicks(W.x0, W.x1), ys = niceTicks(W.y0, W.y1);
+  let g = '';
+  for (const x of xs) g += `<line x1="${fx(x)}" y1="${PF.y}" x2="${fx(x)}" y2="${PF.y + PF.h}" stroke="${x === 0 ? '#9aa3a8' : GRID}"/><text x="${fx(x)}" y="${PF.y + PF.h + 16}" font-size="11" text-anchor="middle" fill="${FAINT}" class="m">${fk(x)}</text>`;
+  for (const y of ys) g += `<line x1="${PF.x}" y1="${fy(y)}" x2="${PF.x + PF.w}" y2="${fy(y)}" stroke="${y === 0 ? '#9aa3a8' : GRID}"/><text x="${PF.x - 6}" y="${fy(y) + 4}" font-size="11" text-anchor="end" fill="${FAINT}" class="m">${fk(y)}</text>`;
+  g += `<text x="${PF.x + PF.w - 4}" y="${PF.y + PF.h - 6}" font-size="13" text-anchor="end" fill="${FAINT}" class="serif" font-style="italic">${E.xv || 'x'}</text><text x="${PF.x + 6}" y="${PF.y + 16}" font-size="13" fill="${FAINT}" class="serif" font-style="italic">${E.yv || 'y'}</text>`;
+  $('fGrid').innerHTML = g;
+  /* the field: a short segment with the equation's slope at each grid point, drawn in screen units */
+  const sx = PF.w / (W.x1 - W.x0), sy = PF.h / (W.y1 - W.y0);
+  let f = '';
+  const NX = 24, NY = 22;
+  for (let i = 0; i < NX; i++) for (let j = 0; j < NY; j++) {
+    const X = PF.x + (i + 0.5) * PF.w / NX, Y = PF.y + (j + 0.5) * PF.h / NY, x = ufx(X), y = ufy(Y);
+    const m = F(x, y);
+    let dx, dy;
+    if (!Number.isFinite(m)) { dx = 0; dy = 1; } else { const a = Math.atan2(m * sy, sx); dx = Math.cos(a); dy = Math.sin(a); }
+    const L = 8.5;
+    f += `M${(X - L * dx).toFixed(1)} ${(Y + L * dy).toFixed(1)}L${(X + L * dx).toFixed(1)} ${(Y - L * dy).toFixed(1)}`;
+  }
+  $('fField').innerHTML = `<path d="${f}" stroke="#8d979c" stroke-width="1.3" stroke-linecap="round" fill="none"/>`;
+  $('fTitle').textContent = `${E.tex}   ·   ${E.src}`;
+}
+function niceTicks(a, b){
+  const span = b - a, raw = span / 8, p = Math.pow(10, Math.floor(Math.log10(raw)));
+  const step = [1, 2, 5, 10].map(m => m * p).find(s => s >= raw);
+  const out = []; for (let v = Math.ceil(a / step) * step; v <= b + 1e-9; v += step) out.push(+v.toFixed(10));
+  return out;
+}
+function paintF(){
+  const E = EQS[S.eq], k = kNow(), h = hNow();
+  let cs = '', dots = '', exs = '';
+  S.curves.forEach((c, i) => {
+    const pts = solveCurve(S.eq, k, c.x, c.y, h, S.method), col = CURVE[i % CURVE.length], last = i === S.curves.length - 1;
+    cs += `<path d="${pathOf(pts, fx, fy)}" fill="none" stroke="${col}" stroke-width="${last ? 2.8 : 2}" stroke-linejoin="round" opacity="${last ? 1 : 0.8}"/>`;
+    if (h >= 0.125 && S.method === 'euler' && last) cs += pts.map(([x, y]) => `<circle cx="${fx(x).toFixed(1)}" cy="${fy(y).toFixed(1)}" r="2.2" fill="${col}"/>`).join('');
+    dots += `<circle cx="${fx(c.x)}" cy="${fy(c.y)}" r="5.5" fill="#fff" stroke="${col}" stroke-width="2.5"/>`;
+    if (last) exs = `<path d="${exactPath(S.eq, k, c.x, c.y)}" fill="none" stroke="${INK}" stroke-width="1.3" stroke-dasharray="5 4" opacity=".8"/>`;
+  });
+  $('fCurves').innerHTML = cs; $('fDots').innerHTML = dots; $('fExact').innerHTML = exs;
+  $('fHint').textContent = S.locked.F ? (S.curves.length ? 'Dashed: the book’s exact solution through your latest point.' : 'Click anywhere in the field to launch a solution.') : 'Lock in a prediction to launch solutions.';
+  /* the error plot */
+  let pts = '';
+  for (const m of ['euler', 'rk4']) {
+    const col = m === 'euler' ? CE : CR, R = S.rec[m].slice().sort((a, b) => b[0] - a[0]);
+    if (R.length > 1) pts += `<path d="${R.map((p, i) => (i ? 'L' : 'M') + lx(Math.log10(p[0])).toFixed(1) + ' ' + ly(Math.log10(Math.max(p[1], 1e-16))).toFixed(1)).join('')}" fill="none" stroke="${col}" stroke-width="1.6" opacity=".7"/>`;
+    for (const p of R) pts += `<circle cx="${lx(Math.log10(p[0])).toFixed(1)}" cy="${ly(Math.log10(Math.max(p[1], 1e-16))).toFixed(1)}" r="4.5" fill="${col}" stroke="#fff" stroke-width="1.5"/>`;
+  }
+  $('llPts').innerHTML = pts;
+  const oe = orderOf('euler'), or = orderOf('rk4');
+  $('llFit').innerHTML = `<tspan fill="${CE}">Euler slope ${oe == null ? '—' : num(oe, 2)}</tspan>   <tspan fill="${CR}">RK4 slope ${or == null ? '—' : num(or, 2)}</tspan>`;
+  $('llSub').textContent = S.curves.length ? `D = ${E.D}: the error of the latest curve at ${E.xv || 'x'} = ${fk(S.curves[S.curves.length - 1].x + E.D)}` : 'Launch a curve, then change the step.';
+  const c = S.curves[S.curves.length - 1];
+  let nums = '';
+  if (c && S.locked.F) {
+    const r = errAt(S.eq, k, c.x, c.y, h, S.method);
+    const row = (y, l, v, col) => `<text x="${LL.x - 40}" y="${y}" font-size="13" fill="${FAINT}">${l}</text><text x="${LL.x + LL.w}" y="${y}" font-size="13.5" font-weight="600" fill="${col || INK}" text-anchor="end" class="m">${v}</text>`;
+    nums = row(142, `stepped ${S.method === 'euler' ? 'Euler' : 'RK4'}, h = ${h}`, r ? num(r.num, 6) : 'outside the window', S.method === 'euler' ? CE : CR) +
+           row(168, 'the book’s exact solution', r ? num(r.exact, 6) : '—') +
+           row(194, 'error', r ? sci(r.err) : '—');
+    if (S.eq === 'ex9') {
+      const T = doublingTime(solveCurve(S.eq, k, c.x, c.y, h, S.method).filter(p => p[0] >= c.x - 1e-9));
+      nums += row(232, 'doubling time, read off the curve', T == null ? 'beyond t = 30' : num(T, 2) + ' yr') + row(258, 'ln 2 / k', num(Math.LN2 / k, 2) + ' yr');
+    }
+  }
+  $('llNums').innerHTML = nums;
+  /* readout */
+  let rd = `<span>equation</span><b>${esc(E.tex)}</b><span>order, degree</span><b>1, 1</b><span>type</span><b>${esc(E.kind)}</b>`;
+  if (c && S.locked.F) {
+    const ex = E.exact(c.x, c.y, k);
+    rd += `<span>through</span><b>(${fk(c.x)}, ${fk(c.y)})</b><span>particular solution</span><b>${esc(ex.text)}</b><span>constant C</span><b>${ex.C == null ? '—' : num(ex.C, 4)}</b>`;
+  }
+  $('readF').innerHTML = rd;
+  $('kRow').style.display = S.eq === 'ex9' ? '' : 'none';
+  $('kOut').textContent = S.k + '%'; $('hOut').textContent = h;
+}
+function orderOf(m){
+  const P = S.rec[m].filter(p => p[0] <= 0.25 + 1e-12);
+  return P.length >= 2 ? fitSlope(P) : null;
+}
+/* record the latest curve's error at the current step and method */
+function record(){
+  const c = S.curves[S.curves.length - 1]; if (!c) return;
+  const key = `${S.eq}|${S.k}|${c.x}|${c.y}`;
+  if (key !== S.recKey) { S.recKey = key; S.rec = {euler: [], rk4: []}; }
+  const r = errAt(S.eq, kNow(), c.x, c.y, hNow(), S.method);
+  if (!r) return;
+  const L = S.rec[S.method].filter(p => p[0] !== hNow());
+  L.push([hNow(), r.err]); S.rec[S.method] = L;
+}
+
+/* ============================================================================
+   Stage 2: zoom in
+   ============================================================================ */
+const sZ = $('stageZ');
+const PZ = {x: 60, y: 96, w: 480, h: 440};
+const ZB = {x: 610, y: 96, s: 340};
+const PWn = () => PW[S.pw];
+const zx = x => PZ.x + (x - PWn().win.x0) / (PWn().win.x1 - PWn().win.x0) * PZ.w;
+const zy = y => PZ.y + PZ.h - (y - PWn().win.y0) / (PWn().win.y1 - PWn().win.y0) * PZ.h;
+const uzy = Y => PWn().win.y0 + (PZ.y + PZ.h - Y) / PZ.h * (PWn().win.y1 - PWn().win.y0);
+function buildZ(){
+  sZ.innerHTML = `
+  <rect x="0" y="0" width="1000" height="640" fill="#fbfaf7"/>
+  <text x="${PZ.x}" y="44" font-size="19" fill="${INK}" class="serif" id="zTitle"></text>
+  <text x="${PZ.x}" y="68" font-size="12.5" fill="${FAINT}" id="zSub"></text>
+  <rect x="${PZ.x}" y="${PZ.y}" width="${PZ.w}" height="${PZ.h}" fill="#fff" stroke="#e3dfd3"/>
+  <g id="zGrid"></g>
+  <defs><clipPath id="clipZ"><rect x="${PZ.x}" y="${PZ.y}" width="${PZ.w}" height="${PZ.h}"/></clipPath>
+        <clipPath id="clipB"><rect x="${ZB.x}" y="${ZB.y}" width="${ZB.s}" height="${ZB.s}"/></clipPath></defs>
+  <g clip-path="url(#clipZ)"><path id="zL" fill="none" stroke="${HUE}" stroke-width="3"/><path id="zR" fill="none" stroke="#3057c9" stroke-width="3"/></g>
+  <rect id="zWin" fill="none" stroke="${INK}" stroke-width="1.4" stroke-dasharray="4 3"/>
+  <circle id="zDot" r="5" fill="${INK}"/><circle id="zOpen" r="5" fill="#fff" stroke="#3057c9" stroke-width="2"/>
+  <g id="zHandles">
+    <line id="zMline" stroke="#3057c9" stroke-width="1" stroke-dasharray="3 3"/>
+    <circle class="hand" id="hJ" r="10" fill="#3057c9" stroke="#fff" stroke-width="3"/>
+    <circle class="hand" id="hM" r="10" fill="#fff" stroke="#3057c9" stroke-width="3"/>
+  </g>
+
+  <text x="${ZB.x}" y="44" font-size="19" fill="${INK}" class="serif">Round the join, magnified</text>
+  <text x="${ZB.x}" y="68" font-size="12.5" fill="${FAINT}" id="zbSub"></text>
+  <rect x="${ZB.x}" y="${ZB.y}" width="${ZB.s}" height="${ZB.s}" fill="#fff" stroke="${INK}" stroke-width="1.4"/>
+  <line x1="${ZB.x + ZB.s / 2}" y1="${ZB.y}" x2="${ZB.x + ZB.s / 2}" y2="${ZB.y + ZB.s}" stroke="${GRID}"/>
+  <line x1="${ZB.x}" y1="${ZB.y + ZB.s / 2}" x2="${ZB.x + ZB.s}" y2="${ZB.y + ZB.s / 2}" stroke="${GRID}"/>
+  <g clip-path="url(#clipB)"><path id="bL" fill="none" stroke="${HUE}" stroke-width="3.4"/><path id="bR" fill="none" stroke="#3057c9" stroke-width="3.4"/>
+    <circle id="bDot" r="5.5" fill="${INK}"/><circle id="bOpen" r="5.5" fill="#fff" stroke="#3057c9" stroke-width="2"/></g>
+  <text id="zTurn" x="${ZB.x}" y="${ZB.y + ZB.s + 30}" font-size="15" fill="${INK}" class="m"></text>
+  <text id="zTurn2" x="${ZB.x}" y="${ZB.y + ZB.s + 54}" font-size="12.5" fill="${FAINT}"></text>`;
+}
+function piecePath(fn, a, b, X, Y, n = 300){
+  let d = '';
+  for (let i = 0; i <= n; i++) { const x = a + (b - a) * i / n, y = fn(x); d += (i ? 'L' : 'M') + X(x).toFixed(2) + ' ' + clamp(Y(y), -5000, 5000).toFixed(2); }
+  return d;
+}
+function zoomWin(){
+  const P = PWn(), Z = Math.pow(10, S.zoom);
+  const hw = (P.win.x1 - P.win.x0) * (ZB.s / PZ.w) / 2 / Z, hh = (P.win.y1 - P.win.y0) * (ZB.s / PZ.h) / 2 / Z;
+  return {Z, hw, hh};
+}
+function paintZ(){
+  const P = PWn(), p = pNow(), A = analyse(S.pw, p), c = P.c, W = P.win;
+  let g = '';
+  for (const x of niceTicks(W.x0, W.x1)) g += `<line x1="${zx(x)}" y1="${PZ.y}" x2="${zx(x)}" y2="${PZ.y + PZ.h}" stroke="${x === 0 ? '#9aa3a8' : GRID}"/><text x="${zx(x)}" y="${PZ.y + PZ.h + 16}" font-size="11" text-anchor="middle" fill="${FAINT}" class="m">${fk(x)}</text>`;
+  for (const y of niceTicks(W.y0, W.y1)) g += `<line x1="${PZ.x}" y1="${zy(y)}" x2="${PZ.x + PZ.w}" y2="${zy(y)}" stroke="${y === 0 ? '#9aa3a8' : GRID}"/><text x="${PZ.x - 6}" y="${zy(y) + 4}" font-size="11" text-anchor="end" fill="${FAINT}" class="m">${fk(y)}</text>`;
+  $('zGrid').innerHTML = g;
+  $('zL').setAttribute('d', piecePath(x => P.L(x, p), W.x0, c, zx, zy));
+  $('zR').setAttribute('d', piecePath(x => P.R(x, p), c, W.x1, zx, zy));
+  $('zDot').setAttribute('cx', zx(c)); $('zDot').setAttribute('cy', zy(A.fc));
+  $('zOpen').setAttribute('cx', zx(c)); $('zOpen').setAttribute('cy', zy(A.rhl)); $('zOpen').style.display = A.cont ? 'none' : '';
+  $('zTitle').textContent = P.text(p); $('zSub').textContent = P.src + (S.pw === 'join' ? ': drag the blue handles to move the line' : '');
+  const {Z, hw, hh} = zoomWin();
+  $('zWin').setAttribute('x', zx(c - hw)); $('zWin').setAttribute('y', zy(A.fc + hh)); $('zWin').setAttribute('width', Math.max(1, zx(c + hw) - zx(c - hw))); $('zWin').setAttribute('height', Math.max(1, zy(A.fc - hh) - zy(A.fc + hh)));
+  /* the magnified box, drawn from the function itself */
+  const bx = x => ZB.x + ZB.s / 2 + (x - c) / hw * ZB.s / 2, by = y => ZB.y + ZB.s / 2 - (y - A.fc) / hh * ZB.s / 2;
+  $('bL').setAttribute('d', piecePath(x => P.L(x, p), c - 1.2 * hw, c, bx, by));
+  $('bR').setAttribute('d', piecePath(x => P.R(x, p), c, c + 1.2 * hw, bx, by));
+  $('bDot').setAttribute('cx', bx(c)); $('bDot').setAttribute('cy', by(A.fc));
+  $('bOpen').setAttribute('cx', bx(c)); $('bOpen').setAttribute('cy', clamp(by(A.rhl), -50, 1000)); $('bOpen').style.display = A.cont ? 'none' : '';
+  $('zbSub').textContent = `×${Z >= 10 ? Math.round(Z) : num(Z, 1)} round (${fk(c)}, ${num(A.fc, 3).replace(/\.?0+$/, '')}): window ${num(2 * hw, Z >= 100 ? 5 : 3)} wide`;
+  const asp = (ZB.s / 2 / hh) / (ZB.s / 2 / hw);          // screen slope per unit slope
+  const turn = turnAt(S.pw, p, hw, asp);
+  const show = S.locked.Z;
+  $('zTurn').textContent = show ? (A.cont ? `turn at the join: ${num(turn, 2)}°` : 'the pieces do not meet: a jump') : '';
+  $('zTurn2').textContent = show ? (A.cont ? 'the angle between the chords to either side, as drawn in this box' : `gap ${num(Math.abs(A.rhl - A.lhl), 3)}, the same at every zoom`) : '';
+  /* handles for the join */
+  const J = S.pw === 'join';
+  $('zHandles').style.display = J ? '' : 'none';
+  if (J) {
+    $('hJ').setAttribute('cx', zx(1)); $('hJ').setAttribute('cy', zy(S.join.b));
+    $('hM').setAttribute('cx', zx(2)); $('hM').setAttribute('cy', zy(S.join.b + S.join.m));
+    $('zMline').setAttribute('x1', zx(2)); $('zMline').setAttribute('x2', zx(2)); $('zMline').setAttribute('y1', PZ.y); $('zMline').setAttribute('y2', PZ.y + PZ.h);
+  }
+  /* the side panel */
+  $('pkRow').style.display = P.k ? '' : 'none';
+  $('pkOut').textContent = P.k ? fk(S.pk[S.pw]) : '';
+  $('zOut').textContent = '×' + (Z >= 10 ? Math.round(Z) : num(Z, 1));
+  $('pwNote').textContent = S.pw === 'ex29' ? 'Find k so that f is continuous at x = 5.' : S.pw === 'ex27' ? 'Find k so that f is continuous at x = 2.' :
+    S.pw === 'join' ? 'Move the line until the join is continuous, then until it is smooth.' : 'The book: |x| is continuous everywhere, but not differentiable at 0.';
+  if (show) {
+    const f = x => pwEval(S.pw, p, x);
+    let t = `<table class="lim"><tr><th>h</th><th>f(c − h)</th><th>f(c + h)</th><th>left slope</th><th>right slope</th></tr>`;
+    for (const h of [0.1, 0.01, 0.001]) {
+      const dl = (A.fc - f(c - h)) / h, dr = (f(c + h) - A.fc) / h;
+      t += `<tr><td>${h}</td><td>${num(f(c - h), 4)}</td><td>${num(f(c + h), 4)}</td><td>${Math.abs(dl) > 1e4 ? '→ ∞' : num(dl, 3)}</td><td>${Math.abs(dr) > 1e4 ? '→ ∞' : num(dr, 3)}</td></tr>`;
+    }
+    t += `</table><div class="readout"><span>f(c)</span><b>${num(A.fc, 4)}</b><span>left limit</span><b>${num(A.lhl, 4)}</b><span>right limit</span><b>${num(A.rhl, 4)}</b>
+      <span>left derivative</span><b>${A.cont ? num(A.dl, 4) : '—'}</b><span>right derivative</span><b>${A.cont ? num(A.dr, 4) : '—'}</b></div>`;
+    $('limT').innerHTML = t;
+    $('verdZ').innerHTML = `<div class="verdict-line ${A.cont ? 'yes' : 'no'}">${A.cont ? 'Continuous at x = ' + fk(c) : 'Not continuous at x = ' + fk(c)}</div>` +
+      `<div class="verdict-line ${A.diff ? 'yes' : 'no'}" style="margin-top:2px">${A.diff ? 'Differentiable at x = ' + fk(c) : 'Not differentiable at x = ' + fk(c)}</div>`;
+  } else { $('limT').innerHTML = ''; $('verdZ').innerHTML = ''; }
+}
+
+/* ============================================================================
+   Narrator, findings, explanations
+   ============================================================================ */
+const EXPL = {F: false, Z: false};
+function paintWhy(){
+  const locked = S.locked[S.tab];
+  $('whyCard').hidden = !locked;
+  if (!locked) return;
+  let t = '';
+  if (S.tab === 'F') {
+    const oe = orderOf('euler'), or = orderOf('rk4');
+    t = `<p>Every short segment is the slope F(x, y) at its point. A solution curve is any curve that is tangent to the field everywhere; through each point there is one, and the family of them is the general solution. The constant C picks out one member: the particular solution through your point.</p>` +
+        `<p>Euler walks each step along the slope at its start, so on a bending curve it falls behind by an amount proportional to h${oe != null ? ` (measured slope ${num(oe, 2)})` : ''}. RK4 samples the slope four times per step and averages them; its error falls like h⁴${or != null ? ` (measured ${num(or, 2)})` : ''}.</p>`;
+  } else {
+    const A = analyse(S.pw, pNow());
+    t = `<p>Continuity asks whether the two pieces meet: the left limit, the right limit and f(c) must agree. Differentiability asks more: the left and right slopes must agree too. Here the left derivative is ${A.cont ? num(A.dl, 3) : '—'} and the right is ${A.cont ? num(A.dr, 3) : '—'}.</p>` +
+        `<p>Zooming in on a differentiable curve flattens its bending away, so it looks like its tangent line. A corner is made of two different straight lines, and magnifying straight lines only gives the same two lines back. Every differentiable function is continuous; |x| shows the converse is false.</p>`;
+  }
+  $('why').innerHTML = t;
+}
+function checkF(){
+  if (!S.locked.F || !S.touched.F) return;
+  const c = S.curves[S.curves.length - 1];
+  if (S.eq === 'ex18' && c && c.x === 0 && c.y === 1 && S.method === 'rk4') {
+    const r = errAt('ex18', 0, 0, 1, hNow(), 'rk4');
+    if (r && r.err < 1e-4) discover('particular');
+  }
+  const same = S.curves.length >= 3;
+  if (same) discover('family');
+  const oe = orderOf('euler'), or = orderOf('rk4');
+  if (S.rec.euler.filter(p => p[0] <= 0.25 + 1e-12).length >= 3 && oe != null && Math.abs(oe - 1) < 0.12) discover('euler');
+  if (S.rec.rk4.filter(p => p[0] <= 0.25 + 1e-12).length >= 3 && or != null && Math.abs(or - 4) < 0.3) discover('rk4');
+  if (S.eq === 'ex9' && c) {
+    const T = doublingTime(solveCurve('ex9', kNow(), c.x, c.y, hNow(), S.method).filter(p => p[0] >= c.x - 1e-9));
+    if (T != null && Math.abs(T - Math.LN2 / kNow()) / (Math.LN2 / kNow()) < 0.005) discover('double');
+  }
+  /* the prediction: Euler's error at two steps, one half the other */
+  if (!EXPL.F) {
+    const R = S.rec.euler;
+    for (const a of R) for (const b of R) if (Math.abs(a[0] / b[0] - 2) < 1e-9 && b[1] > 0) {
+      EXPL.F = true;
+      POEF.explain(`The model stepped the same curve with h = ${a[0]} and h = ${b[0]}. The error at x₀ + D went from <b>${sci(a[1])}</b> to <b>${sci(b[1])}</b>: it was divided by ${num(a[1] / b[1], 2)}. ` +
+        `Halving Euler's step roughly halves its error, because each step's slip is about h² and there are 1/h steps. Record more steps to measure the slope of the log–log line.`);
+      return;
+    }
+  }
+}
+function checkZ(){
+  if (!S.locked.Z || !S.touched.Z) return;
+  const p = pNow(), A = analyse(S.pw, p);
+  if (!A.cont) discover('jump');
+  if (A.cont && (S.pw === 'ex29' || S.pw === 'ex27')) discover('cont');
+  if (A.cont && !A.diff && S.zoom >= 2) discover('kink');
+  if (S.pw === 'join' && A.diff && S.zoom >= 2) discover('smooth');
+  if (S.pw === 'abs' && S.zoom >= 2 && !EXPL.Z) {
+    EXPL.Z = true;
+    const {hw, hh} = zoomWin(), turn = turnAt('abs', p, hw, (ZB.s / 2 / hh) / (ZB.s / 2 / hw));
+    POEZ.explain(`At ×${Math.round(Math.pow(10, S.zoom))} the window round x = 0 is only ${num(2 * hw, 4)} wide, and the model still measures a turn of <b>${num(turn, 1)}°</b> at the join: the left slope is ${num(A.dl, 3)}, the right slope ${num(A.dr, 3)}. ` +
+      `|x| is made of two straight lines, so magnifying never straightens it. The limit of (f(0 + h) − f(0))/h is different from the two sides: |x| is continuous but not differentiable at 0 (NCERT, after Theorem 3).`);
+  }
+}
+
+/* ============================================================================
+   Paint and controls
+   ============================================================================ */
+buildF(); buildZ();
+$('eqChips').innerHTML = EQ_ORDER.map(id => `<button class="chip m" data-eq="${id}" title="${EQS[id].src}">${EQS[id].tex}</button>`).join('');
+$('pwChips').innerHTML = PW_ORDER.map(id => `<button class="chip m" data-pw="${id}" title="${PW[id].src}">${PW[id].tex}</button>`).join('');
+let lastEq = null;
+function paint(){
+  for (const k of ['F', 'Z']) {
+    const on = S.tab === k;
+    $('tab' + k).setAttribute('aria-selected', on); $('stage' + k).toggleAttribute('hidden', !on);
+    $('card' + k).hidden = !on; $('poe' + k).hidden = !on;
+  }
+  $('gate').hidden = S.locked[S.tab];
+  if (S.tab === 'F') { const key = S.eq + S.k; if (key !== lastEq) { paintFieldGrid(); lastEq = key; } paintF(); checkF(); }
+  else { paintZ(); checkZ(); }
+  paintWhy();
+  for (const b of document.querySelectorAll('#eqChips .chip')) b.setAttribute('aria-pressed', b.dataset.eq === S.eq);
+  for (const b of document.querySelectorAll('#mChips .chip')) b.setAttribute('aria-pressed', b.dataset.m === S.method);
+  for (const b of document.querySelectorAll('#pwChips .chip')) b.setAttribute('aria-pressed', b.dataset.pw === S.pw);
+  $('hIn').value = S.hIdx; $('kIn').value = S.k; $('zIn').value = S.zoom;
+  if (PW[S.pw].k) $('pkIn').value = S.pk[S.pw];
+}
+for (const k of ['F', 'Z']) $('tab' + k).addEventListener('click', () => { S.tab = k; sound('tick'); paint(); track('tab', {tab: k}); });
+
+$('hitF').addEventListener('click', e => {
+  if (!S.locked.F) return;
+  const p = Play.svgPoint(sF, e), E = EQS[S.eq];
+  const x = +(Math.round(ufx(p.x) / E.snap[0]) * E.snap[0]).toFixed(6), y = +(Math.round(ufy(p.y) / E.snap[1]) * E.snap[1]).toFixed(6);
+  if (E.guard && y === 2) { toast('The slope is vertical on y = 2: no solution y(x) starts there.'); return; }
+  if (S.eq === 'ex9' && y <= 0) { toast('Start with some money: P must be above 0.'); return; }
+  S.curves.push({x, y}); if (S.curves.length > 6) S.curves.shift();
+  S.touched.F = true; record(); sound('pop'); paint();
+  track('launch', {eq: S.eq, x, y, method: S.method, h: hNow()});
+});
+$('eqChips').addEventListener('click', e => {
+  const b = e.target.closest('[data-eq]'); if (!b || b.disabled) return;
+  if (b.dataset.eq !== S.eq) { S.eq = b.dataset.eq; S.curves = []; S.rec = {euler: [], rk4: []}; S.recKey = null; }
+  S.touched.F = true; sound('tick'); paint(); track('equation', {eq: S.eq});
+});
+$('mChips').addEventListener('click', e => {
+  const b = e.target.closest('[data-m]'); if (!b || b.disabled) return;
+  S.method = b.dataset.m; S.touched.F = true; record(); sound('tick'); paint(); track('method', {m: S.method});
+});
+$('hIn').addEventListener('input', e => { S.hIdx = +e.target.value; S.touched.F = true; record(); paint(); });
+$('hIn').addEventListener('change', () => track('step', {h: hNow()}));
+$('kIn').addEventListener('input', e => { S.k = +e.target.value; S.touched.F = true; record(); paint(); });
+$('kIn').addEventListener('change', () => track('rate', {k: S.k}));
+$('clearBtn').addEventListener('click', () => { S.curves = []; S.rec = {euler: [], rk4: []}; S.recKey = null; sound('tick'); paint(); });
+
+$('pwChips').addEventListener('click', e => {
+  const b = e.target.closest('[data-pw]'); if (!b || b.disabled) return;
+  S.pw = b.dataset.pw; S.touched.Z = true; sound('tick'); paint(); track('piecewise', {f: S.pw});
+});
+$('pkIn').addEventListener('input', e => { S.pk[S.pw] = +(+e.target.value).toFixed(2); S.touched.Z = true; paint(); });
+$('pkIn').addEventListener('change', () => track('k', {f: S.pw, k: S.pk[S.pw]}));
+$('zIn').addEventListener('input', e => { S.zoom = +e.target.value; S.touched.Z = true; paint(); });
+$('zIn').addEventListener('change', () => track('zoom', {z: S.zoom}));
+Play.drag($('hJ'), sZ, {
+  start(){ if (!S.locked.Z || S.pw !== 'join') return false; },
+  move(p){ const b = clamp(Math.round(uzy(p.y) * 10) / 10, -0.5, 5.5); if (b !== S.join.b) { S.join.b = b; S.touched.Z = true; paint(); } },
+  end(){ track('joinB', {b: S.join.b}); },
+});
+Play.drag($('hM'), sZ, {
+  start(){ if (!S.locked.Z || S.pw !== 'join') return false; },
+  move(p){ const m = clamp(Math.round((uzy(p.y) - S.join.b) * 10) / 10, -4, 5); if (m !== S.join.m) { S.join.m = m; S.touched.Z = true; paint(); } },
+  end(){ track('joinM', {m: S.join.m}); },
+});
+
+function lockCtl(){
+  const L = S.locked;
+  for (const b of document.querySelectorAll('#eqChips .chip, #mChips .chip')) b.disabled = !L.F;
+  for (const id of ['hIn', 'kIn', 'clearBtn']) $(id).disabled = !L.F;
+  $('hitF').style.pointerEvents = L.F ? '' : 'none';
+  for (const b of document.querySelectorAll('#pwChips .chip')) b.disabled = !L.Z;
+  for (const id of ['pkIn', 'zIn']) $(id).disabled = !L.Z;
+  for (const id of ['hJ', 'hM']) $(id).style.pointerEvents = L.Z ? '' : 'none';
+}
+
+/* ============================================================================
+   Start
+   ============================================================================ */
+findings($('finds'), [
+  {id: 'particular', icon: '⤳', label: 'The stepped curve lands on the book’s solution', hint: 'Example 18 through (0, 1), stepped with RK4'},
+  {id: 'family',     icon: '≋', label: 'One equation, a family of curves', hint: 'Launch three solutions'},
+  {id: 'euler',      icon: '½', label: 'Euler’s error is proportional to h', hint: 'Measure Euler at three small steps'},
+  {id: 'rk4',        icon: '⁴', label: 'RK4’s error falls like h⁴', hint: 'Measure RK4 at three small steps'},
+  {id: 'double',     icon: '×2', label: 'Money doubles in ln 2 / k years', hint: 'Example 9: read the doubling time off a curve'},
+  {id: 'jump',       icon: '⌐', label: 'A jump: the limits disagree', hint: 'Pieces that do not meet'},
+  {id: 'cont',       icon: '⌒', label: 'The k that makes it continuous', hint: 'Solve an exercise by sliding k'},
+  {id: 'kink',       icon: 'V', label: 'A corner: continuous, not differentiable', hint: 'Zoom ×100 on a corner'},
+  {id: 'smooth',     icon: '―', label: 'Smooth joins look straight up close', hint: 'Build a join with no corner'},
+], () => toast('All nine: slopes become curves, and curves become straight when you look closely enough.', 4200));
+
+const POEF = predict($('poeF'), {
+  id: 'euler-halve',
+  q: 'Euler’s method steps along the slope field with a step h. You halve h. What happens to the error at the end of the curve?',
+  options: [
+    {id: 'same',  text: 'Nothing: the error is set by the equation, not the step.'},
+    {id: 'half',  text: 'It roughly halves.', right: true},
+    {id: 'quart', text: 'It drops to a quarter.'},
+    {id: 'grow',  text: 'It grows: twice the steps, twice the slips.'},
+  ],
+  onLock(){ S.locked.F = true; lockCtl(); paint(); },
+});
+const POEZ = predict($('poeZ'), {
+  id: 'abs-zoom',
+  q: 'Zoom in on the corner of y = |x| at x = 0, a hundred times and more. What do you see?',
+  options: [
+    {id: 'line',   text: 'A straight line: every graph straightens out when you zoom in enough.'},
+    {id: 'corner', text: 'The same corner, at every zoom.', right: true},
+    {id: 'gap',    text: 'A gap opens between the two sides.'},
+    {id: 'round',  text: 'A small rounded bottom.'},
+  ],
+  onLock(){ S.locked.Z = true; lockCtl(); paint(); },
+});
+lockCtl();
+if (!Play.FF('predict')) { S.locked = {F: true, Z: true}; lockCtl(); }
+paint();
+window.applyFeatures = () => paint();
+window.PG_STATE = () => JSON.parse(JSON.stringify(S));
+window.PG_MODEL = {EQS, H, stepFn, march, solveCurve, errAt, fitSlope, doublingTime, PW, pwEval, analyse, turnAt};
+</script>
+</body>
+</html>

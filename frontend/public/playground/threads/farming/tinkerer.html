@@ -1,0 +1,406 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Story of Indian Farming</title>
+<meta name="description" content="Class 6–8: predict what a failed monsoon does to a rice crop, then set the season, the rain, the irrigation and the soil, and watch the harvest.">
+<link rel="icon" href="../../favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600&family=Inter:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="../../play.css">
+<style>
+/* Only what this page needs beyond play.css. */
+.pg-stage{background:#eef3e4}
+@media (max-width:1180px) and (min-width:981px){ .pg-main.wide-side{grid-template-columns:minmax(0,1fr) 340px} }
+.gate{position:absolute; inset:0; display:grid; place-items:center; pointer-events:none}
+.gate span{background:rgba(15,26,43,.82); color:#fff; padding:10px 16px; border-radius:99px; font-weight:600; font-size:14px}
+.seg{display:flex; background:var(--sunk); border-radius:99px; padding:3px; gap:3px}
+.seg button{flex:1; border:0; background:transparent; border-radius:99px; padding:7px 8px; font-weight:600; font-size:13px; cursor:pointer; color:var(--ink-2)}
+.seg button[aria-pressed="true"]{background:var(--card); color:var(--ink); box-shadow:var(--shadow)}
+.seg button:disabled{cursor:default; opacity:.5}
+.soils{display:grid; grid-template-columns:repeat(6,1fr); gap:5px; margin-top:6px}
+.soilbtn{display:flex; flex-direction:column; align-items:center; gap:3px; padding:5px 2px; border-radius:var(--radius-sm); border:1.5px solid var(--hair-2); background:var(--card); cursor:pointer; font-size:9.5px; font-weight:600; color:var(--ink-2); text-align:center; line-height:1.1}
+.soilbtn i{width:18px; height:18px; border-radius:5px; display:block; border:1px solid rgba(0,0,0,.15)}
+.soilbtn[aria-pressed="true"]{border-color:var(--ink); box-shadow:0 0 0 2px var(--accent-soft)}
+.soilbtn:disabled{cursor:default; opacity:.5}
+.why p{font-size:14px}
+.why b{color:var(--ink)}
+.cropmeters{display:grid; gap:7px}
+.cropmeter{display:grid; grid-template-columns:auto 1fr auto; gap:2px 8px; align-items:center; font-size:12.5px}
+.cropmeter .bar{grid-column:1/-1; height:9px; border-radius:99px; background:var(--sunk); overflow:hidden}
+.cropmeter .bar i{display:block; height:100%; border-radius:99px; transition:width .25s}
+.cropmeter b{font-variant-numeric:tabular-nums}
+.hint{font-size:12.5px; color:var(--ink-3); margin:6px 0 0}
+.seasonline{font-size:12px; color:var(--ink-3); margin:4px 0 0}
+</style>
+</head>
+<body>
+<header class="pg-top"></header>
+
+<div class="pg-intro">
+  <h1>The story of Indian farming</h1>
+  <p>India's farmers follow three seasons — kharif, rabi and zaid — each with its own crops, rain and soil.
+     Before you touch anything, say what a weak monsoon does to a kharif crop. Then set the season, the rainfall,
+     the irrigation and the soil, and watch the field decide the harvest for itself.</p>
+</div>
+
+<main class="pg-main wide-side">
+  <section class="pg-stage" id="stageWrap">
+    <svg id="stage" viewBox="0 0 1000 700" role="img" aria-label="A calendar of the three cropping seasons, and a field of crops whose growth depends on rainfall, irrigation and soil"></svg>
+    <div class="gate" id="gate"><span>Make your prediction first →</span></div>
+  </section>
+
+  <aside class="pg-side">
+    <div id="poe"></div>
+
+    <div class="card" id="ctlCard">
+      <div class="seg" role="group" aria-label="Which cropping season">
+        <button data-season="kharif" aria-pressed="true">Kharif</button>
+        <button data-season="rabi" aria-pressed="false">Rabi</button>
+        <button data-season="zaid" aria-pressed="false">Zaid</button>
+      </div>
+      <p class="seasonline" id="seasonLine"></p>
+      <div class="ctl"><label for="rain">This year's rainfall</label><input type="range" id="rain" min="0" max="160" step="5" value="55"><output id="rainOut" class="num">55%</output></div>
+      <div class="ctl"><label for="irr">Irrigation cover</label><input type="range" id="irr" min="0" max="100" step="5" value="0"><output id="irrOut" class="num">0%</output></div>
+      <div class="kicker" style="margin-top:8px">Soil</div>
+      <div class="soils" id="soils"></div>
+    </div>
+
+    <div class="card" id="meterCard">
+      <div class="kicker">This season's crops</div>
+      <div class="cropmeters" id="cropmeters"></div>
+    </div>
+
+    <div class="card why" id="whyCard" hidden>
+      <div class="kicker">What is happening</div>
+      <div id="why"></div>
+    </div>
+
+    <div class="card"><div class="kicker">To find</div><div id="finds"></div></div>
+  </aside>
+</main>
+
+<script src="../../play.js"></script>
+<script>
+'use strict';
+const {$, $$, esc, clamp, fmt, sound, say, track, toast, predict, findings, discover, found,
+       shareState, sharedState, mount, reduced} = Play;
+mount({thread: 'farming', band: 'tinkerer'});
+
+/* MODEL:start ================================================================
+   The chapter (CBSE Class 7, "The Story of Indian Farming"): three cropping
+   seasons — kharif (monsoon, hot, heavy rain, June-September), rabi (cool,
+   less water, October-March) and zaid (short summer season between harvests,
+   April-June, kept alive by irrigation). Six soil types with different
+   moisture and fertility (alluvial: "rich in nutrients"; black/cotton soil:
+   "holds a lot of moisture and is very fertile"; red and laterite: "not very
+   fertile"; desert: dry and sandy; mountain/alpine: "thin, rough and rocky").
+   Crops are grouped by season from the chapter's Fig. 1.5 list, and each crop
+   has an ideal band of *effective water* and a set of soils it suits — outside
+   that soil, the chapter's own note says a crop "can be grown with efficient
+   irrigation" (the asterisked crops in Fig. 1.10). Nothing here is a lookup of
+   the answer: every yield is computed from the water and soil actually chosen.
+   ============================================================================ */
+const SEASON_WEIGHT = {   // how much of the rainfall slider vs the irrigation slider reaches the roots
+  kharif: {rain: 1.0, irr: 0.5},   // the monsoon crop: mostly rain-fed
+  rabi:   {rain: 0.3, irr: 1.0},   // the dry cool season: mostly wells, canals and groundwater
+  zaid:   {rain: 0.15, irr: 1.2},  // the short hot season between monsoons: needs irrigation to exist at all
+};
+const SEASONS = {
+  kharif: {label: 'Kharif — the monsoon crop', months: 'June – September', climate: 'hot, with heavy monsoon rain', range: [6, 9]},
+  rabi:   {label: 'Rabi — the winter crop',     months: 'October – March', climate: 'cool, with less water',       range: [10, 15]},
+  zaid:   {label: 'Zaid — the summer crop',     months: 'April – June',    climate: 'hot summer, between harvests', range: [4, 6]},
+};
+const SOILS = {
+  alluvial: {label: 'Alluvial', note: 'river silt — rich in nutrients', color: '#c9a66b'},
+  black:    {label: 'Black (cotton)', note: 'holds moisture — very fertile', color: '#4a4038'},
+  red:      {label: 'Red', note: 'iron-rich — not very fertile', color: '#b5563c'},
+  laterite: {label: 'Laterite', note: 'hardens in heat — not fertile', color: '#8a3b23'},
+  desert:   {label: 'Desert', note: 'sandy and dry', color: '#d9c08a'},
+  mountain: {label: 'Mountain', note: 'thin and rocky', color: '#7c8a7a'},
+};
+const CROPS = {
+  rice:      {season: 'kharif', label: 'Rice',      lo: 90, hi: 150, soils: ['alluvial', 'black', 'laterite'], kind: 'blade', c1: '#5b8f3e', c2: '#d9b54a'},
+  cotton:    {season: 'kharif', label: 'Cotton',     lo: 50, hi: 90,  soils: ['black'],                        kind: 'bush',  c1: '#4f7942', c2: '#f5f5f0'},
+  bajra:     {season: 'kharif', label: 'Bajra (pearl millet)', lo: 20, hi: 55, soils: ['desert', 'red', 'alluvial'], kind: 'blade', c1: '#6b8e23', c2: '#7a5c3e'},
+  groundnut: {season: 'kharif', label: 'Groundnut',  lo: 40, hi: 75,  soils: ['red', 'alluvial', 'black'],      kind: 'bush',  c1: '#3f6b32', c2: '#e8c547'},
+  wheat:     {season: 'rabi',   label: 'Wheat',      lo: 30, hi: 60,  soils: ['alluvial', 'black'],             kind: 'blade', c1: '#c9a227', c2: '#e8c547'},
+  mustard:   {season: 'rabi',   label: 'Mustard',    lo: 15, hi: 40,  soils: ['alluvial', 'black', 'red'],      kind: 'bush',  c1: '#4f7942', c2: '#f2c14e'},
+  gram:      {season: 'rabi',   label: 'Gram',       lo: 10, hi: 35,  soils: ['black', 'alluvial'],             kind: 'bush',  c1: '#4a6b3a', c2: '#8a9a5b'},
+  watermelon:{season: 'zaid',   label: 'Watermelon', lo: 60, hi: 110, soils: ['alluvial', 'desert'],            kind: 'vine',  c1: '#3f7d3f', c2: '#2e5c2e'},
+  cucumber:  {season: 'zaid',   label: 'Cucumber',   lo: 55, hi: 100, soils: ['alluvial'],                      kind: 'vine',  c1: '#3f7d3f', c2: '#6fae53'},
+  muskmelon: {season: 'zaid',   label: 'Muskmelon',  lo: 55, hi: 100, soils: ['alluvial', 'desert'],            kind: 'vine',  c1: '#3f7d3f', c2: '#c9a15a'},
+};
+const SEASON_CROPS = {kharif: ['rice', 'cotton', 'bajra', 'groundnut'], rabi: ['wheat', 'mustard', 'gram'], zaid: ['watermelon', 'cucumber', 'muskmelon']};
+
+function waterScore(W, lo, hi){
+  if (W < lo) return clamp(1 - (lo - W) / 50, 0, 1);
+  if (W > hi) return clamp(1 - (W - hi) / 60, 0, 1);
+  return 1;
+}
+/* The chapter's own rule for the crops marked with * in Fig. 1.10: not the ideal soil,
+   but efficient irrigation (canals, wells, drip, sprinkler) lets them grow anyway. */
+function matchFactor(soils, soil, irrigation){
+  if (soils.includes(soil)) return 1;
+  return irrigation >= 50 ? 0.65 : 0.3;
+}
+/* A farmer irrigates to make up a shortfall, not to flood the field: irrigation can only
+   fill the gap between what the rain gave and the top of the crop's ideal band. Only the
+   monsoon itself can push a crop's water PAST that band (the chapter's "excessive rainfall
+   also leads to the destruction of crops"). */
+function cropYield(id, rainfall, irrigation, soil){
+  const c = CROPS[id], w = SEASON_WEIGHT[c.season];
+  const natural = rainfall * w.rain;
+  const shortfall = Math.max(0, c.hi - natural);
+  const applied = Math.min(shortfall, irrigation * w.irr);
+  const W = natural + applied;
+  const ws = waterScore(W, c.lo, c.hi);
+  const mf = matchFactor(c.soils, soil, irrigation);
+  return {W: Math.round(W * 10) / 10, waterScore: ws, matchFactor: mf, yieldPct: clamp(Math.round(100 * ws * mf), 0, 100)};
+}
+/* MODEL:end */
+
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+function monthSeason(m){ // m: 1..12
+  if (m >= 6 && m <= 9) return 'kharif';
+  if (m >= 4 && m <= 5) return 'zaid';
+  return 'rabi'; // Oct-Mar
+}
+
+/* ---- state: plain data ----------------------------------------------------- */
+const S = {season: 'kharif', rainfall: 55, irrigation: 0, soil: 'alluvial', locked: false};
+const shared = sharedState();
+if (shared) {
+  if (SEASONS[shared.season]) S.season = shared.season;
+  S.rainfall = clamp(+shared.rainfall || 55, 0, 160);
+  S.irrigation = clamp(+shared.irrigation || 0, 0, 100);
+  if (SOILS[shared.soil]) S.soil = shared.soil;
+}
+shareState(() => ({season: S.season, rainfall: S.rainfall, irrigation: S.irrigation, soil: S.soil}));
+
+/* ============================================================================
+   The stage: drawn once, then only patched.
+   ============================================================================ */
+const svg = $('stage');
+const CAL = {x: 30, y: 16, w: 940, h: 46};
+const FIELD = {x: 30, y: 100, w: 940, h: 460, groundY: 500, soilH: 48};
+
+function build(){
+  let cal = '';
+  for (let m = 1; m <= 12; m++) {
+    const w = CAL.w / 12, x = CAL.x + (m - 1) * w;
+    const seas = monthSeason(m);
+    const col = seas === 'kharif' ? '#a9c46c' : seas === 'rabi' ? '#a9c9d9' : '#e8c07a';
+    cal += `<rect x="${x.toFixed(1)}" y="${CAL.y}" width="${(w - 1.5).toFixed(1)}" height="${CAL.h}" fill="${col}" opacity=".55" rx="4"/>` +
+           `<text x="${(x + w / 2).toFixed(1)}" y="${CAL.y + CAL.h / 2 + 4}" text-anchor="middle" font-size="11.5" font-weight="700" fill="#233022">${MONTHS[m - 1]}</text>` +
+           `<rect id="calHi${m}" x="${x.toFixed(1)}" y="${CAL.y}" width="${(w - 1.5).toFixed(1)}" height="${CAL.h}" fill="none" stroke="#233022" stroke-width="0" rx="4"/>`;
+  }
+  svg.innerHTML = `
+  <defs>
+    <linearGradient id="gSky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#eaf3df"/><stop offset="1" stop-color="#eef3e4"/></linearGradient>
+  </defs>
+  <rect x="0" y="0" width="1000" height="640" fill="url(#gSky)"/>
+  <text x="30" y="12" font-size="0"></text>
+  <g id="calGroup">${cal}</g>
+  <text x="${CAL.x}" y="${CAL.y - 6}" font-size="12" font-weight="700" letter-spacing=".06em" fill="#4a5a3f">THE FARMING YEAR — KHARIF, RABI, ZAID</text>
+
+  <g id="fieldGround"></g>
+  <g id="plots"></g>
+  <g id="weather"></g>
+  <text id="fieldCaption" x="${FIELD.x}" y="${FIELD.y - 6}" font-size="12" font-weight="700" letter-spacing=".06em" fill="#4a5a3f"></text>
+  `;
+}
+
+function plantSVG(kind, cx, baseY, h, alive, c1, c2, spread){
+  h = Math.max(10, h);
+  const main = alive ? c1 : '#9b8f78', accent = alive ? c2 : '#8a7660';
+  if (kind === 'blade') {
+    let g = `<line x1="${cx}" y1="${baseY}" x2="${cx}" y2="${(baseY - h).toFixed(1)}" stroke="${main}" stroke-width="3.4" stroke-linecap="round"/>`;
+    if (alive) g += `<ellipse cx="${cx}" cy="${(baseY - h - 4).toFixed(1)}" rx="6" ry="10" fill="${accent}" transform="rotate(8 ${cx} ${(baseY - h - 4).toFixed(1)})"/>`;
+    g += `<path d="M${cx} ${(baseY - h * 0.55).toFixed(1)} q ${alive ? -10 : -4} ${alive ? -10 : -3} ${alive ? -14 : -6} 2" stroke="${main}" stroke-width="2.4" fill="none" stroke-linecap="round"/>`;
+    g += `<path d="M${cx} ${(baseY - h * 0.4).toFixed(1)} q ${alive ? 10 : 4} ${alive ? -8 : -3} ${alive ? 14 : 6} 4" stroke="${main}" stroke-width="2.4" fill="none" stroke-linecap="round"/>`;
+    return g;
+  }
+  if (kind === 'bush') {
+    const r = clamp(h * 0.32, 10, (spread || 40) * 0.85);
+    let g = `<line x1="${cx}" y1="${baseY}" x2="${cx}" y2="${(baseY - h * 0.5).toFixed(1)}" stroke="${main}" stroke-width="3" stroke-linecap="round"/>`;
+    g += `<ellipse cx="${cx}" cy="${(baseY - h * 0.55).toFixed(1)}" rx="${(r * 1.15).toFixed(1)}" ry="${r.toFixed(1)}" fill="${main}"/>`;
+    if (alive) for (const dx of [-r * 0.55, 0, r * 0.55]) g += `<circle cx="${(cx + dx).toFixed(1)}" cy="${(baseY - h * 0.55 - r * 0.25).toFixed(1)}" r="3.6" fill="${accent}"/>`;
+    return g;
+  }
+  /* vine */
+  let g = `<path d="M${cx} ${baseY} q ${alive ? 18 : 6} ${alive ? -h * 0.5 : -h * 0.3} 0 ${(-h).toFixed(1)}" stroke="${main}" stroke-width="3" fill="none" stroke-linecap="round"/>`;
+  if (alive) g += `<circle cx="${cx}" cy="${(baseY - h - 6).toFixed(1)}" r="9" fill="${accent}" stroke="${main}" stroke-width="1.4"/>`;
+  return g;
+}
+
+function paintCalendar(){
+  for (let m = 1; m <= 12; m++) {
+    const on = monthSeason(m) === S.season;
+    $('calHi' + m).setAttribute('stroke-width', on ? 2.4 : 0);
+  }
+}
+
+function paintField(){
+  const ids = SEASON_CROPS[S.season];
+  const n = ids.length, w = FIELD.w / n;
+  const soil = SOILS[S.soil];
+  let ground = `<rect x="${FIELD.x}" y="${FIELD.groundY}" width="${FIELD.w}" height="${FIELD.soilH}" fill="${soil.color}"/>` +
+               `<rect x="${FIELD.x}" y="${FIELD.groundY}" width="${FIELD.w}" height="6" fill="#3a4a2c" opacity=".35"/>` +
+               `<rect x="${FIELD.x}" y="${FIELD.groundY + FIELD.soilH}" width="${FIELD.w}" height="${FIELD.y + FIELD.h - FIELD.groundY - FIELD.soilH}" fill="#5a5049"/>`;
+  let plots = '';
+  const yields = [];
+  for (let i = 0; i < n; i++) {
+    const id = ids[i], crop = CROPS[id];
+    const y = cropYield(id, S.rainfall, S.irrigation, S.soil);
+    yields.push({id, crop, y});
+    const cx0 = FIELD.x + i * w;
+    if (i > 0) plots += `<line x1="${cx0.toFixed(1)}" y1="${FIELD.y}" x2="${cx0.toFixed(1)}" y2="${(FIELD.groundY + FIELD.soilH).toFixed(1)}" stroke="#ffffff" stroke-width="1" opacity=".25"/>`;
+    const total = 4, alive = Math.max(0, Math.round(y.yieldPct / 100 * total));
+    const maxH = 280, h = Math.max(22, maxH * clamp(0.22 + 0.78 * y.yieldPct / 100, 0.18, 1));
+    const spread = (w * 0.64 / (total - 1)) / 2;
+    for (let k = 0; k < total; k++) {
+      const cx = cx0 + w * (0.18 + 0.64 * k / (total - 1));
+      plots += plantSVG(crop.kind, cx, FIELD.groundY, h, k < alive, crop.c1, crop.c2, spread);
+    }
+    plots += `<text x="${(cx0 + w / 2).toFixed(1)}" y="${(FIELD.y + 18)}" text-anchor="middle" font-size="13" font-weight="700" fill="#233022">${esc(crop.label)}</text>`;
+    plots += `<text x="${(cx0 + w / 2).toFixed(1)}" y="${(FIELD.y + 36)}" text-anchor="middle" font-size="12.5" font-weight="700" fill="${crop.c1}">${S.locked ? y.yieldPct + '% yield' : ''}</text>`;
+  }
+  $('plots').innerHTML = plots;
+  $('fieldGround').innerHTML = ground;
+  $('fieldCaption').textContent = `${soil.label.toUpperCase()} SOIL — ${soil.note}${S.irrigation ? ' · ' + S.irrigation + '% irrigated' : ''}`;
+  return yields;
+}
+
+function paintWeather(){
+  const rnd = Play.mulberry32(S.rainfall * 13 + S.irrigation * 7 + 1);
+  const nDrops = Math.round(clamp(S.rainfall, 0, 160) / 160 * 26);
+  let g = '';
+  for (let i = 0; i < nDrops; i++) {
+    const x = FIELD.x + rnd() * FIELD.w, y0 = FIELD.y + 46 + rnd() * 40;
+    g += `<line x1="${x.toFixed(1)}" y1="${y0.toFixed(1)}" x2="${(x - 4).toFixed(1)}" y2="${(y0 + 16).toFixed(1)}" stroke="#5a92c9" stroke-width="2" opacity=".65" stroke-linecap="round"/>`;
+  }
+  const canalY = FIELD.groundY + FIELD.soilH + (FIELD.y + FIELD.h - FIELD.groundY - FIELD.soilH) / 2 - 4;
+  const canalW = FIELD.w * clamp(S.irrigation / 100, 0, 1);
+  g += `<rect x="${FIELD.x}" y="${canalY.toFixed(1)}" width="${FIELD.w}" height="8" rx="4" fill="#41504a" opacity=".5"/>`;
+  g += `<rect x="${FIELD.x}" y="${canalY.toFixed(1)}" width="${canalW.toFixed(1)}" height="8" rx="4" fill="#3f7fd8"/>`;
+  $('weather').innerHTML = g;
+}
+
+/* ---- paint: everything that depends on the state --------------------------- */
+function paint(){
+  paintCalendar();
+  const yields = paintField();
+  paintWeather();
+  $('seasonLine').textContent = `${SEASONS[S.season].months} — ${SEASONS[S.season].climate}.`;
+  for (const s of ['kharif', 'rabi', 'zaid']) $(`[data-season="${s}"]`) && 0;
+  $$('#ctlCard [data-season]').forEach(b => b.setAttribute('aria-pressed', b.dataset.season === S.season));
+  $('rain').value = S.rainfall; $('rainOut').textContent = S.rainfall + '%';
+  $('irr').value = S.irrigation; $('irrOut').textContent = S.irrigation + '%';
+  $$('#soils .soilbtn').forEach(b => b.setAttribute('aria-pressed', b.dataset.soil === S.soil));
+  paintMeters(yields);
+  paintWhy(yields);
+  if (S.locked) check(yields);
+}
+function paintMeters(yields){
+  if (!S.locked) { $('cropmeters').innerHTML = '<p style="font-size:13px;color:var(--ink-3);margin:0">The harvest appears once you have made a prediction.</p>'; return; }
+  $('cropmeters').innerHTML = yields.map(({crop, y}) =>
+    `<div class="cropmeter"><span>${esc(crop.label)}</span><span class="bar"><i style="width:${y.yieldPct}%;background:${crop.c1}"></i></span><b>${y.yieldPct}%</b></div>`).join('');
+}
+function paintWhy(yields){
+  if (!S.locked || !yields.length) return;
+  $('whyCard').hidden = false;
+  const soil = SOILS[S.soil], seas = SEASONS[S.season];
+  const worst = yields.reduce((a, b) => a.y.yieldPct <= b.y.yieldPct ? a : b);
+  const best = yields.reduce((a, b) => a.y.yieldPct >= b.y.yieldPct ? a : b);
+  let txt = `<p>It is <b>${esc(seas.label)}</b> (${seas.months}): ${seas.climate}. This year's rainfall is <b>${S.rainfall}%</b> of normal and irrigation reaches <b>${S.irrigation}%</b> of the field, on <b>${soil.label.toLowerCase()}</b> soil (${soil.note}).</p>`;
+  txt += `<p><b>${esc(best.crop.label)}</b> is doing best at <b>${best.y.yieldPct}%</b> of a full harvest (it gets about ${best.y.W}% effective water against its ideal ${best.crop.lo}–${best.crop.hi}%${best.y.matchFactor < 1 ? ', on soil that is not its usual choice' : ', on a soil it suits'}).</p>`;
+  if (worst.id !== best.id) txt += `<p><b>${esc(worst.crop.label)}</b> struggles most, at <b>${worst.y.yieldPct}%</b>.</p>`;
+  $('why').innerHTML = txt;
+}
+
+/* ---- findings: reached by the model, never by a button --------------------- */
+function check(yields){
+  const by = id => yields.find(y => y.id === id);
+  const rice = by('rice'), cotton = by('cotton'), wheat = by('wheat'), mustard = by('mustard');
+  if (S.season === 'kharif' && rice && rice.y.matchFactor === 1 && rice.y.yieldPct >= 85) discover('goodMonsoon');
+  if (S.season === 'kharif' && S.rainfall <= 25 && S.irrigation <= 5 && rice && rice.y.yieldPct <= 12) discover('drought');
+  if (S.season === 'kharif' && S.rainfall >= 150 && cotton && cotton.y.matchFactor === 1 && cotton.y.yieldPct <= 20) discover('excessRain');
+  if (S.season === 'rabi' && S.rainfall <= 20 && S.irrigation >= 70 && ((wheat && wheat.y.yieldPct >= 55) || (mustard && mustard.y.yieldPct >= 55))) discover('irrigationRabi');
+  if (S.season === 'zaid' && S.irrigation <= 5 && yields.every(y => y.y.yieldPct <= 10)) discover('zaidFails');
+  if (yields.some(y => y.y.matchFactor === 0.65 && y.y.yieldPct >= 45)) discover('irrigationOvercomesSoil');
+  maybeExplain(yields);
+}
+let EXPLAINED = false;
+function maybeExplain(yields){
+  if (EXPLAINED || !POE) return;
+  const rice = yields.find(y => y.id === 'rice');
+  if (!rice) return;
+  EXPLAINED = true;
+  POE.explain(`Rice needs a lot of water (an effective ${rice.crop.lo}–${rice.crop.hi}% of a full monsoon). With ${S.rainfall}% rainfall and ${S.irrigation}% irrigation it is only getting about <b>${rice.y.W}%</b> effective water, so it grows — the field is not empty — but yields only <b>${rice.y.yieldPct}%</b> of a full harvest. Push the rainfall slider up and the same field recovers.`);
+}
+
+/* ============================================================================
+   Controls.
+   ============================================================================ */
+build();
+function lockControls(lock){
+  for (const id of ['rain', 'irr']) $(id).disabled = lock;
+  $$('#ctlCard [data-season]').forEach(b => b.disabled = lock);
+  $$('#soils .soilbtn').forEach(b => b.disabled = lock);
+  $('gate').hidden = !lock;
+}
+$('ctlCard').addEventListener('click', e => {
+  const b = e.target.closest('[data-season]'); if (!b || b.disabled) return;
+  S.season = b.dataset.season; sound('pop'); track('season', {season: S.season}); paint();
+});
+$('rain').addEventListener('input', e => { S.rainfall = +e.target.value; paint(); });
+$('rain').addEventListener('change', () => track('rain', {rainfall: S.rainfall}));
+$('irr').addEventListener('input', e => { S.irrigation = +e.target.value; paint(); });
+$('irr').addEventListener('change', () => track('irr', {irrigation: S.irrigation}));
+$('soils').innerHTML = Object.entries(SOILS).map(([id, s]) =>
+  `<button class="soilbtn" data-soil="${id}" aria-pressed="${id === S.soil}"><i style="background:${s.color}"></i>${esc(s.label)}</button>`).join('');
+$('soils').addEventListener('click', e => {
+  const b = e.target.closest('.soilbtn'); if (!b || b.disabled) return;
+  S.soil = b.dataset.soil; sound('pop'); track('soil', {soil: S.soil}); paint();
+});
+
+/* ============================================================================
+   Start
+   ============================================================================ */
+findings($('finds'), [
+  {id: 'goodMonsoon', icon: '☔', label: 'A good monsoon feeds the kharif crop', hint: 'Try Kharif with rainfall near 100% on a soil rice suits'},
+  {id: 'drought', icon: '🥀', label: 'Drought withers a kharif crop', hint: 'Turn the rainfall right down with no irrigation'},
+  {id: 'excessRain', icon: '🌊', label: 'Too much rain also hurts', hint: 'Push Kharif rainfall very high, on black soil'},
+  {id: 'irrigationRabi', icon: '🚰', label: 'Irrigation rescues the dry season', hint: 'Try Rabi with little rain but strong irrigation'},
+  {id: 'zaidFails', icon: '☀', label: "Zaid can't survive without irrigation", hint: 'Try Zaid with no irrigation at all'},
+  {id: 'irrigationOvercomesSoil', icon: '🌱', label: 'Efficient irrigation overcomes the wrong soil', hint: 'Pick a soil the crop does not suit, with strong irrigation'},
+], () => toast('All six found. You have farmed better than the weather let you.', 4200));
+
+const POE = predict($('poe'), {
+  id: 'why-farming',
+  q: "It's Kharif season and the monsoon has been weak — only 55% of normal rainfall — and the field has no irrigation. What happens to the rice crop?",
+  options: [
+    {id: 'fine', text: 'It grows just as well — rice does not need much water.'},
+    {id: 'less', text: 'It grows, but the harvest is much smaller than usual.', right: true},
+    {id: 'better', text: 'It grows even better with less water.'},
+    {id: 'everywhere', text: 'Every kharif crop in India fails the same way, since none of them can be irrigated.'},
+  ],
+  onLock(){
+    S.locked = true;
+    lockControls(false);
+    say("Now find out. Set the season, the rain, the irrigation and the soil, and watch the field.");
+    paint();
+  },
+});
+lockControls(!POE.locked);
+if (!Play.FF('predict')) S.locked = true;
+paint();
+window.applyFeatures = () => paint();
+window.PG_STATE = () => JSON.parse(JSON.stringify(S));
+window.PG_MODEL = {cropYield, waterScore, matchFactor, CROPS, SOILS, SEASONS, SEASON_CROPS, SEASON_WEIGHT, monthSeason};
+</script>
+</body>
+</html>

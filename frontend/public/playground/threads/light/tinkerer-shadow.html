@@ -1,0 +1,386 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Shape of a Shadow</title>
+<meta name="description" content="Class 7 Science, Ch 11 Light: a ball swings on a rail in front of a lamp; play, pause and step through its swing and watch the shadow — and a pinhole picture of the same swing — keep time with it.">
+<link rel="icon" href="../../favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="../../play.css">
+<style>
+/* Only what this page needs beyond play.css. */
+.gate{position:absolute; inset:0; display:grid; place-items:center; pointer-events:none}
+.gate span{background:rgba(15,26,43,.85); color:#fff; padding:10px 16px; border-radius:99px; font-weight:600; font-size:14px}
+.clockbar{display:flex; align-items:center; gap:12px; flex-wrap:wrap; padding:10px 16px; border-bottom:1px solid var(--hair)}
+.clocklab{font-size:12px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; color:var(--ink-3)}
+.clocknote{font-size:12.5px; color:var(--ink-3)}
+.sub{font-size:11px; letter-spacing:.07em; text-transform:uppercase; font-weight:700; color:var(--ink-3); margin:10px 0 2px}
+.note{font-size:12.5px; color:var(--ink-3); margin:8px 0 0}
+.nums{display:grid; grid-template-columns:1fr auto; gap:3px 12px; font-size:13.5px}
+.nums b{font-variant-numeric:tabular-nums; text-align:right}
+.why p{font-size:14px}
+.why b{color:var(--ink)}
+</style>
+</head>
+<body>
+<header class="pg-top"></header>
+
+<div class="pg-intro">
+  <h1>The shape of a shadow</h1>
+  <p>The ball is threaded on a rail, swinging from side to side in front of the lamp. Play, pause, slow down or step through its
+     swing with the clock above the bench, and watch the shadow on the wall keep time with it — never at quite the same speed.
+     On the right, the same swing is seen through a pinhole in a card.</p>
+</div>
+
+<main class="pg-main wide-side">
+  <section class="pg-stage" id="stageWrap">
+    <div class="clockbar">
+      <span class="clocklab">The swing</span>
+      <div id="clock"></div>
+      <span class="clocknote" id="clockNote"></span>
+    </div>
+    <svg id="stage" viewBox="0 0 1000 640" role="img" aria-label="A lamp and a ball on a swinging rail casting a shadow on a wall, and the same swing seen through a pinhole in a card"></svg>
+    <div class="gate" id="gate"><span>Make your prediction first →</span></div>
+  </section>
+
+  <aside class="pg-side">
+    <div id="poe"></div>
+
+    <div class="card" id="ctlCard">
+      <div class="sub">The shadow bench</div>
+      <div class="ctl"><label for="hw">Lamp width</label><input type="range" id="hw" min="0" max="6" step="0.5" value="0"><output id="hwOut" class="num">a point</output></div>
+      <div class="ctl"><label for="d1">Ball from lamp</label><input type="range" id="d1" min="20" max="50" step="1" value="35"><output id="d1Out" class="num">35 cm</output></div>
+      <div class="sub">The pinhole camera</div>
+      <div class="ctl"><label for="u">Candle from pinhole</label><input type="range" id="u" min="20" max="45" step="1" value="32"><output id="uOut" class="num">32 cm</output></div>
+      <p class="note">The swing is the clock's to run — play, pause, slow it down or step it one beat at a time above the bench.</p>
+    </div>
+
+    <div class="card why" id="whyCard" hidden>
+      <div class="kicker">What is happening</div>
+      <div id="why"></div>
+    </div>
+
+    <div class="card" id="numCard">
+      <div class="kicker">Measured, right now</div>
+      <div id="nums"></div>
+    </div>
+
+    <div class="card"><div class="kicker">To find</div><div id="finds"></div></div>
+  </aside>
+</main>
+
+<script src="../../play.js"></script>
+<script>
+'use strict';
+const {$, esc, clamp, fmt, sound, say, track, toast, predict, findings, discover, found,
+       shareState, sharedState, mount, clock} = Play;
+mount({thread: 'light', band: 'tinkerer', part: 'shadow'});
+
+/* MODEL:start ==================================================================
+   The same straight-line rays as the chapter's own diagrams, but now the ball
+   moves, so the diagram becomes a function of time instead of one frozen
+   instant. Units: 5 drawing units = 1 cm. A top-down view, as if looking down
+   on the bench: the vertical axis of the drawing is the SIDEWAYS position.
+
+   SHADOW BENCH. A lamp of half-width hw sits at the origin; an opaque ball of
+   radius r is at distance d1 from it, offset yb sideways; the screen is a
+   fixed distance D beyond the lamp. A screen point at height Y is reached by
+   a ray from a lamp point s (-hw..hw) through the ball's edge (yb±r) exactly
+   when Y sits between the four lines traced from each combination of lamp
+   edge and ball edge. That gives, in closed form:
+     outer1 = m(yb-r) - hw(m-1)     inner1 = m(yb-r) + hw(m-1)
+     outer2 = m(yb+r) + hw(m-1)     inner2 = m(yb+r) - hw(m-1)      where m = D/d1
+   Between outer1 and inner1 (and between inner2 and outer2) some but not all
+   of the lamp is blocked: the PENUMBRA. Between inner1 and inner2, if inner1
+   <= inner2, none of the lamp can be seen at all: the UMBRA. If the lamp is
+   too wide for how close the ball is (hw > m*r/(m-1)), inner1 > inner2 and
+   the umbra vanishes completely — the whole shadow is fuzzy.
+   The shadow's own centre is always at m*yb: m times as far from the axis as
+   the ball, so it always moves m times as fast, whatever m is (m > 1 always,
+   since the screen is further from the lamp than the ball is).
+
+   PINHOLE CAMERA. A candle at distance u from a pinhole, offset yb sideways;
+   a screen at a fixed distance v beyond the pinhole. Only one ray from each
+   point of the candle passes through the point-sized hole, so the image is
+   at -yb*(v/u): the same similar-triangles ratio as the shadow's, but with
+   the opposite sign — sideways inversion, seen happening rather than just
+   seen finished.
+   ============================================================================ */
+const PX = 5;                          // px per cm
+const AY = 240;                        // the bench axis
+const AMP = 5, PERIOD = 5;             // the swing: ±5 cm, once every 5 model-seconds
+const BEAT = 0.4;                      // one Step = 0.4 model-seconds
+const BALL_R = 3, CANDLE_H = 7;        // cm
+const D_CM = 65;                       // shadow bench: lamp to screen
+const LX = 70, WX = LX + D_CM * PX;
+const V_CM = 20;                       // pinhole bench: pinhole to screen
+const PHX = 830, CX0 = PHX, SCR_X = PHX + V_CM * PX;
+
+const yOf = t => AMP * Math.sin(2 * Math.PI * t / PERIOD);
+function shadowEdges(hw, d1, r, yb, D){
+  const m = D / d1;
+  const outer1 = m * (yb - r) - hw * (m - 1), inner1 = m * (yb - r) + hw * (m - 1);
+  const inner2 = m * (yb + r) - hw * (m - 1), outer2 = m * (yb + r) + hw * (m - 1);
+  return {m, outer1, inner1, inner2, outer2, hasUmbra: inner1 <= inner2, center: m * yb, rim: hw * (m - 1) * 2};
+}
+function pinholeImage(u, v, yb, h){
+  const ratio = v / u;
+  return {y: -ratio * yb, h: h * ratio, ratio};
+}
+/* MODEL:end */
+
+/* ---- state: plain data ------------------------------------------------------ */
+const S = {hw: 0, d1: 35, u: 32, t: 0, locked: false,
+  seen: {hwLo: false, hwHi: false, uChanged: false}};
+const shared = sharedState();
+if (shared) {
+  S.hw = clamp(+shared.hw || 0, 0, 6); S.d1 = clamp(+shared.d1 || 35, 20, 50); S.u = clamp(+shared.u || 32, 20, 45);
+}
+shareState(() => ({hw: S.hw, d1: S.d1, u: S.u}));
+let CLOCK = null;
+
+/* ============================================================================
+   The stage
+   ============================================================================ */
+const svg = $('stage');
+const GL = {x: 40, y: 495, w: 420, h: 120};
+const GR = {x: 540, y: 495, w: 420, h: 120};
+
+function build(){
+  svg.innerHTML = `
+  <defs>
+    <radialGradient id="gFlame" cx="50%" cy="65%"><stop offset="0" stop-color="#fff9d6"/><stop offset=".5" stop-color="#ffd24a"/><stop offset="1" stop-color="#ff8a1f"/></radialGradient>
+    <radialGradient id="gGlow"><stop offset="0" stop-color="#ffe27a" stop-opacity=".7"/><stop offset="1" stop-color="#ffe27a" stop-opacity="0"/></radialGradient>
+    <radialGradient id="gBall" cx="38%" cy="34%"><stop offset="0" stop-color="#ff9aa6"/><stop offset=".7" stop-color="#d64558"/><stop offset="1" stop-color="#8f2233"/></radialGradient>
+  </defs>
+  <rect x="0" y="0" width="1000" height="460" fill="#0f1823"/>
+  <line x1="500" y1="14" x2="500" y2="446" stroke="#26394c" stroke-dasharray="5 6"/>
+
+  <!-- ===================== LEFT: THE SHADOW BENCH ===================== -->
+  <g id="vShadow">
+    <text x="24" y="30" fill="#9fb3c8" font-size="13" font-weight="700" letter-spacing=".08em">A SWINGING SHADOW, SEEN FROM ABOVE</text>
+    <text x="24" y="48" fill="#6f8399" font-size="11.5">The ball rides a rail, swinging side to side. Every line here is a ray.</text>
+    <line x1="${LX}" y1="${AY}" x2="${WX}" y2="${AY}" stroke="#2a3a4d" stroke-dasharray="4 6"/>
+    <line id="rail" x1="0" x2="0" stroke="#3c4d60" stroke-width="3" stroke-linecap="round"/>
+    <circle id="railCapT" r="4" fill="#54677c"/><circle id="railCapB" r="4" fill="#54677c"/>
+    <rect id="shWall" x="${WX}" y="12" width="20" height="436" fill="#3a4452"/>
+    <rect id="shWallFace" x="${WX}" y="12" width="20" height="436" fill="#f3e7c2"/>
+    <g id="shBands"></g>
+    <rect x="${WX + 20}" y="12" width="9" height="436" fill="#556070"/>
+    <text x="${WX + 10}" y="462" fill="#8ea3b8" font-size="11" text-anchor="middle">screen</text>
+    <g id="shRays" fill="none" stroke-width="1.1"></g>
+    <g id="lampG">
+      <rect id="lampBody" x="${LX - 40}" width="36" rx="6" fill="#56606c" stroke="#3b434c"/>
+      <rect id="lampFace" x="${LX - 4}" width="6" rx="2" fill="#ffe27a"/>
+      <circle id="lampGlow" cx="${LX}" cy="${AY}" r="34" fill="url(#gGlow)"/>
+    </g>
+    <text x="${LX - 22}" y="462" fill="#8ea3b8" font-size="11" text-anchor="middle">lamp</text>
+    <circle id="ball" r="${BALL_R * PX}" fill="url(#gBall)"/>
+    <text id="noUmbraLab" x="24" y="430" fill="#ffb86b" font-size="12.5" font-weight="600"></text>
+  </g>
+
+  <!-- ===================== RIGHT: THE PINHOLE CAMERA ===================== -->
+  <g id="vPin">
+    <text x="524" y="30" fill="#9fb3c8" font-size="13" font-weight="700" letter-spacing=".08em">THE SAME SWING, THROUGH A PINHOLE</text>
+    <text x="524" y="48" fill="#6f8399" font-size="11.5">Only one ray per point gets through the hole.</text>
+    <line x1="${CX0 - 45 * PX}" y1="${AY}" x2="${SCR_X}" y2="${AY}" stroke="#2a3a4d" stroke-dasharray="4 6"/>
+    <line id="railP" x1="0" x2="0" stroke="#3c4d60" stroke-width="3" stroke-linecap="round"/>
+    <circle id="railPCapT" r="4" fill="#54677c"/><circle id="railPCapB" r="4" fill="#54677c"/>
+    <rect id="pinWall" x="${SCR_X}" y="12" width="20" height="436" fill="#3a4452"/>
+    <rect id="pinWallFace" x="${SCR_X}" y="12" width="20" height="436" fill="#22303f"/>
+    <g id="imgG"><ellipse id="imgFlame" rx="6" ry="10" fill="url(#gFlame)" opacity=".85"/></g>
+    <rect x="${SCR_X + 20}" y="12" width="9" height="436" fill="#556070"/>
+    <text x="${SCR_X + 10}" y="462" fill="#8ea3b8" font-size="11" text-anchor="middle">screen</text>
+    <g id="pinRays" fill="none" stroke-width="1.1"></g>
+    <g id="candleG"><rect id="cBody" width="16" rx="3" fill="#f4ecd6" stroke="#cbbf9f"/><ellipse id="cFlame" rx="7" ry="14" fill="url(#gFlame)"/></g>
+    <rect id="cardG" x="${PHX - 5}" y="12" width="10" height="436" fill="#8a7550" stroke="#6b5a3e"/>
+    <circle id="hole" cx="${PHX}" cy="${AY}" r="4" fill="#0f1823"/>
+    <text x="${PHX}" y="462" fill="#8ea3b8" font-size="11" text-anchor="middle">pinhole card</text>
+  </g>
+
+  <!-- ===================== below: two strip charts ===================== -->
+  <rect x="0" y="460" width="1000" height="180" fill="#fbfaf6"/>
+  <line x1="0" y1="460" x2="1000" y2="460" stroke="#e2ded2"/>
+  <text x="24" y="484" fill="#4a555b" font-size="12.5" font-weight="700" letter-spacing=".06em">BALL AND SHADOW, ONE SWING</text>
+  <text x="524" y="484" fill="#4a555b" font-size="12.5" font-weight="700" letter-spacing=".06em">CANDLE AND ITS IMAGE, ONE SWING</text>
+  <g id="glAxes"></g><g id="grAxes"></g>
+  <path id="gl1" fill="none" stroke="#8a97a6" stroke-width="1.6" stroke-dasharray="4 3"/>
+  <path id="gl2" fill="none" stroke="#1f8a70" stroke-width="2.2"/>
+  <circle id="glDotObj" r="4" fill="#8a97a6" stroke="#fff" stroke-width="1.3"/>
+  <circle id="glDotSh" r="4.5" fill="#1f8a70" stroke="#fff" stroke-width="1.3"/>
+  <path id="gr1" fill="none" stroke="#e2552b" stroke-width="1.6" stroke-dasharray="4 3"/>
+  <path id="gr2" fill="none" stroke="#2f7de1" stroke-width="2.2"/>
+  <circle id="grDotObj" r="4" fill="#e2552b" stroke="#fff" stroke-width="1.3"/>
+  <circle id="grDotIm" r="4.5" fill="#2f7de1" stroke="#fff" stroke-width="1.3"/>
+  `;
+}
+
+/* ---- little strip-chart helper: one full swing period, plotted from the closed form ---- */
+function stripChart(box, ymax, curve1, curve2, ids){
+  const gx = t => box.x + t / PERIOD * box.w;
+  const gy = v => box.y + box.h / 2 - clamp(v, -ymax, ymax) / ymax * (box.h / 2 - 8);
+  let ax = `<line x1="${box.x}" y1="${(box.y + box.h / 2).toFixed(1)}" x2="${box.x + box.w}" y2="${(box.y + box.h / 2).toFixed(1)}" stroke="#cfc9b8"/>` +
+           `<line x1="${box.x}" y1="${box.y}" x2="${box.x}" y2="${box.y + box.h}" stroke="#cfc9b8"/>` +
+           `<text x="${box.x + box.w}" y="${box.y + box.h + 15}" fill="#9aa3a6" font-size="10.5" text-anchor="end">time, one swing (s)</text>`;
+  $(ids.axes).innerHTML = ax;
+  if (!S.locked) { $(ids.c1).setAttribute('d', ''); $(ids.c2).setAttribute('d', ''); return; }
+  const N = 60; let p1 = '', p2 = '';
+  for (let i = 0; i <= N; i++) {
+    const t = i / N * PERIOD, v1 = curve1(t), v2 = curve2(t);
+    p1 += (i ? 'L' : 'M') + gx(t).toFixed(1) + ' ' + gy(v1).toFixed(1);
+    p2 += (i ? 'L' : 'M') + gx(t).toFixed(1) + ' ' + gy(v2).toFixed(1);
+  }
+  $(ids.c1).setAttribute('d', p1); $(ids.c2).setAttribute('d', p2);
+  const tm = ((S.t % PERIOD) + PERIOD) % PERIOD;
+  $(ids.d1).setAttribute('cx', gx(tm).toFixed(1)); $(ids.d1).setAttribute('cy', gy(curve1(tm)).toFixed(1));
+  $(ids.d2).setAttribute('cx', gx(tm).toFixed(1)); $(ids.d2).setAttribute('cy', gy(curve2(tm)).toFixed(1));
+}
+
+/* ---- paint -------------------------------------------------------------------- */
+function paint(){
+  const yb = yOf(S.t), bx = LX + S.d1 * PX;
+  const E = shadowEdges(S.hw, S.d1, BALL_R, yb, D_CM);
+  const img = pinholeImage(S.u, V_CM, yb, CANDLE_H);
+  const cx = CX0 - S.u * PX;
+
+  /* controls echo the state */
+  $('hw').value = S.hw; $('hwOut').textContent = S.hw < 0.25 ? 'a point' : fmt(S.hw, 1) + ' cm';
+  $('d1').value = S.d1; $('d1Out').textContent = S.d1 + ' cm';
+  $('u').value = S.u; $('uOut').textContent = S.u + ' cm';
+
+  /* --- shadow bench --- */
+  const lampHalf = Math.max(6, S.hw * PX);
+  $('lampBody').setAttribute('y', AY - Math.max(14, lampHalf + 6)); $('lampBody').setAttribute('height', 2 * Math.max(14, lampHalf + 6));
+  $('lampFace').setAttribute('y', AY - lampHalf); $('lampFace').setAttribute('height', 2 * lampHalf);
+  $('ball').setAttribute('cx', bx); $('ball').setAttribute('cy', AY + yb * PX);
+  const railTop = AY - (AMP + BALL_R + 4) * PX, railBot = AY + (AMP + BALL_R + 4) * PX;
+  $('rail').setAttribute('x1', bx); $('rail').setAttribute('x2', bx); $('rail').setAttribute('y1', railTop); $('rail').setAttribute('y2', railBot);
+  $('railCapT').setAttribute('cx', bx); $('railCapT').setAttribute('cy', railTop);
+  $('railCapB').setAttribute('cx', bx); $('railCapB').setAttribute('cy', railBot);
+  $('shWallFace').setAttribute('opacity', S.locked ? 1 : 0.4);
+
+  let bands = '', rays = '';
+  if (S.locked) {
+    const sy = v => (AY + clamp(v, -220, 220) * PX).toFixed(1);
+    if (E.hasUmbra) {
+      bands += `<rect x="${WX}" y="${sy(E.outer1)}" width="20" height="${(sy(E.inner1) - sy(E.outer1))}" fill="#05090e" opacity=".45"/>`;
+      bands += `<rect x="${WX}" y="${sy(E.inner1)}" width="20" height="${(sy(E.inner2) - sy(E.inner1))}" fill="#05090e" opacity=".88"/>`;
+      bands += `<rect x="${WX}" y="${sy(E.inner2)}" width="20" height="${(sy(E.outer2) - sy(E.inner2))}" fill="#05090e" opacity=".45"/>`;
+    } else {
+      bands += `<rect x="${WX}" y="${sy(E.outer1)}" width="20" height="${(sy(E.outer2) - sy(E.outer1))}" fill="#05090e" opacity=".5"/>`;
+    }
+    const ray = (s, ey) => `<line x1="${LX}" y1="${(AY + s * PX).toFixed(1)}" x2="${WX}" y2="${(AY + (s + (ey - s) * D_CM / S.d1) * PX).toFixed(1)}" stroke="#ffd84d" opacity=".38"/>`;
+    for (const s of [-S.hw, S.hw]) for (const ey of [yb - BALL_R, yb + BALL_R]) rays += ray(s, ey);
+    $('noUmbraLab').textContent = E.hasUmbra ? '' : 'No dark centre left — too wide a lamp.';
+  } else $('noUmbraLab').textContent = '';
+  $('shBands').innerHTML = bands; $('shRays').innerHTML = rays;
+
+  /* --- pinhole bench --- */
+  $('cBody').setAttribute('x', cx - 8); $('cBody').setAttribute('y', AY + yb * PX - CANDLE_H * PX * 0.72);
+  $('cBody').setAttribute('height', CANDLE_H * PX * 0.72);
+  $('cFlame').setAttribute('cx', cx); $('cFlame').setAttribute('cy', AY + yb * PX - CANDLE_H * PX * 0.86);
+  const railPTop = AY - (AMP + 2) * PX - CANDLE_H * PX * 0.9, railPBot = AY + (AMP + 2) * PX;
+  $('railP').setAttribute('x1', cx); $('railP').setAttribute('x2', cx); $('railP').setAttribute('y1', railPTop); $('railP').setAttribute('y2', railPBot);
+  $('railPCapT').setAttribute('cx', cx); $('railPCapT').setAttribute('cy', railPTop);
+  $('railPCapB').setAttribute('cx', cx); $('railPCapB').setAttribute('cy', railPBot);
+  $('pinWallFace').setAttribute('opacity', S.locked ? 1 : 0.35);
+
+  let prays = '', ig = '';
+  if (S.locked) {
+    prays += `<line x1="${cx}" y1="${(AY + yb * PX - CANDLE_H * PX * 0.86).toFixed(1)}" x2="${PHX}" y2="${AY}" stroke="#ffd84d" opacity=".55"/>`;
+    prays += `<line x1="${PHX}" y1="${AY}" x2="${SCR_X}" y2="${(AY + img.y * PX).toFixed(1)}" stroke="#ffd84d" opacity=".8"/>`;
+    $('imgFlame').setAttribute('cx', SCR_X); $('imgFlame').setAttribute('cy', AY + img.y * PX);
+    $('imgG').setAttribute('opacity', 1);
+  } else $('imgG').setAttribute('opacity', 0);
+  $('pinRays').innerHTML = prays;
+
+  stripChart(GL, Math.max(8, 1.15 * E.m * AMP), t => yOf(t), t => E.m * yOf(t), {axes: 'glAxes', c1: 'gl1', c2: 'gl2', d1: 'glDotObj', d2: 'glDotSh'});
+  stripChart(GR, 6, t => yOf(t), t => pinholeImage(S.u, V_CM, yOf(t), CANDLE_H).y, {axes: 'grAxes', c1: 'gr1', c2: 'gr2', d1: 'grDotObj', d2: 'grDotIm'});
+
+  paintNums(E, img, yb); paintWhy(E, img, yb); check(E);
+}
+function nums(rows){ $('nums').innerHTML = `<div class="nums">${rows.map(r => `<span>${r[0]}</span><b>${r[1]}</b>`).join('')}</div>`; }
+function paintNums(E, img, yb){
+  if (!S.locked) { $('nums').innerHTML = '<p style="font-size:13px;color:var(--ink-3);margin:0">The numbers appear once you have made a prediction.</p>'; return; }
+  nums([
+    ['Ball from lamp', S.d1 + ' cm'], ['Lamp to screen', D_CM + ' cm'], ['Screen ÷ ball-distance (m)', fmt(E.m, 2)],
+    ['Ball, right now', fmt(yb, 1) + ' cm'], ['Shadow centre, right now', fmt(E.center, 1) + ' cm'],
+    ['Shadow speed ÷ ball speed', fmt(E.m, 2) + ' — always'],
+    ['Dark centre (umbra)', E.hasUmbra ? fmt(E.inner2 - E.inner1, 1) + ' cm wide' : 'gone'],
+    ['Fuzzy rim, each side', fmt(E.rim, 1) + ' cm'],
+    ['Candle from pinhole', S.u + ' cm'], ['Image, right now', fmt(img.y, 1) + ' cm'],
+  ]);
+}
+function paintWhy(E, img, yb){
+  if (!S.locked) return;
+  $('whyCard').hidden = false;
+  let t = `<p>The screen is <b>${fmt(E.m, 2)}×</b> as far from the lamp as the ball is, so wherever the ball goes, its shadow goes ${fmt(E.m, 2)}× as far — and moves ${fmt(E.m, 2)}× as fast, whatever the ball is doing.</p>`;
+  t += S.hw < 0.3 ? `<p>The lamp is a point, so every point on the screen either sees it or does not: the edge of the shadow is razor sharp.</p>`
+     : E.hasUmbra ? `<p>The lamp is ${fmt(S.hw, 1)} cm wide, so round the dark centre is a fuzzy rim <b>${fmt(E.rim, 1)} cm</b> wide on each side, where only part of the lamp is hidden.</p>`
+     : `<p>The lamp is so wide compared with how close the ball is that no point on the screen ever loses the lamp completely: the dark centre has <b>vanished</b>, and the whole shadow is one fuzzy rim.</p>`;
+  t += `<p>Through the pinhole, the image sits at <b>${fmt(img.y, 1)} cm</b> while the candle itself is at ${fmt(yb, 1)} cm: the image always moves the <b>opposite way</b> to the candle. That is what "upside down" really means for a pinhole picture.</p>`;
+  $('why').innerHTML = t;
+}
+function check(E){
+  if (!S.locked) return;
+  if (S.hw <= 1) S.seen.hwLo = true;
+  if (S.hw >= 5) S.seen.hwHi = true;
+  if (S.seen.hwLo && S.seen.hwHi) discover('wider');
+  if (!E.hasUmbra) discover('vanish');
+  if (S.t >= 3) discover('faster');
+  if (S.t >= 3 && S.seen.uChanged) discover('opposite');
+}
+
+/* ============================================================================
+   Controls
+   ============================================================================ */
+build();
+const on = (id, ev, fn) => $(id).addEventListener(ev, fn);
+on('hw', 'input', e => { S.hw = +e.target.value; paint(); });
+on('d1', 'input', e => { S.d1 = +e.target.value; paint(); });
+on('u', 'input', e => { S.u = +e.target.value; S.seen.uChanged = true; paint(); });
+
+function lockControls(lock){
+  for (const id of ['hw', 'd1', 'u']) $(id).disabled = lock;
+  $('gate').hidden = !lock;
+}
+
+findings($('finds'), [
+  {id: 'faster',   icon: '→', label: 'The shadow always races ahead of the ball', hint: 'Let the swing play for a few seconds'},
+  {id: 'wider',    icon: '◐', label: 'A wider lamp makes a wider fuzzy rim', hint: 'Try a narrow lamp, then a wide one'},
+  {id: 'vanish',   icon: '○', label: 'Make the dark centre disappear completely', hint: 'A wide lamp and a ball close to it'},
+  {id: 'opposite', icon: '⇄', label: 'Through the pinhole, the image moves the opposite way', hint: 'Change the candle’s distance, then watch both sides swing'},
+], () => toast('All four found. Every one comes from the same straight-line rays — just watched over time.', 4200));
+
+const POE = predict($('poe'), {
+  id: 'shadow-speed',
+  q: 'A torch shines on a ball that swings from side to side, casting its shadow on a screen behind it. Compared with the ball, the shadow on the screen moves…',
+  options: [
+    {id: 'same',   text: 'at the same speed as the ball.'},
+    {id: 'slower', text: 'more slowly than the ball.'},
+    {id: 'faster', text: 'faster than the ball.', right: true},
+    {id: 'still',  text: 'it does not move at all.'},
+  ],
+  onLock(){
+    S.locked = true;
+    lockControls(false);
+    CLOCK = clock({mount: $('clock'), onTick: dt => { S.t += dt; paint(); }, step: BEAT});
+    $('clockNote').textContent = 'Play, slow down or step through one swing.';
+    say('Now watch the swing, and its shadow.');
+    paint();
+  },
+});
+lockControls(!POE.locked);
+if (!Play.FF('predict')) S.locked = true;
+paint();
+window.applyFeatures = () => paint();
+window.PG_STATE = () => JSON.parse(JSON.stringify(Object.assign({}, S,
+  {yb: yOf(S.t), edges: shadowEdges(S.hw, S.d1, BALL_R, yOf(S.t), D_CM), img: pinholeImage(S.u, V_CM, yOf(S.t), CANDLE_H),
+   clock: CLOCK ? {playing: CLOCK.playing, speed: CLOCK.speed} : null})));
+window.PG_MODEL = {yOf, shadowEdges, pinholeImage, PX, AY, AMP, PERIOD, BEAT, BALL_R, CANDLE_H, D_CM, LX, WX, V_CM, PHX, SCR_X};
+</script>
+</body>
+</html>

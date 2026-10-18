@@ -1,0 +1,944 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Light the Bulb</title>
+<meta name="description" content="Class 6–8: wire cells, bulbs, LEDs and switches on a breadboard. The circuit is solved from what you wire: bulbs glow, a compass swings, a coil lifts clips and a nichrome wire heats up.">
+<link rel="icon" href="../../favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600&family=Inter:wght@400;500;600;700&family=Nunito:wght@500;700;800&family=Newsreader:opsz,wght@6..72,400;6..72,500&family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="../../play.css">
+<style>
+/* Only what this page needs beyond play.css. */
+.gate{position:absolute; left:0; width:72%; top:0; height:98%; display:grid; place-items:center; pointer-events:none}
+.gate span{background:rgba(29,35,39,.86); color:#fff; padding:10px 16px; border-radius:99px; font-weight:600; font-size:14px}
+.pg-stage{align-self:start; min-height:0}
+@media (max-width:1100px){ .pg-main.wide-side{grid-template-columns:1fr} }
+.slotHit{fill:transparent; cursor:pointer}
+.slotHit:hover{fill:rgba(255,255,255,.22); stroke:#fff6d8; stroke-width:1.5; stroke-dasharray:4 4}
+body.locked .slotHit{pointer-events:none}
+.tools{display:grid; grid-template-columns:repeat(4,1fr); gap:6px}
+.tool{display:flex; flex-direction:column; align-items:center; gap:2px; padding:7px 4px 6px; border-radius:var(--radius-sm); border:1.5px solid var(--hair-2);
+  background:var(--card); cursor:pointer; font-size:12px; font-weight:600; color:var(--ink-2); line-height:1.1}
+.tool svg{width:34px; height:22px; background:#f7f5ef; border-radius:5px}
+.tool:hover{border-color:var(--ink-3)}
+.tool[aria-pressed="true"]{border-color:var(--accent); background:var(--accent-soft); color:var(--ink)}
+.tool:disabled{opacity:.45; cursor:default}
+.chips{display:flex; flex-wrap:wrap; gap:5px; margin-top:8px}
+.chip{padding:4px 9px; border-radius:99px; border:1px solid var(--hair-2); background:var(--card); cursor:pointer; font-size:12.5px; color:var(--ink-2)}
+.chip[aria-pressed="true"]{background:var(--ink); color:var(--card); border-color:var(--ink)}
+.chip:disabled{opacity:.45; cursor:default}
+.seg{display:flex; gap:4px; flex-wrap:wrap; align-items:center}
+.btn[aria-pressed="true"]{background:var(--accent-soft); border-color:var(--accent)}
+.note{font-size:12.5px; color:var(--ink-3); margin:6px 0 0}
+.why p{font-size:13.5px; margin-bottom:.5em}
+.why ul{margin:0 0 .5em; padding-left:18px; font-size:13.5px}
+.why li{margin:2px 0}
+.warn{color:var(--bad); font-weight:600}
+.sub{font-size:11.5px; font-weight:700; color:var(--ink-3); letter-spacing:.05em; text-transform:uppercase; margin:10px 0 4px}
+</style>
+</head>
+<body class="locked">
+<header class="pg-top"></header>
+
+<div class="pg-intro">
+  <h1>Light the bulb</h1>
+  <p>A breadboard, a box of parts and a battery of cells. Put a part between any two pegs. Nothing on this board is a picture of the answer:
+     every time you change something, the page works out the current in every wire from what you have joined, and the bulbs, the compass,
+     the electromagnet and the heating wire respond to that current.</p>
+</div>
+
+<main class="pg-main wide-side">
+  <section class="pg-stage" id="stageWrap">
+    <svg id="stage" viewBox="0 0 1000 650" role="img" aria-label="A breadboard with the circuit you build, its circuit diagram, a compass close-up and a graph over time"></svg>
+    <div class="gate" id="gate"><span>Make your prediction first →</span></div>
+  </section>
+
+  <aside class="pg-side">
+    <div id="poe"></div>
+
+    <div class="card" id="partsCard">
+      <div class="row" style="justify-content:space-between; margin-bottom:8px">
+        <div class="kicker" style="margin:0">Parts box</div>
+        <div class="row" style="gap:6px">
+          <select id="preset" aria-label="Start from a circuit in the book" disabled>
+            <option value="">Start from…</option>
+            <option value="series">Two bulbs, one path (Fig. 3.17)</option>
+            <option value="torch">A torch: cells, switch, bulb</option>
+            <option value="led">An LED and two cells (Fig. 3.10)</option>
+            <option value="tester">Conduction tester (Fig. 3.15)</option>
+            <option value="oersted">Wire over a compass (Fig. 4.1)</option>
+            <option value="magnet">Electromagnet (Fig. 4.3)</option>
+            <option value="heat">Heating a nichrome wire (Fig. 4.5)</option>
+            <option value="empty">An empty board</option>
+          </select>
+        </div>
+      </div>
+      <div class="tools" id="tools"></div>
+      <div id="matBox" hidden>
+        <div class="sub">Material to test</div>
+        <div class="chips" id="mats"></div>
+      </div>
+      <div id="coilBox" hidden>
+        <div class="sub">Electromagnet</div>
+        <div class="seg" id="turnsSeg"><span style="font-size:12.5px;color:var(--ink-2)">Turns</span></div>
+        <div class="seg" style="margin-top:6px"><button class="btn sm" id="btnCore" aria-pressed="true">Iron nail inside the coil</button></div>
+      </div>
+      <p class="note" id="toolNote">Pick a part, then click the space between two pegs.</p>
+    </div>
+
+    <div class="card why" id="whyCard">
+      <div class="kicker">What is happening</div>
+      <div id="why"><p style="color:var(--ink-3)">The explanation appears once you have made a prediction.</p></div>
+    </div>
+
+    <div class="card"><div class="kicker">To find</div><div id="finds"></div></div>
+  </aside>
+</main>
+
+<script src="../../play.js"></script>
+<script>
+'use strict';
+const {$, esc, clamp, fmt, loop, sound, say, track, toast, predict, findings, discover, found,
+       shareState, sharedState, mount, reduced} = Play;
+mount({thread: 'circuits', band: 'tinkerer'});
+
+/* MODEL:start ==================================================================
+   A real circuit solver. The board is a set of nodes (the pegs); each part is an
+   element between two of them. Modified nodal analysis: Kirchhoff's current law at
+   every node, plus one equation for every source (a cell, or an LED that is
+   conducting). Ideal-diode iteration decides which LEDs conduct. Every glow, every
+   compass swing, every clip lifted and every degree of heat is read from the
+   currents this solve returns.
+
+   Parts (numbers a teacher can check; see the report for which are assumed):
+     cell      emf 1.5 V, internal resistance 0.5 Ω (a dry cell)
+     bulb      torch bulb rated 2.5 V, 0.3 A, so about 8.3 Ω; brightness = power ÷ 0.75 W
+     LED       conducts only from + to −, and only above 2.0 V; 40 Ω once on; full glow at 20 mA
+     wire      0.005 Ω
+     nichrome  10 cm of 0.3 mm wire (NCERT Activity 4.5): R = ρl/A, ρ = 1.10 × 10⁻⁶ Ω m
+     coil      0.02 Ω a turn; pull on the clips ∝ (μ n I)², iron core μ ≈ 100
+     compass   1 cm under the wire; wire field B = μ₀I / 2πd against the Earth's 38 µT
+   ============================================================================ */
+const E_CELL = 1.5, R_CELL = 0.5, R_WIRE = 0.005;
+const R_BULB = 8.3, P_BULB = 0.75;
+const LED_VF = 2.0, LED_RON = 40, LED_FULL = 0.02;
+const NI = {rho: 1.10e-6, l: 0.10, d: 0.3e-3, dens: 8400, c: 450, h: 100};
+NI.A = Math.PI * NI.d * NI.d / 4;
+NI.R = NI.rho * NI.l / NI.A;                               // ≈ 1.56 Ω
+NI.C = NI.dens * NI.A * NI.l * NI.c;                       // heat capacity, J/K
+NI.G = NI.h * Math.PI * NI.d * NI.l;                       // heat lost per kelvin, W/K
+const T_ROOM = 25;
+const COIL = {rTurn: 0.02, mu: 100, K: 2865};
+const MU0 = 4e-7 * Math.PI, B_EARTH = 38e-6, D_COMPASS = 0.01;
+const MATS = {
+  key:    {name: 'iron key',        R: 0.01, icon: 'key'},
+  coin:   {name: 'coin',            R: 0.01, icon: 'coin'},
+  foil:   {name: 'aluminium foil',  R: 0.02, icon: 'foil'},
+  needle: {name: 'sewing needle',   R: 0.05, icon: 'needle'},
+  lead:   {name: 'pencil lead',     R: 3.0,  icon: 'lead'},
+  wood:   {name: 'wooden stick',    R: Infinity, icon: 'wood'},
+  scale:  {name: 'plastic scale',   R: Infinity, icon: 'scale'},
+  eraser: {name: 'rubber eraser',   R: Infinity, icon: 'eraser'},
+  bangle: {name: 'glass bangle',    R: Infinity, icon: 'bangle'},
+  paper:  {name: 'paper strip',     R: Infinity, icon: 'paper'},
+  candle: {name: 'candle (wax)',    R: Infinity, icon: 'candle'},
+  cork:   {name: 'cork',            R: Infinity, icon: 'cork'},
+};
+
+/* solveNet(n, els): els are {t:'R', a, b, R} or {t:'V', a, b, E, r}; a source raises the
+   potential from a to b by E, less r × its current. Returns node potentials (NaN where
+   nothing is connected; each separate island has its own zero) and, for each element,
+   its current from a to b. */
+function solveNet(n, els){
+  const par = Array.from({length: n}, (_, i) => i);
+  const find = i => par[i] === i ? i : (par[i] = find(par[i]));
+  const used = new Uint8Array(n);
+  for (const e of els) { used[e.a] = used[e.b] = 1; par[find(e.a)] = find(e.b); }
+  const gnd = new Map();
+  for (let i = 0; i < n; i++) if (used[i]) { const r = find(i); if (!gnd.has(r)) gnd.set(r, i); }
+  const idx = new Int32Array(n).fill(-1);
+  let m = 0;
+  for (let i = 0; i < n; i++) if (used[i] && gnd.get(find(i)) !== i) idx[i] = m++;
+  const nv = m;
+  for (const e of els) if (e.t === 'V') e._k = m++;
+  const A = Array.from({length: m}, () => new Float64Array(m)), z = new Float64Array(m);
+  const add = (r, c, v) => { if (r >= 0 && c >= 0) A[r][c] += v; };
+  for (const e of els) {
+    const ia = idx[e.a], ib = idx[e.b];
+    if (e.t === 'R') { const g = 1 / e.R; add(ia, ia, g); add(ib, ib, g); add(ia, ib, -g); add(ib, ia, -g); }
+    else { const k = e._k; add(ia, k, 1); add(ib, k, -1); add(k, ib, 1); add(k, ia, -1); A[k][k] += e.r || 0; z[k] = e.E; }
+  }
+  /* Gaussian elimination with partial pivoting */
+  let ok = true;
+  for (let c = 0; c < m; c++) {
+    let p = c, best = Math.abs(A[c][c]);
+    for (let r = c + 1; r < m; r++) if (Math.abs(A[r][c]) > best) { best = Math.abs(A[r][c]); p = r; }
+    if (best < 1e-13) { ok = false; continue; }
+    if (p !== c) { const t = A[p]; A[p] = A[c]; A[c] = t; const u = z[p]; z[p] = z[c]; z[c] = u; }
+    for (let r = c + 1; r < m; r++) {
+      const f = A[r][c] / A[c][c]; if (!f) continue;
+      for (let k = c; k < m; k++) A[r][k] -= f * A[c][k];
+      z[r] -= f * z[c];
+    }
+  }
+  const x = new Float64Array(m);
+  for (let r = m - 1; r >= 0; r--) {
+    let s = z[r];
+    for (let k = r + 1; k < m; k++) s -= A[r][k] * x[k];
+    x[r] = Math.abs(A[r][r]) < 1e-13 ? 0 : s / A[r][r];
+  }
+  const V = new Float64Array(n).fill(NaN);
+  for (let i = 0; i < n; i++) if (used[i]) V[i] = idx[i] < 0 ? 0 : x[idx[i]];
+  const I = els.map(e => e.t === 'R' ? (V[e.a] - V[e.b]) / e.R : x[e._k]);
+  const island = i => used[i] ? find(i) : -1;
+  return {V, I, ok, island};
+}
+
+/* The board's parts as circuit elements. A part sits on an edge from peg a to peg b.
+   `dir` +1 puts a cell's + terminal (an LED's long + leg) at b. Returns the elements and,
+   for each, the sign that turns its current into "along the edge, a to b". */
+function netOf(parts, ends, ledOn){
+  const els = [];
+  for (const k in parts) {
+    const p = parts[k], [a, b] = ends(k);
+    const P = (lo, hi) => p.dir > 0 ? [lo, hi, 1] : [hi, lo, -1];
+    switch (p.kind) {
+      case 'wire':     els.push({k, t: 'R', a, b, R: R_WIRE, s: 1}); break;
+      case 'switch':   if (p.on) els.push({k, t: 'R', a, b, R: R_WIRE, s: 1}); break;
+      case 'bulb':     if (!p.fused) els.push({k, t: 'R', a, b, R: R_BULB, s: 1}); break;
+      case 'nichrome': els.push({k, t: 'R', a, b, R: NI.R, s: 1}); break;
+      case 'coil':     els.push({k, t: 'R', a, b, R: COIL.rTurn * p.turns, s: 1}); break;
+      case 'mat':      if (isFinite(MATS[p.m].R)) els.push({k, t: 'R', a, b, R: MATS[p.m].R, s: 1}); break;
+      case 'cell': { const [n0, n1, s] = P(a, b); els.push({k, t: 'V', a: n0, b: n1, E: E_CELL, r: R_CELL, s}); break; }
+      case 'led': {  /* conducting LED = a small source opposing the current: a = cathode, b = anode */
+        if (ledOn[k]) { const [ca, an, s] = P(a, b); els.push({k, t: 'V', a: ca, b: an, E: LED_VF, r: LED_RON, s, led: true}); }
+        break; }
+    }
+  }
+  return els;
+}
+/* Solve the board: iterate the LEDs until each is consistent (on only if forward current
+   flows; off only if the voltage across it stays below 2.0 V). */
+function solveBoard(parts, nNodes, ends){
+  const ledOn = {};
+  let res, els;
+  for (let it = 0; it < 24; it++) {
+    els = netOf(parts, ends, ledOn);
+    res = solveNet(nNodes, els);
+    let changed = false;
+    for (const k in parts) {
+      const p = parts[k]; if (p.kind !== 'led') continue;
+      const [a, b] = ends(k), an = p.dir > 0 ? b : a, ca = p.dir > 0 ? a : b;
+      if (ledOn[k]) {
+        const e = els.find(e => e.k === k);
+        if (!(res.I[els.indexOf(e)] < -1e-9)) { ledOn[k] = false; changed = true; }   // current must flow anode → cathode
+      } else {
+        const v = res.V[an] - res.V[ca];
+        if (isFinite(v) && v > LED_VF + 1e-9) { ledOn[k] = true; changed = true; }
+      }
+    }
+    if (!changed) break;
+  }
+  const cur = {};                   // current along each edge, a → b
+  for (const k in parts) cur[k] = 0;
+  els.forEach((e, i) => { cur[e.k] = e.s * res.I[i]; });
+  const out = {V: res.V, cur, ledOn, island: res.island, ok: res.ok};
+  /* LED current in its own forward sense, bulb power, cell current out of its + terminal */
+  out.info = {};
+  for (const k in parts) {
+    const p = parts[k], i = cur[k];
+    if (p.kind === 'bulb') out.info[k] = {I: Math.abs(i), P: i * i * R_BULB, b: i * i * R_BULB / P_BULB};
+    else if (p.kind === 'led') { const f = p.dir > 0 ? -i : i; /* forward: + leg to − leg */ out.info[k] = {I: Math.max(0, f), b: clamp(f / LED_FULL, 0, 1)}; }
+    else if (p.kind === 'cell') out.info[k] = {I: p.dir > 0 ? i : -i};    // + means it pushes forward
+    else out.info[k] = {I: Math.abs(i)};
+  }
+  return out;
+}
+/* A compass 1 cm under a straight wire. The needle settles along the sum of the Earth's
+   field (north, up the screen) and the wire's field, which below the wire points along
+   u × (−z) for a current along u. Returns the needle's turn from north, in degrees,
+   clockwise positive (east). */
+function compassAngle(I, ux, uy){
+  const B = MU0 * Math.abs(I) / (2 * Math.PI * D_COMPASS);
+  const sx = Math.sign(I) * ux, sy = Math.sign(I) * uy;       // current direction, screen axes (y down)
+  /* In map axes (x east, y north): u = (sx, −sy). u × (−z) = (−u_y, u_x). */
+  const bx = B * sy, by = B * sx;                                // east, north components of the wire field
+  return Math.atan2(bx, B_EARTH + by) * 180 / Math.PI;
+}
+/* Steady temperature of the nichrome wire for a current I, and its time constant. */
+const niSteady = I => T_ROOM + I * I * NI.R / NI.G;
+const niTau = () => NI.C / NI.G;
+/* How many paper clips the electromagnet holds: pull ∝ (μ n I)². */
+function clipsFor(turns, I, core){
+  const x = (core ? COIL.mu : 1) * turns * Math.abs(I) / COIL.K;
+  return Math.min(30, Math.floor(x * x + 1e-9));
+}
+/* MODEL:end */
+
+/* ============================================================================
+   The board
+   ============================================================================ */
+const C = 6, RW = 4, X0 = 80, Y0 = 74, DX = 120, DY = 124;
+const NN = C * RW;
+const node = (i, j) => j * C + i;
+const pos = n => ({x: X0 + (n % C) * DX, y: Y0 + Math.floor(n / C) * DY});
+const SLOTS = [];
+for (let j = 0; j < RW; j++) for (let i = 0; i < C - 1; i++) SLOTS.push(`h${i}_${j}`);
+for (let j = 0; j < RW - 1; j++) for (let i = 0; i < C; i++) SLOTS.push(`v${i}_${j}`);
+function ends(k){
+  const [i, j] = k.slice(1).split('_').map(Number);
+  return k[0] === 'h' ? [node(i, j), node(i + 1, j)] : [node(i, j), node(i, j + 1)];
+}
+function geo(k){
+  const [a, b] = ends(k), A = pos(a), B = pos(b), h = k[0] === 'h';
+  return {x1: A.x, y1: A.y, x2: B.x, y2: B.y, L: h ? DX : DY, ang: h ? 0 : 90, mx: (A.x + B.x) / 2, my: (A.y + B.y) / 2, h,
+          ux: h ? 1 : 0, uy: h ? 0 : 1};
+}
+
+/* ---- state: plain data --------------------------------------------------- */
+const S = {parts: {}, compass: null, tool: 'hand', mat: 'key', turns: 50, core: true, locked: false,
+           tested: {cond: [], ins: []}, niT: T_ROOM, t: 0};
+let SOL = null, COUNT = 0;
+
+/* ---- presets: circuits from the book ------------------------------------- */
+const PRESETS = {
+  series:  {parts: {h1_3: {kind: 'cell', dir: -1}, h2_3: {kind: 'cell', dir: -1}, h3_3: {kind: 'switch', on: true},
+                    v1_1: {kind: 'wire'}, v1_2: {kind: 'wire'}, h1_1: {kind: 'bulb'}, h2_1: {kind: 'wire'}, h3_1: {kind: 'bulb'},
+                    v4_1: {kind: 'wire'}, v4_2: {kind: 'wire'}}},
+  torch:   {parts: {h1_3: {kind: 'cell', dir: -1}, h2_3: {kind: 'cell', dir: -1}, h3_3: {kind: 'switch', on: false},
+                    v1_1: {kind: 'wire'}, v1_2: {kind: 'wire'}, h1_1: {kind: 'wire'}, h2_1: {kind: 'bulb'}, h3_1: {kind: 'wire'},
+                    v4_1: {kind: 'wire'}, v4_2: {kind: 'wire'}}},
+  led:     {parts: {h1_3: {kind: 'cell', dir: -1}, h2_3: {kind: 'cell', dir: -1}, h3_3: {kind: 'wire'},
+                    v1_1: {kind: 'wire'}, v1_2: {kind: 'wire'}, h1_1: {kind: 'wire'}, h2_1: {kind: 'led', dir: -1}, h3_1: {kind: 'wire'},
+                    v4_1: {kind: 'wire'}, v4_2: {kind: 'wire'}}},
+  tester:  {parts: {h1_3: {kind: 'cell', dir: -1}, h2_3: {kind: 'cell', dir: -1}, h3_3: {kind: 'wire'},
+                    v1_1: {kind: 'wire'}, v1_2: {kind: 'wire'}, h1_1: {kind: 'bulb'}, h2_1: {kind: 'wire'},
+                    v4_1: {kind: 'wire'}, v4_2: {kind: 'wire'}}, note: 'The gap at the top right is the tester: put a material in it.'},
+  oersted: {parts: {h1_3: {kind: 'cell', dir: -1}, h2_3: {kind: 'cell', dir: -1}, h3_3: {kind: 'switch', on: false},
+                    v1_1: {kind: 'wire'}, v1_2: {kind: 'wire'}, h1_1: {kind: 'bulb'}, h2_1: {kind: 'wire'}, h3_1: {kind: 'wire'},
+                    v4_1: {kind: 'wire'}, v4_2: {kind: 'wire'}}, compass: 'v4_1'},
+  magnet:  {parts: {h1_3: {kind: 'cell', dir: -1}, h2_3: {kind: 'switch', on: false}, h3_3: {kind: 'wire'},
+                    v1_1: {kind: 'wire'}, v1_2: {kind: 'wire'}, h1_1: {kind: 'wire'}, h2_1: {kind: 'coil'}, h3_1: {kind: 'wire'},
+                    v4_1: {kind: 'wire'}, v4_2: {kind: 'wire'}}},
+  heat:    {parts: {h1_3: {kind: 'cell', dir: -1}, h2_3: {kind: 'switch', on: false}, h3_3: {kind: 'wire'},
+                    v1_1: {kind: 'wire'}, v1_2: {kind: 'wire'}, h1_1: {kind: 'wire'}, h2_1: {kind: 'nichrome'}, h3_1: {kind: 'wire'},
+                    v4_1: {kind: 'wire'}, v4_2: {kind: 'wire'}}},
+  empty:   {parts: {}},
+};
+function loadPreset(name){
+  const pr = PRESETS[name]; if (!pr) return;
+  S.parts = {}; COUNT = 0;
+  let nb = 0;
+  for (const k in pr.parts) S.parts[k] = Object.assign({n: pr.parts[k].kind === 'bulb' ? ++nb : ++COUNT}, pr.parts[k], pr.parts[k].kind === 'coil' ? {turns: S.turns} : {});
+  S.compass = pr.compass || null;
+  S.niT = T_ROOM; HIST.length = 0;
+  for (const k of SLOTS) drawSlot(k);
+  solve();
+  if (pr.note) toast(pr.note, 3400);
+}
+
+/* ============================================================================
+   Stage: built once, then patched.
+   ============================================================================ */
+const svg = $('stage');
+const MINI = {x: 728, y: 58};                    // circuit-diagram panel
+const CMP = {x: 856, y: 376, r: 60};                     // compass close-up
+const GR = {x: 70, y: 520, w: 880, h: 92};               // graph over time
+function build(){
+  let pegs = '', hits = '', slots = '', dots = '';
+  for (let n = 0; n < NN; n++) { const p = pos(n); pegs += `<circle cx="${p.x}" cy="${p.y}" r="6.5" fill="#6b4a25"/><circle cx="${p.x}" cy="${p.y}" r="3.2" fill="#d9b27a"/>`; }
+  for (const k of SLOTS) {
+    const g = geo(k);
+    slots += `<line x1="${g.x1}" y1="${g.y1}" x2="${g.x2}" y2="${g.y2}" stroke="#b58a53" stroke-width="1.5" stroke-dasharray="2 7" opacity=".55"/>` +
+             `<g id="s_${k}" transform="translate(${g.x1} ${g.y1}) rotate(${g.ang})"></g>`;
+    dots += `<g id="d_${k}">${[0, 1, 2].map(() => `<circle r="3.4" fill="#ffe27a" stroke="#8a5a00" stroke-width="1" opacity="0"/>`).join('')}</g>`;
+    const w = g.L - 26, t = 36;
+    hits += g.h ? `<rect class="slotHit" data-k="${k}" x="${g.x1 + 13}" y="${g.y1 - t / 2}" width="${w}" height="${t}" rx="8"/>`
+                : `<rect class="slotHit" data-k="${k}" x="${g.x1 - t / 2}" y="${g.y1 + 13}" width="${t}" height="${w}" rx="8"/>`;
+  }
+  svg.innerHTML = `
+  <defs>
+    <linearGradient id="gWood" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#e9c893"/><stop offset="1" stop-color="#d7ad6c"/></linearGradient>
+    <linearGradient id="gCell" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3b3f46"/><stop offset=".45" stop-color="#1d2025"/><stop offset="1" stop-color="#2b2f35"/></linearGradient>
+    <linearGradient id="gCellBand" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffcf4a"/><stop offset="1" stop-color="#e09b00"/></linearGradient>
+    <radialGradient id="gGlow"><stop offset="0" stop-color="#fff6b0" stop-opacity=".95"/><stop offset=".45" stop-color="#ffd84a" stop-opacity=".5"/><stop offset="1" stop-color="#ffc400" stop-opacity="0"/></radialGradient>
+    <radialGradient id="gLed"><stop offset="0" stop-color="#ffd0d0" stop-opacity=".95"/><stop offset=".5" stop-color="#ff3b3b" stop-opacity=".45"/><stop offset="1" stop-color="#ff0000" stop-opacity="0"/></radialGradient>
+    <radialGradient id="gGlass" cx="40%" cy="35%"><stop offset="0" stop-color="#ffffff" stop-opacity=".9"/><stop offset="1" stop-color="#dfe9f2" stop-opacity=".55"/></radialGradient>
+  </defs>
+  <rect x="0" y="0" width="1000" height="650" fill="#f7f3ea"/>
+  <rect x="18" y="18" width="684" height="468" rx="16" fill="url(#gWood)" stroke="#b98a4a" stroke-width="2"/>
+  <text x="36" y="44" fill="#6b4a25" font-size="13" font-weight="700" letter-spacing=".08em">YOUR BREADBOARD</text>
+  <text x="684" y="44" fill="#7d5b2f" font-size="12" text-anchor="end" id="boardHint">Current flows from + round to −. Dots show it moving.</text>
+  <g id="slotGuides">${slots.replace(/<g id="s_[^"]+"[^>]*><\/g>/g, '')}</g>
+  <g id="compassG" opacity="0"></g>
+  <g id="dotsUnder"></g>
+  <g id="parts">${SLOTS.map(k => { const g = geo(k); return `<g id="s_${k}" transform="translate(${g.x1} ${g.y1}) rotate(${g.ang})"></g>`; }).join('')}</g>
+  <g id="dots" pointer-events="none">${dots}</g>
+  <g id="pegs" pointer-events="none">${pegs}</g>
+  <g id="labels" pointer-events="none" font-size="12" font-weight="700"></g>
+  <g id="hits">${hits}</g>
+
+  <!-- the circuit diagram of the same board -->
+  <rect x="712" y="18" width="270" height="222" rx="12" fill="#ffffff" stroke="#ddd6c6"/>
+  <text x="728" y="42" fill="#4a555b" font-size="12.5" font-weight="700" letter-spacing=".08em">CIRCUIT DIAGRAM</text>
+  <g id="mini" transform="translate(${MINI.x} ${MINI.y})"></g>
+  <text x="847" y="228" fill="#7c878c" font-size="11" text-anchor="middle">The same circuit, drawn with symbols</text>
+
+  <!-- compass close-up -->
+  <rect x="712" y="252" width="270" height="234" rx="12" fill="#ffffff" stroke="#ddd6c6"/>
+  <text x="728" y="276" fill="#4a555b" font-size="12.5" font-weight="700" letter-spacing=".08em">COMPASS</text>
+  <g id="bigCompass"></g>
+  <text id="cmpTxt" x="847" y="476" fill="#4a555b" font-size="12" text-anchor="middle"></text>
+
+  <!-- graph over time -->
+  <rect x="18" y="498" width="964" height="140" rx="12" fill="#ffffff" stroke="#ddd6c6"/>
+  <text x="34" y="516" fill="#4a555b" font-size="12.5" font-weight="700" letter-spacing=".08em" id="grTitle">CURRENT FROM THE BATTERY</text>
+  <g id="grAxes"></g>
+  <path id="grLine" fill="none" stroke="#e0a100" stroke-width="2.6" stroke-linejoin="round"/>
+  <circle id="grNow" r="4.5" fill="#e0a100" stroke="#fff" stroke-width="1.5"/>
+  <text id="grNowT" font-size="12" font-weight="700" fill="#8a5a00"></text>
+  `;
+  buildCompass();
+}
+function buildCompass(){
+  let t = '';
+  for (let d = 0; d < 360; d += 10) {
+    const a = d * Math.PI / 180, r1 = d % 30 ? CMP.r - 6 : CMP.r - 11;
+    t += `<line x1="${(CMP.x + Math.sin(a) * r1).toFixed(1)}" y1="${(CMP.y - Math.cos(a) * r1).toFixed(1)}" x2="${(CMP.x + Math.sin(a) * CMP.r).toFixed(1)}" y2="${(CMP.y - Math.cos(a) * CMP.r).toFixed(1)}" stroke="#8a94a6" stroke-width="${d % 90 ? 1 : 2}"/>`;
+  }
+  const lab = (s, a) => `<text x="${(CMP.x + Math.sin(a) * (CMP.r + 13)).toFixed(1)}" y="${(CMP.y - Math.cos(a) * (CMP.r + 13) + 4).toFixed(1)}" text-anchor="middle" font-size="12" font-weight="700" fill="#4a555b">${s}</text>`;
+  $('bigCompass').innerHTML = `<circle cx="${CMP.x}" cy="${CMP.y}" r="${CMP.r + 4}" fill="#f4efe2" stroke="#b9ad92" stroke-width="2"/>${t}` +
+    lab('N', 0) + lab('E', Math.PI / 2) + lab('S', Math.PI) + lab('W', -Math.PI / 2) +
+    `<line id="bigWire" x1="${CMP.x}" y1="${CMP.y - CMP.r - 2}" x2="${CMP.x}" y2="${CMP.y + CMP.r + 2}" stroke="#2f6f9f" stroke-width="6" stroke-linecap="round" opacity=".28"/>` +
+    `<g id="bigNeedle"><path d="M${CMP.x} ${CMP.y - CMP.r + 8} L${CMP.x + 7} ${CMP.y} L${CMP.x - 7} ${CMP.y}Z" fill="#d6453d"/>` +
+    `<path d="M${CMP.x} ${CMP.y + CMP.r - 8} L${CMP.x + 7} ${CMP.y} L${CMP.x - 7} ${CMP.y}Z" fill="#8a94a6"/><circle cx="${CMP.x}" cy="${CMP.y}" r="4" fill="#4a555b"/></g>`;
+}
+
+/* ---- part art, in the edge's own frame: from (0,0) to (L,0) -------------- */
+const MAT_ART = {
+  key:    `<circle cx="-14" cy="0" r="8" fill="none" stroke="#9aa3ad" stroke-width="4"/><rect x="-6" y="-2.5" width="26" height="5" rx="2" fill="#9aa3ad"/><rect x="12" y="2" width="4" height="6" fill="#9aa3ad"/><rect x="17" y="2" width="3" height="5" fill="#9aa3ad"/>`,
+  coin:   `<circle r="13" fill="#d8b24a" stroke="#a37e1c" stroke-width="2"/><circle r="8" fill="none" stroke="#a37e1c" stroke-width="1"/>`,
+  foil:   `<path d="M-22 -9 L-10 -12 L2 -8 L14 -12 L23 -7 L21 8 L8 11 L-4 8 L-16 12 L-23 7Z" fill="#dfe4ea" stroke="#9aa3ad" stroke-width="1.2"/>`,
+  needle: `<line x1="-24" y1="0" x2="24" y2="0" stroke="#7d8793" stroke-width="2.4" stroke-linecap="round"/><ellipse cx="-19" cy="0" rx="3.5" ry="1.8" fill="none" stroke="#7d8793" stroke-width="1.2"/>`,
+  lead:   `<rect x="-24" y="-3" width="48" height="6" rx="3" fill="#3a3d42"/><rect x="-24" y="-3" width="48" height="2" rx="1" fill="#6d727a"/>`,
+  wood:   `<rect x="-25" y="-6" width="50" height="12" rx="3" fill="#a8743c"/><path d="M-20 -2 H18 M-14 2 H22" stroke="#7d5327" stroke-width="1"/>`,
+  scale:  `<rect x="-25" y="-8" width="50" height="16" rx="2" fill="#9fd3f0" fill-opacity=".75" stroke="#4a8fb8"/>${[-20, -15, -10, -5, 0, 5, 10, 15, 20].map(x => `<line x1="${x}" y1="-8" x2="${x}" y2="${x % 10 ? -4 : -1}" stroke="#2f6f9f"/>`).join('')}`,
+  eraser: `<rect x="-17" y="-9" width="34" height="18" rx="4" fill="#f4a3b5" stroke="#c96c83"/><rect x="-17" y="-9" width="12" height="18" rx="4" fill="#7fb2e5"/>`,
+  bangle: `<circle r="13" fill="none" stroke="#6fc3b8" stroke-width="5" opacity=".85"/>`,
+  paper:  `<rect x="-24" y="-7" width="48" height="14" fill="#ffffff" stroke="#b9b3a3"/>`,
+  candle: `<rect x="-24" y="-7" width="48" height="14" rx="3" fill="#fff8e1" stroke="#d8cba0"/><line x1="24" y1="0" x2="30" y2="0" stroke="#333" stroke-width="1.5"/>`,
+  cork:   `<rect x="-18" y="-10" width="36" height="20" rx="5" fill="#c9a26b" stroke="#9c7640"/>${[-10, -2, 7].map(x => `<circle cx="${x}" cy="${x % 3 ? 3 : -3}" r="1.6" fill="#9c7640"/>`).join('')}`,
+};
+function leads(L, g1, g2, col = '#2f6f9f'){
+  return `<line x1="0" y1="0" x2="${g1}" y2="0" stroke="${col}" stroke-width="4.5" stroke-linecap="round"/>` +
+         `<line x1="${g2}" y1="0" x2="${L}" y2="0" stroke="${col}" stroke-width="4.5" stroke-linecap="round"/>`;
+}
+function partArt(p, L){
+  const m = L / 2;
+  switch (p.kind) {
+    case 'wire': return `<line x1="0" y1="0" x2="${L}" y2="0" stroke="#2f6f9f" stroke-width="4.5" stroke-linecap="round"/>`;
+    case 'cell': {
+      const cap = p.dir > 0 ? `<rect x="${m + 32}" y="-6" width="6" height="12" rx="2" fill="#b8bec6"/>` : `<rect x="${m - 38}" y="-6" width="6" height="12" rx="2" fill="#b8bec6"/>`;
+      const band = p.dir > 0 ? `<rect x="${m + 10}" y="-13" width="22" height="26" fill="url(#gCellBand)"/>` : `<rect x="${m - 32}" y="-13" width="22" height="26" fill="url(#gCellBand)"/>`;
+      return leads(L, m - 36, m + 36) + `<rect x="${m - 32}" y="-13" width="64" height="26" rx="5" fill="url(#gCell)"/>${band}${cap}`;
+    }
+    case 'bulb':
+      return leads(L, m - 22, m + 22) +
+        `<circle class="glow" cx="${m}" cy="0" r="30" fill="url(#gGlow)" opacity="0"/>` +
+        `<rect x="${m - 25}" y="-8" width="9" height="16" rx="2" fill="#b8a07a"/><rect x="${m + 16}" y="-8" width="9" height="16" rx="2" fill="#b8a07a"/>` +
+        `<ellipse cx="${m}" cy="0" rx="19" ry="15" fill="url(#gGlass)" stroke="#9fb0bf" stroke-width="1.4"/>` +
+        (p.fused ? `<path d="M${m - 16} 0 L${m - 9} 0 L${m - 6} -5 M${m + 3} 4 L${m + 7} -2 L${m + 16} 0" fill="none" stroke="#6b5a4a" stroke-width="1.6"/>`
+                 : `<path class="fil" d="M${m - 16} 0 L${m - 9} 0 L${m - 6} -5 L${m - 3} 5 L${m} -5 L${m + 3} 5 L${m + 6} -5 L${m + 9} 0 L${m + 16} 0" fill="none" stroke="#6b5a4a" stroke-width="1.6"/>`);
+    case 'led': {
+      const plus = p.dir > 0 ? m + 12 : m - 12;
+      return leads(L, m - 12, m + 12, '#8a94a6') +
+        `<circle class="glow" cx="${m}" cy="0" r="26" fill="url(#gLed)" opacity="0"/>` +
+        `<circle cx="${m}" cy="0" r="12" fill="#e2412f" fill-opacity=".85" stroke="#9e2415" stroke-width="1.5"/>` +
+        `<circle cx="${m - 3}" cy="-4" r="3" fill="#fff" opacity=".6"/>` +
+        `<line x1="${plus}" y1="-11" x2="${plus}" y2="11" stroke="#9e2415" stroke-width="2.4"/>`;
+    }
+    case 'switch': {
+      const a = p.on ? 0 : -32;
+      return leads(L, m - 24, m + 24) + `<rect x="${m - 34}" y="-15" width="68" height="30" rx="4" fill="#efe3c6" stroke="#c2ab7a"/>` +
+        `<g transform="rotate(${a} ${m - 24} 0)"><line x1="${m - 24}" y1="0" x2="${m + 26}" y2="0" stroke="#8d98a5" stroke-width="3.2" stroke-linecap="round"/></g>` +
+        `<circle cx="${m - 24}" cy="0" r="6" fill="#e0b43a" stroke="#9c7a17"/><circle cx="${m + 24}" cy="0" r="6" fill="#e0b43a" stroke="#9c7a17"/>`;
+    }
+    case 'mat':
+      return leads(L, m - 30, m + 30) + `<g transform="translate(${m} 0)">${MAT_ART[p.m]}</g>` +
+        `<path d="M${m - 34} -5 L${m - 26} -2 L${m - 26} 2 L${m - 34} 5Z" fill="#c0392b"/><path d="M${m + 34} -5 L${m + 26} -2 L${m + 26} 2 L${m + 34} 5Z" fill="#222"/>`;
+    case 'nichrome':
+      return leads(L, m - 30, m + 30) + `<circle cx="${m - 30}" cy="0" r="4" fill="#77808a"/><circle cx="${m + 30}" cy="0" r="4" fill="#77808a"/>` +
+        `<circle class="glow" cx="${m}" cy="0" r="26" fill="url(#gGlow)" opacity="0"/>` +
+        `<path class="hot" d="M${m - 30} 0 ${Array.from({length: 10}, (_, i) => `L${(m - 27 + i * 6).toFixed(1)} ${i % 2 ? 4 : -4}`).join(' ')} L${m + 30} 0" fill="none" stroke="#8a8f96" stroke-width="1.7"/>`;
+    case 'coil': {
+      const n = Math.round(p.turns / 6) + 2;
+      let w = '';
+      for (let i = 0; i < n; i++) { const x = m - 24 + i * 48 / (n - 1); w += `<ellipse cx="${x.toFixed(1)}" cy="0" rx="2.2" ry="${S.core ? 9 : 8}" fill="none" stroke="#c46b22" stroke-width="2"/>`; }
+      const nail = S.core ? `<rect x="${m - 38}" y="-4" width="72" height="8" rx="1" fill="#8a929c"/><rect x="${m - 41}" y="-8" width="5" height="16" rx="1" fill="#6d757f"/><path d="M${m + 34} -4 L${m + 42} 0 L${m + 34} 4Z" fill="#8a929c"/>`
+                           : `<rect x="${m - 30}" y="-6" width="60" height="12" rx="3" fill="#f3ead2" stroke="#c9b98f"/>`;
+      return leads(L, m - 28, m + 28, '#c46b22') + nail + w + `<g class="clips"></g>`;
+    }
+  }
+  return '';
+}
+/* labels, in world coordinates, so text never rotates */
+function side(g, off){ return g.h ? {x: g.mx, y: g.my + off} : {x: g.mx + off, y: g.my}; }
+function labelsFor(k, p){
+  const g = geo(k), out = [];
+  const at = (t, off) => ({x: g.x1 + (g.x2 - g.x1) * t + (g.h ? 0 : off), y: g.y1 + (g.y2 - g.y1) * t + (g.h ? off : 0)});
+  if (p.kind === 'cell') {
+    const tp = p.dir > 0 ? 0.5 + 34 / g.L : 0.5 - 34 / g.L, tm = p.dir > 0 ? 0.5 - 34 / g.L : 0.5 + 34 / g.L;
+    const a = at(tp, -20), b = at(tm, -20);
+    out.push(`<text x="${a.x}" y="${a.y + 5}" text-anchor="middle" fill="#b3261e" font-size="16">+</text>`, `<text x="${b.x}" y="${b.y + 5}" text-anchor="middle" fill="#1d2327" font-size="16">−</text>`);
+    const c = side(g, 27); out.push(`<text x="${c.x}" y="${c.y + 4}" text-anchor="middle" fill="#5d4322" font-weight="600" font-size="11">1.5 V</text>`);
+  } else if (p.kind === 'bulb') {
+    const c = side(g, 30); out.push(`<text x="${c.x}" y="${c.y + 4}" text-anchor="middle" fill="#5d4322" font-size="11">${p.fused ? 'broken' : 'bulb ' + p.n}</text>`);
+  } else if (p.kind === 'led') {
+    const a = at(p.dir > 0 ? 0.5 + 20 / g.L : 0.5 - 20 / g.L, -18);
+    out.push(`<text x="${a.x}" y="${a.y + 5}" text-anchor="middle" fill="#b3261e" font-size="14">+</text>`);
+    const c = side(g, 30); out.push(`<text x="${c.x}" y="${c.y + 4}" text-anchor="middle" fill="#5d4322" font-size="11">LED</text>`);
+  } else if (p.kind === 'switch') {
+    const c = side(g, 29); out.push(`<text x="${c.x}" y="${c.y + 4}" text-anchor="middle" fill="${p.on ? '#1f7a4a' : '#b3261e'}" font-size="11">${p.on ? 'ON' : 'OFF'}</text>`);
+  } else if (p.kind === 'mat') {
+    const c = side(g, 28); out.push(`<text x="${c.x}" y="${c.y + 4}" text-anchor="middle" fill="#5d4322" font-size="11">${esc(MATS[p.m].name)}</text>`);
+  } else if (p.kind === 'nichrome') {
+    const c = side(g, 28); out.push(`<text class="niLab" x="${c.x}" y="${c.y + 4}" text-anchor="middle" fill="#5d4322" font-size="11" data-k="${k}">nichrome</text>`);
+  } else if (p.kind === 'coil') {
+    const a = at(0.5 - 44 / g.L, -16), b = at(0.5 + 46 / g.L, -16);
+    out.push(`<text class="pole" data-k="${k}" data-e="a" x="${a.x}" y="${a.y + 4}" text-anchor="middle" font-size="13"></text>`,
+             `<text class="pole" data-k="${k}" data-e="b" x="${b.x}" y="${b.y + 4}" text-anchor="middle" font-size="13"></text>`);
+    const c = side(g, 32); out.push(`<text x="${c.x}" y="${c.y + 4}" text-anchor="middle" fill="#5d4322" font-size="11">${p.turns} turns${S.core ? '' : ', no core'}</text>`);
+  }
+  return out.join('');
+}
+function drawSlot(k){
+  const p = S.parts[k], g = geo(k);
+  $('s_' + k).innerHTML = p ? partArt(p, g.L) : '';
+}
+function drawLabels(){ $('labels').innerHTML = Object.keys(S.parts).map(k => labelsFor(k, S.parts[k])).join(''); }
+
+/* ---- the circuit diagram: symbols (NCERT Table 3.2) on the same grid ---- */
+function symbol(p, L){
+  const m = L / 2, st = 'stroke="#1d2327" stroke-width="1.6" fill="none"';
+  const ln = (a, b) => `<line x1="${a}" y1="0" x2="${b}" y2="0" ${st}/>`;
+  switch (p.kind) {
+    case 'wire': return ln(0, L);
+    case 'cell': { const lo = p.dir > 0 ? m - 3 : m + 3, hi = p.dir > 0 ? m + 3 : m - 3;
+      return ln(0, m - 3) + ln(m + 3, L) + `<line x1="${hi}" y1="-9" x2="${hi}" y2="9" ${st}/><line x1="${lo}" y1="-4.5" x2="${lo}" y2="4.5" stroke="#1d2327" stroke-width="3"/>`; }
+    case 'bulb': return ln(0, m - 7) + ln(m + 7, L) + `<circle cx="${m}" cy="0" r="7" ${st}/>` + (p.fused ? '' : `<path d="M${m - 5} -5 L${m + 5} 5 M${m - 5} 5 L${m + 5} -5" ${st}/>`);
+    case 'led': { const d = p.dir > 0 ? 1 : -1;   /* the triangle points the way current can go: + to − */
+      const tip = m - 5 * d, base = m + 5 * d;
+      return ln(0, m - 5) + ln(m + 5, L) + `<path d="M${base} -6 L${base} 6 L${tip} 0Z" fill="#1d2327"/><line x1="${tip}" y1="-6" x2="${tip}" y2="6" ${st}/>` +
+        `<path d="M${m} -8 l5 -6 M${m + 4} -8 l5 -6" stroke="#1d2327" stroke-width="1.2"/>`; }
+    case 'switch': return ln(0, m - 8) + ln(m + 8, L) + `<circle cx="${m - 8}" cy="0" r="2" fill="#1d2327"/><circle cx="${m + 8}" cy="0" r="2" fill="#1d2327"/>` +
+      (p.on ? ln(m - 8, m + 8) : `<line x1="${m - 8}" y1="0" x2="${m + 6}" y2="-8" ${st}/>`);
+    case 'mat': return ln(0, m - 9) + ln(m + 9, L) + `<rect x="${m - 9}" y="-4" width="18" height="8" fill="${isFinite(MATS[p.m].R) ? '#9aa3ad' : '#f4a3b5'}" stroke="#1d2327" stroke-width="1"/>`;
+    case 'nichrome': return ln(0, m - 10) + ln(m + 10, L) + `<path d="M${m - 10} 0 l2.5 -5 l5 10 l5 -10 l5 10 l2.5 -5" ${st}/>`;
+    case 'coil': return ln(0, m - 10) + ln(m + 10, L) + `<path d="M${m - 10} 0 a2.5 4 0 0 1 5 0 a2.5 4 0 0 1 5 0 a2.5 4 0 0 1 5 0 a2.5 4 0 0 1 5 0" ${st}/>`;
+  }
+  return '';
+}
+function drawMini(){
+  let s = '';
+  /* fit the wired part of the board into the panel */
+  let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
+  for (const k in S.parts) { const g = geo(k); x0 = Math.min(x0, g.x1); y0 = Math.min(y0, g.y1); x1 = Math.max(x1, g.x2); y1 = Math.max(y1, g.y2); }
+  const sc = Math.min(0.5, 220 / Math.max(1, x1 - x0), 130 / Math.max(1, y1 - y0));
+  const ox = 119 - (x0 + x1) / 2 * sc, oy = 70 - (y0 + y1) / 2 * sc;
+  for (const k in S.parts) {
+    const g = geo(k);
+    s += `<g transform="translate(${(ox + g.x1 * sc).toFixed(1)} ${(oy + g.y1 * sc).toFixed(1)}) rotate(${g.ang})">${symbol(S.parts[k], g.L * sc)}</g>`;
+  }
+  if (!Object.keys(S.parts).length) s = `<text x="118" y="70" text-anchor="middle" fill="#9aa3a6" font-size="12">Nothing wired yet</text>`;
+  $('mini').innerHTML = s;
+}
+
+/* ============================================================================
+   Solving and painting
+   ============================================================================ */
+function solve(){
+  SOL = solveBoard(S.parts, NN, ends);
+  drawLabels(); drawMini();
+  paintStatic(); paintWhy(); check();
+}
+const lit = () => {
+  const out = new Set();
+  if (!SOL) return out;
+  for (const k in S.parts) { const p = S.parts[k], f = SOL.info[k]; if ((p.kind === 'bulb' && f.b >= 0.08) || (p.kind === 'led' && f.I > 0.002)) out.add(k); }
+  return out;
+};
+function batteryCurrent(){
+  if (!SOL) return 0;
+  let m = 0;
+  for (const k in S.parts) if (S.parts[k].kind === 'cell') m = Math.max(m, Math.abs(SOL.cur[k]));
+  return m;
+}
+function paintStatic(){
+  for (const k in S.parts) {
+    const p = S.parts[k], el = $('s_' + k), f = SOL.info[k];
+    if (p.kind === 'bulb') {
+      const gl = el.querySelector('.glow'), fil = el.querySelector('.fil');
+      const b = f.b;
+      if (gl) { gl.setAttribute('opacity', b >= 0.08 ? clamp(0.6 + b * 0.4, 0, 1).toFixed(2) : 0); gl.setAttribute('r', (26 + 22 * clamp(b, 0, 1.3)).toFixed(1)); }
+      if (fil) fil.setAttribute('stroke', b > 0.08 ? (b > 0.6 ? '#fff4b0' : '#ffb74a') : '#6b5a4a');
+    } else if (p.kind === 'led') {
+      const gl = el.querySelector('.glow'); gl.setAttribute('opacity', f.b > 0.05 ? (0.3 + 0.7 * f.b).toFixed(2) : 0);
+    }
+  }
+  /* electromagnet: poles and clips */
+  for (const k in S.parts) {
+    const p = S.parts[k]; if (p.kind !== 'coil') continue;
+    const I = SOL.cur[k], n = clipsFor(p.turns, I, S.core);
+    p.clips = n;
+    /* Right-hand grip: the coil is wound the same way on every nail, so current a → b makes the b end north. */
+    const bN = I > 0;
+    for (const t of document.querySelectorAll(`#labels .pole[data-k="${k}"]`)) {
+      const isB = t.dataset.e === 'b';
+      t.textContent = Math.abs(I) > 1e-3 ? ((isB === bN) ? 'N' : 'S') : '';
+      t.setAttribute('fill', (isB === bN) ? '#d6453d' : '#3f7fd8');
+    }
+    const g = $('s_' + k).querySelector('.clips'), L = geo(k).L;
+    let c = '';
+    for (let i = 0; i < Math.min(n, 12); i++) {
+      const x = L / 2 + 40 + (i % 2) * 7 - (i > 5 ? 6 : 0), y = 8 + i * 5.5;
+      c += `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="6" height="11" rx="3" fill="none" stroke="#6d757f" stroke-width="1.4" transform="rotate(${(i % 3 - 1) * 14} ${x + 3} ${y})"/>`;
+    }
+    if (n > 12) c += `<text x="${L / 2 + 58}" y="60" font-size="11" fill="#4a555b" font-weight="700">+${n - 12}</text>`;
+    g.innerHTML = c;
+  }
+  /* the small compass on the board */
+  const cg = $('compassG');
+  if (S.compass) {
+    const g = geo(S.compass);
+    cg.setAttribute('opacity', 1);
+    if (cg.dataset.k !== S.compass) {
+      cg.dataset.k = S.compass;
+      cg.innerHTML = `<circle cx="${g.mx}" cy="${g.my}" r="22" fill="#f4efe2" stroke="#8a7a5a" stroke-width="2"/>` +
+        `<g id="smallNeedle" transform="rotate(0 ${g.mx} ${g.my})"><path d="M${g.mx} ${g.my - 17} L${g.mx + 4.5} ${g.my} L${g.mx - 4.5} ${g.my}Z" fill="#d6453d"/><path d="M${g.mx} ${g.my + 17} L${g.mx + 4.5} ${g.my} L${g.mx - 4.5} ${g.my}Z" fill="#8a94a6"/></g>`;
+    }
+  } else { cg.setAttribute('opacity', 0); cg.dataset.k = ''; }
+  $('bigWire').setAttribute('opacity', S.compass ? 0.35 : 0);
+  if (S.compass) { const g = geo(S.compass); $('bigWire').setAttribute('transform', `rotate(${g.h ? 90 : 0} ${CMP.x} ${CMP.y})`); }
+  /* tools that depend on what is on the board */
+  const hasCoil = Object.values(S.parts).some(p => p.kind === 'coil');
+  $('coilBox').hidden = !hasCoil;
+}
+function targetCompass(){
+  if (!S.compass || !SOL) return 0;
+  const g = geo(S.compass), I = SOL.cur[S.compass] || 0;
+  return compassAngle(I, g.ux, g.uy);
+}
+
+/* ---- the live narrator: every sentence is read from the solved circuit ---- */
+const kindName = p => ({bulb: 'bulb ' + p.n, led: 'the LED', nichrome: 'the nichrome wire', coil: 'the coil', mat: 'the ' + (p.m ? MATS[p.m].name : ''), switch: 'the switch', cell: 'a cell', wire: 'a wire'})[p.kind];
+function blockers(){
+  /* parts that leave a gap: open switch, broken bulb, insulator, LED the wrong way */
+  const out = [];
+  for (const k in S.parts) {
+    const p = S.parts[k];
+    if ((p.kind === 'switch' && !p.on) || (p.kind === 'bulb' && p.fused) || (p.kind === 'mat' && !isFinite(MATS[p.m].R)) || (p.kind === 'led' && !SOL.ledOn[k])) out.push(k);
+  }
+  return out;
+}
+/* Would any lamp light if this one gap were closed? A second solve answers it. */
+function wouldLight(k){
+  const p = S.parts[k], alt = Object.assign({}, S.parts);
+  if (p.kind === 'led') alt[k] = Object.assign({}, p, {dir: -p.dir});
+  else alt[k] = {kind: 'wire'};
+  const s = solveBoard(alt, NN, ends);
+  for (const q in alt) {
+    if (q === k && p.kind !== 'led') continue;
+    const r = alt[q], f = s.info[q];
+    if ((r.kind === 'bulb' && f.b >= 0.08) || (r.kind === 'led' && f.I > 0.002)) return true;
+  }
+  return false;
+}
+function paintWhy(){
+  if (!S.locked) return;
+  const P = S.parts, keys = Object.keys(P), out = [];
+  const cells = keys.filter(k => P[k].kind === 'cell');
+  const Ib = batteryCurrent();
+  if (!cells.length) { $('why').innerHTML = '<p>There is no cell on the board, so nothing pushes a current. Every circuit needs a source: pick <b>Cell</b> and put one between two pegs.</p>'; return; }
+  const against = cells.filter(k => SOL.info[k].I < -1e-4);
+  const pushing = cells.filter(k => SOL.info[k].I > 1e-4);
+  if (Ib < 1e-4) out.push(`<p><b>No current flows.</b> The path from the + end of the battery back to its − end is not complete.</p>`);
+  else out.push(`<p><b>The circuit is closed.</b> A current of <b>${fmt(Ib, 2)} A</b> leaves the + end of the battery, goes round the loop and comes back to the − end. ` +
+    (pushing.length > 1 ? `${pushing.length} cells push one after the other, + joined to −, so together they push harder.` : '') + `</p>`);
+  if (against.length) out.push(`<p class="warn">${against.length === 1 ? 'One cell is' : against.length + ' cells are'} turned the wrong way round: its push works against the others.</p>`);
+  const li = [];
+  for (const k of keys) {
+    const p = P[k], f = SOL.info[k];
+    if (p.kind === 'bulb' && !p.fused) li.push(`Bulb ${p.n}: ${f.b >= 0.08 ? (f.b > 0.9 ? 'glows brightly' : f.b > 0.3 ? 'glows' : 'glows dimly') : 'dark'}, ${fmt(f.I, 2)} A through its filament.`);
+    if (p.kind === 'bulb' && p.fused) li.push(`Bulb ${p.n}: its filament is broken, so there is a gap inside it.`);
+    if (p.kind === 'led') li.push(`The LED: ${f.I > 0.002 ? `glows, ${fmt(f.I * 1000, 0)} mA` : 'dark'}.`);
+    if (p.kind === 'mat') li.push(`The ${esc(MATS[p.m].name)}: ${isFinite(MATS[p.m].R) ? `lets current through (${fmt(f.I, 2)} A), so it is a <b>conductor</b>` : 'lets no current through, so it is an <b>insulator</b>'}.`);
+    if (p.kind === 'nichrome') li.push(`The nichrome wire: ${fmt(f.I, 2)} A. It turns ${fmt(f.I * f.I * NI.R, 2)} joules of electrical energy into heat every second.`);
+    if (p.kind === 'coil') li.push(`The coil: ${fmt(f.I, 2)} A through ${p.turns} turns. ${p.clips ? `It is a magnet and holds <b>${p.clips}</b> paper clip${p.clips > 1 ? 's' : ''}.` : f.I > 1e-3 ? (S.core ? 'Too weak to hold a clip.' : 'Without the iron nail it is too weak to lift a clip.') : 'No current, so no magnet.'}`);
+  }
+  if (li.length) out.push('<ul>' + li.map(s => `<li>${s}</li>`).join('') + '</ul>');
+  /* why is something dark? ask the model */
+  const dark = [...blockers()].filter(k => wouldLight(k));
+  if (dark.length) {
+    const w = dark.map(k => { const p = P[k];
+      return p.kind === 'switch' ? 'the switch is OFF, which leaves an air gap' : p.kind === 'bulb' ? `bulb ${p.n} has a broken filament` :
+             p.kind === 'led' ? 'the LED is the wrong way round: current can pass through it only from its + leg to its − leg' : `the ${MATS[p.m].name} does not conduct`; });
+    out.push(`<p>Something could glow but does not, because ${w.join('; and ')}. Close that gap and the loop is complete.</p>`);
+  }
+  if (Ib > 2) out.push(`<p class="warn">Careful: almost nothing slows the current down, so ${fmt(Ib, 1)} A pours through. The cell gets hot and runs down fast. Never do this with real cells for more than a moment.</p>`);
+  const ledK = keys.find(k => P[k].kind === 'led');
+  if (ledK && !SOL.ledOn[ledK] && Ib < 1e-4) {
+    const Vb = cells.reduce((s, k) => s + E_CELL, 0);
+    if (Vb < LED_VF) out.push(`<p>This LED needs more than ${fmt(LED_VF, 1)} V to start glowing. ${cells.length === 1 ? 'One cell gives only 1.5 V: try two cells joined + to −.' : ''}</p>`);
+  }
+  if (S.compass) {
+    const a = targetCompass(), g = geo(S.compass), I = SOL.cur[S.compass] || 0;
+    out.push(`<p>The compass under the wire ${Math.abs(a) >= 1 ? `turns <b>${fmt(Math.abs(a), 0)}° ${a > 0 ? 'east' : 'west'}</b>` : 'points north'}. ` +
+      (Math.abs(I) < 1e-4 ? 'No current flows in that wire, so only the Earth’s magnetism acts on the needle.' :
+       g.h ? 'This wire runs east–west. The magnetism of the current then pushes along the needle, not across it, so it hardly turns.' :
+             'The current in the wire makes it a weak magnet. Reverse the current and the needle turns the other way.') + `</p>`);
+  }
+  $('why').innerHTML = out.join('');
+}
+
+/* ---- findings, reached only by the model ---------------------------------- */
+function check(){
+  if (!S.locked) return;
+  if (lit().size) discover('closed');
+  for (const k in S.parts) {
+    const p = S.parts[k]; if (p.kind !== 'mat') continue;
+    if (isFinite(MATS[p.m].R) && SOL.info[k].I > 0.01 && lit().size && !S.tested.cond.includes(p.m)) S.tested.cond.push(p.m);
+    if (!isFinite(MATS[p.m].R) && !S.tested.ins.includes(p.m) && wouldLight(k)) S.tested.ins.push(p.m);
+  }
+  if (S.tested.cond.length && S.tested.ins.length) discover('insulator');
+  if (Math.abs(targetCompass()) >= 5) discover('oersted');
+  if (Object.values(S.parts).some(p => p.kind === 'coil' && p.clips >= 1)) discover('magnet');
+}
+
+/* ============================================================================
+   Controls
+   ============================================================================ */
+const TOOLS = [
+  {id: 'hand', name: 'Hand', note: 'Click a switch to turn it on or off, a cell or LED to turn it round, a bulb to break or mend its filament.',
+   ico: '<path d="M12 20 V9 a2 2 0 0 1 4 0 v6 M16 13 V5 a2 2 0 0 1 4 0 v8 M20 12 V6 a2 2 0 0 1 4 0 v8 M24 13 V9 a2 2 0 0 1 4 0 v5 c0 5 -3 8 -8 8 h-2 c-3 0 -5 -2 -6 -4 l-3 -5" fill="none" stroke="#4a555b" stroke-width="1.6" transform="translate(0 -1) scale(.95)"/>'},
+  {id: 'wire', name: 'Wire', ico: '<line x1="3" y1="11" x2="31" y2="11" stroke="#2f6f9f" stroke-width="4" stroke-linecap="round"/>'},
+  {id: 'cell', name: 'Cell', ico: '<rect x="5" y="4" width="22" height="14" rx="3" fill="#24272c"/><rect x="19" y="4" width="8" height="14" fill="#f2b400"/><rect x="27" y="8" width="3" height="6" fill="#b8bec6"/>'},
+  {id: 'bulb', name: 'Bulb', ico: '<ellipse cx="17" cy="11" rx="10" ry="8" fill="#fff3b0" stroke="#9fb0bf"/><path d="M10 11 h3 l1.5 -3 l2 6 l2 -6 l2 6 l1.5 -3 h3" fill="none" stroke="#6b5a4a" stroke-width="1.2"/>'},
+  {id: 'led', name: 'LED', ico: '<circle cx="17" cy="11" r="7" fill="#e2412f"/><line x1="3" y1="11" x2="10" y2="11" stroke="#8a94a6" stroke-width="2"/><line x1="24" y1="11" x2="31" y2="11" stroke="#8a94a6" stroke-width="2"/>'},
+  {id: 'switch', name: 'Switch', ico: '<circle cx="8" cy="15" r="3" fill="#e0b43a"/><circle cx="26" cy="15" r="3" fill="#e0b43a"/><line x1="8" y1="15" x2="25" y2="6" stroke="#8d98a5" stroke-width="2.4" stroke-linecap="round"/>'},
+  {id: 'mat', name: 'Material', note: 'Pick a material below, then click the gap in the circuit to put it there.', ico: '<rect x="6" y="6" width="22" height="10" rx="3" fill="#f4a3b5"/><rect x="6" y="6" width="8" height="10" rx="3" fill="#7fb2e5"/>'},
+  {id: 'nichrome', name: 'Nichrome', ico: '<path d="M4 11 l3 -5 l4 10 l4 -10 l4 10 l4 -10 l4 10 l3 -5" fill="none" stroke="#c0502a" stroke-width="1.6"/>'},
+  {id: 'coil', name: 'Coil', ico: '<rect x="4" y="9" width="26" height="4" fill="#8a929c"/>' + [9, 13, 17, 21, 25].map(x => `<ellipse cx="${x}" cy="11" rx="1.5" ry="6" fill="none" stroke="#c46b22" stroke-width="1.6"/>`).join('')},
+  {id: 'compass', name: 'Compass', note: 'Click a wire to slide the compass under it.', ico: '<circle cx="17" cy="11" r="9" fill="#f4efe2" stroke="#8a7a5a"/><path d="M17 3 l3 8 h-6z" fill="#d6453d"/><path d="M17 19 l3 -8 h-6z" fill="#8a94a6"/>'},
+  {id: 'erase', name: 'Remove', note: 'Click a part to take it off the board.', ico: '<path d="M9 5 L25 17 M25 5 L9 17" stroke="#d6453d" stroke-width="2.6" stroke-linecap="round"/>'},
+];
+function buildTools(){
+  $('tools').innerHTML = TOOLS.map(t => `<button class="tool" data-tool="${t.id}" aria-pressed="${S.tool === t.id}" disabled><svg viewBox="0 0 34 22" aria-hidden="true">${t.ico}</svg>${t.name}</button>`).join('');
+  $('mats').innerHTML = Object.keys(MATS).map(m => `<button class="chip" data-mat="${m}" aria-pressed="${S.mat === m}">${esc(MATS[m].name)}</button>`).join('');
+  $('turnsSeg').innerHTML += [25, 50, 75, 100].map(n => `<button class="btn sm" data-turns="${n}" aria-pressed="${S.turns === n}">${n}</button>`).join('');
+}
+function setTool(id){
+  S.tool = id;
+  for (const b of document.querySelectorAll('.tool')) b.setAttribute('aria-pressed', b.dataset.tool === id);
+  $('matBox').hidden = id !== 'mat';
+  const t = TOOLS.find(t => t.id === id);
+  $('toolNote').textContent = t.note || `Click the space between two pegs to put a ${t.name.toLowerCase()} there. Click an occupied space to swap it.`;
+}
+function clickSlot(k){
+  if (!S.locked) return;
+  const p = S.parts[k], before = lit(), tool = S.tool;
+  if (tool === 'hand') {
+    if (!p) { toast('Pick a part from the box first, then click here.'); return; }
+    if (p.kind === 'switch') p.on = !p.on;
+    else if (p.kind === 'cell' || p.kind === 'led') p.dir = -p.dir;
+    else if (p.kind === 'bulb') p.fused = !p.fused;
+    else { toast('Nothing to change on this part. Use Remove to take it off.'); return; }
+    sound(p.kind === 'switch' ? 'snap' : 'tick');
+    drawSlot(k); solve();
+    const after = lit();
+    const wentOut = [...before].filter(q => q !== k && !after.has(q));
+    if (p.kind === 'switch' && !p.on && [...before].some(q => !after.has(q))) discover('switch');
+    if (p.kind === 'bulb' && p.fused && wentOut.length) { discover('series'); explainSeries(k, wentOut[0]); }
+    if (p.kind === 'led' && before.has(k) !== after.has(k)) discover('led');
+    track('toggle', {kind: p.kind, key: k});
+    return;
+  }
+  if (tool === 'erase') { if (p) { delete S.parts[k]; if (S.compass === k) S.compass = null; sound('pop'); drawSlot(k); solve(); track('remove', {key: k}); } return; }
+  if (tool === 'compass') { S.compass = k; sound('tick'); solve(); track('compass', {key: k}); return; }
+  const np = {kind: tool, n: ++COUNT};
+  if (tool === 'cell' || tool === 'led') np.dir = p && p.kind === tool ? p.dir : 1;
+  if (tool === 'switch') np.on = true;
+  if (tool === 'mat') np.m = S.mat;
+  if (tool === 'coil') np.turns = S.turns;
+  if (tool === 'bulb') np.n = Object.values(S.parts).filter(q => q.kind === 'bulb').length + 1;
+  S.parts[k] = np;
+  sound('pop'); drawSlot(k); solve();
+  track('place', {kind: tool, key: k, mat: np.m});
+}
+let SERIES_INFO = null;
+function explainSeries(k, other){
+  if (!POE || POE.explained) return;
+  /* the model's own before/after: mend the bulb for a moment and read the current */
+  const alt = Object.assign({}, S.parts); alt[k] = Object.assign({}, S.parts[k], {fused: false});
+  const b = solveBoard(alt, NN, ends);
+  const Ibefore = b.info[other].I, Iafter = SOL.info[other].I;
+  POE.explain(`With both filaments whole, the same <b>${fmt(Ibefore, 2)} A</b> flowed through both bulbs, because there is only one path round. ` +
+    `Break one filament and that path has a gap in it: the current everywhere drops to <b>${fmt(Iafter, 2)} A</b>, so the other bulb goes out too. ` +
+    `This is why the book’s Fig. 3.17 question has one answer: a broken bulb in a single loop stops the whole loop.`);
+}
+
+$('tools').addEventListener('click', e => { const b = e.target.closest('.tool'); if (b && !b.disabled) { setTool(b.dataset.tool); sound('tick'); } });
+$('mats').addEventListener('click', e => { const b = e.target.closest('.chip'); if (!b) return;
+  S.mat = b.dataset.mat; for (const c of document.querySelectorAll('.chip')) c.setAttribute('aria-pressed', c.dataset.mat === S.mat); sound('tick'); });
+$('turnsSeg').addEventListener('click', e => { const b = e.target.closest('[data-turns]'); if (!b) return;
+  S.turns = +b.dataset.turns; for (const c of document.querySelectorAll('[data-turns]')) c.setAttribute('aria-pressed', +c.dataset.turns === S.turns);
+  const before = Math.max(0, ...Object.values(S.parts).filter(p => p.kind === 'coil').map(p => p.clips || 0));
+  for (const k in S.parts) if (S.parts[k].kind === 'coil') { S.parts[k].turns = S.turns; drawSlot(k); }
+  sound('tick'); solve(); track('turns', {turns: S.turns, clipsBefore: before}); });
+$('btnCore').addEventListener('click', () => { S.core = !S.core; $('btnCore').setAttribute('aria-pressed', S.core);
+  for (const k in S.parts) if (S.parts[k].kind === 'coil') drawSlot(k); sound('tick'); solve(); track('core', {on: S.core}); });
+$('preset').addEventListener('change', e => { if (!e.target.value) return; loadPreset(e.target.value); track('preset', {name: e.target.value}); e.target.value = ''; });
+$('stage').addEventListener('click', e => { const h = e.target.closest('.slotHit'); if (h) clickSlot(h.dataset.k); });
+
+/* ============================================================================
+   The clock: flowing charge, the needle, the heating wire and the graph.
+   ============================================================================ */
+const HIST = [];            // [t, value]
+let PHASE = {}, NEEDLE = 0, SAMPLE = 0;
+const GW = 40;              // seconds shown
+function graphMode(){ return Object.values(S.parts).some(p => p.kind === 'nichrome') ? 'heat' : 'current'; }
+function drawAxes(mode){
+  const top = mode === 'heat' ? 300 : 3.5;
+  let ax = `<line x1="${GR.x}" y1="${GR.y + GR.h}" x2="${GR.x + GR.w}" y2="${GR.y + GR.h}" stroke="#9aa3a6"/>`;
+  const ticks = mode === 'heat' ? [0, 100, 200, 300] : [0, 1, 2, 3];
+  for (const v of ticks) {
+    const y = GR.y + GR.h - v / top * GR.h;
+    ax += `<line x1="${GR.x}" y1="${y.toFixed(1)}" x2="${GR.x + GR.w}" y2="${y.toFixed(1)}" stroke="#efece3"/><text x="${GR.x - 8}" y="${(y + 4).toFixed(1)}" font-size="10.5" fill="#7c878c" text-anchor="end">${v}</text>`;
+  }
+  for (let s = 0; s <= GW; s += 10) ax += `<text x="${(GR.x + GR.w - s / GW * GR.w).toFixed(1)}" y="${GR.y + GR.h + 13}" font-size="10.5" fill="#7c878c" text-anchor="middle">${s ? '−' + s + ' s' : 'now'}</text>`;
+  ax += `<text x="${GR.x - 8}" y="${GR.y - 5}" font-size="10.5" fill="#7c878c" text-anchor="end">${mode === 'heat' ? '°C' : 'A'}</text>`;
+  $('grAxes').innerHTML = ax; $('grAxes').dataset.mode = mode;
+  $('grTitle').textContent = mode === 'heat' ? 'TEMPERATURE OF THE NICHROME WIRE' : 'CURRENT FROM THE BATTERY';
+  return top;
+}
+let GTOP = 3.5;
+function tick(dt){
+  S.t += dt;
+  const mode = graphMode();
+  if ($('grAxes').dataset.mode !== mode) { GTOP = drawAxes(mode); HIST.length = 0; }
+  /* heating wire: C dT/dt = I²R − G (T − T_room) */
+  const nk = Object.keys(S.parts).find(k => S.parts[k].kind === 'nichrome');
+  if (nk && SOL) {
+    const I = SOL.cur[nk], Tinf = niSteady(I);
+    S.niT = reduced() ? Tinf : Tinf + (S.niT - Tinf) * Math.exp(-dt / niTau());
+    const hot = clamp((S.niT - 60) / 440, 0, 1), el = $('s_' + nk);
+    const w = el.querySelector('.hot'), gl = el.querySelector('.glow');
+    if (w) w.setAttribute('stroke', S.niT < 60 ? '#8a8f96' : mix('#b0584a', '#ff7a1a', hot));
+    if (gl) gl.setAttribute('opacity', S.niT > 450 ? clamp((S.niT - 450) / 300, 0, 0.8).toFixed(2) : 0);
+    const lab = document.querySelector('#labels .niLab'); if (lab) lab.textContent = 'nichrome, ' + fmt(S.niT, 0) + ' °C';
+    if (S.locked && S.niT >= 60) discover('heat');
+  } else S.niT = T_ROOM;
+  /* the compass needle turns towards the field, with a little swing */
+  const tgt = targetCompass();
+  NEEDLE = reduced() ? tgt : NEEDLE + (tgt - NEEDLE) * (1 - Math.exp(-dt * 5));
+  if (S.compass) {
+    const g = geo(S.compass), sn = $('smallNeedle');
+    if (sn) sn.setAttribute('transform', `rotate(${NEEDLE.toFixed(2)} ${g.mx} ${g.my})`);
+  }
+  $('bigNeedle').setAttribute('transform', `rotate(${(S.compass ? NEEDLE : 0).toFixed(2)} ${CMP.x} ${CMP.y})`);
+  $('cmpTxt').textContent = !S.compass ? 'Put the compass under a wire to use it.' :
+    Math.abs(tgt) < 0.5 ? 'Needle points north' : `Turned ${fmt(Math.abs(tgt), 0)}° towards the ${tgt > 0 ? 'east' : 'west'}`;
+  /* charge moving: dots step along each part at a speed proportional to its current */
+  for (const k of SLOTS) {
+    const g = $('d_' + k), I = SOL && S.parts[k] ? SOL.cur[k] : 0;
+    const on = S.locked && Math.abs(I) > 1e-4;
+    if (!on) { if (g.dataset.on !== '0') { for (const c of g.children) c.setAttribute('opacity', 0); g.dataset.on = '0'; } continue; }
+    g.dataset.on = '1';
+    const G = geo(k), v = clamp(Math.abs(I) / 0.3 * 90, 8, 420) * Math.sign(I);
+    PHASE[k] = ((PHASE[k] || 0) + (reduced() ? 0 : v * dt / G.L)) % 1;
+    let i = 0;
+    for (const c of g.children) {
+      const f = ((PHASE[k] + i / 3) % 1 + 1) % 1; i++;
+      c.setAttribute('cx', (G.x1 + (G.x2 - G.x1) * f).toFixed(1)); c.setAttribute('cy', (G.y1 + (G.y2 - G.y1) * f).toFixed(1));
+      c.setAttribute('opacity', S.parts[k].kind !== 'wire' && f > 0.25 && f < 0.75 ? 0 : 0.95);   /* charge passes behind the part's body */
+    }
+  }
+  /* the graph */
+  SAMPLE += dt;
+  if (SAMPLE >= 0.2) {
+    SAMPLE = 0;
+    HIST.push([S.t, mode === 'heat' ? S.niT : batteryCurrent()]);
+    while (HIST.length && HIST[0][0] < S.t - GW) HIST.shift();
+    const X = t => GR.x + GR.w - (S.t - t) / GW * GR.w, Y = v => GR.y + GR.h - clamp(v / GTOP, 0, 1.05) * GR.h;
+    $('grLine').setAttribute('d', HIST.map((h, i) => (i ? 'L' : 'M') + X(h[0]).toFixed(1) + ' ' + Y(h[1]).toFixed(1)).join(''));
+    const last = HIST[HIST.length - 1];
+    if (last) {
+      $('grNow').setAttribute('cx', X(last[0]).toFixed(1)); $('grNow').setAttribute('cy', Y(last[1]).toFixed(1));
+      $('grNowT').setAttribute('x', X(last[0]) - 8); $('grNowT').setAttribute('y', Y(last[1]) - 9); $('grNowT').setAttribute('text-anchor', 'end');
+      $('grNowT').textContent = mode === 'heat' ? fmt(last[1], 0) + ' °C' : fmt(last[1], 2) + ' A';
+    }
+  }
+}
+function mix(a, b, t){
+  const pa = [1, 3, 5].map(i => parseInt(a.slice(i, i + 2), 16)), pb = [1, 3, 5].map(i => parseInt(b.slice(i, i + 2), 16));
+  return '#' + pa.map((v, i) => Math.round(v + (pb[i] - v) * t).toString(16).padStart(2, '0')).join('');
+}
+
+/* ============================================================================
+   Start
+   ============================================================================ */
+build();
+buildTools();
+setTool('hand');
+GTOP = drawAxes('current');
+findings($('finds'), [
+  {id: 'closed',    icon: '💡', label: 'A closed loop lights the bulb',        hint: 'Make a bulb glow'},
+  {id: 'series',    icon: '⛓', label: 'One broken bulb darkens the loop',       hint: 'Break a filament'},
+  {id: 'switch',    icon: '⏻', label: 'A switch opens the circuit',             hint: 'Turn a lit circuit off'},
+  {id: 'led',       icon: '→', label: 'An LED works one way round',             hint: 'Turn an LED round'},
+  {id: 'insulator', icon: '🧪', label: 'Conductors and insulators',             hint: 'Test materials in a gap'},
+  {id: 'oersted',   icon: '🧭', label: 'A current moves a compass',              hint: 'Slide a compass under a wire'},
+  {id: 'magnet',    icon: '🧲', label: 'A coil and a nail make a magnet',        hint: 'Wind a coil and switch it on'},
+  {id: 'heat',      icon: '🔥', label: 'A current heats a wire',                 hint: 'Pass a current through nichrome'},
+], () => toast('All eight found. You have done every activity in both chapters.', 4200));
+
+const POE = predict($('poe'), {
+  id: 'series-bulb',
+  q: 'Two bulbs are joined one after the other with a battery, and both glow (Fig. 3.17). If the filament of one bulb breaks, what happens to the other bulb?',
+  options: [
+    {id: 'same',     text: 'It keeps glowing just as before.'},
+    {id: 'brighter', text: 'It glows brighter, because it gets all the current.'},
+    {id: 'dark',     text: 'It goes out too.', right: true},
+    {id: 'dimmer',   text: 'It glows a little dimmer.'},
+  ],
+  onLock(){
+    S.locked = true; lockControls(false);
+    say('Now find out. Click a bulb to break its filament.');
+    solve();
+  },
+});
+function lockControls(lock){
+  document.body.classList.toggle('locked', lock);
+  for (const b of document.querySelectorAll('.tool')) b.disabled = lock;
+  $('preset').disabled = lock;
+  $('gate').hidden = !lock;
+}
+const shared = sharedState();
+if (shared && shared.parts) {
+  for (const k in shared.parts) if (SLOTS.includes(k)) S.parts[k] = shared.parts[k];
+  COUNT = Object.keys(S.parts).length; S.compass = SLOTS.includes(shared.compass) ? shared.compass : null;
+  if ([25, 50, 75, 100].includes(shared.turns)) S.turns = shared.turns; S.core = shared.core !== false;
+  for (const k of SLOTS) drawSlot(k);
+  solve();
+} else loadPreset('series');
+shareState(() => ({parts: S.parts, compass: S.compass, turns: S.turns, core: S.core}));
+lockControls(!POE.locked);
+if (!Play.FF('predict')) { S.locked = true; lockControls(false); solve(); }
+loop(tick);
+window.applyFeatures = () => solve();
+window.PG_STATE = () => JSON.parse(JSON.stringify(Object.assign({}, S, {sol: SOL && {cur: SOL.cur, info: SOL.info, ledOn: SOL.ledOn}, needle: NEEDLE})));
+window.PG_MODEL = {solveNet, solveBoard: parts => solveBoard(parts, NN, ends), compassAngle, niSteady, niTau, clipsFor, NI, E_CELL, R_CELL, R_WIRE, R_BULB};
+</script>
+</body>
+</html>

@@ -1,0 +1,504 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Votes Into Seats</title>
+<meta name="description" content="Class 11 Political Science: the same synthetic votes counted two ways — first-past-the-post in single-member constituencies, and proportional representation — with the gap between votes and seats measured.">
+<link rel="icon" href="../../favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600&family=Inter:wght@400;500;600;700&family=Nunito:wght@500;700;800&family=Newsreader:opsz,wght@6..72,400;6..72,500&family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="../../play.css">
+<style>
+/* Only what this page needs beyond play.css. */
+.pg-stage{min-height:0}
+.gate{position:absolute; inset:0; display:grid; place-items:center; pointer-events:none}
+.gate span{background:rgba(29,35,39,.86); color:#fff; padding:10px 16px; border-radius:99px; font-weight:600; font-size:14px}
+.seg{display:grid; grid-auto-flow:column; grid-auto-columns:1fr; gap:4px; background:var(--sunk); padding:4px; border-radius:var(--radius-sm); margin:4px 0 8px}
+.seg button{border:0; background:transparent; border-radius:6px; min-height:30px; font-weight:600; font-size:12.5px; cursor:pointer; color:var(--ink-2)}
+.seg button[aria-pressed="true"]{background:var(--card); color:var(--ink); box-shadow:var(--shadow)}
+.seg button:disabled{opacity:.5; cursor:default}
+.prow{display:grid; grid-template-columns:74px 1fr 52px; align-items:center; gap:4px 8px; margin:0}
+.prow input[type=range]{height:26px}
+.prow output{font-family:var(--font-mono); font-size:12.5px; font-weight:600; text-align:right}
+.prow .lab{font-size:12px; color:var(--ink-3)}
+.chip{display:inline-flex; align-items:center; gap:6px; font-weight:700; font-size:13px}
+.chip i{width:14px; height:14px; border-radius:4px; display:inline-block}
+.ctl{grid-template-columns:112px 1fr 58px; margin:2px 0}
+.ctl label{font-size:12.5px; line-height:1.2}
+.ctl output{font-family:var(--font-mono); font-size:12.5px; font-weight:600; min-width:0}
+.sub{font-size:11px; letter-spacing:.07em; text-transform:uppercase; font-weight:700; color:var(--ink-3); margin:10px 0 2px}
+.note{font-size:12.5px; color:var(--ink-3); margin:6px 0 0}
+.why p{font-size:13.5px; margin-bottom:.55em}
+.chk{display:flex; align-items:center; gap:8px; font-size:13px; margin-top:8px; cursor:pointer}
+.tile{cursor:pointer}
+svg text.m{font-family:var(--font-mono)}
+@media (max-width:1200px) and (min-width:981px){ .pg-main.wide-side{grid-template-columns:minmax(0,1fr) 330px} }
+</style>
+</head>
+<body>
+<header class="pg-top"></header>
+
+<div class="pg-intro">
+  <h1>Votes into seats</h1>
+  <p>An invented state, four invented parties and 1,08,000 synthetic voters. Hold an election under first-past-the-post, the system the
+     Constitution prescribes for the Lok Sabha and the Vidhan Sabhas, then count exactly the same votes by proportional representation.
+     Change how the votes are spread, how many constituencies there are and the PR rules, and measure the gap between votes and seats.</p>
+</div>
+
+<main class="pg-main wide-side">
+  <section class="pg-stage" id="stageWrap">
+    <svg id="stage" viewBox="0 0 1000 660" role="img" aria-label="A map of constituencies coloured by their winners, two assemblies compared, seat share against vote share, a constituency's count and a results table"></svg>
+    <div class="gate" id="gate"><span>Make your prediction first →</span></div>
+  </section>
+
+  <aside class="pg-side">
+    <div id="poe"></div>
+
+    <div class="card" id="voteCard">
+      <div class="kicker">The voters</div>
+      <div id="parties"></div>
+      <div class="ctl" style="margin-top:6px"><label for="vary">Local variation</label><input type="range" id="vary" min="0" max="0.6" step="0.05" value="0.3"><output id="varyOut">0.30</output></div>
+      <p class="note">For each party the upper slider sets its support, the lower one how concentrated that support is in its home region. Local variation makes some areas lean one way or another.</p>
+    </div>
+
+    <div class="card" id="countCard">
+      <div class="kicker">The count</div>
+      <div class="sub">Constituencies (seats)</div>
+      <div class="seg" id="segS"><button data-s="1" aria-pressed="false">1</button><button data-s="6" aria-pressed="false">6</button><button data-s="24" aria-pressed="false">24</button><button data-s="60" aria-pressed="true">60</button><button data-s="120" aria-pressed="false">120</button></div>
+      <div class="row" style="margin:4px 0 6px"><button class="btn sm primary" id="btnElect">Hold the election (FPTP)</button><button class="btn sm" id="btnPR" disabled>Count the same votes by PR</button></div>
+      <div class="sub">Proportional representation</div>
+      <div class="seg" id="segM"><button data-m="hare" aria-pressed="true">Largest remainder</button><button data-m="dhondt" aria-pressed="false">D’Hondt</button></div>
+      <div class="ctl"><label for="thr">Threshold</label><input type="range" id="thr" min="0" max="10" step="0.25" value="0"><output id="thrOut">0%</output></div>
+      <div class="sub">Map shows</div>
+      <div class="seg" id="segV"><button data-v="win" aria-pressed="true">Winners</button><button data-v="vot" aria-pressed="false">Voters, area by area</button></div>
+      <label class="chk"><input type="checkbox" id="chkRes" checked> Mark reserved constituencies (SC, ST)</label>
+    </div>
+
+    <div class="card why" id="whyCard" hidden>
+      <div class="kicker">What the count says</div>
+      <div id="why"></div>
+    </div>
+
+    <div class="card"><div class="kicker">To find</div><div id="finds"></div></div>
+  </aside>
+</main>
+
+<script src="../../play.js"></script>
+<script>
+'use strict';
+const {$, esc, clamp, fmt, sound, say, track, toast, predict, findings, discover, found,
+       shareState, sharedState, mount, reduced, tween} = Play;
+mount({thread: 'elections', band: 'theorist'});
+
+/* MODEL:start ==================================================================
+   HOW VOTES BECOME SEATS (NCERT Indian Constitution at Work, Class 11, Ch 3).
+
+   The electorate. The state is a grid of 30 × 24 small areas ("wards"), each
+   with 150 voters: 1,08,000 in all. Party i's pull in a ward is
+        weight_i × [(1 − c_i) + c_i · g_i(ward) / mean(g_i)] × exp(v · ε_i,ward)
+   where g_i is a bump round the party's home region, c_i (0–1) how
+   concentrated its support is, v the local variation and ε fixed random
+   numbers (the same every time, so the same slider settings give the same
+   electorate). The ward's 150 voters split in proportion to these pulls,
+   rounded to whole voters by largest remainders. Nothing below looks at
+   seats: every seat comes from counting these votes.
+
+   FPTP (the book's rules): the state is divided into S single-member
+   constituencies (blocks of wards); in each, the candidate with more votes
+   than any other wins — no majority needed.
+   PR: the whole state is one constituency with S seats; parties at or above
+   the threshold share the seats in proportion to their votes, by the largest
+   remainder (Hare quota) or by D'Hondt's highest averages.
+   Disproportionality (the Gallagher index): √(½ Σ (vote % − seat %)²).
+   Reserved constituencies: SC and ST seats in proportion to 84 and 47 of the
+   Lok Sabha's 543; ST seats go to the constituencies with the highest ST
+   population share, SC seats to those with high SC shares, spread across the
+   state's regions (the Delimitation Commission's rule as the book gives it).
+   ============================================================================ */
+const WX = 30, WY = 24, VOTERS = 150, NP = 4;
+const LAYOUT = {1: [1, 1], 6: [3, 2], 24: [6, 4], 60: [10, 6], 120: [15, 8]};
+const HOMES = [{x: 0.32, y: 0.5}, {x: 0.78, y: 0.35}, {x: 0.78, y: 0.85}, {x: 0.15, y: 0.15}];
+const SIG = 0.2;
+/* fixed random numbers: the electorate's local quirks, and its SC / ST population */
+function normals(seed, n){ const r = Play.mulberry32(seed), out = new Float64Array(n); for (let k = 0; k < n; k += 2) { const u = Math.max(1e-12, r()), v = r(); const m = Math.sqrt(-2 * Math.log(u)); out[k] = m * Math.cos(2 * Math.PI * v); if (k + 1 < n) out[k + 1] = m * Math.sin(2 * Math.PI * v); } return out; }
+const EPS = normals(2026, WX * WY * NP), EPS2 = normals(1950, WX * WY * 2);
+const wardXY = w => ({x: ((w % WX) + 0.5) / WX, y: (Math.floor(w / WX) + 0.5) / WY});
+const bump = (p, h) => Math.exp(-((p.x - h.x) ** 2 + (p.y - h.y) ** 2) / (2 * SIG * SIG));
+const GMEAN = HOMES.map(h => { let s = 0; for (let w = 0; w < WX * WY; w++) s += bump(wardXY(w), h); return s / (WX * WY); });
+const POP = Array.from({length: WX * WY}, (_, w) => {
+  const p = wardXY(w);
+  const st = clamp(0.02 + 0.55 * Math.exp(-((p.x - 0.12) ** 2 + (p.y - 0.22) ** 2) / 0.02) + 0.35 * Math.exp(-((p.x - 0.9) ** 2 + (p.y - 0.25) ** 2) / 0.012) + 0.015 * EPS2[2 * w], 0, 0.9);
+  const sc = clamp(0.16 + 0.05 * EPS2[2 * w + 1], 0.03, 0.4);
+  return {sc, st};
+});
+/* largest-remainder rounding: split n into whole parts in proportion to w */
+function hamilton(w, n){
+  const tot = w.reduce((a, b) => a + b, 0); if (tot <= 0) return w.map(() => 0);
+  const q = w.map(x => x * n / tot), f = q.map(Math.floor); let left = n - f.reduce((a, b) => a + b, 0);
+  const order = q.map((x, i) => [x - f[i], i]).sort((a, b) => b[0] - a[0] || a[1] - b[1]);
+  for (let k = 0; k < left; k++) f[order[k][1]]++;
+  return f;
+}
+/* the votes in every ward */
+function electorate(parties, vary){
+  const V = new Array(WX * WY);
+  for (let w = 0; w < WX * WY; w++) {
+    const p = wardXY(w);
+    const pull = parties.map((pa, i) => pa.w * ((1 - pa.c) + pa.c * bump(p, HOMES[i]) / GMEAN[i]) * Math.exp(vary * EPS[w * NP + i]));
+    V[w] = hamilton(pull, VOTERS);
+  }
+  return V;
+}
+const blockOf = (w, S) => { const [cx, cy] = LAYOUT[S]; return Math.floor((w % WX) / (WX / cx)) + cx * Math.floor(Math.floor(w / WX) / (WY / cy)); };
+/* first past the post: a winner in every constituency */
+function fptpCount(counts){
+  let best = 0; for (let i = 1; i < counts.length; i++) if (counts[i] > counts[best]) best = i;
+  const tot = counts.reduce((a, b) => a + b, 0);
+  return {winner: best, share: tot ? counts[best] / tot : 0, tot};
+}
+function constituencies(V, S){
+  const C = Array.from({length: S}, () => ({votes: new Array(NP).fill(0), sc: 0, st: 0, n: 0, x: 0}));
+  V.forEach((v, w) => { const c = C[blockOf(w, S)]; v.forEach((k, i) => c.votes[i] += k); c.sc += POP[w].sc; c.st += POP[w].st; c.n++; c.x += wardXY(w).x; });
+  for (const c of C) { c.sc /= c.n; c.st /= c.n; c.x /= c.n; Object.assign(c, fptpCount(c.votes)); }
+  return C;
+}
+/* proportional representation over the whole state */
+function prSeats(votes, S, method, threshold){
+  const tot = votes.reduce((a, b) => a + b, 0);
+  const ok = votes.map(v => tot > 0 && v / tot * 100 >= threshold - 1e-9);
+  const eligible = votes.map((v, i) => ok[i] ? v : 0);
+  if (method === 'dhondt') {
+    const s = votes.map(() => 0);
+    for (let k = 0; k < S; k++) { let b = -1, bv = -1; eligible.forEach((v, i) => { const q = v / (s[i] + 1); if (v > 0 && q > bv) { bv = q; b = i; } }); if (b < 0) break; s[b]++; }
+    return s;
+  }
+  return hamilton(eligible, S);
+}
+function gallagher(votePct, seatPct){ return Math.sqrt(0.5 * votePct.reduce((a, v, i) => a + (v - seatPct[i]) ** 2, 0)); }
+function reserve(C, S){
+  const nSC = Math.round(S * 84 / 543), nST = Math.round(S * 47 / 543);
+  const idx = C.map((c, i) => i), res = C.map(() => null);
+  idx.slice().sort((a, b) => C[b].st - C[a].st).slice(0, nST).forEach(i => res[i] = 'ST');
+  const rest = idx.filter(i => !res[i]);
+  const regionOf = i => Math.min(2, Math.floor(C[i].x * 3));
+  const per = [0, 1, 2].map(r => rest.filter(i => regionOf(i) === r).length);
+  const quota = hamilton(per, Math.min(nSC, rest.length));
+  [0, 1, 2].forEach(r => rest.filter(i => regionOf(i) === r).sort((a, b) => C[b].sc - C[a].sc).slice(0, quota[r]).forEach(i => res[i] = 'SC'));
+  return res;
+}
+/* everything one election produces */
+function election(parties, vary, S, method, threshold){
+  const V = electorate(parties, vary), C = constituencies(V, S);
+  const votes = new Array(NP).fill(0); for (const c of C) c.votes.forEach((k, i) => votes[i] += k);
+  const tot = votes.reduce((a, b) => a + b, 0);
+  const fptp = new Array(NP).fill(0); for (const c of C) fptp[c.winner]++;
+  const pr = prSeats(votes, S, method, threshold);
+  const vp = votes.map(v => v / tot * 100), fp = fptp.map(s => s / S * 100), pp = pr.map(s => s / S * 100);
+  let wasted = 0; for (const c of C) wasted += c.tot - c.votes[c.winner];
+  return {V, C, votes, tot, vp, fptp, fp, pr, pp, gF: gallagher(vp, fp), gP: gallagher(vp, pp),
+    wasted: wasted / tot * 100, under50: C.filter(c => c.share < 0.5).length, reserved: reserve(C, S)};
+}
+/* MODEL:end */
+
+const PARTIES = [
+  {name: 'Party A', col: '#1f8a9e', mark: '●'}, {name: 'Party B', col: '#7b5cd6', mark: '■'},
+  {name: 'Party C', col: '#c2569b', mark: '▲'}, {name: 'Party D', col: '#5f6b7a', mark: '◆'},
+];
+
+/* ---- state: plain data --------------------------------------------------------- */
+const S = {locked: false, counted: false, prCounted: false, reveal: 0, sel: null, view: 'win', showRes: true,
+  parties: [{w: 38, c: 0.1}, {w: 30, c: 0.1}, {w: 22, c: 0.15}, {w: 8, c: 0.1}], vary: 0.3, S: 60, method: 'hare', thr: 0, E: null, prBefore: null};
+const shared = sharedState();
+if (shared && Array.isArray(shared.parties) && shared.parties.length === NP) {
+  S.parties = shared.parties.map(p => ({w: clamp(+p.w || 0, 0, 60), c: clamp(+p.c || 0, 0, 1)}));
+  S.vary = clamp(+shared.vary || 0, 0, 0.6); if (LAYOUT[shared.S]) S.S = +shared.S;
+  if (['hare', 'dhondt'].includes(shared.method)) S.method = shared.method; S.thr = clamp(+shared.thr || 0, 0, 10);
+}
+shareState(() => ({parties: S.parties, vary: S.vary, S: S.S, method: S.method, thr: S.thr}));
+const recount = () => { S.E = election(S.parties, S.vary, S.S, S.method, S.thr); };
+
+/* ============================================================================
+   The stage
+   ============================================================================ */
+const svg = $('stage'), NS = 'http://www.w3.org/2000/svg';
+const MP = {x0: 20, y0: 60, x1: 470, y1: 420};                  // the state: 30 × 24 wards of 15 px
+const WPX = (MP.x1 - MP.x0) / WX;
+const HEMI = [{x: 620, y: 184, r: 98, title: 'FIRST PAST THE POST'}, {x: 870, y: 184, r: 98, title: 'PROPORTIONAL REPRESENTATION'}];
+const SC = {x0: 560, x1: 965, y0: 418, y1: 262};                // seats against votes
+function build(){
+  svg.innerHTML = `
+  <rect x="0" y="0" width="1000" height="660" fill="#fbfaf6"/>
+  <text id="mTitle" x="20" y="30" font-size="12" font-weight="700" letter-spacing=".08em" fill="#4a555b"></text>
+  <text id="mSub" x="20" y="48" font-size="12" fill="#7c878c"></text>
+  <rect x="${MP.x0}" y="${MP.y0}" width="${MP.x1 - MP.x0}" height="${MP.y1 - MP.y0}" fill="#e7e5dc"/>
+  <g id="wards"></g>
+  <g id="tiles"></g>
+  <g id="homes" font-size="10.5" font-weight="700"></g>
+  ${HEMI.map((h, k) => `<text x="${h.x}" y="30" text-anchor="middle" font-size="12" font-weight="700" letter-spacing=".06em" fill="#4a555b">${h.title}</text>
+    <g id="hemi${k}"></g><text id="hemiT${k}" x="${h.x}" y="${h.y + 22}" text-anchor="middle" font-size="12" fill="#1d2327" class="m"></text>
+    <text id="hemiM${k}" x="${h.x}" y="${h.y + 40}" text-anchor="middle" font-size="11.5" fill="#7c878c"></text>`).join('')}
+  <text x="${SC.x0 - 40}" y="${SC.y1 - 14}" font-size="12" font-weight="700" letter-spacing=".06em" fill="#4a555b">SEAT SHARE AGAINST VOTE SHARE</text>
+  <g id="scat"></g>
+  <line x1="0" y1="440" x2="1000" y2="440" stroke="#e2ded2"/>
+  <text x="20" y="464" font-size="12" font-weight="700" letter-spacing=".06em" fill="#4a555b" id="insT">ONE CONSTITUENCY</text>
+  <g id="ins"></g>
+  <text x="500" y="464" font-size="12" font-weight="700" letter-spacing=".06em" fill="#4a555b">THE RESULT</text>
+  <g id="tab" font-size="12.5"></g>
+  <rect id="veil" x="0" y="0" width="1000" height="660" fill="#fbfaf6" opacity=".9"/>
+  <text id="veilT" x="500" y="330" text-anchor="middle" fill="#7c878c" font-size="15" font-weight="600">The election is held once you have made a prediction.</text>`;
+  $('homes').innerHTML = HOMES.map((h, i) => `<text x="${(MP.x0 + h.x * (MP.x1 - MP.x0)).toFixed(1)}" y="${(MP.y0 + h.y * (MP.y1 - MP.y0)).toFixed(1)}" text-anchor="middle" fill="${PARTIES[i].col}" opacity=".0" id="home${i}">${PARTIES[i].mark} ${PARTIES[i].name.slice(-1)} home</text>`).join('');
+}
+function buildTiles(){
+  const [cx, cy] = LAYOUT[S.S], tw = (MP.x1 - MP.x0) / cx, th = (MP.y1 - MP.y0) / cy;
+  let t = '';
+  for (let k = 0; k < S.S; k++) {
+    const x = MP.x0 + (k % cx) * tw, y = MP.y0 + Math.floor(k / cx) * th;
+    t += `<g class="tile" data-k="${k}"><rect id="tl${k}" x="${(x + 1.5).toFixed(1)}" y="${(y + 1.5).toFixed(1)}" width="${(tw - 3).toFixed(1)}" height="${(th - 3).toFixed(1)}" rx="4" stroke="#fff" stroke-width="1.5"/>
+      <text id="tt${k}" x="${(x + tw / 2).toFixed(1)}" y="${(y + th / 2 + 5).toFixed(1)}" text-anchor="middle" font-size="${Math.min(15, th / 3).toFixed(0)}" font-weight="700" fill="#fff" pointer-events="none"></text>
+      <text id="tr${k}" x="${(x + 5).toFixed(1)}" y="${(y + 13).toFixed(1)}" font-size="9.5" font-weight="700" fill="#1d2327" pointer-events="none"></text></g>`;
+  }
+  $('tiles').innerHTML = t;
+}
+const mix = (a, b, t) => { const pa = [1, 3, 5].map(i => parseInt(a.slice(i, i + 2), 16)), pb = [1, 3, 5].map(i => parseInt(b.slice(i, i + 2), 16)); return '#' + pa.map((v, i) => Math.round(v + (pb[i] - v) * t).toString(16).padStart(2, '0')).join(''); };
+function paintMap(){
+  const E = S.E, voters = S.view === 'vot';
+  $('mTitle').textContent = `A STATE OF ${S.S} CONSTITUENCIES · 1,08,000 VOTERS`;
+  $('mSub').textContent = !S.counted ? 'Not counted yet: hold the election.' : voters ? 'Each small square is an area of 150 voters, coloured by the party most of them chose.' : 'Each tile is one constituency, coloured by its winner. Pale: won without a majority. Click a tile.';
+  /* ward mosaic */
+  if (voters) {
+    let w = '';
+    E.V.forEach((v, i) => {
+      let b = 0; for (let k = 1; k < NP; k++) if (v[k] > v[b]) b = k;
+      const sh = v[b] / VOTERS;
+      w += `<rect x="${(MP.x0 + (i % WX) * WPX).toFixed(1)}" y="${(MP.y0 + Math.floor(i / WX) * WPX).toFixed(1)}" width="${WPX.toFixed(1)}" height="${WPX.toFixed(1)}" fill="${mix('#ffffff', PARTIES[b].col, clamp((sh - 0.2) / 0.45, 0.15, 1))}"/>`;
+    });
+    $('wards').innerHTML = w;
+  } else $('wards').innerHTML = '';
+  for (let k = 0; k < S.S; k++) {
+    const c = E.C[k], r = $('tl' + k), shown = S.counted && k < S.reveal;
+    if (!r) continue;
+    if (voters) { r.setAttribute('fill', 'transparent'); r.setAttribute('stroke', '#1d2327'); r.setAttribute('stroke-width', S.sel === k ? 3 : 1.2); }
+    else {
+      r.setAttribute('stroke', S.sel === k ? '#1d2327' : '#fff'); r.setAttribute('stroke-width', S.sel === k ? 3 : 1.5);
+      r.setAttribute('fill', shown ? mix('#ffffff', PARTIES[c.winner].col, c.share >= 0.5 ? 1 : 0.62) : '#cfccc2');
+    }
+    $('tt' + k).textContent = shown && !voters ? PARTIES[c.winner].name.slice(-1) : (!S.counted ? '?' : '');
+    $('tt' + k).setAttribute('fill', voters ? '#1d2327' : '#fff');
+    $('tr' + k).textContent = S.showRes && E.reserved[k] && S.S >= 6 ? E.reserved[k] : '';
+  }
+  for (let i = 0; i < NP; i++) $('home' + i).setAttribute('opacity', voters && S.parties[i].c >= 0.3 ? 1 : 0);
+}
+/* an assembly as a half-circle of seats, grouped by party from left to right */
+function hemicycle(k, seats, on){
+  const h = HEMI[k], N = seats.reduce((a, b) => a + b, 0), g = $('hemi' + k);
+  const rows = N <= 6 ? 1 : N <= 24 ? 2 : N <= 60 ? 4 : 5, r0 = h.r * 0.42;
+  const radii = Array.from({length: rows}, (_, i) => r0 + (h.r - r0) * (rows === 1 ? 1 : i / (rows - 1)));
+  const perRow = hamilton(radii, N);
+  const pos = [];
+  radii.forEach((rad, i) => { const n = perRow[i]; for (let j = 0; j < n; j++) { const a = Math.PI * (n === 1 ? 0.5 : j / (n - 1)); pos.push({a, x: h.x - rad * Math.cos(a), y: h.y - rad * Math.sin(a)}); } });
+  pos.sort((p, q) => p.a - q.a);
+  const cols = []; seats.forEach((s, i) => { for (let j = 0; j < s; j++) cols.push(PARTIES[i].col); });
+  const dot = Math.max(2.4, Math.min(9, h.r * 1.9 / Math.max(6, N) * (N > 60 ? 1.6 : 1.4)));
+  g.innerHTML = pos.map((p, i) => `<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="${dot.toFixed(1)}" fill="${on ? cols[i] : '#d6d3c9'}"/>`).join('') +
+    `<line x1="${h.x}" y1="${h.y - h.r - 10}" x2="${h.x}" y2="${h.y - r0 + 12}" stroke="#1d2327" stroke-width="1" stroke-dasharray="3 3" opacity=".5"/>`;
+  $('hemiT' + k).textContent = on ? seats.map((s, i) => PARTIES[i].name.slice(-1) + ' ' + s).join(' · ') : 'not counted';
+  const maj = Math.floor(N / 2) + 1, top = seats.indexOf(Math.max(...seats));
+  $('hemiM' + k).textContent = on ? (seats[top] >= maj ? `${PARTIES[top].name} has a majority (${maj} needed)` : `No majority: ${maj} seats needed`) : '';
+}
+function paintScatter(){
+  const E = S.E, gx = v => SC.x0 + v / 60 * (SC.x1 - SC.x0), gy = v => SC.y0 - v / 100 * (SC.y0 - SC.y1);
+  let g = `<rect x="${SC.x0}" y="${SC.y1}" width="${SC.x1 - SC.x0}" height="${SC.y0 - SC.y1}" fill="#fff" stroke="#e2ded2"/>`;
+  for (const v of [0, 20, 40, 60]) g += `<text x="${gx(v)}" y="${SC.y0 + 14}" text-anchor="${v === 60 ? 'end' : 'middle'}" font-size="10" fill="#7c878c">${v}%${v === 60 ? ' of votes' : ''}</text>`;
+  for (const v of [0, 50, 100]) g += `<line x1="${SC.x0}" y1="${gy(v)}" x2="${SC.x1}" y2="${gy(v)}" stroke="#eceae4"/><text x="${SC.x0 - 6}" y="${gy(v) + 4}" text-anchor="end" font-size="10" fill="#7c878c">${v}%</text>`;
+  g += `<text x="${SC.x0 - 6}" y="${gy(100) + 16}" text-anchor="end" font-size="10" fill="#7c878c">of seats</text>`;
+  g += `<line x1="${gx(0)}" y1="${gy(0)}" x2="${gx(60)}" y2="${gy(60)}" stroke="#9aa3a6" stroke-dasharray="4 3"/><text x="${gx(58)}" y="${gy(60) - 6}" text-anchor="end" font-size="10.5" fill="#7c878c">seats = votes</text>`;
+  if (S.counted) for (let i = 0; i < NP; i++) {
+    const x = gx(E.vp[i]), yF = gy(E.fp[i]), yP = gy(E.pp[i]), col = PARTIES[i].col;
+    if (S.prCounted) g += `<line x1="${x}" y1="${yF}" x2="${x}" y2="${yP}" stroke="${col}" stroke-width="1.2" opacity=".5"/><rect x="${x - 5}" y="${yP - 5}" width="10" height="10" fill="#fff" stroke="${col}" stroke-width="2"/>`;
+    g += `<circle cx="${x}" cy="${yF}" r="6" fill="${col}"/><text x="${x + 9}" y="${yF + 4}" font-size="11" font-weight="700" fill="${col}">${PARTIES[i].name.slice(-1)}</text>`;
+  }
+  g += `<g font-size="10.5"><circle cx="${SC.x0 + 10}" cy="${SC.y1 + 12}" r="5" fill="#4a555b"/><text x="${SC.x0 + 19}" y="${SC.y1 + 16}" fill="#4a555b">FPTP</text>${S.prCounted ? `<rect x="${SC.x0 + 58}" y="${SC.y1 + 7}" width="9" height="9" fill="#fff" stroke="#4a555b" stroke-width="2"/><text x="${SC.x0 + 72}" y="${SC.y1 + 16}" fill="#4a555b">PR</text>` : ''}</g>`;
+  $('scat').innerHTML = g;
+}
+function paintInspector(){
+  const E = S.E, k = S.sel;
+  if (!S.counted || k == null || k >= S.S) { $('ins').innerHTML = `<text x="20" y="492" font-size="12.5" fill="#7c878c">${S.counted ? 'Click a constituency on the map to see its count.' : 'Nothing counted yet.'}</text>`; $('insT').textContent = 'ONE CONSTITUENCY'; return; }
+  const c = E.C[k], mx = Math.max(...c.votes), res = E.reserved[k];
+  $('insT').textContent = `CONSTITUENCY ${k + 1}${res ? ' · RESERVED (' + res + ')' : ''}`;
+  let g = '';
+  c.votes.forEach((v, i) => {
+    const y = 476 + i * 24, w = v / mx * 250;
+    g += `<text x="20" y="${y + 13}" font-size="12.5" font-weight="${i === c.winner ? 700 : 500}" fill="${PARTIES[i].col}">${PARTIES[i].mark} ${PARTIES[i].name}</text>
+      <rect x="110" y="${y}" width="${w.toFixed(1)}" height="18" rx="3" fill="${PARTIES[i].col}" opacity="${i === c.winner ? 1 : 0.45}"/>
+      <text x="${(116 + w).toFixed(1)}" y="${y + 13}" font-size="12" class="m" fill="#1d2327">${v.toLocaleString('en-IN')} (${fmt(v / c.tot * 100, 1)}%)</text>`;
+  });
+  const sorted = c.votes.slice().sort((a, b) => b - a);
+  g += `<text x="20" y="592" font-size="12.5" fill="#1d2327">${PARTIES[c.winner].name} wins with <tspan font-weight="700">${fmt(c.share * 100, 1)}%</tspan>${c.share < 0.5 ? ' — not a majority' : ''}; margin ${(sorted[0] - sorted[1]).toLocaleString('en-IN')} votes.</text>`;
+  g += `<text x="20" y="611" font-size="12" fill="#4a555b">${(c.tot - c.votes[c.winner]).toLocaleString('en-IN')} of ${c.tot.toLocaleString('en-IN')} votes went to candidates who lost here.</text>`;
+  g += `<text x="20" y="630" font-size="11.5" fill="#7c878c">${res ? `Reserved for ${res}: only ${res} candidates may stand; all its voters vote.` : 'A general constituency: any eligible citizen may stand.'}</text>`;
+  g += `<text x="20" y="648" font-size="11.5" fill="#7c878c">Population here: SC ${fmt(c.sc * 100, 0)}%, ST ${fmt(c.st * 100, 0)}%.</text>`;
+  $('ins').innerHTML = g;
+}
+function paintTable(){
+  const E = S.E;
+  let t = `<text x="500" y="488" fill="#7c878c" font-size="11.5" font-weight="700">PARTY</text><text x="660" y="488" text-anchor="end" fill="#7c878c" font-size="11.5" font-weight="700">VOTES</text>
+    <text x="730" y="488" text-anchor="end" fill="#7c878c" font-size="11.5" font-weight="700">VOTE %</text><text x="850" y="488" text-anchor="end" fill="#7c878c" font-size="11.5" font-weight="700">FPTP SEATS</text>
+    <text x="975" y="488" text-anchor="end" fill="#7c878c" font-size="11.5" font-weight="700">PR SEATS</text>`;
+  for (let i = 0; i < NP; i++) {
+    const y = 510 + i * 21;
+    t += `<text x="500" y="${y}" fill="${PARTIES[i].col}" font-weight="700">${PARTIES[i].mark} ${PARTIES[i].name}</text>
+      <text x="660" y="${y}" text-anchor="end" class="m" fill="#1d2327">${S.counted ? E.votes[i].toLocaleString('en-IN') : '—'}</text>
+      <text x="730" y="${y}" text-anchor="end" class="m" fill="#1d2327">${S.counted ? fmt(E.vp[i], 1) : '—'}</text>
+      <text x="850" y="${y}" text-anchor="end" class="m" fill="#1d2327">${S.counted ? `${E.fptp[i]} (${fmt(E.fp[i], 0)}%)` : '—'}</text>
+      <text x="975" y="${y}" text-anchor="end" class="m" fill="#1d2327">${S.prCounted ? `${E.pr[i]} (${fmt(E.pp[i], 0)}%)` : '—'}</text>`;
+  }
+  if (S.counted) {
+    t += `<line x1="500" y1="${592}" x2="975" y2="${592}" stroke="#e2ded2"/>`;
+    t += `<text x="500" y="612" fill="#4a555b">Distance of seats from votes, √(½ Σ(v − s)²)</text><text x="850" y="612" text-anchor="end" class="m" fill="#1d2327" font-weight="600">${fmt(E.gF, 1)}</text><text x="975" y="612" text-anchor="end" class="m" fill="#1d2327" font-weight="600">${S.prCounted ? fmt(E.gP, 1) : '—'}</text>`;
+    t += `<text x="500" y="634" fill="#4a555b">FPTP: votes for losing candidates ${fmt(E.wasted, 0)}%; seats won without a majority ${E.under50} of ${S.S}</text>`;
+    t += `<text x="500" y="652" fill="#7c878c" font-size="11.5">PR: ${S.method === 'dhondt' ? 'D’Hondt' : 'largest remainder'}, threshold ${fmt(S.thr, 2).replace(/\.?0+$/, '')}%${S.showRes && S.S >= 6 ? ` · reserved: ${E.reserved.filter(r => r === 'SC').length} SC, ${E.reserved.filter(r => r === 'ST').length} ST` : ''}</text>`;
+  }
+  $('tab').innerHTML = t;
+}
+
+/* ---- the narrator ------------------------------------------------------------ */
+function paintWhy(){
+  if (!S.locked || !S.counted) return;
+  $('whyCard').hidden = false;
+  const E = S.E, top = E.fptp.indexOf(Math.max(...E.fptp));
+  let t = `<p>Under FPTP <b>${PARTIES[top].name}</b> won <b>${fmt(E.vp[top], 1)}%</b> of the votes and <b>${E.fptp[top]} of ${S.S}</b> seats (${fmt(E.fp[top], 0)}%). ` +
+    `In ${E.under50} of the ${S.S} constituencies the winner had less than half the votes: the book’s point that the winner need not secure a majority.</p>`;
+  const noSeat = E.vp.map((v, i) => [v, i]).filter(([v, i]) => E.fptp[i] === 0 && v >= 5);
+  if (noSeat.length) t += `<p>${noSeat.map(([v, i]) => `${PARTIES[i].name} (${fmt(v, 1)}%)`).join(' and ')} won no seat at all: its votes came second or third almost everywhere.</p>`;
+  if (S.prCounted) t += `<p>Counted by PR, the same votes give ${E.pr.map((s, i) => PARTIES[i].name.slice(-1) + ' ' + s).join(', ')}. Seats sit ${fmt(E.gP, 1)} points from votes, against ${fmt(E.gF, 1)} under FPTP.` +
+    `${Math.max(...E.pr) < Math.floor(S.S / 2) + 1 ? ' No party has a majority: a government would need a coalition.' : ''}</p>`;
+  t += `<p style="color:var(--ink-3)">The book weighs both: FPTP is simple, gives every area its own representative and usually a stable majority; PR matches seats to votes and lets smaller parties in.</p>`;
+  $('why').innerHTML = t;
+}
+
+/* ---- findings ------------------------------------------------------------------ */
+function check(){
+  if (!S.locked || !S.counted || S.reveal < S.S) return;
+  const E = S.E, top = E.fptp.indexOf(Math.max(...E.fptp));
+  if (E.fp[top] - E.vp[top] >= 15) { discover('bonus'); maybeExplain(); }
+  for (let i = 0; i < NP; i++) {
+    if (E.vp[i] >= 10 && E.fptp[i] === 0 && S.S >= 24) discover('zero');
+    for (let j = 0; j < NP; j++) if (E.vp[i] < E.vp[j] - 2 && E.fptp[i] > E.fptp[j]) discover('concentrated');
+    if (S.S >= 6 && E.fptp[i] === S.S && E.vp[i] < 30) discover('quarter');
+  }
+  if (S.prCounted) {
+    if (E.gP < 2 && E.gF > 10) discover('pr');
+    if (S.thr > 0) {
+      const free = prSeats(E.votes, S.S, S.method, 0);
+      if (E.pr.some((s, i) => s === 0 && free[i] > 0)) discover('threshold');
+    }
+  }
+}
+let EXPLAINED = false;
+function maybeExplain(){
+  if (EXPLAINED || !POE) return;
+  EXPLAINED = true;
+  const E = S.E;
+  POE.explain(`Party A took <b>${fmt(E.vp[0], 1)}%</b> of the votes but won <b>${E.fptp[0]} of ${S.S}</b> seats (${fmt(E.fp[0], 0)}%). ` +
+    `It came first in most constituencies, usually with well under half the votes (${E.under50} of the ${S.S} winners had less than 50%), and a seat won by one vote counts as much as a seat won by thousands. ` +
+    `This is the extra 'bonus' the book says FPTP gives the largest party.`);
+}
+
+/* ---- paint ----------------------------------------------------------------------- */
+function paint(){
+  paintMap(); hemicycle(0, S.E.fptp, S.counted && S.reveal >= S.S); hemicycle(1, S.E.pr, S.prCounted);
+  paintScatter(); paintInspector(); paintTable(); paintWhy(); paintControls(); check();
+}
+function paintControls(){
+  S.parties.forEach((p, i) => {
+    $('pw' + i).value = p.w; $('pc' + i).value = p.c;
+    $('pwo' + i).textContent = S.counted ? fmt(S.E.vp[i], 1) + '%' : fmt(p.w / S.parties.reduce((a, q) => a + q.w, 0) * 100, 0) + '%';
+    $('pco' + i).textContent = fmt(p.c, 2);
+  });
+  $('varyOut').textContent = fmt(S.vary, 2);
+  $('thrOut').textContent = fmt(S.thr, 2).replace(/\.?0+$/, '') + '%';
+  for (const b of $('segS').querySelectorAll('button')) b.setAttribute('aria-pressed', +b.dataset.s === S.S);
+  for (const b of $('segM').querySelectorAll('button')) b.setAttribute('aria-pressed', b.dataset.m === S.method);
+  for (const b of $('segV').querySelectorAll('button')) b.setAttribute('aria-pressed', b.dataset.v === S.view);
+  $('btnPR').disabled = !S.locked || !S.counted || S.reveal < S.S;
+  $('btnElect').textContent = S.counted ? 'Counted: FPTP updates live' : 'Hold the election (FPTP)';
+  $('btnElect').disabled = !S.locked || S.counted;
+}
+
+/* ============================================================================
+   Controls
+   ============================================================================ */
+build();
+$('parties').innerHTML = PARTIES.map((p, i) => `
+  <div class="prow" style="margin-top:${i ? 8 : 2}px"><span class="chip"><i style="background:${p.col}"></i>${p.name.slice(-1)} ${p.mark}</span>
+    <input type="range" id="pw${i}" min="0" max="60" step="1" aria-label="${p.name}: support"><output id="pwo${i}"></output></div>
+  <div class="prow"><span class="lab">concentrated</span><input type="range" id="pc${i}" min="0" max="1" step="0.05" aria-label="${p.name}: how concentrated"><output id="pco${i}"></output></div>`).join('');
+const changed = what => { recount(); if (S.sel != null && S.sel >= S.S) S.sel = null; paint(); if (what) track(what, {parties: S.parties, vary: S.vary, S: S.S, method: S.method, thr: S.thr}); };
+S.parties.forEach((p, i) => {
+  $('pw' + i).addEventListener('input', e => { S.parties[i].w = +e.target.value; changed(); });
+  $('pc' + i).addEventListener('input', e => { S.parties[i].c = +e.target.value; changed(); });
+  $('pw' + i).addEventListener('change', () => track('support', {party: i, w: S.parties[i].w}));
+  $('pc' + i).addEventListener('change', () => track('concentration', {party: i, c: S.parties[i].c}));
+});
+$('vary').addEventListener('input', e => { S.vary = +e.target.value; changed(); });
+$('thr').addEventListener('input', e => { S.thr = +e.target.value; changed(); });
+$('thr').addEventListener('change', () => track('threshold', {thr: S.thr}));
+$('segS').addEventListener('click', e => { const b = e.target.closest('[data-s]'); if (!b || b.disabled) return; S.S = +b.dataset.s; S.reveal = S.counted ? S.S : 0; buildTiles(); sound('tick'); changed('constituencies'); });
+$('segM').addEventListener('click', e => { const b = e.target.closest('[data-m]'); if (!b || b.disabled) return; S.method = b.dataset.m; sound('tick'); changed('method'); });
+$('segV').addEventListener('click', e => { const b = e.target.closest('[data-v]'); if (!b || b.disabled) return; S.view = b.dataset.v; sound('tick'); paint(); });
+$('chkRes').addEventListener('change', e => { S.showRes = e.target.checked; paint(); });
+$('tiles').addEventListener('click', e => { const t = e.target.closest('.tile'); if (!t || !S.counted) return; S.sel = +t.dataset.k; sound('pop'); paint(); track('inspect', {k: S.sel}); });
+$('btnElect').addEventListener('click', async () => {
+  if (S.counted) return;
+  S.counted = true; S.reveal = 0; sound('whoosh'); track('election', {S: S.S});
+  await tween(0, S.S, 1600, v => { S.reveal = Math.floor(v); paint(); }, Play.ease.out);
+  S.reveal = S.S; sound('chime'); paint();
+});
+$('btnPR').addEventListener('click', () => { S.prCounted = true; sound('snap'); track('prCount', {method: S.method, thr: S.thr}); paint(); });
+function lockControls(lock){
+  for (const el of document.querySelectorAll('#voteCard input, #countCard input, #countCard button')) el.disabled = lock;
+  $('gate').hidden = !lock;
+}
+
+/* ============================================================================
+   Start
+   ============================================================================ */
+findings($('finds'), [
+  {id: 'bonus',        icon: '＋', label: 'The largest party’s bonus',          hint: 'Compare A’s seats with its votes'},
+  {id: 'zero',         icon: '∅', label: 'A tenth of the votes, no seats',     hint: 'A party whose support is spread thin'},
+  {id: 'concentrated', icon: '◎', label: 'Fewer votes, more seats',           hint: 'Concentrate a party’s support'},
+  {id: 'quarter',      icon: '¼', label: 'Every seat on a quarter of the votes', hint: 'The book’s “25 per cent in every constituency”'},
+  {id: 'pr',           icon: '⚖', label: 'PR mirrors the votes',               hint: 'Count the same votes by PR'},
+  {id: 'threshold',    icon: '▁', label: 'A threshold shuts a party out',       hint: 'Israel’s rule: a minimum share of votes'},
+], () => toast('All six. The rules of the count decide the result as much as the votes do.', 4200));
+
+const POE = predict($('poe'), {
+  id: 'fptp-seats',
+  q: 'Party A gets 38% of all the votes, spread fairly evenly over a state of 60 constituencies; four parties contest every seat. Under first-past-the-post, about how many of the 60 seats will A win?',
+  options: [
+    {id: 'same',  text: 'About 23 seats: 38% of 60.'},
+    {id: 'half',  text: 'About half: 30 seats.'},
+    {id: 'most',  text: 'Well over half: 40 seats or more.', right: true},
+    {id: 'fewer', text: 'Fewer than 23: its votes are spread too thin.'},
+  ],
+  onLock(){
+    S.locked = true;
+    lockControls(false);
+    $('veil').remove(); $('veilT').remove();
+    say('Now hold the election, and count the votes.');
+    paint();
+  },
+});
+recount();
+buildTiles();
+lockControls(!POE.locked);
+if (!Play.FF('predict')) S.locked = true;
+paint();
+window.applyFeatures = () => paint();
+window.PG_STATE = () => { const E = S.E; return JSON.parse(JSON.stringify({locked: S.locked, counted: S.counted, prCounted: S.prCounted, reveal: S.reveal, sel: S.sel, S: S.S, method: S.method, thr: S.thr,
+  vary: S.vary, parties: S.parties, votes: E.votes, vp: E.vp, fptp: E.fptp, pr: E.pr, gF: E.gF, gP: E.gP, wasted: E.wasted, under50: E.under50, reserved: E.reserved})); };
+window.PG_MODEL = {hamilton, fptpCount, prSeats, gallagher, electorate, constituencies, election, reserve, blockOf, POP, VOTERS, WX, WY};
+</script>
+</body>
+</html>

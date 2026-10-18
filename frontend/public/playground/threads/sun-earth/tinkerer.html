@@ -1,0 +1,527 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Why Are There Seasons</title>
+<meta name="description" content="Class 6–8: predict why June is hot in Delhi, then move the Earth round its orbit, change its tilt and find out.">
+<link rel="icon" href="../../favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600&family=Inter:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="../../play.css">
+<style>
+/* Only what this page needs beyond play.css. */
+#earthHit{cursor:grab}
+#earthHit.dragging{cursor:grabbing}
+.gate{position:absolute; inset:auto 0 0 0; top:0; display:grid; place-items:center; pointer-events:none}
+.gate span{background:rgba(15,26,43,.82); color:#fff; padding:10px 16px; border-radius:99px; font-weight:600; font-size:14px}
+.play{width:40px; min-width:40px; padding:0}
+.datebig{font-family:"Fredoka",var(--font-head); font-size:26px; font-weight:600; line-height:1}
+.why p{font-size:14px}
+.why b{color:var(--ink)}
+</style>
+</head>
+<body>
+<header class="pg-top"></header>
+
+<div class="pg-intro">
+  <h1>Why are there seasons?</h1>
+  <p>In Delhi, June is scorching and January is cold. Before you touch anything, say why you think that happens.
+     Then move the Earth round the Sun, change how much it leans, and see which idea survives.</p>
+</div>
+
+<main class="pg-main wide-side">
+  <section class="pg-stage" id="stageWrap">
+    <svg id="stage" viewBox="0 0 1000 660" role="img" aria-label="The Earth's orbit round the Sun, a view of the noon Sun from a city, and a graph of sunlight and distance through the year"></svg>
+    <div class="gate" id="gate"><span>Make your prediction first →</span></div>
+  </section>
+
+  <aside class="pg-side">
+    <div id="poe"></div>
+
+    <div class="card" id="ctlCard">
+      <div class="row" style="justify-content:space-between">
+        <div><div class="kicker">Date</div><div class="datebig num" id="dateOut">21 Jun</div></div>
+        <button class="btn play" id="btnPlay" aria-label="Play the year" title="Play the year">▶</button>
+      </div>
+      <div class="ctl"><label for="day">Day</label><input type="range" id="day" min="1" max="365" step="1" value="172"><output id="dayOut" class="num">172</output></div>
+      <div class="ctl"><label for="tilt">Tilt</label><input type="range" id="tilt" min="0" max="45" step="0.5" value="23.5"><output id="tiltOut" class="num">23.5°</output></div>
+      <div class="ctl"><label for="city">City</label>
+        <select id="city" style="grid-column:2/4">
+          <option value="Srinagar">Srinagar, 34.1° N</option>
+          <option value="Delhi" selected>Delhi, 28.6° N</option>
+          <option value="Chennai">Chennai, 13.1° N</option>
+          <option value="Singapore">Singapore, 1.3° N</option>
+          <option value="Sydney">Sydney, 33.9° S</option>
+          <option value="Tromso">Tromsø, Norway, 69.6° N</option>
+        </select></div>
+      <p style="font-size:12.5px;color:var(--ink-3);margin:6px 0 0">You can also drag the Earth round its orbit.</p>
+    </div>
+
+    <div class="card" id="meterCard">
+      <div class="kicker">In <span id="cityName">Delhi</span>, today</div>
+      <div class="meters" id="meters"></div>
+    </div>
+
+    <div class="card why" id="whyCard" hidden>
+      <div class="kicker">What is happening</div>
+      <div id="why"></div>
+    </div>
+
+    <div class="card"><div class="kicker">To find</div><div id="finds"></div></div>
+  </aside>
+</main>
+
+<script src="../../play.js"></script>
+<script>
+'use strict';
+const {$, esc, clamp, fmt, drag, loop, sound, say, track, toast, predict, findings, discover, found,
+       shareState, sharedState, mount, reduced} = Play;
+mount({thread: 'sun-earth', band: 'tinkerer'});
+
+/* MODEL:start ==================================================================
+   The real Earth. Every number on the page comes from here.
+
+   Orbit: Kepler's equation with the real eccentricity, perihelion on 3 January.
+   The Sun's declination from its ecliptic longitude and the tilt. Day length
+   from the sunrise hour angle. Sunlight per day is the top-of-atmosphere
+   daily insolation, which carries BOTH effects — the tilt (through the Sun's
+   height and the day's length) and the distance (through 1/r²) — so the
+   learner can see which one wins without being told.
+   ============================================================================ */
+const A_KM = 149.598;              // semi-major axis, million km
+const ECC = 0.0167;                // eccentricity of the Earth's orbit
+const PERI_DAY = 3;                // perihelion, day of year
+const YEAR = 365.256;
+const LON_PERI = 282.9;            // the Sun's ecliptic longitude at perihelion, degrees
+const S0 = 1361;                   // solar constant, W/m²
+const D2R = Math.PI / 180, R2D = 180 / Math.PI;
+const CITIES = {
+  Srinagar: {lat: 34.1, name: 'Srinagar'}, Delhi: {lat: 28.6, name: 'Delhi'}, Chennai: {lat: 13.1, name: 'Chennai'},
+  Singapore: {lat: 1.3, name: 'Singapore'}, Sydney: {lat: -33.9, name: 'Sydney'}, Tromso: {lat: 69.6, name: 'Tromsø'},
+};
+
+function kepler(M){ let E = M; for (let i = 0; i < 8; i++) E -= (E - ECC * Math.sin(E) - M) / (1 - ECC * Math.cos(E)); return E; }
+/* Where the Earth is on day d: distance r (million km), true anomaly nu, the Sun's longitude. */
+function orbitAt(d){
+  const M = 2 * Math.PI * (d - PERI_DAY) / YEAR;
+  const E = kepler(M);
+  const nu = 2 * Math.atan2(Math.sqrt(1 + ECC) * Math.sin(E / 2), Math.sqrt(1 - ECC) * Math.cos(E / 2));
+  const r = A_KM * (1 - ECC * Math.cos(E));
+  const lamSun = ((nu * R2D + LON_PERI) % 360 + 360) % 360;
+  return {r, nu, lamSun};
+}
+/* The inverse, for dragging the Earth: which day puts the Sun at this longitude. */
+function dayOfLamSun(lamSun){
+  const nu = ((lamSun - LON_PERI) % 360 + 360) % 360 * D2R;
+  const E = 2 * Math.atan2(Math.sqrt(1 - ECC) * Math.sin(nu / 2), Math.sqrt(1 + ECC) * Math.cos(nu / 2));
+  const M = E - ECC * Math.sin(E);
+  let d = PERI_DAY + M * YEAR / (2 * Math.PI);
+  d = ((d - 1) % 365 + 365) % 365 + 1;
+  return d;
+}
+/* Everything a person standing at latitude lat sees on day d, for a given tilt. */
+function sky(d, tilt, lat){
+  const o = orbitAt(d);
+  const dec = Math.asin(Math.sin(tilt * D2R) * Math.sin(o.lamSun * D2R));      // radians
+  const phi = lat * D2R;
+  const c = -Math.tan(phi) * Math.tan(dec);
+  const H0 = c >= 1 ? 0 : c <= -1 ? Math.PI : Math.acos(c);                    // sunrise hour angle
+  const dayLen = 24 * H0 / Math.PI;
+  const noonAlt = 90 - Math.abs(lat - dec * R2D);                              // degrees
+  const Q = (S0 * 86400 / Math.PI) * Math.pow(A_KM / o.r, 2) *
+            (H0 * Math.sin(phi) * Math.sin(dec) + Math.cos(phi) * Math.cos(dec) * Math.sin(H0));
+  return {r: o.r, lamSun: o.lamSun, dec: dec * R2D, dayLen, noonAlt, kwh: Math.max(0, Q) / 3.6e6};
+}
+/* MODEL:end */
+
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const MDAYS = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+function dateOf(d){ d = Math.round(d); let m = 0; while (m < 11 && d > MDAYS[m]) { d -= MDAYS[m]; m++; } return d + ' ' + MONTHS[m]; }
+const midMonth = m => MDAYS.slice(0, m).reduce((a, b) => a + b, 0) + 15;
+const hm = h => { const H = Math.floor(h + 1e-9), M = Math.round((h - H) * 60); return M === 60 ? (H + 1) + ' h 0 min' : H + ' h ' + M + ' min'; };
+
+/* ---- state: plain data --------------------------------------------------- */
+const S = {day: 172, tilt: 23.5, city: 'Delhi', playing: false, locked: false, visited: {jun: false, jan: false}};
+const shared = sharedState();
+if (shared) { S.day = clamp(+shared.day || 172, 1, 365); S.tilt = clamp(+shared.tilt, 0, 45); if (CITIES[shared.city]) S.city = shared.city; }
+shareState(() => ({day: Math.round(S.day), tilt: S.tilt, city: S.city}));
+
+/* ============================================================================
+   The stage: drawn once, then only patched.
+   ============================================================================ */
+const svg = $('stage');
+const OC = {x: 300, y: 205, rx: 235, ry: 92};           // orbit drawing
+const NOON = {x0: 600, gx: 800, gy: 330};              // noon panel
+const GR = {x: 70, y: 450, w: 850, h: 160};            // year graph
+/* The Sun sits at a focus, displaced ae from the centre towards perihelion (about 4 px:
+   the true size of the offset, which is the point). */
+const PSI_PERI = (LON_PERI + 90) * D2R;
+const SUN = {x: OC.x + OC.rx * ECC * Math.cos(PSI_PERI), y: OC.y + OC.ry * ECC * Math.sin(PSI_PERI)};
+
+function build(){
+  let stars = '';
+  const rnd = Play.mulberry32(7);
+  for (let i = 0; i < 70; i++) stars += `<circle cx="${(rnd() * 598).toFixed(1)}" cy="${(rnd() * 398).toFixed(1)}" r="${(rnd() * 1.2 + .3).toFixed(2)}" fill="#fff" opacity="${(rnd() * .6 + .2).toFixed(2)}"/>`;
+  svg.innerHTML = `
+  <defs>
+    <radialGradient id="gSun" cx="45%" cy="40%"><stop offset="0" stop-color="#fff4c2"/><stop offset=".55" stop-color="#ffc53d"/><stop offset="1" stop-color="#f28a12"/></radialGradient>
+    <radialGradient id="gGlow"><stop offset="0" stop-color="#ffcf5a" stop-opacity=".55"/><stop offset="1" stop-color="#ffcf5a" stop-opacity="0"/></radialGradient>
+    <radialGradient id="gEarth" cx="40%" cy="38%"><stop offset="0" stop-color="#6fc1ff"/><stop offset=".7" stop-color="#2471c9"/><stop offset="1" stop-color="#174d93"/></radialGradient>
+    <linearGradient id="gSky" x1="0" y1="0" x2="0" y2="1"><stop id="sky0" offset="0" stop-color="#5aa9ef"/><stop id="sky1" offset="1" stop-color="#cde8fb"/></linearGradient>
+    <clipPath id="clipNoon"><rect x="600" y="0" width="400" height="400"/></clipPath>
+    <clipPath id="clipEarth"><circle r="21"/></clipPath>
+  </defs>
+  <!-- space -->
+  <rect x="0" y="0" width="600" height="400" fill="#0d1726"/>
+  <g>${stars}</g>
+  <text x="18" y="28" fill="#9fb3c8" font-size="13" font-weight="700" letter-spacing=".08em">THE ORBIT</text>
+  <text x="18" y="46" fill="#6f8399" font-size="11.5">Drawn to its true shape. It is very nearly a circle.</text>
+  <ellipse id="orbit" cx="${OC.x}" cy="${OC.y}" rx="${OC.rx}" ry="${OC.ry}" fill="none" stroke="#3d5573" stroke-width="1.5" stroke-dasharray="3 6"/>
+  <g id="monthTicks"></g>
+  <g id="backLayer"></g>
+  <g id="sunG"><circle cx="${SUN.x}" cy="${SUN.y}" r="70" fill="url(#gGlow)"/><circle cx="${SUN.x}" cy="${SUN.y}" r="36" fill="url(#gSun)"/></g>
+  <g id="frontLayer"></g>
+  <g id="earthG">
+    <line id="sunLine" stroke="#ffd36b" stroke-width="1" stroke-dasharray="2 5" opacity=".5"/>
+    <g id="earthBody">
+      <circle r="21" fill="url(#gEarth)"/>
+      <path id="nightHalf" fill="#050b16" opacity=".72" clip-path="url(#clipEarth)"/>
+      <line id="axis" stroke="#ffffff" stroke-width="2" stroke-linecap="round"/>
+      <line id="equator" stroke="#ffffff" stroke-width="1" opacity=".45"/>
+      <circle id="cityDot" r="3.6" fill="#ff5a5f" stroke="#fff" stroke-width="1.2"/>
+      <text id="nLab" font-size="10" font-weight="700" fill="#fff" text-anchor="middle">N</text>
+    </g>
+  </g>
+  <!-- The hit target never moves between layers: re-parenting a node drops its pointer capture. -->
+  <circle id="earthHit" r="34" fill="transparent" tabindex="0" role="slider" aria-label="The Earth: drag it round the orbit to change the date"/>
+  <g id="distLabels" opacity="0">
+    <text id="periLab" fill="#ffd36b" font-size="12" font-weight="600" text-anchor="middle"></text>
+    <text id="aphLab" fill="#ffd36b" font-size="12" font-weight="600" text-anchor="middle"></text>
+  </g>
+  <text id="distNow" x="18" y="382" fill="#dce6f0" font-size="14" font-weight="600" opacity="0"></text>
+
+  <!-- noon view -->
+  <g clip-path="url(#clipNoon)">
+    <rect x="600" y="0" width="400" height="400" fill="url(#gSky)"/>
+    <g id="noonStars" opacity="0">${Array.from({length: 26}, (_, i) => `<circle cx="${610 + (i * 97) % 380}" cy="${20 + (i * 53) % 250}" r="${1 + (i % 3) * .4}" fill="#fff"/>`).join('')}</g>
+    <path id="sunPath" fill="none" stroke="#ffffff" stroke-width="1.2" stroke-dasharray="3 5" opacity=".6"/>
+    <g id="beam"></g>
+    <circle id="noonSun" r="20" fill="url(#gSun)"/>
+    <rect x="600" y="${NOON.gy}" width="400" height="70" fill="#7aa35a"/>
+    <rect x="600" y="${NOON.gy}" width="400" height="6" fill="#5d8a44"/>
+    <rect id="foot" y="${NOON.gy - 2}" height="10" rx="3" fill="#ffe066" opacity=".95"/>
+    <path id="shadow" fill="#2d4a22" opacity=".45"/>
+    <g id="stick"><rect x="${NOON.gx - 3}" y="${NOON.gy - 60}" width="6" height="60" rx="2" fill="#6b4a2b"/><circle cx="${NOON.gx}" cy="${NOON.gy - 64}" r="6" fill="#6b4a2b"/></g>
+    <path id="altArc" fill="none" stroke="#fff" stroke-width="1.6"/>
+    <text id="altLab" fill="#fff" font-size="14" font-weight="700"></text>
+  </g>
+  <text x="618" y="28" fill="#0d2a44" font-size="13" font-weight="700" letter-spacing=".08em" id="noonTitle">NOON IN DELHI</text>
+  <text x="618" y="46" fill="#23476b" font-size="11.5" id="noonSub">The same beam of sunlight, and the ground it covers.</text>
+  <text id="spreadLab" x="800" y="372" text-anchor="middle" fill="#fff" font-size="14" font-weight="700"></text>
+  <text id="noSun" x="800" y="200" text-anchor="middle" fill="#fff" font-size="17" font-weight="700" opacity="0">The Sun does not rise today</text>
+
+  <!-- year graph -->
+  <rect x="0" y="400" width="1000" height="260" fill="#fbfaf6"/>
+  <line x1="0" y1="400" x2="1000" y2="400" stroke="#e2ded2"/>
+  <text x="18" y="428" fill="#4a555b" font-size="13" font-weight="700" letter-spacing=".08em">THE WHOLE YEAR</text>
+  <g id="gAxes"></g>
+  <path id="qCurve" fill="none" stroke="#e8890c" stroke-width="3" stroke-linejoin="round"/>
+  <path id="qFill" fill="#e8890c" opacity=".10"/>
+  <path id="rCurve" fill="none" stroke="#3f7fd8" stroke-width="2.2" stroke-dasharray="7 5"/>
+  <line id="nowLine" y1="${GR.y}" y2="${GR.y + GR.h}" stroke="#1d2327" stroke-width="1.5"/>
+  <circle id="nowQ" r="5.5" fill="#e8890c" stroke="#fff" stroke-width="2"/>
+  <circle id="nowR" r="5" fill="#3f7fd8" stroke="#fff" stroke-width="2"/>
+  <g id="legend" font-size="12.5" font-weight="600">
+    <line x1="560" y1="424" x2="590" y2="424" stroke="#e8890c" stroke-width="3"/><text x="597" y="428" fill="#8a4d00" id="legQ">Sunlight per day in Delhi</text>
+    <line x1="560" y1="442" x2="590" y2="442" stroke="#3f7fd8" stroke-width="2.2" stroke-dasharray="7 5"/><text x="597" y="446" fill="#1f4f94">Distance from the Sun</text>
+  </g>
+  <rect id="graphVeil" x="0" y="401" width="1000" height="259" fill="#fbfaf6" opacity=".93"/>
+  <text id="graphVeilT" x="500" y="540" text-anchor="middle" fill="#7c878c" font-size="15" font-weight="600">The graph appears once you have made a prediction.</text>
+  `;
+  /* month ticks round the orbit, from the model: where the Earth is mid-month */
+  let mt = '';
+  for (let m = 0; m < 12; m++) {
+    const p = earthPos(midMonth(m));
+    const dx = p.x - OC.x, dy = (p.y - OC.y) * OC.rx / OC.ry, L = Math.hypot(dx, dy) || 1;
+    const lx = OC.x + dx / L * (OC.rx + 34), ly = OC.y + dy / L * (OC.rx + 34) * OC.ry / OC.rx;
+    mt += `<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="2.2" fill="#5d7593"/>` +
+          `<text x="${lx.toFixed(1)}" y="${(ly + 4).toFixed(1)}" fill="#7d93ad" font-size="11.5" font-weight="600" text-anchor="middle">${MONTHS[m]}</text>`;
+  }
+  $('monthTicks').innerHTML = mt;
+}
+
+/* Screen position of the Earth on day d. The Earth's heliocentric longitude is the Sun's
+   plus 180°; it is laid out so that June (Earth at 270°) sits on the LEFT of the Sun, where
+   an axis leaning to the right tips the north pole towards the Sun. The sun is displaced
+   from the centre by ae — the real, tiny offset. */
+function earthPos(d){
+  const o = orbitAt(d);
+  const psi = (o.lamSun + 180 - 90) * D2R;
+  /* Measured from the Sun, at the real r: the orbit is a/e-accurate, not a drawn ellipse. */
+  const k = o.r / A_KM;
+  return {x: SUN.x + OC.rx * k * Math.cos(psi), y: SUN.y + OC.ry * k * Math.sin(psi), psi, back: Math.sin(psi) < 0, r: o.r};
+}
+
+/* ---- the graph ----------------------------------------------------------- */
+let QMAX = 14;
+const gx = d => GR.x + (d - 1) / 364 * GR.w;
+const gyQ = q => GR.y + GR.h - q / QMAX * GR.h;
+const R_LO = 146.5, R_HI = 152.5;
+const gyR = r => GR.y + GR.h - (r - R_LO) / (R_HI - R_LO) * GR.h;
+function drawGraph(){
+  const lat = CITIES[S.city].lat;
+  const pts = [];
+  let mx = 0;
+  for (let d = 1; d <= 365; d += 2) { const s = sky(d, S.tilt, lat); pts.push([d, s.kwh]); mx = Math.max(mx, s.kwh); }
+  QMAX = Math.max(8, Math.ceil((mx + 0.5) / 2) * 2);
+  const q = pts.map((p, i) => (i ? 'L' : 'M') + gx(p[0]).toFixed(1) + ' ' + gyQ(p[1]).toFixed(1)).join('');
+  $('qCurve').setAttribute('d', q);
+  $('qFill').setAttribute('d', q + `L${gx(365)} ${GR.y + GR.h}L${gx(1)} ${GR.y + GR.h}Z`);
+  let r = '';
+  for (let d = 1; d <= 365; d += 3) r += (d === 1 ? 'M' : 'L') + gx(d).toFixed(1) + ' ' + gyR(orbitAt(d).r).toFixed(1);
+  $('rCurve').setAttribute('d', r);
+  let ax = `<line x1="${GR.x}" y1="${GR.y + GR.h}" x2="${GR.x + GR.w}" y2="${GR.y + GR.h}" stroke="#9aa3a6"/>`;
+  for (let m = 0; m < 12; m++) {
+    const x = gx(midMonth(m));
+    ax += `<text x="${x.toFixed(1)}" y="${GR.y + GR.h + 18}" fill="#7c878c" font-size="11.5" text-anchor="middle" font-weight="600">${MONTHS[m]}</text>`;
+  }
+  for (let v = 0; v <= QMAX; v += QMAX > 10 ? 4 : 2) {
+    ax += `<line x1="${GR.x}" y1="${gyQ(v).toFixed(1)}" x2="${GR.x + GR.w}" y2="${gyQ(v).toFixed(1)}" stroke="#ece8dc"/>` +
+          `<text x="${GR.x - 8}" y="${(gyQ(v) + 4).toFixed(1)}" fill="#b5620a" font-size="11" text-anchor="end">${v}</text>`;
+  }
+  for (const v of [147, 149, 151]) ax += `<text x="${GR.x + GR.w + 8}" y="${(gyR(v) + 4).toFixed(1)}" fill="#3f7fd8" font-size="11">${v}</text>`;
+  ax += `<text x="${GR.x - 50}" y="${GR.y - 8}" fill="#b5620a" font-size="11" font-weight="600">kWh per m²</text>`;
+  ax += `<text x="${GR.x + GR.w + 36}" y="${GR.y - 8}" fill="#3f7fd8" font-size="11" font-weight="600" text-anchor="end">million km</text>`;
+  $('gAxes').innerHTML = ax;
+  $('legQ').textContent = 'Sunlight per day in ' + CITIES[S.city].name;
+}
+
+/* ---- paint: everything that depends on the state -------------------------- */
+function paint(){
+  const d = S.day, city = CITIES[S.city], s = sky(d, S.tilt, city.lat);
+  /* orbit */
+  const p = earthPos(d);
+  const sunX = SUN.x, sunY = SUN.y;
+  const scale = p.back ? 0.86 : 1.08;
+  const eg = $('earthG');
+  (p.back ? $('backLayer') : $('frontLayer')).appendChild(eg);
+  $('earthBody').setAttribute('transform', `translate(${p.x.toFixed(1)} ${p.y.toFixed(1)}) scale(${scale})`);
+  $('earthHit').setAttribute('cx', p.x.toFixed(1)); $('earthHit').setAttribute('cy', p.y.toFixed(1));
+  $('sunLine').setAttribute('x1', sunX); $('sunLine').setAttribute('y1', sunY);
+  $('sunLine').setAttribute('x2', p.x.toFixed(1)); $('sunLine').setAttribute('y2', p.y.toFixed(1));
+  /* night half: the half-disc facing away from the Sun, in the picture */
+  const ang = Math.atan2(sunY - p.y, sunX - p.x);
+  const nx = -Math.cos(ang), ny = -Math.sin(ang);
+  const R = 21, px = -ny * R, py = nx * R;
+  $('nightHalf').setAttribute('d', `M${px.toFixed(2)} ${py.toFixed(2)} A${R} ${R} 0 0 1 ${(-px).toFixed(2)} ${(-py).toFixed(2)} L${(-px + nx * R * 2).toFixed(2)} ${(-py + ny * R * 2).toFixed(2)} L${(px + nx * R * 2).toFixed(2)} ${(py + ny * R * 2).toFixed(2)}Z`);
+  /* The axis leans the same way all year, towards +x: that is the whole trick. */
+  const t = S.tilt * D2R, ax = Math.sin(t), ay = -Math.cos(t);
+  $('axis').setAttribute('x1', (-ax * 30).toFixed(2)); $('axis').setAttribute('y1', (-ay * 30).toFixed(2));
+  $('axis').setAttribute('x2', (ax * 30).toFixed(2)); $('axis').setAttribute('y2', (ay * 30).toFixed(2));
+  $('equator').setAttribute('x1', (ay * 21).toFixed(2)); $('equator').setAttribute('y1', (-ax * 21).toFixed(2));
+  $('equator').setAttribute('x2', (-ay * 21).toFixed(2)); $('equator').setAttribute('y2', (ax * 21).toFixed(2));
+  const ls = Math.sin(city.lat * D2R) * 21;
+  $('cityDot').setAttribute('cx', (ax * ls).toFixed(2)); $('cityDot').setAttribute('cy', (ay * ls).toFixed(2));
+  $('nLab').setAttribute('x', (ax * 38).toFixed(2)); $('nLab').setAttribute('y', (ay * 38 + 4).toFixed(2));
+
+  /* distances: shown only after the prediction, because "closest in January" IS the answer */
+  if (S.locked) {
+    const pe = earthPos(PERI_DAY), ap = earthPos(PERI_DAY + YEAR / 2);
+    $('periLab').setAttribute('x', clamp(pe.x, 130, 470).toFixed(1)); $('periLab').setAttribute('y', (pe.y + 46).toFixed(1));
+    $('periLab').textContent = `Closest, ${dateOf(PERI_DAY)}: ${fmt(orbitAt(PERI_DAY).r, 1)} million km`;
+    $('aphLab').setAttribute('x', clamp(ap.x, 130, 470).toFixed(1)); $('aphLab').setAttribute('y', (ap.y - 36).toFixed(1));
+    $('aphLab').textContent = `Farthest, ${dateOf(PERI_DAY + YEAR / 2)}: ${fmt(orbitAt(PERI_DAY + YEAR / 2).r, 1)} million km`;
+    $('distNow').textContent = `Today: ${fmt(s.r, 1)} million km from the Sun`;
+  }
+
+  /* noon panel */
+  const h = s.noonAlt, up = h > 0;
+  const top = up ? Math.min(1, h / 70) : 0;
+  $('sky0').setAttribute('stop-color', up ? mix('#2a4f86', '#4f9ff0', top) : '#0b1530');
+  $('sky1').setAttribute('stop-color', up ? mix('#f2b27a', '#cfe8fb', top) : '#1a2a4d');
+  $('noonStars').setAttribute('opacity', up ? 0 : 1);
+  $('noSun').setAttribute('opacity', up ? 0 : 1);
+  $('noonTitle').textContent = 'NOON IN ' + city.name.toUpperCase();
+  $('noonTitle').setAttribute('fill', up ? '#0d2a44' : '#dce6f0');
+  $('noonSub').setAttribute('fill', up ? '#23476b' : '#9fb3c8');
+  const hr = clamp(h, 0.5, 90) * D2R, Lsun = 240;
+  /* Sun on the south side for northern cities, north side for southern ones — drawn on the
+     left either way, facing the Sun. */
+  const sx = NOON.gx - Lsun * Math.cos(hr), sy = NOON.gy - Lsun * Math.sin(hr);
+  $('noonSun').setAttribute('cx', sx.toFixed(1)); $('noonSun').setAttribute('cy', sy.toFixed(1));
+  $('noonSun').setAttribute('opacity', up ? 1 : 0);
+  $('sunPath').setAttribute('d', `M${NOON.gx - Lsun} ${NOON.gy} A${Lsun} ${Lsun} 0 0 1 ${NOON.gx} ${NOON.gy - Lsun}`);
+  /* the beam: five parallel rays, 64 px wide across, landing on W / sin h of ground */
+  const W = 64, u = {x: Math.cos(hr), y: Math.sin(hr)};
+  let beam = '';
+  if (up) {
+    const half = W / 2 / Math.sin(hr);
+    beam += `<path d="M${(NOON.gx - half).toFixed(1)} ${NOON.gy} L${(NOON.gx + half).toFixed(1)} ${NOON.gy} L${(NOON.gx + half - 400 * u.x).toFixed(1)} ${(NOON.gy - 400 * u.y).toFixed(1)} L${(NOON.gx - half - 400 * u.x).toFixed(1)} ${(NOON.gy - 400 * u.y).toFixed(1)}Z" fill="#fff3b0" opacity=".38"/>`;
+    for (let i = -2; i <= 2; i++) {
+      const hx = NOON.gx - (i * W / 4) / Math.sin(hr);
+      beam += `<line x1="${hx.toFixed(1)}" y1="${NOON.gy}" x2="${(hx - 400 * u.x).toFixed(1)}" y2="${(NOON.gy - 400 * u.y).toFixed(1)}" stroke="#ffd43b" stroke-width="2" opacity=".85"/>`;
+    }
+    $('foot').setAttribute('x', (NOON.gx - half).toFixed(1)); $('foot').setAttribute('width', (2 * half).toFixed(1));
+  } else { $('foot').setAttribute('width', 0); }
+  $('beam').innerHTML = beam;
+  $('foot').setAttribute('opacity', up ? .95 : 0);
+  const shLen = up ? Math.min(300, 64 / Math.tan(hr)) : 0;
+  $('shadow').setAttribute('d', up ? `M${NOON.gx - 3} ${NOON.gy} L${(NOON.gx + shLen).toFixed(1)} ${NOON.gy} L${(NOON.gx + shLen).toFixed(1)} ${NOON.gy + 4} L${NOON.gx - 3} ${NOON.gy + 4}Z` : '');
+  const ar = 54;
+  $('altArc').setAttribute('d', up ? `M${NOON.gx - ar} ${NOON.gy} A${ar} ${ar} 0 0 1 ${(NOON.gx - ar * Math.cos(hr)).toFixed(1)} ${(NOON.gy - ar * Math.sin(hr)).toFixed(1)}` : '');
+  $('altLab').setAttribute('x', NOON.gx - ar - 64); $('altLab').setAttribute('y', NOON.gy - 12);
+  $('altLab').textContent = S.locked && up ? fmt(h, 0) + '°' : '';
+  $('spreadLab').textContent = S.locked && up ? `Spread over ${fmt(1 / Math.sin(hr), 2)}× the ground of an overhead Sun` : '';
+
+  /* graph markers */
+  $('nowLine').setAttribute('x1', gx(d).toFixed(1)); $('nowLine').setAttribute('x2', gx(d).toFixed(1));
+  $('nowQ').setAttribute('cx', gx(d).toFixed(1)); $('nowQ').setAttribute('cy', gyQ(s.kwh).toFixed(1));
+  $('nowR').setAttribute('cx', gx(d).toFixed(1)); $('nowR').setAttribute('cy', gyR(s.r).toFixed(1));
+
+  /* side panel */
+  $('dateOut').textContent = dateOf(d);
+  $('day').value = Math.round(d); $('dayOut').textContent = Math.round(d);
+  $('tilt').value = S.tilt; $('tiltOut').textContent = fmt(S.tilt, 1) + '°';
+  $('city').value = S.city; $('cityName').textContent = city.name;
+  paintMeters(s);
+  paintWhy(s);
+  check(s);
+}
+function mix(a, b, t){
+  const pa = [1, 3, 5].map(i => parseInt(a.slice(i, i + 2), 16)), pb = [1, 3, 5].map(i => parseInt(b.slice(i, i + 2), 16));
+  return '#' + pa.map((v, i) => Math.round(v + (pb[i] - v) * t).toString(16).padStart(2, '0')).join('');
+}
+function paintMeters(s){
+  if (!S.locked) { $('meters').innerHTML = '<p style="font-size:13px;color:var(--ink-3);margin:0">The numbers appear once you have made a prediction.</p>'; return; }
+  const row = (lab, val, frac, col) => `<div class="meter"><span>${lab}</span><b>${val}</b><span class="bar"><i style="width:${(clamp(frac, 0, 1) * 100).toFixed(1)}%;${col ? 'background:' + col : ''}"></i></span></div>`;
+  $('meters').innerHTML =
+    row('Length of the day', hm(s.dayLen), s.dayLen / 24) +
+    row('Height of the Sun at noon', s.noonAlt > 0 ? fmt(s.noonAlt, 0) + '°' : 'below the horizon', s.noonAlt / 90) +
+    row('Sunlight on each m² today', fmt(s.kwh, 1) + ' kWh', s.kwh / QMAX, '#e8890c') +
+    row('Distance from the Sun', fmt(s.r, 1) + ' million km', (s.r - R_LO) / (R_HI - R_LO), '#3f7fd8');
+}
+/* A live narrator: it describes what THIS state is doing, in words, from the model. */
+function paintWhy(s){
+  if (!S.locked) return;
+  $('whyCard').hidden = false;
+  const city = CITIES[S.city], north = city.lat >= 0;
+  const lean = Math.abs(s.dec) < 0.6 ? 'Neither half of the Earth leans towards the Sun'
+    : (s.dec > 0 ? 'The northern half' : 'The southern half') + ' of the Earth leans towards the Sun';
+  const mine = (s.dec > 0.6 && north) || (s.dec < -0.6 && !north) ? `, and ${city.name} is on that half.` : Math.abs(s.dec) < 0.6 ? '.' : `, and ${city.name} is on the other half.`;
+  let txt = S.tilt < 0.5 ? `<p><b>There is no tilt.</b> The Sun is over the equator every day of the year, so in ${city.name} every day is the same length and the noon Sun is always the same height.</p>`
+    : `<p><b>${lean}</b>${mine}</p>`;
+  txt += `<p>So at noon the Sun climbs to <b>${s.noonAlt > 0 ? fmt(s.noonAlt, 0) + '°' : 'nowhere: it stays below the horizon'}</b>, and it is up for <b>${hm(s.dayLen)}</b>. ` +
+    (s.noonAlt > 0 ? `A high Sun puts its light on a small patch of ground; a low Sun spreads the same light thin.` : '') + `</p>`;
+  const near = orbitAt(PERI_DAY).r, far = orbitAt(PERI_DAY + YEAR / 2).r;
+  txt += `<p>The distance changes too, from ${fmt(near, 1)} to ${fmt(far, 1)} million km. That changes the sunlight by only about ${fmt((Math.pow(far / near, 2) - 1) * 100, 0)}% across the whole year.</p>`;
+  $('why').innerHTML = txt;
+}
+
+/* ---- findings: reached by the model, never by a button -------------------- */
+function check(s){
+  if (!S.locked) return;
+  const d = S.day;
+  if (d <= 10 || d >= 360) discover('closest');
+  if (S.tilt < 0.5) discover('notilt');
+  if (S.city === 'Sydney' && S.tilt > 10 && ((d >= 152 && d <= 243) || d >= 335 || d <= 59)) discover('opposite');
+  if (s.dayLen >= 23.99 || s.dayLen <= 0.01) discover('midnight');
+  if (S.tilt > 10 && s.noonAlt > 0 && s.noonAlt < 40) discover('spread');
+  if (d >= 150 && d <= 200) S.visited.jun = true;
+  if (d <= 31 || d >= 335) S.visited.jan = true;
+  maybeExplain();
+}
+let EXPLAINED = false;
+function maybeExplain(){
+  if (EXPLAINED || !POE || !found('closest') || !S.visited.jun) return;
+  EXPLAINED = true;
+  const del = CITIES.Delhi.lat, jun = sky(172, 23.5, del), dec = sky(355, 23.5, del);
+  const near = orbitAt(PERI_DAY).r, far = orbitAt(PERI_DAY + YEAR / 2).r;
+  POE.explain(`The Earth is <b>closest to the Sun in early January</b>, in Delhi's winter, and farthest in July. ` +
+    `Distance changes the sunlight by only about ${fmt((Math.pow(far / near, 2) - 1) * 100, 0)}%. ` +
+    `The tilt does the real work. In June the noon Sun over Delhi climbs to about <b>${fmt(jun.noonAlt, 0)}°</b> and the day lasts <b>${hm(jun.dayLen)}</b>. ` +
+    `In December it reaches only <b>${fmt(dec.noonAlt, 0)}°</b>, and the day lasts <b>${hm(dec.dayLen)}</b>. Set the tilt to 0° and the seasons disappear.`);
+}
+
+/* ============================================================================
+   Controls. The stage is built first, so there is something to wire.
+   ============================================================================ */
+build();
+let ANIM = null;
+function setPlaying(on){
+  S.playing = on;
+  $('btnPlay').textContent = on ? '❚❚' : '▶';
+  $('btnPlay').setAttribute('aria-label', on ? 'Pause' : 'Play the year');
+  if (ANIM) { ANIM.stop(); ANIM = null; }
+  if (on) ANIM = loop(dt => { S.day += dt * 30; if (S.day > 365) S.day -= 365; paint(); });
+}
+function lockControls(lock){
+  for (const id of ['day', 'tilt', 'city', 'btnPlay']) $(id).disabled = lock;
+  $('earthHit').style.pointerEvents = lock ? 'none' : '';
+  $('gate').hidden = !lock;
+}
+$('btnPlay').addEventListener('click', () => { setPlaying(!S.playing); sound('tick'); track('play', {on: S.playing}); });
+$('day').addEventListener('input', e => { setPlaying(false); S.day = +e.target.value; paint(); });
+$('tilt').addEventListener('input', e => { S.tilt = +e.target.value; drawGraph(); paint(); });
+$('tilt').addEventListener('change', () => track('tilt', {tilt: S.tilt}));
+$('city').addEventListener('change', e => { S.city = e.target.value; sound('pop'); drawGraph(); paint(); track('city', {city: S.city}); });
+
+/* Drag the Earth round the orbit. The pointer's angle about the Sun is the Earth's longitude. */
+drag($('earthHit'), svg, {
+  start(){ if (!S.locked) return false; setPlaying(false); },
+  move(p){
+    const psi = Math.atan2((p.y - SUN.y) / OC.ry, (p.x - SUN.x) / OC.rx) * R2D;
+    const lamSun = psi + 90 - 180;
+    S.day = dayOfLamSun(lamSun);
+    paint();
+  },
+  end(){ track('dragEarth', {day: Math.round(S.day)}); },
+});
+$('earthHit').addEventListener('keydown', e => {
+  const k = {ArrowRight: 1, ArrowUp: 1, ArrowLeft: -1, ArrowDown: -1}[e.key];
+  if (!k || !S.locked) return;
+  e.preventDefault(); setPlaying(false);
+  S.day = ((S.day - 1 + k * (e.shiftKey ? 10 : 1)) % 365 + 365) % 365 + 1; paint();
+});
+
+/* ============================================================================
+   Start
+   ============================================================================ */
+drawGraph();
+findings($('finds'), [
+  {id: 'closest',  icon: '☀', label: 'Closest to the Sun in January', hint: 'When is the Earth nearest the Sun?'},
+  {id: 'notilt',   icon: '⟂', label: 'No tilt, no seasons',          hint: 'What if the Earth stood upright?'},
+  {id: 'opposite', icon: '⇅', label: 'Sydney’s seasons are the other way round', hint: 'Try a city south of the equator'},
+  {id: 'midnight', icon: '◐', label: 'A day with no night (or no day)', hint: 'Go far north'},
+  {id: 'spread',   icon: '▭', label: 'A low Sun spreads its light thin', hint: 'Watch the beam on the ground'},
+], () => toast('All five found. You have explained the seasons better than most adults can.', 4200));
+
+const POE = predict($('poe'), {
+  id: 'why-seasons',
+  q: 'In Delhi, June is hot and January is cold. Why?',
+  options: [
+    {id: 'closer', text: 'The Earth is closer to the Sun in June.'},
+    {id: 'tilt',   text: 'The Earth is tilted, so in June the Sun climbs higher over India and the days are longer.', right: true},
+    {id: 'hotter', text: 'The Sun itself gives out more heat in June.'},
+    {id: 'clouds', text: 'There are fewer clouds in June.'},
+  ],
+  onLock(){
+    S.locked = true;
+    lockControls(false);
+    $('distLabels').setAttribute('opacity', 1); $('distNow').setAttribute('opacity', 1);
+    $('graphVeil').remove(); $('graphVeilT').remove();
+    say('Now find out. Move the Earth round the Sun, and watch the distance and the noon Sun.');
+    paint();
+  },
+});
+lockControls(!POE.locked);
+if (!Play.FF('predict')) S.locked = true;
+paint();
+if (!reduced() && !shared) setPlaying(true);
+window.applyFeatures = () => paint();
+window.PG_STATE = () => JSON.parse(JSON.stringify(S));
+window.PG_MODEL = {orbitAt, sky, dayOfLamSun};
+</script>
+</body>
+</html>

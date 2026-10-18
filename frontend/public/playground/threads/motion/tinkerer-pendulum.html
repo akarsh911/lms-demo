@@ -1,0 +1,379 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The swinging pendulum</title>
+<meta name="description" content="Class 7, Curiosity Ch 8: race two pendulums side by side, change one thing about the second twin at a time, and find that only the length sets the beat — until you pull one out very far.">
+<link rel="icon" href="../../favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600&family=Inter:wght@400;500;600;700&family=Nunito:wght@500;700;800&family=Newsreader:opsz,wght@6..72,400;6..72,500&family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="../../play.css">
+<style>
+/* Only what this page needs beyond play.css — the same look as motion/tinkerer.html. */
+.pg-stage{background:#fbfaf5}
+.gate{position:absolute; inset:0 0 68px 0; display:flex; align-items:flex-end; justify-content:center; padding-bottom:14px; pointer-events:none}
+.gate span{background:rgba(24,34,20,.84); color:#fff; padding:10px 16px; border-radius:99px; font-weight:600; font-size:14px; text-align:center}
+.raceBar{display:flex; align-items:center; justify-content:space-between; gap:10px; padding:10px 14px; border-top:1px solid var(--hair); background:var(--sunk); flex-wrap:wrap}
+.ctl{grid-template-columns:96px 1fr 66px; margin:4px 0}
+.seg{display:flex; background:var(--sunk); border-radius:99px; padding:3px; gap:3px; margin:6px 0}
+.seg button{flex:1; border:0; background:transparent; border-radius:99px; padding:6px 6px; font-weight:600; font-size:12.5px; cursor:pointer; color:var(--ink-2)}
+.seg button[aria-pressed="true"]{background:var(--card); color:var(--ink); box-shadow:var(--shadow)}
+.seg button:disabled{cursor:default; opacity:.5}
+.hint{font-size:12.5px; color:var(--ink-3); margin:6px 0 0}
+.twincard .kicker.a{color:#1d6fa5} .twincard .kicker.b{color:#b86500}
+table.log{width:100%; border-collapse:collapse; font-size:12px; font-variant-numeric:tabular-nums}
+table.log th{font-size:10.5px; text-transform:uppercase; letter-spacing:.04em; color:var(--ink-3); font-weight:700; text-align:right; padding:3px 4px; border-bottom:1px solid var(--hair)}
+table.log td{text-align:right; padding:3px 4px; border-bottom:1px solid var(--hair)}
+table.log th:first-child, table.log td:first-child{text-align:left}
+table.log tr.new td{background:var(--accent-soft)}
+.empty{font-size:13px; color:var(--ink-3)}
+.diffline{display:flex; gap:6px; flex-wrap:wrap; margin-top:8px}
+.chip{font-size:11px; font-weight:700; padding:3px 9px; border-radius:99px; background:var(--sunk); color:var(--ink-3)}
+.chip.on{background:var(--accent-soft); color:var(--ink)}
+@media (max-width:1180px) and (min-width:981px){ .pg-main.wide-side{grid-template-columns:minmax(0,1fr) 340px} }
+</style>
+</head>
+<body>
+<header class="pg-top"></header>
+
+<div class="pg-intro">
+  <h1>The swinging pendulum</h1>
+  <p>Galileo watched a lamp swing in a church and timed it with his own pulse. Here you hang two pendulums, Twin A and
+     Twin B, from the same beam. Change one thing about Twin B — its string, its bob, or how far you pull it — release
+     them together, and watch whether they keep the same beat or drift apart. Time is yours: pause it, slow it down, or
+     step through a swing at a time.</p>
+</div>
+
+<main class="pg-main wide-side">
+  <section class="pg-stage" id="stageWrap">
+    <svg id="stage" viewBox="0 0 1000 620" role="img" aria-label="Two pendulums, Twin A and Twin B, hanging from one beam, with a race panel on the right comparing how long each takes for ten oscillations"></svg>
+    <div class="gate" id="gate"><span>Make your prediction first →</span></div>
+    <div class="raceBar">
+      <button class="btn primary" id="btnRelease" disabled>Release both together</button>
+      <button class="btn sm" id="btnCopy" disabled title="Make Twin B identical to Twin A, so you can change one thing">Copy A → B</button>
+      <div id="clockMount"></div>
+    </div>
+  </section>
+
+  <aside class="pg-side">
+    <div id="poe"></div>
+
+    <div class="card twincard">
+      <div class="kicker a">Twin A</div>
+      <div class="ctl"><label for="lenA">String length</label><input type="range" id="lenA" min="20" max="150" step="5" value="100"><output id="lenAOut">100 cm</output></div>
+      <div class="ctl"><label for="ampA">Pull aside</label><input type="range" id="ampA" min="4" max="50" step="1" value="10"><output id="ampAOut">10°</output></div>
+      <div class="seg" id="bobSegA" role="group" aria-label="Twin A bob">
+        <button data-bob="0.05" aria-pressed="true">Stone 50 g</button>
+        <button data-bob="0.2" aria-pressed="false">Ball 200 g</button>
+        <button data-bob="0.5" aria-pressed="false">Iron 500 g</button>
+      </div>
+    </div>
+    <div class="card twincard">
+      <div class="kicker b">Twin B</div>
+      <div class="ctl"><label for="lenB">String length</label><input type="range" id="lenB" min="20" max="150" step="5" value="100"><output id="lenBOut">100 cm</output></div>
+      <div class="ctl"><label for="ampB">Pull aside</label><input type="range" id="ampB" min="4" max="50" step="1" value="10"><output id="ampBOut">10°</output></div>
+      <div class="seg" id="bobSegB" role="group" aria-label="Twin B bob">
+        <button data-bob="0.05" aria-pressed="true">Stone 50 g</button>
+        <button data-bob="0.2" aria-pressed="false">Ball 200 g</button>
+        <button data-bob="0.5" aria-pressed="false">Iron 500 g</button>
+      </div>
+      <p class="hint">A pull past about 30° is a big swing — Curiosity's Activity 8.2 only ever asks you to move the bob "slightly to one side".</p>
+      <div class="diffline" id="diffLine"></div>
+    </div>
+
+    <div class="card">
+      <div class="kicker">Table 8.1, twinned · results of your races</div>
+      <div id="raceTable"><p class="empty">Release both twins to record a race.</p></div>
+    </div>
+
+    <div class="card"><div class="kicker">To find</div><div id="finds"></div></div>
+  </aside>
+</main>
+
+<script src="../../play.js"></script>
+<script>
+'use strict';
+const {$, esc, clamp, fmt, loop, clock, sound, track, toast, predict, findings, discover, found,
+       shareState, sharedState, mount, reduced, mulberry32} = Play;
+mount({thread: 'motion', band: 'tinkerer', part: 'pendulum'});
+
+/* MODEL:start ==================================================================
+   The same real pendulum as motion/tinkerer.html (Curiosity Grade 7, Activity 8.2), integrated
+   with RK4 — nothing here is a formula plugged straight into an answer box. Two independent
+   copies run side by side, each timed the way the book times it: ten oscillations, starting and
+   ending at the extreme position it was released from.
+     m·L·θ'' = −m·g·sin θ − b·L·θ'   (b: a small, fixed air drag, the same for every bob)
+   Because sin θ is used (not the small-angle θ), the model is free to show what the small-angle
+   formula T = 2π√(L/g) leaves out: at a big amplitude the period really does lengthen.
+   ============================================================================ */
+const G = 9.8;
+const AIR_B = 0.0008;
+function pendDeriv(th, w, L, m){ return [w, -(G / L) * Math.sin(th) - (AIR_B / m) * w]; }
+function pendStep(s, dt, L, m){
+  const [a1, b1] = pendDeriv(s.th, s.w, L, m);
+  const [a2, b2] = pendDeriv(s.th + a1 * dt / 2, s.w + b1 * dt / 2, L, m);
+  const [a3, b3] = pendDeriv(s.th + a2 * dt / 2, s.w + b2 * dt / 2, L, m);
+  const [a4, b4] = pendDeriv(s.th + a3 * dt, s.w + b3 * dt, L, m);
+  const w0 = s.w;
+  s.th += (a1 + 2 * a2 + 2 * a3 + a4) * dt / 6;
+  s.w  += (b1 + 2 * b2 + 2 * b3 + b4) * dt / 6;
+  s.t += dt;
+  if (w0 > 0 && s.w <= 0 && s.th > 0) { s.osc++; s.tA = s.t - dt * s.w / (s.w - w0); }
+  return s;
+}
+const PEND_DT = 1 / 1200;
+function pendNew(ampDeg){ return {th: ampDeg * Math.PI / 180, w: 0, t: 0, osc: 0, tA: 0}; }
+/* Time for n oscillations, straight from the integration — used by the test and to draw the
+   small-angle reference line; never used to fill in the race itself. */
+function pendTime(Lcm, mKg, ampDeg, n = 10){
+  const s = pendNew(ampDeg), L = Lcm / 100;
+  while (s.osc < n && s.t < 200) pendStep(s, PEND_DT, L, mKg);
+  return s.tA;
+}
+const theory = Lcm => 2 * Math.PI * Math.sqrt(Lcm / 100 / G);
+/* MODEL:end */
+
+const BOBS = {0.05: {name: 'stone, 50 g', r: 10, fill: 'url(#gStone)'}, 0.2: {name: 'ball, 200 g', r: 14, fill: 'url(#gBob)'}, 0.5: {name: 'iron ball, 500 g', r: 19, fill: 'url(#gBob)'}};
+/* The gap between the two pivots is wide enough that even at the largest length (150 cm) and the
+   biggest pull (50°) on BOTH twins at once, the two bobs stay well clear of each other. */
+const PIV = {A: {x: 160, y: 62}, B: {x: 540, y: 62}}, PXCM = 1.3;
+const RACE = {x0: 660, x1: 960, yA: 96, yB: 146, w: 300};
+const COL = {A: '#2f7de1', B: '#e8890c'};
+
+const S = {
+  locked: false, raceActive: false, rows: [],
+  A: {L: 100, amp: 10, m: 0.05, sim: null, running: false, done: false, T: null},
+  B: {L: 100, amp: 10, m: 0.05, sim: null, running: false, done: false, T: null},
+};
+const shared = sharedState();
+if (shared) {
+  for (const k of ['A', 'B']) if (shared[k]) {
+    const t = shared[k];
+    S[k].L = clamp(+t.L || 100, 20, 150); S[k].amp = clamp(+t.amp || 10, 4, 50);
+    S[k].m = [0.05, 0.2, 0.5].includes(+t.m) ? +t.m : 0.05;
+  }
+}
+shareState(() => ({A: {L: S.A.L, amp: S.A.amp, m: S.A.m}, B: {L: S.B.L, amp: S.B.amp, m: S.B.m}}));
+
+/* ============================================================================
+   Stage
+   ============================================================================ */
+const svg = $('stage');
+const set = (id, attrs) => { const el = $(id); for (const k in attrs) el.setAttribute(k, attrs[k]); return el; };
+
+function build(){
+  svg.innerHTML = `
+  <defs>
+    <radialGradient id="gBob" cx="35%" cy="32%"><stop offset="0" stop-color="#e8eef2"/><stop offset=".55" stop-color="#8d9aa3"/><stop offset="1" stop-color="#4b565d"/></radialGradient>
+    <radialGradient id="gStone" cx="35%" cy="32%"><stop offset="0" stop-color="#d9cfc0"/><stop offset="1" stop-color="#7b6d5b"/></radialGradient>
+    <linearGradient id="gWood" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#b7834c"/><stop offset="1" stop-color="#8a5d31"/></linearGradient>
+  </defs>
+  <rect x="0" y="0" width="1000" height="620" fill="#fbfaf5"/>
+  <rect x="90" y="34" width="520" height="24" rx="4" fill="url(#gWood)"/>
+  <line x1="70" y1="600" x2="630" y2="600" stroke="#e6e3d8"/>
+
+  <g id="scA">
+    <text x="${PIV.A.x}" y="20" font-size="13" font-weight="700" fill="${COL.A}" text-anchor="middle" letter-spacing=".05em">TWIN A</text>
+    <path id="arcA" fill="none" stroke="#b9b39f" stroke-width="1.2" stroke-dasharray="3 5"/>
+    <line id="stringA" x1="${PIV.A.x}" y1="${PIV.A.y}" stroke="#3a3a3a" stroke-width="1.6"/>
+    <circle cx="${PIV.A.x}" cy="${PIV.A.y}" r="4" fill="#3a3a3a"/>
+    <circle id="bobA" r="12" fill="url(#gBob)" stroke="#39434a" stroke-width="1"/>
+    <text id="theoryA" x="${PIV.A.x}" y="304" font-size="11.5" fill="#7c878c" text-anchor="middle"></text>
+    <text id="readA" x="${PIV.A.x}" y="330" font-size="20" font-weight="600" text-anchor="middle" class="m" fill="${COL.A}">0.00 s</text>
+    <text id="oscA" x="${PIV.A.x}" y="350" font-size="12" text-anchor="middle" fill="#4a555b">0 of 10 oscillations</text>
+  </g>
+  <g id="scB">
+    <text x="${PIV.B.x}" y="20" font-size="13" font-weight="700" fill="${COL.B}" text-anchor="middle" letter-spacing=".05em">TWIN B</text>
+    <path id="arcB" fill="none" stroke="#b9b39f" stroke-width="1.2" stroke-dasharray="3 5"/>
+    <line id="stringB" x1="${PIV.B.x}" y1="${PIV.B.y}" stroke="#3a3a3a" stroke-width="1.6"/>
+    <circle cx="${PIV.B.x}" cy="${PIV.B.y}" r="4" fill="#3a3a3a"/>
+    <circle id="bobB" r="12" fill="url(#gBob)" stroke="#39434a" stroke-width="1"/>
+    <text id="theoryB" x="${PIV.B.x}" y="304" font-size="11.5" fill="#7c878c" text-anchor="middle"></text>
+    <text id="readB" x="${PIV.B.x}" y="330" font-size="20" font-weight="600" text-anchor="middle" class="m" fill="${COL.B}">0.00 s</text>
+    <text id="oscB" x="${PIV.B.x}" y="350" font-size="12" text-anchor="middle" fill="#4a555b">0 of 10 oscillations</text>
+  </g>
+
+  <g id="race">
+    <text x="${RACE.x0}" y="34" font-size="13" font-weight="700" fill="#4a555b" letter-spacing=".06em">TEN OSCILLATIONS, SIDE BY SIDE</text>
+    <rect x="${RACE.x0}" y="${RACE.yA}" width="${RACE.w}" height="20" rx="10" fill="#eeece2"/>
+    <rect id="fillA" x="${RACE.x0}" y="${RACE.yA}" width="0" height="20" rx="10" fill="${COL.A}"/>
+    <text x="${RACE.x0}" y="${RACE.yA - 8}" font-size="12" font-weight="700" fill="${COL.A}">Twin A</text>
+    <text id="flagA" x="${RACE.x1 + 10}" y="${RACE.yA + 15}" font-size="16" opacity="0">🏁</text>
+    <rect x="${RACE.x0}" y="${RACE.yB}" width="${RACE.w}" height="20" rx="10" fill="#eeece2"/>
+    <rect id="fillB" x="${RACE.x0}" y="${RACE.yB}" width="0" height="20" rx="10" fill="${COL.B}"/>
+    <text x="${RACE.x0}" y="${RACE.yB - 8}" font-size="12" font-weight="700" fill="${COL.B}">Twin B</text>
+    <text id="flagB" x="${RACE.x1 + 10}" y="${RACE.yB + 15}" font-size="16" opacity="0">🏁</text>
+    <text id="verdict" x="${RACE.x0}" y="${RACE.yB + 56}" font-size="14" font-weight="600" fill="#1d2327"></text>
+    <text id="verdict2" x="${RACE.x0}" y="${RACE.yB + 80}" font-size="12.5" fill="#4a555b"></text>
+    <text x="${RACE.x0}" y="${RACE.yB + 130}" font-size="11.5" fill="#8a938f">Change one thing about Twin B, then release.</text>
+    <text x="${RACE.x0}" y="${RACE.yB + 148}" font-size="11.5" fill="#8a938f">Same length ⇒ same beat, whatever else differs.</text>
+  </g>`;
+}
+
+function paintTwin(k){
+  const T = S[k], PV = PIV[k];
+  const th = T.sim ? T.sim.th : T.amp * Math.PI / 180;
+  const Lp = T.L * PXCM;
+  const bx = PV.x + Lp * Math.sin(th), by = PV.y + Lp * Math.cos(th);
+  set('string' + k, {x2: bx.toFixed(1), y2: by.toFixed(1)});
+  const B = BOBS[T.m];
+  set('bob' + k, {cx: bx.toFixed(1), cy: by.toFixed(1), r: B.r, fill: B.fill});
+  const a = T.amp * Math.PI / 180;
+  const ax = PV.x + Lp * Math.sin(a), ay = PV.y + Lp * Math.cos(a);
+  set('arc' + k, {d: `M${(PV.x - Lp * Math.sin(a)).toFixed(1)} ${ay.toFixed(1)} A${Lp} ${Lp} 0 0 0 ${ax.toFixed(1)} ${ay.toFixed(1)}`});
+  $('theory' + k).textContent = `small-angle theory: ${theory(T.L).toFixed(2)} s`;
+  const t = T.sim ? (T.done ? T.T * 10 : T.sim.t) : 0;
+  $('read' + k).textContent = t.toFixed(2) + ' s';
+  $('osc' + k).textContent = `${T.sim ? Math.min(10, T.sim.osc) : 0} of 10 oscillations`;
+  $('len' + k).value = T.L; $('len' + k + 'Out').textContent = T.L + ' cm';
+  $('amp' + k).value = T.amp; $('amp' + k + 'Out').textContent = T.amp + '°';
+  document.querySelectorAll('#bobSeg' + k + ' button').forEach(b => b.setAttribute('aria-pressed', +b.dataset.bob === T.m));
+}
+function paintRace(){
+  for (const k of ['A', 'B']) {
+    const T = S[k];
+    const ref = theory(T.L) * 10;
+    const frac = T.sim ? clamp((T.done ? T.T * 10 : T.sim.t) / Math.max(ref, 0.01), 0, 1) : 0;
+    set('fill' + k, {width: (frac * RACE.w).toFixed(1)});
+    set('flag' + k, {opacity: T.done ? 1 : 0});
+  }
+  if (S.A.done && S.B.done) {
+    const dT = S.B.T - S.A.T;
+    $('verdict').textContent = Math.abs(dT) < 0.01 ? 'Photo finish — the same beat.' : (dT > 0 ? `Twin B is behind by ${fmt(Math.abs(dT), 3)} s per swing.` : `Twin A is behind by ${fmt(Math.abs(dT), 3)} s per swing.`);
+    $('verdict2').textContent = `Twin A: ${S.A.T.toFixed(3)} s/swing · Twin B: ${S.B.T.toFixed(3)} s/swing.`;
+  } else if (S.raceActive) {
+    $('verdict').textContent = 'Racing…'; $('verdict2').textContent = '';
+  } else {
+    $('verdict').textContent = ''; $('verdict2').textContent = '';
+  }
+}
+function paintDiff(){
+  const diffs = {length: S.A.L !== S.B.L, mass: S.A.m !== S.B.m, amp: S.A.amp !== S.B.amp};
+  $('diffLine').innerHTML = Object.entries(diffs).map(([k, on]) => `<span class="chip${on ? ' on' : ''}">${on ? 'different' : 'same'} ${k}</span>`).join('');
+}
+function raceTable(){
+  if (!S.rows.length) { $('raceTable').innerHTML = '<p class="empty">Release both twins to record a race.</p>'; return; }
+  $('raceTable').innerHTML = `<table class="log"><tr><th>#</th><th>A: L/m/pull</th><th>B: L/m/pull</th><th>T(A)</th><th>T(B)</th></tr>` +
+    S.rows.slice(-6).map((r, i, a) => `<tr${i === a.length - 1 ? ' class="new"' : ''}><td>${r.n}</td><td>${r.A.L}cm/${r.A.m * 1000}g/${r.A.amp}°</td><td>${r.B.L}cm/${r.B.m * 1000}g/${r.B.amp}°</td><td><b>${r.A.T.toFixed(3)}</b></td><td><b>${r.B.T.toFixed(3)}</b></td></tr>`).join('') + '</table>';
+}
+function paint(){
+  paintTwin('A'); paintTwin('B'); paintRace(); paintDiff();
+  $('btnRelease').disabled = !S.locked || S.raceActive;
+  $('btnRelease').textContent = S.raceActive ? 'Racing…' : (S.rows.length ? 'Release both again' : 'Release both together');
+  $('btnCopy').disabled = !S.locked || S.raceActive;
+  for (const k of ['A', 'B']) {
+    $('len' + k).disabled = !S.locked || S.raceActive;
+    $('amp' + k).disabled = !S.locked || S.raceActive;
+    document.querySelectorAll('#bobSeg' + k + ' button').forEach(b => b.disabled = !S.locked || S.raceActive);
+  }
+}
+
+/* ============================================================================
+   The race, driven by Play.clock: pause, slow it down, or step it one beat at a
+   time. dt arrives already scaled by the chosen speed.
+   ============================================================================ */
+const PEND_BEAT = 0.15;
+const clk = clock({mount: $('clockMount'), step: PEND_BEAT, onTick: dt => raceTick(dt)});
+window.PG_CLOCK = clk;
+
+function releaseRace(){
+  for (const k of ['A', 'B']) { const T = S[k]; T.sim = pendNew(T.amp); T.running = true; T.done = false; T.T = null; }
+  S.raceActive = true;
+  sound('tick'); track('release', {A: {L: S.A.L, m: S.A.m, amp: S.A.amp}, B: {L: S.B.L, m: S.B.m, amp: S.B.amp}});
+  paint();
+}
+function raceTick(dtScaled){
+  if (!S.raceActive || dtScaled <= 0) return;
+  for (const k of ['A', 'B']) {
+    const T = S[k];
+    if (T.done) continue;
+    let n = Math.min(20000, Math.round(dtScaled / PEND_DT));
+    for (let i = 0; i < n; i++) {
+      pendStep(T.sim, PEND_DT, T.L / 100, T.m);
+      if (T.sim.osc >= 10) { T.done = true; T.T = T.sim.tA / 10; break; }
+    }
+  }
+  if (S.A.done && S.B.done) finishRace();
+  paint();
+}
+let poeExplained = false;
+function finishRace(){
+  S.raceActive = false;
+  const row = {n: S.rows.length + 1, A: {L: S.A.L, m: S.A.m, amp: S.A.amp, T: S.A.T}, B: {L: S.B.L, m: S.B.m, amp: S.B.amp, T: S.B.T}};
+  S.rows.push(row);
+  raceTable();
+  sound('chime');
+  track('race', {A: row.A, B: row.B});
+  checkFindings();
+  maybeExplainPOE();
+}
+function checkFindings(){
+  const {A, B} = S, dT = Math.abs(A.T - B.T);
+  if (A.L === B.L && A.m === B.m && A.amp !== B.amp && Math.max(A.amp, B.amp) <= 25 && dT < 0.012) discover('ampfree');
+  if (A.L === B.L && A.amp === B.amp && A.m !== B.m && dT < 0.012) discover('massfree');
+  if (A.m === B.m && A.amp === B.amp && A.L !== B.L && dT > 0.02) discover('lengthwins');
+  if (A.L === B.L && A.m === B.m && Math.max(A.amp, B.amp) >= 35 && dT > 0.02) discover('bigswing');
+}
+function maybeExplainPOE(){
+  if (poeExplained) return;
+  const {A, B} = S;
+  const diffs = [];
+  if (A.L !== B.L) diffs.push('length');
+  if (A.m !== B.m) diffs.push('mass');
+  if (A.amp !== B.amp) diffs.push('amp');
+  if (!diffs.length) return;
+  poeExplained = true;
+  const dT = B.T - A.T;
+  let h = `<p>Twin A (${A.L} cm, ${A.m * 1000} g, pulled ${A.amp}°) took <b>${A.T.toFixed(3)} s</b> per swing. Twin B (${B.L} cm, ${B.m * 1000} g, pulled ${B.amp}°) took <b>${B.T.toFixed(3)} s</b>.</p>`;
+  if (diffs.length === 1 && diffs[0] === 'length') h += `<p>Only the length changed, and the beat changed with it — <b>the length alone sets the time of a swing.</b></p>`;
+  else if (diffs.length === 1 && diffs[0] === 'mass') h += `<p>Only the bob changed, and the beat barely moved (Δ = ${Math.abs(dT).toFixed(3)} s). A heavier bob is pulled harder by the Earth, but it is also harder to get moving, by exactly the same amount — the mass does not matter.</p>`;
+  else if (diffs.length === 1 && diffs[0] === 'amp' && Math.max(A.amp, B.amp) <= 30) h += `<p>Only the pull changed, and it was a gentle one — the beat barely moved. Curiosity's own activity only asks for a small pull for exactly this reason.</p>`;
+  else if (diffs.includes('amp') && Math.max(A.amp, B.amp) > 30 && A.L === B.L && A.m === B.m) h += `<p>Twin B was pulled out much further, and its beat slowed by ${Math.abs(dT).toFixed(3)} s even though the length is identical. At a gentle pull this would not happen — a big swing quietly breaks the "only the length matters" rule the book states.</p>`;
+  else h += `<p>More than one thing changed at once, so this race alone can't say which one mattered — release again after changing just one thing about Twin B.</p>`;
+  POE.explain(h);
+}
+
+/* ============================================================================
+   Controls
+   ============================================================================ */
+build();
+for (const k of ['A', 'B']) {
+  $('len' + k).addEventListener('input', e => { S[k].L = +e.target.value; S[k].sim = null; paint(); });
+  $('amp' + k).addEventListener('input', e => { S[k].amp = +e.target.value; S[k].sim = null; paint(); });
+  $('bobSeg' + k).addEventListener('click', e => { const b = e.target.closest('[data-bob]'); if (!b || b.disabled) return; S[k].m = +b.dataset.bob; S[k].sim = null; sound('pop'); paint(); });
+}
+$('btnRelease').addEventListener('click', releaseRace);
+$('btnCopy').addEventListener('click', () => { S.B.L = S.A.L; S.B.m = S.A.m; S.B.amp = S.A.amp; S.B.sim = null; sound('pop'); paint(); });
+
+findings($('finds'), [
+  {id: 'lengthwins', icon: '↕', label: 'A longer string swings slower',        hint: 'Change only the length'},
+  {id: 'massfree',   icon: '⚖', label: 'A heavier bob keeps the same beat',    hint: 'Change only the bob'},
+  {id: 'ampfree',    icon: '〰', label: "A gentle pull doesn't change the beat", hint: 'Change only the pull, a little'},
+  {id: 'bigswing',   icon: '⚠', label: 'A big swing quietly falls behind',      hint: 'Pull one twin past 35°, same length and bob'},
+], () => toast('All four found. Only the length sets the beat — until you push the model past where the book stopped testing.', 4200));
+
+const POE = predict($('poe'), {
+  id: 'twin-pendulum',
+  q: 'Twin A and Twin B are identical: 100 cm string, 50 g stone, pulled aside 10°. Released together, they swing perfectly in step. Change ONE thing about Twin B only. Which change will make it fall out of step with Twin A?',
+  options: [
+    {id: 'mass',   text: 'Swap its stone for a 500 g iron ball.'},
+    {id: 'amp',    text: 'Pull it aside a little further, to 15°.'},
+    {id: 'length', text: 'Make its string longer, to 150 cm.', right: true},
+    {id: 'none',   text: 'None of these — twins always stay in step.'},
+  ],
+  onLock(){ S.locked = true; $('gate').hidden = true; sound('snap'); paint(); },
+});
+$('gate').hidden = !!POE.locked;
+if (!Play.FF('predict')) S.locked = true;
+raceTable();
+paint();
+window.applyFeatures = () => paint();
+window.PG_STATE = () => JSON.parse(JSON.stringify({locked: S.locked, raceActive: S.raceActive, rows: S.rows,
+  A: {L: S.A.L, m: S.A.m, amp: S.A.amp, done: S.A.done, T: S.A.T, t: S.A.sim ? S.A.sim.t : 0, osc: S.A.sim ? S.A.sim.osc : 0},
+  B: {L: S.B.L, m: S.B.m, amp: S.B.amp, done: S.B.done, T: S.B.T, t: S.B.sim ? S.B.sim.t : 0, osc: S.B.sim ? S.B.sim.osc : 0}}));
+window.PG_MODEL = {pendStep, pendNew, pendTime, theory, G, AIR_B, PEND_DT};
+window.PEND_BEAT = PEND_BEAT;
+</script>
+</body>
+</html>

@@ -1,0 +1,719 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Shapes of Molecules</title>
+<meta name="description" content="Class 11–12: VSEPR in 3-D. Electron pairs on a sphere push each other apart by a repulsion law you set; the molecule's shape, bond angles and dipole moment come out of the minimum.">
+<link rel="icon" href="../../favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600&family=Inter:wght@400;500;600;700&family=Nunito:wght@500;700;800&family=Newsreader:opsz,wght@6..72,400;6..72,500&family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="../../play.css">
+<style>
+/* Only what this page needs beyond play.css. */
+.pg-stage{align-self:start; min-height:0}
+.gate{position:absolute; inset:0; display:grid; place-items:center; pointer-events:none}
+.gate span{background:rgba(29,35,39,.86); color:#fff; padding:10px 16px; border-radius:99px; font-weight:600; font-size:14px}
+.chips{display:grid; grid-template-columns:repeat(4, 1fr); gap:5px; margin:4px 0 8px}
+.chips button{min-height:30px; border-radius:7px; border:1.5px solid var(--hair-2); background:var(--card); cursor:pointer; font-weight:600; font-size:12.5px; color:var(--ink-2); padding:0 4px}
+.chips button[aria-pressed="true"]{border-color:var(--accent); color:var(--ink); box-shadow:0 0 0 2px var(--accent-soft)}
+.chips button:disabled{opacity:.5; cursor:default}
+.nums{display:grid; grid-template-columns:1fr auto; gap:3px 12px; font-size:13px; align-items:baseline}
+.nums span{color:var(--ink-2)}
+.nums b{font-family:var(--font-mono); font-weight:600; font-size:12.5px; font-variant-numeric:tabular-nums; text-align:right}
+.nums .eq{grid-column:1/-1; font-family:var(--font-mono); font-size:11.5px; color:var(--ink-3); margin:-2px 0 4px}
+.nums .sep{grid-column:1/-1; height:1px; background:var(--hair); margin:3px 0}
+.why p{font-size:13.5px; margin-bottom:.5em}
+.note{font-size:12.5px; color:var(--ink-3); margin:6px 0 0}
+.ctl{grid-template-columns:118px 1fr 60px; margin:4px 0}
+.ctl label{font-size:12.5px; line-height:1.2}
+.ctl output{font-family:var(--font-mono); font-size:12.5px; font-weight:600; min-width:0}
+.btn[aria-pressed="true"]{background:var(--accent-soft); border-color:var(--accent)}
+#viewHit{cursor:grab} #viewHit.dragging{cursor:grabbing} #graphHit{cursor:ew-resize}
+</style>
+</head>
+<body>
+<header class="pg-top"></header>
+
+<div class="pg-intro">
+  <h1>Shapes of molecules</h1>
+  <p>VSEPR says the electron pairs round a central atom push each other as far apart as they can. Here they really do: each pair sits on a sphere,
+     every pair repels every other by a law you set, and the model slides them downhill until the repulsion is least. The shape, the bond angles and the dipole moment
+     are measured from where they come to rest. Drag to turn the molecule; drag a lone pair onto an atom and they swap places.</p>
+</div>
+
+<main class="pg-main wide-side">
+  <section class="pg-stage" id="stageWrap">
+    <svg id="stage" viewBox="0 0 1000 660" role="img" aria-label="A molecule in 3-D, with its electron pairs, bond angles and a graph of bond angle against the repulsion law"></svg>
+    <div class="gate" id="gate"><span>Make your prediction first →</span></div>
+  </section>
+
+  <aside class="pg-side">
+    <div id="poe"></div>
+
+    <div class="card" id="ctlCard">
+      <div class="kicker">Molecule</div>
+      <div class="chips" id="chips"></div>
+      <div class="row" style="gap:6px; margin-bottom:6px">
+        <button class="btn sm" id="addBP">+ bond pair</button><button class="btn sm" id="subBP">− bond pair</button>
+        <button class="btn sm" id="addLP">+ lone pair</button><button class="btn sm" id="subLP">− lone pair</button>
+      </div>
+      <div class="ctl"><label for="lam">lp–bp push, λ</label><input type="range" id="lam" min="1" max="2" step="0.01" value="1"><output id="lamOut">1.00</output></div>
+      <div class="ctl"><label for="LL">lp–lp push, Λ</label><input type="range" id="LL" min="1" max="6" step="0.05" value="1"><output id="LLOut">1.00</output></div>
+      <div class="ctl"><label for="pexp">Repulsion law 1/d<sup>p</sup></label><input type="range" id="pexp" min="1" max="20" step="0.5" value="3"><output id="pOut">p = 3</output></div>
+      <div class="row" style="justify-content:space-between">
+        <button class="btn sm" id="btnLpDip" aria-pressed="true">Lone pairs’ own dipole</button>
+        <button class="btn sm" id="btnView">Reset view</button>
+      </div>
+      <p class="note">A lone pair pushes a bond pair λ times, and another lone pair Λ times, as hard as two bond pairs push each other. Click two atoms to measure the angle between their bonds; drop a lone pair on an atom to swap them.</p>
+    </div>
+
+    <div class="card" id="numCard">
+      <div class="kicker" id="numKick">Measured by the model</div>
+      <div id="nums"></div>
+    </div>
+
+    <div class="card why" id="whyCard" hidden>
+      <div class="kicker">What the model says</div>
+      <div id="why"></div>
+    </div>
+
+    <div class="card"><div class="kicker">To find</div><div id="finds"></div></div>
+  </aside>
+</main>
+
+<script src="../../play.js"></script>
+<script>
+'use strict';
+const {$, esc, clamp, lerp, fmt, drag, loop, sound, say, track, toast, predict, findings, discover, found,
+       shareState, sharedState, mount, reduced} = Play;
+mount({thread: 'bonding', band: 'theorist'});
+
+/* MODEL:start ==================================================================
+   LEWIS. The central atom brings V valence electrons. Each bond to a ligand uses
+   as many of them as the bond's order (a double bond to O uses 2 and counts as
+   ONE electron-pair region, NCERT's "super pair"). A charge of +q removes q.
+   What is left, in pairs, is the number of lone pairs.
+   VSEPR. Every electron-pair region is a point on a sphere round the central
+   atom. Two regions i, j repel with energy w_ij / d^p, d their distance:
+   w = 1 for two bond pairs, λ for a lone pair and a bond pair, Λ for two lone
+   pairs. NCERT's order lp–lp > lp–bp > bp–bp means Λ > λ > 1. The model
+   slides every region downhill on the sphere until the total energy is least,
+   from several random starts, and keeps the lowest.
+   DIPOLE. Each bond is a vector of (EN of ligand − EN of centre) debye along
+   the bond (Pauling electronegativities, NCERT Table 3.8), pointing to the more
+   electronegative end. A lone pair can add its own 0.4 D toward itself.
+   ============================================================================ */
+const EN = {H: 2.1, Be: 1.5, B: 2.0, C: 2.5, N: 3.0, O: 3.5, F: 4.0, P: 2.1, S: 2.5, Cl: 3.0, Br: 2.8, Xe: 2.6};
+const MU_LP = 0.4;
+const lig = (e, n, order = 1) => Array.from({length: n}, () => [e, order]);
+const MOLS = {
+  'BeCl₂': {c: 'Be', V: 2, L: lig('Cl', 2)}, 'BF₃': {c: 'B', V: 3, L: lig('F', 3)}, 'CH₄': {c: 'C', V: 4, L: lig('H', 4)},
+  'NH₃': {c: 'N', V: 5, L: lig('H', 3)}, 'NF₃': {c: 'N', V: 5, L: lig('F', 3)}, 'H₂O': {c: 'O', V: 6, L: lig('H', 2)},
+  'NH₄⁺': {c: 'N', V: 5, L: lig('H', 4), q: 1}, 'CO₂': {c: 'C', V: 4, L: lig('O', 2, 2)}, 'SO₂': {c: 'S', V: 6, L: lig('O', 2, 2)},
+  'CCl₄': {c: 'C', V: 4, L: lig('Cl', 4)}, 'PCl₅': {c: 'P', V: 5, L: lig('Cl', 5)}, 'SF₄': {c: 'S', V: 6, L: lig('F', 4)},
+  'ClF₃': {c: 'Cl', V: 7, L: lig('F', 3)}, 'XeF₂': {c: 'Xe', V: 8, L: lig('F', 2)}, 'SF₆': {c: 'S', V: 6, L: lig('F', 6)},
+  'BrF₅': {c: 'Br', V: 7, L: lig('F', 5)}, 'XeF₄': {c: 'Xe', V: 8, L: lig('F', 4)},
+};
+/* measured (NCERT Table 4.5 and text) */
+const MEAS_MU = {'H₂O': 1.85, 'NH₃': 1.47, 'NF₃': 0.23, 'CO₂': 0, 'BF₃': 0, 'CH₄': 0, 'CCl₄': 0};
+const MEAS_ANG = {'H₂O': 104.5, 'NH₃': 107, 'CH₄': 109.5, 'BF₃': 120};
+function lewis(m){
+  const bonded = m.L.reduce((s, l) => s + l[1], 0), left = m.V - bonded - (m.q || 0);
+  return {bp: m.L.length, lp: left / 2, left, bonded};
+}
+/* lam = {lb: λ, ll: Λ} */
+const weight = (a, b, lam) => a === 'lp' && b === 'lp' ? lam.ll : a === 'lp' || b === 'lp' ? lam.lb : 1;
+function energy(u, types, lam, p){
+  let E = 0;
+  for (let i = 0; i < u.length; i++) for (let j = i + 1; j < u.length; j++) {
+    const d = Math.hypot(u[i][0] - u[j][0], u[i][1] - u[j][1], u[i][2] - u[j][2]);
+    E += weight(types[i], types[j], lam) / Math.pow(Math.max(d, 1e-6), p);
+  }
+  return E;
+}
+function forces(u, types, lam, p){
+  const F = u.map(() => [0, 0, 0]);
+  for (let i = 0; i < u.length; i++) for (let j = i + 1; j < u.length; j++) {
+    const d = [0, 1, 2].map(k => u[i][k] - u[j][k]), r = Math.max(Math.hypot(...d), 1e-6);
+    const f = weight(types[i], types[j], lam) * p / Math.pow(r, p + 2);
+    for (let k = 0; k < 3; k++) { F[i][k] += f * d[k]; F[j][k] -= f * d[k]; }
+  }
+  /* keep only the part along the sphere */
+  return F.map((f, i) => { const dot = f[0] * u[i][0] + f[1] * u[i][1] + f[2] * u[i][2]; return f.map((x, k) => x - dot * u[i][k]); });
+}
+const norm = v => { const m = Math.hypot(...v) || 1; return v.map(x => x / m); };
+/* one downhill step with a step length that adapts: grows after a success, halves after a failure */
+function step(st, types, lam, p, hold = -1){
+  const F = forces(st.u, types, lam, p);
+  if (hold >= 0) F[hold] = [0, 0, 0];
+  const fmax = Math.max(...F.map(f => Math.hypot(...f)));
+  if (fmax < 1e-10) { st.done = true; return; }
+  const E0 = st.E != null ? st.E : energy(st.u, types, lam, p);
+  const trial = st.u.map((v, i) => norm(v.map((x, k) => x + st.h * F[i][k] / fmax)));
+  const E1 = energy(trial, types, lam, p);
+  if (E1 < E0) { st.u = trial; st.E = E1; st.h = Math.min(0.1, st.h * 1.25); }
+  else { st.E = E0; st.h *= 0.5; }
+  if (st.h < 1e-7) st.done = true;
+}
+function relax(u, types, lam, p, maxIt = 6000, hold = -1){
+  const st = {u: u.map(v => v.slice()), h: 0.05, E: null, done: false};
+  for (let i = 0; i < maxIt && !st.done; i++) step(st, types, lam, p, hold);
+  st.E = energy(st.u, types, lam, p);
+  return st;
+}
+function randomStart(n, seed){
+  const r = Play.mulberry32(seed);
+  return Array.from({length: n}, () => norm([r() - 0.5, r() - 0.5, r() - 0.5]));
+}
+/* the lowest minimum from several random starts */
+function relaxGlobal(types, lam, p, seeds = 8){
+  let best = null;
+  for (let s = 1; s <= seeds; s++) {
+    const start = randomStart(types.length, 7919 * s + types.length);
+    const r = relax(start, types, lam, p);
+    if (!best || r.E < best.E - 1e-9) best = {E: r.E, u: r.u, start};
+  }
+  return best;
+}
+const angle = (a, b) => Math.acos(clamp(a[0] * b[0] + a[1] * b[1] + a[2] * b[2], -1, 1)) * 180 / Math.PI;
+function bondAngles(u, types){
+  const out = [];
+  for (let i = 0; i < u.length; i++) for (let j = i + 1; j < u.length; j++) if (types[i] === 'bp' && types[j] === 'bp') out.push(angle(u[i], u[j]));
+  return out.sort((a, b) => a - b);
+}
+function dipole(u, types, ligs, centre, lpDip = true){
+  if (!centre || !(centre in EN)) return null;
+  const m = [0, 0, 0];
+  let b = 0;
+  types.forEach((t, i) => {
+    if (t === 'bp') { const l = ligs[b++]; if (!l || !(l[0] in EN)) return; const k = EN[l[0]] - EN[centre]; for (let q = 0; q < 3; q++) m[q] += k * u[i][q]; }
+    else if (lpDip) for (let q = 0; q < 3; q++) m[q] += MU_LP * u[i][q];
+  });
+  return {vec: m, mag: Math.hypot(...m)};
+}
+const HYB = ['', '', 'sp', 'sp²', 'sp³', 'sp³d', 'sp³d²'];
+const GEOM = ['', '', 'linear', 'trigonal planar', 'tetrahedral', 'trigonal bipyramidal', 'octahedral'];
+const SHAPE = {'2,0': 'linear', '3,0': 'trigonal planar', '2,1': 'bent', '4,0': 'tetrahedral', '3,1': 'trigonal pyramidal', '2,2': 'bent',
+  '5,0': 'trigonal bipyramidal', '4,1': 'see-saw', '3,2': 'T-shaped', '2,3': 'linear', '6,0': 'octahedral', '5,1': 'square pyramidal', '4,2': 'square planar',
+  '1,1': 'linear', '1,2': 'linear', '1,3': 'linear', '1,0': 'linear', '3,3': 'T-shaped', '2,4': 'linear', '1,4': 'linear', '1,5': 'linear'};
+/* for five regions: is a lone pair axial (it has a partner almost opposite) or equatorial? */
+function lpSite(u, types){
+  if (u.length !== 5) return null;
+  const i = types.indexOf('lp'); if (i < 0) return null;
+  return u.some((v, j) => j !== i && angle(u[i], v) > 150) ? 'axial' : 'equatorial';
+}
+/* for five bond pairs: trigonal bipyramid (one pair at 180°) or square pyramid? */
+function ax5Shape(u, types){
+  if (u.length !== 5 || types.includes('lp')) return null;
+  return Math.max(...bondAngles(u, types)) > 175 ? 'trigonal bipyramidal' : 'square pyramidal';
+}
+/* MODEL:end */
+
+/* ---- 3-D: rotation matrices and a perspective projection (our own, no library) ---- */
+const matMul = (A, B) => A.map(r => [0, 1, 2].map(j => r[0] * B[0][j] + r[1] * B[1][j] + r[2] * B[2][j]));
+const matVec = (A, v) => A.map(r => r[0] * v[0] + r[1] * v[1] + r[2] * v[2]);
+const rotX = a => [[1, 0, 0], [0, Math.cos(a), -Math.sin(a)], [0, Math.sin(a), Math.cos(a)]];
+const rotY = a => [[Math.cos(a), 0, Math.sin(a)], [0, 1, 0], [-Math.sin(a), 0, Math.cos(a)]];
+const transpose = A => [0, 1, 2].map(i => [0, 1, 2].map(j => A[j][i]));
+function alignTo(a, b){                                      // the rotation taking unit vector a onto unit vector b
+  const v = [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]], c = a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+  if (c < -0.999999) { const p = Math.abs(a[0]) < 0.9 ? [1, 0, 0] : [0, 1, 0]; const ax = norm([a[1] * p[2] - a[2] * p[1], a[2] * p[0] - a[0] * p[2], a[0] * p[1] - a[1] * p[0]]);
+    return [0, 1, 2].map(i => [0, 1, 2].map(j => 2 * ax[i] * ax[j] - (i === j ? 1 : 0))); }
+  const K = [[0, -v[2], v[1]], [v[2], 0, -v[0]], [-v[1], v[0], 0]], K2 = matMul(K, K), f = 1 / (1 + c);
+  return [0, 1, 2].map(i => [0, 1, 2].map(j => (i === j ? 1 : 0) + K[i][j] + K2[i][j] * f));
+}
+const VIEW0 = matMul(rotX(-0.35), rotY(0.5));
+const CX = 300, CY = 342, BL = 150, CAM = 1100;            // centre, bond length (px), camera distance
+function project(v){ const s = CAM / (CAM - v[2] * BL); return {x: CX + v[0] * BL * s, y: CY - v[1] * BL * s, s, z: v[2]}; }
+
+/* ---- state: plain data --------------------------------------------------- */
+const S = {mol: 'CH₄', centre: 'C', ligs: MOLS['CH₄'].L.slice(), types: [], u: [], lam: 1, LL: 1, p: 3, lpDip: true, R: VIEW0.map(r => r.slice()),
+  locked: false, settled: false, sel: [], anim: null, seen: {}, custom: false, graphVar: 'lam'};
+const shared = sharedState();
+if (shared) { if (MOLS[shared.mol]) S.mol = shared.mol; S.lam = clamp(+shared.lam || 1, 1, 2); S.LL = clamp(+shared.LL || 1, 1, 6); S.p = clamp(+shared.p || 3, 1, 20); }
+shareState(() => ({mol: S.mol, lam: S.lam, LL: S.LL, p: S.p}));
+const W = () => ({lb: S.lam, ll: S.LL});
+
+/* ============================================================================
+   The stage: built once, then patched every frame.
+   ============================================================================ */
+const svg = $('stage');
+const GR = {x: 680, y: 70, w: 290, h: 200};
+const ELCOL = {H: '#f4f4f2', B: '#f5b47a', C: '#5b6168', N: '#3f7fd8', O: '#e0453d', F: '#8fd16a', P: '#f29a1f', S: '#e8c93a', Cl: '#3fb56a', Br: '#a5402a', Xe: '#5ab4c8', Be: '#b8e070', X: '#b9a8e8', A: '#8a94a6'};
+const RAD = {H: 17, F: 21, Cl: 25, Br: 27, O: 23, X: 21};
+function build(){
+  svg.innerHTML = `
+  <defs>
+    <radialGradient id="gBg" cx="30%" cy="45%" r="75%"><stop offset="0" stop-color="#ffffff"/><stop offset="1" stop-color="#eeebe3"/></radialGradient>
+    <radialGradient id="gShine" cx="35%" cy="30%" r="70%"><stop offset="0" stop-color="#fff" stop-opacity=".85"/><stop offset=".35" stop-color="#fff" stop-opacity="0"/></radialGradient>
+    <radialGradient id="gLobe" cx="50%" cy="50%"><stop offset="0" stop-color="#b79cf0" stop-opacity=".55"/><stop offset="1" stop-color="#8a6ad8" stop-opacity=".22"/></radialGradient>
+  </defs>
+  <rect x="0" y="0" width="1000" height="660" fill="#fbfaf6"/>
+  <rect x="12" y="12" width="620" height="636" rx="10" fill="url(#gBg)" stroke="#e2ded2"/>
+  <text x="32" y="44" font-size="20" class="serif" fill="#1d2327" id="molTitle"></text>
+  <text x="32" y="66" font-size="12.5" fill="#7c878c" id="molSub"></text>
+  <g id="sphere"></g>
+  <g id="scene"></g>
+  <g id="arc"></g>
+  <g id="dipG"></g>
+  <text id="relaxLab" x="32" y="630" font-size="12" fill="#7c878c"></text>
+  <rect id="viewHit" x="12" y="80" width="620" height="540" fill="transparent" role="img" aria-label="Drag to turn the molecule; drag an electron pair to push it"/>
+
+  <text x="${GR.x - 40}" y="36" font-size="17" class="serif" fill="#1d2327" id="grTitle"></text>
+  <g id="grAxes"></g><path id="grMin" fill="none" stroke="#6a3fc2" stroke-width="2.4"/><path id="grMax" fill="none" stroke="#6a3fc2" stroke-width="1.6" stroke-dasharray="5 4"/>
+  <line id="grNow" stroke="#1d2327" stroke-width="1.3"/><circle id="grDot" r="5" fill="#6a3fc2" stroke="#fff" stroke-width="2"/>
+  <rect id="graphHit" x="${GR.x}" y="${GR.y}" width="${GR.w}" height="${GR.h}" fill="transparent" role="slider" aria-label="Set the law on the graph"/>
+  <g id="table"></g>
+  `;
+}
+let SCENE = null;                                           // element pools
+function ensureScene(){
+  const n = S.u.length, key = n + ':' + S.types.join(',') + ':' + S.ligs.map(l => l.join('')).join(',') + ':' + S.centre;
+  if (SCENE && SCENE.key === key) return;
+  let h = '';
+  for (let i = 0; i < n; i++) h += `<g id="d${i}"></g>`;
+  h += `<g id="dC"><circle r="30" fill="${ELCOL[S.centre] || '#8a94a6'}" stroke="#1d2327" stroke-opacity=".25"/><circle r="30" fill="url(#gShine)"/><text y="6" font-size="17" font-weight="700" text-anchor="middle" fill="${['C', 'Br', 'N'].includes(S.centre) ? '#fff' : '#1d2327'}">${S.centre}</text></g>`;
+  $('scene').innerHTML = h;
+  let b = 0;
+  for (let i = 0; i < n; i++) {
+    const g = $('d' + i);
+    if (S.types[i] === 'bp') {
+      const l = S.ligs[b++] || ['X', 1], el = l[0], r = RAD[el] || 21;
+      g.innerHTML = `<line class="b1" stroke="#9aa3a6" stroke-width="8" stroke-linecap="round"/>${l[1] === 2 ? '<line class="b2" stroke="#9aa3a6" stroke-width="5" stroke-linecap="round"/>' : ''}
+        <g class="atom"><circle r="${r}" fill="${ELCOL[el] || '#b9a8e8'}" stroke="#1d2327" stroke-opacity=".25"/><circle r="${r}" fill="url(#gShine)"/><text y="5" font-size="14" font-weight="700" text-anchor="middle" fill="${el === 'Br' ? '#fff' : '#1d2327'}">${el}</text></g>`;
+    } else {
+      g.innerHTML = `<ellipse class="lobe" fill="url(#gLobe)" stroke="#8a6ad8" stroke-opacity=".55" stroke-width="1.2"/><circle class="e1" r="3.2" fill="#6a3fc2"/><circle class="e2" r="3.2" fill="#6a3fc2"/>`;
+    }
+  }
+  SCENE = {key};
+}
+function paintScene(){
+  ensureScene();
+  const V = S.u.map(u => matVec(S.R, u));
+  const order = V.map((v, i) => i).sort((a, b) => V[a][2] - V[b][2]);
+  const C = project([0, 0, 0]), proj = [];
+  /* back regions first, then the centre, then the front ones */
+  const scene = $('scene'), cEl = $('dC');
+  let placedC = false;
+  order.forEach(i => {
+    if (!placedC && V[i][2] > 0) { scene.appendChild(cEl); placedC = true; }
+    scene.appendChild($('d' + i));
+  });
+  if (!placedC) scene.appendChild(cEl);
+  cEl.setAttribute('transform', `translate(${C.x.toFixed(1)},${C.y.toFixed(1)})`);
+  V.forEach((v, i) => {
+    const g = $('d' + i);
+    if (S.types[i] === 'bp') {
+      const P = project(v), a = g.querySelector('.atom'), r = P.s;
+      proj[i] = {x: P.x, y: P.y};
+      const l1 = g.querySelector('.b1'), l2 = g.querySelector('.b2');
+      const dx = P.x - C.x, dy = P.y - C.y, m = Math.hypot(dx, dy) || 1, ox = -dy / m * 5, oy = dx / m * 5;
+      const off = l2 ? 1 : 0;
+      l1.setAttribute('x1', (C.x + ox * off).toFixed(1)); l1.setAttribute('y1', (C.y + oy * off).toFixed(1)); l1.setAttribute('x2', (P.x + ox * off).toFixed(1)); l1.setAttribute('y2', (P.y + oy * off).toFixed(1));
+      if (l2) { l2.setAttribute('x1', (C.x - ox).toFixed(1)); l2.setAttribute('y1', (C.y - oy).toFixed(1)); l2.setAttribute('x2', (P.x - ox).toFixed(1)); l2.setAttribute('y2', (P.y - oy).toFixed(1)); }
+      a.setAttribute('transform', `translate(${P.x.toFixed(1)},${P.y.toFixed(1)}) scale(${r.toFixed(3)})`);
+      a.querySelector('circle').setAttribute('stroke-width', S.sel.includes(i) ? 3 / r : 1);
+      a.querySelector('circle').setAttribute('stroke', S.sel.includes(i) ? '#6a3fc2' : '#1d2327');
+      a.querySelector('circle').setAttribute('stroke-opacity', S.sel.includes(i) ? 1 : 0.25);
+    } else {
+      const P = project(v.map(x => x * 0.52)), tip = project(v.map(x => x * 0.82));
+      proj[i] = {x: tip.x, y: tip.y};
+      const len = Math.hypot(v[0], v[1]), ang = Math.atan2(-v[1], v[0]) * 180 / Math.PI;
+      const rx = BL * (0.2 + 0.2 * len) * P.s, ry = BL * 0.2 * P.s;
+      const e = g.querySelector('.lobe');
+      e.setAttribute('cx', P.x.toFixed(1)); e.setAttribute('cy', P.y.toFixed(1)); e.setAttribute('rx', rx.toFixed(1)); e.setAttribute('ry', ry.toFixed(1));
+      e.setAttribute('transform', `rotate(${ang.toFixed(1)} ${P.x.toFixed(1)} ${P.y.toFixed(1)})`);
+      const px = -Math.sin(ang * Math.PI / 180) * 5, py = Math.cos(ang * Math.PI / 180) * 5, E2 = project(v.map(x => x * 0.62));
+      g.querySelector('.e1').setAttribute('cx', (E2.x + px).toFixed(1)); g.querySelector('.e1').setAttribute('cy', (E2.y + py).toFixed(1));
+      g.querySelector('.e2').setAttribute('cx', (E2.x - px).toFixed(1)); g.querySelector('.e2').setAttribute('cy', (E2.y - py).toFixed(1));
+    }
+  });
+  S.proj = proj;
+  /* the valence shell: a faint sphere, and its equator */
+  let sp = `<circle cx="${CX}" cy="${CY}" r="${BL}" fill="none" stroke="#d6d0c0" stroke-dasharray="3 6"/>`;
+  let eq = '';
+  for (let k = 0; k <= 48; k++) { const a = k / 48 * 2 * Math.PI, P = project(matVec(S.R, [Math.cos(a), 0, Math.sin(a)])); eq += (k ? 'L' : 'M') + P.x.toFixed(1) + ' ' + P.y.toFixed(1); }
+  sp += `<path d="${eq}" fill="none" stroke="#e2ddcf"/>`;
+  $('sphere').innerHTML = sp;
+  /* the measured angle: an arc between two bonds */
+  const sel = S.sel.length === 2 ? S.sel : defaultPair();
+  let arc = '';
+  if (sel && S.locked) {
+    const [a, b] = sel, A = S.u[a], Bv = S.u[b], th = angle(A, Bv) * Math.PI / 180;
+    let d = '';
+    for (let k = 0; k <= 24; k++) {
+      const t = k / 24, sa = Math.sin((1 - t) * th) / Math.sin(th || 1e-9), sb = Math.sin(t * th) / Math.sin(th || 1e-9);
+      const w = th < 1e-6 ? A : A.map((x, q) => sa * x + sb * Bv[q]);
+      const P = project(matVec(S.R, w.map(x => x * 0.42)));
+      d += (k ? 'L' : 'M') + P.x.toFixed(1) + ' ' + P.y.toFixed(1);
+    }
+    const mid = norm(A.map((x, q) => x + Bv[q])), M = project(matVec(S.R, mid.map(x => x * 0.62)));
+    arc = `<path d="${d}" fill="none" stroke="#6a3fc2" stroke-width="2.4"/>
+      <text x="${M.x.toFixed(1)}" y="${(M.y + 5).toFixed(1)}" font-size="15" font-weight="700" text-anchor="middle" fill="#6a3fc2" stroke="#fbfaf6" stroke-width="4" paint-order="stroke" font-family="JetBrains Mono, monospace">${angle(A, Bv).toFixed(1)}°</text>`;
+  }
+  $('arc').innerHTML = arc;
+  /* the dipole moment, drawn from the centre */
+  const dp = dipole(S.u, S.types, S.ligs, S.centre, S.lpDip);
+  let dg = '';
+  if (dp && S.locked && S.settled && dp.mag > 0.05) {
+    const v = matVec(S.R, dp.vec.map(x => x / dp.mag)), P0 = project(v.map(x => -x * 0.2)), P1 = project(v.map(x => x * clamp(0.3 + dp.mag * 0.35, 0.35, 1.1)));
+    const ang = Math.atan2(P1.y - P0.y, P1.x - P0.x);
+    dg = `<line x1="${P0.x.toFixed(1)}" y1="${P0.y.toFixed(1)}" x2="${P1.x.toFixed(1)}" y2="${P1.y.toFixed(1)}" stroke="#d6453d" stroke-width="3.5"/>
+      <path d="M${P1.x.toFixed(1)} ${P1.y.toFixed(1)} l${(-14 * Math.cos(ang - 0.4)).toFixed(1)} ${(-14 * Math.sin(ang - 0.4)).toFixed(1)} M${P1.x.toFixed(1)} ${P1.y.toFixed(1)} l${(-14 * Math.cos(ang + 0.4)).toFixed(1)} ${(-14 * Math.sin(ang + 0.4)).toFixed(1)}" stroke="#d6453d" stroke-width="3.5" fill="none"/>
+      <line x1="${(P0.x + 9 * Math.sin(ang)).toFixed(1)}" y1="${(P0.y - 9 * Math.cos(ang)).toFixed(1)}" x2="${(P0.x - 9 * Math.sin(ang)).toFixed(1)}" y2="${(P0.y + 9 * Math.cos(ang)).toFixed(1)}" stroke="#d6453d" stroke-width="3"/>
+      <text x="${(P1.x + 10).toFixed(1)}" y="${(P1.y - 8).toFixed(1)}" font-size="12.5" font-weight="700" fill="#d6453d" stroke="#fbfaf6" stroke-width="4" paint-order="stroke">μ = ${dp.mag.toFixed(2)} D</text>`;
+  }
+  $('dipG').innerHTML = dg;
+}
+function defaultPair(){
+  const n = S.u.length; let best = null, ba = 1e9;
+  const five = n === 5;
+  for (let i = 0; i < n; i++) for (let j = i + 1; j < n; j++) if (S.types[i] === 'bp' && S.types[j] === 'bp') {
+    const a = angle(S.u[i], S.u[j]);
+    const key = five && !S.types.includes('lp') ? -a : a;               // five bond pairs: show the widest (axial) angle
+    if (key < ba) { ba = key; best = [i, j]; }
+  }
+  return best;
+}
+
+/* ---------- the graph: bond angle against λ or p, each point a fresh global minimum ---------- */
+const GRCACHE = {};
+function curve(){
+  const gv = GV[S.graphVar];
+  const key = [S.types.join(','), S.graphVar, S.graphVar === 'lam' ? '' : S.lam, S.graphVar === 'LL' ? '' : S.LL, S.graphVar === 'p' ? '' : S.p].join('|');
+  if (GRCACHE[key]) return GRCACHE[key];
+  const xs = Array.from({length: gv.n + 1}, (_, i) => gv.lo + (gv.hi - gv.lo) * i / gv.n);
+  const pts = xs.map(x => { const lb = S.graphVar === 'lam' ? x : S.lam, ll = S.graphVar === 'LL' ? x : S.LL, p = S.graphVar === 'p' ? x : S.p;
+    const g = relaxGlobal(S.types, {lb, ll}, p, 4), a = bondAngles(g.u, S.types); return {x, min: a.length ? a[0] : null, max: a.length ? a[a.length - 1] : null}; });
+  return (GRCACHE[key] = pts);
+}
+const GV = {lam: {lo: 1, hi: 2, n: 20, ticks: [1, 1.25, 1.5, 1.75, 2], title: 'Bond angle against the lp–bp push λ', axis: 'λ: how much harder a lone pair pushes a bond pair', step: 0.01},
+            LL: {lo: 1, hi: 6, n: 20, ticks: [1, 2, 3, 4, 5, 6], title: 'Bond angle against the lp–lp push Λ', axis: 'Λ: how much harder two lone pairs push each other', step: 0.05},
+            p: {lo: 1, hi: 20, n: 19, ticks: [1, 5, 10, 15, 20], title: 'Bond angle against the law’s power p', axis: 'p in the repulsion 1/dᵖ', step: 0.5}};
+const gvNow = () => S.graphVar === 'lam' ? S.lam : S.graphVar === 'LL' ? S.LL : S.p;
+const gx = x => { const gv = GV[S.graphVar]; return GR.x + (x - gv.lo) / (gv.hi - gv.lo) * GR.w; };
+const gy = a => GR.y + GR.h - clamp((a - 80) / 105, 0, 1) * GR.h;
+function paintGraph(){
+  const gv = GV[S.graphVar];
+  $('grTitle').textContent = gv.title;
+  let ax = `<line x1="${GR.x}" y1="${GR.y + GR.h}" x2="${GR.x + GR.w}" y2="${GR.y + GR.h}" stroke="#9aa3a6"/><line x1="${GR.x}" y1="${GR.y}" x2="${GR.x}" y2="${GR.y + GR.h}" stroke="#9aa3a6"/>`;
+  for (const a of [90, 120, 150, 180]) ax += `<line x1="${GR.x}" y1="${gy(a)}" x2="${GR.x + GR.w}" y2="${gy(a)}" stroke="#ece8dc"/><text x="${GR.x - 6}" y="${gy(a) + 4}" font-size="10.5" text-anchor="end" fill="#7c878c">${a}°</text>`;
+  ax += `<line x1="${GR.x}" y1="${gy(109.47)}" x2="${GR.x + GR.w}" y2="${gy(109.47)}" stroke="#d8d2c2" stroke-dasharray="2 3"/><text x="${GR.x - 6}" y="${gy(109.47) + 4}" font-size="10" text-anchor="end" fill="#9aa3a6">109.5</text>`;
+  gv.ticks.forEach(t => ax += `<text x="${gx(t)}" y="${GR.y + GR.h + 15}" font-size="10.5" text-anchor="middle" fill="#7c878c">${t}</text>`);
+  ax += `<text x="${GR.x + GR.w}" y="${GR.y + GR.h + 30}" font-size="11" text-anchor="end" fill="#7c878c">${gv.axis}</text>`;
+  const book = MEAS_ANG[S.mol];
+  if (book && !S.custom && [104.5, 107].includes(book)) ax += `<line x1="${GR.x}" y1="${gy(book)}" x2="${GR.x + GR.w}" y2="${gy(book)}" stroke="#d6453d" stroke-dasharray="6 4"/><text x="${GR.x + GR.w - 4}" y="${gy(book) + 14}" font-size="11" text-anchor="end" fill="#d6453d">measured ${book}°</text>`;
+  ax += `<g font-size="11"><line x1="${GR.x}" y1="${GR.y - 12}" x2="${GR.x + 20}" y2="${GR.y - 12}" stroke="#6a3fc2" stroke-width="2.4"/><text x="${GR.x + 24}" y="${GR.y - 8}" fill="#4a555b">smallest bond angle</text>
+    <line x1="${GR.x + 146}" y1="${GR.y - 12}" x2="${GR.x + 166}" y2="${GR.y - 12}" stroke="#6a3fc2" stroke-width="1.6" stroke-dasharray="5 4"/><text x="${GR.x + 170}" y="${GR.y - 8}" fill="#4a555b">largest</text></g>`;
+  $('grAxes').innerHTML = ax;
+  if (!S.locked) { $('grMin').setAttribute('d', ''); $('grMax').setAttribute('d', ''); $('grDot').setAttribute('opacity', 0); $('grNow').setAttribute('opacity', 0); return; }
+  const pts = curve();
+  const path = f => pts.filter(q => q[f] != null).map((q, i) => (i ? 'L' : 'M') + gx(q.x).toFixed(1) + ' ' + gy(q[f]).toFixed(1)).join('');
+  $('grMin').setAttribute('d', path('min')); $('grMax').setAttribute('d', path('max'));
+  const xNow = gvNow(), a = bondAngles(S.u, S.types);
+  $('grNow').setAttribute('x1', gx(xNow)); $('grNow').setAttribute('x2', gx(xNow)); $('grNow').setAttribute('y1', GR.y); $('grNow').setAttribute('y2', GR.y + GR.h); $('grNow').setAttribute('opacity', 1);
+  $('grDot').setAttribute('cx', gx(xNow)); $('grDot').setAttribute('cy', a.length ? gy(a[0]) : GR.y + GR.h); $('grDot').setAttribute('opacity', a.length ? 1 : 0);
+}
+/* the angles the model measured, and the Lewis count */
+function paintTable(){
+  const L = currentLewis(), n = S.types.length, bp = S.types.filter(t => t === 'bp').length, lp = n - bp;
+  let t = `<text x="${GR.x - 40}" y="340" font-size="17" class="serif" fill="#1d2327">Counting the pairs</text>`;
+  const lines = [];
+  if (!S.custom) lines.push(`${S.centre} brings ${MOLS[S.mol].V} valence electrons${MOLS[S.mol].q ? `, minus ${MOLS[S.mol].q} for the + charge` : ''}.`,
+    `${L.bonded} go into ${bp} bond${bp > 1 ? 's' : ''}${MOLS[S.mol].L[0][1] === 2 ? ' (double bonds: one region each)' : ''}; ${L.left} left = ${lp} lone pair${lp === 1 ? '' : 's'}.`);
+  else lines.push(`A made-up molecule: ${bp} bond pair${bp === 1 ? '' : 's'} and ${lp} lone pair${lp === 1 ? '' : 's'}.`);
+  lines.push(`AX${sub(bp)}${lp ? 'E' + (lp > 1 ? sub(lp) : '') : ''}: ${n} regions, ${GEOM[n] || '—'}; hybridisation ${HYB[n] || '—'}.`);
+  lines.forEach((s, i) => t += `<text x="${GR.x - 40}" y="${364 + i * 20}" font-size="12.5" fill="#4a555b">${esc(s)}</text>`);
+  t += `<text x="${GR.x - 40}" y="448" font-size="17" class="serif" fill="#1d2327">Bond angles, measured</text>`;
+  const a = S.locked && S.settled ? bondAngles(S.u, S.types) : [];
+  const groups = [];
+  a.forEach(x => { const g = groups.find(q => Math.abs(q.a - x) < 0.6); if (g) { g.n++; g.a = (g.a * (g.n - 1) + x) / g.n; } else groups.push({a: x, n: 1}); });
+  groups.slice(0, 6).forEach((g, i) => t += `<text x="${GR.x - 40 + (i % 3) * 110}" y="${474 + Math.floor(i / 3) * 22}" font-size="13.5" font-family="JetBrains Mono, monospace" fill="#1d2327">${g.n} × ${g.a.toFixed(1)}°</text>`);
+  if (!a.length) t += `<text x="${GR.x - 40}" y="474" font-size="12.5" fill="#7c878c">${!S.locked ? 'Make a prediction first.' : !S.settled ? 'Settling…' : 'Fewer than two bonds: no angle.'}</text>`;
+  const shape = shapeName();
+  t += `<text x="${GR.x - 40}" y="536" font-size="13" fill="#4a555b">Shape of the atoms:</text><text x="${GR.x + 92}" y="536" font-size="15" font-weight="700" fill="#6a3fc2">${S.locked && S.settled ? esc(shape) : '…'}</text>`;
+  const site = lpSite(S.u, S.types);
+  if (site && S.settled) t += `<text x="${GR.x - 40}" y="558" font-size="12.5" fill="#4a555b">lone pair ${site}${S.types.filter(q => q === 'lp').length > 1 ? ' (first one)' : ''}</text>`;
+  t += `<text x="${GR.x - 40}" y="592" font-size="13" fill="#4a555b">Repulsion energy:</text><text x="${GR.x + 92}" y="592" font-size="13.5" font-family="JetBrains Mono, monospace" fill="#1d2327">${S.locked ? energy(S.u, S.types, W(), S.p).toFixed(4) : '—'}</text>`;
+  const seenE = S.seen[lawKey()];
+  if (seenE && S.mol === 'SF₄') t += `<text x="${GR.x - 40}" y="614" font-size="12" fill="#7c878c">lone pair equatorial ${seenE.equatorial != null ? seenE.equatorial.toFixed(4) : '—'} · axial ${seenE.axial != null ? seenE.axial.toFixed(4) : '— (drag it there)'}</text>`;
+  $('table').innerHTML = t;
+}
+const sub = n => String(n).split('').map(c => '₀₁₂₃₄₅₆₇₈₉'[+c]).join('');
+const lawKey = () => S.mol + '|' + S.lam + '|' + S.LL + '|' + S.p;
+function currentLewis(){ return S.custom ? {bonded: 0, left: 0} : lewis(MOLS[S.mol]); }
+function shapeName(){
+  const bp = S.types.filter(t => t === 'bp').length, lp = S.types.length - bp;
+  const a5 = ax5Shape(S.u, S.types); if (a5) return a5;
+  const site = lpSite(S.u, S.types);
+  if (site === 'axial' && lp === 1) return 'trigonal pyramid';
+  return SHAPE[bp + ',' + lp] || '—';
+}
+
+/* ---------- side panel ---------- */
+function paintSide(){
+  const n = S.types.length;
+  $('lam').value = S.lam; $('lamOut').textContent = S.lam.toFixed(2);
+  $('LL').value = S.LL; $('LLOut').textContent = S.LL.toFixed(2);
+  $('pexp').value = S.p; $('pOut').textContent = 'p = ' + (S.p % 1 ? S.p.toFixed(1) : S.p);
+  $('btnLpDip').setAttribute('aria-pressed', S.lpDip);
+  document.querySelectorAll('#chips button').forEach(b => b.setAttribute('aria-pressed', !S.custom && b.dataset.m === S.mol));
+  $('molTitle').textContent = S.custom ? 'Your own molecule' : S.mol;
+  $('molSub').textContent = S.custom ? `${S.types.filter(t => t === 'bp').length} bond pairs, ${S.types.filter(t => t === 'lp').length} lone pairs` : `central ${S.centre}: ${S.types.filter(t => t === 'bp').length} bond pairs, ${S.types.filter(t => t === 'lp').length} lone pair${S.types.filter(t => t === 'lp').length === 1 ? '' : 's'}`;
+  $('relaxLab').textContent = !S.locked ? '' : S.settled ? 'At rest: no pair can move without raising the repulsion.' : 'The pairs are pushing each other apart…';
+  if (!S.locked) { $('nums').innerHTML = '<p style="font-size:13px;color:var(--ink-3);margin:0">The measurements appear once you have made a prediction.</p>'; $('whyCard').hidden = true; return; }
+  const a = bondAngles(S.u, S.types), dp = dipole(S.u, S.types, S.ligs, S.centre, S.lpDip), meas = MEAS_MU[S.mol];
+  const dEN = !S.custom && S.ligs.length ? Math.abs(EN[S.ligs[0][0]] - EN[S.centre]) : null;
+  $('nums').innerHTML = `<div class="nums">
+    <span>Electron-pair regions</span><b>${n}</b>
+    <span>Smallest bond angle</span><b>${a.length ? a[0].toFixed(1) + '°' : '—'}</b>
+    <span>Largest bond angle</span><b>${a.length ? a[a.length - 1].toFixed(1) + '°' : '—'}</b>
+    ${MEAS_ANG[S.mol] && !S.custom ? `<span class="eq">measured: ${MEAS_ANG[S.mol]}° (NCERT)</span>` : ''}
+    <i class="sep"></i>
+    <span>Bond polarity, ΔEN</span><b>${dEN == null ? '—' : dEN.toFixed(1)}</b>
+    <span>Dipole moment, model</span><b>${dp && S.settled ? dp.mag.toFixed(2) + ' D' : '—'}</b>
+    ${meas != null && !S.custom ? `<span class="eq">measured: ${meas} D (NCERT Table 4.5)</span>` : ''}
+  </div>`;
+  $('whyCard').hidden = false;
+  $('why').innerHTML = whyText(a, dp);
+}
+function whyText(a, dp){
+  if (!S.settled) return '<p>Every pair is pushed by all the others. The model moves each one a little along the sphere, downhill in energy, again and again.</p>';
+  const lp = S.types.filter(t => t === 'lp').length, n = S.types.length;
+  if (n === 5 && !lp && ax5Shape(S.u, S.types) === 'square pyramidal') return `<p>With a law as steep as 1/d<sup>${S.p}</sup> the pairs behave like hard balls: only near neighbours matter, and a square pyramid packs five of them better than the trigonal bipyramid. VSEPR’s shapes belong to a soft repulsion.</p>`;
+  if (S.mol === 'SF₄' && !S.custom && lp) {
+    const site = lpSite(S.u, S.types), eqA = a.length ? a.filter(x => x > 100 && x < 150) : [];
+    return `<p>The lone pair sits ${site}. ${site === 'equatorial' ? 'There it has only two neighbours at 90°; axial, it would have three.' : 'This is a resting place, but a higher one: three bond pairs at 90° instead of two.'}
+      ${S.lam > 1.05 && eqA.length ? ` Measured SF₄ has F–S–F = 173° and 102°. This model bends the axial pair away (${a[a.length - 1].toFixed(0)}°) but opens the equatorial one to ${eqA[0].toFixed(0)}°: a lone pair is not a point.` : ''}</p>`;
+  }
+  if (lp && (S.mol === 'H₂O' || S.mol === 'NH₃') && !S.custom) return S.lam === 1 && S.LL === 1
+    ? `<p>With every pair pushing equally, the four regions make a perfect tetrahedron and the bond angle is ${a[0].toFixed(1)}°. Measured: ${MEAS_ANG[S.mol]}°. Make the lone pairs push harder.</p>`
+    : `<p>With λ = ${S.lam.toFixed(2)} and Λ = ${S.LL.toFixed(2)} the bond angle is <b>${a[0].toFixed(1)}°</b> (measured ${MEAS_ANG[S.mol]}°). ${S.lam > 1 ? 'Lone pairs pushing on the bonds squeeze them together.' : 'Lone pairs pushing only on each other open the bonds out.'}</p>`;
+  if (S.mol === 'XeF₄' && !S.custom && a.length > 1) { const sq = a[a.length - 1] > 178 && a[a.length - 2] > 178;
+    return sq ? `<p>The two lone pairs sit opposite each other, as far apart as they can be, and the four F atoms make a <b>square plane</b> at ${a[0].toFixed(1)}°. That needs lone pairs to repel each other hardest: Λ = ${S.LL.toFixed(2)} against λ = ${S.lam.toFixed(2)}.</p>`
+      : `<p>The lone pairs are side by side (${a[a.length - 1].toFixed(0)}° is the widest F–Xe–F): with Λ = ${S.LL.toFixed(2)} they do not mind being close. Measured XeF₄ is square planar: make the lp–lp push the strongest.</p>`; }
+  if (dp && dp.mag < 0.05 && S.ligs.some(l => Math.abs(EN[l[0]] - EN[S.centre]) >= 0.5)) return `<p>Every bond is polar, yet the dipole moment is ${dp.mag.toFixed(2)} D: the bond vectors are arranged symmetrically and add to zero.</p>`;
+  if (!lp && a.length) return `<p>${n} regions spread as far apart as they can: ${GEOM[n]}, bond angle ${a[0].toFixed(1)}°${a[a.length - 1] - a[0] > 1 ? ' and ' + a[a.length - 1].toFixed(1) + '°' : ''}.</p>`;
+  return `<p>${n} regions: the electron pairs make a ${GEOM[n]} arrangement, and the atoms alone make a ${esc(shapeName())} shape.</p>`;
+}
+
+/* ---------- the model running ---------- */
+function setMolecule(name){
+  S.custom = false; S.mol = name; const m = MOLS[name], L = lewis(m);
+  S.centre = m.c; S.ligs = m.L.slice();
+  S.types = [...Array(L.bp).fill('bp'), ...Array(L.lp).fill('lp')];
+  S.sel = [];
+  settleFresh();
+}
+function setCustom(bp, lp){
+  S.custom = true; S.centre = 'A'; S.ligs = Array.from({length: bp}, () => ['X', 1]);
+  S.types = [...Array(bp).fill('bp'), ...Array(lp).fill('lp')]; S.sel = [];
+  settleFresh();
+}
+/* find the lowest arrangement, turn it to face us, then let the pairs relax into it from their start */
+function settleFresh(){
+  const g = relaxGlobal(S.types, W(), S.p);
+  const up = orientUp(g.u);
+  let Q = alignTo(up, [0, 1, 0]);
+  const f = matVec(Q, g.u[S.types.indexOf('bp') >= 0 ? S.types.indexOf('bp') : 0]);
+  const phi = Math.atan2(f[2], f[0]);
+  Q = matMul(rotY(phi), Q);
+  S.u = g.start.map(v => matVec(Q, v));
+  S.settled = false; SCENE = null;
+  startRelax();
+}
+function orientUp(u){
+  const lps = S.types.map((t, i) => t === 'lp' ? u[i] : null).filter(Boolean);
+  if (lps.length) { const s = lps.reduce((a, v) => a.map((x, k) => x + v[k]), [0, 0, 0]); if (Math.hypot(...s) > 0.1) return norm(s); return lps[0]; }
+  const bps = u.filter((v, i) => S.types[i] === 'bp');
+  if (bps.length === 5) { let best = null, ba = -1; for (let i = 0; i < 5; i++) for (let j = i + 1; j < 5; j++) { const a = angle(bps[i], bps[j]); if (a > ba) { ba = a; best = i; } } return bps[best]; }
+  if (bps.length === 3) { const [a, b] = bps; return norm([a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]]); }
+  return bps[0] || u[0];
+}
+let RUN = null, HOLD = -1;
+function startRelax(){
+  S.st = {u: S.u.map(v => v.slice()), h: 0.03, E: null, done: false};
+  S.settled = false;
+  if (reduced()) { const r = relax(S.u, S.types, W(), S.p, 20000); S.u = r.u; S.settled = true; afterSettle(); paint(); return; }
+  if (!RUN) RUN = loop(() => {
+    if (!S.st || S.settled) return;
+    for (let k = 0; k < 12 && !S.st.done; k++) step(S.st, S.types, W(), S.p, HOLD);
+    S.u = S.st.u.map(v => v.slice());
+    if (S.st.done && HOLD < 0) { S.settled = true; afterSettle(); }
+    paint();
+  });
+  paint();
+}
+/* after the pairs come to rest: record what was measured, then check the findings */
+function afterSettle(){
+  const key = lawKey();
+  if (!S.custom) {
+    const site = lpSite(S.u, S.types);
+    if (site) { S.seen[key] = S.seen[key] || {}; S.seen[key][site] = energy(S.u, S.types, W(), S.p); }
+    const dp = dipole(S.u, S.types, S.ligs, S.centre, S.lpDip);
+    if (dp && S.lpDip) { S.seen['mu|' + S.mol] = dp.mag; }
+  }
+  check();
+}
+/* after a slider is released: is there a lower arrangement than the one we are resting in? */
+function recheckGlobal(){
+  const here = relax(S.u, S.types, W(), S.p, 20000), g = relaxGlobal(S.types, W(), S.p);
+  if (g.E < here.E - 1e-6 * Math.abs(here.E)) {
+    const Q = alignTo(orientUp(g.u), orientUp(here.u));
+    S.u = g.start.map(v => matVec(Q, v));
+  }
+  startRelax();
+}
+
+/* ---------- paint ---------- */
+function paint(){ paintScene(); paintGraph(); paintTable(); paintSide(); }
+
+/* ---------- findings ---------- */
+function check(){
+  if (!S.locked || !S.settled) return;
+  const a = bondAngles(S.u, S.types), lp = S.types.filter(t => t === 'lp').length;
+  if (S.types.length === 4 && !lp && a.length === 6 && a.every(x => Math.abs(x - 109.47) < 0.3)) discover('tetra');
+  if (!S.custom && (S.mol === 'H₂O' || S.mol === 'NH₃') && S.lam > 1 && a[0] < 109) discover('squeeze');
+  if (!S.custom && S.mol === 'H₂O' && S.lam > 1 && Math.abs(a[0] - 104.5) <= 0.5) discover('water');
+  if (!S.custom && S.mol === 'XeF₄' && S.LL > S.lam && S.lam > 1 && a.length > 1 && a[a.length - 2] > 178) discover('planar');
+  const e = S.mol === 'SF₄' ? S.seen[lawKey()] : null;
+  if (e && e.axial != null && e.equatorial != null && e.equatorial < e.axial - 1e-6) discover('equator');
+  const dp = dipole(S.u, S.types, S.ligs, S.centre, S.lpDip);
+  if (!S.custom && dp && dp.mag < 0.05 && S.ligs.some(l => Math.abs(EN[l[0]] - EN[S.centre]) >= 0.5)) discover('nodipole');
+  if (S.seen['mu|NH₃'] != null && S.seen['mu|NF₃'] != null && S.seen['mu|NH₃'] > S.seen['mu|NF₃']) discover('nh3nf3');
+  if (ax5Shape(S.u, S.types) === 'square pyramidal') discover('law');
+  maybeExplain(a);
+}
+let EXPLAINED = false;
+function maybeExplain(a){
+  if (EXPLAINED || !POE || !found('water')) return;
+  EXPLAINED = true;
+  const eq = bondAngles(relaxGlobal(['bp', 'bp', 'lp', 'lp'], {lb: 1, ll: 1}, S.p).u, ['bp', 'bp', 'lp', 'lp'])[0];
+  POE.explain(`With every pair pushing equally the model puts water’s bonds at <b>${eq.toFixed(1)}°</b>, the tetrahedral angle. Lone pairs pushing the bonds ${S.lam.toFixed(2)} times as hard
+    squeeze them to <b>${a[0].toFixed(1)}°</b>, the measured 104.5°: a little less than 109.5°, not 180° or 120°.`);
+}
+
+/* ============================================================================
+   Controls
+   ============================================================================ */
+build();
+$('chips').innerHTML = Object.keys(MOLS).map(m => `<button data-m="${m}" aria-pressed="false">${m}</button>`).join('');
+$('chips').addEventListener('click', e => { const b = e.target.closest('[data-m]'); if (!b || !S.locked) return; setMolecule(b.dataset.m); sound('pop'); track('molecule', {mol: b.dataset.m}); });
+function editPairs(dbp, dlp){
+  if (!S.locked) return;
+  const bp = S.types.filter(t => t === 'bp').length + dbp, lp = S.types.filter(t => t === 'lp').length + dlp;
+  if (bp < 1 || lp < 0 || bp + lp > 6) { sound('oops'); toast(bp + lp > 6 ? 'Six regions is as many as a central atom holds here.' : 'Keep at least one bond.'); return; }
+  setCustom(bp, lp); sound('pop'); track('pairs', {bp, lp});
+}
+$('addBP').addEventListener('click', () => editPairs(1, 0)); $('subBP').addEventListener('click', () => editPairs(-1, 0));
+$('addLP').addEventListener('click', () => editPairs(0, 1)); $('subLP').addEventListener('click', () => editPairs(0, -1));
+$('lam').addEventListener('input', e => { S.lam = +e.target.value; S.graphVar = 'lam'; startRelax(); });
+$('lam').addEventListener('change', () => { recheckGlobal(); track('law', {lam: S.lam, LL: S.LL, p: S.p}); });
+$('LL').addEventListener('input', e => { S.LL = +e.target.value; S.graphVar = 'LL'; startRelax(); });
+$('LL').addEventListener('change', () => { recheckGlobal(); track('law', {lam: S.lam, LL: S.LL, p: S.p}); });
+$('pexp').addEventListener('input', e => { S.p = +e.target.value; S.graphVar = 'p'; startRelax(); });
+$('pexp').addEventListener('change', () => { recheckGlobal(); track('law', {lam: S.lam, LL: S.LL, p: S.p}); });
+$('btnLpDip').addEventListener('click', () => { S.lpDip = !S.lpDip; sound('tick'); if (S.settled) afterSettle(); paint(); });
+$('btnView').addEventListener('click', () => { S.R = VIEW0.map(r => r.slice()); sound('tick'); paint(); });
+/* the graph sets the law */
+const fromGraph = p => { const gv = GV[S.graphVar], v = gv.lo + (p.x - GR.x) / GR.w * (gv.hi - gv.lo); return clamp(Math.round(v / gv.step) * gv.step, gv.lo, gv.hi); };
+const setGV = v => { v = +v.toFixed(2); if (S.graphVar === 'lam') S.lam = v; else if (S.graphVar === 'LL') S.LL = v; else S.p = v; };
+drag($('graphHit'), svg, {
+  start(p){ if (!S.locked) return false; setGV(fromGraph(p)); startRelax(); },
+  move(p){ setGV(fromGraph(p)); startRelax(); },
+  end(){ recheckGlobal(); track('law', {lam: S.lam, LL: S.LL, p: S.p}); },
+});
+/* the view: drag empty space to turn it; grab a region to push it; a click on an atom selects it for the angle */
+let DR = null;
+drag($('viewHit'), svg, {
+  start(p){
+    if (!S.locked) return false;
+    let hit = -1, bd = 26;
+    (S.proj || []).forEach((q, i) => { if (!q) return; const d = Math.hypot(q.x - p.x, q.y - p.y); if (d < bd) { bd = d; hit = i; } });
+    DR = {mode: hit >= 0 ? 'dom' : 'rot', i: hit, x: p.x, y: p.y, x0: p.x, y0: p.y, moved: 0, orig: hit >= 0 ? S.u[hit].slice() : null};
+  },
+  move(p){
+    if (!DR) return;
+    DR.moved = Math.max(DR.moved, Math.hypot(p.x - DR.x0, p.y - DR.y0));
+    if (DR.mode === 'rot') {
+      const dx = p.x - DR.x, dy = p.y - DR.y; DR.x = p.x; DR.y = p.y;
+      S.R = matMul(matMul(rotY(dx * 0.01), rotX(dy * 0.01)), S.R);
+      paint();
+    } else if (DR.moved > 4) {
+      /* unproject onto the sphere, on the side the pair is on */
+      const i = DR.i, v = matVec(S.R, S.u[i]), sc = S.types[i] === 'bp' ? 1 : 0.82;
+      let x = (p.x - CX) / (BL * sc), y = -(p.y - CY) / (BL * sc);
+      const m = Math.hypot(x, y); if (m > 0.999) { x /= m / 0.999; y /= m / 0.999; }
+      const z = Math.sqrt(Math.max(0, 1 - x * x - y * y)) * (v[2] >= 0 ? 1 : -1);
+      /* the others hold still while you move this one */
+      S.u[i] = norm(matVec(transpose(S.R), [x, y, z]));
+      S.st = null; S.settled = false; DR.pushed = true;
+      paint();
+    }
+  },
+  end(){
+    if (!DR) return;
+    if (DR.mode === 'dom' && DR.moved <= 4 && S.types[DR.i] === 'bp') {
+      S.sel = S.sel.includes(DR.i) ? S.sel.filter(k => k !== DR.i) : [...S.sel.slice(-1), DR.i];
+      sound('tick'); paint();
+    } else if (DR.mode === 'dom' && DR.pushed) {
+      /* dropped onto another pair's place: the two swap places */
+      const i = DR.i; let j = -1, bj = 30;
+      S.u.forEach((v, k) => { if (k !== i) { const a = angle(v, S.u[i]); if (a < bj) { bj = a; j = k; } } });
+      if (j >= 0 && S.types[j] !== S.types[i]) { S.u[i] = S.u[j].slice(); S.u[j] = DR.orig; sound('snap'); }
+      startRelax(); track('push', {mol: S.mol, type: S.types[i], swapped: j >= 0});
+    }
+    else track('rotate');
+    DR = null;
+  },
+});
+
+function lockControls(lock){
+  for (const id of ['addBP', 'subBP', 'addLP', 'subLP', 'lam', 'LL', 'pexp', 'btnLpDip', 'btnView']) $(id).disabled = lock;
+  document.querySelectorAll('#chips button').forEach(b => b.disabled = lock);
+  for (const id of ['viewHit', 'graphHit']) $(id).style.pointerEvents = lock ? 'none' : '';
+  $('gate').hidden = !lock;
+}
+
+/* ============================================================================
+   Start
+   ============================================================================ */
+findings($('finds'), [
+  {id: 'tetra',    icon: '◭',  label: 'Four pairs make a tetrahedron, 109.5°',   hint: 'Let methane’s four pairs settle'},
+  {id: 'squeeze',  icon: '⇲',  label: 'Lone pairs push harder',                  hint: 'Give water’s lone pairs a stronger push'},
+  {id: 'water',    icon: '💧', label: 'Water’s 104.5°',                          hint: 'Tune λ until water matches the book'},
+  {id: 'planar',   icon: '◇',  label: 'Lone pairs keep apart: XeF₄ is square',   hint: 'Make lp–lp the strongest push of all, for XeF₄'},
+  {id: 'equator',  icon: '⊖',  label: 'A lone pair takes the equator',           hint: 'In SF₄, drag the lone pair to an axial place and compare energies'},
+  {id: 'nodipole', icon: '0',  label: 'Polar bonds, no dipole',                  hint: 'Try a symmetric molecule with polar bonds'},
+  {id: 'nh3nf3',   icon: 'μ',  label: 'NH₃ is more polar than NF₃',              hint: 'Compare their dipole moments'},
+  {id: 'law',      icon: 'p',  label: 'Change the law, change the shape',        hint: 'Make the repulsion very steep for five bond pairs'},
+], () => toast('All eight. Shapes, angles and dipoles, all from pairs pushing on a sphere.', 4200));
+
+const POE = predict($('poe'), {
+  id: 'water-angle',
+  q: 'Oxygen in water has two bond pairs and two lone pairs. What is the H–O–H angle?',
+  options: [
+    {id: '180', text: '180°: the two bonds get as far apart as possible.'},
+    {id: '120', text: '120°'},
+    {id: '1095', text: '109.5°, like methane: four pairs make a tetrahedron.'},
+    {id: 'less', text: 'A little less than 109.5°.', right: true},
+    {id: '90', text: '90°'},
+  ],
+  onLock(){ S.locked = true; lockControls(false); say('Methane first. Watch four pairs push each other apart.'); setMolecule(S.mol); },
+});
+lockControls(!POE.locked);
+if (!Play.FF('predict')) S.locked = true;
+/* before the prediction: methane's pairs sit where the model starts them, unrelaxed */
+(() => { const m = MOLS[S.mol], L = lewis(m); S.centre = m.c; S.ligs = m.L.slice(); S.types = [...Array(L.bp).fill('bp'), ...Array(L.lp).fill('lp')]; S.u = randomStart(S.types.length, 3); })();
+if (S.locked) setMolecule(S.mol); else paint();
+window.applyFeatures = () => paint();
+window.PG_STATE = () => JSON.parse(JSON.stringify({mol: S.mol, custom: S.custom, types: S.types, u: S.u, lam: S.lam, LL: S.LL, p: S.p, R: S.R, settled: S.settled, sel: S.sel,
+  angles: bondAngles(S.u, S.types), shape: shapeName(), proj: S.proj, seen: S.seen, lpDip: S.lpDip, graphVar: S.graphVar,
+  energy: energy(S.u, S.types, W(), S.p), site: lpSite(S.u, S.types), mu: (dipole(S.u, S.types, S.ligs, S.centre, S.lpDip) || {}).mag}));
+window.PG_MODEL = {MOLS, EN, lewis, energy, relax, relaxGlobal, randomStart, bondAngles, dipole, lpSite, ax5Shape, HYB, GEOM, SHAPE, angle,
+  molecule(name, lb = 1, ll = 1, p = 3){ const m = MOLS[name], L = lewis(m), types = [...Array(L.bp).fill('bp'), ...Array(L.lp).fill('lp')], g = relaxGlobal(types, {lb, ll}, p);
+    return {types, u: g.u, E: g.E, angles: bondAngles(g.u, types), mu: (dipole(g.u, types, m.L, m.c) || {}).mag, site: lpSite(g.u, types), hyb: HYB[types.length]}; }};
+</script>
+</body>
+</html>

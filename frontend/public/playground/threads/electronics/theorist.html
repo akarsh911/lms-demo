@@ -1,0 +1,931 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The p–n Junction</title>
+<meta name="description" content="Class 12: dope silicon and watch nₑnₕ = nᵢ² hold, form a p–n junction from diffusing carriers, draw a diode's I–V curve point by point, and rectify 50 Hz ac.">
+<link rel="icon" href="../../favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600&family=Inter:wght@400;500;600;700&family=Nunito:wght@500;700;800&family=Newsreader:opsz,wght@6..72,400;6..72,500&family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="../../play.css">
+<style>
+/* Only what this page needs beyond play.css. */
+.pg-stage{align-self:start; min-height:0}
+.gate{position:absolute; inset:0; display:grid; place-items:center; pointer-events:none}
+.gate span{background:rgba(22,30,26,.86); color:#fff; padding:10px 16px; border-radius:99px; font-weight:600; font-size:14px}
+.seg{display:grid; grid-auto-flow:column; grid-auto-columns:1fr; gap:4px; background:var(--sunk); padding:4px; border-radius:var(--radius-sm); margin-bottom:10px}
+.seg button{border:0; background:transparent; border-radius:7px; min-height:30px; font-weight:600; font-size:12.5px; cursor:pointer; color:var(--ink-2); padding:0 6px}
+.seg button[aria-pressed="true"]{background:var(--card); color:var(--ink); box-shadow:var(--shadow)}
+.seg button:disabled{opacity:.5; cursor:default}
+.nums{display:grid; grid-template-columns:1fr auto; gap:3px 12px; font-size:13px; align-items:baseline}
+.nums span{color:var(--ink-2)}
+.nums b{font-family:var(--font-mono); font-weight:600; font-size:12.5px; font-variant-numeric:tabular-nums; text-align:right}
+.nums .sep{grid-column:1/-1; height:1px; background:var(--hair); margin:3px 0}
+.why p{font-size:13.5px; margin-bottom:.5em}
+.note{font-size:12.5px; color:var(--ink-3); margin:6px 0 0}
+.ctl{grid-template-columns:118px 1fr 84px; margin:4px 0}
+.ctl label{font-size:12.5px; line-height:1.2}
+.ctl output{font-family:var(--font-mono); font-size:12.5px; font-weight:600; min-width:0}
+.pick{display:flex; gap:8px; align-items:center; flex-wrap:wrap; font-size:13px; margin:4px 0 6px}
+svg text.m{white-space:pre}
+</style>
+</head>
+<body>
+<header class="pg-top"></header>
+
+<div class="pg-intro">
+  <h1>The p–n junction</h1>
+  <p>Silicon barely conducts — until a few atoms in a million are swapped for arsenic or boron. Dope it and watch the electrons and holes
+     balance by nₑnₕ = nᵢ²; heat it until the doping stops mattering. Make half the wafer n-type and watch carriers diffuse, leave charged
+     ions behind and build the barrier that stops them. Then put a diode in a circuit, draw its I–V curve point by point, and use it to turn 50 Hz ac into dc.</p>
+</div>
+
+<main class="pg-main wide-side">
+  <section class="pg-stage" id="stageWrap">
+    <svg id="stage" viewBox="0 0 1000 650" role="img" aria-label="A p–n junction forming"></svg>
+    <div class="gate" id="gate"><span>Make your prediction first →</span></div>
+  </section>
+
+  <aside class="pg-side">
+    <div id="poe"></div>
+
+    <div class="card" id="ctlCard">
+      <div class="seg" role="group" aria-label="Model">
+        <button id="tabDope" aria-pressed="false">Doping</button>
+        <button id="tabJunc" aria-pressed="true">Junction</button>
+        <button id="tabIV" aria-pressed="false">Diode I–V</button>
+        <button id="tabRect" aria-pressed="false">Rectifier</button>
+      </div>
+      <div id="ctlDope" hidden>
+        <div class="pick"><label for="mat">Crystal</label><select id="mat"></select>
+          <label for="dop">doped with</label><select id="dop">
+            <option value="none">nothing (intrinsic)</option><option value="As">arsenic (pentavalent)</option><option value="B">boron (trivalent)</option></select></div>
+        <div class="ctl"><label for="ppm">Dopant, parts per million</label><input type="range" id="ppm" min="-4" max="2" step="0.1" value="0"><output id="ppmOut">1 ppm</output></div>
+        <div class="ctl"><label for="temp">Temperature</label><input type="range" id="temp" min="150" max="700" step="5" value="300"><output id="tempOut">300 K</output></div>
+      </div>
+      <div id="ctlJunc">
+        <div class="row" style="margin-bottom:6px">
+          <button class="btn sm primary" id="btnForm">Form the junction</button>
+          <button class="btn sm" id="btnPause">❚❚ Pause</button>
+        </div>
+        <div class="kicker" style="margin-top:6px">A real silicon junction (right-hand picture)</div>
+        <div class="ctl"><label for="na">Acceptors N<sub>A</sub> (p side)</label><input type="range" id="na" min="21" max="24" step="0.1" value="23"><output id="naOut"></output></div>
+        <div class="ctl"><label for="nd">Donors N<sub>D</sub> (n side)</label><input type="range" id="nd" min="21" max="24" step="0.1" value="23"><output id="ndOut"></output></div>
+        <div class="ctl"><label for="bias">Bias V (p relative to n)</label><input type="range" id="bias" min="-10" max="0.6" step="0.05" value="0"><output id="biasOut"></output></div>
+      </div>
+      <div id="ctlIV" hidden>
+        <div class="pick"><label for="dmat">Diode</label><select id="dmat"><option value="Si">silicon</option><option value="Ge">germanium</option></select>
+          <button class="btn sm" id="btnPol" aria-pressed="false">Battery: forward ⇄</button></div>
+        <div class="ctl"><label for="supply">Supply voltage E</label><input type="range" id="supply" min="0" max="3" step="0.02" value="0"><output id="supplyOut">0.00 V</output></div>
+        <div class="ctl"><label for="temp2">Temperature</label><input type="range" id="temp2" min="250" max="400" step="5" value="300"><output id="temp2Out">300 K</output></div>
+        <div class="row"><button class="btn sm" id="btnClearIV">Clear points</button></div>
+        <p class="note">The supply drives the diode through 100 Ω. Every setting you visit is plotted: forward in mA, reverse in µA, as in the book.</p>
+      </div>
+      <div id="ctlRect" hidden>
+        <div class="seg" style="margin-bottom:6px">
+          <button id="mHalf" aria-pressed="true">Half-wave (one diode)</button>
+          <button id="mFull" aria-pressed="false">Full-wave (centre tap)</button>
+        </div>
+        <div class="ctl"><label for="vm">Peak ac voltage</label><input type="range" id="vm" min="2" max="20" step="0.5" value="10"><output id="vmOut">10.0 V</output></div>
+        <div class="ctl"><label for="cap">Filter capacitor</label><input type="range" id="cap" min="0" max="7" step="1" value="0"><output id="capOut">none</output></div>
+        <p class="note">50 Hz in, load R<sub>L</sub> = 1 kΩ. The circuit is stepped every 20 µs with the silicon diode’s own I–V curve.</p>
+      </div>
+    </div>
+
+    <div class="card" id="numCard">
+      <div class="kicker">Measured by the model</div>
+      <div id="nums"></div>
+    </div>
+
+    <div class="card why" id="whyCard" hidden>
+      <div class="kicker">What the model says</div>
+      <div id="why"></div>
+    </div>
+
+    <div class="card"><div class="kicker">To find</div><div id="finds"></div></div>
+  </aside>
+</main>
+
+<script src="../../play.js"></script>
+<script>
+'use strict';
+const {$, esc, clamp, fmt, loop, sound, track, toast, predict, findings, discover, found,
+       shareState, sharedState, mount, reduced} = Play;
+mount({thread: 'electronics', band: 'theorist'});
+
+/* MODEL:start ==================================================================
+   1. CARRIERS (NCERT Class 12, Ch 14.3–14.4).
+   Intrinsic density nᵢ(T) = nᵢ(300 K)·(T/300)^1.5·exp(−E_g/2k·(1/T − 1/300)), with
+   nᵢ(Si, 300 K) = 1.5 × 10¹⁶ m⁻³ and E_g from the book (C 5.4, Si 1.1, Ge 0.7 eV); the
+   other crystals share silicon's prefactor. Every dopant atom is taken as ionised. Then
+   charge neutrality nₑ − nₕ = N_D − N_A and the law of mass action nₑnₕ = nᵢ² fix both.
+   ============================================================================ */
+const KB = 8.617333e-5, QE = 1.602177e-19, EPS0 = 8.854188e-12;
+const MATS = {
+  Si: {name: 'Silicon', sym: 'Si', Eg: 1.1, atoms: 5e28, eps: 11.7, mun: 0.135, mup: 0.048},
+  Ge: {name: 'Germanium', sym: 'Ge', Eg: 0.7, atoms: 4.4e28, eps: 16, mun: 0.39, mup: 0.19},
+  C:  {name: 'Diamond (C)', sym: 'C', Eg: 5.4, atoms: 1.76e29, eps: 5.7, mun: 0.22, mup: 0.18},
+};
+const NI_SI_300 = 1.5e16;
+function ni(mat, T){
+  const m = MATS[mat], n300 = NI_SI_300 * Math.exp(-(m.Eg - 1.1) / (2 * KB * 300));
+  return n300 * Math.pow(T / 300, 1.5) * Math.exp(-m.Eg / (2 * KB) * (1 / T - 1 / 300));
+}
+/* carriers(mat, T, ND, NA) → {ni, n, p} */
+function carriers(mat, T, ND, NA){
+  const n_i = ni(mat, T), N = ND - NA, h = N / 2;
+  let n, p;
+  if (N >= 0) { n = h + Math.sqrt(h * h + n_i * n_i); p = n_i * n_i / n; }
+  else { p = -h + Math.sqrt(h * h + n_i * n_i); n = n_i * n_i / p; }
+  return {ni: n_i, n, p};
+}
+const resistivity = (mat, c) => 1 / (QE * (c.n * MATS[mat].mun + c.p * MATS[mat].mup));
+/* Fermi level above midgap (eV): kT ln(n/nᵢ) */
+const fermi = (T, c) => KB * T * Math.log(c.n / c.ni);
+
+/* 2. FORMING A JUNCTION: a 1-D particle model in natural units (kT = 1, mobility 1,
+   so D = 1; charge 1). The left half holds fixed acceptor ions (−) and as many holes;
+   the right half fixed donors (+) and electrons. Each step every carrier drifts in the
+   local field and takes a random (diffusion) step. The field is not drawn in: it is
+   Gauss's law, E(x) = K × (charge to the left of x), recomputed every step. An electron
+   and a hole in the same bin recombine with a small probability; heat makes new pairs
+   anywhere at a small rate. A crossing of the middle counts as DIFFUSION if it goes
+   down the carrier's own concentration (holes p→n, electrons n→p) and DRIFT if the
+   other way (minority carriers swept back by the field), as in NCERT Fig. 14.10. */
+const JP = {L: 100, dens: 3, K: 0.05, dt: 0.02, g: 0.02, pr: 0.01, bw: 0.5};
+function makeJunction(seed){
+  const rnd = Play.mulberry32(seed), NB = JP.L / JP.bw, ions = new Float64Array(NB), car = [];
+  const n = JP.L / 2 * JP.dens;
+  for (let i = 0; i < n; i++) { const x = (i + 0.5) / JP.dens; ions[Math.floor(x / JP.bw)] -= 1; car.push({x, q: 1, side: -1, lane: rnd()}); }
+  for (let i = 0; i < n; i++) { const x = JP.L / 2 + (i + 0.5) / JP.dens; ions[Math.floor(x / JP.bw)] += 1; car.push({x, q: -1, side: 1, lane: rnd()}); }
+  return {rnd, t: 0, ions, car, E: new Float64Array(NB + 1), q: new Float64Array(NB), ev: [], NB, spare: null,
+          avgH: null, avgE: null, avgPot: null, created: 0, recomb: 0};
+}
+function gaussJ(s){
+  if (s.spare != null) { const v = s.spare; s.spare = null; return v; }
+  let u = 0; while (!u) u = s.rnd(); const v = s.rnd(), r = Math.sqrt(-2 * Math.log(u));
+  s.spare = r * Math.sin(2 * Math.PI * v); return r * Math.cos(2 * Math.PI * v);
+}
+function fieldJ(s){
+  const q = s.q; q.set(s.ions);
+  for (const c of s.car) q[Math.min(s.NB - 1, Math.floor(c.x / JP.bw))] += c.q;
+  let acc = 0; s.E[0] = 0;
+  for (let i = 0; i < s.NB; i++) { acc += q[i]; s.E[i + 1] = JP.K * acc; }
+}
+function stepJunction(s){
+  fieldJ(s);
+  const sd = Math.sqrt(2 * JP.dt), mid = JP.L / 2;
+  for (const c of s.car) {
+    const f = c.x / JP.bw, i = Math.min(s.NB - 1, Math.floor(f)), E = s.E[i] + (s.E[i + 1] - s.E[i]) * (f - i);
+    c.x += c.q * E * JP.dt + sd * gaussJ(s);
+    if (c.x < 0) c.x = -c.x; if (c.x > JP.L) c.x = 2 * JP.L - c.x;
+    const ns = c.x < mid - 1 ? -1 : c.x > mid + 1 ? 1 : c.side;
+    if (ns !== c.side) { s.ev.push({t: s.t, kind: (c.q > 0) === (ns > 0) ? 'diff' : 'drift'}); c.side = ns; }
+  }
+  const bins = new Map();
+  for (let k = 0; k < s.car.length; k++) { const b = Math.floor(s.car[k].x / JP.bw); let e = bins.get(b); if (!e) bins.set(b, e = {h: [], e: []}); (s.car[k].q > 0 ? e.h : e.e).push(k); }
+  let dead = null;
+  for (const e of bins.values()) { const m = Math.min(e.h.length, e.e.length); for (let j = 0; j < m; j++) if (s.rnd() < JP.pr) { dead = dead || new Set(); dead.add(e.h[j]); dead.add(e.e[j]); s.recomb++; } }
+  if (dead) s.car = s.car.filter((c, k) => !dead.has(k));
+  if (s.rnd() < JP.g * JP.L * JP.dt) { const x = s.rnd() * JP.L, side = x < mid - 1 ? -1 : x > mid + 1 ? 1 : 0; s.car.push({x, q: 1, side: side || -1, lane: s.rnd()}, {x, q: -1, side: side || 1, lane: s.rnd()}); s.created++; }
+  s.t += JP.dt;
+  if (s.ev.length > 3000) s.ev.splice(0, 1500);
+}
+/* Time-averaged profiles (every 10 steps): carrier densities and the potential φ = −∫E dx. */
+function sampleJunction(s){
+  fieldJ(s);
+  const NB = s.NB, h = new Float64Array(NB), e = new Float64Array(NB), pot = new Float64Array(NB + 1);
+  for (const c of s.car) (c.q > 0 ? h : e)[Math.min(NB - 1, Math.floor(c.x / JP.bw))] += 1 / JP.bw;
+  let phi = 0; for (let i = 0; i < NB; i++) { phi -= s.E[i + 1] * JP.bw; pot[i + 1] = phi; }
+  const a = s.t < 4 ? 0.3 : 0.03;
+  if (!s.avgH) { s.avgH = h; s.avgE = e; s.avgPot = pot; return; }
+  for (let i = 0; i < NB; i++) { s.avgH[i] += (h[i] - s.avgH[i]) * a; s.avgE[i] += (e[i] - s.avgE[i]) * a; }
+  for (let i = 0; i <= NB; i++) s.avgPot[i] += (pot[i] - s.avgPot[i]) * a;
+}
+function junctionStats(s, win = 20){
+  let d = 0, r = 0; for (const x of s.ev) if (x.t > s.t - win) (x.kind === 'diff' ? d++ : r++);
+  let Q = 0; for (let i = 0; i < s.NB / 2; i++) Q += s.q[i];
+  const P = s.avgPot, bar = P ? P[Math.round(0.85 * s.NB)] - P[Math.round(0.15 * s.NB)] : 0;
+  return {t: s.t, diff: d, drift: r, Qp: Q, barrier: bar, carriers: s.car.length};
+}
+function runJunction(seed, T){ const s = makeJunction(seed); let k = 0; while (s.t < T) { stepJunction(s); if (++k % 10 === 0) sampleJunction(s); } fieldJ(s); return s; }
+
+/* 3. A REAL JUNCTION, in the depletion approximation. Built-in V₀ = (kT/e) ln(N_A N_D/nᵢ²);
+   with bias V the barrier is V₀ − V and the depleted widths obey N_A x_p = N_D x_n:
+   x_n = √(2ε(V₀−V) N_A / (e N_D (N_A+N_D))). */
+function depletion(mat, T, NA, ND, V){
+  const n_i = ni(mat, T), V0 = KB * T * Math.log(NA * ND / (n_i * n_i)), eps = MATS[mat].eps * EPS0;
+  const Vb = Math.max(0.02, V0 - V);
+  const xn = Math.sqrt(2 * eps * Vb * NA / (QE * ND * (NA + ND))), xp = xn * ND / NA;
+  return {V0, Vb, xn, xp, W: xn + xp, Emax: QE * ND * xn / eps};
+}
+
+/* 4. THE DIODE: I = I_s(e^{V_j/ηV_T} − 1), plus in reverse a saturating current I₀(e^{V_j/V_T} − 1)
+   of minority carriers swept across, a tiny leakage G V_j and breakdown past V_br; all through a
+   bulk resistance r_s. Parameters chosen to reproduce NCERT Fig. 14.17 for silicon (10 mA at
+   0.7 V, 20 mA at 0.8 V, −1 µA at −10 V); I_s scales as nᵢ², I₀ and G as nᵢ, with temperature. */
+const DIODES = {
+  Si: {Is: 4.1e-13, I0: 1.0e-6, eta: 1, rs: 8.2, G: 1e-9, Vbr: 50, mat: 'Si'},
+  Ge: {Is: 1.0e-6, I0: 4.0e-6, eta: 1, rs: 5, G: 1e-9, Vbr: 50, mat: 'Ge'},
+};
+function diodeAt(kind, T){
+  const d = DIODES[kind], r = ni(d.mat, T) / ni(d.mat, 300);
+  return {Is: d.Is * r * r, I0: d.I0 * r, eta: d.eta, rs: d.rs, G: d.G * r, Vbr: d.Vbr, Vt: KB * T};
+}
+function junctionI(D, Vj){
+  let f = D.Is * Math.expm1(Math.min(Vj / (D.eta * D.Vt), 80)) + D.G * Vj;
+  if (Vj < 0) f += D.I0 * Math.expm1(Vj / D.Vt);           // minority carriers swept across: saturates within a few kT/e
+  return f - 1e-6 * Math.exp(Math.min((-Vj - D.Vbr) / 0.1, 80));
+}
+/* The circuit: supply E through R. Solve Vj + I(Vj)(r_s + R) = E by bisection. */
+function solveCircuit(kind, T, E, R = 100){
+  const D = diodeAt(kind, T);
+  let lo = -80, hi = 1.6;
+  for (let k = 0; k < 90; k++) { const m = (lo + hi) / 2; if (m + junctionI(D, m) * (D.rs + R) > E) hi = m; else lo = m; }
+  const Vj = (lo + hi) / 2, I = junctionI(D, Vj);
+  return {Vj, I, V: Vj + I * D.rs};
+}
+/* The diode's own V at a given current (for dynamic resistance), and the reverse. */
+function diodeV(kind, T, I){
+  const D = diodeAt(kind, T); let lo = -80, hi = 1.6;
+  for (let k = 0; k < 90; k++) { const m = (lo + hi) / 2; if (junctionI(D, m) > I) hi = m; else lo = m; }
+  const Vj = (lo + hi) / 2; return Vj + junctionI(D, Vj) * D.rs;
+}
+const dynR = (kind, T, I1, I2) => (diodeV(kind, T, I2) - diodeV(kind, T, I1)) / (I2 - I1);
+
+/* 5. THE RECTIFIER: v_s = V_m sin(2π·50t). Half-wave: one diode feeds R_L ∥ C.
+   Full-wave: two diodes, fed from the two ends of a centre-tapped secondary (±v_s).
+   Each 20 µs step solves C(V−V_prev)/dt + V/R_L = Σ I_diode(v_k − V) by bisection,
+   with the diode's terminal curve tabulated once from the model above. */
+function diodeTable(kind, T){
+  const D = diodeAt(kind, T), V = [], I = [];
+  for (let vj = -60; vj < 0; vj += 0.05) { const i = junctionI(D, vj); V.push(vj + i * D.rs); I.push(i); }
+  for (let vj = 0; vj <= 1.0; vj += 0.0005) { const i = junctionI(D, vj); V.push(vj + i * D.rs); I.push(i); }
+  return {V, I};
+}
+function tableI(tb, v){
+  const V = tb.V; if (v <= V[0]) return tb.I[0]; const n = V.length;
+  if (v >= V[n - 1]) return tb.I[n - 1] + (v - V[n - 1]) / 8.2;
+  let lo = 0, hi = n - 1; while (hi - lo > 1) { const m = (lo + hi) >> 1; if (V[m] <= v) lo = m; else hi = m; }
+  return tb.I[lo] + (tb.I[hi] - tb.I[lo]) * (v - V[lo]) / (V[hi] - V[lo]);
+}
+const CAPS = [0, 10e-6, 22e-6, 47e-6, 100e-6, 220e-6, 470e-6, 1000e-6];
+function rectify(o){                       // o = {mode:'half'|'full', Vm, C, RL, f, T, ms}
+  const tb = diodeTable('Si', o.T || 300), dt = 2e-5, n = Math.round((o.ms || 80) / 1000 / dt);
+  const t = [], vin = [], vout = [], dA = [], dB = [];
+  let V = 0;
+  for (let k = 0; k <= n; k++) {
+    const tt = k * dt, vs = o.Vm * Math.sin(2 * Math.PI * o.f * tt);
+    const g = x => (o.C ? o.C * (x - V) / dt : 0) + x / o.RL - tableI(tb, vs - x) - (o.mode === 'full' ? tableI(tb, -vs - x) : 0);
+    let lo = -o.Vm - 2, hi = o.Vm + 2;
+    for (let j = 0; j < 44; j++) { const m = (lo + hi) / 2; if (g(m) > 0) hi = m; else lo = m; }
+    V = (lo + hi) / 2;
+    t.push(tt); vin.push(vs); vout.push(V); dA.push(tableI(tb, vs - V)); dB.push(o.mode === 'full' ? tableI(tb, -vs - V) : 0);
+  }
+  return {t, vin, vout, dA, dB, dt};
+}
+/* Measure the output over the last two input cycles: pulses per second (from the spacing of its peaks), dc level, ripple. */
+function measureOut(r, f = 50){
+  const k0 = Math.round((r.t[r.t.length - 1] - 2 / f) / r.dt), seg = r.vout.slice(k0);
+  const mx = Math.max(...seg), mn = Math.min(...seg), avg = seg.reduce((s, v) => s + v, 0) / seg.length;
+  const hys = Math.max(1e-6, 0.3 * (mx - mn)), times = [];
+  let run = seg[0], at = 0, rising = false;
+  for (let i = 1; i < seg.length; i++) {
+    const v = seg[i];
+    if (rising) { if (v > run) { run = v; at = i; } else if (v < run - hys) { times.push(at * r.dt); rising = false; run = v; } }
+    else { if (v < run) run = v; else if (v > run + hys) { rising = true; run = v; at = i; } }
+  }
+  const gaps = times.slice(1).map((t, i) => t - times[i]);
+  const freq = gaps.length ? 1 / (gaps.reduce((s, g) => s + g, 0) / gaps.length) : 0;
+  return {Vmax: mx, Vmin: mn, Vdc: avg, ripple: mx - mn, freq, peaks: times.length};
+}
+/* MODEL:end */
+
+/* ---- state ------------------------------------------------------------------ */
+const S = {tab: 'junc', locked: false,
+           mat: 'Si', dop: 'As', lppm: 0, T: 300,
+           running: false, na: 23, nd: 23, bias: 0, biasMin: 0, biasMax: 0,
+           dmat: 'Si', rev: false, supply: 0, pts: [],
+           mode: 'half', vm: 10, cap: 0};
+const shared = sharedState();
+if (shared) {
+  if (['dope', 'junc', 'iv', 'rect'].includes(shared.tab)) S.tab = shared.tab;
+  if (MATS[shared.mat]) S.mat = shared.mat;
+  if (['none', 'As', 'B'].includes(shared.dop)) S.dop = shared.dop;
+  for (const [k, lo, hi] of [['lppm', -4, 2], ['T', 150, 700], ['na', 21, 24], ['nd', 21, 24], ['bias', -10, 0.6], ['vm', 2, 20], ['cap', 0, 7]])
+    if (isFinite(+shared[k])) S[k] = clamp(+shared[k], lo, hi);
+  if (shared.mode === 'full') S.mode = 'full';
+}
+shareState(() => ({tab: S.tab, mat: S.mat, dop: S.dop, lppm: S.lppm, T: S.T, na: S.na, nd: S.nd, bias: S.bias, mode: S.mode, vm: S.vm, cap: S.cap}));
+let JS = makeJunction(5);
+const dopN = () => S.dop === 'none' ? 0 : Math.pow(10, S.lppm) * 1e-6 * MATS[S.mat].atoms;
+const CAR = () => carriers(S.mat, S.T, S.dop === 'As' ? dopN() : 0, S.dop === 'B' ? dopN() : 0);
+
+/* ---- formatting ------------------------------------------------------------- */
+const SUP = {'-': '⁻', 0: '⁰', 1: '¹', 2: '²', 3: '³', 4: '⁴', 5: '⁵', 6: '⁶', 7: '⁷', 8: '⁸', 9: '⁹'};
+const sup = s => String(s).split('').map(c => SUP[c] || c).join('');
+function sci(v, dp = 2){
+  if (!isFinite(v)) return '—'; if (v === 0) return '0';
+  const e = Math.floor(Math.log10(Math.abs(v)));
+  if (e >= -2 && e < 3) return v.toFixed(Math.max(0, dp - e));
+  return (v / Math.pow(10, e)).toFixed(dp) + ' × 10' + sup(e);
+}
+const ppmTxt = l => { const v = Math.pow(10, l); return v >= 1 ? (v < 10 ? v.toFixed(1) : v.toFixed(0)) + ' ppm' : v >= 0.01 ? v.toFixed(2) + ' ppm' : sci(v, 1) + ' ppm'; };
+const amps = I => Math.abs(I) >= 1e-3 ? (I * 1e3).toFixed(2) + ' mA' : (I * 1e6).toFixed(3) + ' µA';
+
+/* ============================================================================
+   The stage: built once, then patched.
+   ============================================================================ */
+const svg = $('stage');
+const LD = {x: 560, y: 60, h: 540, d0: 0, d1: 30};              // concentration ladder (log10 m⁻³)
+const lgy = v => LD.y + LD.h - (clamp(Math.log10(Math.max(v, 1e-30)), LD.d0, LD.d1) - LD.d0) / (LD.d1 - LD.d0) * LD.h;
+const TP = {x: 805, y: 60, w: 175, h: 540, t0: 150, t1: 700};
+const tpx = T => TP.x + (T - TP.t0) / (TP.t1 - TP.t0) * TP.w;
+const BD = {x: 40, x1: 470, mid: 500};
+const JB = {x: 40, y: 58, w: 920, h: 152};                       // junction sim box
+const jx = x => JB.x + x / JP.L * JB.w;
+const JPL = {x: 70, y: 320, w: 390, h: 270};                     // sim profiles
+const DP = {x: 560, y: 320, w: 410, h: 270};                     // real depletion
+const IVP = {x0: 745, y0: 320, fx: 235, fy: 270, rx: 225, ry: 260, Vf: 1.0, If: 30e-3, Vr: 60, Ir: 12e-6};
+const RW = {x: 520, y: 50, w: 450, h: 230, ms: 160};
+const RO = {x: 70, y: 360, w: 900, h: 230};
+
+function build(){
+  const T = (x, y, s, o = '') => `<text x="${x}" y="${y}" ${o}>${s}</text>`;
+  const H = (x, y, s) => T(x, y, s, 'fill="#4a555b" font-size="12" font-weight="700" letter-spacing=".06em"');
+  /* ladder and T plot axes */
+  let ld = `<line x1="${LD.x}" y1="${LD.y}" x2="${LD.x}" y2="${LD.y + LD.h}" stroke="#9aa3a6"/>`;
+  for (let d = 0; d <= 30; d += 5) ld += `<line x1="${LD.x - 5}" y1="${lgy(Math.pow(10, d))}" x2="${LD.x}" y2="${lgy(Math.pow(10, d))}" stroke="#9aa3a6"/>` + T(LD.x - 8, lgy(Math.pow(10, d)) + 4, '10' + sup(d), 'fill="#7c878c" font-size="11" text-anchor="end" class="m"');
+  let tp = `<rect x="${TP.x}" y="${TP.y}" width="${TP.w}" height="${TP.h}" fill="#fff" stroke="#e2ded2"/>`;
+  for (let d = 0; d <= 30; d += 5) tp += `<line x1="${TP.x}" y1="${lgy(Math.pow(10, d))}" x2="${TP.x + TP.w}" y2="${lgy(Math.pow(10, d))}" stroke="#f0ede4"/>`;
+  for (const t of [200, 300, 400, 500, 600, 700]) tp += `<line x1="${tpx(t)}" y1="${TP.y + TP.h}" x2="${tpx(t)}" y2="${TP.y + TP.h + 4}" stroke="#9aa3a6"/>` + T(tpx(t), TP.y + TP.h + 16, t, 'fill="#7c878c" font-size="10.5" text-anchor="middle" class="m"');
+  tp += T(TP.x + TP.w, TP.y + TP.h + 32, 'temperature (K) →', 'fill="#7c878c" font-size="11" text-anchor="end"');
+  /* junction sim: ions, drawn once */
+  let ions = '';
+  const rnd = Play.mulberry32(3);
+  for (let i = 0; i < 150; i++) {
+    const xa = jx((i + 0.5) / JP.dens), xd = jx(JP.L / 2 + (i + 0.5) / JP.dens), ya = JB.y + 10 + rnd() * (JB.h - 20), yd = JB.y + 10 + rnd() * (JB.h - 20);
+    ions += `<path d="M${(xa - 2.5).toFixed(1)} ${ya.toFixed(1)}h5" stroke="#b0605e" stroke-width="1.4"/><path d="M${(xd - 2.5).toFixed(1)} ${yd.toFixed(1)}h5M${xd.toFixed(1)} ${(yd - 2.5).toFixed(1)}v5" stroke="#4d6fa8" stroke-width="1.4"/>`;
+  }
+  /* IV axes (book style: forward mA, reverse µA) */
+  const I = IVP;
+  let iv = `<line x1="${I.x0 - I.rx}" y1="${I.y0}" x2="${I.x0 + I.fx}" y2="${I.y0}" stroke="#1d2327"/><line x1="${I.x0}" y1="${I.y0 - I.fy}" x2="${I.x0}" y2="${I.y0 + I.ry}" stroke="#1d2327"/>`;
+  for (let v = 0.2; v <= 1.001; v += 0.2) { const x = I.x0 + v / I.Vf * I.fx; iv += `<line x1="${x}" y1="${I.y0 - 4}" x2="${x}" y2="${I.y0 + 4}" stroke="#1d2327"/>` + T(x, I.y0 + 17, v.toFixed(1), 'fill="#4a555b" font-size="10.5" text-anchor="middle" class="m"'); }
+  for (let v = 10; v <= 60; v += 10) { const x = I.x0 - v / I.Vr * I.rx; iv += `<line x1="${x}" y1="${I.y0 - 4}" x2="${x}" y2="${I.y0 + 4}" stroke="#1d2327"/>` + T(x, I.y0 - 9, '−' + v, 'fill="#4a555b" font-size="10.5" text-anchor="middle" class="m"'); }
+  for (let a = 5; a <= 30; a += 5) { const y = I.y0 - a / 30 * I.fy; iv += `<line x1="${I.x0}" y1="${y}" x2="${I.x0 + I.fx}" y2="${y}" stroke="#f0ede4"/>` + T(I.x0 - 6, y + 4, a, 'fill="#4a555b" font-size="10.5" text-anchor="end" class="m"'); }
+  for (let a = 2; a <= 12; a += 2) { const y = I.y0 + a / 12 * I.ry; iv += `<line x1="${I.x0 - I.rx}" y1="${y}" x2="${I.x0}" y2="${y}" stroke="#f0ede4"/>` + T(I.x0 + 6, y + 4, '−' + a, 'fill="#4a555b" font-size="10.5" class="m"'); }
+  iv += T(I.x0 + 8, I.y0 - I.fy + 4, 'I (mA)', 'fill="#1d2327" font-size="11.5" font-weight="600"') + T(I.x0 + 8, I.y0 + I.ry + 2, 'I (µA)', 'fill="#1d2327" font-size="11.5" font-weight="600"') +
+        T(I.x0 + I.fx, I.y0 + 34, 'V (volts) →', 'fill="#1d2327" font-size="11.5" text-anchor="end"') + T(I.x0 - I.rx, I.y0 - 26, '← reverse, V (volts)', 'fill="#1d2327" font-size="11.5"') +
+        T(I.x0 + 60, I.y0 - I.fy + 4, 'forward', 'fill="#7c878c" font-size="11"') + T(I.x0 - I.rx + 4, I.y0 + I.ry - 6, 'reverse', 'fill="#7c878c" font-size="11"');
+  /* rectifier axes */
+  const rax = (P, v0, v1, lab) => {
+    let s = `<rect x="${P.x}" y="${P.y}" width="${P.w}" height="${P.h}" fill="#fff" stroke="#e2ded2"/>`;
+    for (let ms = 0; ms <= 160; ms += 20) { const x = P.x + ms / 160 * P.w; s += `<line x1="${x}" y1="${P.y}" x2="${x}" y2="${P.y + P.h}" stroke="#f0ede4"/>` + T(x, P.y + P.h + 15, ms, 'fill="#7c878c" font-size="10.5" text-anchor="middle" class="m"'); }
+    s += T(P.x + P.w, P.y + P.h + 30, 'time (ms) →', 'fill="#7c878c" font-size="11" text-anchor="end"') + `<g id="${lab}"></g>`;
+    return s;
+  };
+  svg.innerHTML = `
+  <defs>
+    <marker id="mArr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="context-stroke"/></marker>
+    <clipPath id="cJB"><rect x="${JB.x}" y="${JB.y}" width="${JB.w}" height="${JB.h}"/></clipPath>
+    <clipPath id="cIV"><rect x="${IVP.x0 - IVP.rx - 4}" y="${IVP.y0 - IVP.fy - 8}" width="${IVP.rx + IVP.fx + 8}" height="${IVP.fy + IVP.ry + 16}"/></clipPath>
+    <clipPath id="cDP"><rect x="${DP.x}" y="${DP.y}" width="${DP.w}" height="${DP.h}"/></clipPath>
+  </defs>
+  <rect x="0" y="0" width="1000" height="650" fill="#fbfaf6"/>
+
+  <g id="vDope" hidden>
+    ${H(20, 26, 'THE CRYSTAL')}${T(128, 26, '(a cartoon: real dopants are far fewer)', 'fill="#7c878c" font-size="11"')}
+    <rect x="20" y="38" width="460" height="262" fill="#fff" stroke="#e2ded2"/>
+    <g id="lattice"></g>
+    <text id="latNote" x="30" y="292" fill="#7c878c" font-size="10.5"></text>
+    ${H(20, 332, 'ENERGY BANDS')}
+    <rect x="20" y="340" width="460" height="290" fill="#fff" stroke="#e2ded2"/>
+    <g id="bands"></g>
+    ${H(500, 26, 'HOW MANY CARRIERS, m⁻³')}${T(500, 42, 'log scale: each step is ×10', 'fill="#7c878c" font-size="11"')}
+    ${ld}<g id="ladder"></g>
+    ${H(TP.x, 26, 'AGAINST TEMPERATURE')}
+    ${tp}<g id="tcurves"></g>
+  </g>
+
+  <g id="vJunc">
+    ${H(20, 26, 'FORMING A p–n JUNCTION')}${T(222, 26, 'a 1-D model: carriers diffuse and drift; ions stay put; the field comes from the charge', 'fill="#7c878c" font-size="11"')}
+    <rect x="${JB.x}" y="${JB.y}" width="${JB.w / 2}" height="${JB.h}" fill="#fbe9ea"/>
+    <rect x="${JB.x + JB.w / 2}" y="${JB.y}" width="${JB.w / 2}" height="${JB.h}" fill="#e7eefa"/>
+    <rect id="depl" y="${JB.y}" height="${JB.h}" fill="#fff" opacity=".75"/>
+    <line x1="${JB.x + JB.w / 2}" y1="${JB.y - 6}" x2="${JB.x + JB.w / 2}" y2="${JB.y + JB.h + 6}" stroke="#1d2327" stroke-dasharray="4 3"/>
+    ${T(JB.x, JB.y - 7, 'p-type: acceptor ions (−) and holes (○)', 'fill="#8c3b39" font-size="11.5" font-weight="600"')}
+    ${T(JB.x + JB.w, JB.y - 7, 'n-type: donor ions (+) and electrons (●)', 'fill="#2f4f86" font-size="11.5" font-weight="600" text-anchor="end"')}
+    <g clip-path="url(#cJB)">${ions}<g id="jCar"></g></g>
+    <rect x="${JB.x}" y="${JB.y}" width="${JB.w}" height="${JB.h}" fill="none" stroke="#cfc9b8"/>
+    <text id="jCount" x="${JB.x}" y="${JB.y + JB.h + 24}" fill="#1d2327" font-size="12" class="m"></text>
+    <text id="jCount2" x="${JB.x}" y="${JB.y + JB.h + 42}" fill="#4a555b" font-size="12" class="m"></text>
+    <text id="jBanner" x="${JB.x + JB.w}" y="${JB.y + JB.h + 24}" fill="#2f7d4f" font-size="15" text-anchor="end" class="serif"></text>
+    ${H(JPL.x - 30, 296, 'THE MODEL, AVERAGED OVER TIME')}
+    <rect x="${JPL.x}" y="${JPL.y}" width="${JPL.w}" height="${JPL.h}" fill="#fff" stroke="#e2ded2"/>
+    <line x1="${JPL.x + JPL.w / 2}" y1="${JPL.y}" x2="${JPL.x + JPL.w / 2}" y2="${JPL.y + JPL.h}" stroke="#cfc9b8" stroke-dasharray="3 3"/>
+    <path id="jpH" fill="none" stroke="#c2413b" stroke-width="2"/><path id="jpE" fill="none" stroke="#2f5fb3" stroke-width="2"/><path id="jpPot" fill="none" stroke="#6a3fc2" stroke-width="2.4"/>
+    ${T(JPL.x + 6, JPL.y + JPL.h + 16, 'holes per unit length', 'fill="#c2413b" font-size="11"')}${T(JPL.x + 140, JPL.y + JPL.h + 16, 'electrons', 'fill="#2f5fb3" font-size="11"')}${T(JPL.x + 214, JPL.y + JPL.h + 16, 'potential φ (units of kT/e)', 'fill="#6a3fc2" font-size="11"')}
+    <text id="jpBar" x="${JPL.x + JPL.w - 8}" y="${JPL.y + 18}" fill="#6a3fc2" font-size="12" text-anchor="end" class="m"></text>
+    ${H(DP.x, 296, 'A REAL SILICON JUNCTION (depletion approximation)')}
+    <rect x="${DP.x}" y="${DP.y}" width="${DP.w}" height="${DP.h}" fill="#fff" stroke="#e2ded2"/>
+    <g clip-path="url(#cDP)"><g id="dpG"></g></g>
+    <g id="dpAx"></g>
+    <g id="veilJ">
+      <rect x="0" y="262" width="1000" height="388" fill="#fbfaf6" opacity=".95"/>
+      ${T(500, 460, 'The measurements appear once you have made a prediction.', 'fill="#7c878c" font-size="15" font-weight="600" text-anchor="middle"')}
+    </g>
+  </g>
+
+  <g id="vIV" hidden>
+    ${H(20, 26, 'THE CIRCUIT')}
+    <g id="circIV"></g>
+    <text id="ivRead1" x="40" y="360" fill="#1d2327" font-size="20" class="m"></text>
+    <text id="ivRead2" x="40" y="390" fill="#1d2327" font-size="20" class="m"></text>
+    <text id="ivRead3" x="40" y="416" fill="#4a555b" font-size="12" class="m"></text>
+    ${H(20, 456, 'THE JUNCTION INSIDE')}
+    <g id="ivJunc"></g>
+    ${H(510, 26, 'V–I CHARACTERISTIC, POINT BY POINT')}
+    ${iv}
+    <g clip-path="url(#cIV)"><g id="ivPts"></g><circle id="ivDot" r="6" fill="#ffb400" stroke="#1d2327" stroke-width="1.3"/></g>
+    <text id="ivOff" x="${IVP.x0 - IVP.rx + 6}" y="${IVP.y0 + IVP.ry + 22}" fill="#c2413b" font-size="11.5"></text>
+  </g>
+
+  <g id="vRect" hidden>
+    ${H(20, 26, 'THE RECTIFIER')}
+    <g id="circR"></g>
+    ${H(RW.x, 26, 'INPUT: THE TRANSFORMER SECONDARY')}
+    ${rax(RW, -1, 1, 'rIn')}
+    ${H(RO.x, 340, 'OUTPUT ACROSS THE LOAD')}
+    ${rax(RO, 0, 1, 'rOut')}
+    <line id="rCur1" y1="${RW.y}" y2="${RW.y + RW.h}" stroke="#1d2327" stroke-width="1.2" opacity=".5"/>
+    <line id="rCur2" y1="${RO.y}" y2="${RO.y + RO.h}" stroke="#1d2327" stroke-width="1.2" opacity=".5"/>
+    <text id="rMeas" x="${RO.x + RO.w}" y="340" fill="#1d2327" font-size="12" text-anchor="end" class="m"></text>
+  </g>`;
+  $('mat').innerHTML = Object.entries(MATS).map(([k, m]) => `<option value="${k}">${m.name}, E<sub>g</sub> ${m.Eg} eV</option>`).join('');
+}
+
+/* ============================================================================
+   Paint: doping
+   ============================================================================ */
+let latAng = 0;
+function paintDope(){
+  const m = MATS[S.mat], c = CAR(), N = dopN();
+  /* the lattice: 6 × 4 atoms, the dopant in the middle */
+  const sym = m.sym, cols = 6, rows = 4, x0 = 70, y0 = 78, dx = 72, dy = 62;
+  const dI = 2, dJ = 1;
+  let g = '';
+  for (let j = 0; j < rows; j++) for (let i = 0; i < cols; i++) {
+    const x = x0 + i * dx, y = y0 + j * dy;
+    if (i < cols - 1) g += `<line x1="${x + 16}" y1="${y - 3}" x2="${x + dx - 16}" y2="${y - 3}" stroke="#9aa3a6"/><line x1="${x + 16}" y1="${y + 3}" x2="${x + dx - 16}" y2="${y + 3}" stroke="#9aa3a6"/>`;
+    if (j < rows - 1) g += `<line x1="${x - 3}" y1="${y + 16}" x2="${x - 3}" y2="${y + dy - 16}" stroke="#9aa3a6"/><line x1="${x + 3}" y1="${y + 16}" x2="${x + 3}" y2="${y + dy - 16}" stroke="#9aa3a6"/>`;
+  }
+  /* bond electrons */
+  const broken = new Set();
+  const nb = S.mat === 'C' ? 0 : clamp(Math.floor(Math.log10(c.ni) - 9), 0, 7);
+  const rb = Play.mulberry32(17), bonds = [];
+  for (let j = 0; j < rows; j++) for (let i = 0; i < cols - 1; i++) bonds.push([i, j, 'h']);
+  for (let j = 0; j < rows - 1; j++) for (let i = 0; i < cols; i++) bonds.push([i, j, 'v']);
+  for (let k = 0; k < nb; k++) broken.add(Math.floor(rb() * bonds.length));
+  bonds.forEach(([i, j, o], k) => {
+    const x = x0 + i * dx, y = y0 + j * dy;
+    const ex = o === 'h' ? [x + dx / 2 - 6, x + dx / 2 + 6] : [x, x], ey = o === 'h' ? [y, y] : [y + dy / 2 - 6, y + dy / 2 + 6];
+    const isB = S.dop === 'B' && ((o === 'h' && j === dJ && i === dI) );
+    for (let e = 0; e < 2; e++) {
+      if ((broken.has(k) && e === 0) || (isB && e === 1)) g += `<circle cx="${ex[e]}" cy="${ey[e]}" r="3.6" fill="#fff" stroke="#c2413b" stroke-width="1.6"/>`;
+      else g += `<circle cx="${ex[e]}" cy="${ey[e]}" r="2.6" fill="#2f5fb3"/>`;
+    }
+    if (broken.has(k)) g += `<circle cx="${ex[0] + 14}" cy="${ey[0] - 16}" r="3" fill="#2f5fb3" stroke="#bcd3ff" stroke-width="3"/>`;
+  });
+  for (let j = 0; j < rows; j++) for (let i = 0; i < cols; i++) {
+    const x = x0 + i * dx, y = y0 + j * dy, dopant = i === dI && j === dJ && S.dop !== 'none';
+    const lab = dopant ? S.dop : sym, fill = dopant ? (S.dop === 'As' ? '#dbe7fb' : '#fbe1e0') : '#eceae4';
+    g += `<circle cx="${x}" cy="${y}" r="15" fill="${fill}" stroke="${dopant ? (S.dop === 'As' ? '#2f5fb3' : '#c2413b') : '#9aa3a6'}" stroke-width="${dopant ? 2 : 1}"/><text x="${x}" y="${y + 4}" font-size="11.5" font-weight="700" text-anchor="middle" fill="#1d2327">${lab}</text>`;
+  }
+  if (S.dop === 'As') {
+    const x = x0 + dI * dx, y = y0 + dJ * dy, a = latAng;
+    g += `<circle cx="${x}" cy="${y}" r="27" fill="none" stroke="#2f5fb3" stroke-dasharray="3 3"/><circle cx="${(x + 27 * Math.cos(a)).toFixed(1)}" cy="${(y + 27 * Math.sin(a)).toFixed(1)}" r="3.4" fill="#2f5fb3" stroke="#bcd3ff" stroke-width="3"/>` +
+         `<text x="${x + 30}" y="${y - 30}" font-size="10.5" fill="#2f5fb3" stroke="#fff" stroke-width="3" paint-order="stroke">5th electron, loosely held</text>`;
+  } else if (S.dop === 'B') {
+    const x = x0 + dI * dx + dx / 2 + 6, y = y0 + dJ * dy;
+    g += `<text x="${x - 20}" y="${y - 12}" font-size="10.5" fill="#c2413b" stroke="#fff" stroke-width="3" paint-order="stroke">a hole: one bond short</text>`;
+  }
+  $('lattice').innerHTML = g;
+  $('latNote').textContent = S.mat === 'C' ? 'Diamond: no bond breaks at these temperatures.' : `Broken bonds drawn: one for each factor of 10 in nᵢ above 10¹⁰ m⁻³ (${nb} now).`;
+  /* bands */
+  const scale = S.mat === 'C' ? 40 : 110, gap = m.Eg * scale, Ec = BD.mid - gap / 2 - 10, Ev = BD.mid + gap / 2 - 10;
+  let b = `<rect x="${BD.x + 60}" y="${Ec - 70}" width="${BD.x1 - BD.x - 150}" height="70" fill="#e7eefa"/><rect x="${BD.x + 60}" y="${Ev}" width="${BD.x1 - BD.x - 150}" height="70" fill="#fbe9ea"/>` +
+    `<line x1="${BD.x + 60}" y1="${Ec}" x2="${BD.x1 - 90}" y2="${Ec}" stroke="#2f5fb3" stroke-width="2"/><line x1="${BD.x + 60}" y1="${Ev}" x2="${BD.x1 - 90}" y2="${Ev}" stroke="#c2413b" stroke-width="2"/>` +
+    `<text x="${BD.x + 66}" y="${Ec - 54}" font-size="11.5" fill="#2f4f86" font-weight="600">conduction band</text><text x="${BD.x + 66}" y="${Ev + 64}" font-size="11.5" fill="#8c3b39" font-weight="600">valence band</text>` +
+    `<text x="${BD.x1 - 84}" y="${Ec + 4}" font-size="11" fill="#2f4f86" class="m">E_C</text><text x="${BD.x1 - 84}" y="${Ev + 4}" font-size="11" fill="#8c3b39" class="m">E_V</text>` +
+    `<line x1="${BD.x + 40}" y1="${Ec}" x2="${BD.x + 40}" y2="${Ev}" stroke="#4a555b" marker-end="url(#mArr)"/><text x="${BD.x + 34}" y="${(Ec + Ev) / 2 + 4}" font-size="11.5" fill="#1d2327" text-anchor="end" class="m">${m.Eg} eV</text>`;
+  if (S.dop === 'As') b += `<line x1="${BD.x + 120}" y1="${Ec + 0.045 * scale}" x2="${BD.x1 - 150}" y2="${Ec + 0.045 * scale}" stroke="#2f5fb3" stroke-dasharray="6 4"/><text x="${BD.x + 150}" y="${Ec - 8}" font-size="10.5" fill="#2f5fb3">dashes: donor level E_D, 0.045 eV below</text>`;
+  if (S.dop === 'B') b += `<line x1="${BD.x + 120}" y1="${Ev - 0.045 * scale}" x2="${BD.x1 - 150}" y2="${Ev - 0.045 * scale}" stroke="#c2413b" stroke-dasharray="6 4"/><text x="${BD.x + 150}" y="${Ev + 16}" font-size="10.5" fill="#c2413b">dashes: acceptor level E_A, 0.045 eV above</text>`;
+  const ef = fermi(S.T, c), yf = clamp((Ec + Ev) / 2 - ef * scale, Ec - 4, Ev + 4);
+  b += `<line x1="${BD.x + 60}" y1="${yf}" x2="${BD.x1 - 90}" y2="${yf}" stroke="#e8890c" stroke-width="1.6" stroke-dasharray="3 3"/><text x="${BD.x1 - 84}" y="${yf + 4}" font-size="11" fill="#b56a00" class="m">E_F</text>`;
+  b += `<text x="${BD.x + 66}" y="${Ec - 30}" font-size="11.5" fill="#1d2327" class="m">nₑ = ${sci(c.n, 2)} m⁻³</text><text x="${BD.x + 66}" y="${Ev + 40}" font-size="11.5" fill="#1d2327" class="m">nₕ = ${sci(c.p, 2)} m⁻³</text>`;
+  if (S.mat === 'C') b += `<text x="${BD.x + 66}" y="${BD.mid + 128}" font-size="10.5" fill="#7c878c">(diamond drawn at a third of the scale)</text>`;
+  $('bands').innerHTML = b;
+  /* ladder */
+  const rows2 = [['atoms', m.atoms, '#9aa3a6'], ['dopant atoms', N, S.dop === 'B' ? '#c2413b' : '#2f5fb3'], ['nᵢ', c.ni, '#6a3fc2'], ['electrons nₑ', c.n, '#2f5fb3'], ['holes nₕ', c.p, '#c2413b']];
+  let l = '';
+  const X = LD.x;
+  rows2.forEach(([lab, v, col], k) => {
+    if (lab === 'dopant atoms' && !(v > 0)) return;
+    const y = lgy(v), off = lab === 'nᵢ' ? 0 : lab.startsWith('electrons') ? 0 : 0, lx = X + 14 + (lab.startsWith('electrons') ? 0 : lab.startsWith('holes') ? 0 : 0);
+    const dash = lab === 'nᵢ' ? 'stroke-dasharray="5 3"' : '';
+    l += `<line x1="${X}" y1="${y.toFixed(1)}" x2="${X + 130}" y2="${y.toFixed(1)}" stroke="${col}" stroke-width="${lab.includes('n') && lab !== 'nᵢ' ? 2.4 : 1.6}" ${dash}/>`;
+  });
+  /* labels, nudged apart */
+  const labs = rows2.filter(r => !(r[0] === 'dopant atoms' && !(r[1] > 0))).map(r => ({t: r[0], v: r[1], c: r[2], y: lgy(r[1])})).sort((a, b) => a.y - b.y);
+  for (let k = 1; k < labs.length; k++) if (labs[k].y - labs[k - 1].y < 14) labs[k].y = labs[k - 1].y + 14;
+  for (const L of labs) l += `<text x="${X + 136}" y="${(L.y + 4).toFixed(1)}" font-size="11" fill="${L.c}" font-weight="600">${esc(L.t)}</text>`;
+  if (c.p < 1 || c.n < 1) l += `<text x="${X + 10}" y="${LD.y + LD.h - 6}" font-size="10.5" fill="#7c878c">below 1 m⁻³ — off the scale</text>`;
+  /* mirror: equal distances from nᵢ on a log scale */
+  const yn = lgy(c.n), yp = lgy(c.p), yi = lgy(c.ni);
+  if (Math.abs(yn - yp) > 20) l += `<path d="M${X + 40} ${yi}V${yn + (yn < yi ? 3 : -3)}M${X + 40} ${yi}V${yp + (yp < yi ? 3 : -3)}" stroke="#6a3fc2" stroke-width="1.2" marker-end="url(#mArr)"/>` +
+    `<text x="${X + 46}" y="${(yi + (yn < yi ? -8 : 14)).toFixed(1)}" font-size="10.5" fill="#6a3fc2">equal steps: nₑnₕ = nᵢ²</text>`;
+  $('ladder').innerHTML = l;
+  /* T curves */
+  let dn = '', dp = '', di = '';
+  for (let T = TP.t0; T <= TP.t1; T += 10) {
+    const cc = carriers(S.mat, T, S.dop === 'As' ? N : 0, S.dop === 'B' ? N : 0), x = tpx(T).toFixed(1);
+    dn += (dn ? 'L' : 'M') + x + ' ' + lgy(cc.n).toFixed(1); dp += (dp ? 'L' : 'M') + x + ' ' + lgy(cc.p).toFixed(1); di += (di ? 'L' : 'M') + x + ' ' + lgy(cc.ni).toFixed(1);
+  }
+  $('tcurves').innerHTML = `<path d="${di}" fill="none" stroke="#6a3fc2" stroke-width="1.4" stroke-dasharray="5 3"/><path d="${dp}" fill="none" stroke="#c2413b" stroke-width="2"/><path d="${dn}" fill="none" stroke="#2f5fb3" stroke-width="2"/>` +
+    `<line x1="${tpx(S.T)}" y1="${TP.y}" x2="${tpx(S.T)}" y2="${TP.y + TP.h}" stroke="#e8890c" stroke-width="1.4"/><text x="${tpx(S.T) + 4}" y="${TP.y + 14}" font-size="11" fill="#b56a00" class="m">${S.T} K</text>`;
+}
+
+/* ============================================================================
+   Paint: junction
+   ============================================================================ */
+function paintJunc(){
+  const s = JS;
+  let g = '';
+  for (const c of s.car) {
+    const x = jx(c.x).toFixed(1), y = (JB.y + 8 + c.lane * (JB.h - 16)).toFixed(1);
+    g += c.q > 0 ? `<circle cx="${x}" cy="${y}" r="3.1" fill="none" stroke="#c2413b" stroke-width="1.5"/>` : `<circle cx="${x}" cy="${y}" r="2.7" fill="#2f5fb3"/>`;
+  }
+  $('jCar').innerHTML = g;
+  const st = junctionStats(s);
+  $('jCount').textContent = `t = ${s.t.toFixed(0).padStart(4)}   in the last 20 time units: diffusion crossings ${String(st.diff).padStart(3)}   drift crossings ${String(st.drift).padStart(3)}`;
+  $('jCount2').textContent = `charge on the p side ${st.Qp >= 0 ? '+' : '−'}${Math.abs(st.Qp).toFixed(0)} e    carriers ${st.carriers}    pairs made by heat ${s.created}, recombined ${s.recomb}`;
+  $('jBanner').textContent = JDONE ? 'Diffusion balanced by drift: the junction has formed' : S.running ? 'Carriers pour across…' : s.t === 0 ? 'Press “Form the junction”' : 'Paused';
+  /* depleted zone: where the time-averaged carriers are under a quarter of the doping */
+  if (s.avgH) {
+    let a = JP.L / 2, b = JP.L / 2;
+    for (let i = s.NB / 2 - 1; i >= 0; i--) { if (s.avgH[i] < JP.dens * 0.5) a = i * JP.bw; else break; }
+    for (let i = s.NB / 2; i < s.NB; i++) { if (s.avgE[i] < JP.dens * 0.5) b = (i + 1) * JP.bw; else break; }
+    $('depl').setAttribute('x', jx(a).toFixed(1)); $('depl').setAttribute('width', Math.max(0, jx(b) - jx(a)).toFixed(1));
+    const px = i => JPL.x + i / s.NB * JPL.w, py = v => JPL.y + JPL.h - clamp(v / 6, 0, 1) * JPL.h * 0.9;
+    const pp = v => JPL.y + JPL.h / 2 - clamp(v, -12, 12) / 12 * JPL.h * 0.45;
+    let dh = '', de = '', dpp = '';
+    for (let i = 0; i < s.NB; i += 2) { dh += (dh ? 'L' : 'M') + px(i + 1).toFixed(1) + ' ' + py((s.avgH[i] + s.avgH[i + 1]) / 2).toFixed(1); de += (de ? 'L' : 'M') + px(i + 1).toFixed(1) + ' ' + py((s.avgE[i] + s.avgE[i + 1]) / 2).toFixed(1); }
+    const p0 = s.avgPot[Math.round(0.15 * s.NB)];
+    for (let i = 0; i <= s.NB; i += 2) dpp += (dpp ? 'L' : 'M') + px(i).toFixed(1) + ' ' + pp(s.avgPot[i] - p0).toFixed(1);
+    $('jpH').setAttribute('d', dh); $('jpE').setAttribute('d', de); $('jpPot').setAttribute('d', dpp);
+    $('jpBar').textContent = `barrier ${st.barrier.toFixed(1)} kT/e`;
+  } else { $('depl').setAttribute('width', 0); for (const id of ['jpH', 'jpE', 'jpPot']) $(id).setAttribute('d', ''); $('jpBar').textContent = ''; }
+  paintDepletion();
+}
+function paintDepletion(){
+  const NA = Math.pow(10, S.na), ND = Math.pow(10, S.nd), d = depletion('Si', S.T, NA, ND, S.bias);
+  const span = 1.3 * Math.max(d.xp, d.xn, 0.05e-6), X = x => DP.x + DP.w / 2 + x / span * DP.w / 2;
+  const top = DP.y + 20, rh = 90, rmax = Math.max(NA, ND);
+  const hA = NA / rmax * rh * 0.45, hD = ND / rmax * rh * 0.45, mid = top + rh / 2;
+  let g = `<rect x="${DP.x}" y="${top}" width="${X(0) - DP.x}" height="${rh}" fill="#fbe9ea"/><rect x="${X(0)}" y="${top}" width="${DP.x + DP.w - X(0)}" height="${rh}" fill="#e7eefa"/>` +
+    `<rect x="${X(-d.xp)}" y="${top}" width="${X(d.xn) - X(-d.xp)}" height="${rh}" fill="#fff" stroke="#9aa3a6" stroke-dasharray="3 3"/>` +
+    `<rect x="${X(-d.xp)}" y="${mid}" width="${X(0) - X(-d.xp)}" height="${hA}" fill="#c2413b" opacity=".75"/><rect x="${X(0)}" y="${mid - hD}" width="${X(d.xn) - X(0)}" height="${hD}" fill="#2f5fb3" opacity=".75"/>` +
+    `<line x1="${DP.x}" y1="${mid}" x2="${DP.x + DP.w}" y2="${mid}" stroke="#9aa3a6"/>` +
+    `<text x="${DP.x + 8}" y="${top + 14}" font-size="11" fill="#8c3b39">p</text><text x="${DP.x + DP.w - 8}" y="${top + 14}" font-size="11" fill="#2f4f86" text-anchor="end">n</text>` +
+    `<text x="${X(-d.xp) - 4}" y="${mid + 14}" font-size="10.5" fill="#8c3b39" text-anchor="end">−eN_A</text><text x="${X(d.xn) + 4}" y="${mid - 4}" font-size="10.5" fill="#2f4f86">+eN_D</text>`;
+  /* potential: 0 on the p side, rising by V0 − V across the depleted region */
+  const py0 = DP.y + DP.h - 30, pscale = 110 / Math.max(1.2, d.Vb), eps = MATS.Si.eps * EPS0;
+  let dd = '';
+  for (let i = 0; i <= 120; i++) {
+    const x = -span + i / 120 * 2 * span;
+    let v; if (x <= -d.xp) v = 0; else if (x <= 0) v = QE * NA * (x + d.xp) ** 2 / (2 * eps); else if (x < d.xn) v = d.Vb - QE * ND * (d.xn - x) ** 2 / (2 * eps); else v = d.Vb;
+    dd += (i ? 'L' : 'M') + X(x).toFixed(1) + ' ' + (py0 - v * pscale).toFixed(1);
+  }
+  g += `<path d="${dd}" fill="none" stroke="#6a3fc2" stroke-width="2.4"/><line x1="${DP.x}" y1="${py0}" x2="${DP.x + DP.w}" y2="${py0}" stroke="#e2ded2"/>` +
+       `<text x="${DP.x + DP.w - 8}" y="${(py0 - d.Vb * pscale - 8).toFixed(1)}" font-size="12" fill="#6a3fc2" text-anchor="end" class="m">V₀ − V = ${d.Vb.toFixed(2)} V</text>` +
+       `<text x="${DP.x + 8}" y="${py0 - 8}" font-size="11" fill="#6a3fc2">potential</text>`;
+  $('dpG').innerHTML = g;
+  let ax = '';
+  const step = niceStep(span * 1e6);
+  for (let u = -Math.floor(span * 1e6 / step) * step; u <= span * 1e6 + 1e-9; u += step) { const x = X(u * 1e-6); ax += `<line x1="${x}" y1="${DP.y + DP.h}" x2="${x}" y2="${DP.y + DP.h + 4}" stroke="#9aa3a6"/><text x="${x}" y="${DP.y + DP.h + 16}" font-size="10.5" fill="#7c878c" text-anchor="middle" class="m">${(+u.toFixed(3))}</text>`; }
+  ax += `<text x="${DP.x + DP.w}" y="${DP.y + DP.h + 30}" font-size="11" fill="#7c878c" text-anchor="end">distance from the junction (µm) →</text>` +
+        `<text x="${DP.x + 8}" y="${DP.y + DP.h + 30}" font-size="11.5" fill="#1d2327" class="m">W = ${(d.W * 1e6).toFixed(3)} µm</text>`;
+  $('dpAx').innerHTML = ax;
+}
+const niceStep = s => { const r = s / 3, p = Math.pow(10, Math.floor(Math.log10(r))), m = r / p; return (m < 1.5 ? 1 : m < 3.5 ? 2 : m < 7.5 ? 5 : 10) * p; };
+
+/* ============================================================================
+   Paint: I–V
+   ============================================================================ */
+const supplyE = () => S.rev ? -S.supply : S.supply;
+function paintIV(){
+  const E = supplyE(), r = solveCircuit(S.dmat, S.T, E);
+  /* circuit: battery left, resistor top, diode right, meters */
+  const c = [], pol = E >= 0;
+  c.push(`<path d="M80 110 V60 H200 M260 60 H380 V120 M380 220 V280 H80 V190" fill="none" stroke="#4a555b" stroke-width="2"/>`);
+  c.push(`<path d="M200 60 l6 -8 l10 16 l10 -16 l10 16 l10 -16 l10 16 l4 -8" fill="none" stroke="#1d2327" stroke-width="2"/><text x="230" y="44" font-size="12" text-anchor="middle" fill="#1d2327">R = 100 Ω</text>`);
+  /* battery (long plate = +) */
+  const yT = pol ? 110 : 190, yB = pol ? 190 : 110;
+  c.push(`<line x1="56" y1="${pol ? 130 : 170}" x2="104" y2="${pol ? 130 : 170}" stroke="#1d2327" stroke-width="2.4"/><line x1="66" y1="${pol ? 142 : 158}" x2="94" y2="${pol ? 142 : 158}" stroke="#1d2327" stroke-width="4"/>` +
+    `<line x1="56" y1="${pol ? 158 : 142}" x2="104" y2="${pol ? 158 : 142}" stroke="#1d2327" stroke-width="2.4"/><line x1="66" y1="${pol ? 170 : 130}" x2="94" y2="${pol ? 170 : 130}" stroke="#1d2327" stroke-width="4"/>` +
+    `<text x="112" y="${pol ? 128 : 176}" font-size="14" fill="#c2413b" font-weight="700">+</text><text x="112" y="${pol ? 176 : 128}" font-size="14" fill="#2f5fb3" font-weight="700">−</text>` +
+    `<text x="30" y="154" font-size="12.5" fill="#1d2327" text-anchor="middle" class="m">${Math.abs(E).toFixed(2)}</text><text x="30" y="168" font-size="11" fill="#4a555b" text-anchor="middle">V</text>`);
+  c.push(`<path d="M80 130 V142 M80 158 V170" stroke="#4a555b" stroke-width="2"/>`);
+  /* diode: triangle pointing down (p at top, n at bottom) */
+  c.push(`<path d="M364 128 H396 L380 156 Z" fill="${r.I > 1e-3 ? '#ffd36b' : '#fff'}" stroke="#1d2327" stroke-width="2"/><line x1="362" y1="158" x2="398" y2="158" stroke="#1d2327" stroke-width="2.6"/>` +
+    `<path d="M380 158 V220" stroke="#4a555b" stroke-width="2"/><text x="404" y="140" font-size="12" fill="#c2413b" font-weight="700">p</text><text x="404" y="174" font-size="12" fill="#2f5fb3" font-weight="700">n</text>` +
+    `<text x="404" y="192" font-size="11" fill="#4a555b">${S.dmat === 'Si' ? 'silicon' : 'germanium'}</text>`);
+  /* voltmeter across the diode, ammeter in the bottom wire */
+  c.push(`<path d="M380 118 H430 V132 M430 176 V210 H380" fill="none" stroke="#9aa3a6" stroke-width="1.5" stroke-dasharray="3 2"/><circle cx="430" cy="154" r="20" fill="#fff" stroke="#1d2327" stroke-width="1.8"/><text x="430" y="159" font-size="14" font-weight="700" text-anchor="middle">V</text>`);
+  c.push(`<circle cx="230" cy="280" r="20" fill="#fff" stroke="#1d2327" stroke-width="1.8"/><text x="230" y="285" font-size="12" font-weight="700" text-anchor="middle">${Math.abs(r.I) >= 1e-3 || !S.rev ? 'mA' : 'µA'}</text>`);
+  const dir = r.I >= 0 ? 1 : -1, big = Math.abs(r.I) > 1e-5;
+  if (big) c.push(`<path d="M${dir > 0 ? 300 : 340} 60 H${dir > 0 ? 340 : 300}" stroke="#e8890c" stroke-width="3" marker-end="url(#mArr)"/><text x="320" y="84" font-size="11" fill="#b56a00" text-anchor="middle">current</text>`);
+  $('circIV').innerHTML = c.join('');
+  $('ivRead1').textContent = `V = ${r.V >= 0 ? '+' : '−'}${Math.abs(r.V).toFixed(3)} V`;
+  $('ivRead2').textContent = `I = ${r.I >= 0 ? '+' : '−'}${amps(Math.abs(r.I))}`;
+  const rd = Math.abs(r.I) > 1e-9 ? (r.I > 0 ? dynR(S.dmat, S.T, r.I * 0.99, r.I * 1.01) : Math.abs(r.V / r.I)) : NaN;
+  $('ivRead3').textContent = r.I > 0 ? `dynamic resistance ΔV/ΔI = ${rd >= 1e3 ? sci(rd, 2) : rd.toFixed(2)} Ω` : `reverse resistance V/I = ${sci(rd, 2)} Ω`;
+  /* the junction inside: its depletion width at this bias (same NA, ND as the Junction tab) */
+  const d0 = depletion('Si', S.T, 1e23, 1e23, 0), d = depletion('Si', S.T, 1e23, 1e23, Math.min(r.V, 0.75));
+  const w = clamp(d.W / d0.W, 0.05, 6), cx = 230, half = 34 * w;
+  $('ivJunc').innerHTML = `<rect x="40" y="470" width="${cx - 40}" height="50" fill="#fbe9ea"/><rect x="${cx}" y="470" width="${cx - 40}" height="50" fill="#e7eefa"/>` +
+    `<rect x="${(cx - Math.min(half, 186)).toFixed(1)}" y="470" width="${(2 * Math.min(half, 186)).toFixed(1)}" height="50" fill="#fff" stroke="#9aa3a6" stroke-dasharray="3 3"/>` +
+    `<text x="48" y="490" font-size="12" fill="#8c3b39" font-weight="700">p</text><text x="412" y="490" font-size="12" fill="#2f4f86" font-weight="700" text-anchor="end">n</text>` +
+    `<text x="40" y="540" font-size="11.5" fill="#1d2327" class="m">depletion width ${(d.W * 1e6).toFixed(3)} µm (${w.toFixed(2)} × unbiased); barrier ${(d.Vb).toFixed(2)} V</text>` +
+    `<text x="40" y="558" font-size="10.5" fill="#7c878c">a model junction with N_A = N_D = 10²³ m⁻³; the barrier cannot go below zero</text>`;
+  /* plotted points */
+  const P = IVP, px = V => V >= 0 ? P.x0 + V / P.Vf * P.fx : P.x0 + V / P.Vr * P.rx, py = I => I >= 0 ? P.y0 - I / P.If * P.fy : P.y0 - I / P.Ir * P.ry;
+  $('ivPts').innerHTML = S.pts.map(p => `<circle cx="${px(p.V).toFixed(1)}" cy="${clamp(py(p.I), P.y0 - P.fy - 6, P.y0 + P.ry + 6).toFixed(1)}" r="3.2" fill="${p.m === 'Si' ? '#6a3fc2' : '#2f9e5b'}"/>`).join('');
+  const dy = py(r.I);
+  $('ivDot').setAttribute('cx', px(r.V).toFixed(1)); $('ivDot').setAttribute('cy', clamp(dy, P.y0 - P.fy - 6, P.y0 + P.ry + 6).toFixed(1));
+  $('ivOff').textContent = dy > P.y0 + P.ry ? `off the scale: ${amps(r.I)} — breakdown` : dy < P.y0 - P.fy ? `off the scale: ${amps(r.I)}` : '';
+  IVNOW = r;
+}
+let IVNOW = null;
+
+/* ============================================================================
+   Paint: rectifier
+   ============================================================================ */
+let RECT = null, RMEAS = null, rCursor = 0;
+function recompute(){
+  RECT = rectify({mode: S.mode, Vm: S.vm, C: CAPS[S.cap], RL: 1000, f: 50, T: 300, ms: 160});
+  RMEAS = measureOut(RECT);
+}
+function paintRect(){
+  if (!RECT) recompute();
+  const r = RECT, k = Math.min(r.t.length - 1, Math.round(rCursor / 1000 / r.dt)), full = S.mode === 'full';
+  const onA = r.dA[k] > 1e-4, onB = r.dB[k] > 1e-4;
+  /* circuit */
+  const hot = on => on ? '#e8890c' : '#4a555b';
+  let c = `<g font-size="11.5" fill="#1d2327">`;
+  const hump = n => Array.from({length: n}, () => 'q14 10 0 20').join(' ');
+  c += `<path d="M60 70 ${hump(full ? 8 : 4)}" fill="none" stroke="#1d2327" stroke-width="2"/>`;
+  c += `<path d="M40 70 V${full ? 230 : 150}M34 70 V${full ? 230 : 150}" stroke="#1d2327" stroke-width="1.4"/><text x="14" y="${full ? 262 : 180}">transformer</text>`;
+  const Dsym = (x, y, on, lab) => `<path d="M${x} ${y - 14} L${x + 26} ${y} L${x} ${y + 14} Z" fill="${on ? '#ffd36b' : '#fff'}" stroke="#1d2327" stroke-width="2"/><line x1="${x + 26}" y1="${y - 14}" x2="${x + 26}" y2="${y + 14}" stroke="#1d2327" stroke-width="2.6"/><text x="${x + 6}" y="${y - 20}">${lab}</text>`;
+  c += `<path d="M60 70 H160 M186 70 H330 V150" fill="none" stroke="${hot(onA)}" stroke-width="2"/>` + Dsym(160, 70, onA, full ? 'D₁' : 'D') + `<text x="66" y="62">A</text>`;
+  if (full) c += `<path d="M60 230 H160 M186 230 H330 V150" fill="none" stroke="${hot(onB)}" stroke-width="2"/>` + Dsym(160, 230, onB, 'D₂') + `<text x="66" y="250">B</text><text x="66" y="144" fill="#4a555b">centre tap</text>`;
+  c += `<path d="M60 150 H180 M240 150 H330" fill="none" stroke="#4a555b" stroke-width="2"/>` +
+       `<path d="M180 150 l5 -8 l10 16 l10 -16 l10 16 l10 -16 l10 16 l5 -8" fill="none" stroke="#1d2327" stroke-width="2"/><text x="210" y="134" text-anchor="middle">R_L 1 kΩ</text>`;
+  if (CAPS[S.cap]) c += `<path d="M150 150 V192 H205 M215 192 H290 V150" fill="none" stroke="#4a555b" stroke-width="2"/><line x1="205" y1="178" x2="205" y2="206" stroke="#1d2327" stroke-width="2.4"/><line x1="215" y1="178" x2="215" y2="206" stroke="#1d2327" stroke-width="2.4"/><text x="224" y="${full ? 214 : 222}">C ${Math.round(CAPS[S.cap] * 1e6)} µF</text>`;
+  c += `<circle cx="330" cy="150" r="4" fill="#1d2327"/><path d="M330 150 H380" stroke="#4a555b" stroke-width="2"/><circle cx="384" cy="150" r="4" fill="#fff" stroke="#1d2327" stroke-width="1.6"/><text x="392" y="154">output</text>`;
+  c += `<text x="30" y="296" fill="#4a555b">${full ? (onA ? 'D₁ conducts: A is positive' : onB ? 'D₂ conducts: B is positive' : 'neither diode conducts') : (onA ? 'D conducts: A is positive' : 'D is reverse-biased: no current')}</text></g>`;
+  $('circR').innerHTML = c;
+  /* waveforms */
+  const X = (P, t) => P.x + t * 1000 / 160 * P.w, Yi = v => RW.y + RW.h / 2 - v / (S.vm * 1.15) * RW.h / 2, Yo = v => RO.y + RO.h - (v + 0.05 * S.vm) / (S.vm * 1.12) * RO.h;
+  let a = '', bb = '', o = '';
+  for (let i = 0; i < r.t.length; i += 10) { a += (i ? 'L' : 'M') + X(RW, r.t[i]).toFixed(1) + ' ' + Yi(r.vin[i]).toFixed(1); if (full) bb += (i ? 'L' : 'M') + X(RW, r.t[i]).toFixed(1) + ' ' + Yi(-r.vin[i]).toFixed(1); o += (i ? 'L' : 'M') + X(RO, r.t[i]).toFixed(1) + ' ' + Yo(r.vout[i]).toFixed(1); }
+  const m = RMEAS;
+  $('rIn').innerHTML = `<line x1="${RW.x}" y1="${Yi(0)}" x2="${RW.x + RW.w}" y2="${Yi(0)}" stroke="#9aa3a6"/><path d="${a}" fill="none" stroke="#6a3fc2" stroke-width="2"/>` + (full ? `<path d="${bb}" fill="none" stroke="#2f9e5b" stroke-width="1.6" stroke-dasharray="5 3"/>` : '') +
+    `<text x="${RW.x + 6}" y="${RW.y + 14}" font-size="11" fill="#6a3fc2" class="m">v_A, peak ${S.vm.toFixed(1)} V, 50 Hz</text>` + (full ? `<text x="${RW.x + 200}" y="${RW.y + 14}" font-size="11" fill="#2f9e5b" class="m">v_B = −v_A</text>` : '');
+  $('rOut').innerHTML = `<line x1="${RO.x}" y1="${Yo(0)}" x2="${RO.x + RO.w}" y2="${Yo(0)}" stroke="#9aa3a6"/>` +
+    `<line x1="${RO.x}" y1="${Yo(m.Vdc)}" x2="${RO.x + RO.w}" y2="${Yo(m.Vdc)}" stroke="#e8890c" stroke-dasharray="6 4"/>` +
+    `<path d="${o}" fill="none" stroke="#1d2327" stroke-width="2.2"/>` +
+    `<path d="M${X(RO, 0.156)} ${Yo(m.Vmax)}h14M${X(RO, 0.156)} ${Yo(m.Vmin)}h14M${X(RO, 0.156) + 7} ${Yo(m.Vmax)}V${Yo(m.Vmin)}" stroke="#c2413b" stroke-width="1.4"/>`;
+  $('rMeas').textContent = `${m.freq.toFixed(0)} pulses/s   average ${m.Vdc.toFixed(2)} V (dashed)   ripple ${m.ripple.toFixed(2)} V = ${(100 * m.ripple / m.Vmax).toFixed(1)} % of peak`;
+  const cx = t => (P => P.x + t / 160 * P.w);
+  $('rCur1').setAttribute('x1', cx(rCursor)(RW)); $('rCur1').setAttribute('x2', cx(rCursor)(RW));
+  $('rCur2').setAttribute('x1', cx(rCursor)(RO)); $('rCur2').setAttribute('x2', cx(rCursor)(RO));
+}
+
+/* ============================================================================
+   Side cards
+   ============================================================================ */
+function paintNums(){
+  if (!S.locked) { $('nums').innerHTML = '<p style="font-size:13px;color:var(--ink-3);margin:0">The measurements appear once you have made a prediction.</p>'; return; }
+  let t = '';
+  if (S.tab === 'dope') {
+    const c = CAR(), m = MATS[S.mat];
+    t = `<span>Intrinsic nᵢ at ${S.T} K</span><b>${sci(c.ni, 2)} m⁻³</b><span>Dopant atoms (${S.dop === 'none' ? 'none' : S.dop})</span><b>${sci(dopN(), 2)} m⁻³</b><i class="sep"></i>` +
+        `<span>Electrons nₑ</span><b>${sci(c.n, 3)} m⁻³</b><span>Holes nₕ</span><b>${sci(c.p, 3)} m⁻³</b>` +
+        `<span>nₑ × nₕ</span><b>${sci(c.n * c.p, 3)}</b><span>nᵢ²</span><b>${sci(c.ni * c.ni, 3)}</b><i class="sep"></i>` +
+        `<span>Majority carriers</span><b>${S.dop === 'none' ? '—' : c.n > c.p ? 'electrons' : 'holes'}</b><span>Resistivity</span><b>${sci(resistivity(S.mat, c), 2)} Ω m</b>`;
+  } else if (S.tab === 'junc') {
+    const st = junctionStats(JS), NA = Math.pow(10, S.na), ND = Math.pow(10, S.nd), d = depletion('Si', S.T, NA, ND, S.bias);
+    t = `<span>Model time</span><b>${JS.t.toFixed(0)}</b><span>Diffusion / drift crossings (last 20)</span><b>${st.diff} / ${st.drift}</b><span>Charge left on the p side</span><b>${st.Qp.toFixed(0)} e</b><span>Barrier (time-averaged)</span><b>${st.barrier.toFixed(2)} kT/e</b><i class="sep"></i>` +
+        `<span>Real Si: built-in V₀</span><b>${d.V0.toFixed(3)} V</b><span>Barrier V₀ − V</span><b>${d.Vb.toFixed(3)} V</b><span>Depletion width W</span><b>${(d.W * 1e6).toFixed(3)} µm</b>` +
+        `<span>… of which on the p side</span><b>${(d.xp * 1e6).toFixed(3)} µm</b><span>Peak field</span><b>${sci(d.Emax, 2)} V/m</b>`;
+  } else if (S.tab === 'iv') {
+    const r = IVNOW || solveCircuit(S.dmat, S.T, supplyE());
+    t = `<span>Supply E</span><b>${supplyE().toFixed(2)} V</b><span>Across the diode V</span><b>${r.V.toFixed(4)} V</b><span>Current I</span><b>${r.I >= 0 ? '' : '−'}${amps(Math.abs(r.I))}</b>` +
+        `<span>Points plotted</span><b>${S.pts.length}</b><i class="sep"></i><span>Current reaches 10 mA at</span><b>${diodeV(S.dmat, S.T, 0.01).toFixed(3)} V</b>` +
+        `<span>r between 10 and 20 mA</span><b>${dynR(S.dmat, S.T, 0.01, 0.02).toFixed(2)} Ω</b>`;
+  } else {
+    const m = RMEAS || measureOut(RECT);
+    t = `<span>Input frequency</span><b>50 Hz</b><span>Output peaks per second</span><b>${m.freq.toFixed(0)} Hz</b><span>Peak output</span><b>${m.Vmax.toFixed(3)} V</b>` +
+        `<span>Average (dc) output</span><b>${m.Vdc.toFixed(3)} V</b><span>Ripple, peak to trough</span><b>${m.ripple.toFixed(3)} V</b><span>Time constant R_L C</span><b>${CAPS[S.cap] ? (1000 * CAPS[S.cap] * 1000).toFixed(0) + ' ms' : '—'}</b>`;
+  }
+  $('nums').innerHTML = `<div class="nums">${t}</div>`;
+}
+function paintWhy(){
+  if (!S.locked) { $('whyCard').hidden = true; return; }
+  $('whyCard').hidden = false;
+  let t = '';
+  if (S.tab === 'dope') {
+    const c = CAR(), N = dopN();
+    t = S.dop === 'none' ? `<p>Pure ${MATS[S.mat].name.toLowerCase()}: every electron that heat frees leaves a hole, so nₑ = nₕ = nᵢ = <span class="mono">${sci(c.ni, 2)}</span> m⁻³.</p>`
+      : `<p>${sci(N, 2)} ${S.dop === 'As' ? 'arsenic atoms each give an electron' : 'boron atoms each take one, leaving a hole'}. The ${c.n > c.p ? 'holes' : 'electrons'} don’t just stay at nᵢ: they recombine with the crowd until nₑnₕ = nᵢ², falling to <span class="mono">${sci(Math.min(c.n, c.p), 2)}</span> m⁻³.</p>`;
+    if (S.dop !== 'none') t += c.ni > N / 3 ? `<p>At ${S.T} K heat makes <span class="mono">${sci(c.ni, 2)}</span> pairs per m³ — as many as the dopant supplies. The doping has stopped mattering.</p>` : `<p>Heat makes only <span class="mono">${sci(c.ni, 2)}</span> pairs per m³ here, so the dopant decides almost everything. Raise the temperature and watch nᵢ catch up.</p>`;
+  } else if (S.tab === 'junc') {
+    const st = junctionStats(JS), d = depletion('Si', S.T, Math.pow(10, S.na), Math.pow(10, S.nd), S.bias);
+    t = JS.t === 0 ? `<p>At the start both halves are neutral: every hole sits by its acceptor, every electron by its donor.</p>` :
+      `<p>Holes wander from where they are crowded (p) to where they are few (n): <b>diffusion</b>. Each one leaves an acceptor ion uncovered; the p side is now <span class="mono">${st.Qp.toFixed(0)} e</span>. That charge makes a field pointing from n to p which sweeps carriers back: <b>drift</b>. ${JDONE ? 'The two have come to balance.' : 'Drift is catching up.'}</p>`;
+    t += `<p>In real silicon with these dopings the barrier is <span class="mono">${d.V0.toFixed(2)} V</span> and the depleted layer <span class="mono">${(d.W * 1e6).toFixed(2)} µm</span> thick. ${S.bias > 0.05 ? 'Forward bias lowers the barrier to ' + d.Vb.toFixed(2) + ' V and thins the layer.' : S.bias < -0.05 ? 'Reverse bias raises the barrier to ' + d.Vb.toFixed(2) + ' V and widens the layer.' : 'Try a bias.'}</p>`;
+  } else if (S.tab === 'iv') {
+    const r = IVNOW || solveCircuit(S.dmat, S.T, supplyE());
+    t = r.V >= 0 ? `<p>Forward: the supply lowers the barrier. Below about <span class="mono">${diodeV(S.dmat, S.T, 1e-3).toFixed(2)} V</span> only a trickle crosses; each extra ${(KB * S.T * Math.log(10) * 1000).toFixed(0)} mV multiplies the current by ten.</p>`
+      : r.V > -DIODES[S.dmat].Vbr ? `<p>Reverse: only the few minority carriers are swept across, so the current is tiny (<span class="mono">${amps(Math.abs(r.I))}</span>) and hardly changes with V.</p>` : `<p>Past about ${DIODES[S.dmat].Vbr} V the reverse current runs away: breakdown. Only the 100 Ω resistor limits it now.</p>`;
+  } else {
+    const m = RMEAS;
+    t = `<p>${S.mode === 'full' ? 'Two diodes take turns: each conducts on the half-cycle when its end of the secondary is positive, so every half-cycle becomes a pulse' : 'The diode conducts only while A is positive: every other half-cycle is simply missing'} — <span class="mono">${m.freq.toFixed(0)}</span> pulses a second from 50 Hz.</p>` +
+        (CAPS[S.cap] ? `<p>The capacitor charges to the peak and then feeds the load while the diode is off; R_L C = ${(CAPS[S.cap] * 1e6).toFixed(0)} ms compared with ${S.mode === 'full' ? 10 : 20} ms between pulses decides how far it sags: ripple <span class="mono">${m.ripple.toFixed(2)} V</span>.</p>` : `<p>Add a capacitor to smooth the pulses into dc.</p>`);
+  }
+  $('why').innerHTML = t;
+}
+
+const TABS = {dope: 'Dope', junc: 'Junc', iv: 'IV', rect: 'Rect'};
+function paint(){
+  for (const [t, c] of Object.entries(TABS)) {
+    $('v' + c).toggleAttribute('hidden', S.tab !== t);
+    $('ctl' + c).hidden = S.tab !== t;
+    $('tab' + c).setAttribute('aria-pressed', S.tab === t);
+  }
+  svg.setAttribute('aria-label', {dope: 'A silicon lattice with a dopant atom, its energy bands, and the electron and hole concentrations on a log scale',
+    junc: 'Carriers diffusing across a p–n junction, their averaged densities and potential, and a real silicon junction’s depletion region',
+    iv: 'A diode circuit with its measured V–I characteristic', rect: 'A rectifier circuit with its input and output voltage against time'}[S.tab]);
+  if (S.tab === 'dope') paintDope(); else if (S.tab === 'junc') paintJunc(); else if (S.tab === 'iv') paintIV(); else paintRect();
+  paintNums(); paintWhy();
+}
+
+/* ============================================================================
+   Findings
+   ============================================================================ */
+let POE = null, JDONE = false, EXPLAINED = false;
+function check(){
+  if (!S.locked) return;
+  if (S.tab === 'dope') {
+    const c = CAR(), N = dopN();
+    if (S.dop !== 'none' && S.mat === 'Si' && Math.abs(S.T - 300) <= 10 && N >= 1000 * c.ni && Math.min(c.n, c.p) < c.ni / 1000) discover('minority');
+    if (S.dop !== 'none' && N >= 1e20 && c.ni >= N) discover('hot');
+  }
+  if (S.tab === 'junc') {
+    const NA = Math.pow(10, S.na), ND = Math.pow(10, S.nd);
+    const W = depletion('Si', S.T, NA, ND, S.bias).W, W0 = depletion('Si', S.T, NA, ND, 0).W;
+    if (S.bias >= 0.3 && W < 0.75 * W0) S.seenFwd = true;
+    if (S.bias <= -3 && W > 2 * W0) S.seenRev = true;
+    if (S.seenFwd && S.seenRev) discover('bias');
+  }
+  if (S.tab === 'iv') {
+    const f = S.pts.filter(p => p.I >= 0 && p.m === S.dmat), lo = f.filter(p => p.I < 2e-4), hi = f.filter(p => p.I >= 0.01);
+    if (lo.some(a => hi.some(b => b.V - a.V < 0.3 && b.V > a.V))) discover('cutin');
+    if (S.pts.some(p => p.I < -1e-3)) discover('breakdown');
+  }
+  if (S.tab === 'rect' && RMEAS) {
+    if (S.mode === 'full' && Math.round(RMEAS.freq) === 100) discover('fullwave');
+    if (CAPS[S.cap] > 0 && RMEAS.ripple / RMEAS.Vmax < 0.1) discover('smooth');
+  }
+}
+function checkJunction(){
+  if (!S.locked || JDONE) return;
+  const st = junctionStats(JS, 20);
+  if (JS.t >= 40 && st.Qp <= -8 && st.diff + st.drift >= 2 && Math.abs(st.diff - st.drift) <= Math.max(3, 0.5 * (st.diff + st.drift))) {
+    JDONE = true; discover('formed');
+    const d = depletion('Si', 300, 1e23, 1e23, 0);
+    if (!EXPLAINED && POE) {
+      EXPLAINED = true;
+      POE.explain(`In the model, holes and electrons diffused across at first (the p side is left with <b>${st.Qp.toFixed(0)} e</b> of uncovered acceptor ions), and that charge built a field. ` +
+        `By t = ${JS.t.toFixed(0)} the crossings balance: <b>${st.diff}</b> by diffusion and <b>${st.drift}</b> by drift in the last 20 time units, across a barrier of about <b>${st.barrier.toFixed(1)} kT/e</b>. No net current flows, yet nothing has stopped moving. ` +
+        `In real silicon with 10²³ dopant atoms per m³ on each side the same balance leaves a barrier of <b>${d.V0.toFixed(2)} V</b> across a layer <b>${(d.W * 1e6).toFixed(2)} µm</b> thick.`);
+    }
+  }
+}
+
+/* ============================================================================
+   Controls
+   ============================================================================ */
+build();
+function setTab(t){ S.tab = t; sound('tick'); if (t === 'rect') recompute(); paint(); check(); track('tab', {tab: t}); }
+for (const [t, c] of Object.entries(TABS)) $('tab' + c).addEventListener('click', () => setTab(t));
+function syncOuts(){
+  $('ppmOut').textContent = ppmTxt(S.lppm); $('tempOut').textContent = S.T + ' K'; $('temp2Out').textContent = S.T + ' K';
+  $('naOut').textContent = sci(Math.pow(10, S.na), 1).replace(' × ', '×'); $('ndOut').textContent = sci(Math.pow(10, S.nd), 1).replace(' × ', '×');
+  $('biasOut').textContent = (S.bias >= 0 ? '+' : '−') + Math.abs(S.bias).toFixed(2) + ' V';
+  $('supplyOut').textContent = (S.rev ? '−' : '') + S.supply.toFixed(2) + ' V';
+  $('vmOut').textContent = S.vm.toFixed(1) + ' V'; $('capOut').textContent = CAPS[S.cap] ? Math.round(CAPS[S.cap] * 1e6) + ' µF' : 'none';
+  $('mat').value = S.mat; $('dop').value = S.dop; $('ppm').value = S.lppm; $('temp').value = S.T; $('temp2').value = clamp(S.T, 250, 400);
+  $('na').value = S.na; $('nd').value = S.nd; $('bias').value = S.bias; $('vm').value = S.vm; $('cap').value = S.cap; $('dmat').value = S.dmat;
+  $('btnPol').textContent = S.rev ? 'Battery: reverse ⇄' : 'Battery: forward ⇄'; $('btnPol').setAttribute('aria-pressed', S.rev);
+  $('supply').max = S.rev ? 60 : 3; $('supply').step = S.rev ? 0.5 : 0.02; $('supply').value = S.supply;
+  $('mHalf').setAttribute('aria-pressed', S.mode === 'half'); $('mFull').setAttribute('aria-pressed', S.mode === 'full');
+}
+const on = (id, ev, fn) => $(id).addEventListener(ev, fn);
+on('mat', 'change', e => { S.mat = e.target.value; syncOuts(); paint(); check(); track('crystal', {mat: S.mat}); });
+on('dop', 'change', e => { S.dop = e.target.value; syncOuts(); paint(); check(); track('dopant', {dop: S.dop}); });
+on('ppm', 'input', e => { S.lppm = Math.round(+e.target.value * 10) / 10; syncOuts(); paint(); check(); });
+on('temp', 'input', e => { S.T = +e.target.value; syncOuts(); paint(); check(); });
+on('temp2', 'input', e => { S.T = +e.target.value; syncOuts(); plotPoint(); paint(); check(); });
+on('na', 'input', e => { S.na = +e.target.value; syncOuts(); paint(); check(); });
+on('nd', 'input', e => { S.nd = +e.target.value; syncOuts(); paint(); check(); });
+on('bias', 'input', e => { S.bias = Math.round(+e.target.value * 100) / 100; syncOuts(); paint(); check(); });
+on('btnForm', 'click', () => {
+  JS = makeJunction(5 + Math.floor(Math.random() * 1000)); JDONE = false; S.running = true;
+  $('btnPause').textContent = '❚❚ Pause'; sound('whoosh'); track('form'); paint();
+});
+on('btnPause', 'click', () => { if (JS.t === 0) return; S.running = !S.running; $('btnPause').textContent = S.running ? '❚❚ Pause' : '▶ Run'; sound('tick'); paint(); });
+function plotPoint(){
+  const r = solveCircuit(S.dmat, S.T, supplyE());
+  S.pts.push({V: r.V, I: r.I, m: S.dmat}); if (S.pts.length > 400) S.pts.shift();
+}
+on('supply', 'input', e => { S.supply = +e.target.value; syncOuts(); plotPoint(); paint(); check(); });
+on('supply', 'change', () => track('diode', {E: supplyE(), mat: S.dmat}));
+on('dmat', 'change', e => { S.dmat = e.target.value; plotPoint(); paint(); check(); });
+on('btnPol', 'click', () => { S.rev = !S.rev; S.supply = 0; syncOuts(); sound('snap'); paint(); });
+on('btnClearIV', 'click', () => { S.pts = []; paint(); });
+on('mHalf', 'click', () => { S.mode = 'half'; syncOuts(); recompute(); sound('tick'); paint(); check(); });
+on('mFull', 'click', () => { S.mode = 'full'; syncOuts(); recompute(); sound('tick'); paint(); check(); track('rectifier', {mode: 'full'}); });
+on('vm', 'input', e => { S.vm = +e.target.value; syncOuts(); recompute(); paint(); check(); });
+on('cap', 'input', e => { S.cap = +e.target.value; syncOuts(); recompute(); paint(); check(); });
+on('cap', 'change', () => track('rectifier', {C: CAPS[S.cap], ripple: RMEAS && RMEAS.ripple}));
+
+const CTL_IDS = ['mat', 'dop', 'ppm', 'temp', 'btnForm', 'btnPause', 'na', 'nd', 'bias', 'dmat', 'btnPol', 'supply', 'temp2', 'btnClearIV', 'mHalf', 'mFull', 'vm', 'cap'];
+function lockControls(lock){ for (const id of CTL_IDS) $(id).disabled = lock; $('gate').hidden = !lock; }
+
+/* ============================================================================
+   Start
+   ============================================================================ */
+findings($('finds'), [
+  {id: 'minority',  icon: '⚖', label: 'Doping starves the minority: nₑnₕ = nᵢ²', hint: 'Dope silicon at room temperature'},
+  {id: 'hot',       icon: '🔥', label: 'Heat undoes doping', hint: 'Warm a doped crystal until nᵢ catches up'},
+  {id: 'formed',    icon: '⇄', label: 'Diffusion balanced by drift', hint: 'Form the junction and let it settle'},
+  {id: 'bias',      icon: '↔', label: 'Bias moves the barrier', hint: 'Try forward and reverse bias on the real junction'},
+  {id: 'cutin',     icon: '⤴', label: 'A trickle, then a flood', hint: 'Plot the forward curve through its knee'},
+  {id: 'breakdown', icon: '⚡', label: 'Reverse breakdown', hint: 'Turn the battery round and keep going'},
+  {id: 'fullwave',  icon: '∿', label: 'Full-wave: 100 pulses from 50 Hz', hint: 'Use both halves of the cycle'},
+  {id: 'smooth',    icon: '▭', label: 'A capacitor smooths it to dc', hint: 'Filter the output until the ripple is under 10 %'},
+], () => toast('All eight. From one doped crystal to a power supply.', 4800));
+
+POE = predict($('poe'), {
+  id: 'junction',
+  q: 'Half of a p-type silicon wafer is made n-type. No battery is connected. What happens at the junction?',
+  options: [
+    {id: 'mix',    text: 'Electrons and holes keep crossing until both halves are the same.'},
+    {id: 'none',   text: 'Nothing: without a battery nothing moves.'},
+    {id: 'field',  text: 'Carriers cross briefly, leaving charged ions whose field then balances further crossing.', right: true},
+    {id: 'steady', text: 'A small current flows round for ever.'},
+  ],
+  onLock(){ S.locked = true; lockControls(false); $('veilJ').remove(); paint(); check(); },
+});
+lockControls(!POE.locked);
+if (!Play.FF('predict')) S.locked = true;
+syncOuts(); paint();
+
+/* ---- the loop: the junction model runs; the rectifier's time cursor sweeps ---- */
+const RM = reduced();
+let sampleK = 0, rAcc = 0, numAcc = 0;
+loop(dt => {
+  if (S.tab === 'junc' && S.running) {
+    const steps = RM ? 150 : 12;
+    if (RM) { rAcc += dt; if (rAcc < 0.25) return; rAcc = 0; }
+    for (let i = 0; i < steps; i++) { stepJunction(JS); if (++sampleK % 10 === 0) sampleJunction(JS); }
+    fieldJ(JS); checkJunction(); paintJunc();
+    numAcc += RM ? 1 : dt; if (numAcc > 0.3) { numAcc = 0; paintNums(); paintWhy(); }
+  } else if (S.tab === 'rect' && S.locked && !RM) { rCursor = (rCursor + dt * 16) % 160; paintRect(); }
+  else if (S.tab === 'dope' && S.dop === 'As' && !RM) { latAng += dt * 1.8; paintDope(); }
+});
+window.PG_STATE = () => {
+  const c = CAR(), st = junctionStats(JS);
+  return {tab: S.tab, locked: S.locked, mat: S.mat, dop: S.dop, lppm: S.lppm, T: S.T, carriers: c,
+    junction: {t: JS.t, diff: st.diff, drift: st.drift, Qp: st.Qp, barrier: st.barrier, done: JDONE, running: S.running},
+    na: S.na, nd: S.nd, bias: S.bias, dmat: S.dmat, rev: S.rev, supply: S.supply, pts: S.pts.length, now: IVNOW,
+    mode: S.mode, vm: S.vm, cap: CAPS[S.cap], rect: RMEAS};
+};
+window.PG_MODEL = {ni, carriers, resistivity, fermi, makeJunction, stepJunction, sampleJunction, junctionStats, runJunction, depletion,
+  diodeAt, junctionI, solveCircuit, diodeV, dynR, rectify, measureOut, MATS, DIODES, CAPS, KB};
+</script>
+</body>
+</html>

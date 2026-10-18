@@ -1,0 +1,540 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lines And Angles</title>
+<meta name="description" content="Class 6–8: turn two crossing lines and measure the four angles; then cut two lines with a transversal and find which angles must be equal — and when.">
+<link rel="icon" href="../../favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="../../play.css">
+<style>
+/* Only what this page needs beyond play.css. */
+html{scrollbar-gutter:stable}
+.tabs{display:flex; gap:8px; padding:10px 12px; background:var(--sunk); border-bottom:1px solid var(--hair)}
+.tab{flex:1; min-height:44px; border-radius:var(--radius-sm); border:2px solid transparent; background:var(--card); cursor:pointer;
+  font-family:var(--font-head); font-size:16px; font-weight:600; color:var(--ink-2)}
+.tab[aria-selected="true"]{border-color:var(--accent); color:var(--ink); box-shadow:0 2px 0 var(--accent)}
+.hnd{cursor:grab} .hnd.dragging{cursor:grabbing}
+.gate{position:absolute; left:0; right:0; top:66px; display:grid; place-items:center; pointer-events:none}
+.gate span{background:rgba(15,26,43,.84); color:#fff; padding:10px 16px; border-radius:99px; font-weight:600; font-size:14px}
+.why p{font-size:14px; margin-bottom:.5em}
+.why b{color:var(--ink)}
+.chips{display:flex; flex-wrap:wrap; gap:6px}
+.chip{padding:7px 11px; border-radius:99px; border:1.5px solid var(--hair-2); background:var(--card); cursor:pointer; font-size:13px; font-weight:600; color:var(--ink-2)}
+.chip[aria-pressed="true"]{background:var(--accent); border-color:var(--accent); color:#fff}
+.atab{display:grid; grid-template-columns:repeat(4,1fr); gap:6px; margin-top:10px}
+.atab div{border-radius:10px; background:var(--sunk); padding:6px 8px; font-size:13px; color:var(--ink-2); border:2px solid transparent}
+.atab div b{display:block; font-family:var(--font-mono); font-size:17px; color:var(--ink)}
+.atab div.hl{border-color:#e07b00; background:var(--warm-soft)}
+.four{display:grid; grid-template-columns:repeat(4,1fr); gap:6px}
+.four div{border-radius:10px; background:var(--sunk); padding:6px 8px; font-size:13px; color:var(--ink-2)}
+.four div b{display:block; font-family:var(--font-mono); font-size:18px; color:var(--ink)}
+.sumline{font-family:var(--font-mono); font-size:14px; margin-top:8px; color:var(--ink-2)}
+.note{font-size:12.5px; color:var(--ink-3); margin:6px 0 0}
+@media (max-width:1240px) and (min-width:981px){ .pg-main.wide-side{grid-template-columns:minmax(0,1fr) 330px} }
+</style>
+</head>
+<body>
+<header class="pg-top"></header>
+
+<div class="pg-intro">
+  <h1>Lines, angles and symmetry</h1>
+  <p>Cross two lines and measure the four angles they make. Then cut two lines with a transversal and find which of the eight angles must be equal — and what it takes for them to be equal.</p>
+</div>
+
+<main class="pg-main wide-side">
+  <section class="pg-stage" id="stageWrap">
+    <div class="tabs" role="tablist">
+      <button class="tab" id="tabX" role="tab" aria-selected="true">✕ Two crossing lines</button>
+      <button class="tab" id="tabT" role="tab" aria-selected="false">⫽ A transversal</button>
+    </div>
+    <svg id="xStage" viewBox="0 0 1000 560" role="img" aria-label="Two lines l and m crossing at a point O, with a protractor round O. Drag the end of any arm to turn its line or change its length."></svg>
+    <svg id="tStage" viewBox="0 0 1000 600" role="img" aria-label="Two lines l and m cut by a transversal t, making eight angles, and a graph of angle 1 and angle 5 against the direction of t." hidden></svg>
+    <div class="gate" id="gate"><span>Make your prediction first →</span></div>
+  </section>
+
+  <aside class="pg-side">
+    <div id="poe"></div>
+
+    <div class="card" id="cardX">
+      <div class="kicker">The four angles at O</div>
+      <div class="four" id="fourX"></div>
+      <div class="sumline" id="sumX"></div>
+      <p class="note">Drag the round end of any arm. Drag along the arm to make it longer or shorter.</p>
+    </div>
+
+    <div class="card" id="cardT" hidden>
+      <div class="kicker">Angle pairs</div>
+      <div class="chips" id="chips">
+        <button class="chip" data-k="corr" aria-pressed="true">Corresponding</button>
+        <button class="chip" data-k="alt" aria-pressed="false">Alternate</button>
+        <button class="chip" data-k="int" aria-pressed="false">Interior, same side</button>
+        <button class="chip" data-k="vo" aria-pressed="false">Vertically opposite</button>
+      </div>
+      <div class="atab" id="atab"></div>
+      <p class="note">Tap a chip again for the next pair. Drag the round handles to turn l, m and t.</p>
+    </div>
+
+    <div class="card why" id="whyCard" hidden>
+      <div class="kicker">What is happening</div>
+      <div id="why"></div>
+    </div>
+
+    <div class="card"><div class="kicker">To find</div><div id="finds"></div></div>
+  </aside>
+</main>
+
+<script src="../../play.js"></script>
+<script>
+'use strict';
+const {$, esc, clamp, fmt, drag, sound, say, track, toast, predict, findings, discover, found,
+       shareState, sharedState, mount, reduced} = Play;
+mount({thread: 'shapes', band: 'tinkerer'});
+
+/* MODEL:start ==================================================================
+   Lines are directions. A line's direction θ is an angle in degrees, measured the
+   mathematician's way (anticlockwise from the rightward direction), and each line has two
+   rays: θ and θ + 180. An angle between two rays is MEASURED, as a protractor would:
+       ∠(u, v) = arccos(u · v)          (0° … 180°)
+   Nothing on the page assumes the answers (that opposite angles match, or that
+   corresponding angles do). They come out of the measurements, or they do not.
+
+   CROSSING LINES (Ganita Prakash 6, Ch 2; 7, Ch 5.1): lines l and m through O. The four
+   angles are measured between neighbouring rays, going round:
+       a = ∠(l→, m→),  b = ∠(m→, l←),  c = ∠(l←, m←),  d = ∠(m←, l→)
+   The length of an arm plays no part in any of them.
+
+   A TRANSVERSAL (Ch 5.5–5.8): t crosses l at X and m at Y. At each crossing four angles,
+   numbered as in the book: 1 (above l, right of t), 2 (above l, left of t), 3 (below l,
+   left of t), 4 (below l, right of t), and 5–8 the same way round at m.
+   ============================================================================ */
+const D2R = Math.PI / 180, R2D = 180 / Math.PI;
+const dir = th => [Math.cos(th * D2R), Math.sin(th * D2R)];       // a unit vector (y up)
+function between(u, v){ return Math.acos(clamp(u[0] * v[0] + u[1] * v[1], -1, 1)) * R2D; }
+const neg = u => [-u[0], -u[1]];
+/* the four angles of two crossing lines */
+function crossing(al, be){
+  const l = dir(al), m = dir(be);
+  return {a: between(l, m), b: between(m, neg(l)), c: between(neg(l), neg(m)), d: between(neg(m), l)};
+}
+/* the eight angles a transversal makes with l and m. "Up" along t is the ray with
+   positive y; "right" along a line is the ray with positive x. */
+function eight(tl, tm, tt){
+  const up = dir(tt)[1] >= 0 ? dir(tt) : neg(dir(tt)), down = neg(up);
+  const at = th => { const r = dir(th)[0] >= 0 ? dir(th) : neg(dir(th)), lf = neg(r);
+    return [between(r, up), between(up, lf), between(lf, down), between(down, r)]; };
+  return [...at(tl), ...at(tm)];                     // [∠1 … ∠8]
+}
+/* The pairs, with the book's names. Indices are angle numbers. */
+const PAIRS = {
+  corr: [[1, 5], [2, 6], [3, 7], [4, 8]],
+  alt:  [[3, 5], [4, 6]],
+  int:  [[4, 5], [3, 6]],
+  vo:   [[1, 3], [2, 4], [5, 7], [6, 8]],
+};
+/* Where two lines would meet, if they were drawn long enough: a point, or null if parallel.
+   p, q are points on the lines (screen coordinates, y down); th their directions. */
+function meet(p, thp, q, thq){
+  const u = [Math.cos(thp * D2R), -Math.sin(thp * D2R)], v = [Math.cos(thq * D2R), -Math.sin(thq * D2R)];
+  const den = u[0] * v[1] - u[1] * v[0];
+  if (Math.abs(den) < 1e-9) return null;
+  const s = ((q[0] - p[0]) * v[1] - (q[1] - p[1]) * v[0]) / den;
+  return [p[0] + s * u[0], p[1] + s * u[1]];
+}
+const angType = x => x < 0.5 ? 'zero' : x < 89.5 ? 'acute' : x <= 90.5 ? 'right' : x < 179.5 ? 'obtuse' : 'straight';
+/* MODEL:end */
+
+/* ---- state: plain data --------------------------------------------------- */
+const S = {tab: 'x', locked: false,
+           al: 20, be: 140, len: {lp: 230, ln: 190, mp: 200, mn: 210}, bins: {},
+           tl: 0, tm: 12, tt: 64, pair: 'corr', pairIdx: 0, sweep: null};
+const shared = sharedState();
+if (shared) {
+  for (const k of ['al', 'be', 'tl', 'tm', 'tt']) if (isFinite(+shared[k])) S[k] = Math.round(+shared[k]);
+  if (shared.tab === 't') S.tab = 't';
+}
+shareState(() => ({tab: S.tab, al: S.al, be: S.be, tl: S.tl, tm: S.tm, tt: S.tt}));
+
+const r1 = n => Math.round(n);
+const f1 = n => (+n).toFixed(1);
+const norm360 = x => ((x % 360) + 360) % 360;
+
+/* ============================================================================
+   Tab 1: two crossing lines. Built once, then patched.
+   ============================================================================ */
+const xs = $('xStage');
+const O = {x: 470, y: 285};
+const COL = {a: '#e07b00', b: '#3f7fd8', c: '#e07b00', d: '#3f7fd8'};
+const scrOf = (c, th, r) => ({x: c.x + r * Math.cos(th * D2R), y: c.y - r * Math.sin(th * D2R)});
+function buildX(){
+  let ticks = '';
+  for (let d = 0; d < 360; d += 5) { const p = scrOf(O, d, 128), q = scrOf(O, d, d % 30 ? (d % 10 ? 122 : 118) : 112);
+    ticks += `<line x1="${f1(p.x)}" y1="${f1(p.y)}" x2="${f1(q.x)}" y2="${f1(q.y)}"/>`;
+    if (d % 30 === 0) { const t = scrOf(O, d, 142); ticks += `<text x="${f1(t.x)}" y="${f1(t.y + 4)}" text-anchor="middle" font-size="11" fill="#8a9a8e" stroke="none" class="m">${d}</text>`; } }
+  xs.innerHTML = `
+  <rect width="1000" height="560" fill="#fbfcf8"/>
+  <g stroke="#eef2ea" stroke-width="1">${Array.from({length: 26}, (_, i) => `<line x1="${i * 40}" y1="0" x2="${i * 40}" y2="560"/>`).join('')}${Array.from({length: 15}, (_, i) => `<line x1="0" y1="${i * 40}" x2="1000" y2="${i * 40}"/>`).join('')}</g>
+  <circle cx="${O.x}" cy="${O.y}" r="128" fill="#fffdf0" stroke="#d8d2b0" stroke-width="1.5" opacity=".9"/>
+  <g stroke="#b9b08a" stroke-width="1.2">${ticks}</g>
+  <g id="xArcs"></g>
+  <g id="xLines" stroke-linecap="round"></g>
+  <g id="xLabels" font-weight="700"></g>
+  <circle cx="${O.x}" cy="${O.y}" r="6" fill="#1d2327"/>
+  <text x="${O.x - 22}" y="${O.y + 22}" font-size="15" font-weight="700" fill="#1d2327">O</text>
+  <g id="xHandles"></g>
+  <g transform="translate(740 96)">
+    <rect width="240" height="300" rx="14" fill="#fff" stroke="#dbe3d5"/>
+    <text x="16" y="28" font-size="12" font-weight="700" fill="#4a555b" letter-spacing=".08em">READING THE PROTRACTOR</text>
+    <text x="16" y="62" font-size="14" fill="#1f7a3f" font-weight="600">arm l points to</text><text id="rdL" x="224" y="62" text-anchor="end" font-size="17" fill="#1f7a3f" font-weight="700" class="m"></text>
+    <text x="16" y="92" font-size="14" fill="#5a3fb0" font-weight="600">arm m points to</text><text id="rdM" x="224" y="92" text-anchor="end" font-size="17" fill="#5a3fb0" font-weight="700" class="m"></text>
+    <line x1="16" y1="110" x2="224" y2="110" stroke="#e6ece2"/>
+    <text x="16" y="136" font-size="13" fill="#4a555b" font-weight="600">the turn from l to m</text>
+    <text id="rdA" x="16" y="164" font-size="17" fill="#e07b00" font-weight="700" class="m"></text>
+    <text id="rdAt" x="16" y="190" font-size="14" fill="#4a555b"></text>
+    <text x="16" y="212" font-size="13" fill="#4a555b" font-weight="600">on from m to l’s other arm</text>
+    <text id="rdB" x="16" y="236" font-size="17" fill="#3f7fd8" font-weight="700" class="m"></text>
+    <text id="rdBt" x="16" y="260" font-size="14" fill="#4a555b"></text>
+    <text id="rdP" x="16" y="286" font-size="14" fill="#1d2327" font-weight="700"></text>
+  </g>
+  <text x="24" y="36" font-size="13" font-weight="700" fill="#4a555b" letter-spacing=".08em">TWO LINES CROSSING AT O</text>
+  <text x="24" y="56" font-size="12.5" fill="#7c878c">l is green, m is purple. The protractor round O reads each line’s direction.</text>
+  `;
+  $('xHandles').innerHTML = ['lp', 'ln', 'mp', 'mn'].map(k => `<circle id="h-${k}" class="hnd" r="15" fill="${k[0] === 'l' ? '#2f9e5b' : '#7b5cd6'}" stroke="#fff" stroke-width="3" tabindex="0" role="slider"
+    aria-label="End of ${k[0] === 'l' ? 'line l' : 'line m'}. Drag to turn the line or change the arm's length. Arrow keys turn it by 1 degree."/>`).join('');
+}
+function paintX(){
+  const {al, be, len} = S, A = crossing(al, be);
+  const rays = {lp: al, ln: al + 180, mp: be, mn: be + 180};
+  let lines = '', labels = '', arcs = '';
+  for (const k of ['lp', 'ln', 'mp', 'mn']) {
+    const e = scrOf(O, rays[k], len[k]);
+    lines += `<line x1="${O.x}" y1="${O.y}" x2="${f1(e.x)}" y2="${f1(e.y)}" stroke="${k[0] === 'l' ? '#2f9e5b' : '#7b5cd6'}" stroke-width="5"/>`;
+    const h = $('h-' + k); h.setAttribute('cx', f1(e.x)); h.setAttribute('cy', f1(e.y));
+    if (k === 'lp' || k === 'mp') { const t = scrOf(O, rays[k], len[k] + 26); labels += `<text x="${f1(t.x)}" y="${f1(t.y + 6)}" text-anchor="middle" font-size="19" fill="${k[0] === 'l' ? '#1f7a3f' : '#5a3fb0'}" font-style="italic" font-family="Newsreader, Georgia, serif">${k[0]}</text>`; }
+  }
+  /* each angle: from one ray round to the next (anticlockwise), with its measure */
+  const order = [['a', rays.lp, rays.mp], ['b', rays.mp, rays.ln], ['c', rays.ln, rays.mn], ['d', rays.mn, rays.lp + 360]];
+  for (const [nm, from, to0] of order) {
+    let to = to0; while (to - from > 360) to -= 360; while (to < from) to += 360;
+    const rr = nm === 'a' || nm === 'c' ? 56 : 70, s0 = scrOf(O, from, rr), s1 = scrOf(O, to, rr), large = to - from > 180 ? 1 : 0;
+    arcs += `<path d="M${O.x} ${O.y} L${f1(s0.x)} ${f1(s0.y)} A${rr} ${rr} 0 ${large} 0 ${f1(s1.x)} ${f1(s1.y)} Z" fill="${COL[nm]}" opacity=".16"/>
+      <path d="M${f1(s0.x)} ${f1(s0.y)} A${rr} ${rr} 0 ${large} 0 ${f1(s1.x)} ${f1(s1.y)}" fill="none" stroke="${COL[nm]}" stroke-width="3"/>`;
+    const mid = (from + to) / 2, lp = scrOf(O, mid, rr + 26);
+    labels += `<text x="${f1(lp.x)}" y="${f1(lp.y + 5)}" text-anchor="middle" font-size="15" fill="${COL[nm]}" stroke="#fbfcf8" stroke-width="4" paint-order="stroke">${nm}${S.locked ? ' = ' + r1(A[nm]) + '°' : ''}</text>`;
+  }
+  $('xLines').innerHTML = lines; $('xArcs').innerHTML = arcs; $('xLabels').innerHTML = labels;
+  /* the protractor panel: each arm's reading, and the turn between them */
+  const L = r1(norm360(al)), Mr = r1(norm360(be)), turnLM = r1(norm360(be - al));
+  const show = S.locked;
+  $('rdL').textContent = show ? L + '°' : '?'; $('rdM').textContent = show ? Mr + '°' : '?';
+  $('rdA').textContent = !show ? '' : turnLM <= 180 ? (Mr >= L ? `${Mr}° − ${L}° = ${turnLM}°` : `${Mr}° + 360° − ${L}° = ${turnLM}°`) : `the other way: ${360 - turnLM}°`;
+  $('rdAt').textContent = show ? `∠a = ${r1(A.a)}°, ${angType(A.a) === 'right' ? 'a right angle' : angType(A.a)}` : '';
+  $('rdB').textContent = show ? `${Mr}° → ${r1(norm360(al + 180))}°: ${r1(A.b)}°` : '';
+  $('rdBt').textContent = show ? `∠b = ${r1(A.b)}°, ${angType(A.b) === 'right' ? 'a right angle' : angType(A.b)}` : '';
+  $('rdP').textContent = show && Math.abs(A.a - 90) < 0.5 ? 'l ⟂ m: perpendicular' : '';
+  /* side card */
+  const cell = nm => `<div><span>∠${nm}</span><b>${S.locked ? r1(A[nm]) + '°' : '?'}</b></div>`;
+  $('fourX').innerHTML = cell('a') + cell('b') + cell('c') + cell('d');
+  $('sumX').innerHTML = S.locked ? `∠a + ∠b = ${r1(A.a)}° + ${r1(A.b)}° = ${r1(A.a + A.b)}°` : '';
+  if (S.tab === 'x') paintWhyX(A);
+}
+function paintWhyX(A){
+  if (!S.locked) return;
+  const perp = Math.abs(A.a - 90) < 0.5;
+  let t = `<p>The two lines cross at O and make four angles. <b>∠a = ${r1(A.a)}°</b> is ${angType(A.a) === 'right' ? 'a right angle' : 'an ' + angType(A.a) + ' angle'}, and <b>∠b = ${r1(A.b)}°</b> is ${angType(A.b) === 'right' ? 'a right angle' : 'an ' + angType(A.b) + ' angle'}.</p>`;
+  t += `<p>∠a and ∠b sit side by side along line l, so together they make a straight angle: ${r1(A.a)}° + ${r1(A.b)}° = <b>${r1(A.a + A.b)}°</b>. They are a <b>linear pair</b>.</p>`;
+  t += `<p>∠a and ∠c are <b>vertically opposite</b>: the protractor reads ${r1(A.a)}° and ${r1(A.c)}°. So are ∠b and ∠d: ${r1(A.b)}° and ${r1(A.d)}°.</p>`;
+  if (perp) t += `<p>All four angles are 90°: <b>l and m are perpendicular</b>.</p>`;
+  t += `<p>The arms are ${Object.values(S.len).map(v => r1(v)).join(', ')} px long. Their length never enters the measurement: only the turn between the arms does.</p>`;
+  $('why').innerHTML = t;
+}
+
+/* dragging an arm's end: its direction turns the whole line; its distance is that arm's length */
+let armDrag = null;
+function wireArm(k){
+  drag($('h-' + k), xs, {
+    start(p){ if (!S.locked) return false; armDrag = {k, th0: k[0] === 'l' ? S.al : S.be, len0: S.len[k], moved: false}; },
+    move(p){
+      const d = Math.hypot(p.x - O.x, p.y - O.y); if (d < 30) return;
+      let th = Math.atan2(-(p.y - O.y), p.x - O.x) * R2D;
+      if (k[1] === 'n') th += 180;
+      th = norm360(Math.round(th));
+      const cur = armDrag.th0;
+      /* a gentle stick: pulling nearly straight along the arm keeps its direction */
+      const dd = Math.abs(((th - cur) % 360 + 540) % 360 - 180);
+      if (dd <= 3) th = cur;
+      const other = k[0] === 'l' ? S.be : S.al;
+      const sep = Math.abs(((th - other) % 180 + 180) % 180);
+      if (sep < 5 || sep > 175) return;                 // the two lines may not lie on top of each other
+      if (k[0] === 'l') S.al = th; else S.be = th;
+      S.len[k] = clamp(d, 70, 250);
+      paintX();
+    },
+    end(){
+      const a = armDrag; armDrag = null; if (!a) return;
+      const now = k[0] === 'l' ? S.al : S.be, A = crossing(S.al, S.be);
+      if (now === a.th0 && Math.abs(S.len[k] - a.len0) >= 50) discover('longArms');
+      if (now !== a.th0) sound('tick');
+      checkX(A);
+      track('arm', {k, al: S.al, be: S.be, len: r1(S.len[k])});
+    },
+  });
+  $('h-' + k).addEventListener('keydown', e => {
+    const s = {ArrowLeft: 1, ArrowUp: 1, ArrowRight: -1, ArrowDown: -1}[e.key]; if (!s || !S.locked) return;
+    e.preventDefault();
+    if (k[0] === 'l') S.al = norm360(S.al + s); else S.be = norm360(S.be + s);
+    paintX(); checkX(crossing(S.al, S.be));
+  });
+}
+function checkX(A){
+  if (!S.locked) return;
+  S.bins[Math.round(Math.min(A.a, A.b) / 10)] = true;
+  if (Object.keys(S.bins).length >= 3 && Math.abs(A.a - A.c) < 1e-9 && Math.abs(A.b - A.d) < 1e-9) discover('vertOpp');
+  if (Math.abs(A.a - 90) < 0.5) discover('perp');
+}
+
+/* ============================================================================
+   Tab 2: a transversal. Built once, then patched.
+   ============================================================================ */
+const ts = $('tStage');
+const PL = {x: 430, y: 128}, PM = {x: 430, y: 300}, T0 = {x: 430, y: 214};
+const HL = 330, HT = 180;                       // how far along l/m and t the handles sit
+const GR = {x: 80, y: 438, w: 860, h: 120};     // the graph
+const TT_MIN = 20, TT_MAX = 160;
+const ACOL = ['#e07b00', '#3f7fd8'];
+function buildT(){
+  let ax = `<line x1="${GR.x}" y1="${GR.y + GR.h}" x2="${GR.x + GR.w}" y2="${GR.y + GR.h}" stroke="#9aa3a6"/><line x1="${GR.x}" y1="${GR.y}" x2="${GR.x}" y2="${GR.y + GR.h}" stroke="#9aa3a6"/>`;
+  for (let v = 0; v <= 180; v += 45) ax += `<line x1="${GR.x}" y1="${f1(gy(v))}" x2="${GR.x + GR.w}" y2="${f1(gy(v))}" stroke="#ece8dc"/><text x="${GR.x - 8}" y="${f1(gy(v) + 4)}" text-anchor="end" font-size="11" fill="#7c878c" class="m">${v}°</text>`;
+  for (let v = TT_MIN; v <= TT_MAX; v += 20) ax += `<text x="${f1(gx(v))}" y="${GR.y + GR.h + 16}" text-anchor="middle" font-size="11" fill="#7c878c" class="m">${v}°</text>`;
+  ts.innerHTML = `
+  <defs><clipPath id="clipD"><rect x="0" y="0" width="1000" height="392"/></clipPath></defs>
+  <rect width="1000" height="392" fill="#fbfcf8"/>
+  <g stroke="#eef2ea" stroke-width="1">${Array.from({length: 26}, (_, i) => `<line x1="${i * 40}" y1="0" x2="${i * 40}" y2="430"/>`).join('')}${Array.from({length: 10}, (_, i) => `<line x1="0" y1="${i * 40}" x2="1000" y2="${i * 40}"/>`).join('')}</g>
+  <g clip-path="url(#clipD)">
+    <g id="tArcs"></g>
+    <line id="lnL" stroke="#2f9e5b" stroke-width="5" stroke-linecap="round"/>
+    <line id="lnM" stroke="#7b5cd6" stroke-width="5" stroke-linecap="round"/>
+    <line id="lnT" stroke="#1d2327" stroke-width="4" stroke-linecap="round"/>
+    <g id="tLabels" font-weight="700"></g>
+    <g id="parMarks"></g>
+  </g>
+  <g pointer-events="none"><rect x="610" y="10" width="378" height="50" rx="10" fill="#fff" opacity=".92" stroke="#dbe3d5"/>
+    <text x="624" y="30" font-size="12.5" font-weight="700" fill="#4a555b" letter-spacing=".08em">A TRANSVERSAL t CUTS l AND m</text>
+    <text id="parTag" x="624" y="49" font-size="12" fill="#6b767b"></text></g>
+  <circle id="ptX" r="5" fill="#1d2327"/><circle id="ptY" r="5" fill="#1d2327"/>
+  <text id="labL" font-size="21" font-style="italic" font-family="Newsreader, Georgia, serif" fill="#1f7a3f">l</text>
+  <text id="labM" font-size="21" font-style="italic" font-family="Newsreader, Georgia, serif" fill="#5a3fb0">m</text>
+  <text id="labT" font-size="21" font-style="italic" font-family="Newsreader, Georgia, serif" fill="#1d2327">t</text>
+  <circle id="h-l" class="hnd" r="15" fill="#2f9e5b" stroke="#fff" stroke-width="3" tabindex="0" role="slider" aria-label="Turn line l. Arrow keys turn it by 1 degree."/>
+  <circle id="h-m" class="hnd" r="15" fill="#7b5cd6" stroke="#fff" stroke-width="3" tabindex="0" role="slider" aria-label="Turn line m. Arrow keys turn it by 1 degree."/>
+  <circle id="h-t" class="hnd" r="15" fill="#1d2327" stroke="#fff" stroke-width="3" tabindex="0" role="slider" aria-label="Turn the transversal t. Arrow keys turn it by 1 degree."/>
+
+  <!-- the graph -->
+  <rect x="0" y="392" width="1000" height="208" fill="#f6f7f2"/>
+  <line x1="0" y1="392" x2="1000" y2="392" stroke="#dbe3d5"/>
+  <text x="24" y="418" font-size="13" font-weight="700" fill="#4a555b" letter-spacing=".08em">∠1 AND ∠5 AS t TURNS</text>
+  <g font-size="12.5" font-weight="600">
+    <line x1="560" y1="414" x2="590" y2="414" stroke="${ACOL[0]}" stroke-width="3"/><text x="597" y="418" fill="#8a4d00">∠1, at l</text>
+    <line x1="700" y1="414" x2="730" y2="414" stroke="${ACOL[1]}" stroke-width="3" stroke-dasharray="7 5"/><text x="737" y="418" fill="#1f4f94">∠5, at m</text>
+  </g>
+  ${ax}
+  <text x="${GR.x + GR.w}" y="${GR.y + GR.h + 34}" text-anchor="end" font-size="11.5" fill="#7c878c">direction of t (measured from the rightward direction)</text>
+  <g id="trail"></g>
+  <path id="g1" fill="none" stroke="${ACOL[0]}" stroke-width="3"/>
+  <path id="g5" fill="none" stroke="${ACOL[1]}" stroke-width="3" stroke-dasharray="7 5"/>
+  <line id="gNow" y1="${GR.y}" y2="${GR.y + GR.h}" stroke="#1d2327" stroke-width="1.2"/>
+  <circle id="gd1" r="5.5" fill="${ACOL[0]}" stroke="#fff" stroke-width="2"/><circle id="gd5" r="5" fill="${ACOL[1]}" stroke="#fff" stroke-width="2"/>
+  <text id="gGap" font-size="12.5" font-weight="700" fill="#1d2327" class="m"></text>
+  <rect id="graphVeil" x="0" y="393" width="1000" height="207" fill="#f6f7f2" opacity=".94"/>
+  <text id="graphVeilT" x="500" y="500" text-anchor="middle" fill="#7c878c" font-size="15" font-weight="600">The graph appears once you have made a prediction.</text>
+  `;
+}
+function gx(v){ return GR.x + (v - TT_MIN) / (TT_MAX - TT_MIN) * GR.w; }
+function gy(v){ return GR.y + GR.h - v / 180 * GR.h; }
+const scrDir = th => [Math.cos(th * D2R), -Math.sin(th * D2R)];
+function paintT(){
+  const {tl, tm, tt} = S, A = eight(tl, tm, tt);
+  const X = meet([PL.x, PL.y], tl, [T0.x, T0.y], tt), Y = meet([PM.x, PM.y], tm, [T0.x, T0.y], tt);
+  const setLine = (id, p, th) => { const u = scrDir(th); const el = $(id);
+    el.setAttribute('x1', f1(p.x - u[0] * 1300)); el.setAttribute('y1', f1(p.y - u[1] * 1300)); el.setAttribute('x2', f1(p.x + u[0] * 1300)); el.setAttribute('y2', f1(p.y + u[1] * 1300)); };
+  setLine('lnL', PL, tl); setLine('lnM', PM, tm); setLine('lnT', T0, tt);
+  const hp = (id, p, th, r) => { const u = scrDir(th); $(id).setAttribute('cx', f1(p.x + u[0] * r)); $(id).setAttribute('cy', f1(p.y + u[1] * r)); };
+  hp('h-l', PL, tl, HL); hp('h-m', PM, tm, HL); hp('h-t', T0, tt, HT);
+  const lab = (id, p, th, r, dy = -12) => { const u = scrDir(th); $(id).setAttribute('x', f1(p.x + u[0] * r)); $(id).setAttribute('y', f1(p.y + u[1] * r + dy)); };
+  lab('labL', PL, tl, HL + 40, 7); lab('labM', PM, tm, HL + 40, 7); lab('labT', T0, tt, HT + 30, 7);
+  $('ptX').setAttribute('cx', f1(X[0])); $('ptX').setAttribute('cy', f1(X[1])); $('ptY').setAttribute('cx', f1(Y[0])); $('ptY').setAttribute('cy', f1(Y[1]));
+  /* the eight arcs: the chosen pair is filled, the others are faint */
+  const hl = new Set(PAIRS[S.pair][S.pairIdx % PAIRS[S.pair].length]);
+  const up = scrDir(tt)[1] <= 0 ? tt : tt + 180;                         // "up" along t on the screen
+  let arcs = '', labels = '';
+  const at = (P, th, base) => {
+    const right = scrDir(th)[0] >= 0 ? th : th + 180;
+    const spans = [[right, up], [up, right + 180], [right + 180, up + 180], [up + 180, right + 360]];
+    spans.forEach(([f, t0], i) => {
+      let t = t0; while (t - f > 360) t -= 360; while (t < f) t += 360;
+      const n = base + i + 1, on = hl.has(n), col = on ? ACOL[[...hl].indexOf(n)] : '#9aa3a6';
+      const rr = 30, s0 = scrOf({x: P[0], y: P[1]}, f, rr), s1 = scrOf({x: P[0], y: P[1]}, t, rr), large = t - f > 180 ? 1 : 0;
+      arcs += `<path d="M${f1(P[0])} ${f1(P[1])} L${f1(s0.x)} ${f1(s0.y)} A${rr} ${rr} 0 ${large} 0 ${f1(s1.x)} ${f1(s1.y)} Z" fill="${col}" opacity="${on ? .45 : .1}"/>`;
+      const m = scrOf({x: P[0], y: P[1]}, (f + t) / 2, 48);
+      labels += `<text x="${f1(m.x)}" y="${f1(m.y + 5)}" text-anchor="middle" font-size="${on ? 15 : 13}" fill="${on ? col : '#6b767b'}" stroke="#fbfcf8" stroke-width="4" paint-order="stroke">${S.locked ? r1(A[n - 1]) + '°' : ''}</text>` +
+        `<text x="${f1(scrOf({x: P[0], y: P[1]}, (f + t) / 2, 18).x)}" y="${f1(scrOf({x: P[0], y: P[1]}, (f + t) / 2, 18).y + 4)}" text-anchor="middle" font-size="11" fill="#1d2327" class="m">${n}</text>`;
+    });
+  };
+  at(X, tl, 0); at(Y, tm, 4);
+  $('tArcs').innerHTML = arcs; $('tLabels').innerHTML = labels;
+  /* parallel marks, only when the lines ARE parallel */
+  const par = tl === tm;
+  $('parMarks').innerHTML = par ? [PL, PM].map(P => { const c = {x: P.x + scrDir(tl)[0] * 170, y: P.y + scrDir(tl)[1] * 170};
+    return `<path d="M${f1(c.x - 8)} ${f1(c.y - 8)} L${f1(c.x + 2)} ${f1(c.y)} L${f1(c.x - 8)} ${f1(c.y + 8)}" transform="rotate(${-tl} ${f1(c.x)} ${f1(c.y)})" fill="none" stroke="#1d2327" stroke-width="2.5"/>`; }).join('') : '';
+  const mp = meet([PL.x, PL.y], tl, [PM.x, PM.y], tm);
+  $('parTag').textContent = !S.locked ? '' : par ? 'l ∥ m: the lines are parallel.' : `Not parallel: extended, l and m meet ${mp[0] < 0 ? 'off to the left' : mp[0] > 1000 ? 'off to the right' : 'on the page'}, at ${Math.abs(tm - tl)}°.`;
+  /* the graph: ∠1 and ∠5 for every direction of t, for THIS l and m */
+  let p1 = '', p5 = '';
+  for (let v = TT_MIN; v <= TT_MAX; v += 2) {
+    const e = eight(tl, tm, v);
+    p1 += (p1 ? 'L' : 'M') + f1(gx(v)) + ' ' + f1(gy(e[0]));
+    p5 += (p5 ? 'L' : 'M') + f1(gx(v)) + ' ' + f1(gy(e[4]));
+  }
+  $('g1').setAttribute('d', p1); $('g5').setAttribute('d', p5);
+  $('gNow').setAttribute('x1', f1(gx(tt))); $('gNow').setAttribute('x2', f1(gx(tt)));
+  $('gd1').setAttribute('cx', f1(gx(tt))); $('gd1').setAttribute('cy', f1(gy(A[0])));
+  $('gd5').setAttribute('cx', f1(gx(tt))); $('gd5').setAttribute('cy', f1(gy(A[4])));
+  $('gGap').setAttribute('x', f1(gx(tt) + (tt > 130 ? -10 : 10))); $('gGap').setAttribute('text-anchor', tt > 130 ? 'end' : 'start');
+  $('gGap').setAttribute('y', f1((gy(A[0]) + gy(A[4])) / 2 + 4));
+  $('gGap').textContent = S.locked ? (par ? 'equal' : `gap ${r1(Math.abs(A[0] - A[4]))}°`) : '';
+  /* the table */
+  $('atab').innerHTML = A.map((v, i) => `<div class="${hl.has(i + 1) ? 'hl' : ''}"><span>∠${i + 1}</span><b>${S.locked ? r1(v) + '°' : '?'}</b></div>`).join('');
+  if (S.tab === 't') paintWhyT(A, par, mp);
+}
+const PAIRNAME = {corr: 'corresponding', alt: 'alternate', int: 'interior angles on the same side', vo: 'vertically opposite'};
+function paintWhyT(A, par, mp){
+  if (!S.locked) return;
+  const pr = PAIRS[S.pair][S.pairIdx % PAIRS[S.pair].length], x = A[pr[0] - 1], y = A[pr[1] - 1];
+  let t = `<p>t makes <b>∠1 = ${r1(A[0])}°</b> with l and <b>∠5 = ${r1(A[4])}°</b> with m. ` +
+    (par ? `l and m point the same way, so these corresponding angles are <b>equal</b>.` :
+      `l is turned ${r1(Math.abs(S.tm - S.tl))}° away from m, and ∠1 − ∠5 = ${r1(A[0] - A[4])}°: exactly that turn. Turning t changes both angles by the same amount, so the gap stays.`) + `</p>`;
+  const nm = PAIRNAME[S.pair];
+  if (S.pair === 'int') t += `<p>Interior angles ∠${pr[0]} and ∠${pr[1]} (between l and m, on the same side of t): ${r1(x)}° + ${r1(y)}° = <b>${r1(x + y)}°</b>${par ? '. With parallel lines they always make 180°.' : '. Not 180°, because l and m are not parallel.'}</p>`;
+  else t += `<p>The ${nm} pair ∠${pr[0]} and ∠${pr[1]}: ${r1(x)}° and ${r1(y)}° — <b>${Math.abs(x - y) < 0.5 ? 'equal' : 'not equal, ' + r1(Math.abs(x - y)) + '° apart'}</b>.` +
+    (S.pair === 'vo' ? ' Vertically opposite angles are equal whether or not the lines are parallel.' : par ? '' : ' Make l and m parallel and they will match.') + `</p>`;
+  const distinct = new Set(A.map(v => r1(v))).size;
+  t += `<p>Of the eight angles there are <b>${distinct}</b> different sizes${par ? ' — with parallel lines only two: one acute or right, and the other 180° minus it' : ''}.</p>`;
+  $('why').innerHTML = t;
+}
+
+/* turning l, m or t by their handles */
+function wireT(id, key, pivot){
+  drag($(id), ts, {
+    start(){ if (!S.locked) return false; if (key === 'tt') S.sweep = S.sweep || {tl: S.tl, tm: S.tm, lo: S.tt, hi: S.tt}; },
+    move(p){
+      let th = Math.round(Math.atan2(-(p.y - pivot.y), p.x - pivot.x) * R2D);
+      if (key === 'tt') { if (th < 0) th += 180; th = clamp(th, Math.max(TT_MIN, Math.max(S.tl, S.tm) + 12), Math.min(TT_MAX, Math.min(S.tl, S.tm) + 168)); }
+      else { if (th > 90) th -= 180; if (th < -90) th += 180; th = clamp(th, -40, 40);
+        const other = S.tt; th = clamp(th, other - 168, other - 12); }
+      if (th === S[key]) return;
+      S[key] = th; sound('tick'); onT(key);
+    },
+    end(){ track('turn', {line: key, tl: S.tl, tm: S.tm, tt: S.tt}); checkT(true); },
+  });
+  $(id).addEventListener('keydown', e => {
+    const s = {ArrowLeft: 1, ArrowUp: 1, ArrowRight: -1, ArrowDown: -1}[e.key]; if (!s || !S.locked) return;
+    e.preventDefault();
+    const v = S[key] + s;
+    if (key === 'tt' ? (v < Math.max(TT_MIN, Math.max(S.tl, S.tm) + 12) || v > Math.min(TT_MAX, Math.min(S.tl, S.tm) + 168)) : (v < -40 || v > 40 || S.tt - v < 12 || S.tt - v > 168)) return;
+    if (key === 'tt') S.sweep = S.sweep || {tl: S.tl, tm: S.tm, lo: S.tt, hi: S.tt};
+    S[key] = v; onT(key); checkT(true);
+  });
+}
+function onT(key){
+  /* a sweep of t only counts while l and m stay as they were */
+  if (key !== 'tt') S.sweep = null;
+  else if (S.sweep) { S.sweep.lo = Math.min(S.sweep.lo, S.tt); S.sweep.hi = Math.max(S.sweep.hi, S.tt); }
+  paintT(); checkT(false);
+  addTrail();
+}
+let trail = [];
+function addTrail(){
+  const A = eight(S.tl, S.tm, S.tt);
+  trail.push([S.tt, A[0], A[4]]); if (trail.length > 60) trail.shift();
+  $('trail').innerHTML = trail.map(([v, a, b]) => `<circle cx="${f1(gx(v))}" cy="${f1(gy(a))}" r="2.2" fill="${ACOL[0]}" opacity=".5"/><circle cx="${f1(gx(v))}" cy="${f1(gy(b))}" r="2.2" fill="${ACOL[1]}" opacity=".5"/>`).join('');
+}
+function checkT(settled){
+  if (!S.locked) return;
+  const A = eight(S.tl, S.tm, S.tt), par = S.tl === S.tm;
+  if (S.sweep && !par && Math.abs(S.tm - S.tl) >= 5 && S.sweep.hi - S.sweep.lo >= 40) {
+    if (discover('gap')) S.gapSeen = {d: Math.abs(S.tm - S.tl), lo: S.sweep.lo, hi: S.sweep.hi, diff: r1(A[0] - A[4])};
+  }
+  if (par && settled) { if (discover('corr')) S.corrSeen = {v: r1(A[0])}; }
+  if (par && S.pair === 'alt') discover('alt');
+  maybeExplain();
+}
+function maybeExplain(){
+  if (!POE || POE.explained || !S.gapSeen || !S.corrSeen) return;
+  const g = S.gapSeen;
+  POE.explain(`While l and m were ${g.d}° apart, you turned t from ${g.lo}° to ${g.hi}°, and ∠1 − ∠5 stayed <b>${g.diff}°</b> the whole way: ` +
+    `turning t adds the same amount to both angles. The corresponding angles could never be equal. ` +
+    `Only when you made <b>l ∥ m</b> did they match (∠1 = ∠5 = ${S.corrSeen.v}°). Equal corresponding angles and parallel lines go together: each one means the other.`);
+}
+$('chips').addEventListener('click', e => {
+  const b = e.target.closest('[data-k]'); if (!b) return;
+  if (S.pair === b.dataset.k) S.pairIdx++; else { S.pair = b.dataset.k; S.pairIdx = 0; }
+  $('chips').querySelectorAll('[data-k]').forEach(x => x.setAttribute('aria-pressed', x === b));
+  sound('tick'); paintT(); checkT(true);
+  track('pair', {pair: S.pair, idx: S.pairIdx % PAIRS[S.pair].length});
+});
+
+/* ============================================================================
+   Tabs, predict, start
+   ============================================================================ */
+buildX(); buildT();
+['lp', 'ln', 'mp', 'mn'].forEach(wireArm);
+wireT('h-l', 'tl', PL); wireT('h-m', 'tm', PM); wireT('h-t', 'tt', T0);
+function showTab(tab){
+  S.tab = tab;
+  $('tabX').setAttribute('aria-selected', tab === 'x'); $('tabT').setAttribute('aria-selected', tab === 't');
+  $('xStage').toggleAttribute('hidden', tab !== 'x'); $('tStage').toggleAttribute('hidden', tab !== 't');
+  $('cardX').hidden = tab !== 'x'; $('cardT').hidden = tab !== 't';
+  if (tab === 'x') paintX(); else paintT();
+}
+$('tabX').addEventListener('click', () => { sound('tick'); showTab('x'); track('tab', {tab: 'x'}); });
+$('tabT').addEventListener('click', () => { sound('tick'); showTab('t'); track('tab', {tab: 't'}); });
+
+findings($('finds'), [
+  {id: 'vertOpp',  icon: '✕', label: 'Vertically opposite angles are equal', hint: 'Cross the lines at three quite different angles'},
+  {id: 'perp',     icon: '⟂', label: 'Perpendicular: four right angles',      hint: 'Can all four angles be equal?'},
+  {id: 'longArms', icon: '↔', label: 'Longer arms, same angle',               hint: 'Pull an arm longer without turning it'},
+  {id: 'gap',      icon: '⇅', label: 'Turning t never changes the gap',       hint: 'Keep l and m apart and sweep t round'},
+  {id: 'corr',     icon: '∥', label: 'Parallel: corresponding angles equal',  hint: 'Can you make ∠1 = ∠5?'},
+  {id: 'alt',      icon: 'Z', label: 'Alternate angles are equal too',        hint: 'Look at the alternate pair with l ∥ m'},
+], () => toast('All six found. You have proved half of Chapter 5 by measuring.', 4200));
+
+const POE = predict($('poe'), {
+  id: 'corresponding-without-parallel',
+  q: 'Lines l and m are <b>not parallel</b>. A transversal t cuts both. By turning t, can you make the corresponding angles ∠1 and ∠5 equal?',
+  options: [
+    {id: 'tilt', text: 'Yes — turn t until it is just right.'},
+    {id: 'perp', text: 'Yes, when t is perpendicular to l.'},
+    {id: 'never', text: 'No. They can be equal only if l and m are parallel.', right: true},
+    {id: 'cant', text: 'You cannot tell without measuring.'},
+  ],
+  onLock(){
+    S.locked = true; $('gate').hidden = true;
+    $('graphVeil').remove(); $('graphVeilT').remove();
+    $('whyCard').hidden = false;
+    say('Now turn the lines and measure.');
+    paintX(); paintT();
+  },
+});
+if (!Play.FF('predict')) { S.locked = true; $('gate').hidden = true; }
+showTab(S.tab);
+paintX(); paintT();
+window.applyFeatures = () => { paintX(); paintT(); };
+window.PG_STATE = () => Object.assign(JSON.parse(JSON.stringify(S)), {x: crossing(S.al, S.be), eight: eight(S.tl, S.tm, S.tt)});
+window.PG_VIEW = {O, PL, PM, T0, HL, HT};
+window.PG_MODEL = {crossing, eight, meet, between, dir, PAIRS, angType};
+</script>
+</body>
+</html>

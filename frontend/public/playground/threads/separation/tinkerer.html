@@ -1,0 +1,531 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Methods of Separation</title>
+<meta name="description" content="Class 6: pick a mixture from Malli and Valli's trip across India, then pick a method. It only separates the mixture if the two parts really differ the way that method needs — size for a sieve, weight in air for winnowing, magnetism for a magnet, particle size for a filter, density for settling, boiling point for evaporation.">
+<link rel="icon" href="../../favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600&family=Inter:wght@400;500;600;700&family=Nunito:wght@500;700;800&family=Newsreader:opsz,wght@6..72,400;6..72,500&family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="../../play.css">
+<style>
+.pg-stage{min-height:0}
+.gate{position:absolute; inset:0; display:grid; place-items:center; pointer-events:none}
+.gate span{background:rgba(29,35,39,.86); color:#fff; padding:10px 16px; border-radius:99px; font-weight:600; font-size:14px}
+.hit{cursor:pointer}
+.hit:hover rect.hoverable, .hit:hover .hb{stroke:#d35400; stroke-width:2.4}
+.hit:focus{outline:none} .hit:focus-visible .hb{stroke:#d35400; stroke-width:2.4}
+.hit[aria-disabled="true"]{cursor:default}
+.hit[aria-pressed="true"] .hb{stroke:#d35400; stroke-width:2.6; fill:rgba(211,84,0,.08)}
+.why p{font-size:13.5px; margin-bottom:.5em}
+.why b{color:var(--ink)}
+.note{font-size:12.5px; color:var(--ink-3); margin:6px 0 0}
+.propnum{display:grid; grid-template-columns:1fr auto auto; gap:4px 10px; font-size:13px; align-items:center}
+.propnum .h{font-weight:700; color:var(--ink-3); font-size:11px; text-transform:uppercase; letter-spacing:.05em}
+.propnum .cellA, .propnum .cellB{font-family:var(--font-mono); font-weight:600; text-align:right; font-variant-numeric:tabular-nums}
+.propnum .lit{background:rgba(211,84,0,.12); border-radius:6px}
+.propnum .lit > *{padding:2px 4px}
+.tray-scene{background:#efe6d6}
+@media (max-width:1100px) and (min-width:981px){ .pg-main{grid-template-columns:minmax(0,1fr) 310px; padding-inline:12px} }
+</style>
+</head>
+<body>
+<header class="pg-top"></header>
+
+<div class="pg-intro">
+  <h1>Methods of separation</h1>
+  <p>Malli and Valli travelled across India and met seven mixtures that needed sorting out — stones in grain, nails in
+     sawdust, salt in seawater. Pick a mixture, then pick a method. It only works if the two parts really differ the
+     way that method needs: in size, in weight, in whether a magnet pulls them, in whether they dissolve.
+     CBSE Class 6 Science (Curiosity), Chapter 9.</p>
+</div>
+
+<main class="pg-main wide-side">
+  <section class="pg-stage tray-scene" id="stageWrap">
+    <svg id="stage" viewBox="0 0 1000 700" role="img" aria-label="A kitchen and workshop bench: six mixtures from Malli and Valli's trip, a tray in the middle, and eight separation methods to try on whatever is loaded"></svg>
+    <div class="gate" id="gate"><span>Make your prediction first →</span></div>
+  </section>
+
+  <aside class="pg-side">
+    <div id="poe"></div>
+
+    <div class="card" id="trayCard">
+      <div class="kicker">On the tray</div>
+      <p id="trayInfo" style="font-size:13.5px; margin:0">Click a mixture above to load it onto the tray.</p>
+      <div class="row tight" style="margin-top:8px"><button class="btn sm" id="btnClear">Clear the tray</button></div>
+    </div>
+
+    <div class="card" id="numCard" hidden>
+      <div class="kicker">The numbers behind it</div>
+      <div class="propnum" id="propnum"></div>
+      <p class="note">The row lit up is the property the last method you tried actually depends on.</p>
+    </div>
+
+    <div class="card why" id="whyCard" hidden>
+      <div class="kicker">What is happening</div>
+      <div id="why"></div>
+    </div>
+
+    <div class="card"><div class="kicker">To find</div><div id="finds"></div></div>
+  </aside>
+</main>
+
+<script src="../../play.js"></script>
+<script>
+'use strict';
+const {$, esc, clamp, fmt, tween, sound, say, track, toast, predict, findings, discover, found,
+       shareState, sharedState, mount, reduced, mulberry32} = Play;
+mount({thread: 'separation', band: 'tinkerer'});
+
+/* MODEL:start ==================================================================
+   Every material is written as four real properties: particle size (mm),
+   density (g/cm3), whether it is magnetic, and whether it dissolves in water.
+   A "drag" factor stands for shape resistance in water (a flat leaf or a flake
+   of husk sinks or blows far more slowly than a compact grain of the same
+   size and density — real fluid drag, not a fudge to make the story work).
+
+   Each method is a pure function of two materials (and, for filtering, a pore
+   size) that decides whether the mixture actually separates, from the SAME
+   four properties every time — never a lookup keyed by which mixture it is.
+   That is the whole point: try the wrong tool and the model tells you why it
+   failed, using the numbers, not a scripted "no".
+   ============================================================================ */
+const MATERIALS = {
+  stone:   {name: 'Small stones',  short: 'Stones', size: 6,    density: 2.60, magnetic: false, soluble: false, drag: 1, col: '#9a9384', dark: '#726b5c', shape: 'stone', pl: true},
+  wheat:   {name: 'Wheat grains',  short: 'Grain',  size: 3,    density: 1.30, magnetic: false, soluble: false, drag: 1, col: '#dba53f', dark: '#a97c26', shape: 'grain'},
+  husk:    {name: 'Husk',          short: 'Husk',   size: 5,    density: 0.15, magnetic: false, soluble: false, drag: 9, col: '#efe2ac', dark: '#c6b47e', shape: 'husk'},
+  nail:    {name: 'Iron nails',    short: 'Nails',  size: 3,    density: 7.80, magnetic: true,  soluble: false, drag: 1, col: '#8b93a1', dark: '#525a68', shape: 'nail', pl: true},
+  sawdust: {name: 'Sawdust',       short: 'Sawdust', size: 2,   density: 0.60, magnetic: false, soluble: false, drag: 2, col: '#c9a06a', dark: '#93724a', shape: 'dust'},
+  salt:    {name: 'Salt',          short: 'Salt',   size: 1,    density: 2.16, magnetic: false, soluble: true,  drag: 1, col: '#f7f7f2', dark: '#c9c9bd', shape: 'crystal'},
+  sand:    {name: 'Sand',          short: 'Sand',   size: 0.6,  density: 2.65, magnetic: false, soluble: false, drag: 1, col: '#c2a06a', dark: '#8e6d41', shape: 'grit'},
+  tea:     {name: 'Tea leaves',    short: 'Leaves', size: 6,    density: 1.05, magnetic: false, soluble: false, drag: 6, col: '#3f5a2e', dark: '#25361a', shape: 'leaf', pl: true},
+};
+const MIXTURES = [
+  {id: 'stonesGrain', name: 'Stones in wheat grain', a: 'stone', b: 'wheat', medium: 'dry',
+   scene: "Nani's courtyard", ask: 'Sort the small stones out before the grain is cooked.', want: 'both'},
+  {id: 'grainHusk', name: 'Wheat grain and husk', a: 'wheat', b: 'husk', medium: 'dry',
+   scene: 'Fresh off the stalk', ask: 'Get the husk off the grain.', want: 'both'},
+  {id: 'nailsSawdust', name: 'Iron nails in sawdust', a: 'nail', b: 'sawdust', medium: 'dry',
+   scene: "The carpenter's shop", ask: 'The carpenter dropped nails into the sawdust.', want: 'both'},
+  {id: 'saltWater', name: 'Salt dissolved in water', a: 'salt', b: null, medium: 'wet', dissolved: true,
+   scene: 'Salt pans by the sea', ask: 'Get the salt back, the way it is done at Sambhar Lake.', want: 'solid', real: 150},
+  {id: 'muddyWater', name: 'Muddy pond water', a: 'sand', b: null, medium: 'wet',
+   scene: "Valli's nature walk", ask: 'Clear the water up.', want: 'liquid'},
+  {id: 'teaLeaves', name: 'Tea leaves in tea', a: 'tea', b: null, medium: 'wet',
+   scene: "Dada's tea time", ask: 'Get the leaves out before it is poured.', want: 'liquid'},
+];
+/* Realistic handful sizes, for how long handpicking would actually take (Valli's own question). */
+const REALCOUNT = {stonesGrain: 150, grainHusk: 4000, nailsSawdust: 30};
+const mat = id => MATERIALS[id];
+const sizeRatio = (A, B) => Math.max(A.size, B.size) / Math.max(0.001, Math.min(A.size, B.size));
+/* Some materials (stones, nails, leaves) are plural nouns; the rest (grain, husk, sawdust,
+   salt, sand, water) are mass nouns. Every sentence below agrees with which one it names. */
+const bev = m => m.pl ? 'are' : 'is';
+const sv = (m, sing, plur) => m.pl ? plur : sing;
+
+function tryHandpick(mix, A, B){
+  if (mix.medium !== 'dry') return {works: false, reason: 'There is no loose solid here to pick out by hand — it is dissolved or floating in a liquid.'};
+  const n = REALCOUNT[mix.id] || 100, seconds = n * 1.2, practical = seconds <= 200;
+  return {works: true, completeness: 1, propertyUsed: 'sight and touch', seconds, n, practical,
+    reason: practical
+      ? `${A.short} and ${B.short} look different enough to pick apart by hand. About ${n} pieces here — roughly ${Math.round(seconds)} seconds of picking.`
+      : `You could pick every piece out by hand — but a real batch has about ${n.toLocaleString()} pieces of ${A.short.toLowerCase()} and ${B.short.toLowerCase()} mixed together. At just over a second each, that is <b>${Math.round(seconds / 60)} minutes</b> of picking, one piece at a time.`};
+}
+function trySieve(mix, A, B){
+  if (mix.medium !== 'dry') return {works: false, reason: 'A sieve only sorts dry, loose solids — not something dissolved or suspended in water.'};
+  const r = sizeRatio(A, B), works = r >= 1.6;
+  const big = A.size >= B.size ? A : B, small = A.size >= B.size ? B : A;
+  return {works, completeness: works ? 1 : 0, propertyUsed: 'size', ratio: r,
+    reason: works ? `${big.short} (${big.size} mm) ${bev(big)} too big for the holes and ${sv(big, 'stays', 'stay')} on top; ${small.short} (${small.size} mm) ${sv(small, 'falls', 'fall')} through.`
+                  : `${A.short} (${A.size} mm) and ${B.short} (${B.size} mm) are too close in size — whatever hole you choose, both fall through or both stay.`};
+}
+function tryWinnow(mix, A, B){
+  if (mix.medium !== 'dry') return {works: false, reason: 'Moving air only sorts dry, loose particles.'};
+  const sA = A.density * A.size, sB = B.density * B.size;
+  const ratio = Math.max(sA, sB) / Math.max(0.0001, Math.min(sA, sB)), works = ratio >= 2.2;
+  const light = sA < sB ? A : B, heavy = sA < sB ? B : A;
+  return {works, completeness: works ? clamp(ratio / 8, 0.6, 1) : clamp(ratio / 2.2, 0.1, 0.55), propertyUsed: 'mass carried on the air', ratio,
+    reason: works ? `${light.short} ${bev(light)} light enough for the wind to carry ${light.pl ? 'them' : 'it'} clear of ${heavy.short}, the way husk blows off wheat on the soop.`
+                  : `${A.short} and ${B.short} are blown almost the same distance by the wind — winnowing can't tell them apart.`};
+}
+function tryMagnet(mix, A, B){
+  if (mix.medium !== 'dry') return {works: false, reason: 'A magnet works through dry material, not a liquid mixture.'};
+  const works = A.magnetic !== B.magnetic, magSide = A.magnetic ? A : (B.magnetic ? B : null);
+  return {works, completeness: works ? 1 : 0, propertyUsed: 'magnetism',
+    reason: works ? `${magSide.short} ${sv(magSide, 'jumps', 'jump')} straight to the magnet; nothing else in this tray is magnetic, so it is left behind.`
+                  : `Neither ${A.short} nor ${B.short} is attracted to a magnet — it pulls nothing out at all.`};
+}
+function tryFilter(mix, A, B, pore){
+  if (mix.medium !== 'wet') return {works: false, reason: 'Filtering needs a liquid to carry the solid through — there is nothing to filter here.'};
+  const poreMM = pore === 'cloth' ? 0.7 : 0.05;
+  if (mix.dissolved) return {works: false, completeness: 0, propertyUsed: 'particle size', poreMM,
+    reason: `${A.short} has dissolved — there is no solid particle left to catch. It slips through ${pore === 'cloth' ? 'a piece of cloth' : 'even fine filter paper'} exactly like water does. Filtration cannot separate a solution.`};
+  const works = A.size > poreMM;
+  return {works, completeness: works ? 1 : 0, propertyUsed: 'particle size vs the pore', poreMM,
+    reason: works ? `${A.short} (${A.size} mm) ${bev(A)} bigger than the ${pore === 'cloth' ? "cloth's" : "paper's"} pores (${poreMM} mm), so ${A.pl ? 'they are' : 'it is'} caught; the water runs through clear.`
+                  : `${A.short} (${A.size} mm) ${bev(A)} smaller than the ${pore} pores (${poreMM} mm) — ${A.pl ? 'they wash' : 'it washes'} straight through, and the water is still cloudy. A finer pore is needed.`};
+}
+function trySettle(mix, A, B){
+  if (mix.medium !== 'wet') return {works: false, reason: 'Only something mixed into a liquid can settle to the bottom.'};
+  if (mix.dissolved) return {works: false, completeness: 0, propertyUsed: 'density', reason: `${A.short} has dissolved into the water — it will never sink out on its own, however long you wait.`};
+  const score = Math.abs(A.density - 1) * A.size * A.size / A.drag, REF = 0.66;
+  const completeness = clamp(score / REF, 0, 1), works = completeness >= 0.6;
+  return {works, completeness, propertyUsed: 'density and drag', score,
+    reason: works ? `${A.short} ${bev(A)} dense enough for ${A.pl ? 'their' : 'its'} shape to sink to the bottom in a few minutes; pour the clear water off the top.`
+                  : `${A.short} ${bev(A)} close to water's own density, and ${A.pl ? 'their shape resists' : 'its shape resists'} sinking — after a few minutes, about ${Math.round((1 - completeness) * 100)}% of ${A.pl ? 'them are' : 'it is'} still drifting in the water you pour off. Dada was right: decanting does not catch it all.`};
+}
+function tryEvaporate(mix, A, B){
+  if (mix.medium !== 'wet') return {works: false, reason: 'There is no liquid here to boil away.'};
+  const wanted = mix.want === 'solid';
+  return {works: true, completeness: 1, purposeful: wanted, propertyUsed: 'boiling point',
+    reason: wanted ? `The water boils away and ${A.short.toLowerCase()} is left behind, dry, in the dish — exactly how salt is recovered from seawater.`
+                   : `The water boils away — but that water was what you wanted to drink! ${A.short} ${bev(A)} left behind in the dish, and the liquid you needed is gone.`};
+}
+const METHODS = [
+  {id: 'handpick', name: 'Handpick', icon: '✋', fn: (m, A, B) => tryHandpick(m, A, B)},
+  {id: 'sieve',    name: 'Sieve',    icon: '🕳️', fn: (m, A, B) => trySieve(m, A, B)},
+  {id: 'winnow',   name: 'Winnow',   icon: '💨', fn: (m, A, B) => tryWinnow(m, A, B)},
+  {id: 'magnet',   name: 'Magnet',   icon: '🧲', fn: (m, A, B) => tryMagnet(m, A, B)},
+  {id: 'cloth',    name: 'Filter: cloth', icon: '🧵', fn: (m, A, B) => tryFilter(m, A, B, 'cloth')},
+  {id: 'paper',    name: 'Filter: paper', icon: '📄', fn: (m, A, B) => tryFilter(m, A, B, 'paper')},
+  {id: 'settle',   name: 'Settle & decant', icon: '🫙', fn: (m, A, B) => trySettle(m, A, B)},
+  {id: 'evap',     name: 'Evaporate', icon: '🔥', fn: (m, A, B) => tryEvaporate(m, A, B)},
+];
+function run(mixId, methodId){
+  const mix = MIXTURES.find(m => m.id === mixId), method = METHODS.find(m => m.id === methodId);
+  const A = mat(mix.a), B = mix.b ? mat(mix.b) : {name: 'Water', short: 'Water', size: 0, density: 1, magnetic: false, soluble: false, drag: 1};
+  return Object.assign({mixId, methodId}, method.fn(mix, A, B));
+}
+/* MODEL:end */
+
+/* ---- state ---------------------------------------------------------------- */
+const S = {mixture: null, method: null, locked: false, tried: {}};
+const shared = sharedState();
+if (shared) {
+  if (MIXTURES.some(m => m.id === shared.mixture)) S.mixture = shared.mixture;
+  if (METHODS.some(m => m.id === shared.method)) S.method = shared.method;
+  if (shared.tried && typeof shared.tried === 'object') S.tried = shared.tried;
+}
+shareState(() => ({mixture: S.mixture, method: S.method, tried: S.tried}));
+
+/* ---- shapes ----------------------------------------------------------------
+   Every particle is drawn from the material's own shape, at a unit scale of
+   about 1 svg-unit per mm, so a bigger number really looks bigger. */
+function shapeMarkup(m){
+  switch (m.shape) {
+    case 'stone': return `<polygon points="-5,-3 3,-5 6,-1 4,5 -4,4.5 -6,0.5" fill="${m.col}" stroke="${m.dark}" stroke-width=".8"/>`;
+    case 'grain': return `<ellipse rx="5" ry="2.6" fill="${m.col}" stroke="${m.dark}" stroke-width=".6"/>`;
+    case 'husk':  return `<path d="M-6,0 Q0,-2.4 6,0 Q0,2.4 -6,0Z" fill="${m.col}" opacity=".9" stroke="${m.dark}" stroke-width=".5"/>`;
+    case 'nail':  return `<g><rect x="-1" y="-6" width="2" height="9" fill="${m.col}" stroke="${m.dark}" stroke-width=".5"/><circle cy="-6" r="2" fill="${m.col}" stroke="${m.dark}" stroke-width=".5"/></g>`;
+    case 'dust':  return `<polygon points="-2.4,-2 2.4,-2.6 3,1.6 -1.4,2.4" fill="${m.col}" stroke="${m.dark}" stroke-width=".4"/>`;
+    case 'crystal': return `<rect x="-2.6" y="-2.6" width="5.2" height="5.2" fill="${m.col}" stroke="${m.dark}" stroke-width=".5" transform="rotate(18)"/>`;
+    case 'grit':  return `<circle r="2.2" fill="${m.col}" stroke="${m.dark}" stroke-width=".3"/>`;
+    case 'leaf':  return `<path d="M0,-6 Q4,-2 0,6 Q-4,-2 0,-6Z" fill="${m.col}" stroke="${m.dark}" stroke-width=".5"/>`;
+    default: return `<circle r="3" fill="${m.col}"/>`;
+  }
+}
+function jarIcon(mix){
+  const A = mat(mix.a), rnd = mulberry32(17 + mix.id.length);
+  const N = 8; let ps = '';
+  for (let i = 0; i < N; i++) {
+    const useA = mix.medium === 'dry' ? i % 2 === 0 : true;
+    const m = useA ? A : mat(mix.b);
+    const x = -34 + rnd() * 68, y = -20 + rnd() * 40;
+    ps += `<g transform="translate(${x.toFixed(1)} ${y.toFixed(1)}) scale(.62)">${shapeMarkup(m)}</g>`;
+  }
+  if (mix.medium === 'wet') {
+    return `<rect x="-38" y="-26" width="76" height="52" rx="6" fill="#dff0fa" stroke="#8fb9cf" stroke-width="2"/>
+      <rect x="-38" y="-26" width="76" height="52" rx="6" fill="none" stroke="#8fb9cf" stroke-width="2"/>
+      ${mix.dissolved ? '' : ps}
+      <rect x="-38" y="16" width="76" height="10" fill="#fff" opacity=".22"/>`;
+  }
+  return `<path d="M-40,-24 h80 l-6,50 a6,6 0 0 1 -6,6 h-56 a6,6 0 0 1 -6,-6 Z" fill="#f3e6c8" stroke="#c7ac74" stroke-width="2"/>${ps}`;
+}
+function methodIcon(me){
+  if (me.id === 'cloth') return `<text x="0" y="14" font-size="34" text-anchor="middle">🧵</text><rect x="-16" y="18" width="32" height="10" rx="2" fill="none" stroke="#8a6a4a" stroke-width="1"/>`;
+  if (me.id === 'paper') return `<text x="0" y="14" font-size="34" text-anchor="middle">📄</text>`;
+  if (me.id === 'sieve') {
+    let holes = '';
+    for (let r = -12; r <= 12; r += 8) for (let c = -12; c <= 12; c += 8) if (r * r + c * c < 200) holes += `<circle cx="${c}" cy="${r}" r="2" fill="#8a6a4a"/>`;
+    return `<circle cx="0" cy="0" r="20" fill="#f3e6c8" stroke="#8a6a4a" stroke-width="3"/>${holes}`;
+  }
+  return `<text x="0" y="14" font-size="34" text-anchor="middle">${me.icon}</text>`;
+}
+
+/* ---- build once ------------------------------------------------------------ */
+const svg = $('stage');
+const MIX_X = i => 18 + i * 163, MIX_Y = 26, MIX_W = 150, MIX_H = 110;
+const MET_X = i => 18 + i * 122, MET_Y = 500, MET_W = 112, MET_H = 132;
+const TRAY = {x: 300, y: 190, w: 400, h: 250};
+const BIN_L = {x: 24, y: 190, w: 250, h: 250}, BIN_R = {x: 726, y: 190, w: 250, h: 250};
+
+function build(){
+  let mixjars = '';
+  MIXTURES.forEach((mix, i) => {
+    const x = MIX_X(i), y = MIX_Y;
+    mixjars += `<g class="hit" id="mixhit_${mix.id}" tabindex="0" role="button" aria-label="Load ${esc(mix.name)}">
+      <rect class="hb" x="${x}" y="${y}" width="${MIX_W}" height="${MIX_H}" rx="10" fill="#fbf8f1" stroke="#d8cfba" stroke-width="1.6"/>
+      <g transform="translate(${x + MIX_W / 2} ${y + 40})">${jarIcon(mix)}</g>
+      <text x="${x + MIX_W / 2}" y="${y + 86}" text-anchor="middle" font-size="12.5" font-weight="700" fill="#2b3338">${esc(mix.name)}</text>
+      <text x="${x + MIX_W / 2}" y="${y + 101}" text-anchor="middle" font-size="10.5" fill="#8a8072">${esc(mix.scene)}</text>
+    </g>`;
+  });
+  let methods = '';
+  METHODS.forEach((me, i) => {
+    const x = MET_X(i), y = MET_Y;
+    methods += `<g class="hit" id="methit_${me.id}" tabindex="0" role="button" aria-label="Try ${esc(me.name)}">
+      <rect class="hb" x="${x}" y="${y}" width="${MET_W}" height="${MET_H}" rx="10" fill="#fbf8f1" stroke="#d8cfba" stroke-width="1.6"/>
+      <g transform="translate(${x + MET_W / 2} ${y + 44})">${methodIcon(me)}</g>
+      <text x="${x + MET_W / 2}" y="${y + 96}" text-anchor="middle" font-size="12.5" font-weight="700" fill="#2b3338">${esc(me.name)}</text>
+    </g>`;
+  });
+  svg.innerHTML = `
+  <rect x="0" y="0" width="1000" height="700" fill="#efe6d6"/>
+  <rect x="0" y="0" width="1000" height="16" fill="#e2d4b3"/>
+  <text x="18" y="12" font-size="10.5" font-weight="700" letter-spacing=".07em" fill="#8a6a3a">MIXTURES FROM MALLI AND VALLI'S TRIP — CLICK ONE TO LOAD IT</text>
+  <g id="mixJars">${mixjars}</g>
+
+  <rect x="${BIN_L.x}" y="${BIN_L.y}" width="${BIN_L.w}" height="${BIN_L.h}" rx="12" fill="#fffefb" stroke="#e2d9c6" stroke-width="1.6"/>
+  <text id="binLtitle" x="${BIN_L.x + BIN_L.w / 2}" y="${BIN_L.y + 20}" text-anchor="middle" font-size="12.5" font-weight="700" fill="#5b6770">Kept here</text>
+  <g id="binL"></g>
+
+  <rect x="${TRAY.x}" y="${TRAY.y}" width="${TRAY.w}" height="${TRAY.h}" rx="14" fill="#ffffff" stroke="#cbbfa2" stroke-width="2"/>
+  <ellipse id="trayDish" cx="${TRAY.x + TRAY.w / 2}" cy="${TRAY.y + TRAY.h / 2 + 10}" rx="${TRAY.w / 2 - 24}" ry="${TRAY.h / 2 - 30}" fill="#f4efe2" stroke="#d9cdac" stroke-width="2"/>
+  <g id="trayWater" opacity="0"></g>
+  <text id="trayTitle" x="${TRAY.x + TRAY.w / 2}" y="${TRAY.y + 22}" text-anchor="middle" font-size="13" font-weight="700" fill="#5b6770">On the tray</text>
+  <text id="trayEmpty" x="${TRAY.x + TRAY.w / 2}" y="${TRAY.y + TRAY.h / 2 + 6}" text-anchor="middle" font-size="13.5" fill="#a89d84">Click a mixture to load it here</text>
+  <g id="trayParticles"></g>
+
+  <rect x="${BIN_R.x}" y="${BIN_R.y}" width="${BIN_R.w}" height="${BIN_R.h}" rx="12" fill="#fffefb" stroke="#e2d9c6" stroke-width="1.6"/>
+  <text id="binRtitle" x="${BIN_R.x + BIN_R.w / 2}" y="${BIN_R.y + 20}" text-anchor="middle" font-size="12.5" font-weight="700" fill="#5b6770">Passed through</text>
+  <g id="binR"></g>
+
+  <rect x="0" y="480" width="1000" height="4" fill="#e2d4b3"/>
+  <text x="18" y="474" font-size="10.5" font-weight="700" letter-spacing=".07em" fill="#8a6a3a">METHODS — TRY ONE ON WHAT IS LOADED</text>
+  <g id="methodBtns">${methods}</g>
+  <text id="verdict" x="500" y="656" text-anchor="middle" font-size="15" font-weight="700" fill="#2b3338"></text>
+  <text id="verdict2" x="500" y="678" text-anchor="middle" font-size="12.5" fill="#6a6155"></text>
+  `;
+}
+
+/* ---- paint ------------------------------------------------------------------ */
+function scatterInto(box, materials, seed, count){
+  const rnd = mulberry32(seed);
+  const out = [];
+  for (let i = 0; i < count; i++) {
+    const m = materials[i % materials.length];
+    out.push({m, x: box.x + 24 + rnd() * (box.w - 48), y: box.y + 40 + rnd() * (box.h - 70), rot: (rnd() * 40 - 20)});
+  }
+  return out;
+}
+function paintGroup(id, list, scale = 1){
+  $(id).innerHTML = list.map(p => `<g transform="translate(${p.x.toFixed(1)} ${p.y.toFixed(1)}) rotate(${p.rot.toFixed(0)}) scale(${scale})">${shapeMarkup(p.m)}</g>`).join('');
+}
+function currentMix(){ return S.mixture ? MIXTURES.find(m => m.id === S.mixture) : null; }
+function currentResult(){
+  if (!S.mixture || !S.method) return null;
+  return S.tried[S.mixture + '|' + S.method] || null;
+}
+function paint(){
+  const mix = currentMix();
+  $('trayEmpty').setAttribute('opacity', mix ? 0 : 1);
+  $('trayWater').setAttribute('opacity', mix && mix.medium === 'wet' ? 1 : 0);
+  $('trayTitle').textContent = mix ? mix.name : 'On the tray';
+  for (const m of MIXTURES) $('mixhit_' + m.id).setAttribute('aria-pressed', mix && mix.id === m.id ? 'true' : 'false');
+  for (const me of METHODS) {
+    $('methit_' + me.id).setAttribute('aria-pressed', S.method === me.id ? 'true' : 'false');
+    $('methit_' + me.id).setAttribute('aria-disabled', mix ? 'false' : 'true');
+  }
+  const res = currentResult();
+  /* the water wash, when the loaded mixture is wet */
+  if (mix && mix.medium === 'wet') {
+    const drained = res && (res.methodId === 'cloth' || res.methodId === 'paper' || res.methodId === 'settle' || res.methodId === 'evap') && res.works;
+    const h = drained ? (TRAY.h - 70) * (1 - (res.completeness || 1)) + 14 : TRAY.h - 70;
+    $('trayWater').innerHTML = `<rect x="${TRAY.x + 40}" y="${TRAY.y + TRAY.h - 30 - h}" width="${TRAY.w - 80}" height="${h}" fill="#bfe0f2" opacity=".65"/>`;
+  } else $('trayWater').innerHTML = '';
+
+  /* the particles: mixed in the tray, or split into the two bins once a method has run */
+  let trayList = [], leftList = [], rightList = [];
+  if (mix) {
+    const A = mat(mix.a), B = mix.b ? mat(mix.b) : null;
+    const mats = mix.dissolved ? [] : (B ? [A, B] : [A]);
+    if (!res) {
+      trayList = scatterInto(TRAY, mats.length ? mats : [A], hashSeed(mix.id), mats.length ? 16 : 10);
+    } else if (!res.works) {
+      trayList = scatterInto(TRAY, mats.length ? mats : [A], hashSeed(mix.id + res.methodId), mats.length ? 16 : 10);
+    } else {
+      const zones = outcomeZones(mix, res);
+      if (zones.left.material) leftList = scatterInto(BIN_L, [zones.left.material], hashSeed(mix.id + res.methodId + 'L'), zones.left.n || 8);
+      if (zones.right.material) rightList = scatterInto(BIN_R, [zones.right.material], hashSeed(mix.id + res.methodId + 'R'), zones.right.n || 8);
+      $('binLtitle').textContent = zones.left.label;
+      $('binRtitle').textContent = zones.right.label;
+    }
+  }
+  if (!res || !res.works) { $('binLtitle').textContent = 'Kept here'; $('binRtitle').textContent = 'Passed through'; }
+  paintGroup('trayParticles', trayList);
+  paintGroup('binL', leftList);
+  paintGroup('binR', rightList);
+
+  /* verdict line under the methods */
+  if (!mix) { $('verdict').textContent = ''; $('verdict2').textContent = ''; }
+  else if (!res) { $('verdict').textContent = `${mix.ask}`; $('verdict').setAttribute('fill', '#5b6770'); $('verdict2').textContent = ''; }
+  else {
+    $('verdict').textContent = res.works ? '✓ Separated' : '✗ Still mixed';
+    $('verdict').setAttribute('fill', res.works ? '#2f7a3d' : '#b3402d');
+    $('verdict2').textContent = res.works && res.completeness < 1 ? `About ${Math.round(res.completeness * 100)}% caught.` : '';
+  }
+  paintNums(mix, res);
+  paintWhy(mix, res);
+  checkFindings(mix, res);
+}
+function hashSeed(s){ let h = 7; for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0; return h; }
+/* Which material ends up in which bin, for a successful method — computed from
+   the SAME property test the method used, not a per-mixture answer key. */
+function outcomeZones(mix, res){
+  const A = mat(mix.a), B = mix.b ? mat(mix.b) : {name: 'Water', short: 'Water'};
+  switch (res.methodId) {
+    case 'handpick': return {left: {label: 'One pile', material: A, n: 8}, right: {label: 'The other pile', material: B, n: 8}};
+    case 'sieve': { const big = A.size >= B.size ? A : B, small = A.size >= B.size ? B : A;
+      return {left: {label: `Stayed on the sieve: ${big.short}`, material: big, n: 8}, right: {label: `Fell through: ${small.short}`, material: small, n: 8}}; }
+    case 'winnow': { const sA = A.density * A.size, sB = B.density * B.size, heavy = sA >= sB ? A : B, light = sA >= sB ? B : A;
+      return {left: {label: `Stayed close: ${heavy.short}`, material: heavy, n: 8}, right: {label: `Blown away: ${light.short}`, material: light, n: 8}}; }
+    case 'magnet': { const mg = A.magnetic ? A : B, other = A.magnetic ? B : A;
+      return {left: {label: `Jumped to the magnet: ${mg.short}`, material: mg, n: 8}, right: {label: `Left behind: ${other.short}`, material: other, n: 8}}; }
+    case 'cloth': case 'paper':
+      return {left: {label: `Caught: ${A.short}`, material: A, n: 8}, right: {label: 'Passed through: water', material: null}};
+    case 'settle':
+      return {left: {label: `Settled: ${A.short}`, material: A, n: Math.round(8 * res.completeness) || 1}, right: {label: 'Poured off: water', material: null}};
+    case 'evap':
+      return {left: {label: `Left in the dish: ${A.short}`, material: A, n: 8}, right: {label: 'Boiled away: water', material: null}};
+    default: return {left: {label: 'Kept here', material: null}, right: {label: 'Passed through', material: null}};
+  }
+}
+function paintNums(mix, res){
+  const card = $('numCard');
+  if (!mix) { card.hidden = true; return; }
+  card.hidden = false;
+  const A = mat(mix.a), B = mix.b ? mat(mix.b) : {name: 'Water', short: 'Water', size: 0, density: 1, magnetic: false, soluble: false};
+  const lit = res ? res.propertyUsed : null;
+  const rows = [
+    ['size', 'Size (mm)', mix.dissolved ? '—' : fmt(A.size, 2), fmt(B.size, 2)],
+    ['density', 'Density (g/cm³)', fmt(A.density, 2), fmt(B.density, 2)],
+    ['magnetism', 'Magnetic?', A.magnetic ? 'Yes' : 'No', B.magnetic ? 'Yes' : 'No'],
+    ['dissolve', 'Dissolves in water?', A.soluble ? 'Yes' : 'No', mix.b ? (B.soluble ? 'Yes' : 'No') : '—'],
+  ];
+  $('propnum').innerHTML = `<div class="h"></div><div class="h">${esc(A.short)}</div><div class="h">${esc(B.short)}</div>` +
+    rows.map(r => { const on = lit && lit.includes(r[0]) || (lit === 'particle size vs the pore' && r[0] === 'size') || (lit === 'particle size' && r[0] === 'size') || (lit === 'density and drag' && r[0] === 'density') || (lit === 'mass carried on the air' && (r[0] === 'density' || r[0] === 'size'));
+      return `<div class="${on ? 'lit' : ''}">${r[1]}</div><div class="cellA ${on ? 'lit' : ''}">${r[2]}</div><div class="cellB ${on ? 'lit' : ''}">${r[3]}</div>`; }).join('');
+}
+function paintWhy(mix, res){
+  if (!S.locked) return;
+  $('whyCard').hidden = false;
+  if (!mix) { $('why').innerHTML = '<p>Click a mixture to load it, then try a method on it.</p>'; return; }
+  if (!res) { $('why').innerHTML = `<p><b>${esc(mix.scene)}.</b> ${esc(mix.ask)}</p><p>Try a method and see what the model says.</p>`; return; }
+  $('why').innerHTML = `<p>${res.reason}</p>`;
+}
+function checkFindings(mix, res){
+  if (!S.locked || !mix || !res) return;
+  if (res.works && res.methodId === 'sieve' && mix.id === 'stonesGrain') discover('size');
+  if (res.works && res.methodId === 'winnow' && mix.id === 'grainHusk') discover('wind');
+  if (res.works && res.methodId === 'magnet' && mix.id === 'nailsSawdust') discover('magnet');
+  if (res.works && res.methodId === 'evap' && mix.id === 'saltWater') discover('evaporation');
+  if (res.works && (res.methodId === 'cloth' || res.methodId === 'paper') && mix.id === 'teaLeaves') discover('filter');
+  if (res.works && res.methodId === 'settle' && mix.id === 'muddyWater') discover('settle');
+  if (!res.works && res.methodId === 'settle' && mix.id === 'teaLeaves') discover('leftover');
+  if (!res.works && (res.methodId === 'cloth' || res.methodId === 'paper') && mix.id === 'saltWater') discover('dissolved');
+  if (mix.id === 'grainHusk' && res.methodId === 'handpick' && res.practical === false) discover('slow');
+  maybeExplain();
+}
+let EXPLAINED = false;
+function maybeExplain(){
+  if (EXPLAINED || !POE) return;
+  if (!S.tried['nailsSawdust|magnet']) return;
+  const r = S.tried['nailsSawdust|magnet'];
+  if (!r.works) return;
+  EXPLAINED = true;
+  POE.explain(`A magnet <b>picks out every iron nail</b> and leaves the sawdust behind, because iron is magnetic and wood dust is not — no
+    sieving or winnowing needed. (Try winnowing on the same tray: since nails are so much heavier than sawdust, moving air
+    can also separate them — but you would lose sawdust off the edge of the tray, and the magnet loses nothing.)`);
+}
+
+/* ============================================================================
+   Controls
+   ============================================================================ */
+build();
+function loadMixture(id){
+  if (!S.locked) return;
+  S.mixture = id; S.method = null;
+  sound('pop'); track('loadMixture', {mixture: id});
+  say(MIXTURES.find(m => m.id === id).ask);
+  paint();
+}
+function tryMethod(id){
+  if (!S.locked || !S.mixture) return;
+  S.method = id;
+  const key = S.mixture + '|' + id;
+  if (!S.tried[key]) S.tried[key] = run(S.mixture, id);
+  const res = S.tried[key];
+  sound(res.works ? 'chime' : 'oops');
+  track('tryMethod', {mixture: S.mixture, method: id, works: res.works});
+  paint();
+}
+for (const m of MIXTURES) {
+  const el = $('mixhit_' + m.id);
+  el.addEventListener('click', () => loadMixture(m.id));
+  el.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); loadMixture(m.id); } });
+}
+for (const me of METHODS) {
+  const el = $('methit_' + me.id);
+  el.addEventListener('click', () => tryMethod(me.id));
+  el.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); tryMethod(me.id); } });
+}
+$('btnClear').addEventListener('click', () => { S.mixture = null; S.method = null; sound('whoosh'); track('clear'); paint(); });
+
+function lockControls(lock){
+  $('mixJars').style.pointerEvents = lock ? 'none' : '';
+  $('methodBtns').style.pointerEvents = lock ? 'none' : '';
+  $('btnClear').disabled = lock;
+  $('gate').hidden = !lock;
+}
+
+/* ============================================================================
+   Start
+   ============================================================================ */
+findings($('finds'), [
+  {id: 'size',        icon: '📏', label: 'A sieve sorts by size',              hint: 'Try the stones-and-grain mixture'},
+  {id: 'wind',        icon: '💨', label: 'Winnowing sorts by weight in air',   hint: 'Try winnowing on the wheat and husk'},
+  {id: 'magnet',      icon: '🧲', label: 'A magnet only lifts what is magnetic', hint: 'Try the nails and sawdust'},
+  {id: 'evaporation', icon: '🔥', label: 'Evaporation gets a dissolved solid back', hint: 'Try evaporating the salt water'},
+  {id: 'filter',      icon: '🧵', label: 'A filter catches what is bigger than its pores', hint: 'Try filtering the tea'},
+  {id: 'settle',      icon: '🫙', label: 'Settling and decanting clears a suspension', hint: 'Try settling the muddy water'},
+  {id: 'leftover',    icon: '🍃', label: 'Decanting does not catch everything', hint: 'Try settling the tea leaves instead'},
+  {id: 'dissolved',   icon: '🧂', label: 'You cannot filter out a dissolved solid', hint: 'Try filtering the salt water'},
+  {id: 'slow',        icon: '🐌', label: 'Handpicking works, but not at scale', hint: 'Try handpicking the wheat and husk'},
+], () => toast('All nine found — you now know why a farm has a soop, a sieve and a magnet, not just hands.', 4400));
+
+const POE = predict($('poe'), {
+  id: 'nails-sawdust',
+  q: 'A carpenter drops a handful of iron nails into a bin of sawdust. Which method separates them fastest, without losing a single nail?',
+  options: [
+    {id: 'winnow', text: 'Winnowing: blow the sawdust away with air.'},
+    {id: 'sieve',  text: 'Sieving: shake it through a mesh.'},
+    {id: 'magnet', text: 'A magnet.', right: true},
+    {id: 'filter', text: 'Filtration.'},
+  ],
+  onLock(){
+    S.locked = true;
+    lockControls(false);
+    say('Pick a mixture, then try a method on it.');
+    paint();
+  },
+});
+lockControls(!POE.locked);
+if (!Play.FF('predict')) S.locked = true;
+paint();
+window.applyFeatures = () => paint();
+window.PG_STATE = () => JSON.parse(JSON.stringify(S));
+window.PG_MODEL = {MATERIALS, MIXTURES, run, sizeRatio};
+</script>
+</body>
+</html>

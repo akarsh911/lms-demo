@@ -1,0 +1,355 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Friends on the Bench</title>
+<meta name="description" content="Class 1: tap the gate to bring a friend to the bench, tap a friend to send them home, and hear the number sentence the bench writes for itself.">
+<link rel="icon" href="../../favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600&family=Inter:wght@400;500;600;700&family=Nunito:wght@500;700;800&display=swap">
+<link rel="stylesheet" href="../../play.css">
+<style>
+.pg-main.tiny-main{grid-template-columns:minmax(0,1fr) 250px; padding-top:12px; padding-bottom:12px}
+.tiny-main .pg-stage{align-self:start; min-height:0}
+.pg-intro{display:flex; align-items:baseline; gap:18px; flex-wrap:wrap; padding-top:12px}
+.pg-intro p{margin:0}
+#stage{background:#bfe6ff}
+.hit{cursor:pointer}
+svg [tabindex]:focus{outline:none}
+svg [tabindex]:focus-visible{outline:none; stroke:#b8321f; stroke-width:4; stroke-dasharray:8 8}
+.hear{width:100%; min-height:76px; font-size:24px; font-family:var(--font-head); border-radius:var(--radius)}
+.hear .ic{font-size:30px}
+.try{padding:10px; text-align:center; cursor:pointer; border:2px solid var(--hair-2); transition:transform .2s var(--spring)}
+.try:hover{border-color:var(--accent)}
+.try:active{transform:scale(.97)}
+.try svg{display:block; width:100%; height:auto}
+.try .kicker{margin:2px 0 0}
+.fade{transition:opacity .4s}
+@media (max-width:980px){ .pg-main.tiny-main{grid-template-columns:1fr} }
+</style>
+</head>
+<body>
+<header class="pg-top"></header>
+
+<div class="pg-intro">
+  <h1>Friends on the bench</h1>
+  <p>Tap the gate. A friend comes to sit down. Tap a friend to send them home again.</p>
+</div>
+
+<main class="pg-main tiny-main">
+  <section class="pg-stage" id="stageWrap">
+    <svg id="stage" viewBox="0 0 1000 660" role="img" aria-label="A park with a bench with eight seats, a gate on the left where friends arrive one at a time, and a bush where two friends arrive together. A signboard shows the number sentence."></svg>
+  </section>
+
+  <aside class="pg-side">
+    <button class="btn primary hear" id="hear" aria-label="Hear what to do"><span class="ic">🔊</span> Hear it</button>
+    <button class="card try" id="tryCard" aria-label="What to try next. Tap to hear it."><svg id="tryArt" viewBox="-80 -55 160 110"></svg><div class="kicker">Try this</div></button>
+    <div class="card"><h3>⭐ Found</h3><div id="finds"></div></div>
+  </aside>
+</main>
+
+<script src="../../play.js"></script>
+<script>
+'use strict';
+const {$, clamp, lerp, loop, tween, sleep, sound, tone, say, track, confetti, findings, discover, found,
+       shareState, sharedState, mount, reduced, ease} = Play;
+mount({thread: 'addition', band: 'tiny'});
+
+/* MODEL:start ==================================================================
+   Addition and subtraction as friends joining and leaving a park bench
+   (NCERT Joyful Mathematics Class 1, Ch 5 "How Many?" and Ch 6 "Vegetable Farm").
+   The bench has MAXSEATS seats. A friend arriving through the gate is AUGMENTATION
+   (adding one more to what is already there); two friends arriving together from
+   the bush is AGGREGATION (combining two already-formed groups, "4 and 2 make 6").
+   A friend tapped on the bench goes home: TAKING AWAY. Every action is recorded as
+   {op, before, delta, after}, and the signboard and the spoken sentence are built
+   from that record by the model — never typed in advance.
+   ============================================================================ */
+const MAXSEATS = 8;
+const KINDS = ['cat', 'dog', 'bunny', 'duck'];
+const kindAt = n => KINDS[((n % KINDS.length) + KINDS.length) % KINDS.length];
+const WORDS = ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten'];
+const wordOf = n => WORDS[n] || String(n);
+const sentenceAdd = (before, add) => `${before} + ${add} = ${before + add}`;
+const sentenceSub = (before, sub) => `${before} − ${sub} = ${before - sub}`;
+const storyAdd = (before, add) => `${wordOf(before)} friend${before === 1 ? '' : 's'} and ${wordOf(add)} more make ${wordOf(before + add)}!`;
+const storySub = (before, sub) => `${wordOf(before)} friend${before === 1 ? '' : 's'}, ${wordOf(sub)} hop${sub === 1 ? 's' : ''} off… now ${wordOf(before - sub)}!`;
+/* MODEL:end */
+
+/* ---- state: plain data --------------------------------------------------- */
+const S = {seats: Array(MAXSEATS).fill(null), spawn: 0, last: null, everHad: false, pairs: 0};
+const shared = sharedState();
+if (shared && Array.isArray(shared.seats)) {
+  S.seats = Array.from({length: MAXSEATS}, (_, i) => (shared.seats[i] === null || KINDS.includes(shared.seats[i])) ? shared.seats[i] || null : null);
+  S.everHad = S.seats.some(Boolean);
+}
+shareState(() => ({seats: S.seats}));
+const filled = () => S.seats.filter(Boolean).length;
+const firstEmpty = () => S.seats.indexOf(null);
+
+/* ============================================================================
+   The stage: built once, then patched.
+   ============================================================================ */
+const svg = $('stage');
+const f1 = n => (+n).toFixed(1);
+const SEAT_X = Array.from({length: MAXSEATS}, (_, i) => 265 + i * 65);
+const SEAT_Y = 406;
+const GATE = {x: 108, y: 372};
+const BUSH = {x: 108, y: 526};
+const SIGN = {x: 872, y: 190};
+
+const KIND_COL = {cat: '#ff8a5c', dog: '#a9784c', bunny: '#f6b6cf', duck: '#ffd24a'};
+function earsOf(kind, col){
+  if (kind === 'cat') return `<path d="M-23 -98 L-9 -72 L-31 -70 Z" fill="${col}"/><path d="M23 -98 L9 -72 L31 -70 Z" fill="${col}"/>`;
+  if (kind === 'dog') return `<path d="M-26 -80 q-18 18 -6 42 q16 -2 18 -26 Z" fill="${col}"/><path d="M26 -80 q18 18 6 42 q-16 -2 -18 -26 Z" fill="${col}"/>`;
+  if (kind === 'bunny') return `<ellipse cx="-13" cy="-112" rx="8.5" ry="27" fill="${col}"/><ellipse cx="13" cy="-112" rx="8.5" ry="27" fill="${col}"/>
+    <ellipse cx="-13" cy="-110" rx="4" ry="19" fill="#ffe3ee"/><ellipse cx="13" cy="-110" rx="4" ry="19" fill="#ffe3ee"/>`;
+  return `<path d="M13 -84 q22 1 25 15 q-15 8 -25 -3 Z" fill="#f2a41f"/>`; /* duck bill */
+}
+function friendArt(kind){
+  const col = KIND_COL[kind];
+  return `
+  <g class="legL"><rect x="-20" y="-42" width="14" height="44" rx="6" fill="${col}"/></g>
+  <g class="legR"><rect x="6" y="-42" width="14" height="44" rx="6" fill="${col}"/></g>
+  <ellipse cx="0" cy="-72" rx="30" ry="34" fill="${col}"/>
+  <ellipse cx="0" cy="-60" rx="15" ry="17" fill="#fff8ec" opacity=".8"/>
+  ${earsOf(kind, col)}
+  <circle cx="0" cy="-98" r="22" fill="${col}"/>
+  <circle cx="-8" cy="-100" r="3.2" fill="#2a1d12"/><circle cx="8" cy="-100" r="3.2" fill="#2a1d12"/>
+  <path class="mouth" d="M-6 -90 q6 5 12 0" stroke="#2a1d12" stroke-width="2" fill="none" stroke-linecap="round"/>
+  ${kind === 'cat' ? '<path d="M22 -70 q16 6 16 -8" stroke="' + col + '" stroke-width="7" fill="none" stroke-linecap="round"/>' : ''}`;
+}
+function pawIcon(x, y, col){
+  return `<g transform="translate(${x} ${y})"><ellipse rx="12" ry="10" fill="${col}"/><circle cx="-11" cy="-13" r="5" fill="${col}"/><circle cx="0" cy="-17" r="5.5" fill="${col}"/><circle cx="11" cy="-13" r="5" fill="${col}"/></g>`;
+}
+
+function build(){
+  let bg = '';
+  for (let i = 0; i < 40; i++) { const x = (i * 271) % 1000, y = 40 + (i * 97) % 180; if (Math.hypot(x - 900, y - 60) < 90) continue;
+    bg += i % 3 === 0 ? `<ellipse cx="${x}" cy="${y}" rx="20" ry="9" fill="#fff" opacity=".55"/>` : ''; }
+
+  let seatsArt = '';
+  for (let i = 0; i < MAXSEATS; i++) seatsArt += `<g id="seatG${i}" transform="translate(${SEAT_X[i]} ${SEAT_Y})" opacity="0"><g id="seatJ${i}"></g></g>`;
+
+  svg.innerHTML = `
+  <defs>
+    <linearGradient id="gSky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#8fd0ff"/><stop offset="1" stop-color="#d7f0ff"/></linearGradient>
+    <radialGradient id="gSun" cx="40%" cy="35%"><stop offset="0" stop-color="#fff6c8"/><stop offset=".6" stop-color="#ffc53d"/><stop offset="1" stop-color="#e07b39"/></radialGradient>
+    <linearGradient id="gGrass" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#6fc27a"/><stop offset="1" stop-color="#4aa85c"/></linearGradient>
+    <filter id="soft" x="-30%" y="-30%" width="160%" height="160%"><feDropShadow dx="0" dy="4" stdDeviation="5" flood-color="#000" flood-opacity=".28"/></filter>
+  </defs>
+  <rect width="1000" height="660" fill="url(#gSky)"/>
+  ${bg}
+  <circle cx="900" cy="60" r="58" fill="url(#gSun)"/>
+  <g fill="#ffc53d">${Array.from({length: 8}, (_, i) => { const t = i / 8 * Math.PI * 2, r0 = 64, r1 = i % 2 ? 84 : 96;
+    return `<path d="M${f1(900 + r0 * Math.cos(t))} ${f1(60 + r0 * Math.sin(t))} L${f1(900 + r1 * Math.cos(t))} ${f1(60 + r1 * Math.sin(t))}" stroke="#ffc53d" stroke-width="7" stroke-linecap="round"/>`; }).join('')}</g>
+  <rect y="440" width="1000" height="220" fill="url(#gGrass)"/>
+  <path d="M0 440 Q500 420 1000 440 V460 Q500 440 0 460 Z" fill="#5cb96b"/>
+
+  <!-- big tree behind the bench -->
+  <path d="M780 660 L788 470 L802 470 L810 660 Z" fill="#8a5a2b"/>
+  <circle cx="794" cy="410" r="86" fill="#3aa35a"/><circle cx="740" cy="430" r="56" fill="#348f4d"/><circle cx="856" cy="430" r="60" fill="#4bb86b"/>
+
+  <!-- the gate: tap for one friend -->
+  <g transform="translate(${GATE.x} ${GATE.y})">
+    <path d="M-50 -66 Q0 -100 50 -66 L50 74 L-50 74 Z" fill="#e2a35c" stroke="#8a5a2b" stroke-width="5"/>
+    <rect x="-36" y="-50" width="30" height="112" rx="6" fill="#c9863f"/><rect x="6" y="-50" width="30" height="112" rx="6" fill="#c9863f"/>
+    <circle cx="12" cy="6" r="7" fill="#5a3d20"/>
+    <text x="0" y="92" text-anchor="middle" font-family="Fredoka, Nunito, sans-serif" font-size="17" font-weight="600" fill="#5a3d20">Tap: +1</text>
+  </g>
+  <rect id="gateHit" class="hit" x="${GATE.x - 60}" y="${GATE.y - 90}" width="120" height="180" rx="18" fill="transparent" role="button" tabindex="0" aria-label="The gate. Tap it and one friend comes to sit on the bench."/>
+
+  <!-- the bush: tap for two friends together -->
+  <g transform="translate(${BUSH.x} ${BUSH.y})">
+    <ellipse cx="0" cy="10" rx="58" ry="40" fill="#3aa35a"/><ellipse cx="-30" cy="0" rx="34" ry="28" fill="#348f4d"/><ellipse cx="30" cy="0" rx="34" ry="28" fill="#4bb86b"/>
+    ${pawIcon(-16, -14, '#ff8a5c')}${pawIcon(16, -14, '#a9784c')}
+    <text x="0" y="58" text-anchor="middle" font-family="Fredoka, Nunito, sans-serif" font-size="17" font-weight="600" fill="#fff">Tap: +2</text>
+  </g>
+  <rect id="bushHit" class="hit" x="${BUSH.x - 66}" y="${BUSH.y - 46}" width="132" height="110" rx="20" fill="transparent" role="button" tabindex="0" aria-label="The bush. Tap it and two friends come to sit together."/>
+
+  <!-- the bench: a backrest of three slats, a seat plank the friends sit on, and four legs -->
+  <rect x="234" y="330" width="14" height="96" fill="#5a3719"/><rect x="752" y="330" width="14" height="96" fill="#5a3719"/>
+  <rect x="222" y="330" width="556" height="12" rx="4" fill="#a9713c" stroke="#6b4423" stroke-width="2"/>
+  <rect x="222" y="354" width="556" height="12" rx="4" fill="#a9713c" stroke="#6b4423" stroke-width="2"/>
+  <rect x="222" y="378" width="556" height="12" rx="4" fill="#a9713c" stroke="#6b4423" stroke-width="2"/>
+  <rect x="216" y="${SEAT_Y}" width="568" height="24" rx="6" fill="#c9863f" stroke="#6b4423" stroke-width="3"/>
+  <rect x="234" y="${SEAT_Y + 24}" width="16" height="66" fill="#5a3719"/><rect x="750" y="${SEAT_Y + 24}" width="16" height="66" fill="#5a3719"/>
+
+  <!-- the friends: drawn before the bench-back-slats so nothing hides them oddly, but after grass -->
+  <g id="seats">${seatsArt}</g>
+
+  <!-- the signboard: the number sentence, written by the model -->
+  <rect x="${SIGN.x - 8}" y="${SIGN.y + 60}" width="16" height="180" fill="#8a5a2b"/>
+  <g filter="url(#soft)">
+    <rect x="${SIGN.x - 128}" y="${SIGN.y - 90}" width="256" height="150" rx="20" fill="#3a2a1a"/>
+  </g>
+  <rect x="${SIGN.x - 118}" y="${SIGN.y - 80}" width="236" height="130" rx="12" fill="#2f4a3f" stroke="#7da38f" stroke-width="2"/>
+  <text id="signText" x="${SIGN.x}" y="${SIGN.y - 24}" text-anchor="middle" font-family="Fredoka, Nunito, sans-serif" font-size="38" font-weight="600" fill="#f4f1e6">0</text>
+  <text id="signIdle" x="${SIGN.x}" y="${SIGN.y - 24}" text-anchor="middle" font-family="Fredoka, Nunito, sans-serif" font-size="19" font-weight="600" fill="#cfe3d6">How many friends?</text>
+  <text id="signWord" x="${SIGN.x}" y="${SIGN.y + 16}" text-anchor="middle" font-size="14.5" font-weight="700" fill="#cfe3d6"></text>
+
+  <!-- count of empty/full seats -->
+  <text x="${SIGN.x}" y="${SIGN.y + 42}" text-anchor="middle" font-family="Fredoka, Nunito, sans-serif" font-size="16" font-weight="600" fill="#cfe3d6"><tspan id="seatCount">0</tspan> of 8 seats</text>
+
+  <g id="fx" pointer-events="none"></g>
+  `;
+}
+build();
+
+/* ---- juice ---------------------------------------------------------------- */
+function hop(el, ms = 480){
+  if (reduced()) return Promise.resolve();
+  return tween(0, 1, ms, t => {
+    const k = Math.sin(t * Math.PI);
+    el.setAttribute('transform', `translate(0 ${(-46 * k).toFixed(1)}) rotate(${(6 * Math.sin(t * Math.PI * 2)).toFixed(1)})`);
+  }, ease.out).then(() => el.removeAttribute('transform'));
+}
+function squash(el, ms = 400){
+  return tween(0, 1, ms, t => { const k = Math.sin(t * Math.PI * 3) * (1 - t) * 0.16;
+    el.setAttribute('transform', `scale(${(1 + k).toFixed(3)} ${(1 - k).toFixed(3)})`); }, x => x)
+    .then(() => el.removeAttribute('transform'));
+}
+
+/* ---- paint ------------------------------------------------------------------ */
+function paint(){
+  for (let i = 0; i < MAXSEATS; i++) {
+    const k = S.seats[i];
+    $('seatG' + i).setAttribute('opacity', k ? 1 : 0);
+    $('seatJ' + i).innerHTML = k ? friendArt(k) : '';
+  }
+  $('seatCount').textContent = filled();
+  const L = S.last;
+  $('signIdle').setAttribute('opacity', L ? 0 : 1);
+  const story = L ? (L.op === 'add' ? storyAdd(L.before, L.delta) : storySub(L.before, L.delta)) : '';
+  $('signWord').textContent = story;
+  $('signWord').setAttribute('font-size', story.length > 34 ? 12.5 : 14.5);
+  $('signText').textContent = L ? (L.op === 'add' ? sentenceAdd(L.before, L.delta) : sentenceSub(L.before, L.delta)) : '';
+  const noRoom = filled() >= MAXSEATS;
+  $('gateHit').setAttribute('aria-disabled', noRoom);
+  $('bushHit').setAttribute('aria-disabled', filled() > MAXSEATS - 2);
+}
+
+/* ---- the learner's moves ---------------------------------------------------- */
+function record(op, before, delta){ S.last = {op, before, delta, after: op === 'add' ? before + delta : before - delta}; }
+
+function arrive(n){
+  const empties = []; for (let i = 0; i < MAXSEATS; i++) if (!S.seats[i]) empties.push(i);
+  if (empties.length < n) { sound('oops'); say(n === 1 ? 'The bench is full!' : 'There is not room for two more!'); squash($('stage'), 260); return; }
+  const before = filled();
+  for (let j = 0; j < n; j++) {
+    const i = empties[j];
+    S.seats[i] = kindAt(S.spawn++);
+    hop($('seatJ' + i));
+  }
+  S.everHad = true;
+  if (n === 2) S.pairs++;
+  record('add', before, n);
+  sound('pop'); sound('tada');
+  paint();
+  say(storyAdd(before, n));
+  track('arrive', {n, before, after: before + n});
+  react();
+}
+function leave(i){
+  if (!S.seats[i]) return;
+  const before = filled();
+  S.seats[i] = null;
+  record('sub', before, 1);
+  sound('boing');
+  paint();
+  say(storySub(before, 1));
+  track('leave', {before, after: before - 1});
+  react();
+}
+
+/* ---- discoveries -------------------------------------------------------------- */
+function react(){
+  const n = filled();
+  if (n === 2) discover('two', clientOf(SEAT_X[1], SEAT_Y - 60));
+  if (n === MAXSEATS) discover('full', clientOf(SEAT_X[MAXSEATS - 1], SEAT_Y - 60));
+  if (n === 0 && S.everHad) discover('empty', clientOf(500, 500));
+  if (S.pairs >= 1) discover('pair', clientOf(BUSH.x, BUSH.y));
+  if (S.last && S.last.op === 'add' && S.last.before > 0) discover('addStory', clientOf(SIGN.x, SIGN.y));
+  if (S.last && S.last.op === 'sub') discover('takeStory', clientOf(SIGN.x, SIGN.y));
+  paintTry();
+}
+function clientOf(x, y){
+  const m = svg.getScreenCTM(); if (!m) return {x: innerWidth / 2, y: innerHeight / 2};
+  const p = svg.createSVGPoint(); p.x = x; p.y = y; const q = p.matrixTransform(m);
+  return {x: q.x, y: q.y};
+}
+
+/* ---- try card: what to do next, shown as a small picture ----------------------- */
+const GOALS = ['two', 'pair', 'addStory', 'full', 'takeStory', 'empty'];
+const TRY = {
+  two:      {line: 'Tap the gate. Can you get two friends on the bench?', art: pawIcon(0, 20, '#e07b39') + pawIcon(-30, 20, '#e07b39')},
+  pair:     {line: 'Tap the bush! Two friends can hop on together.', art: pawIcon(-16, 20, '#3aa35a') + pawIcon(16, 20, '#3aa35a')},
+  addStory: {line: 'Add more friends and listen to the number sentence.', art: '<text x="0" y="10" text-anchor="middle" font-family="Fredoka, Nunito, sans-serif" font-size="34" font-weight="600" fill="#e07b39">+</text>'},
+  full:     {line: 'Fill up every seat! How many friends fit on the bench?', art: Array.from({length: 4}, (_, i) => `<circle cx="${-45 + i * 30}" cy="10" r="12" fill="#e07b39"/>`).join('')},
+  takeStory:{line: 'Tap a friend on the bench to send them home.', art: '<path d="M-30 10 L30 10 M14 -6 L30 10 L14 26" stroke="#8a5a2b" stroke-width="7" fill="none" stroke-linecap="round" stroke-linejoin="round"/>'},
+  empty:    {line: 'Can you make the bench empty again?', art: '<circle cx="0" cy="10" r="26" fill="none" stroke="#8a5a2b" stroke-width="6" stroke-dasharray="8 8"/>'},
+};
+let shownGoal;
+function currentGoal(){ return GOALS.find(g => !found(g)) || null; }
+function paintTry(){
+  const g = currentGoal();
+  if (g === shownGoal) return;
+  shownGoal = g;
+  $('tryArt').innerHTML = g ? TRY[g].art : '<text x="0" y="14" text-anchor="middle" font-size="46">⭐</text>';
+}
+function sayTry(){ const g = currentGoal(); say(g ? TRY[g].line : 'You found everything! Keep making friends.'); sound('tick'); track('hear', {goal: g}); }
+
+/* ---- wiring --------------------------------------------------------------------- */
+const onTap = (id, fn) => { $(id).addEventListener('click', fn); $(id).addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fn(); } }); };
+onTap('gateHit', () => arrive(1));
+onTap('bushHit', () => arrive(2));
+for (let i = 0; i < MAXSEATS; i++) {
+  const hit = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+  hit.setAttribute('id', 'seatHit' + i); hit.setAttribute('class', 'hit');
+  hit.setAttribute('x', SEAT_X[i] - 34); hit.setAttribute('y', SEAT_Y - 130); hit.setAttribute('width', 68); hit.setAttribute('height', 140);
+  hit.setAttribute('fill', 'transparent'); hit.setAttribute('role', 'button'); hit.setAttribute('tabindex', '0');
+  hit.setAttribute('aria-label', 'A seat. Tap a friend to send them home.');
+  svg.appendChild(hit);
+  onTap('seatHit' + i, () => leave(i));
+}
+$('hear').addEventListener('click', sayTry);
+$('tryCard').addEventListener('click', sayTry);
+
+/* ---- idle life: a little swing of the legs, so the bench feels alive ------------ */
+let T = 0;
+function idle(dt){
+  T += dt;
+  if (reduced()) return;
+  for (let i = 0; i < MAXSEATS; i++) {
+    if (!S.seats[i]) continue;
+    const j = $('seatJ' + i); if (!j) continue;
+    const legL = j.querySelector('.legL'), legR = j.querySelector('.legR');
+    if (legL) legL.setAttribute('transform', `rotate(${(8 * Math.sin(T * 2.2 + i)).toFixed(1)} -13 -42)`);
+    if (legR) legR.setAttribute('transform', `rotate(${(-8 * Math.sin(T * 2.2 + i)).toFixed(1)} 13 -42)`);
+  }
+}
+
+/* ============================================================================
+   Start
+   ============================================================================ */
+findings($('finds'), [
+  {id: 'two',       icon: '🐶', label: 'Two friends!',            say: 'Two friends on the bench!'},
+  {id: 'pair',      icon: '🤝', label: 'Friends come in twos',    say: 'Two friends hopped on together. That is a plus two!'},
+  {id: 'addStory',  icon: '➕',       label: 'An addition story',       say: 'You made an addition story!'},
+  {id: 'full',      icon: '🎉', label: 'A full bench!',           say: 'Eight friends! The bench is full!'},
+  {id: 'takeStory', icon: '➖',       label: 'A take-away story',       say: 'A friend hopped off. That is a take-away story!'},
+  {id: 'empty',     icon: '🍃', label: 'An empty bench',          say: 'Nobody left! The bench is empty.'},
+], () => { say('You found every story on the bench!'); paintTry(); });
+
+paint();
+paintTry();
+loop(idle);
+say('Tap the gate. Let’s bring a friend to the bench!');
+window.applyFeatures = () => paint();
+window.PG_STATE = () => ({seats: S.seats.slice(), filled: filled(), last: S.last, everHad: S.everHad, pairs: S.pairs, spawn: S.spawn});
+window.PG_MODEL = {MAXSEATS, KINDS, kindAt, wordOf, sentenceAdd, sentenceSub, storyAdd, storySub};
+</script>
+</body>
+</html>

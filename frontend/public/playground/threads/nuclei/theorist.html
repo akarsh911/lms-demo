@@ -1,0 +1,678 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Nuclei</title>
+<meta name="description" content="Class 12: the binding-energy-per-nucleon curve computed from a nuclear mass formula you can tune, fission and fusion energies from real mass differences, and radioactive decay counted from random events, one nucleus at a time.">
+<link rel="icon" href="../../favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600&family=Inter:wght@400;500;600;700&family=Nunito:wght@500;700;800&family=Newsreader:opsz,wght@6..72,400;6..72,500&family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="../../play.css">
+<style>
+/* Only what this page needs beyond play.css. */
+.pg-stage{align-self:start; min-height:0}
+.gate{position:absolute; inset:0; display:grid; place-items:center; pointer-events:none}
+.gate span{background:rgba(29,20,18,.86); color:#fff; padding:10px 16px; border-radius:99px; font-weight:600; font-size:14px}
+.seg{display:grid; grid-auto-flow:column; grid-auto-columns:1fr; gap:4px; background:var(--sunk); padding:4px; border-radius:var(--radius-sm); margin-bottom:10px}
+.seg button{border:0; background:transparent; border-radius:7px; min-height:30px; font-weight:600; font-size:12px; cursor:pointer; color:var(--ink-2); padding:0 4px}
+.seg button[aria-pressed="true"]{background:var(--card); color:var(--ink); box-shadow:var(--shadow)}
+.seg button:disabled{opacity:.5; cursor:default}
+.chips{display:flex; flex-wrap:wrap; gap:5px; margin:4px 0 8px}
+.chips button{min-height:28px; border-radius:7px; border:1.5px solid var(--hair-2); background:var(--card); cursor:pointer; font-weight:600; font-size:12px; color:var(--ink-2); padding:0 8px; font-family:var(--font-mono)}
+.chips button[aria-pressed="true"]{border-color:var(--accent); color:var(--ink); box-shadow:0 0 0 2px var(--accent-soft)}
+.nums{display:grid; grid-template-columns:1fr auto; gap:3px 12px; font-size:13px; align-items:baseline}
+.nums span{color:var(--ink-2)}
+.nums b{font-family:var(--font-mono); font-weight:600; font-size:12.5px; font-variant-numeric:tabular-nums; text-align:right}
+.nums .eq{grid-column:1/-1; font-family:var(--font-mono); font-size:11px; color:var(--ink-3); margin:-2px 0 4px}
+.nums .sep{grid-column:1/-1; height:1px; background:var(--hair); margin:3px 0}
+.why p{font-size:13.5px; margin-bottom:.5em}
+.note{font-size:12.5px; color:var(--ink-3); margin:6px 0 0}
+.ctl{grid-template-columns:130px 1fr 56px; margin:4px 0}
+.ctl label{font-size:12px; line-height:1.2}
+.ctl output{font-family:var(--font-mono); font-size:12px; font-weight:600; min-width:0}
+.btn[aria-pressed="true"]{background:var(--accent-soft); border-color:var(--accent)}
+.row b{font-family:var(--font-mono)}
+#curveHit{cursor:ew-resize} #splitHit{cursor:ew-resize}
+</style>
+</head>
+<body>
+<header class="pg-top"></header>
+
+<div class="pg-intro">
+  <h1>Nuclei</h1>
+  <p>Every nucleus is lighter than the protons and neutrons it is made of — the missing mass is the energy holding it together.
+     Here that energy comes from one nuclear mass formula, with its surface and Coulomb terms left as sliders for you to set.
+     Watch the binding energy per nucleon rise, peak near iron and fall again; split a heavy nucleus or join light ones and read the energy
+     straight off the same curve; and watch a few hundred nuclei decide, one at a time and at random, when to decay.</p>
+</div>
+
+<main class="pg-main wide-side">
+  <section class="pg-stage" id="stageWrap">
+    <svg id="stage" viewBox="0 0 1000 660" role="img" aria-label="Binding energy per nucleon, nuclear fission and fusion, and radioactive decay"></svg>
+    <div class="gate" id="gate"><span>Make your prediction first →</span></div>
+  </section>
+
+  <aside class="pg-side">
+    <div id="poe"></div>
+
+    <div class="card" id="ctlCard">
+      <div class="seg" role="group" aria-label="Model">
+        <button id="tabBind" aria-pressed="true">Binding energy</button>
+        <button id="tabSplit" aria-pressed="false">Split &amp; join</button>
+        <button id="tabDecay" aria-pressed="false">Random decay</button>
+      </div>
+
+      <div id="ctlBind">
+        <div class="kicker">Real nuclides</div>
+        <div class="chips" id="chipsBind"></div>
+        <div class="ctl"><label for="aSlide">Mass number A</label><input type="range" id="aSlide" min="2" max="250" step="1" value="56"><output id="aOut">56</output></div>
+        <div class="row" style="gap:6px">
+          <button class="btn sm" id="zAuto" aria-pressed="true">Most stable Z</button>
+          <button class="btn sm" id="zFree" aria-pressed="false">Choose Z</button>
+        </div>
+        <div class="ctl" id="zRow" hidden><label for="zSlide">Protons Z</label><input type="range" id="zSlide" min="1" max="120" step="1" value="26"><output id="zOut">26</output></div>
+        <div class="ctl"><label for="aS">Surface term a<sub>S</sub> (MeV)</label><input type="range" id="aS" min="5" max="30" step="0.1" value="17.8"><output id="aSOut">17.8</output></div>
+        <div class="ctl"><label for="aC">Coulomb term a<sub>C</sub> (MeV)</label><input type="range" id="aC" min="0" max="1.4" step="0.01" value="0.711"><output id="aCOut">0.711</output></div>
+        <button class="btn sm" id="btnResetLaw">Reset to the real values</button>
+        <p class="note">Drag along the graph, or use the slider. a<sub>S</sub> and a<sub>C</sub> are fixed by nature — here they’re yours to break.</p>
+      </div>
+
+      <div id="ctlSplit" hidden>
+        <div class="kicker">Split a heavy nucleus (fission)</div>
+        <div class="ctl"><label for="a1">First fragment’s A</label><input type="range" id="a1" min="60" max="170" step="1" value="141"><output id="a1Out">141</output></div>
+        <div class="row" style="gap:8px; align-items:center"><span style="font-size:12.5px; color:var(--ink-2)">Neutrons released, k</span>
+          <button class="btn sm" id="kMinus">−</button><b id="kVal">3</b><button class="btn sm" id="kPlus">+</button></div>
+        <div class="row" style="gap:6px; flex-wrap:wrap">
+          <button class="btn sm" id="btnClassic">Ba-141 + Kr-92 + 3n</button>
+          <button class="btn sm" id="btnBest">Most energetic split</button>
+        </div>
+        <div class="kicker" style="margin-top:12px">Join light nuclei (fusion)</div>
+        <div class="chips" id="chipsFusion"></div>
+        <p class="note">Drag the bar itself, or use the slider. Fusion uses each nuclide’s own measured mass, not the formula.</p>
+      </div>
+
+      <div id="ctlDecay" hidden>
+        <div class="kicker">Isotope</div>
+        <div class="chips" id="chipsDecay"></div>
+        <div class="ctl"><label for="n0">Starting nuclei N₀</label><input type="range" id="n0" min="20" max="2000" step="10" value="400"><output id="n0Out">400</output></div>
+        <div class="row"><button class="btn sm primary" id="btnRun">Run the clock, 5 half-lives</button></div>
+        <p class="note">Each nucleus decides for itself, at random, using only the half-life — never how long it has already survived.</p>
+      </div>
+    </div>
+
+    <div class="card" id="numCard">
+      <div class="kicker" id="numKick">Measured by the model</div>
+      <div id="nums"></div>
+    </div>
+
+    <div class="card why" id="whyCard" hidden>
+      <div class="kicker">What the model says</div>
+      <div id="why"></div>
+    </div>
+
+    <div class="card"><div class="kicker">To find</div><div id="finds"></div></div>
+  </aside>
+</main>
+
+<script src="../../play.js"></script>
+<script>
+'use strict';
+const {$, esc, clamp, lerp, fmt, drag, loop, sound, say, track, toast, predict, findings, discover, found,
+       shareState, sharedState, mount, reduced, mulberry32, tween} = Play;
+mount({thread: 'nuclei', band: 'theorist'});
+
+/* MODEL:start ================================================================
+   1. BINDING ENERGY. A nucleus (Z protons, N = A − Z neutrons) is lighter than
+      its separate parts. Using atomic masses (NCERT's own convention, so the
+      electrons cancel): BE(A,Z) = [Z·m(¹H) + N·mn − M(A,Z)]·c², c² = 931.494
+      MeV/u. Where a real measured mass M isn't picked, the semi-empirical mass
+      formula (the liquid-drop model) stands in for it:
+        BE = aV·A − aS·A^(2/3) − aC·Z(Z−1)/A^(1/3) − aA·(A−2Z)²/A + δ(A,Z)
+      volume (every nucleon binds alike) minus surface (surface nucleons have
+      fewer neighbours) minus Coulomb (protons repel) minus asymmetry (N ≈ Z is
+      favoured) plus a pairing bonus δ. aV, aA and δ are held fixed; aS and aC —
+      normally fixed by the strong force and by e² — are sliders. For a given A,
+      the Z that maximises BE (differentiating, dropping the small −Z term and
+      pairing) is Z ≈ A / (2 + aC·A^(2/3) / (2·aA)): the valley of stability.
+   2. FISSION AND FUSION. Splitting or joining nuclei releases energy exactly
+      when the products are more tightly bound than the reactants:
+      Q = ΣBE(products) − ΣBE(reactants), using the SAME formula/masses as
+      above (fission, via the formula, so aS/aC changes it too; fusion, via
+      each light nuclide's own precisely measured mass).
+   3. RADIOACTIVE DECAY. Nothing is drawn from an exponential curve. N₀
+      separate nuclei are tracked; every timestep dt, each surviving nucleus is
+      tested once against p = 1 − e^(−λ·dt) with its own random number
+      (mulberry32) and removed if it "decays". The exponential only shows up
+      because that is what a very large number of independent random events
+      averages out to.
+   ============================================================================ */
+const U_MEV = 931.494, M_N = 1.008665, M_H = 1.007825, M_E = 0.000549;
+const AV = 15.75, AA = 23.7, AP = 11.18;               // fixed SEMF terms (MeV)
+const DEF_AS = 17.8, DEF_AC = 0.711;
+const pairingDelta = (A, Z) => { const N = A - Z, ez = Z % 2 === 0, en = N % 2 === 0;
+  return ez && en ? AP / Math.sqrt(A) : (!ez && !en ? -AP / Math.sqrt(A) : 0); };
+function beSEMF(A, Z, aS = DEF_AS, aC = DEF_AC){
+  const N = A - Z;
+  return AV * A - aS * Math.pow(A, 2 / 3) - aC * Z * (Z - 1) / Math.pow(A, 1 / 3) - AA * (A - 2 * Z) * (A - 2 * Z) / A + pairingDelta(A, Z);
+}
+function zStable(A, aC = DEF_AC){
+  if (aC <= 1e-6) return clamp(Math.round(A / 2), 1, A - 1);
+  const z = A / (2 + (aC / (2 * AA)) * Math.pow(A, 2 / 3));
+  return clamp(Math.round(z), 1, A - 1);
+}
+const beReal = (A, Z, m) => (Z * M_H + (A - Z) * M_N - m) * U_MEV;
+const SUP = {'0': '⁰', '1': '¹', '2': '²', '3': '³', '4': '⁴', '5': '⁵', '6': '⁶', '7': '⁷', '8': '⁸', '9': '⁹'};
+const supNum = n => String(n).split('').map(c => SUP[c] || c).join('');
+const ELSYM = {1: 'H', 2: 'He', 3: 'Li', 4: 'Be', 6: 'C', 7: 'N', 8: 'O', 10: 'Ne', 12: 'Mg', 14: 'Si', 16: 'S', 20: 'Ca', 26: 'Fe', 29: 'Cu', 40: 'Zr', 47: 'Ag', 50: 'Sn', 56: 'Ba', 36: 'Kr', 79: 'Au', 82: 'Pb', 92: 'U'};
+/* real, measured atomic masses (u) — Table-style data, as the chapter would give it */
+const REAL_RAW = [
+  [2, 1, 2.014102, 'Deuterium'], [3, 1, 3.016049, 'Tritium'], [3, 2, 3.016029, 'Helium-3'], [4, 2, 4.002602, 'Helium-4'],
+  [6, 3, 6.015123, 'Lithium-6'], [7, 3, 7.016003, 'Lithium-7'], [9, 4, 9.012182, 'Beryllium-9'], [12, 6, 12.000000, 'Carbon-12'],
+  [14, 7, 14.003074, 'Nitrogen-14'], [16, 8, 15.994915, 'Oxygen-16'], [20, 10, 19.992440, 'Neon-20'], [24, 12, 23.985042, 'Magnesium-24'],
+  [28, 14, 27.976927, 'Silicon-28'], [32, 16, 31.972071, 'Sulfur-32'], [40, 20, 39.962591, 'Calcium-40'], [56, 26, 55.934937, 'Iron-56'],
+  [63, 29, 62.929598, 'Copper-63'], [90, 40, 89.904704, 'Zirconium-90'], [107, 47, 106.905093, 'Silver-107'], [120, 50, 119.902202, 'Tin-120'],
+  [197, 79, 196.966569, 'Gold-197'], [208, 82, 207.976652, 'Lead-208'], [235, 92, 235.043930, 'Uranium-235'], [238, 92, 238.050788, 'Uranium-238'],
+];
+const REAL = REAL_RAW.map(([A, Z, m, name]) => ({A, Z, m, name, sym: supNum(A) + ELSYM[Z], beA: beReal(A, Z, m) / A}));
+const findReal = id => REAL.find(r => r.A + '-' + r.Z === id);
+
+/* ---- fission / fusion ---- */
+const AP_ = 236, ZP_ = 92;                                        // n + U-235
+function fissionQ(A1, k, aS, aC, exactZ){
+  const A2 = AP_ - A1 - k;
+  const Z1 = exactZ ? exactZ[0] : Math.round(ZP_ * A1 / AP_);
+  const Z2 = exactZ ? exactZ[1] : ZP_ - Z1;
+  const beP = beSEMF(AP_, ZP_, aS, aC), be1 = beSEMF(A1, Z1, aS, aC), be2 = beSEMF(A2, Z2, aS, aC);
+  return {A2, Z1, Z2, beP, be1, be2, Q: be1 + be2 - beP};
+}
+function bestSplit(k, aS, aC){
+  let best = null;
+  for (let A1 = 61; A1 <= AP_ - k - 61; A1++) { const f = fissionQ(A1, k, aS, aC); if (!best || f.Q > best.Q) best = Object.assign({A1}, f); }
+  return best;
+}
+const M_D = 2.014102, M_T = 3.016049, M_HE3 = 3.016029, M_HE4 = 4.002602;
+const FUSION = [
+  {id: 'ddh3', label: 'D + D → ³He + n', react: [M_D, M_D], prod: [M_HE3, M_N], A: 4},
+  {id: 'ddtp', label: 'D + D → T + ¹H',  react: [M_D, M_D], prod: [M_T, M_H], A: 4},
+  {id: 'dthe', label: 'D + T → ⁴He + n', react: [M_D, M_T], prod: [M_HE4, M_N], A: 5},
+  {id: 'ppch', label: '4 ¹H → ⁴He + 2e⁺ + 2ν  (the Sun)', react: [M_H, M_H, M_H, M_H], prod: [M_HE4], A: 4},
+].map(r => ({...r, Q: (r.react.reduce((a, b) => a + b, 0) - r.prod.reduce((a, b) => a + b, 0)) * U_MEV}));
+
+/* ---- decay: N0 separate nuclei, each tested at random every step ---- */
+function simulateDecay(N0, totalHalfLives, steps, seed){
+  const rng = mulberry32(seed), lambda = Math.log(2), dt = totalHalfLives / steps, p = 1 - Math.exp(-lambda * dt);
+  const t = [0], n = [N0]; let alive = N0;
+  for (let s = 1; s <= steps; s++) {
+    let next = 0;
+    for (let i = 0; i < alive; i++) if (rng() >= p) next++;
+    alive = next; t.push(s * dt); n.push(alive);
+  }
+  return {t, n, dt, lambda};
+}
+function measuredHalfLife(t, n, N0){
+  for (let i = 1; i < n.length; i++) if (n[i] <= N0 / 2) {
+    const n0 = n[i - 1], n1 = n[i]; if (n0 === n1) return t[i];
+    return lerp(t[i - 1], t[i], (n0 - N0 / 2) / (n0 - n1));
+  }
+  return null;
+}
+const ISOTOPES = [
+  {id: 'C14', sym: '¹⁴C', name: 'Carbon-14', hl: 5730, unit: 'years'},
+  {id: 'Co60', sym: '⁶⁰Co', name: 'Cobalt-60', hl: 5.27, unit: 'years'},
+  {id: 'Sr90', sym: '⁹⁰Sr', name: 'Strontium-90', hl: 28.8, unit: 'years'},
+  {id: 'I131', sym: '¹³¹I', name: 'Iodine-131', hl: 8.02, unit: 'days'},
+  {id: 'Ra226', sym: '²²⁶Ra', name: 'Radium-226', hl: 1600, unit: 'years'},
+  {id: 'U238', sym: '²³⁸U', name: 'Uranium-238', hl: 4.47e9, unit: 'years'},
+  {id: 'Po214', sym: '²¹⁴Po', name: 'Polonium-214', hl: 164e-6, unit: 'seconds'},
+];
+/* MODEL:end */
+
+/* ---- nucleus cartoon: Vogel's sunflower packing, so density comes out equal for every A ---- */
+const GOLDEN = 2.399963229728653;
+function nucleusPoints(A, Z, seed){
+  const rng = mulberry32(seed || 1), order = Array.from({length: A}, (_, i) => i);
+  for (let i = order.length - 1; i > 0; i--) { const j = Math.floor(rng() * (i + 1)); [order[i], order[j]] = [order[j], order[i]]; }
+  const proton = new Set(order.slice(0, Z));
+  return Array.from({length: A}, (_, i) => {
+    const r = Math.sqrt((i + 0.5) / A), th = i * GOLDEN;
+    return {x: r * Math.cos(th), y: r * Math.sin(th), p: proton.has(i)};
+  });
+}
+const R0_FM = 1.2, NUC_SCALE = 13.2;                    // px per fm
+const radiusFm = A => R0_FM * Math.cbrt(A);
+function nuclearDensity(A){                              // kg / m^3 — should come out the same for every A
+  const massKg = A * 1.66054e-27, rM = radiusFm(A) * 1e-15;
+  return massKg / (4 / 3 * Math.PI * rM ** 3);
+}
+
+/* ---- state ---------------------------------------------------------------- */
+const S = {tab: 'bind', locked: false,
+  A: 56, chip: '56-26', zMode: 'auto', Z: 26, aS: DEF_AS, aC: DEF_AC,
+  a1: 141, k: 3, exactSplit: true, fusion: 'ddh3', pressedBest: false,
+  isotope: 'C14', n0: 400, run: null, runSeed: 1, viewedChips: new Set(), smallRun: false, bigRun: false, memoryChecked: null};
+const shared = sharedState();
+if (shared) {
+  if (['bind', 'split', 'decay'].includes(shared.tab)) S.tab = shared.tab;
+  S.A = clamp(+shared.A || 56, 2, 250); S.aS = clamp(+shared.aS ?? DEF_AS, 5, 30); S.aC = clamp(+shared.aC ?? DEF_AC, 0, 1.4);
+}
+shareState(() => ({tab: S.tab, A: S.A, aS: S.aS, aC: S.aC}));
+function currentZ(){ return S.zMode === 'auto' ? zStable(S.A, S.aC) : clamp(S.Z, 1, S.A - 1); }
+
+/* ============================================================================
+   The stage
+   ============================================================================ */
+const svg = $('stage');
+const GX = 64, GY = 78, GW = 520, GH = 430, A_MAX = 250, BEA_MAX = 9.5;
+const gx = A => GX + A / A_MAX * GW, gy = v => GY + GH - v / BEA_MAX * GH;
+const NX = 812, NY = 258, NR = 148;
+const FBAR = {x: 44, y: 96, w: 430, h: 34};
+const QX = 44, QY = 372, QW = 430, QH = 150, QA1MIN = 61, QA1MAX = 170;
+const qx = a1 => QX + (a1 - QA1MIN) / (QA1MAX - QA1MIN) * QW;
+const BARX = 566, BARY = 372, BARW = 400, BARH = 150;
+const DX = 64, DY = 96, DW = 500, DH = 300, DTMAX = 5;
+const dx = t => DX + t / DTMAX * DW, dy = (n, N0) => DY + DH - n / N0 * DH;
+const AX2 = {x: 64, y: 440, w: 500, h: 130};
+
+function build(){
+  svg.innerHTML = `
+  <rect x="0" y="0" width="1000" height="660" fill="#fbfaf3"/>
+
+  <g id="vBind">
+    <text x="24" y="32" font-size="18" class="serif" fill="#241a17">Binding energy per nucleon</text>
+    <text id="lawLab" x="24" y="52" font-size="11.5" fill="#8a7a72"></text>
+    <g id="binAxes"></g>
+    <path id="curveSemf" fill="none" stroke="#c0392b" stroke-width="2.4"/>
+    <g id="realDots"></g>
+    <g id="peakG"></g>
+    <line id="curNowV" stroke="#241a17" stroke-dasharray="3 3"/>
+    <circle id="curNowPt" r="6" fill="#241a17" stroke="#fff" stroke-width="1.6"/>
+    <rect id="curveHit" x="${GX}" y="${GY}" width="${GW}" height="${GH}" fill="transparent" role="slider" aria-label="Drag to choose the mass number A"/>
+
+    <text x="${NX - NR}" y="${NY - NR - 14}" font-size="14.5" class="serif" fill="#241a17">The nucleus, to scale</text>
+    <circle id="nucBound" cx="${NX}" cy="${NY}" r="1" fill="none" stroke="#e4d9c8" stroke-dasharray="2 3"/>
+    <g id="nucDots"></g>
+    <text id="nucCaption" x="${NX}" y="${NY + NR + 30}" font-size="12.5" text-anchor="middle" fill="#4a3f39"></text>
+    <text id="nucCaption2" x="${NX}" y="${NY + NR + 48}" font-size="12.5" text-anchor="middle" fill="#4a3f39"></text>
+    <text id="nucDensity" x="${NX}" y="${NY + NR + 68}" font-size="11.5" text-anchor="middle" fill="#8a7a72"></text>
+    <g id="nucLegend"></g>
+  </g>
+
+  <g id="vSplit">
+    <text x="24" y="32" font-size="18" class="serif" fill="#241a17">Split a heavy nucleus</text>
+    <text id="fisLab" x="24" y="52" font-size="11.5" fill="#8a7a72"></text>
+    <g id="neutrons"></g>
+    <rect id="frag1" x="${FBAR.x}" y="${FBAR.y}" height="${FBAR.h}" fill="#c0392b" rx="3"/>
+    <rect id="frag2" x="${FBAR.x}" y="${FBAR.y}" height="${FBAR.h}" fill="#2f6fd1" rx="3"/>
+    <text id="frag1Lab" y="${FBAR.y - 6}" font-size="12" text-anchor="middle" fill="#c0392b" font-weight="700"></text>
+    <text id="frag2Lab" y="${FBAR.y - 6}" font-size="12" text-anchor="middle" fill="#2f6fd1" font-weight="700"></text>
+    <rect id="splitHit" x="${FBAR.x}" y="${FBAR.y - 10}" width="${FBAR.w}" height="${FBAR.h + 20}" fill="transparent" role="slider" aria-label="Drag to choose the split"/>
+
+    <text x="${QX}" y="${QY - 12}" font-size="13.5" class="serif" fill="#241a17">Energy released, against the split you choose</text>
+    <g id="qAxes"></g><path id="qCurve" fill="none" stroke="#c0392b" stroke-width="2"/>
+    <circle id="qNow" r="5" fill="#241a17" stroke="#fff" stroke-width="1.4"/>
+    <line id="qBestV" stroke="#2f8a57" stroke-dasharray="2 3"/>
+
+    <text x="${BARX - 10}" y="32" font-size="18" class="serif" fill="#241a17">Join light nuclei</text>
+    <text id="fusLab" x="${BARX - 10}" y="52" font-size="11.5" fill="#8a7a72"></text>
+    <g id="fusPic"></g>
+    <text x="${BARX - 10}" y="${BARY - 12}" font-size="13.5" class="serif" fill="#241a17">Energy per nucleon: fission vs. fusion</text>
+    <g id="barChart"></g>
+  </g>
+
+  <g id="vDecay">
+    <text x="24" y="32" font-size="18" class="serif" fill="#241a17">A jar of nuclei, decaying at random</text>
+    <text id="decLab" x="24" y="52" font-size="11.5" fill="#8a7a72"></text>
+    <g id="decAxes"></g>
+    <path id="decTheory" fill="none" stroke="#8a7a72" stroke-width="1.8" stroke-dasharray="5 4"/>
+    <path id="decStep" fill="none" stroke="#c0392b" stroke-width="1.6"/>
+    <g id="decDots"></g>
+    <line id="decHalfV" stroke="#2f8a57" stroke-dasharray="3 3"/>
+    <line id="decHalfH" stroke="#2f8a57" stroke-dasharray="3 3"/>
+    <text id="decReadout" x="${DX + DW}" y="${DY - 12}" font-size="12.5" text-anchor="end" fill="#2f8a57" font-weight="700"></text>
+    <text x="${AX2.x}" y="${AX2.y - 14}" font-size="13.5" class="serif" fill="#241a17">Decays counted in each interval (the activity)</text>
+    <g id="actAxes"></g><g id="actBars"></g><path id="actTheory" fill="none" stroke="#8a7a72" stroke-width="1.6" stroke-dasharray="5 4"/>
+  </g>
+  `;
+}
+
+/* ---------- 1. binding energy ---------- */
+function curvePath(aS, aC){
+  let d = '';
+  for (let A = 4; A <= A_MAX; A++) { const Z = zStable(A, aC), be = beSEMF(A, Z, aS, aC) / A;
+    d += (A === 4 ? 'M' : 'L') + gx(A).toFixed(1) + ' ' + gy(clamp(be, 0, BEA_MAX)).toFixed(1) + ' '; }
+  return d;
+}
+function peakOf(aS, aC){
+  let best = null;
+  for (let A = 4; A <= A_MAX; A++) { const Z = zStable(A, aC), be = beSEMF(A, Z, aS, aC) / A; if (!best || be > best.beA) best = {A, beA: be}; }
+  return best;
+}
+function paintBind(){
+  const A = S.A, Z = currentZ(), N = A - Z;
+  $('lawLab').textContent = `BE = ${AV}A − a_S·A^⅔ − a_C·Z(Z−1)/A^⅓ − ${AA}(A−2Z)²/A ± pairing   (a_S = ${S.aS.toFixed(1)}, a_C = ${S.aC.toFixed(2)})`;
+  let ax = `<line x1="${GX}" y1="${GY + GH}" x2="${GX + GW}" y2="${GY + GH}" stroke="#241a17"/><line x1="${GX}" y1="${GY}" x2="${GX}" y2="${GY + GH}" stroke="#241a17"/>`;
+  for (let a = 0; a <= A_MAX; a += 50) ax += `<line x1="${gx(a)}" y1="${GY + GH}" x2="${gx(a)}" y2="${GY + GH + 5}" stroke="#241a17"/><text x="${gx(a)}" y="${GY + GH + 20}" font-size="11" text-anchor="middle" fill="#8a7a72">${a}</text>`;
+  ax += `<text x="${GX + GW}" y="${GY + GH + 38}" font-size="11.5" text-anchor="end" fill="#8a7a72">mass number A</text>`;
+  for (let v = 0; v <= 8; v += 2) ax += `<line x1="${GX - 5}" y1="${gy(v)}" x2="${GX}" y2="${gy(v)}" stroke="#241a17"/><text x="${GX - 9}" y="${gy(v) + 4}" font-size="11" text-anchor="end" fill="#8a7a72">${v}</text>`;
+  ax += `<text x="${GX - 44}" y="${GY - 10}" font-size="11.5" fill="#8a7a72">BE/A, MeV</text>`;
+  $('binAxes').innerHTML = ax;
+  $('curveSemf').setAttribute('d', curvePath(S.aS, S.aC));
+  let rd = '';
+  REAL.forEach(r => { const inRange = r.beA <= BEA_MAX + 0.3; if (!inRange) return;
+    const big = ['4-2', '56-26', '235-92', '238-92'].includes(r.A + '-' + r.Z), on = S.chip === r.A + '-' + r.Z;
+    rd += `<circle cx="${gx(r.A).toFixed(1)}" cy="${gy(r.beA).toFixed(1)}" r="${on ? 6 : big ? 4.5 : 3}" fill="${on ? '#c0392b' : '#8a5c3a'}" stroke="#fff" stroke-width="1"/>`;
+    if (big) rd += `<text x="${gx(r.A).toFixed(1)}" y="${(gy(r.beA) - 10).toFixed(1)}" font-size="10.5" text-anchor="middle" fill="#4a3f39">${r.sym}</text>`;
+  });
+  $('realDots').innerHTML = rd;
+  const peak = peakOf(S.aS, S.aC);
+  const peakLabelBelow = gy(peak.beA) - 14 < GY + 8;
+  const peakLabelY = peakLabelBelow ? gy(peak.beA) + 18 : gy(peak.beA) - 10;
+  const peakAnchor = peak.A > A_MAX - 40 ? 'end' : peak.A < 40 ? 'start' : 'middle';
+  const peakLabelX = peakAnchor === 'end' ? gx(peak.A) - 6 : peakAnchor === 'start' ? gx(peak.A) + 6 : gx(peak.A);
+  $('peakG').innerHTML = `<line x1="${gx(peak.A)}" y1="${gy(peak.beA)}" x2="${gx(peak.A)}" y2="${GY + GH}" stroke="#2f8a57" stroke-dasharray="2 3"/>
+    <circle cx="${gx(peak.A).toFixed(1)}" cy="${gy(peak.beA).toFixed(1)}" r="4" fill="#2f8a57"/>
+    <text x="${peakLabelX.toFixed(1)}" y="${peakLabelY.toFixed(1)}" font-size="11" text-anchor="${peakAnchor}" fill="#2f8a57" font-weight="700">peak: A ≈ ${peak.A}, ${peak.beA.toFixed(2)} MeV</text>`;
+  const beA = beSEMF(A, Z, S.aS, S.aC) / A;
+  $('curNowV').setAttribute('x1', gx(A)); $('curNowV').setAttribute('x2', gx(A)); $('curNowV').setAttribute('y1', GY); $('curNowV').setAttribute('y2', GY + GH);
+  $('curNowPt').setAttribute('cx', gx(A)); $('curNowPt').setAttribute('cy', gy(clamp(beA, 0, BEA_MAX)));
+  /* nucleus cartoon */
+  const rFm = radiusFm(A), rPx = clamp(rFm * NUC_SCALE, 6, NR);
+  $('nucBound').setAttribute('r', rPx);
+  const pts = nucleusPoints(A, Z, A * 131 + Z);
+  const dotR = clamp(rPx / Math.sqrt(A) * 0.85, 1.1, 6);
+  $('nucDots').innerHTML = pts.map(p => `<circle cx="${(NX + p.x * rPx).toFixed(1)}" cy="${(NY + p.y * rPx).toFixed(1)}" r="${dotR.toFixed(1)}" fill="${p.p ? '#c0392b' : '#2f6fd1'}"/>`).join('');
+  const dens = nuclearDensity(A);
+  $('nucCaption').textContent = `R = 1.2 fm × A^⅓ = ${rFm.toFixed(2)} fm`;
+  $('nucCaption2').textContent = `Z = ${Z} protons (red), N = ${N} neutrons (blue)`;
+  $('nucDensity').textContent = `nuclear density ≈ ${dens.toExponential(2)} kg/m³ — the same, whatever A is`;
+  $('nucLegend').innerHTML = `<circle cx="${NX - NR + 8}" cy="${NY + NR + 4}" r="4" fill="#c0392b"/><text x="${NX - NR + 16}" y="${NY + NR + 8}" font-size="10.5" fill="#4a3f39">proton</text>
+    <circle cx="${NX - NR + 68}" cy="${NY + NR + 4}" r="4" fill="#2f6fd1"/><text x="${NX - NR + 76}" y="${NY + NR + 8}" font-size="10.5" fill="#4a3f39">neutron</text>`;
+  $('aSlide').value = A; $('aOut').textContent = A;
+  $('zSlide').max = A - 1; $('zSlide').value = Z; $('zOut').textContent = Z;
+  $('aS').value = S.aS; $('aSOut').textContent = S.aS.toFixed(1);
+  $('aC').value = S.aC; $('aCOut').textContent = S.aC.toFixed(2);
+  $('zAuto').setAttribute('aria-pressed', S.zMode === 'auto'); $('zFree').setAttribute('aria-pressed', S.zMode === 'free');
+  document.querySelectorAll('#chipsBind button').forEach(b => b.setAttribute('aria-pressed', b.dataset.id === S.chip));
+  paintBindSide(A, Z, N, beA, peak);
+  if (S.locked) {
+    if (beA < 7 && A <= 9) discover('light');
+    if (peak.A > 200) discover('nocoulomb');
+    if (S.chip) { const r = findReal(S.chip); if (r) { S.viewedChips.add(S.chip);
+      if (['4-2', '3-1', '3-2', '2-1'].includes(S.chip)) discover('light');
+      if (Math.abs(r.A - peak.A) <= 5) discover('peak');
+      if (r.A >= 230) discover('heavy'); } }
+  }
+}
+function paintBindSide(A, Z, N, beA, peak){
+  $('numKick').textContent = 'Measured by the model';
+  const real = S.chip ? findReal(S.chip) : null;
+  let h = `<div class="nums">
+    <span>A (mass number)</span><b>${A}</b>
+    <span>Z (protons)</span><b>${Z}</b>
+    <span>N (neutrons)</span><b>${N}</b>`;
+  if (real) {
+    const be = beReal(A, Z, real.m);
+    h += `<i class="sep"></i><span>${esc(real.name)}</span><b>${real.sym}</b>
+      <span>atomic mass (measured)</span><b>${real.m.toFixed(6)} u</b>
+      <span>mass defect Δm</span><b>${(Z * M_H + N * M_N - real.m).toFixed(6)} u</b>
+      <span>binding energy</span><b>${be.toFixed(2)} MeV</b>
+      <span>BE per nucleon</span><b>${(be / A).toFixed(3)} MeV</b>
+      <span class="eq">Δm·c² = [${Z}×1.007825 + ${N}×1.008665 − ${real.m}] × 931.494</span>`;
+  } else {
+    h += `<i class="sep"></i><span>the formula's mass</span><b>${(Z * M_H + N * M_N - beSEMF(A, Z, S.aS, S.aC) / U_MEV).toFixed(4)} u</b>
+      <span>binding energy</span><b>${beSEMF(A, Z, S.aS, S.aC).toFixed(2)} MeV</b>
+      <span>BE per nucleon</span><b>${beA.toFixed(3)} MeV</b>`;
+  }
+  h += `<i class="sep"></i><span>peak of the curve</span><b>A ≈ ${peak.A}, ${peak.beA.toFixed(2)} MeV</b></div>`;
+  $('nums').innerHTML = h;
+  $('whyCard').hidden = false;
+  $('why').innerHTML = real
+    ? `<p>${esc(real.name)}'s measured mass is ${real.m.toFixed(4)} u; ${(Z * M_H + N * M_N).toFixed(4)} u of separate protons and neutrons would weigh more. That missing ${(Z * M_H + N * M_N - real.m).toFixed(4)} u is the binding energy, by E = Δm c².</p>`
+    : `<p>No real nuclide sits at A = ${A}, Z = ${Z} in this table, so the formula's own mass is used instead. Its binding energy per nucleon is ${beA.toFixed(2)} MeV — compare it with a real nuclide nearby.</p>`;
+}
+
+/* ---------- 2. split & join ---------- */
+function qCurvePath(k, aS, aC){
+  let d = '';
+  for (let A1 = QA1MIN; A1 <= QA1MAX; A1++) { const f = fissionQ(A1, k, aS, aC); d += (A1 === QA1MIN ? 'M' : 'L') + qx(A1).toFixed(1) + ' ' + (QY + QH - clamp(f.Q, 0, 260) / 260 * QH).toFixed(1) + ' '; }
+  return d;
+}
+function paintSplit(){
+  const k = S.k, A1 = S.a1, exact = S.exactSplit && A1 === 141 && k === 3 ? [56, 36] : null;
+  const f = fissionQ(A1, k, S.aS, S.aC, exact);
+  const w1 = f.beP ? A1 / AP_ * FBAR.w : 0, w2 = f.A2 / AP_ * FBAR.w;
+  $('fisLab').textContent = `n + ²³⁵U → A₁ (Z₁ = ${f.Z1}) + A₂ (Z₂ = ${f.Z2}) + ${k}n`;
+  $('frag1').setAttribute('x', FBAR.x); $('frag1').setAttribute('width', Math.max(w1, 2)); $('frag1').setAttribute('y', FBAR.y); $('frag1').setAttribute('height', FBAR.h);
+  $('frag2').setAttribute('x', FBAR.x + w1); $('frag2').setAttribute('width', Math.max(w2, 2)); $('frag2').setAttribute('y', FBAR.y); $('frag2').setAttribute('height', FBAR.h);
+  $('frag1Lab').setAttribute('x', FBAR.x + w1 / 2); $('frag1Lab').textContent = `A₁ = ${A1}`;
+  $('frag2Lab').setAttribute('x', FBAR.x + w1 + w2 / 2); $('frag2Lab').textContent = `A₂ = ${f.A2}`;
+  let ne = '';
+  for (let i = 0; i < k; i++) ne += `<circle cx="${(FBAR.x + w1 + 14 + i * 14).toFixed(1)}" cy="${FBAR.y - 22}" r="4.5" fill="#4a3f39"/>`;
+  ne += `<text x="${(FBAR.x + w1 + 14 + (k - 1) * 14 + 14).toFixed(1)}" y="${FBAR.y - 18}" font-size="10.5" fill="#4a3f39">${k}n</text>`;
+  $('neutrons').innerHTML = ne;
+  /* Q vs A1 graph */
+  let qa = `<line x1="${QX}" y1="${QY + QH}" x2="${QX + QW}" y2="${QY + QH}" stroke="#241a17"/><line x1="${QX}" y1="${QY}" x2="${QX}" y2="${QY + QH}" stroke="#241a17"/>`;
+  [80, 120, 160].forEach(a => qa += `<text x="${qx(a)}" y="${QY + QH + 16}" font-size="10.5" text-anchor="middle" fill="#8a7a72">${a}</text>`);
+  qa += `<text x="${QX + QW}" y="${QY + QH + 30}" font-size="10.5" text-anchor="end" fill="#8a7a72">A₁</text>`;
+  [0, 100, 200].forEach(v => qa += `<text x="${QX - 6}" y="${(QY + QH - v / 260 * QH + 4).toFixed(1)}" font-size="10" text-anchor="end" fill="#8a7a72">${v}</text>`);
+  qa += `<text x="${QX - 40}" y="${QY - 6}" font-size="10.5" fill="#8a7a72">Q, MeV</text>`;
+  $('qAxes').innerHTML = qa;
+  $('qCurve').setAttribute('d', qCurvePath(k, S.aS, S.aC));
+  const best = bestSplit(k, S.aS, S.aC);
+  $('qBestV').setAttribute('x1', qx(best.A1)); $('qBestV').setAttribute('x2', qx(best.A1)); $('qBestV').setAttribute('y1', QY); $('qBestV').setAttribute('y2', QY + QH);
+  $('qNow').setAttribute('cx', qx(A1)); $('qNow').setAttribute('cy', QY + QH - clamp(f.Q, 0, 260) / 260 * QH);
+  /* fusion */
+  const fu = FUSION.find(x => x.id === S.fusion);
+  $('fusLab').textContent = fu.label + `   Q = ${fu.Q.toFixed(2)} MeV`;
+  $('fusPic').innerHTML = `<circle cx="${BARX + 40}" cy="120" r="20" fill="#f2b134"/><circle cx="${BARX + 90}" cy="120" r="20" fill="#f2b134"/>
+    <path d="M${BARX + 62} 120 L${BARX + 110} 120" stroke="#8a7a72" stroke-dasharray="3 3" marker-end="url(#arrow)"/>
+    <circle cx="${BARX + 160}" cy="120" r="24" fill="#2f8a57"/>
+    <text x="${BARX + 160}" y="125" font-size="11" text-anchor="middle" fill="#fff" font-weight="700">${fu.A} u</text>
+    <defs><marker id="arrow" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto"><path d="M0 0L8 4L0 8Z" fill="#8a7a72"/></marker></defs>`;
+  /* per-nucleon bar chart */
+  const qFisPer = f.Q / AP_, qFusPer = fu.Q / fu.A, maxPer = 5;
+  const bh1 = clamp(qFisPer / maxPer * BARH, 0, BARH), bh2 = clamp(qFusPer / maxPer * BARH, 0, BARH);
+  $('barChart').innerHTML = `
+    <line x1="${BARX}" y1="${BARY + BARH}" x2="${BARX + BARW}" y2="${BARY + BARH}" stroke="#241a17"/>
+    <rect x="${BARX + 40}" y="${BARY + BARH - bh1}" width="90" height="${bh1}" fill="#c0392b"/>
+    <text x="${BARX + 85}" y="${BARY + BARH - bh1 - 8}" font-size="12" text-anchor="middle" font-weight="700" fill="#c0392b">${qFisPer.toFixed(2)}</text>
+    <text x="${BARX + 85}" y="${BARY + BARH + 16}" font-size="11" text-anchor="middle" fill="#4a3f39">fission</text>
+    <rect x="${BARX + 220}" y="${BARY + BARH - bh2}" width="90" height="${bh2}" fill="#2f8a57"/>
+    <text x="${BARX + 265}" y="${BARY + BARH - bh2 - 8}" font-size="12" text-anchor="middle" font-weight="700" fill="#2f8a57">${qFusPer.toFixed(2)}</text>
+    <text x="${BARX + 265}" y="${BARY + BARH + 16}" font-size="11" text-anchor="middle" fill="#4a3f39">fusion</text>
+    <text x="${BARX}" y="${BARY - 22}" font-size="10.5" fill="#8a7a72">MeV per nucleon</text>`;
+  $('a1').value = A1; $('a1Out').textContent = A1; $('kVal').textContent = k;
+  document.querySelectorAll('#chipsFusion button').forEach(b => b.setAttribute('aria-pressed', b.dataset.id === S.fusion));
+  paintSplitSide(f, k, fu, qFisPer, qFusPer, best);
+  if (f.Q > 0) discover('fission');
+  if (qFusPer > 2 * qFisPer) discover('perNucleon');
+  if (S.pressedBest && Math.abs(S.a1 - AP_ / 2) < 8) discover('symmetric');
+}
+function paintSplitSide(f, k, fu, qFisPer, qFusPer, best){
+  $('numKick').textContent = 'Measured by the model';
+  $('nums').innerHTML = `<div class="nums">
+    <span>BE(parent, A=${AP_})</span><b>${f.beP.toFixed(1)} MeV</b>
+    <span>BE(fragment 1)</span><b>${f.be1.toFixed(1)} MeV</b>
+    <span>BE(fragment 2)</span><b>${f.be2.toFixed(1)} MeV</b>
+    <span>Q = BE₁+BE₂−BE(parent)</span><b>${f.Q.toFixed(1)} MeV</b>
+    <span>Q per nucleon</span><b>${qFisPer.toFixed(3)} MeV</b>
+    <i class="sep"></i>
+    <span>most energetic split</span><b>A₁ ≈ ${best.A1}, Q ≈ ${best.Q.toFixed(0)} MeV</b>
+    <i class="sep"></i>
+    <span>${esc(fu.label)}</span><b>Q = ${fu.Q.toFixed(2)} MeV</b>
+    <span>fusion Q per nucleon</span><b>${qFusPer.toFixed(3)} MeV</b>
+  </div>`;
+  $('whyCard').hidden = false;
+  $('why').innerHTML = `<p>Splitting or joining releases energy only when the pieces end up more tightly bound than they started.
+    Here Q = ${f.Q.toFixed(0)} MeV for this split — close to the ${'~200 MeV'} the chapter gives for uranium fission.
+    Fusing light nuclei releases far less energy each time, but ${qFusPer > qFisPer ? 'more of it per nucleon' : 'about as much per nucleon'} — that is why a kilogram of fusion fuel outlasts a kilogram of fission fuel.
+    ${S.aC < 0.05 ? ' With the Coulomb push turned off, splitting this nucleus now costs energy instead of releasing it: no repulsion, no reason to fly apart.' : ''}</p>`;
+}
+
+/* ---------- 3. decay ---------- */
+function paintDecay(){
+  const N0 = S.n0, iso = ISOTOPES.find(x => x.id === S.isotope);
+  $('decLab').textContent = `${iso.name} (${iso.sym}), real half-life ${iso.hl >= 1 ? iso.hl.toLocaleString() : iso.hl} ${iso.unit} — simulated here in units of one half-life`;
+  let ax = `<line x1="${DX}" y1="${DY + DH}" x2="${DX + DW}" y2="${DY + DH}" stroke="#241a17"/><line x1="${DX}" y1="${DY}" x2="${DX}" y2="${DY + DH}" stroke="#241a17"/>`;
+  for (let t = 0; t <= DTMAX; t++) ax += `<line x1="${dx(t)}" y1="${DY + DH}" x2="${dx(t)}" y2="${DY + DH + 5}" stroke="#241a17"/><text x="${dx(t)}" y="${DY + DH + 20}" font-size="11" text-anchor="middle" fill="#8a7a72">${t}T½</text>`;
+  [0, 0.5, 1].forEach(f => ax += `<text x="${DX - 8}" y="${(DY + DH - f * DH + 4).toFixed(1)}" font-size="10.5" text-anchor="end" fill="#8a7a72">${Math.round(f * N0)}</text>`);
+  ax += `<text x="${DX - 48}" y="${DY - 8}" font-size="11" fill="#8a7a72">N remaining</text>`;
+  $('decAxes').innerHTML = ax;
+  let th = '';
+  for (let i = 0; i <= 50; i++) { const t = i / 50 * DTMAX; th += (i === 0 ? 'M' : 'L') + dx(t).toFixed(1) + ' ' + dy(N0 * Math.pow(2, -t), N0).toFixed(1) + ' '; }
+  $('decTheory').setAttribute('d', th);
+  const r = S.run;
+  if (r) {
+    let dstep = '', dots = '';
+    r.t.forEach((t, i) => { dstep += (i === 0 ? 'M' : 'L') + dx(t).toFixed(1) + ' ' + dy(r.n[i], N0).toFixed(1) + ' '; dots += `<circle cx="${dx(t).toFixed(1)}" cy="${dy(r.n[i], N0).toFixed(1)}" r="2.4" fill="#c0392b"/>`; });
+    $('decStep').setAttribute('d', dstep); $('decDots').innerHTML = dots;
+    const mh = measuredHalfLife(r.t, r.n, N0);
+    if (mh != null) {
+      $('decHalfV').setAttribute('x1', dx(mh)); $('decHalfV').setAttribute('x2', dx(mh)); $('decHalfV').setAttribute('y1', dy(N0 / 2, N0)); $('decHalfV').setAttribute('y2', DY + DH);
+      $('decHalfH').setAttribute('x1', DX); $('decHalfH').setAttribute('x2', dx(mh)); $('decHalfH').setAttribute('y1', dy(N0 / 2, N0)); $('decHalfH').setAttribute('y2', dy(N0 / 2, N0));
+      const err = Math.abs(mh - 1) * 100;
+      $('decReadout').textContent = `measured half-life ≈ ${mh.toFixed(2)} × T½  (${err.toFixed(0)}% off)`;
+      if (N0 >= 200 && err < 25) discover('halflife');
+      if (N0 < 100) S.smallRun = true; if (N0 >= 500) S.bigRun = true;
+      if (S.smallRun && S.bigRun) discover('lawoflargenumbers');
+      /* memorylessness: fraction surviving from T½ to 2T½, compared with fraction from 0 to T½ */
+      const i1 = r.t.findIndex(t => t >= 1), i2 = r.t.findIndex(t => t >= 2);
+      if (i1 > 0 && i2 > i1 && r.n[i1] > 20) {
+        const frac1 = r.n[i1] / N0, frac2 = r.n[i2] / r.n[i1];
+        S.memoryChecked = {frac1, frac2};
+        discover('nomemory');
+        if (POE && POE.locked && !POE.explained) POE.explain(`In this run, ${(frac1 * 100).toFixed(0)}% survived the first half-life, and ${(frac2 * 100).toFixed(0)}% of THOSE survived the second — the same nucleus never remembers its age.`, true);
+      }
+    } else $('decReadout').textContent = 'not even half have gone yet';
+  } else { $('decStep').setAttribute('d', ''); $('decDots').innerHTML = ''; $('decReadout').textContent = ''; $('decHalfV').setAttribute('x1', -10); $('decHalfV').setAttribute('x2', -10); $('decHalfH').setAttribute('x1', -10); $('decHalfH').setAttribute('x2', -10); }
+  /* activity histogram */
+  const NB = 10;
+  let aax = `<line x1="${AX2.x}" y1="${AX2.y + AX2.h}" x2="${AX2.x + AX2.w}" y2="${AX2.y + AX2.h}" stroke="#241a17"/>`;
+  $('actAxes').innerHTML = aax;
+  const lambda = Math.log(2), maxAct = N0 * lambda / NB * DTMAX;
+  let tp = '';
+  for (let i = 0; i <= 40; i++) { const t = i / 40 * DTMAX, act = N0 * lambda * Math.pow(2, -t) * (DTMAX / NB); tp += (i === 0 ? 'M' : 'L') + (AX2.x + t / DTMAX * AX2.w).toFixed(1) + ' ' + (AX2.y + AX2.h - clamp(act / maxAct, 0, 1) * AX2.h).toFixed(1) + ' '; }
+  $('actTheory').setAttribute('d', tp);
+  let bars = '';
+  if (r) { for (let b = 0; b < NB; b++) { const i0 = Math.round(b / NB * 50), i1b = Math.round((b + 1) / NB * 50);
+    const dec = (r.n[i0] || 0) - (r.n[i1b] ?? r.n[r.n.length - 1]);
+    const h = clamp(dec / maxAct, 0, 1) * AX2.h;
+    bars += `<rect x="${(AX2.x + b / NB * AX2.w + 2).toFixed(1)}" y="${(AX2.y + AX2.h - h).toFixed(1)}" width="${(AX2.w / NB - 4).toFixed(1)}" height="${h.toFixed(1)}" fill="#c0392b" opacity=".75"/>`; } }
+  $('actBars').innerHTML = bars;
+  $('n0').value = N0; $('n0Out').textContent = N0;
+  document.querySelectorAll('#chipsDecay button').forEach(b => b.setAttribute('aria-pressed', b.dataset.id === S.isotope));
+  paintDecaySide(iso, r, N0);
+}
+function paintDecaySide(iso, r, N0){
+  $('numKick').textContent = 'Measured by the model';
+  let h = `<div class="nums">
+    <span>isotope</span><b>${iso.sym}</b>
+    <span>real half-life</span><b>${iso.hl.toLocaleString()} ${iso.unit}</b>
+    <span>λ = ln2 / T½</span><b>${(Math.log(2) / iso.hl).toExponential(3)} / ${iso.unit.slice(0, -1)}</b>
+    <span>starting nuclei N₀</span><b>${N0}</b>`;
+  if (r) { const mh = measuredHalfLife(r.t, r.n, N0);
+    h += `<i class="sep"></i><span>survivors after 1 T½ (real ½)</span><b>${r.n[Math.round(r.n.length / DTMAX)] ?? '—'}</b>
+      <span>measured half-life</span><b>${mh != null ? mh.toFixed(3) + ' × T½' : 'not reached'}</b>`;
+    if (S.memoryChecked) h += `<span>1st half-life survived</span><b>${(S.memoryChecked.frac1 * 100).toFixed(1)}%</b><span>2nd half-life survived (of those)</span><b>${(S.memoryChecked.frac2 * 100).toFixed(1)}%</b>`;
+  }
+  $('nums').innerHTML = h + '</div>';
+  $('whyCard').hidden = false;
+  $('why').innerHTML = r
+    ? `<p>No curve was drawn: ${N0} separate nuclei each threw their own dice, every step, with the same probability of decaying. ${N0 < 100 ? 'With so few nuclei the random jitter is easy to see.' : 'With this many, the jitter almost vanishes and the dots sit right on the smooth curve.'}</p>`
+    : `<p>Press “Run the clock” to let ${N0} nuclei decide, one at a time, whether they decay this instant.</p>`;
+}
+
+/* ---------- painting dispatch ---------- */
+function paint(){
+  ['vBind', 'vSplit', 'vDecay'].forEach(id => $(id).toggleAttribute('hidden', id !== 'v' + S.tab[0].toUpperCase() + S.tab.slice(1)));
+  ['ctlBind', 'ctlSplit', 'ctlDecay'].forEach(id => $(id).toggleAttribute('hidden', id !== 'ctl' + S.tab[0].toUpperCase() + S.tab.slice(1)));
+  if (S.tab === 'bind') paintBind(); else if (S.tab === 'split') paintSplit(); else paintDecay();
+}
+
+build();
+
+/* ---------- controls ---------- */
+function setTab(t){ S.tab = t; ['tabBind', 'tabSplit', 'tabDecay'].forEach(id => $(id).setAttribute('aria-pressed', id === 'tab' + t[0].toUpperCase() + t.slice(1))); sound('tick'); track('tab', {tab: t}); paint(); }
+$('tabBind').addEventListener('click', () => setTab('bind'));
+$('tabSplit').addEventListener('click', () => setTab('split'));
+$('tabDecay').addEventListener('click', () => setTab('decay'));
+
+let chipsBindHTML = REAL.map(r => `<button data-id="${r.A}-${r.Z}" title="${esc(r.name)}">${r.sym}</button>`).join('');
+$('chipsBind').innerHTML = chipsBindHTML;
+$('chipsBind').addEventListener('click', e => { const b = e.target.closest('button'); if (!b || !S.locked) return;
+  S.chip = b.dataset.id; const r = findReal(S.chip); S.A = r.A; S.Z = r.Z; S.zMode = 'auto'; sound('tick'); paint(); });
+$('aSlide').addEventListener('input', e => { S.A = +e.target.value; S.chip = null; paint(); });
+$('zAuto').addEventListener('click', () => { S.zMode = 'auto'; $('zRow').hidden = true; paint(); });
+$('zFree').addEventListener('click', () => { S.zMode = 'free'; S.Z = currentZ(); $('zRow').hidden = false; paint(); });
+$('zSlide').addEventListener('input', e => { S.Z = +e.target.value; S.chip = null; paint(); });
+$('aS').addEventListener('input', e => { S.aS = +e.target.value; paint(); });
+$('aC').addEventListener('input', e => { S.aC = +e.target.value; paint(); });
+$('btnResetLaw').addEventListener('click', () => { S.aS = DEF_AS; S.aC = DEF_AC; sound('pop'); paint(); });
+drag($('curveHit'), svg, {
+  start(p){ if (!S.locked) return false; },
+  move(p){ S.A = clamp(Math.round((p.x - GX) / GW * A_MAX), 4, A_MAX); S.chip = null; paint(); },
+});
+
+$('chipsFusion').innerHTML = FUSION.map(f => `<button data-id="${f.id}">${f.label}</button>`).join('');
+$('chipsFusion').addEventListener('click', e => { const b = e.target.closest('button'); if (!b || !S.locked) return; S.fusion = b.dataset.id; sound('tick'); paint(); });
+$('a1').addEventListener('input', e => { S.a1 = +e.target.value; S.exactSplit = false; paint(); });
+$('kMinus').addEventListener('click', () => { S.k = clamp(S.k - 1, 1, 4); S.exactSplit = false; paint(); });
+$('kPlus').addEventListener('click', () => { S.k = clamp(S.k + 1, 1, 4); S.exactSplit = false; paint(); });
+$('btnClassic').addEventListener('click', () => { S.a1 = 141; S.k = 3; S.exactSplit = true; sound('pop'); paint(); track('fissionPreset'); });
+$('btnBest').addEventListener('click', () => { const b = bestSplit(S.k, S.aS, S.aC); S.a1 = b.A1; S.exactSplit = false; S.pressedBest = true; sound('chime'); paint(); track('fissionBest'); });
+drag($('splitHit'), svg, {
+  start(p){ if (!S.locked) return false; },
+  move(p){ S.a1 = clamp(Math.round((p.x - FBAR.x) / FBAR.w * AP_), 61, AP_ - S.k - 61); S.exactSplit = false; paint(); },
+});
+
+$('chipsDecay').innerHTML = ISOTOPES.map(i => `<button data-id="${i.id}" title="${i.name}">${i.sym}</button>`).join('');
+$('chipsDecay').addEventListener('click', e => { const b = e.target.closest('button'); if (!b || !S.locked) return; S.isotope = b.dataset.id; S.run = null; sound('tick'); paint(); });
+$('n0').addEventListener('input', e => { S.n0 = +e.target.value; S.run = null; paint(); });
+$('btnRun').addEventListener('click', () => { S.runSeed++; S.run = simulateDecay(S.n0, 5, 50, S.runSeed * 7919 + 13); sound('whoosh'); track('decayRun', {n0: S.n0, isotope: S.isotope}); paint(); });
+
+function lockControls(lock){
+  for (const id of ['tabBind', 'tabSplit', 'tabDecay', 'aSlide', 'zAuto', 'zFree', 'zSlide', 'aS', 'aC', 'btnResetLaw',
+    'a1', 'kMinus', 'kPlus', 'btnClassic', 'btnBest', 'n0', 'btnRun']) $(id).disabled = lock;
+  document.querySelectorAll('#chipsBind, #chipsFusion, #chipsDecay').forEach(c => c.style.pointerEvents = lock ? 'none' : '');
+  for (const id of ['curveHit', 'splitHit']) $(id).style.pointerEvents = lock ? 'none' : '';
+  $('gate').hidden = !lock;
+}
+
+/* ============================================================================
+   Start
+   ============================================================================ */
+findings($('finds'), [
+  {id: 'light', icon: '◦', label: 'Light nuclei are loosely bound', hint: 'Look at deuterium, tritium or helium-3'},
+  {id: 'peak', icon: '⛰', label: 'Iron sits near the very top', hint: 'Try iron-56'},
+  {id: 'heavy', icon: '⚛', label: 'Heavy nuclei give some of it back', hint: 'Try uranium-235 or 238'},
+  {id: 'nocoulomb', icon: '⌀', label: 'No Coulomb push, no peak in the middle', hint: 'Set a_C to 0'},
+  {id: 'fission', icon: '⚡', label: 'Splitting releases energy', hint: 'Look at the Q for any split'},
+  {id: 'perNucleon', icon: '➗', label: 'Fusion beats fission, nucleon for nucleon', hint: 'Compare the two bars'},
+  {id: 'symmetric', icon: '⚖', label: 'The most energetic split is nearly symmetric', hint: 'Press “Most energetic split”'},
+  {id: 'halflife', icon: '½', label: 'Half of them, gone — right on time', hint: 'Run the clock with N₀ ≥ 200'},
+  {id: 'nomemory', icon: '∞', label: 'A nucleus never remembers its age', hint: 'Run the clock for 2 half-lives'},
+  {id: 'lawoflargenumbers', icon: '📈', label: 'More nuclei, less noise', hint: 'Run with a small N₀ and a large one'},
+], () => toast('All ten. One mass formula explains why nuclei hold together, why splitting or joining them releases energy, and why decay is a coin toss with no memory.', 4400));
+
+let POE;
+POE = predict($('poe'), {
+  id: 'memoryless',
+  q: 'A single radioactive nucleus has already survived exactly one whole half-life. What is the chance it decays during the NEXT half-life?',
+  options: [
+    {id: 'sure', text: 'It is now certain to decay soon — it has used up its share of luck.'},
+    {id: 'less', text: 'Less than 50%, because it has already lasted this long.'},
+    {id: 'half', text: 'Still exactly 50%, the same as any fresh nucleus.', right: true},
+    {id: 'more', text: 'More than 50%, because old nuclei are less stable.'},
+  ],
+  onLock(){ S.locked = true; lockControls(false); say('Try the binding energy curve first: find where a nucleus is most tightly held together.'); paint(); },
+});
+lockControls(!POE.locked);
+if (!Play.FF('predict')) S.locked = true;
+paint();
+window.applyFeatures = () => paint();
+window.PG_STATE = () => JSON.parse(JSON.stringify({tab: S.tab, A: S.A, Z: currentZ(), aS: S.aS, aC: S.aC, a1: S.a1, k: S.k, fusion: S.fusion, isotope: S.isotope, n0: S.n0, hasRun: !!S.run, locked: S.locked}));
+window.PG_MODEL = {beSEMF, zStable, beReal, REAL, pairingDelta, fissionQ, bestSplit, FUSION, simulateDecay, measuredHalfLife, radiusFm, nuclearDensity, U_MEV, M_N, M_H};
+</script>
+</body>
+</html>

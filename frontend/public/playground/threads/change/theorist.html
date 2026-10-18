@@ -1,0 +1,316 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mole And Limiting Reagent</title>
+<meta name="description" content="Class 11: set moles of two reactants freely, watch the model pair off real molecules until one runs out, and read the limiting-reagent kink straight off a computed graph.">
+<link rel="icon" href="../../favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,400;6..72,500&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="../../play.css">
+<style>
+.pg-stage{min-height:0}
+.eqchips{display:flex; flex-direction:column; gap:6px; margin:4px 0 10px}
+.eqchip{border:1px solid var(--hair-2); background:var(--card); border-radius:10px; padding:8px 10px; font-size:12.8px; cursor:pointer; font-weight:600; color:var(--ink-2); text-align:left}
+.eqchip[aria-pressed="true"]{background:var(--accent-soft); border-color:var(--accent); color:var(--ink)}
+.gate{position:absolute; left:0; right:0; top:0; bottom:0; display:grid; place-items:center; pointer-events:none}
+.gate span{background:rgba(29,35,39,.86); color:#fff; padding:10px 16px; border-radius:99px; font-weight:600; font-size:14px; text-align:center}
+.ledger{width:100%; border-collapse:collapse; font-size:12.8px}
+.ledger td{padding:3px 4px}
+.ledger td:last-child{text-align:right; font-family:"JetBrains Mono",monospace}
+.ledger tr.total td{border-top:1.5px solid var(--hair-2); font-weight:700}
+.why p{font-size:13.5px; margin:0 0 .5em}
+.why b{color:var(--ink)}
+.serif{font-family:"Newsreader",Georgia,serif}
+.pcomp{display:flex; gap:8px; margin:6px 0}
+.pcomp .seg{height:16px; border-radius:8px; overflow:hidden; flex:1; display:flex}
+</style>
+</head>
+<body>
+<header class="pg-top"></header>
+
+<div class="pg-intro">
+  <h1>The mole and the limiting reagent</h1>
+  <p>Set how many moles of each reactant you bring together. The model pairs off real molecules, exactly to the equation,
+     until one runs out — it does not look up an answer, it runs out of the reagent you gave it too little of.
+     Then read the same fact off a computed graph, and check the product’s own percentage composition.</p>
+</div>
+
+<main class="pg-main wide-side">
+  <section class="pg-stage" id="stageWrap">
+    <svg id="stage" viewBox="0 0 1000 640" role="img" aria-label="A mixing chamber where molecules of two reactants pair off into product, with a graph of product formed against the amount of one reactant added"></svg>
+    <div class="gate" id="gate"><span>Make your prediction first</span></div>
+  </section>
+
+  <aside class="pg-side">
+    <div id="poe"></div>
+
+    <div class="card">
+      <div class="kicker">The reaction</div>
+      <div class="eqchips" id="eqChips"></div>
+      <div class="ctl"><label for="molA" id="labA">mol A</label><input type="range" id="molA" min="0" max="6" step="1" value="2"><output id="molAOut" class="num">2</output></div>
+      <div class="ctl"><label for="molB" id="labB">mol B</label><input type="range" id="molB" min="0" max="6" step="1" value="2"><output id="molBOut" class="num">2</output></div>
+      <table class="ledger" id="ledger"></table>
+    </div>
+
+    <div class="card">
+      <div class="kicker">Percentage composition of the product</div>
+      <div id="pcompLabel" class="serif" style="font-size:15px"></div>
+      <div class="pcomp" id="pcomp"></div>
+      <div id="pcompLegend" style="display:flex; flex-direction:column; gap:2px; font-size:12px; margin-top:6px"></div>
+    </div>
+
+    <div class="card why" id="whyCard" hidden>
+      <div class="kicker">What is happening</div>
+      <div id="why"></div>
+    </div>
+
+    <div class="card"><div class="kicker">To find</div><div id="finds"></div></div>
+  </aside>
+</main>
+
+<script src="../../play.js"></script>
+<script>
+'use strict';
+const {$, $$, esc, clamp, fmt, sound, say, track, toast, predict, findings, discover, found,
+       shareState, sharedState, mount, reduced} = Play;
+mount({thread: 'change', band: 'theorist'});
+
+/* MODEL:start ================================================================
+   Stoichiometry, run rather than looked up. Given moles of A and B for
+   cA A + cB B -> cP P, the number of "reaction units" possible from each
+   reactant is moles/coefficient; the SMALLER one is what actually happens
+   (Play.tween never enters into it — this is pure arithmetic on what the
+   learner set). Whichever reactant supplies fewer units is the limiting
+   reagent, and the model computes its leftover, the excess reagent's
+   leftover, and the product formed, all from that one number. The formula
+   parser and atomic-mass table also compute the product's own percentage
+   composition, so nothing is a stored answer.
+   ============================================================================ */
+const MW = {H: 1, O: 16, N: 14, C: 12};
+function parseFormula(f){
+  let i = 0;
+  function group(){
+    const counts = {};
+    while (i < f.length && f[i] !== ')') {
+      if (f[i] === '(') {
+        i++; const inner = group(); i++;
+        let num = ''; while (i < f.length && /[0-9]/.test(f[i])) num += f[i++];
+        const mult = num ? +num : 1;
+        for (const el in inner) counts[el] = (counts[el] || 0) + inner[el] * mult;
+      } else {
+        let el = f[i++];
+        while (i < f.length && /[a-z]/.test(f[i])) el += f[i++];
+        let num = ''; while (i < f.length && /[0-9]/.test(f[i])) num += f[i++];
+        counts[el] = (counts[el] || 0) + (num ? +num : 1);
+      }
+    }
+    return counts;
+  }
+  return group();
+}
+function percentComposition(formula){
+  const counts = parseFormula(formula);
+  const molar = Object.entries(counts).reduce((a, [el, n]) => a + MW[el] * n, 0);
+  return Object.entries(counts).map(([el, n]) => ({el, n, mass: MW[el] * n, pct: MW[el] * n / molar * 100})).sort((a, b) => b.pct - a.pct);
+}
+/* The reaction, run for real: returns exactly what happened, nothing assumed. */
+function react(eq, molA, molB){
+  const unitsA = molA / eq.a.coef, unitsB = molB / eq.b.coef;
+  const units = Math.min(unitsA, unitsB);
+  const limiting = unitsA === units && unitsA <= unitsB ? 'a' : 'b';
+  const consumedA = units * eq.a.coef, consumedB = units * eq.b.coef;
+  const productMol = units * eq.p.coef;
+  return {
+    units, limiting,
+    consumedA, consumedB,
+    leftA: Math.max(0, molA - consumedA), leftB: Math.max(0, molB - consumedB),
+    productMol, productMass: productMol * eq.p.molar,
+  };
+}
+/* MODEL:end */
+
+const ATOM = {
+  H: {r: 9, fill: '#f5f2ea', stroke: '#b9c3c7', text: '#4a555b'},
+  O: {r: 13, fill: '#e0564a', stroke: '#a83a30', text: '#fff'},
+  N: {r: 13, fill: '#3f7fd8', stroke: '#2a5aa8', text: '#fff'},
+};
+const SUB = {0: '₀', 1: '₁', 2: '₂', 3: '₃', 4: '₄', 5: '₅', 6: '₆', 7: '₇', 8: '₈', 9: '₉'};
+const subFormula = f => f.replace(/[0-9]/g, d => SUB[d]);
+function glyphAtoms(formula){
+  const counts = parseFormula(formula);
+  const atoms = []; for (const el in counts) for (let i = 0; i < counts[el]; i++) atoms.push(el);
+  const n = atoms.length, R = n <= 1 ? 0 : 8 + n * 1.6;
+  return atoms.map((el, i) => {
+    const ang = (2 * Math.PI * i / n) - Math.PI / 2, a = ATOM[el];
+    return {el, cx: n <= 1 ? 0 : R * Math.cos(ang), cy: n <= 1 ? 0 : R * Math.sin(ang), r: a.r * 0.82, fill: a.fill, stroke: a.stroke, text: a.text};
+  });
+}
+function drawGlyph(gx, gy, formula, dim){
+  const atoms = glyphAtoms(formula);
+  const R = Math.max(16, ...atoms.map(a => Math.hypot(a.cx, a.cy) + a.r + 3));
+  let s = `<g transform="translate(${gx.toFixed(1)} ${gy.toFixed(1)})">
+    <circle r="${R.toFixed(1)}" fill="${dim ? 'none' : '#a9dfc0'}" stroke="${dim ? '#c8c2ae' : '#2f9e5b'}" stroke-width="1.6" stroke-dasharray="${dim ? '3 3' : '0'}"/>
+    <g opacity="${dim ? 0.4 : 1}">`;
+  for (const a of atoms) s += `<circle cx="${a.cx.toFixed(1)}" cy="${a.cy.toFixed(1)}" r="${a.r.toFixed(1)}" fill="${a.fill}" stroke="${a.stroke}" stroke-width="1.1"/>`;
+  return s + '</g></g>';
+}
+function gridPos(i, n, x0, y0, w, h, cols){
+  cols = cols || (n <= 3 ? n || 1 : n <= 8 ? 4 : 6);
+  const rows = Math.max(1, Math.ceil(n / cols));
+  return {cx: x0 + w / (cols + 1) * ((i % cols) + 1), cy: y0 + h / (rows + 1) * (Math.floor(i / cols) + 1)};
+}
+
+const REACTIONS = [
+  {id: 'water', label: 'Hydrogen + Oxygen → Water', a: {f: 'H2', coef: 2, molar: 2}, b: {f: 'O2', coef: 1, molar: 32}, p: {f: 'H2O', coef: 2, molar: 18}},
+  {id: 'ammonia', label: 'Nitrogen + Hydrogen → Ammonia (Haber process)', a: {f: 'N2', coef: 1, molar: 28}, b: {f: 'H2', coef: 3, molar: 2}, p: {f: 'NH3', coef: 2, molar: 17}},
+];
+const eqOf = () => REACTIONS.find(e => e.id === S.eq);
+
+/* ---- state ---------------------------------------------------------------- */
+const S = {locked: false, eq: 'water', molA: 2, molB: 2, visited: {water: false, ammonia: false}};
+shareState(() => ({locked: S.locked, eq: S.eq, molA: S.molA, molB: S.molB, visited: S.visited}));
+const shared = sharedState();
+if (shared) Object.assign(S, shared);
+
+const svg = $('stage');
+const GR = {x: 560, y: 90, w: 380, h: 300};
+
+function paintLedger(eq, r){
+  const rows = [];
+  rows.push(`<tr><td>${subFormula(eq.a.f)}</td><td>${fmt(S.molA, 0)} mol × ${eq.a.molar} g/mol = ${fmt(S.molA * eq.a.molar, 1)} g</td></tr>`);
+  rows.push(`<tr><td>${subFormula(eq.b.f)}</td><td>${fmt(S.molB, 0)} mol × ${eq.b.molar} g/mol = ${fmt(S.molB * eq.b.molar, 1)} g</td></tr>`);
+  rows.push(`<tr class="total"><td>Limiting reagent</td><td>${S.molA === 0 && S.molB === 0 ? '—' : subFormula(r.limiting === 'a' ? eq.a.f : eq.b.f)}</td></tr>`);
+  rows.push(`<tr><td>${subFormula(eq.a.f)} left over</td><td>${fmt(r.leftA, 2)} mol</td></tr>`);
+  rows.push(`<tr><td>${subFormula(eq.b.f)} left over</td><td>${fmt(r.leftB, 2)} mol</td></tr>`);
+  rows.push(`<tr class="total"><td>${subFormula(eq.p.f)} formed</td><td>${fmt(r.productMol, 2)} mol = ${fmt(r.productMass, 2)} g</td></tr>`);
+  $('ledger').innerHTML = rows.join('');
+}
+function paintPercent(eq){
+  const parts = percentComposition(eq.p.f);
+  const cols = {H: '#e0564a', O: '#3f7fd8', N: '#2f9e5b', C: '#4a555b'};
+  $('pcompLabel').textContent = subFormula(eq.p.f) + ' — molar mass ' + eq.p.molar + ' g/mol';
+  $('pcomp').innerHTML = `<div class="seg">${parts.map(p => `<div style="width:${p.pct.toFixed(1)}%;background:${cols[p.el] || '#999'}"></div>`).join('')}</div>`;
+  $('pcompLegend').innerHTML = parts.map(p => `<div>${p.el}: ${fmt(p.mass, 0)} / ${eq.p.molar} = <b class="num">${fmt(p.pct, 2)}%</b></div>`).join('');
+}
+function paintGraph(eq, r){
+  const kinkX = eq.a.coef * (S.molB / eq.b.coef);
+  const xMax = 6, yMax = Math.max(2, (Math.min(xMax / eq.a.coef, S.molB / eq.b.coef) * eq.p.coef) * 1.15, r.productMol * 1.2);
+  const gx = x => GR.x + x / xMax * GR.w, gy = y => GR.y + GR.h - y / yMax * GR.h;
+  const kx = clamp(kinkX, 0, xMax);
+  const yAtKink = Math.min(kx / eq.a.coef, S.molB / eq.b.coef) * eq.p.coef;
+  let path = `M${gx(0).toFixed(1)} ${gy(0).toFixed(1)} L${gx(kx).toFixed(1)} ${gy(yAtKink).toFixed(1)}`;
+  if (kx < xMax) path += ` L${gx(xMax).toFixed(1)} ${gy(yAtKink).toFixed(1)}`;
+  let ax = '';
+  for (let v = 0; v <= xMax; v++) ax += `<line x1="${gx(v).toFixed(1)}" y1="${GR.y}" x2="${gx(v).toFixed(1)}" y2="${GR.y + GR.h}" stroke="#ece8dc"/><text x="${gx(v).toFixed(1)}" y="${GR.y + GR.h + 16}" font-size="10.5" text-anchor="middle" fill="#7c878c">${v}</text>`;
+  for (let v = 0; v <= yMax; v += Math.max(1, Math.round(yMax / 5))) ax += `<line x1="${GR.x}" y1="${gy(v).toFixed(1)}" x2="${GR.x + GR.w}" y2="${gy(v).toFixed(1)}" stroke="#ece8dc"/><text x="${GR.x - 6}" y="${(gy(v) + 4).toFixed(1)}" font-size="10.5" text-anchor="end" fill="#7c878c">${fmt(v, 0)}</text>`;
+  return `
+    <text x="${GR.x - 44}" y="${GR.y - 18}" font-size="13" font-weight="700" class="serif" fill="#1d2327">mol ${subFormula(eq.p.f)} formed vs mol ${subFormula(eq.a.f)} added</text>
+    ${ax}
+    <line x1="${GR.x}" y1="${GR.y + GR.h}" x2="${GR.x + GR.w}" y2="${GR.y + GR.h}" stroke="#9aa3a6"/>
+    <line x1="${GR.x}" y1="${GR.y}" x2="${GR.x}" y2="${GR.y + GR.h}" stroke="#9aa3a6"/>
+    <path d="${path}" fill="none" stroke="#6a3fc2" stroke-width="2.4"/>
+    ${kx < xMax ? `<line x1="${gx(kx).toFixed(1)}" y1="${GR.y}" x2="${gx(kx).toFixed(1)}" y2="${GR.y + GR.h}" stroke="#d6453d" stroke-dasharray="4 4"/>
+      <text x="${gx(kx).toFixed(1)}" y="${GR.y - 4}" text-anchor="middle" font-size="11" fill="#d6453d" font-weight="700">kink: ${fmt(kx, 2)} mol</text>` : ''}
+    <circle cx="${gx(S.molA).toFixed(1)}" cy="${gy(r.productMol).toFixed(1)}" r="6" fill="#6a3fc2" stroke="#fff" stroke-width="2"/>
+    <text x="${GR.x + GR.w / 2}" y="${GR.y + GR.h + 34}" text-anchor="middle" font-size="11" fill="#7c878c">mol ${subFormula(eq.a.f)} added (mol ${subFormula(eq.b.f)} fixed at ${fmt(S.molB, 0)})</text>
+  `;
+}
+function paint(){
+  const eq = eqOf(), r = react(eq, S.molA, S.molB);
+  $('gate').hidden = S.locked;
+  $$('.eqchip').forEach(c => { c.setAttribute('aria-pressed', c.dataset.id === S.eq); c.disabled = !S.locked; });
+  $('molA').disabled = !S.locked; $('molB').disabled = !S.locked;
+  $('labA').textContent = 'mol ' + subFormula(eq.a.f); $('labB').textContent = 'mol ' + subFormula(eq.b.f);
+  if (!S.locked) {
+    svg.innerHTML = `<rect x="0" y="0" width="1000" height="640" fill="#fbfaf6"/>
+      <text x="500" y="310" text-anchor="middle" font-size="15" fill="#7c878c">The mixing chamber and the graph appear once you have made a prediction.</text>`;
+    $('ledger').innerHTML = '<tr><td colspan="2" style="color:var(--ink-3)">The numbers appear once you have made a prediction.</td></tr>';
+    $('pcompLabel').textContent = ''; $('pcomp').innerHTML = ''; $('pcompLegend').innerHTML = '';
+    return;
+  }
+  /* mixing chamber: whole reacted molecules shown in the middle tray; the illustration rounds to
+     whole particles, but every number in the ledger is exact. */
+  const nA = Math.round(S.molA), nB = Math.round(S.molB);
+  const consumedShareA = S.molA > 0 ? r.consumedA / S.molA : 0, consumedShareB = S.molB > 0 ? r.consumedB / S.molB : 0;
+  let mol = '';
+  for (let i = 0; i < nA; i++) { const p = gridPos(i, nA, 40, 90, 220, 420); mol += drawGlyph(p.cx, p.cy, eq.a.f, i >= Math.round(nA * consumedShareA)); }
+  for (let i = 0; i < nB; i++) { const p = gridPos(i, nB, 300, 90, 220, 420); mol += drawGlyph(p.cx, p.cy, eq.b.f, i >= Math.round(nB * consumedShareB)); }
+  svg.innerHTML = `
+    <rect x="0" y="0" width="1000" height="640" fill="#fbfaf6"/>
+    <rect x="0" y="580" width="1000" height="60" fill="#e8dcc0"/><rect x="0" y="580" width="1000" height="6" fill="#d8c290"/>
+    <text x="500" y="34" text-anchor="middle" font-size="16" font-weight="700" class="serif" fill="#1d2327">${eq.a.coef === 1 ? '' : eq.a.coef}${subFormula(eq.a.f)} + ${eq.b.coef === 1 ? '' : eq.b.coef}${subFormula(eq.b.f)} → ${eq.p.coef === 1 ? '' : eq.p.coef}${subFormula(eq.p.f)}</text>
+    <rect x="20" y="70" width="490" height="440" rx="10" fill="#fff" stroke="#e2ded2"/>
+    <text x="40" y="60" font-size="12" font-weight="700" letter-spacing=".06em" fill="#7c878c">MIXING CHAMBER — solid = reacted, faint = left over</text>
+    <line x1="270" y1="90" x2="270" y2="490" stroke="#e2ded2" stroke-dasharray="3 4"/>
+    <text x="150" y="530" text-anchor="middle" font-size="12" fill="#4a555b" font-weight="600">${fmt(S.molA, 0)} mol ${subFormula(eq.a.f)}</text>
+    <text x="390" y="530" text-anchor="middle" font-size="12" fill="#4a555b" font-weight="600">${fmt(S.molB, 0)} mol ${subFormula(eq.b.f)}</text>
+    <text x="270" y="556" text-anchor="middle" font-size="12.5" font-weight="700" fill="${r.leftA > 0.01 && r.leftB > 0.01 ? '#4a555b' : '#1f7a68'}">${r.leftA <= 0.01 && r.leftB <= 0.01 ? 'Exactly the stoichiometric ratio — nothing left over' : (r.leftA > r.leftB ? subFormula(eq.a.f) : subFormula(eq.b.f)) + ' is in excess; ' + (r.limiting === 'a' ? subFormula(eq.a.f) : subFormula(eq.b.f)) + ' is the limiting reagent'}</text>
+    ${mol}
+    <rect x="${GR.x - 30}" y="${GR.y - 40}" width="${GR.w + 60}" height="${GR.h + 90}" rx="10" fill="#fff" stroke="#e2ded2"/>
+    ${paintGraph(eq, r)}
+  `;
+  paintLedger(eq, r);
+  paintPercent(eq);
+  S.visited[S.eq] = true;
+  check(r);
+}
+
+/* ---- controls --------------------------------------------------------------- */
+const eqBox = $('eqChips');
+REACTIONS.forEach(eq => {
+  const b = document.createElement('button');
+  b.className = 'eqchip'; b.type = 'button'; b.dataset.id = eq.id; b.textContent = eq.label;
+  b.addEventListener('click', () => { if (!S.locked) return; S.eq = eq.id; sound('tick'); paint(); track('eq', {eq: eq.id}); });
+  eqBox.appendChild(b);
+});
+$('molA').addEventListener('input', e => { S.molA = +e.target.value; $('molAOut').textContent = S.molA; paint(); });
+$('molA').addEventListener('change', () => track('molA', {v: S.molA}));
+$('molB').addEventListener('input', e => { S.molB = +e.target.value; $('molBOut').textContent = S.molB; paint(); });
+$('molB').addEventListener('change', () => track('molB', {v: S.molB}));
+
+/* ---- findings ----------------------------------------------------------------- */
+function check(r){
+  if (S.molA > 0 && S.molB > 0) {
+    if (r.leftA <= 0.02 && r.leftB <= 0.02) discover('stoichiometric');
+    else if (r.limiting === 'a') discover('limiting-a'); else discover('limiting-b');
+  }
+  const eq = eqOf(), kinkX = eq.a.coef * (S.molB / eq.b.coef);
+  if (Math.abs(S.molA - kinkX) < 0.02 && S.molB > 0) discover('kink');
+  if (S.visited.water && S.visited.ammonia) discover('secondreaction');
+}
+
+/* ============================================================================
+   Start
+   ============================================================================ */
+findings($('finds'), [
+  {id: 'limiting-a', icon: '⏹', label: 'The first reactant runs out first', hint: 'Give it too little of one reagent'},
+  {id: 'limiting-b', icon: '⏹', label: 'The second reactant runs out first', hint: 'Give it too little of the other reagent'},
+  {id: 'stoichiometric', icon: '⚖️', label: 'Exactly the stoichiometric ratio — nothing wasted', hint: 'Match the mole ratio in the equation exactly'},
+  {id: 'kink', icon: '📈', label: 'Landed exactly on the graph’s kink', hint: 'Set mol A to the equivalence point'},
+  {id: 'secondreaction', icon: '🔁', label: 'Tried a second reaction with a different ratio', hint: 'Switch to the ammonia reaction'},
+], () => toast('All five found — you can spot a limiting reagent from the numbers alone now.', 4200));
+
+const POE = predict($('poe'), {
+  id: 'limiting-reagent',
+  q: 'You mix 2 mol of H₂ with 2 mol of O₂ to make water: 2H₂ + O₂ → 2H₂O. Which one runs out first?',
+  options: [
+    {id: 'h2', text: 'H₂ — the equation needs twice as much of it.', right: true},
+    {id: 'o2', text: 'O₂ — it has the bigger molecule.'},
+    {id: 'both', text: 'Both run out together — the amounts are equal.'},
+    {id: 'neither', text: "Neither — you can't tell without a catalyst."},
+  ],
+  onLock(){
+    S.locked = true;
+    say('Now set your own amounts, and watch which one runs out.');
+    paint();
+  },
+});
+if (!Play.FF('predict')) S.locked = true;
+paint();
+window.PG_STATE = () => JSON.parse(JSON.stringify(S));
+window.PG_MODEL = {parseFormula, percentComposition, react, REACTIONS, MW};
+</script>
+</body>
+</html>

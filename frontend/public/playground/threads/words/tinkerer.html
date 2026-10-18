@@ -1,0 +1,570 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tense on a Timeline</title>
+<meta name="description" content="Class 6–8: slide an action along a timeline, stretch it and set a reference point, and watch a small grammar engine build the verb in all twelve tenses.">
+<link rel="icon" href="../../favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600&family=Inter:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="../../play.css">
+<style>
+/* Only what this page needs beyond play.css. */
+/* The stage paints its own paper, in light and dark chrome alike; a narrower side panel on small laptops. */
+.pg-stage{background:#fbfaf6}
+@media (max-width:1180px) and (min-width:981px){ .pg-main.wide-side{grid-template-columns:minmax(0,1fr) 340px} }
+.pg-stage{align-self:start}
+.hit{cursor:grab}
+.hit.dragging{cursor:grabbing}
+.hit.ew{cursor:ew-resize}
+.gate{position:absolute; inset:0; display:grid; place-items:center; pointer-events:none}
+.gate span{background:rgba(15,26,43,.82); color:#fff; padding:10px 16px; border-radius:99px; font-weight:600; font-size:14px}
+.sent{background:#fbfaf6; border-bottom:1px solid #e2ded2; padding:16px 20px 12px; min-height:128px; color:#1d2327}
+.sent .kick{font-size:11px; letter-spacing:.08em; font-weight:700; color:#7c878c; text-transform:uppercase; margin-bottom:10px; display:flex; gap:10px; align-items:baseline}
+.sent .kick b{color:#1d2327; letter-spacing:.02em; text-transform:none; font-size:13px}
+.words{display:flex; flex-wrap:wrap; gap:8px 6px; align-items:flex-start}
+.wb{display:inline-flex; flex-direction:column; align-items:center; gap:3px}
+.wb b{background:var(--c); color:#fff; font-weight:700; font-size:19px; padding:5px 11px; border-radius:10px; line-height:1.25; white-space:nowrap;
+  box-shadow:inset 0 -3px 0 rgba(0,0,0,.14)}
+.wb.aux b{box-shadow:inset 0 -3px 0 rgba(0,0,0,.14), 0 0 0 2px #fff, 0 0 0 3.5px var(--c)}
+.wb small{font-size:10.5px; font-weight:600; color:#7c878c; white-space:nowrap}
+.wb.flash b{animation:flash .5s ease-out}
+@keyframes flash{0%{transform:translateY(-4px) scale(1.06)}100%{transform:none}}
+.stop{font-size:22px; font-weight:700; align-self:flex-start; margin:4px 0 0 -3px; color:#1d2327}
+.none{font-size:15px; color:#7c878c; font-style:italic; padding:6px 0}
+.chips{display:flex; flex-wrap:wrap; gap:6px; margin:4px 0 10px}
+.chip{border:1.5px solid var(--hair-2); background:var(--card); border-radius:99px; padding:5px 12px; font-size:13.5px; font-weight:600; cursor:pointer; color:var(--ink-2)}
+.chip:hover:not(:disabled){border-color:var(--ink-3)}
+.chip[aria-pressed="true"]{border-color:var(--cc, var(--accent)); background:var(--cc, var(--accent)); color:#fff}
+.chip:disabled{opacity:.45; cursor:default}
+.chip.subj{--cc:#7b5cd6}
+.chip.subj.noun{--cc:#3f7fd8}
+.chip.verb{--cc:#d6453d}
+.lab{font-size:12px; font-weight:700; color:var(--ink-3); text-transform:uppercase; letter-spacing:.06em}
+.tense{font-family:"Fredoka",var(--font-head); font-size:24px; font-weight:600; line-height:1.15}
+.formula{font-size:13.5px; color:var(--ink-2); margin-top:4px}
+.formula code{font-family:var(--font); font-weight:700; color:#b0302a; background:#fde6e3; padding:1px 6px; border-radius:6px}
+.why p{font-size:14px}
+.why b{color:var(--ink)}
+</style>
+</head>
+<body>
+<header class="pg-top"></header>
+
+<div class="pg-intro">
+  <h1>Tense on a timeline</h1>
+  <p>A verb carries time inside it. Before you touch anything, read one sentence and decide what happened first.
+     Then slide an action along the timeline, stretch it, set a reference point, and watch a small grammar engine build the verb.</p>
+</div>
+
+<main class="pg-main wide-side">
+  <section class="pg-stage" id="stageWrap">
+    <div class="sent" id="sentWrap" aria-live="polite">
+      <div class="kick">The sentence <b id="tenseTag"></b></div>
+      <div class="words" id="words"></div>
+    </div>
+    <svg id="stage" viewBox="0 0 1000 470" role="img" aria-label="A timeline with the action and a reference point, and the grid of twelve tenses"></svg>
+    <div class="gate" id="gate"><span>Make your prediction first →</span></div>
+  </section>
+
+  <aside class="pg-side">
+    <div id="poe"></div>
+
+    <div class="card" id="ctlCard">
+      <div class="lab">Who</div>
+      <div class="chips" id="subjChips"></div>
+      <div class="lab">Does what</div>
+      <div class="chips" id="verbChips"></div>
+      <div class="row" style="justify-content:space-between; margin-top:2px">
+        <span style="font-size:12.5px;color:var(--ink-3);max-width:250px">Drag the ◆ to set your own reference point. Tie it back to follow the action.</span>
+        <button class="btn sm" id="btnTie" aria-pressed="true">◆ Tied to the action</button>
+      </div>
+    </div>
+
+    <div class="card" id="tenseCard">
+      <div class="kicker">The tense</div>
+      <div class="tense" id="tenseName">—</div>
+      <div class="formula" id="formula"></div>
+    </div>
+
+    <div class="card why" id="whyCard" hidden>
+      <div class="kicker">What is happening</div>
+      <div id="why"></div>
+    </div>
+
+    <div class="card"><div class="kicker">To find</div><div id="finds"></div></div>
+  </aside>
+</main>
+
+<script src="../../play.js"></script>
+<script>
+'use strict';
+const {$, esc, clamp, drag, sound, say, track, toast, predict, findings, discover, found,
+       shareState, sharedState, mount, reduced} = Play;
+mount({thread: 'words', band: 'tinkerer'});
+
+/* MODEL:start ==================================================================
+   Two small models, and no table of sentences anywhere.
+
+   1. MORPHOLOGY. A lexicon lists each verb's base form and ONLY what English
+      does not do by rule (went, gone, ate, eaten…). Every other form — the
+      third-person -s/-es/-ies, the regular -ed past, the -ing form with its
+      dropped e and doubled consonant — is made by spelling rules. The helping
+      verbs be and have are verbs in the same lexicon.
+
+   2. TIME. Reichenbach's picture of tense: the moment of speaking (NOW), the
+      action E (a point or a stretch), and a reference point R.
+        time   = where R is:    before NOW → past,  at NOW → present,  after → future
+        aspect = how E sits against R:
+                 a point AT R                    → simple
+                 over, and still going at R      → continuous   (be + -ing)
+                 finished before R               → perfect      (have + past participle)
+                 a stretch that runs right up to R → perfect continuous (have been + -ing)
+      Times are whole hours, so every comparison is exact.
+   ============================================================================ */
+const LEX = {
+  walk:  {obj: [['to', 'prep'], ['school', 'noun']]},
+  eat:   {past: 'ate', pp: 'eaten', obj: [['a', 'det'], ['mango', 'noun']]},
+  play:  {obj: [['cricket', 'noun']]},
+  write: {past: 'wrote', pp: 'written', obj: [['a', 'det'], ['letter', 'noun']]},
+  go:    {past: 'went', pp: 'gone', obj: [['to', 'prep'], ['the', 'det'], ['market', 'noun']]},
+  sing:  {past: 'sang', pp: 'sung', obj: [['a', 'det'], ['song', 'noun']]},
+  run:   {past: 'ran', pp: 'run', obj: [['in', 'prep'], ['the', 'det'], ['park', 'noun']]},
+  study: {obj: [['for', 'prep'], ['the', 'det'], ['test', 'noun']]},
+  watch: {obj: [['a', 'det'], ['film', 'noun']]},
+  /* the helpers, and the verbs of the reference clause */
+  be:    {s: 'is', past: 'was', pp: 'been'},
+  have:  {s: 'has', past: 'had', pp: 'had'},
+  ring:  {past: 'rang', pp: 'rung'},
+  arrive:{},
+};
+const VERBS = ['walk', 'eat', 'play', 'write', 'go', 'sing', 'run', 'study', 'watch'];
+const SUBJECTS = [
+  {id: 'I',        words: [['I', 'pron']],                     person: 1, plural: false},
+  {id: 'You',      words: [['you', 'pron']],                   person: 2, plural: false},
+  {id: 'He',       words: [['he', 'pron']],                    person: 3, plural: false},
+  {id: 'She',      words: [['she', 'pron']],                   person: 3, plural: false},
+  {id: 'We',       words: [['we', 'pron']],                    person: 1, plural: true},
+  {id: 'They',     words: [['they', 'pron']],                  person: 3, plural: true},
+  {id: 'Meena',    words: [['Meena', 'noun']],                 person: 3, plural: false},
+  {id: 'Children', words: [['the', 'det'], ['children', 'noun']], person: 3, plural: true},
+];
+const subjOf = id => SUBJECTS.find(s => s.id === id) || SUBJECTS[3];
+const is3sg = s => s.person === 3 && !s.plural;
+const VOW = 'aeiou';
+
+/* Spelling rules. */
+function thirdS(v){
+  const L = LEX[v] || {};
+  if (L.s) return L.s;
+  if (/(s|sh|ch|x|z|o)$/.test(v)) return v + 'es';                     // watch → watches
+  if (/[^aeiou]y$/.test(v)) return v.slice(0, -1) + 'ies';              // study → studies
+  return v + 's';
+}
+/* A short verb ending consonant–vowel–consonant doubles its last letter (run → running). */
+const doubles = v => /^[^aeiou]*[aeiou][^aeiouwxy]$/.test(v);
+function edForm(v){
+  if (/e$/.test(v)) return v + 'd';                                     // arrive → arrived
+  if (/[^aeiou]y$/.test(v)) return v.slice(0, -1) + 'ied';              // study → studied
+  if (doubles(v)) return v + v.slice(-1) + 'ed';                        // stop → stopped
+  return v + 'ed';                                                      // walk → walked
+}
+function ingForm(v){
+  if (/ie$/.test(v)) return v.slice(0, -2) + 'ying';                    // lie → lying
+  if (/[^aeiouy]e$/.test(v) && v !== 'be') return v.slice(0, -1) + 'ing';  // write → writing
+  if (doubles(v)) return v + v.slice(-1) + 'ing';                       // run → running
+  return v + 'ing';
+}
+function forms(v){
+  const L = LEX[v] || {};
+  return {base: v, s: thirdS(v), past: L.past || edForm(v), pp: L.pp || edForm(v), ing: ingForm(v),
+          irregular: {past: !!L.past, pp: !!L.pp}};
+}
+/* be, with its own agreement: I am, he is, they are; I/he was, they were. */
+function beForm(subj, time){
+  if (time === 'present') return subj.person === 1 && !subj.plural ? 'am' : is3sg(subj) ? 'is' : 'are';
+  return (subj.person === 1 || subj.person === 3) && !subj.plural ? 'was' : 'were';
+}
+function haveForm(subj, time){ return time === 'past' ? forms('have').past : is3sg(subj) ? forms('have').s : 'have'; }
+
+/* The verb phrase for (subject, verb, time, aspect): a list of {w, aux, form}. */
+function verbPhrase(subj, v, time, aspect){
+  const f = forms(v), out = [];
+  const aux = (w, form) => out.push({w, aux: true, form});
+  const main = (w, form) => out.push({w, aux: false, form});
+  if (time === 'future') aux('will', 'helping verb');
+  const t = time === 'future' ? null : time;                            // after will, the base form
+  if (aspect === 'simple') {
+    if (time === 'present') is3sg(subj) ? main(f.s, 's') : main(f.base, 'base');
+    else if (time === 'past') main(f.past, 'past');
+    else main(f.base, 'base');
+  } else if (aspect === 'continuous') {
+    aux(t ? beForm(subj, t) : 'be', 'helping verb'); main(f.ing, 'ing');
+  } else if (aspect === 'perfect') {
+    aux(t ? haveForm(subj, t) : 'have', 'helping verb'); main(f.pp, 'pp');
+  } else {
+    aux(t ? haveForm(subj, t) : 'have', 'helping verb'); aux(forms('be').pp, 'helping verb'); main(f.ing, 'ing');
+  }
+  return out;
+}
+const vpText = (subj, v, time, aspect) => verbPhrase(subj, v, time, aspect).map(x => x.w).join(' ');
+
+/* Where things are on the timeline → which of the twelve tenses English uses. */
+function classify(s, e, R){
+  const time = R < 0 ? 'past' : R > 0 ? 'future' : 'present';
+  let aspect;
+  if (s === e) aspect = s === R ? 'simple' : s < R ? 'perfect' : null;
+  else if (e < R) aspect = 'perfect';
+  else if (e === R) aspect = 'perfect continuous';
+  else if (s < R) aspect = 'continuous';
+  else aspect = null;                                                   // the action starts after R
+  return {time, aspect};
+}
+/* A reference point tied to the action: the action itself for a point; NOW if a stretch
+   covers NOW; otherwise the stretch's middle. */
+function tiedRef(s, e){ return s === e ? s : (s < 0 && e > 0) ? 0 : (s + e) / 2; }
+
+const NUMW = ['no', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten', 'eleven', 'twelve'];
+const hoursW = n => n === 1 ? 'an hour' : NUMW[n] + ' hours';
+/* The rest of the sentence: object, then when / how long, all from the geometry. */
+function adverbials(st, cls){
+  const {s, e} = st, R = st.R, tied = st.tied, out = [];
+  const bell = time => [['the', 'det', 'article'], ['bell', 'noun', 'noun'], [time === 'past' ? forms('ring').past : forms('ring').s, 'verb', time === 'past' ? 'past form' : 'base + s']];
+  const whenBell = (conj, time) => [[conj, 'conj', 'joining word']].concat(bell(time));
+  const h = Math.max(1, Math.round(Math.abs(R)));
+  const {time, aspect} = cls;
+  if (aspect === 'perfect continuous') out.push(['for', 'prep', 'preposition'], [hoursW(e - s), 'adv', 'how long']);
+  if (aspect === 'simple' || aspect === 'continuous') {
+    if (time === 'present') out.push(aspect === 'simple' ? ['every day', 'adv', 'how often'] : ['right now', 'adv', 'when']);
+    else if (tied) out.push(time === 'past' ? [hoursW(h) + ' ago', 'adv', 'when'] : ['in ' + hoursW(h), 'adv', 'when']);
+    else out.push(...whenBell('when', time));
+  } else if (time !== 'present') {
+    out.push(...whenBell(aspect === 'perfect continuous' && time === 'past' ? 'when' : 'by the time', time));
+  }
+  return out;
+}
+/* The whole sentence, as tagged words. */
+function sentence(st){
+  const subj = subjOf(st.subj), R = st.tied ? tiedRef(st.s, st.e) : st.R;
+  const cls = classify(st.s, st.e, R);
+  if (!cls.aspect) return {cls, R, words: null};
+  const w = [];
+  subj.words.forEach(([x, pos]) => w.push({w: x, pos, cap: pos === 'pron' ? 'pronoun' : pos === 'det' ? 'article' : 'noun', role: 'subject'}));
+  verbPhrase(subj, st.verb, cls.time, cls.aspect).forEach(x => w.push({w: x.w, pos: 'verb', aux: x.aux,
+    cap: x.aux ? 'helping verb' : {base: 'base form', s: 'base + s', past: 'past form', pp: 'past participle', ing: '-ing form'}[x.form], form: x.form}));
+  (LEX[st.verb].obj || []).forEach(([x, pos]) => w.push({w: x, pos, cap: {prep: 'preposition', det: 'article', noun: 'noun'}[pos]}));
+  adverbials(Object.assign({}, st, {R}), cls).forEach(([x, pos, cap]) => w.push({w: x, pos, cap, clause: true}));
+  w[0] = Object.assign({}, w[0], {w: w[0].w[0].toUpperCase() + w[0].w.slice(1)});
+  return {cls, R, words: w, text: w.map(x => x.w).join(' ') + '.'};
+}
+const tenseName = c => !c.aspect ? '' : c.aspect === 'simple' ? 'simple ' + c.time : c.time + ' ' + c.aspect;
+/* MODEL:end */
+
+const POS_COL = {noun: '#3f7fd8', verb: '#d6453d', adj: '#2f9e5b', det: '#8a94a6', adv: '#f29a1f', pron: '#7b5cd6', prep: '#16a3a3', conj: '#c2569b'};
+const TIMES = ['past', 'present', 'future'], ASPECTS = ['simple', 'continuous', 'perfect', 'perfect continuous'];
+const cellKey = (t, a) => t + '|' + a;
+
+/* ---- state: plain data --------------------------------------------------- */
+const S = {subj: 'She', verb: 'walk', s: 0, e: 0, R: 0, tied: true, locked: false, changes: 0, visited: {}};
+const shared = sharedState();
+if (shared) {
+  if (SUBJECTS.some(x => x.id === shared.subj)) S.subj = shared.subj;
+  if (VERBS.includes(shared.verb)) S.verb = shared.verb;
+  const s = Math.round(+shared.s), e = Math.round(+shared.e);
+  if (isFinite(s) && isFinite(e) && s <= e) { S.s = clamp(s, -12, 12); S.e = clamp(e, S.s, 12); }
+  if (isFinite(+shared.R)) S.R = clamp(Math.round(+shared.R), -12, 12);
+  S.tied = shared.tied !== false;
+}
+shareState(() => ({subj: S.subj, verb: S.verb, s: S.s, e: S.e, R: S.R, tied: S.tied}));
+const refNow = () => S.tied ? tiedRef(S.s, S.e) : S.R;
+
+/* ============================================================================
+   The stage: drawn once, then only patched.
+   ============================================================================ */
+const svg = $('stage');
+const TL = {x0: 70, x1: 930, y: 160};                  // the axis: −12 h … +12 h
+const PX = (TL.x1 - TL.x0) / 24;
+const hx = h => TL.x0 + (h + 12) * PX;
+const hourAt = x => (x - TL.x0) / PX - 12;
+const GRID = {x: 150, y: 286, w: 205, h: 56, lab: 20};
+const RED = '#d6453d', RED_D = '#a8322b', INK = '#1d2327', INK2 = '#4a555b', INK3 = '#7c878c';
+
+function build(){
+  let ticks = '';
+  for (let h = -12; h <= 12; h++) {
+    const x = hx(h), big = h % 3 === 0;
+    ticks += `<line x1="${x.toFixed(1)}" y1="${TL.y - (big ? 7 : 4)}" x2="${x.toFixed(1)}" y2="${TL.y + (big ? 7 : 4)}" stroke="${h === 0 ? INK : '#9aa3a6'}" stroke-width="${big ? 1.6 : 1}"/>`;
+    if (big && h) ticks += `<text x="${x.toFixed(1)}" y="${TL.y + 22}" fill="${INK3}" font-size="11" text-anchor="middle">${h < 0 ? -h + ' h ago' : 'in ' + h + ' h'}</text>`;
+  }
+  /* the header of the grid, each with a little picture of its shape */
+  let head = '';
+  const glyph = (a, cx, cy) => {
+    const d = `<path d="M${cx + 16} ${cy - 5}l5 5l-5 5l-5-5z" fill="${INK}"/>`;                 // ◆ at cx+16
+    if (a === 'simple') return `<circle cx="${cx + 16}" cy="${cy - 11}" r="4" fill="${RED}"/>` + d;
+    if (a === 'continuous') return `<rect x="${cx}" y="${cy - 14}" width="34" height="6" rx="3" fill="${RED}"/>` + d;
+    if (a === 'perfect') return `<circle cx="${cx - 2}" cy="${cy - 11}" r="4" fill="${RED}"/>` + d;
+    return `<rect x="${cx - 10}" y="${cy - 14}" width="26" height="6" rx="3" fill="${RED}"/>` + d;
+  };
+  ASPECTS.forEach((a, i) => {
+    const x = GRID.x + i * GRID.w;
+    head += `<text x="${x + 12}" y="${GRID.y - 10}" fill="${INK2}" font-size="12" font-weight="700">${a[0].toUpperCase() + a.slice(1)}</text>` +
+            glyph(a, x + GRID.w - 40, GRID.y - 8);
+  });
+  let cells = '';
+  TIMES.forEach((t, j) => {
+    const y = GRID.y + j * GRID.h;
+    cells += `<text x="${GRID.lab}" y="${y + GRID.h / 2 + 5}" fill="${INK2}" font-size="13" font-weight="700">${t[0].toUpperCase() + t.slice(1)}</text>`;
+    ASPECTS.forEach((a, i) => {
+      const x = GRID.x + i * GRID.w, k = cellKey(t, a);
+      cells += `<rect id="cell-${j}-${i}" x="${x + 3}" y="${y + 3}" width="${GRID.w - 6}" height="${GRID.h - 6}" rx="9" fill="#f1efe8" stroke="#e2ded2"/>` +
+               `<text id="ctext-${j}-${i}" x="${x + GRID.w / 2}" y="${y + GRID.h / 2 + 5}" font-size="14" font-weight="700" text-anchor="middle" fill="${INK3}">?</text>`;
+    });
+  });
+  svg.innerHTML = `
+  <defs>
+    <linearGradient id="gPast" x1="0" x2="1"><stop offset="0" stop-color="#dfe9f7"/><stop offset="1" stop-color="#eef3fa"/></linearGradient>
+    <linearGradient id="gFut" x1="0" x2="1"><stop offset="0" stop-color="#fbf1e2"/><stop offset="1" stop-color="#f8e3c4"/></linearGradient>
+    <filter id="soft" x="-20%" y="-40%" width="140%" height="180%"><feDropShadow dx="0" dy="2" stdDeviation="2" flood-opacity=".22"/></filter>
+  </defs>
+  <rect x="0" y="0" width="1000" height="470" fill="#fbfaf6"/>
+  <text x="20" y="26" fill="${INK2}" font-size="13" font-weight="700" letter-spacing=".08em">THE TIMELINE</text>
+  <text x="20" y="44" fill="${INK3}" font-size="11.5">Drag the red action. Pull its ends to stretch it. The ◆ is the reference point: “the time we are talking about”.</text>
+  <rect x="${TL.x0}" y="56" width="${hx(0) - TL.x0}" height="140" fill="url(#gPast)" rx="6"/>
+  <rect x="${hx(0)}" y="56" width="${TL.x1 - hx(0)}" height="140" fill="url(#gFut)" rx="6"/>
+  <text x="${TL.x0 + 10}" y="74" fill="#5b7aa6" font-size="12" font-weight="700" letter-spacing=".1em">◀ PAST</text>
+  <text x="${TL.x1 - 10}" y="74" fill="#b0731a" font-size="12" font-weight="700" letter-spacing=".1em" text-anchor="end">FUTURE ▶</text>
+  <line x1="${TL.x0 - 8}" y1="${TL.y}" x2="${TL.x1 + 8}" y2="${TL.y}" stroke="${INK}" stroke-width="2"/>
+  ${ticks}
+  <line x1="${hx(0)}" y1="58" x2="${hx(0)}" y2="${TL.y + 30}" stroke="${INK}" stroke-width="2.5"/>
+  <rect x="${hx(0) - 26}" y="58" width="52" height="20" rx="10" fill="${INK}"/>
+  <text x="${hx(0)}" y="72.5" fill="#fff" font-size="11.5" font-weight="700" text-anchor="middle" letter-spacing=".08em">NOW</text>
+
+  <line id="refLine" y1="84" y2="${TL.y + 38}" stroke="${INK}" stroke-width="1.4" stroke-dasharray="4 4"/>
+  <path id="refMark" d="M0 -10L10 0L0 10L-10 0Z" fill="${INK}" stroke="#fff" stroke-width="2"/>
+  <text id="refLab" y="${TL.y + 70}" paint-order="stroke" stroke="#fbfaf6" stroke-width="5" stroke-linejoin="round" fill="${INK}" font-size="12.5" font-weight="700" text-anchor="middle"></text>
+
+  <rect id="actBar" y="102" height="30" rx="15" fill="${RED}" filter="url(#soft)"/>
+  <circle id="actDot" cy="117" r="13" fill="${RED}" filter="url(#soft)"/>
+  <text id="actLab" y="122" fill="#fff" font-size="13" font-weight="700" text-anchor="middle"></text>
+  <path id="lGrip" fill="${RED_D}"/>
+  <path id="rGrip" fill="${RED_D}"/>
+  <text id="durLab" y="94" paint-order="stroke" stroke="#f4f1ea" stroke-width="5" stroke-linejoin="round" fill="${RED_D}" font-size="11.5" font-weight="700" text-anchor="middle"></text>
+
+  <text x="20" y="${GRID.y - 36}" fill="${INK2}" font-size="13" font-weight="700" letter-spacing=".08em">THE TWELVE TENSES</text>
+  <text id="gridCount" x="980" y="${GRID.y - 36}" fill="${INK3}" font-size="12" font-weight="600" text-anchor="end"></text>
+  ${head}
+  ${cells}
+
+  <!-- hit targets: patched in place, never re-parented -->
+  <rect id="actHit" class="hit" y="98" height="38" fill="transparent" role="slider" aria-label="The action: drag it along time"/>
+  <rect id="lHit" class="hit ew" y="98" width="20" height="38" fill="transparent" role="slider" aria-label="The start of the action: drag to stretch"/>
+  <rect id="rHit" class="hit ew" y="98" width="20" height="38" fill="transparent" role="slider" aria-label="The end of the action: drag to stretch"/>
+  <rect id="refHit" class="hit ew" y="${TL.y + 22}" width="36" height="36" fill="transparent" role="slider" aria-label="The reference point: drag it along time"/>
+  `;
+}
+
+/* ---- paint --------------------------------------------------------------- */
+function paint(){
+  const R = refNow(), point = S.s === S.e;
+  const xs = hx(S.s), xe = hx(S.e);
+  /* the action */
+  $('actBar').setAttribute('opacity', point ? 0 : 1);
+  $('actBar').setAttribute('x', (xs - 15).toFixed(1)); $('actBar').setAttribute('width', (xe - xs + 30).toFixed(1));
+  $('actDot').setAttribute('opacity', point ? 1 : 0); $('actDot').setAttribute('cx', xs.toFixed(1));
+  const lg = point ? xs - 22 : xs - 15, rg = point ? xe + 22 : xe + 15;
+  $('lGrip').setAttribute('d', `M${(lg - 1).toFixed(1)} 110l-8 7l8 7z`);
+  $('rGrip').setAttribute('d', `M${(rg + 1).toFixed(1)} 110l8 7l-8 7z`);
+  $('actLab').setAttribute('x', ((xs + xe) / 2).toFixed(1));
+  $('actLab').textContent = point ? '' : (xe - xs > 60 ? S.verb : '');
+  $('durLab').setAttribute('x', ((xs + xe) / 2).toFixed(1));
+  $('durLab').textContent = point ? (S.s === 0 ? 'a moment, now' : 'a moment') : `${S.e - S.s} hour${S.e - S.s === 1 ? '' : 's'} long`;
+  /* hit targets follow */
+  $('actHit').setAttribute('x', (xs - 15).toFixed(1)); $('actHit').setAttribute('width', (xe - xs + 30).toFixed(1));
+  $('lHit').setAttribute('x', (lg - 12).toFixed(1)); $('rHit').setAttribute('x', (rg - 6).toFixed(1));
+  /* the reference point */
+  const xr = hx(R);
+  $('refLine').setAttribute('x1', xr.toFixed(1)); $('refLine').setAttribute('x2', xr.toFixed(1));
+  $('refMark').setAttribute('transform', `translate(${xr.toFixed(1)} ${TL.y + 40})`);
+  $('refMark').setAttribute('fill', S.tied ? '#8a94a6' : INK);
+  $('refHit').setAttribute('x', (xr - 18).toFixed(1));
+  const bellT = R < 0 ? 'past' : 'present';
+  $('refLab').setAttribute('x', clamp(xr, 90, 910).toFixed(1));
+  $('refLab').textContent = S.tied ? 'reference point (tied)' : `🔔 the bell ${R < 0 ? forms('ring').past : forms('ring').s}${R === 0 ? ' now' : ''}`;
+  $('refLab').setAttribute('fill', S.tied ? '#6b7480' : INK);
+
+  /* the sentence */
+  const sen = sentence(S);
+  const c = sen.cls;
+  if (sen.words) {
+    $('words').innerHTML = sen.words.map((w, i) =>
+      `<span class="wb${w.aux ? ' aux' : ''}${w.pos === 'verb' && w.role !== 'subject' ? ' v' : ''}" style="--c:${POS_COL[w.pos]}"><b>${esc(w.w)}</b><small>${esc(w.cap || '')}</small></span>`).join('') + '<span class="stop">.</span>';
+    $('tenseTag').textContent = '';
+  } else {
+    $('words').innerHTML = `<div class="none">The action starts after the ◆. None of the twelve tenses says that — slide the action back, or move the ◆ later.</div>`;
+  }
+  $('tenseName').textContent = c.aspect ? tenseName(c)[0].toUpperCase() + tenseName(c).slice(1) : 'Not one of the twelve';
+  $('formula').innerHTML = c.aspect ? formulaHTML(c) : 'The action must touch, cover or come before the ◆.';
+  /* the grid: visited cells show this subject's and this verb's form */
+  if (S.locked && c.aspect) S.visited[cellKey(c.time, c.aspect)] = true;
+  const subj = subjOf(S.subj);
+  TIMES.forEach((t, j) => ASPECTS.forEach((a, i) => {
+    const k = cellKey(t, a), seen = !!S.visited[k], cur = S.locked && c.time === t && c.aspect === a;
+    const cell = $(`cell-${j}-${i}`), tx = $(`ctext-${j}-${i}`);
+    cell.setAttribute('fill', cur ? '#fde6e3' : seen ? '#ffffff' : '#f1efe8');
+    cell.setAttribute('stroke', cur ? RED : seen ? '#c3cfba' : '#e2ded2');
+    cell.setAttribute('stroke-width', cur ? 2.5 : 1);
+    tx.textContent = seen ? vpText(subj, S.verb, t, a) : '?';
+    tx.setAttribute('fill', seen ? (cur ? RED_D : INK) : INK3);
+  }));
+  const n = Object.keys(S.visited).length;
+  $('gridCount').textContent = `${n} of 12 visited`;
+  /* controls */
+  $('btnTie').setAttribute('aria-pressed', S.tied);
+  $('btnTie').textContent = S.tied ? '◆ Tied to the action' : '◆ Tie to the action';
+  document.querySelectorAll('[data-subj]').forEach(b => b.setAttribute('aria-pressed', b.dataset.subj === S.subj));
+  document.querySelectorAll('[data-verb]').forEach(b => b.setAttribute('aria-pressed', b.dataset.verb === S.verb));
+  paintWhy(sen);
+  check(sen);
+}
+function formulaHTML(c){
+  const subj = subjOf(S.subj), f = forms(S.verb);
+  if (c.aspect === 'simple') return c.time === 'present' ? `Base form${is3sg(subj) ? ' <b>+ s</b> (he, she, it)' : ''}: <code>${vpText(subj, S.verb, c.time, c.aspect)}</code>`
+    : c.time === 'past' ? `Past form (V2): <code>${f.past}</code>` : `will + base form: <code>will ${f.base}</code>`;
+  const lead = c.time === 'future' ? 'will ' : '';
+  if (c.aspect === 'continuous') return `${lead}${c.time === 'future' ? 'be' : c.time === 'present' ? 'am / is / are' : 'was / were'} + -ing form: <code>${vpText(subj, S.verb, c.time, c.aspect)}</code>`;
+  if (c.aspect === 'perfect') return `${lead}${c.time === 'future' ? 'have' : c.time === 'present' ? 'has / have' : 'had'} + past participle (V3): <code>${vpText(subj, S.verb, c.time, c.aspect)}</code>`;
+  return `${lead}${c.time === 'future' ? 'have' : c.time === 'present' ? 'has / have' : 'had'} been + -ing form: <code>${vpText(subj, S.verb, c.time, c.aspect)}</code>`;
+}
+
+/* A live narrator: it describes what THIS state is doing, in words, from the model. */
+function paintWhy(sen){
+  if (!S.locked) return;
+  $('whyCard').hidden = false;
+  const c = sen.cls, R = sen.R, subj = subjOf(S.subj), f = forms(S.verb);
+  const hrs = n => n === 1 ? 'an hour' : NUMW[n] + ' hours';
+  const Rr = Math.abs(R);
+  let t = `<p>The ◆ reference point is ${R === 0 ? '<b>at NOW</b>, so this is a <b>present</b> tense' :
+    `${Rr === Math.round(Rr) ? hrs(Rr) : 'about ' + hrs(Math.max(1, Math.round(Rr)))} ${R < 0 ? 'before' : 'after'} NOW, so this is a <b>${c.time}</b> tense`}${S.tied ? ' (it is tied to the action)' : ''}.</p>`;
+  const vp = sen.words ? vpText(subj, S.verb, c.time, c.aspect || 'simple') : '';
+  if (!c.aspect) t += `<p>The action begins <b>after</b> the reference point. English would need “going to” or “would” for that, which are not among these twelve.</p>`;
+  else if (c.aspect === 'simple') t += `<p>The action is a single moment <b>at</b> the reference point${c.time === 'present' ? ' — or something done every day, a habit' : ''}: <b>simple</b>. So the verb is just <b>${vp}</b>.</p>`;
+  else if (c.aspect === 'continuous') t += `<p>The action started before the ◆ and is <b>still going on</b> at it: <b>continuous</b>. So English uses be + -ing: <b>${vp}</b>.</p>`;
+  else if (c.aspect === 'perfect') t += `<p>The action was <b>already finished</b> before the ◆: <b>perfect</b>. So English uses have + past participle: <b>${vp}</b>.</p>`;
+  else t += `<p>The action ran for <b>${hrs(S.e - S.s)}</b> right up to the ◆: <b>perfect continuous</b>. So English uses have been + -ing: <b>${vp}</b>.</p>`;
+  /* the morphology behind the form actually used */
+  const notes = [];
+  if (c.aspect === 'simple' && c.time === 'present' && is3sg(subj)) notes.push(`With <b>${subj.words.map(w => w[0]).join(' ')}</b> the present simple takes an -s: ${f.base} → <b>${f.s}</b>${f.s.endsWith('ies') ? ' (y becomes ies)' : f.s.endsWith('es') ? ' (-es after ' + f.base.slice(-2) + ')' : ''}.`);
+  if (sen.words) {
+    const used = sen.words.find(w => w.pos === 'verb' && !w.aux && w.form);
+    if (used && (used.form === 'past' || used.form === 'pp')) notes.push(f.irregular[used.form]
+      ? `<b>${f.base}</b> is irregular: its past is <b>${f.past}</b> and its past participle is <b>${f.pp}</b> — these are learnt, not made by a rule.`
+      : `<b>${f.base}</b> is regular: past and past participle both add -ed → <b>${f.past}</b>.`);
+    if (used && used.form === 'ing' && f.ing !== f.base + 'ing') notes.push(f.ing.length > f.base.length + 3 ? `${f.base} doubles its last letter before -ing: <b>${f.ing}</b>.` : `${f.base} drops its e before -ing: <b>${f.ing}</b>.`);
+  }
+  if (notes.length) t += `<p>${notes.join(' ')}</p>`;
+  $('why').innerHTML = t;
+}
+
+/* ---- findings: reached by the model, never by a button -------------------- */
+function check(sen){
+  if (!S.locked || S.changes < 1) return;
+  const c = sen.cls, v = S.visited, subj = subjOf(S.subj);
+  if (v['past|simple'] && v['present|simple'] && v['future|simple']) discover('simple3');
+  if (c.aspect === 'continuous') discover('cont');
+  if (c.time === 'past' && c.aspect === 'perfect') discover('pastperf');
+  if (sen.words) {
+    const used = sen.words.find(w => w.pos === 'verb' && !w.aux && w.form);
+    const f = forms(S.verb);
+    if (used && (used.form === 'past' || used.form === 'pp') && f.irregular[used.form]) discover('irreg');
+    if (used && used.form === 's' && is3sg(subj)) discover('thirds');
+  }
+  if (Object.keys(v).length === 12) discover('all12');
+  maybeExplain();
+}
+let EXPLAINED = false;
+function maybeExplain(){
+  if (EXPLAINED || !POE || !found('pastperf')) return;
+  EXPLAINED = true;
+  const I = subjOf('I'), he = subjOf('He');
+  const had = vpText(I, 'eat', 'past', 'perfect'), arrived = vpText(he, 'arrive', 'past', 'simple'), ate = vpText(I, 'eat', 'past', 'simple');
+  POE.explain(`In “I <b>${had}</b> when he <b>${arrived}</b>”, the arriving is the reference point: it is in the past, so the tense is past. ` +
+    `<b>${had.split(' ')[0]}</b> + the past participle <b>${had.split(' ')[1]}</b> is the perfect: the eating was <b>already finished</b> before that point, just as your red action ends before your ◆. ` +
+    `So the <b>eating happened first</b>. Compare “I ${ate} when he ${arrived}” — the simple past puts the eating <b>at</b> the ◆, at the same time or just after.`);
+}
+
+/* ============================================================================
+   Controls. The stage is built first, so there is something to wire.
+   ============================================================================ */
+build();
+$('subjChips').innerHTML = SUBJECTS.map(s => `<button class="chip subj${s.words.some(w => w[1] === 'noun') ? ' noun' : ''}" data-subj="${s.id}">${esc(s.words.map(w => w[0]).join(' ').replace(/^./, m => m.toUpperCase()))}</button>`).join('');
+$('verbChips').innerHTML = VERBS.map(v => `<button class="chip verb" data-verb="${v}">${v}</button>`).join('');
+function changed(what){ S.changes++; paint(); track('change', {what, subj: S.subj, verb: S.verb, s: S.s, e: S.e, R: refNow(), tied: S.tied}); }
+document.querySelectorAll('[data-subj]').forEach(b => b.addEventListener('click', () => { if (!S.locked || S.subj === b.dataset.subj) return; S.subj = b.dataset.subj; sound('pop'); changed('subject'); }));
+document.querySelectorAll('[data-verb]').forEach(b => b.addEventListener('click', () => { if (!S.locked || S.verb === b.dataset.verb) return; S.verb = b.dataset.verb; sound('pop'); changed('verb'); }));
+$('btnTie').addEventListener('click', () => { if (!S.locked || S.tied) return; S.tied = true; sound('snap'); changed('tie'); });
+
+/* Drags keep the grab offset, so nothing jumps under the pointer; times snap to whole hours. */
+function hDrag(node, get, set){
+  let off = 0;
+  drag(node, svg, {
+    start(p){ if (!S.locked) return false; off = hourAt(p.x) - get(); },
+    move(p){ const h = Math.round(hourAt(p.x) - off); if (set(h)) { sound('tick'); changed(node.id); } },
+  });
+}
+hDrag($('actHit'), () => S.s, h => {
+  const len = S.e - S.s, s = clamp(h, -12, 12 - len);
+  if (s === S.s) return false; S.s = s; S.e = s + len; return true;
+});
+hDrag($('lHit'), () => S.s, h => { const s = clamp(h, -12, S.e); if (s === S.s) return false; S.s = s; return true; });
+hDrag($('rHit'), () => S.e, h => { const e = clamp(h, S.s, 12); if (e === S.e) return false; S.e = e; return true; });
+hDrag($('refHit'), () => refNow(), h => {
+  const R = clamp(h, -12, 12);
+  if (!S.tied && R === S.R) return false;
+  S.tied = false; S.R = R; return true;
+});
+
+function lockControls(lock){
+  document.querySelectorAll('.chip, #btnTie').forEach(b => b.disabled = lock);
+  for (const id of ['actHit', 'lHit', 'rHit', 'refHit']) $(id).style.pointerEvents = lock ? 'none' : '';
+  $('gate').hidden = !lock;
+}
+
+/* ============================================================================
+   Start
+   ============================================================================ */
+findings($('finds'), [
+  {id: 'simple3',  icon: '•', label: 'All three simple tenses',          hint: 'Past, present and future, as a single moment'},
+  {id: 'cont',     icon: '━', label: 'A continuing action',              hint: 'Stretch the action over the ◆'},
+  {id: 'pastperf', icon: '◆', label: 'Finished before then (past perfect)', hint: 'Finish the action before a ◆ in the past'},
+  {id: 'irreg',    icon: '✎', label: 'An irregular verb',                hint: 'Some verbs don’t take -ed'},
+  {id: 'thirds',   icon: 's', label: 'He / she / it takes an -s',        hint: 'Who does it, every day?'},
+  {id: 'all12',    icon: '▦', label: 'All 12 tenses',                    hint: 'Fill the whole grid'},
+], () => toast('All six found. Every English tense is just where the action sits against a point in time.', 4200));
+
+const POE = predict($('poe'), {
+  id: 'had-eaten',
+  q: '“I had eaten when he arrived.” Which happened first?',
+  options: [
+    {id: 'eating',   text: 'The eating.', right: true},
+    {id: 'arriving', text: 'The arriving.'},
+    {id: 'both',     text: 'Both at once.'},
+    {id: 'cant',     text: 'Can’t tell from the sentence.'},
+  ],
+  onLock(){
+    S.locked = true;
+    lockControls(false);
+    say('Now find out. Slide the action through time and watch the verb change.');
+    paint();
+  },
+});
+lockControls(!POE.locked);
+if (!Play.FF('predict')) S.locked = true;
+paint();
+window.applyFeatures = () => paint();
+window.PG_STATE = () => JSON.parse(JSON.stringify(Object.assign({}, S, {Rnow: refNow(), sentence: sentence(S).text || null, tense: tenseName(sentence(S).cls)})));
+window.PG_MODEL = {forms, thirdS, edForm, ingForm, verbPhrase, vpText, classify, tiedRef, sentence, tenseName, subjOf};
+</script>
+</body>
+</html>

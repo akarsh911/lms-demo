@@ -1,0 +1,575 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>My Day</title>
+<meta name="description" content="Class 1: put Pihu's day in order, from brushing her teeth in the morning to sleeping at night, and watch the Sun rise, climb, set and give way to the Moon.">
+<link rel="icon" href="../../favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600&family=Inter:wght@400;500;600;700&family=Nunito:wght@500;700;800&display=swap">
+<link rel="stylesheet" href="../../play.css">
+<style>
+/* Tiny: the stage is almost the whole page. */
+.pg-main.tiny-main{grid-template-columns:minmax(0,1fr) 250px; padding-top:12px; padding-bottom:12px}
+.tiny-main .pg-stage{align-self:start; min-height:0}
+.pg-intro{display:flex; align-items:baseline; gap:18px; flex-wrap:wrap; padding-top:12px}
+.pg-intro p{margin:0}
+#stage{background:#5db8f5}
+.slotHit{cursor:grab}
+.slotHit.dragging{cursor:grabbing}
+#wishHit, #pihuHit, #sunHit{cursor:pointer}
+svg [tabindex]:focus{outline:none}
+svg [tabindex]:focus-visible{outline:none; stroke:#ffd84a; stroke-width:4; stroke-dasharray:8 8}
+.fade{transition:opacity .45s}
+.hear{width:100%; min-height:76px; font-size:24px; font-family:var(--font-head); border-radius:var(--radius)}
+.hear .ic{font-size:30px}
+.play{width:100%; min-height:84px; font-size:24px; font-family:var(--font-head); border-radius:var(--radius); background:#2f9e5b; border-color:#2f9e5b; color:#fff}
+.play:hover{filter:brightness(1.06)}
+.play .ic{display:inline-grid; place-items:center; width:40px; height:40px; border-radius:50%; background:#ffd23f; color:#6b3a10; font-size:20px}
+.finds-card h3{display:flex; align-items:center; gap:8px}
+@media (max-width:980px){ .pg-main.tiny-main{grid-template-columns:1fr} }
+</style>
+</head>
+<body>
+<header class="pg-top"></header>
+
+<div class="pg-intro">
+  <h1>My day</h1>
+  <p>Put Pihu’s day in order, from morning to night, and watch the Sun move.</p>
+</div>
+
+<main class="pg-main tiny-main">
+  <section class="pg-stage" id="stageWrap">
+    <svg id="stage" viewBox="0 0 1000 640" role="img" aria-label="Pihu's home and school under the sky, with six picture cards of her day in a row below. Drag a card onto another to swap them. Tap a card to see that time of day."></svg>
+  </section>
+
+  <aside class="pg-side">
+    <button class="btn primary hear" id="hear" aria-label="Hear what to do"><span class="ic">🔊</span> Hear it</button>
+    <button class="btn play" id="play" aria-label="Play Pihu's day, card by card"><span class="ic">▶</span> Play my day</button>
+    <div class="card finds-card"><h3>⭐ Found</h3><div id="finds"></div></div>
+  </aside>
+</main>
+
+<script src="../../play.js"></script>
+<script>
+'use strict';
+const {$, clamp, lerp, loop, tween, sleep, sound, tone, say, track, findings, found,
+       shareState, sharedState, mount, reduced, drag, mulberry32} = Play;
+mount({thread: 'time', band: 'tiny'});
+
+/* MODEL:start ==================================================================
+   Pihu's day (NCERT Class 1, "How do I Spend my Day?"). Each picture card is
+   something Pihu does, at the hour she does it. The card never says "morning":
+   the part of the day, the Sun and the Moon all come from that hour.
+
+   Sun: it rises at 6 in the east (left) and sets at 6:30 in the evening in the
+   west (right), moving along an arch. Its height is
+        up(h) = sin(π · (h − 6) / 12.5)             between sunrise and sunset,
+   and below the horizon (negative) at night, when the Moon crosses the sky.
+   Parts of the day: morning 5–12, afternoon 12–4, evening 4–7:30, night after that.
+
+   Playing the strip walks the clock from card to card, left to right. If the next
+   card's hour is later, the Sun moves on across the sky. If it is earlier, the Sun
+   would have to go BACKWARDS — the model notices, and it is funny, not wrong.
+   ============================================================================ */
+const RISE = 6, SET = 18.5;
+const ACTS = {
+  brush:  {h: 6.5,  place: 'home',   name: 'I brush my teeth',             say: 'I get up and brush my teeth.'},
+  school: {h: 9.5,  place: 'school', name: 'I study at school',            say: 'I study and play with my classmates at school.'},
+  lunch:  {h: 13,   place: 'school', name: 'I eat my lunch',               say: 'I wash my hands and have lunch with my friends.'},
+  play:   {h: 17.5, place: 'park',   name: 'I play with my friends',       say: 'I play with my friends.'},
+  dinner: {h: 20,   place: 'home',   name: 'I eat dinner with my family',  say: 'I eat dinner with my family.'},
+  sleep:  {h: 21.5, place: 'home',   name: 'I read a story and go to sleep', say: 'I read a story book and go to sleep.'},
+};
+const IDS = Object.keys(ACTS);
+function sunUp(h){
+  h = ((h % 24) + 24) % 24;
+  if (h >= RISE && h <= SET) return Math.sin(Math.PI * (h - RISE) / (SET - RISE));
+  const n = ((h - SET) + 24) % 24;                       // hours since sunset
+  return -Math.sin(Math.PI * n / (24 - (SET - RISE)));
+}
+/* where along the arch (0 = east horizon, 1 = west horizon) the Sun, or at night the Moon, is */
+function arcPos(h){
+  h = ((h % 24) + 24) % 24;
+  if (h >= RISE && h <= SET) return {body: 'sun', u: (h - RISE) / (SET - RISE)};
+  return {body: 'moon', u: (((h - SET) + 24) % 24) / (24 - (SET - RISE))};
+}
+function partOf(h){
+  h = ((h % 24) + 24) % 24;
+  if (h >= 5 && h < 12) return 'morning';
+  if (h >= 12 && h < 16) return 'afternoon';
+  if (h >= 16 && h < 19.5) return 'evening';
+  return 'night';
+}
+/* Walk the strip left to right: which steps go forward in time, which go backwards. */
+function walk(order){
+  const steps = [];
+  for (let i = 1; i < order.length; i++) {
+    const a = ACTS[order[i - 1]].h, b = ACTS[order[i]].h;
+    steps.push({from: order[i - 1], to: order[i], dh: b - a, back: b < a});
+  }
+  return {steps, backs: steps.filter(s => s.back).length, inOrder: steps.every(s => !s.back)};
+}
+/* MODEL:end */
+
+/* ---- state: plain data --------------------------------------------------- */
+const START = ['play', 'brush', 'sleep', 'lunch', 'school', 'dinner'];
+const S = {order: START.slice(), hour: 7, act: 'brush', touched: false, playing: false, playIdx: -1, plays: 0};
+const shared = sharedState();
+if (shared && Array.isArray(shared.order) && shared.order.length === 6 && IDS.every(id => shared.order.includes(id))) S.order = shared.order.slice();
+shareState(() => ({order: S.order.slice()}));
+
+/* ============================================================================
+   The stage: drawn once, then only patched.
+   ============================================================================ */
+const svg = $('stage');
+const f1 = n => (+n).toFixed(1);
+const TAU = Math.PI * 2;
+const HZ = 378;                                         // the horizon
+const ARC = {x0: 40, x1: 960, top: 70};                 // the Sun's arch in the big sky
+const PLACE_X = {home: 385, park: 540, school: 690};
+const SLOT = {x0: 34, dx: 158, y: 468, w: 146, h: 150};
+const slotX = i => SLOT.x0 + i * SLOT.dx;
+
+const mix = (a, b, t) => {
+  t = clamp(t, 0, 1);
+  const pa = [1, 3, 5].map(i => parseInt(a.slice(i, i + 2), 16)), pb = [1, 3, 5].map(i => parseInt(b.slice(i, i + 2), 16));
+  return '#' + pa.map((v, i) => Math.round(v + (pb[i] - v) * t).toString(16).padStart(2, '0')).join('');
+};
+/* sky colours: soft pink-blue at dawn, orange at dusk, blue by day, navy at night */
+const dawnish = h => (((h % 24) + 24) % 24) < 12;
+function skyTop(h){ const a = sunUp(h), tw = dawnish(h) ? '#8fb0e8' : '#7a86d0';
+  return a >= 0.5 ? '#4fb0f2' : a >= 0 ? mix(tw, '#4fb0f2', a / 0.5) : a >= -0.3 ? mix('#1b2150', dawnish(h) ? '#6f7fc8' : '#7a5aa0', (a + 0.3) / 0.3) : '#161c46'; }
+function skyLow(h){ const a = sunUp(h), tw = dawnish(h) ? '#ffc8a0' : '#ff9a50';
+  return a >= 0.5 ? mix('#bfe6ff', '#d9f1ff', a) : a >= 0 ? mix(tw, '#bfe6ff', a / 0.5) : a >= -0.3 ? mix('#262c5e', '#ff9a6b', (a + 0.3) / 0.3) : '#262c5e'; }
+function bodyAt(h, box){        // Sun or Moon position inside a box {x0, x1, top, hz}
+  const p = arcPos(h);
+  return {body: p.body, x: lerp(box.x0, box.x1, p.u), y: box.hz - Math.pow(Math.sin(Math.PI * p.u), 0.6) * (box.hz - box.top)};
+}
+
+const SUN_ART = (r) => `<circle r="${r * 1.9}" fill="#ffe27a" opacity=".35"/><g fill="#ffc83a">${Array.from({length: 10}, (_, i) => { const a = i / 10 * TAU, b = .16; return `<path d="M${f1(r * 1.1 * Math.cos(a - b))} ${f1(r * 1.1 * Math.sin(a - b))} L${f1(r * 1.6 * Math.cos(a))} ${f1(r * 1.6 * Math.sin(a))} L${f1(r * 1.1 * Math.cos(a + b))} ${f1(r * 1.1 * Math.sin(a + b))} Z"/>`; }).join('')}</g><circle r="${r}" fill="#ffd23f" stroke="#f29a12" stroke-width="${r / 10}"/>`;
+const MOON_ART = (r) => `<circle r="${r * 1.7}" fill="#fff6c8" opacity=".18"/><path d="M${f1(r * .3)} ${f1(-r)} a${r} ${r} 0 1 0 ${f1(r * .7)} ${f1(r * 1.7)} a${f1(r * .8)} ${f1(r * .8)} 0 1 1 ${f1(-r * .7)} ${f1(-r * 1.7)} Z" fill="#fff1a8" stroke="#e0c35a" stroke-width="${f1(r / 12)}"/>`;
+
+/* pictures on the cards: centred at 0, 20 (the lower part of the card) */
+const PICT = {
+  brush: `<g transform="translate(-6 16)"><path d="M-26 6 C-30 -22 -12 -30 0 -22 C12 -30 30 -22 26 6 C24 22 18 34 12 34 C6 34 6 18 0 18 C-6 18 -6 34 -12 34 C-18 34 -24 22 -26 6 Z" fill="#fff" stroke="#8aa0b8" stroke-width="3"/>
+    <path d="M-12 -12 l4 -4 M12 -14 l3 -5" stroke="#9fd0ff" stroke-width="3" stroke-linecap="round"/></g>
+    <g transform="translate(28 -6) rotate(35)"><rect x="-5" y="-6" width="10" height="46" rx="5" fill="#3f7fd8"/><rect x="-7" y="-22" width="14" height="18" rx="3" fill="#fff" stroke="#8aa0b8" stroke-width="2"/><path d="M-5 -20 v14 M0 -20 v14 M5 -20 v14" stroke="#9fd0ff" stroke-width="2"/></g>
+    <circle cx="16" cy="-24" r="6" fill="#fff" stroke="#bfe0ff" stroke-width="2"/><circle cx="28" cy="-32" r="4" fill="#fff" stroke="#bfe0ff" stroke-width="2"/>`,
+  school: `<rect x="-40" y="-10" width="80" height="50" fill="#f6d28a" stroke="#a8792a" stroke-width="3"/><path d="M-48 -8 L0 -36 L48 -8 Z" fill="#e2553f" stroke="#8f2e22" stroke-width="3" stroke-linejoin="round"/>
+    <rect x="-10" y="14" width="20" height="26" fill="#8a5a2b"/><rect x="-34" y="2" width="16" height="14" fill="#bfe6ff" stroke="#a8792a" stroke-width="2"/><rect x="18" y="2" width="16" height="14" fill="#bfe6ff" stroke="#a8792a" stroke-width="2"/>
+    <circle cx="0" cy="-16" r="7" fill="#fff" stroke="#a8792a" stroke-width="2"/><path d="M0 -20 V-16 H3" stroke="#3a2a1a" stroke-width="1.8" fill="none"/>`,
+  lunch: `<rect x="-38" y="0" width="76" height="36" rx="8" fill="#9aa7b4" stroke="#5a6b7d" stroke-width="3"/><rect x="-34" y="4" width="32" height="28" rx="5" fill="#f3d9a0"/><circle cx="-18" cy="18" r="11" fill="#e8b865" stroke="#c48a3a" stroke-width="2"/>
+    <rect x="2" y="4" width="32" height="28" rx="5" fill="#ffd23f"/><circle cx="12" cy="14" r="3" fill="#6fb04a"/><circle cx="22" cy="20" r="3" fill="#6fb04a"/><circle cx="16" cy="24" r="3" fill="#6fb04a"/>
+    <path d="M-30 -8 C-30 -26 30 -26 30 -8" fill="none" stroke="#5a6b7d" stroke-width="4"/>`,
+  play: `<circle cx="-14" cy="14" r="22" fill="#e2453d" stroke="#fff" stroke-width="3"/><path d="M-36 14 H8 M-14 -8 V36" stroke="#fff" stroke-width="3"/>
+    <path d="M22 36 V-18 M44 36 V-18 M18 -18 H48" stroke="#8a5a2b" stroke-width="5" stroke-linecap="round"/><path d="M26 -16 V14 M40 -16 V14" stroke="#5e3d20" stroke-width="2"/><rect x="22" y="12" width="22" height="7" rx="3" fill="#2f7de1"/>`,
+  dinner: `<ellipse cx="0" cy="22" rx="44" ry="15" fill="#fff" stroke="#b9c3cc" stroke-width="3"/><ellipse cx="-14" cy="18" rx="16" ry="8" fill="#fbf4e2"/><ellipse cx="14" cy="18" rx="13" ry="7" fill="#f2b21f"/>
+    <circle cx="-18" cy="15" r="2" fill="#e8dcc0"/><circle cx="-10" cy="17" r="2" fill="#e8dcc0"/><path d="M34 -12 C44 -20 44 -30 38 -36 M24 -12 C32 -20 32 -30 26 -36" fill="none" stroke="#b9c3cc" stroke-width="3" stroke-linecap="round"/>
+    <circle cx="-4" cy="-6" r="12" fill="#e8b865" stroke="#c48a3a" stroke-width="2"/><path d="M-10 -10 l4 3 M2 -8 l-3 4" stroke="#c48a3a" stroke-width="1.8"/>`,
+  sleep: `<rect x="-46" y="8" width="92" height="26" rx="6" fill="#8a5a2b"/><rect x="-46" y="-12" width="10" height="46" rx="4" fill="#6b4420"/><rect x="-36" y="-4" width="26" height="16" rx="7" fill="#fff"/>
+    <circle cx="-22" cy="-6" r="11" fill="#d89a68"/><path d="M-33 -10 C-32 -22 -12 -22 -11 -10 C-16 -16 -26 -16 -33 -10 Z" fill="#2a1a10"/><path d="M-27 -6 q3 2 6 0" stroke="#2a1a10" stroke-width="2" fill="none" stroke-linecap="round"/>
+    <path d="M-12 -2 C0 -8 40 -8 46 4 L46 14 L-12 14 Z" fill="#7b5cd6"/><path d="M-4 2 h40" stroke="#a58cf0" stroke-width="3" stroke-dasharray="6 6"/>
+    <text x="24" y="-18" font-size="18" font-weight="800" fill="#fff" font-family="Fredoka, sans-serif">z</text><text x="34" y="-30" font-size="14" font-weight="800" fill="#fff" font-family="Fredoka, sans-serif">z</text>`,
+};
+/* a card: its sky and Sun or Moon come from the model at that card's hour */
+function cardArt(id){
+  const h = ACTS[id].h, b = bodyAt(h, {x0: -54, x1: 54, top: -52, hz: 4});
+  const top = skyTop(h), low = skyLow(h), night = sunUp(h) < 0;
+  return `<defs><linearGradient id="cg-${id}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${top}"/><stop offset="1" stop-color="${low}"/></linearGradient>
+      <clipPath id="cc-${id}"><rect x="-66" y="-66" width="132" height="132" rx="18"/></clipPath></defs>
+    <g clip-path="url(#cc-${id})">
+      <rect x="-66" y="-66" width="132" height="132" fill="url(#cg-${id})"/>
+      ${night ? '<g fill="#fff"><circle cx="-40" cy="-40" r="1.8"/><circle cx="30" cy="-48" r="1.5"/><circle cx="46" cy="-20" r="1.8"/><circle cx="-20" cy="-18" r="1.3"/></g>' : ''}
+      <g transform="translate(${f1(b.x)} ${f1(b.y)})">${b.body === 'sun' ? SUN_ART(11) : MOON_ART(10)}</g>
+      <rect x="-66" y="4" width="132" height="62" fill="${night ? '#2f5a3a' : '#6cc26a'}"/>
+      <g transform="translate(0 18) scale(.92)">${PICT[id]}</g>
+    </g>
+    <rect x="-66" y="-66" width="132" height="132" rx="18" fill="none" stroke="#fff" stroke-width="5"/>`;
+}
+
+function build(){
+  const rnd = mulberry32(5);
+  let stars = '';
+  for (let i = 0; i < 70; i++) stars += `<circle cx="${f1(rnd() * 1000)}" cy="${f1(rnd() * 330)}" r="${(rnd() * 1.6 + .5).toFixed(2)}" fill="#fff" opacity="${(rnd() * .6 + .3).toFixed(2)}"/>`;
+  const slots = S.order.map((_, i) => `<rect id="slotBg${i}" x="${slotX(i)}" y="${SLOT.y}" width="${SLOT.w}" height="${SLOT.h}" rx="22" fill="#fff" opacity=".35"/>
+      <rect id="slotGlow${i}" x="${slotX(i) - 5}" y="${SLOT.y - 5}" width="${SLOT.w + 10}" height="${SLOT.h + 10}" rx="26" fill="none" stroke="#ffd23f" stroke-width="7" opacity="0"/>`).join('');
+  const cards = IDS.map(id => `<g id="card-${id}"><g id="cardIn-${id}">${cardArt(id)}</g></g>`).join('');
+  const hits = S.order.map((_, i) => `<rect class="slotHit" id="slotHit${i}" data-i="${i}" x="${slotX(i)}" y="${SLOT.y}" width="${SLOT.w}" height="${SLOT.h}" rx="22" fill="transparent" role="button" tabindex="0"/>`).join('');
+
+  svg.innerHTML = `
+  <defs>
+    <linearGradient id="gSky" x1="0" y1="0" x2="0" y2="1"><stop id="sky0" offset="0" stop-color="#4fb0f2"/><stop id="sky1" offset="1" stop-color="#bfe6ff"/></linearGradient>
+    <linearGradient id="gStrip" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#c98f55"/><stop offset="1" stop-color="#a86f3a"/></linearGradient>
+    <filter id="soft" x="-20%" y="-20%" width="140%" height="140%"><feDropShadow dx="0" dy="4" stdDeviation="5" flood-color="#000" flood-opacity=".28"/></filter>
+  </defs>
+  <rect width="1000" height="640" fill="url(#gSky)"/>
+  <g id="stars" opacity="0">${stars}</g>
+  <path d="M${Array.from({length: 41}, (_, i) => { const u = i / 40; return `${f1(lerp(ARC.x0, ARC.x1, u))} ${f1(HZ - Math.pow(Math.sin(Math.PI * u), 0.6) * (HZ - ARC.top))}`; }).join(' L')}" fill="none" stroke="#fff" stroke-width="3" stroke-dasharray="3 12" stroke-linecap="round" opacity=".55"/>
+  <g id="sun">${SUN_ART(40)}<circle cx="-13" cy="-6" r="4.5" fill="#6b3a10"/><circle cx="13" cy="-6" r="4.5" fill="#6b3a10"/><path d="M-12 9 Q0 19 12 9" fill="none" stroke="#6b3a10" stroke-width="3.5" stroke-linecap="round"/></g>
+  <g id="moon">${MOON_ART(34)}</g>
+  <!-- hills and ground -->
+  <path id="hills" d="M0 ${HZ} C140 330 260 340 380 ${HZ - 12} C520 326 660 332 760 ${HZ - 10} C860 330 940 340 1000 ${HZ - 16} L1000 ${HZ + 40} L0 ${HZ + 40} Z" fill="#79c07a"/>
+  <rect id="groundR" x="0" y="${HZ}" width="1000" height="${460 - HZ}" fill="#5cb85c"/>
+  <!-- home (left) and school (right) -->
+  <g transform="translate(218 ${HZ + 24})">
+    <rect x="-80" y="-120" width="160" height="120" rx="8" fill="#ffe3b3" stroke="#8a5a2b" stroke-width="4"/>
+    <path d="M-100 -114 L0 -186 L100 -114 Z" fill="#e2553f" stroke="#8f2e22" stroke-width="4" stroke-linejoin="round"/>
+    <rect x="-20" y="-64" width="40" height="64" rx="16" fill="#8a5a2b"/>
+    <rect id="win1" x="-64" y="-94" width="34" height="30" rx="4" fill="#bfe6ff" stroke="#8a5a2b" stroke-width="3"/>
+    <rect id="win2" x="30" y="-94" width="34" height="30" rx="4" fill="#bfe6ff" stroke="#8a5a2b" stroke-width="3"/>
+  </g>
+  <g transform="translate(852 ${HZ + 24})">
+    <rect x="-96" y="-130" width="192" height="130" fill="#f6d28a" stroke="#a8792a" stroke-width="4"/>
+    <path d="M-108 -126 L0 -180 L108 -126 Z" fill="#3f7fd8" stroke="#23589e" stroke-width="4" stroke-linejoin="round"/>
+    <circle cx="0" cy="-140" r="15" fill="#fff" stroke="#a8792a" stroke-width="3"/><path d="M0 -150 V-140 H7" stroke="#3a2a1a" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+    <rect x="-22" y="-60" width="44" height="60" fill="#8a5a2b"/>
+    ${[-74, -44, 44, 74].map(x => `<rect x="${x - 12}" y="-104" width="24" height="26" rx="3" fill="#bfe6ff" stroke="#a8792a" stroke-width="3" class="swin"/>`).join('')}
+    <path d="M96 -130 V-210" stroke="#5e3d20" stroke-width="4"/><path d="M96 -210 h36 v10 h-36 Z" fill="#ff9933"/><path d="M96 -200 h36 v10 h-36 Z" fill="#fff"/><path d="M96 -190 h36 v10 h-36 Z" fill="#138808"/><circle cx="114" cy="-195" r="3" fill="none" stroke="#000080" stroke-width="1.5"/>
+  </g>
+  <g id="swing" transform="translate(560 ${HZ + 26})"><path d="M-40 0 V-100 M40 0 V-100 M-46 -100 H46" stroke="#8a5a2b" stroke-width="7" stroke-linecap="round"/><path d="M-18 -98 V-36 M18 -98 V-36" stroke="#5e3d20" stroke-width="2.5"/><rect x="-24" y="-38" width="48" height="8" rx="3" fill="#2f7de1"/></g>
+  <rect id="nightTint" x="0" y="0" width="1000" height="460" fill="#0b1236" opacity="0" pointer-events="none"/>
+
+  <!-- Pihu -->
+  <g id="pihuPos" transform="translate(${PLACE_X.home} ${HZ + 58})"><g id="pihu">
+    <ellipse cx="0" cy="2" rx="46" ry="9" fill="#000" opacity=".15"/>
+    <g id="pihuStand">
+      <path d="M-12 -2 V-58 M12 -2 V-58" stroke="#c98a5a" stroke-width="13" stroke-linecap="round"/>
+      <path d="M-20 -2 h14 M6 -2 h14" stroke="#e2453d" stroke-width="8" stroke-linecap="round"/>
+      <path d="M-26 -128 C-34 -100 -40 -76 -44 -52 L44 -52 C40 -76 34 -100 26 -128 C12 -136 -12 -136 -26 -128 Z" fill="#e0567a" stroke="#a8335a" stroke-width="3" stroke-linejoin="round"/>
+      <path d="M-40 -64 h80" stroke="#fff" stroke-width="4" stroke-dasharray="7 6"/>
+      <path id="pArmL" d="M-24 -124 C-40 -108 -46 -90 -44 -74" stroke="#c98a5a" stroke-width="12" fill="none" stroke-linecap="round"/>
+      <path id="pArmR" d="M24 -124 C40 -108 46 -90 44 -74" stroke="#c98a5a" stroke-width="12" fill="none" stroke-linecap="round"/>
+      <g id="bag" opacity="0"><rect x="-52" y="-124" width="30" height="44" rx="8" fill="#3f7fd8" stroke="#23589e" stroke-width="3"/><path d="M-44 -124 C-44 -134 -30 -134 -30 -124" stroke="#23589e" stroke-width="3" fill="none"/></g>
+      <rect x="-6" y="-146" width="12" height="12" fill="#c98a5a"/>
+      <circle cx="-34" cy="-176" r="11" fill="#2a1a10"/><circle cx="34" cy="-176" r="11" fill="#2a1a10"/>
+      <circle cx="-36" cy="-176" r="4" fill="#e0567a"/><circle cx="36" cy="-176" r="4" fill="#e0567a"/>
+      <circle cx="0" cy="-176" r="32" fill="#d89a68"/>
+      <path d="M-32 -180 C-34 -214 34 -214 32 -180 C24 -196 8 -200 0 -192 C-8 -200 -24 -196 -32 -180 Z" fill="#2a1a10"/>
+      <g id="pEyes"><circle cx="-11" cy="-178" r="4" fill="#2a1a10"/><circle cx="11" cy="-178" r="4" fill="#2a1a10"/><circle cx="-10" cy="-179.5" r="1.4" fill="#fff"/><circle cx="12" cy="-179.5" r="1.4" fill="#fff"/></g>
+      <g id="pEyesShut" opacity="0" stroke="#2a1a10" stroke-width="3" fill="none" stroke-linecap="round"><path d="M-16 -178 q5 4 10 0 M6 -178 q5 4 10 0"/></g>
+      <ellipse cx="-20" cy="-164" rx="6" ry="4" fill="#ff7a6a" opacity=".45"/><ellipse cx="20" cy="-164" rx="6" ry="4" fill="#ff7a6a" opacity=".45"/>
+      <path id="pMouth" d="M-9 -162 Q0 -152 9 -162" stroke="#6b2a1a" stroke-width="3" fill="none" stroke-linecap="round"/>
+      <path id="pMouthO" opacity="0" d="M-6 -162 Q0 -150 6 -162 Z" fill="#7a1f16"/>
+      <!-- what she holds -->
+      <g id="hold-brush" opacity="0"><g transform="translate(34 -150) rotate(-20)"><rect x="-4" y="-2" width="8" height="34" rx="4" fill="#3f7fd8"/><rect x="-6" y="-14" width="12" height="13" rx="3" fill="#fff" stroke="#8aa0b8" stroke-width="2"/></g>
+        <circle class="foam" cx="18" cy="-158" r="5" fill="#fff" stroke="#bfe0ff" stroke-width="2"/><circle class="foam" cx="26" cy="-170" r="4" fill="#fff" stroke="#bfe0ff" stroke-width="2"/></g>
+      <g id="hold-school" opacity="0"><g transform="translate(46 -86)"><rect x="-4" y="-22" width="30" height="36" rx="3" fill="#2f9e5b" stroke="#1d6b3b" stroke-width="3"/><path d="M2 -12 h18 M2 -4 h18 M2 4 h12" stroke="#fff" stroke-width="2.5"/></g></g>
+      <g id="hold-lunch" opacity="0"><g transform="translate(0 -80)"><rect x="-26" y="-12" width="52" height="24" rx="6" fill="#9aa7b4" stroke="#5a6b7d" stroke-width="3"/><circle cx="-10" cy="-2" r="8" fill="#e8b865" stroke="#c48a3a" stroke-width="2"/><rect x="4" y="-8" width="18" height="16" rx="3" fill="#ffd23f"/></g></g>
+      <g id="hold-play" opacity="0"><circle id="ball" cx="62" cy="-40" r="16" fill="#e2453d" stroke="#fff" stroke-width="3"/><path d="M46 -40 H78 M62 -56 V-24" stroke="#fff" stroke-width="2.5"/></g>
+      <g id="hold-dinner" opacity="0"><g transform="translate(0 -78)"><ellipse cx="0" cy="0" rx="34" ry="10" fill="#fff" stroke="#b9c3cc" stroke-width="3"/><ellipse cx="-8" cy="-3" rx="12" ry="5" fill="#fbf4e2"/><ellipse cx="12" cy="-3" rx="9" ry="4.5" fill="#f2b21f"/></g></g>
+    </g>
+    <g id="pihuBed" opacity="0">
+      <rect x="-80" y="-44" width="160" height="40" rx="8" fill="#8a5a2b"/><rect x="-86" y="-86" width="16" height="84" rx="5" fill="#6b4420"/><rect x="70" y="-66" width="14" height="64" rx="5" fill="#6b4420"/>
+      <rect x="-68" y="-72" width="46" height="26" rx="12" fill="#fff"/>
+      <circle cx="-44" cy="-74" r="22" fill="#d89a68"/><path d="M-66 -80 C-66 -104 -22 -104 -22 -80 C-30 -92 -56 -92 -66 -80 Z" fill="#2a1a10"/>
+      <path d="M-52 -72 q4 3 8 0 M-40 -72 q4 3 8 0" stroke="#2a1a10" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+      <path d="M-26 -60 C0 -76 60 -76 76 -54 L76 -40 L-26 -40 Z" fill="#7b5cd6"/><path d="M-14 -56 h80" stroke="#a58cf0" stroke-width="4" stroke-dasharray="8 8"/>
+      <g transform="translate(20 -82) rotate(-10)"><path d="M-18 0 L0 4 L18 0 L18 -20 L0 -16 L-18 -20 Z" fill="#fff" stroke="#e0567a" stroke-width="3" stroke-linejoin="round"/><path d="M0 4 V-16" stroke="#e0567a" stroke-width="2"/></g>
+      <g id="zzz" font-family="Fredoka, sans-serif" font-weight="600" fill="#fff"><text id="z1" x="-30" y="-110" font-size="24">z</text><text id="z2" x="-14" y="-132" font-size="30">Z</text></g>
+    </g>
+  </g></g>
+  <g id="partBanner" filter="url(#soft)">
+    <rect x="16" y="14" width="236" height="64" rx="32" fill="#fff"/>
+    <g id="partIcon" transform="translate(52 46)"></g>
+    <text id="partWord" x="90" y="57" font-size="32" font-weight="600" fill="#3a2a1a" font-family="Fredoka, Nunito, sans-serif">Morning</text>
+  </g>
+
+  <!-- the day strip -->
+  <g filter="url(#soft)"><rect x="14" y="444" width="972" height="190" rx="28" fill="url(#gStrip)"/></g>
+  <path d="M60 456 H930" stroke="#fff" stroke-width="4" stroke-linecap="round" stroke-dasharray="2 12" opacity=".8"/>
+  <path d="M922 449 L936 456 L922 463" fill="none" stroke="#fff" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" opacity=".8"/>
+  <g transform="translate(40 456) scale(.4)">${SUN_ART(16)}</g>
+  <g transform="translate(956 456) scale(.45)">${MOON_ART(14)}</g>
+  ${slots}
+  <g id="cards">${cards}</g>
+
+  <!-- the "try this" card -->
+  <g id="wish" filter="url(#soft)">
+    <rect x="852" y="14" width="136" height="150" rx="26" fill="#fff"/>
+    <g id="wishArt" transform="translate(920 78)"></g>
+    <g transform="translate(962 142)"><circle r="15" fill="#ff7a2f"/><path d="M-7 -4 h4 l6 -5 v18 l-6 -5 h-4 Z" fill="#fff"/><path d="M6 -5 q4 5 0 10" stroke="#fff" stroke-width="2" fill="none" stroke-linecap="round"/></g>
+  </g>
+  <g id="hint" pointer-events="none">
+    <path id="hintPath" d="" fill="none" stroke="#fff" stroke-width="7" stroke-linecap="round" stroke-dasharray="2 15"/>
+    <g id="hintHand"><path transform="scale(1.2)" d="M-6 0 L-6 -34 Q-6 -42 1 -42 Q8 -42 8 -34 L8 -14 L20 -14 Q30 -14 30 -4 L30 16 Q30 30 16 30 L2 30 Q-12 30 -16 18 L-24 4 Q-27 -3 -20 -5 Q-14 -6 -10 2 Z" fill="#fff" stroke="#3a2a1a" stroke-width="3" stroke-linejoin="round"/></g>
+  </g>
+
+  <!-- hit targets: they never move -->
+  <rect id="pihuHit" x="300" y="170" width="480" height="270" fill="transparent" role="button" tabindex="0" aria-label="Pihu. Tap to hear what she is doing."/>
+  ${hits}
+  <rect id="wishHit" x="852" y="14" width="136" height="150" rx="26" fill="transparent" role="button" tabindex="0" aria-label="What to try next. Tap to hear it."/>
+  `;
+}
+build();
+
+/* ---- helpers --------------------------------------------------------------- */
+const $$ = sel => Array.from(svg.querySelectorAll(sel));
+function clientOf(x, y){
+  const m = svg.getScreenCTM(); if (!m) return {x: innerWidth / 2, y: innerHeight / 2};
+  const p = svg.createSVGPoint(); p.x = x; p.y = y; const q = p.matrixTransform(m);
+  return {x: q.x, y: q.y};
+}
+function squash(el, cx, cy, amt = 0.14, ms = 520){
+  return tween(0, 1, ms, t => {
+    const k = Math.sin(t * Math.PI * 3) * (1 - t) * amt;
+    el.setAttribute('transform', `translate(${cx} ${cy}) scale(${(1 + k).toFixed(3)} ${(1 - k).toFixed(3)}) translate(${-cx} ${-cy})`);
+  }, x => x).then(() => el.removeAttribute('transform'));
+}
+const PART_WORD = {morning: 'Morning', afternoon: 'Afternoon', evening: 'Evening', night: 'Night'};
+const PART_LINE = {morning: 'Look, the sun is rising. It is morning.', afternoon: 'The sun is high in the sky. It is afternoon.',
+                   evening: 'See, the sun is setting. It is evening.', night: 'The moon and the stars are out. It is night.'};
+
+/* ---- paint ------------------------------------------------------------------ */
+let cardPos = {};                      // where each card is drawn (x, y of its centre)
+function placeCards(){ S.order.forEach((id, i) => { cardPos[id] = {x: slotX(i) + SLOT.w / 2, y: SLOT.y + SLOT.h / 2}; }); }
+placeCards();
+function paint(){
+  const h = S.hour, up = sunUp(h), part = partOf(h);
+  $('sky0').setAttribute('stop-color', skyTop(h)); $('sky1').setAttribute('stop-color', skyLow(h));
+  $('stars').setAttribute('opacity', clamp(-up * 3, 0, 1).toFixed(2));
+  $('nightTint').setAttribute('opacity', clamp(-up * 1.2, 0, 0.45).toFixed(2));
+  const b = bodyAt(h, {x0: ARC.x0, x1: ARC.x1, top: ARC.top, hz: HZ});
+  $('sun').setAttribute('transform', `translate(${f1(b.x)} ${f1(b.y)})`); $('sun').setAttribute('opacity', b.body === 'sun' ? 1 : 0);
+  $('moon').setAttribute('transform', `translate(${f1(b.x)} ${f1(b.y)})`); $('moon').setAttribute('opacity', b.body === 'moon' ? 1 : 0);
+  const lit = up < 0.05 ? '#ffd75a' : '#bfe6ff';
+  $('win1').setAttribute('fill', lit); $('win2').setAttribute('fill', lit);
+  $('hills').setAttribute('fill', mix('#79c07a', '#2c4a3a', clamp(-up * 2, 0, 1)));
+  $('groundR').setAttribute('fill', mix('#5cb85c', '#23402f', clamp(-up * 2, 0, 1)));
+  /* Pihu does what her card says */
+  const a = S.act;
+  for (const id of ['brush', 'school', 'lunch', 'play', 'dinner']) $('hold-' + id).setAttribute('opacity', a === id ? 1 : 0);
+  $('bag').setAttribute('opacity', a === 'school' ? 1 : 0);
+  $('pihuStand').setAttribute('opacity', a === 'sleep' ? 0 : 1);
+  $('pihuBed').setAttribute('opacity', a === 'sleep' ? 1 : 0);
+  if (paint.part !== part) { paint.part = part; $('partIcon').innerHTML = up >= 0 ? SUN_ART(15) : MOON_ART(14); $('partWord').textContent = PART_WORD[part]; }
+  else if ((up >= 0) !== paint.up) $('partIcon').innerHTML = up >= 0 ? SUN_ART(15) : MOON_ART(14);
+  paint.up = up >= 0;
+  /* cards and their slots: an empty slot glows with the sky of the card sitting in it */
+  for (const id of IDS) if (drg.id !== id) $('card-' + id).setAttribute('transform', `translate(${f1(cardPos[id].x)} ${f1(cardPos[id].y)})`);
+  S.order.forEach((id, i) => {
+    $('slotBg' + i).setAttribute('fill', skyTop(ACTS[id].h));
+    $('slotGlow' + i).setAttribute('opacity', S.playIdx === i ? 1 : 0);
+    $('slotHit' + i).setAttribute('aria-label', `Card ${i + 1}: ${ACTS[id].name}. Tap to see it, or drag it onto another card to swap.`);
+  });
+}
+
+/* ---- moving the clock: the Sun travels, forwards or (sillily) backwards ---- */
+let busy = 0;
+async function goTo(h1, act, ms = 1400){
+  const h0 = S.hour, my = ++busy;
+  const back = h1 < h0;
+  if (back) Play.sound('boing'); else Play.sound('whoosh');
+  await tween(h0, h1, reduced() ? 0 : ms, v => { if (my !== busy) return; S.hour = v; paint(); react(); });
+  if (my !== busy) return back;
+  S.hour = h1; S.act = act;
+  movePihu(ACTS[act].place);
+  paint(); react();
+  return back;
+}
+let pihuX = PLACE_X.home;
+function movePihu(place){
+  const x1 = PLACE_X[place], x0 = pihuX; pihuX = x1;
+  if (x0 === x1) { squash($('pihu'), 0, 0, 0.1, 500); return; }
+  tween(x0, x1, reduced() ? 0 : 600, v => $('pihuPos').setAttribute('transform', `translate(${f1(v)} ${HZ + 58})`));
+}
+function react(){
+  if (!S.touched) return;
+  const part = partOf(S.hour);
+  const at = clientOf(pihuX, 220);
+  if (part === 'morning' && sunUp(S.hour) > 0) discover('morning', at);
+  if (part === 'afternoon' && sunUp(S.hour) > 0.8) discover('afternoon', at);
+  if (part === 'evening' && sunUp(S.hour) < 0.35 && sunUp(S.hour) > 0) discover('evening', at);
+  if (part === 'night' && sunUp(S.hour) < -0.2) discover('night', at);
+}
+
+/* tap one card: that moment of the day */
+async function showCard(i){
+  if (S.playing) return;
+  firstTouch();
+  const id = S.order[i];
+  squash($('cardIn-' + id), 0, 0, 0.12, 460);
+  track('card', {id, slot: i});
+  const p = partOf(ACTS[id].h);
+  say(`${ACTS[id].say} ${PART_LINE[p]}`);
+  await goTo(ACTS[id].h, id);
+}
+
+/* play the whole strip, left to right */
+async function playDay(){
+  if (S.playing) return;
+  firstTouch();
+  S.playing = true; S.plays++;
+  $('play').disabled = true;
+  const w = walk(S.order);
+  track('playDay', {order: S.order.slice(), backs: w.backs});
+  let backs = 0;
+  for (let i = 0; i < S.order.length; i++) {
+    const id = S.order[i];
+    S.playIdx = i; paint();
+    const line = ACTS[id].say + (i === 0 || partOf(ACTS[id].h) !== partOf(ACTS[S.order[i - 1]].h) ? ' ' + PART_LINE[partOf(ACTS[id].h)] : '');
+    const spoken = say(line);
+    const back = i === 0 ? false : await goTo(ACTS[id].h, id, 1300);
+    if (i === 0) { S.hour = ACTS[id].h; S.act = id; movePihu(ACTS[id].place); paint(); react(); }
+    if (back) { backs++; say('Oh no! The sun went backwards!'); await sleep(reduced() ? 300 : 1400); }
+    await Promise.race([spoken, sleep(reduced() ? 300 : 2600)]);
+    await sleep(reduced() ? 100 : 350);
+  }
+  S.playIdx = -1; S.playing = false; $('play').disabled = false;
+  paint();
+  if (backs === 0) { discover('wholeDay', clientOf(500, 300)); say('What a day! Morning, afternoon, evening and night.'); }
+  else discover('silly', clientOf(500, 300));
+}
+$('play').addEventListener('click', playDay);
+
+/* ---- the cards: drag one onto another to swap, tap to see it --------------- */
+const drg = {id: null, i: -1, x0: 0, y0: 0, moved: 0};
+function slotAt(p){ for (let i = 0; i < 6; i++) if (p.x >= slotX(i) - 6 && p.x <= slotX(i) + SLOT.w + 6 && p.y >= SLOT.y - 60 && p.y <= SLOT.y + SLOT.h + 30) return i; return -1; }
+for (let i = 0; i < 6; i++) {
+  const hit = $('slotHit' + i);
+  drag(hit, svg, {
+    start(p){ if (S.playing) return false; drg.i = i; drg.id = S.order[i]; drg.x0 = p.x; drg.y0 = p.y; drg.moved = 0;
+      $('cards').appendChild($('card-' + drg.id)); },          // the card art is not the hit target, so re-ordering it is safe
+    move(p){
+      if (drg.id == null) return;
+      drg.moved = Math.max(drg.moved, Math.hypot(p.x - drg.x0, p.y - drg.y0));
+      const c = cardPos[drg.id];
+      $('card-' + drg.id).setAttribute('transform', `translate(${f1(c.x + p.x - drg.x0)} ${f1(c.y + p.y - drg.y0)}) scale(1.08)`);
+      const j = slotAt(p);
+      for (let k = 0; k < 6; k++) $('slotGlow' + k).setAttribute('opacity', k === j && j !== drg.i ? 0.8 : 0);
+    },
+    end(p){
+      if (drg.id == null) return;
+      const id = drg.id, from = drg.i; drg.id = null;
+      if (drg.moved < 12) { paint(); showCard(from); return; }
+      const to = slotAt(p);
+      const c = cardPos[id], x1 = c.x + p.x - drg.x0, y1 = c.y + p.y - drg.y0;
+      if (to >= 0 && to !== from) {
+        const other = S.order[to];
+        S.order[to] = id; S.order[from] = other;
+        const oldOther = cardPos[other];
+        placeCards();
+        Play.sound('snap');
+        firstTouch();
+        track('swap', {from, to, order: S.order.slice()});
+        const oc = cardPos[other], nc = cardPos[id];
+        tween(0, 1, reduced() ? 0 : 280, t => {
+          $('card-' + id).setAttribute('transform', `translate(${f1(lerp(x1, nc.x, t))} ${f1(lerp(y1, nc.y, t))})`);
+          $('card-' + other).setAttribute('transform', `translate(${f1(lerp(oldOther.x, oc.x, t))} ${f1(lerp(oldOther.y, oc.y, t))})`);
+        }).then(() => { paint(); afterSwap(); });
+        paint();
+      } else {
+        Play.sound('boing');
+        tween(0, 1, reduced() ? 0 : 260, t => $('card-' + id).setAttribute('transform', `translate(${f1(lerp(x1, c.x, t))} ${f1(lerp(y1, c.y, t))})`)).then(paint);
+      }
+    },
+  });
+  hit.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); showCard(i); } });
+}
+function afterSwap(){
+  const w = walk(S.order);
+  if (w.inOrder && !afterSwap.said) { afterSwap.said = true; say('All in order! Press play to see Pihu’s day.'); Play.sound('chime'); }
+}
+
+/* ---- Pihu, the wish card, the Hear button ----------------------------------- */
+function tapPihu(){
+  firstTouch();
+  say(`${ACTS[S.act].say} ${PART_LINE[partOf(S.hour)]}`);
+  squash($('pihu'), 0, 0, 0.12, 520);
+  Play.sound('boing');
+  track('tapPihu', {act: S.act, part: partOf(S.hour)});
+}
+$('pihuHit').addEventListener('click', tapPihu);
+$('pihuHit').addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); tapPihu(); } });
+
+const WISH = {
+  morning:   {line: 'Tap a picture where the sun is rising. What does Pihu do in the morning?', art: `<g transform="scale(.82)">${cardArt('brush')}</g>`},
+  afternoon: {line: 'Tap a picture where the sun is high in the sky.', art: `<g transform="scale(.82)">${cardArt('lunch')}</g>`},
+  evening:   {line: 'Tap a picture where the sun is setting.', art: `<g transform="scale(.82)">${cardArt('play')}</g>`},
+  night:     {line: 'Tap a picture with the moon and the stars.', art: `<g transform="scale(.82)">${cardArt('sleep')}</g>`},
+  wholeDay:  {line: 'Drag the pictures to put Pihu’s day in order, from morning to night. Then press play!', art: `
+    <rect x="-56" y="-50" width="112" height="100" rx="18" fill="#fff3d6"/>
+    ${[0, 1, 2, 3].map(i => `<rect x="${-48 + i * 25}" y="-14" width="21" height="28" rx="5" fill="${skyTop([6.5, 13, 17.5, 21.5][i])}"/>`).join('')}
+    <path d="M-44 28 H40 M32 21 L42 28 L32 35" stroke="#2f9e5b" stroke-width="5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+    <circle cx="30" cy="-34" r="12" fill="#2f9e5b"/><path d="M26 -41 L37 -34 L26 -27 Z" fill="#fff"/>`},
+  silly:     {line: 'Now mix up the pictures, and play again. What does the sun do?', art: `
+    <rect x="-56" y="-50" width="112" height="100" rx="18" fill="#ffe4dc"/>
+    <g transform="translate(0 4) scale(.9)">${SUN_ART(16)}</g>
+    <path d="M36 -30 A40 40 0 0 0 -36 -30" fill="none" stroke="#e2453d" stroke-width="5" stroke-linecap="round"/><path d="M-44 -38 L-36 -28 L-26 -36" fill="none" stroke="#e2453d" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+    <text x="-8" y="44" font-size="24" font-weight="800" fill="#e2453d" font-family="Fredoka, sans-serif">?!</text>`},
+};
+const GOALS = ['morning', 'afternoon', 'evening', 'night', 'wholeDay', 'silly'];
+const currentGoal = () => GOALS.find(g => !found(g)) || null;
+let shownGoal;
+function paintWish(){
+  const g = currentGoal();
+  if (g === shownGoal) return;
+  shownGoal = g;
+  $('wishArt').innerHTML = g ? WISH[g].art : `<rect x="-56" y="-50" width="112" height="100" rx="18" fill="#fff1c9"/>
+    <path d="M0 -34 L10 -10 L36 -8 L16 8 L22 34 L0 20 L-22 34 L-16 8 L-36 -8 L-10 -10 Z" fill="#ffc53d" stroke="#f29a1f" stroke-width="3" stroke-linejoin="round"/>`;
+  squash($('wishArt').parentNode, 920, 90, 0.12, 500);
+}
+function sayGoal(){
+  const g = currentGoal();
+  say(g ? WISH[g].line : 'Morning, afternoon, evening and night. That is Pihu’s day!');
+  squash($('wish'), 920, 90, 0.1, 400);
+  track('hear', {goal: g});
+}
+function nextGoalSoon(ms = 3200){ setTimeout(() => { paintWish(); const g = currentGoal(); if (g && !S.playing) say(WISH[g].line); }, ms); }
+function discover(id, at){ const first = Play.discover(id, at); if (first) nextGoalSoon(); return first; }
+let spokeHello = false;
+function hello(){ if (spokeHello) return; spokeHello = true; say('Hello, I am Pihu! This is my day. ' + WISH[currentGoal() || 'wholeDay'].line); }
+function firstTouch(){ if (S.touched) return; S.touched = true; $('hint').setAttribute('opacity', 0); spokeHello = true; }
+$('wishHit').addEventListener('click', () => { spokeHello = true; sayGoal(); });
+$('wishHit').addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); spokeHello = true; sayGoal(); } });
+$('hear').addEventListener('click', () => { spokeHello = true; sayGoal(); });
+svg.addEventListener('pointerdown', () => { if (!spokeHello) hello(); });
+
+/* ---- little life ---------------------------------------------------------------- */
+let T = 0, blinkT = 2;
+function idle(dt){
+  T += dt;
+  if (reduced()) return;
+  blinkT -= dt;
+  const shut = blinkT < 0.13 && blinkT > 0;
+  $('pEyes').setAttribute('opacity', shut ? 0 : 1); $('pEyesShut').setAttribute('opacity', shut ? 1 : 0);
+  if (blinkT < 0) blinkT = 2 + Math.random() * 3;
+  $('ball').setAttribute('cy', f1(-40 - Math.abs(Math.sin(T * 4)) * 50));
+  $$('.foam').forEach((el, i) => el.setAttribute('transform', `translate(0 ${f1(-((T * 0.8 + i / 2) % 1) * 14)})`));
+  $('z1').setAttribute('transform', `translate(0 ${f1(-6 * Math.sin(T * 1.6))})`); $('z2').setAttribute('transform', `translate(0 ${f1(-6 * Math.sin(T * 1.6 + 1))})`);
+  if (!S.touched) {
+    /* the hint: a hand taps the first card, then shows a swap */
+    const k = (T * 0.4) % 1, a = {x: slotX(1) + 90, y: SLOT.y + 110}, c = {x: slotX(0) + 90, y: SLOT.y + 110};
+    const t = clamp((k - 0.2) / 0.6, 0, 1);
+    $('hintHand').setAttribute('transform', `translate(${f1(lerp(a.x, c.x, t))} ${f1(lerp(a.y, c.y, t) - Math.sin(t * Math.PI) * 40)})`);
+    $('hintHand').setAttribute('opacity', k > 0.92 ? 0 : 1);
+  }
+  const bob = S.act === 'play' ? Math.abs(Math.sin(T * 4)) * 5 : 0;
+  $('pihuStand').setAttribute('transform', `translate(0 ${f1(-bob)})`);
+}
+$('hintPath').setAttribute('d', `M${slotX(1) + 90} ${SLOT.y + 90} Q${slotX(0) + 120} ${SLOT.y + 20} ${slotX(0) + 90} ${SLOT.y + 90}`);
+
+/* ============================================================================
+   Start
+   ============================================================================ */
+findings($('finds'), [
+  {id: 'morning',   icon: '🌅', label: 'Morning',        say: 'Morning! The sun is rising.'},
+  {id: 'afternoon', icon: '☀️', label: 'Afternoon',      say: 'Afternoon! The sun is high in the sky.'},
+  {id: 'evening',   icon: '🌇', label: 'Evening',        say: 'Evening! The sun is setting.'},
+  {id: 'night',     icon: '🌙', label: 'Night',          say: 'Night! The moon and the stars are out.'},
+  {id: 'wholeDay',  icon: '🗓️', label: 'My whole day',   say: 'Pihu’s whole day, in order. The sun went all the way across the sky!'},
+  {id: 'silly',     icon: '🙃', label: 'Topsy-turvy day', say: 'A topsy-turvy day! The sun went backwards. Ha ha!'},
+], () => { setTimeout(() => say('You found them all! Morning, afternoon, evening and night.'), 2500); paintWish(); });
+
+S.hour = ACTS.brush.h; S.act = 'brush';
+paint(); paintWish();
+if (shared) firstTouch();
+loop(idle);
+window.applyFeatures = () => paint();
+window.PG_STATE = () => Object.assign(JSON.parse(JSON.stringify(S)), {part: partOf(S.hour), sunUp: sunUp(S.hour), inOrder: walk(S.order).inOrder, goal: currentGoal()});
+window.PG_MODEL = {ACTS, RISE, SET, sunUp, arcPos, partOf, walk, SLOT, HZ};
+</script>
+</body>
+</html>

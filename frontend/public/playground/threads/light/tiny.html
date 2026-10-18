@@ -1,0 +1,460 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Make A Rainbow</title>
+<meta name="description" content="Class 1: spray Anandi's garden hose and turn her round the garden — a rainbow only hides in the water when the Sun is behind her.">
+<link rel="icon" href="../../favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600&family=Inter:wght@400;500;600;700&family=Nunito:wght@500;700;800&display=swap">
+<link rel="stylesheet" href="../../play.css">
+<style>
+/* Tiny: the stage is almost the whole page. */
+.pg-main.tiny-main{grid-template-columns:minmax(0,1fr) 250px; padding-top:12px; padding-bottom:12px}
+.tiny-main .pg-stage{align-self:start; min-height:0}
+.pg-intro{display:flex; align-items:baseline; gap:18px; flex-wrap:wrap; padding-top:12px}
+.pg-intro p{margin:0}
+#stage{background:#bfe6ff}
+#anandiHit, #sunHit{cursor:pointer}
+#nozzleHit{cursor:grab}
+#nozzleHit.dragging{cursor:grabbing}
+svg [tabindex]:focus{outline:none}
+svg [tabindex]:focus-visible{outline:none; stroke:#ffd84a; stroke-width:4; stroke-dasharray:8 8}
+.hear{width:100%; min-height:76px; font-size:24px; font-family:var(--font-head); border-radius:var(--radius)}
+.hear .ic{font-size:30px}
+.finds-card h3{display:flex; align-items:center; gap:8px}
+@media (max-width:980px){ .pg-main.tiny-main{grid-template-columns:1fr} }
+</style>
+</head>
+<body>
+<header class="pg-top"></header>
+
+<div class="pg-intro">
+  <h1>Make a rainbow</h1>
+  <p>Spray the hose. Turn Anandi round the garden. Where is the rainbow hiding?</p>
+</div>
+
+<main class="pg-main tiny-main">
+  <section class="pg-stage" id="stageWrap">
+    <svg id="stage" viewBox="0 0 1000 640" role="img" aria-label="Anandi stands in her garden with a hose, next to her cat Milli. The Sun shines from one corner of the sky. Tap Anandi to turn her round. Drag the end of the hose up or down to spray higher or lower."></svg>
+  </section>
+
+  <aside class="pg-side">
+    <button class="btn primary hear" id="hear" aria-label="Hear what to do"><span class="ic">🔊</span> Hear it</button>
+    <div class="card finds-card"><h3>⭐ Found</h3><div id="finds"></div></div>
+  </aside>
+</main>
+
+<script src="../../play.js"></script>
+<script>
+'use strict';
+const {$, clamp, lerp, loop, tween, sound, tone, say, track, confetti, findings, discover, found,
+       shareState, sharedState, mount, reduced, drag, svgPoint, mulberry32} = Play;
+mount({thread: 'light', band: 'tiny'});
+
+/* MODEL:start ==================================================================
+   Anandi's Rainbow (NCERT Mridang, Class 1, Ch 9). A rainbow is sunlight bent and
+   bounced once inside raindrops, coming back out at a fixed angle from the point
+   in the sky exactly opposite the Sun (the "antisolar point"): about 40.3° for
+   violet light to 42.4° for red light. So a droplet only shows a colour to an eye
+   when the angle at the droplet, between the line to the Sun and the line to the
+   eye, is in that narrow band.
+
+   The scene is one vertical slice of sky containing the Sun and Anandi, so the
+   Sun's direction and the "straight opposite" (antisolar) direction are simply
+   two elevations on the same line: the Sun sits at elevation +SUN_ALT on Anandi's
+   left; the antisolar point sits at elevation -SUN_ALT (below the ground!) on
+   whichever side Anandi is facing. The spherical law of cosines gives the true
+   angle at a droplet of elevation e (as seen from Anandi's eye), on a side that is
+   either the SAME side as the antisolar point (facing away from the Sun) or the
+   OPPOSITE side (facing the Sun), by an azimuth difference of 0° or 180°:
+       cos(angle) = sin(e)·sin(-SUN_ALT) + cos(e)·cos(-SUN_ALT)·cos(azimuthDiff)
+   Facing the Sun (azimuthDiff = 180°) always gives an angle far from the rainbow
+   band, whatever height she sprays — you cannot see a rainbow looking at the Sun.
+   Facing away (azimuthDiff = 0°) gives angle = e + SUN_ALT: exactly the rainbow
+   band when e is about 14–16° above the ground, which the water passes through
+   as it arcs up and falls (real projectile motion), painting those drops with the
+   colour their own angle calls for — nothing is a picture of a rainbow.
+   ============================================================================ */
+const SUN_ALT = 26;                              // the Sun's fixed height in the sky, degrees
+const BAND = [40.3, 42.4];                       // violet..red critical angle, degrees
+const GLOW = 2.6;                                // soft fade either side of the true band
+const V0 = 450, G = 800;                         // the hose jet: launch speed and "gravity", px/s and px/s^2
+
+/* The true angle at a droplet of elevation e (deg, from Anandi's eye) between the
+   Sun and the eye, given which way she is facing. */
+function sunDropletEyeAngle(elevDeg, facing){
+  const azDiff = facing === 'away' ? 0 : 180;
+  const e1 = elevDeg * Math.PI / 180, e2 = -SUN_ALT * Math.PI / 180, az = azDiff * Math.PI / 180;
+  const c = Math.sin(e1) * Math.sin(e2) + Math.cos(e1) * Math.cos(e2) * Math.cos(az);
+  return Math.acos(clamp(c, -1, 1)) * 180 / Math.PI;
+}
+const SPECTRUM = ['#7b2ff7', '#4b3fd6', '#2f7de1', '#2f9e5b', '#f2d21f', '#f2871f', '#e8442f'];  /* violet..red */
+function mix(a, b, t){
+  t = clamp(t, 0, 1);
+  const pa = [1, 3, 5].map(i => parseInt(a.slice(i, i + 2), 16)), pb = [1, 3, 5].map(i => parseInt(b.slice(i, i + 2), 16));
+  return '#' + pa.map((v, i) => Math.round(v + (pb[i] - v) * t).toString(16).padStart(2, '0')).join('');
+}
+function spectrumColor(t){
+  const n = SPECTRUM.length - 1, seg = clamp(Math.floor(t * n), 0, n - 1);
+  return mix(SPECTRUM[seg], SPECTRUM[seg + 1], t * n - seg);
+}
+/* What a droplet at this elevation looks like: plain water, or coloured by the
+   rainbow rule, with a soft fade at the edges of the true band. */
+function dropletLook(elevDeg, facing){
+  const c = sunDropletEyeAngle(elevDeg, facing);
+  if (c < BAND[0] - GLOW || c > BAND[1] + GLOW) return {inBand: false, alpha: 0, c};
+  let alpha, t;
+  if (c < BAND[0]) { alpha = 1 - (BAND[0] - c) / GLOW; t = 0; }
+  else if (c > BAND[1]) { alpha = 1 - (c - BAND[1]) / GLOW; t = 1; }
+  else { alpha = 1; t = (c - BAND[0]) / (BAND[1] - BAND[0]); }
+  alpha = clamp(alpha, 0, 1);
+  return {inBand: alpha >= 0.5, alpha, t, color: spectrumColor(t), c};
+}
+/* The water jet: a real parabola from the nozzle, sampled into droplets. Each
+   droplet's elevation (as seen from the nozzle, which is where Anandi's eye is)
+   comes straight from where gravity has carried it — nothing is looked up. */
+function trajectory(angleDeg, ox, oy, steps = 90){
+  const a = angleDeg * Math.PI / 180, vx = V0 * Math.cos(a), vy = -V0 * Math.sin(a);
+  const T = 2 * V0 * Math.sin(a) / G;
+  const pts = [];
+  for (let i = 0; i <= steps; i++) {
+    const t = T * i / steps, dx = vx * t, dy = vy * t + 0.5 * G * t * t;
+    pts.push({x: ox + dx, y: oy + dy, elev: Math.atan2(-dy, Math.max(1e-6, Math.abs(dx))) * 180 / Math.PI});
+  }
+  return pts;
+}
+/* Does the current jet show a rainbow at all, and how completely? */
+function bowStats(angleDeg, facing, ox, oy){
+  const pts = trajectory(angleDeg, ox, oy, 180).map(p => dropletLook(p.elev, facing));
+  const strong = pts.filter(p => p.inBand);
+  const buckets = new Set(strong.map(p => Math.floor(p.t * 6)));
+  return {maxAlpha: pts.reduce((m, p) => Math.max(m, p.alpha), 0), strongCount: strong.length, colours: buckets.size};
+}
+/* MODEL:end */
+
+const ANGLE_MIN = 6, ANGLE_MAX = 78;
+const HORIZON_Y = 300;                            // sky/ground line: a bigger garden fills the frame
+const ANANDI = {x: 560, y: 592};
+const ANANDI_SCALE = 1.55;                        // Anandi is drawn at this scale, so she fills her share of the frame
+const PIVOT = {x: 34, y: -108};                   // Anandi's hand, in her own local (facing-forward, unscaled) space
+const HANDLE_R = 100;                             // hose length, in the same unscaled space
+const SUN = {x: 160, y: 118, r: 62};
+const MILLI = {x: 838, y: 596};
+const MILLI_SCALE = 1.4;
+const FLOWER_X = [46, 128, 205, 292, 700, 790, 880];  /* either side of Anandi, out of the spray's way */
+const FLOWER_R = FLOWER_X.map((x, i) => 21 + (i % 3) * 3);
+const PXPERDEG = 15;                              /* the rainbow's sky-dome scale: pixels per degree of angle */
+
+/* ---- state: plain data --------------------------------------------------- */
+const S = {facing: 'toward', angle: 12, painted: false, milliUp: false, spun: 0};
+const shared = sharedState();
+if (shared) {
+  if (shared.facing === 'away') S.facing = 'away';
+  S.angle = clamp(+shared.angle || 12, ANGLE_MIN, ANGLE_MAX);
+}
+shareState(() => ({facing: S.facing, angle: Math.round(S.angle)}));
+const sx = () => (S.facing === 'away' ? 1 : -1);          // screen direction Anandi faces: sun is on the left
+
+/* ============================================================================
+   The stage: drawn once, then only patched.
+   ============================================================================ */
+const svg = $('stage');
+const f1 = n => (+n).toFixed(1);
+const rnd = mulberry32(11);
+
+function petals(cx, cy, r, color){
+  let p = '';
+  for (let i = 0; i < 5; i++) { const a = i / 5 * Math.PI * 2; p += `<ellipse cx="${f1(cx + Math.cos(a) * r)}" cy="${f1(cy + Math.sin(a) * r)}" rx="${r * 0.62}" ry="${r * 0.42}" fill="${color}" transform="rotate(${f1(a * 180 / Math.PI)} ${f1(cx + Math.cos(a) * r)} ${f1(cy + Math.sin(a) * r)})"/>`; }
+  return `${p}<circle cx="${cx}" cy="${cy}" r="${r * 0.5}" fill="#ffd23f"/>`;
+}
+
+function build(){
+  const flowers = FLOWER_X.map((x, i) => {
+    const y = 596 + (i % 2 ? 28 : 0), r = FLOWER_R[i];
+    return `
+    <g id="flower-${i}">
+      <path d="M${x} ${y} C${x - 5} ${y - 26} ${x + 5} ${y - 40} ${x} ${y - 58}" stroke="#3a9a4a" stroke-width="5" fill="none" stroke-linecap="round"/>
+      <path d="M${x} ${y - 30} C${x - 16} ${y - 34} ${x - 24} ${y - 22} ${x - 24} ${y - 22}" stroke="#3a9a4a" stroke-width="4" fill="none" stroke-linecap="round"/>
+      <g id="fhead-${i}" transform="translate(${x} ${y - 58})">${petals(0, 0, r, '#ffffff')}</g>
+    </g>`;
+  }).join('');
+  svg.innerHTML = `
+  <defs>
+    <linearGradient id="gSky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#5fb6ff"/><stop offset="1" stop-color="#dff3ff"/></linearGradient>
+    <linearGradient id="gGround" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#8ed072"/><stop offset="1" stop-color="#5fa856"/></linearGradient>
+    <radialGradient id="gSun" cx="40%" cy="38%"><stop offset="0" stop-color="#fff6c8"/><stop offset=".6" stop-color="#ffcf3d"/><stop offset="1" stop-color="#f29a12"/></radialGradient>
+    <radialGradient id="gGlow"><stop offset=".3" stop-color="#ffe27a" stop-opacity=".65"/><stop offset="1" stop-color="#ffe27a" stop-opacity="0"/></radialGradient>
+    <radialGradient id="gCheek"><stop offset="0" stop-color="#ff8a5c" stop-opacity=".55"/><stop offset="1" stop-color="#ff8a5c" stop-opacity="0"/></radialGradient>
+    <filter id="soft" x="-30%" y="-30%" width="160%" height="160%"><feDropShadow dx="0" dy="4" stdDeviation="4" flood-color="#000" flood-opacity=".22"/></filter>
+  </defs>
+  <rect width="1000" height="${HORIZON_Y + 30}" fill="url(#gSky)"/>
+  <g id="fluffy" opacity=".9">
+    <g transform="translate(120 80)"><ellipse rx="50" ry="18" fill="#fff"/><circle cx="-16" cy="-12" r="17" fill="#fff"/><circle cx="14" cy="-15" r="21" fill="#fff"/></g>
+    <g transform="translate(900 60) scale(.8)"><ellipse rx="50" ry="18" fill="#fff"/><circle cx="-16" cy="-12" r="17" fill="#fff"/><circle cx="14" cy="-15" r="21" fill="#fff"/></g>
+  </g>
+  <g id="sunG" transform="translate(${SUN.x} ${SUN.y})"><g id="sunSquish">
+    <circle id="sunGlow" r="120" fill="url(#gGlow)"/>
+    <g id="sunRays" fill="#ffc83a">${Array.from({length: 12}, (_, i) => { const a = i / 12 * Math.PI * 2, b = 0.13; return `<path d="M${f1(52 * Math.cos(a - b))} ${f1(52 * Math.sin(a - b))} L${f1(82 * Math.cos(a))} ${f1(82 * Math.sin(a))} L${f1(52 * Math.cos(a + b))} ${f1(52 * Math.sin(a + b))} Z"/>`; }).join('')}</g>
+    <circle r="${SUN.r - 12}" fill="url(#gSun)"/>
+    <circle cx="-15" cy="-6" r="5.5" fill="#6b3a10"/><circle cx="15" cy="-6" r="5.5" fill="#6b3a10"/>
+    <path d="M-14 10 Q0 22 14 10" fill="none" stroke="#6b3a10" stroke-width="4.5" stroke-linecap="round"/>
+    <ellipse cx="-26" cy="9" rx="7.5" ry="5" fill="#ff8a5c" opacity=".5"/><ellipse cx="26" cy="9" rx="7.5" ry="5" fill="#ff8a5c" opacity=".5"/>
+  </g></g>
+
+  <!-- the rainbow: real sky, so it sits behind the garden -->
+  <g id="rainbowArc"></g>
+
+  <!-- distant house, sitting on the ground, not floating -->
+  <g transform="translate(884 ${HORIZON_Y + 34}) scale(1.3)">
+    <ellipse cx="0" cy="60" rx="80" ry="12" fill="#3f7a3f" opacity=".35"/>
+    <rect x="-58" y="-72" width="116" height="72" rx="6" fill="#ffe3b3" stroke="#8a5a2b" stroke-width="3"/>
+    <path d="M-70 -68 L0 -122 L70 -68 Z" fill="#e2553f" stroke="#8f2e22" stroke-width="3" stroke-linejoin="round"/>
+    <rect x="-42" y="-52" width="24" height="22" rx="3" fill="#bfe6ff" stroke="#8a5a2b" stroke-width="2.5"/>
+    <rect x="18" y="-52" width="24" height="22" rx="3" fill="#bfe6ff" stroke="#8a5a2b" stroke-width="2.5"/>
+    <rect x="-10" y="-30" width="20" height="30" rx="2" fill="#8a5a2b"/>
+  </g>
+
+  <!-- the garden: reaches all the way to the bottom edge -->
+  <path d="M0 ${HORIZON_Y} C220 ${HORIZON_Y - 22} 420 ${HORIZON_Y - 14} 620 ${HORIZON_Y - 4} C780 ${HORIZON_Y + 4} 900 ${HORIZON_Y - 8} 1000 ${HORIZON_Y - 4} L1000 640 L0 640 Z" fill="url(#gGround)"/>
+  <path d="M0 ${HORIZON_Y + 60} C260 ${HORIZON_Y + 40} 700 ${HORIZON_Y + 78} 1000 ${HORIZON_Y + 46} L1000 640 L0 640 Z" fill="#6fb85f" opacity=".55"/>
+  <!-- a little stone path leading to Anandi -->
+  <g fill="#cdbfa0" opacity=".85">${[0, 1, 2, 3, 4].map(i => `<ellipse cx="${ANANDI.x - 40 + i * 22 - i * i * 2}" cy="${640 - 26 - i * 34}" rx="${30 - i * 2}" ry="${11 - i}"/>`).join('')}</g>
+  <g id="grassTufts" fill="none" stroke="#3f8a3f" stroke-width="5" stroke-linecap="round">${Array.from({length: 34}, (_, i) => { const x = 8 + i * 30 + (i % 3) * 6, y = HORIZON_Y + 30 + (i % 5) * 62; return `<path d="M${x} ${y} l-6 -15 M${x} ${y} l0 -19 M${x} ${y} l7 -15"/>`; }).join('')}</g>
+
+  <g id="flowers">${flowers}</g>
+
+  <!-- Milli the cat -->
+  <g id="milliG" transform="translate(${MILLI.x} ${MILLI.y}) scale(${MILLI_SCALE})">
+    <ellipse cx="0" cy="2" rx="34" ry="8" fill="#000" opacity=".16"/>
+    <path id="milliTail" d="M22 -6 C48 -6 50 -30 34 -34" fill="none" stroke="#e0803a" stroke-width="9" stroke-linecap="round"/>
+    <ellipse cx="0" cy="-16" rx="26" ry="20" fill="#f0973f"/>
+    <path d="M-26 -16 a26 20 0 0 1 26 -20 a26 20 0 0 1 26 20 Z" fill="#f0973f"/>
+    <g id="milliHead" transform="translate(-6 -40)">
+      <circle r="17" fill="#f0973f"/>
+      <path d="M-14 -10 L-6 -20 L-2 -8 Z" fill="#f0973f"/><path d="M14 -10 L6 -20 L2 -8 Z" fill="#f0973f"/>
+      <path d="M-14 -10 L-6 -20 L-2 -8 Z" fill="#c76a1f" opacity=".5" transform="scale(.6) translate(-8 -6)"/>
+      <circle cx="-6" cy="-1" r="2.6" fill="#1d1410"/><circle cx="6" cy="-1" r="2.6" fill="#1d1410"/>
+      <path d="M-3 5 Q0 8 3 5" stroke="#7a4a20" stroke-width="1.6" fill="none" stroke-linecap="round"/>
+      <path d="M-18 3 l-10 -2 M-18 6 l-10 2 M18 3 l10 -2 M18 6 l10 2" stroke="#c76a1f" stroke-width="1.3"/>
+    </g>
+    <path d="M-10 -2 h8 M10 -2 h8" stroke="#c76a1f" stroke-width="6" stroke-linecap="round"/>
+  </g>
+
+  <!-- Anandi, wrapped so she can face either way and stand this big -->
+  <g id="anandiFlip" transform="translate(${ANANDI.x} ${ANANDI.y})"><g transform="scale(${ANANDI_SCALE})">
+    <ellipse cx="0" cy="2" rx="42" ry="9" fill="#000" opacity=".16"/>
+    <path d="M-14 0 V-58" stroke="#c98a5a" stroke-width="15" stroke-linecap="round"/>
+    <path d="M14 0 V-58" stroke="#c98a5a" stroke-width="15" stroke-linecap="round"/>
+    <path id="armBack" d="M-26 -134 C-46 -122 -50 -92 -42 -66" stroke="#c98a5a" stroke-width="14" fill="none" stroke-linecap="round"/>
+    <circle cx="-43" cy="-64" r="9" fill="#c98a5a"/>
+    <path d="M-38 -56 L-27 -140 L27 -140 L38 -56 Z" fill="#3fb0c7" stroke="#238098" stroke-width="3" stroke-linejoin="round"/>
+    <circle cx="-18" cy="-88" r="5.5" fill="#fff" opacity=".6"/><circle cx="6" cy="-100" r="5.5" fill="#fff" opacity=".6"/><circle cx="20" cy="-72" r="5.5" fill="#fff" opacity=".6"/>
+    <path id="armFront" d="M26 -134 C34 -124 ${f1(PIVOT.x + 6)} -118 ${f1(PIVOT.x)} ${f1(PIVOT.y)}" stroke="#c98a5a" stroke-width="14" fill="none" stroke-linecap="round"/>
+    <!-- the hand, gripping the hose -->
+    <g transform="translate(${f1(PIVOT.x)} ${f1(PIVOT.y)})">
+      <circle r="12" fill="#c98a5a"/>
+      <path d="M-9 -3 q-5 -6 0 -10 M-2 -6 q-4 -7 1 -11 M5 -6 q-2 -8 3 -10" stroke="#c98a5a" stroke-width="6" fill="none" stroke-linecap="round"/>
+    </g>
+    <rect x="-8" y="-150" width="16" height="14" fill="#c98a5a"/>
+    <circle cx="0" cy="-166" r="32" fill="#d89a68"/>
+    <circle cx="-15" cy="-156" r="6" fill="url(#gCheek)"/><circle cx="15" cy="-156" r="6" fill="url(#gCheek)"/>
+    <circle cx="-38" cy="-172" r="9" fill="#2a1a10"/><circle cx="38" cy="-172" r="9" fill="#2a1a10"/>
+    <circle cx="-38" cy="-163" r="4.5" fill="#e2553f"/><circle cx="38" cy="-163" r="4.5" fill="#e2553f"/>
+    <path d="M-32 -190 C-34 -206 34 -206 32 -190 C24 -200 8 -202 0 -196 C-8 -202 -24 -200 -32 -190 Z" fill="#2a1a10"/>
+    <g id="eyesOpen"><ellipse cx="-12" cy="-168" rx="5.5" ry="7" fill="#fff"/><ellipse cx="12" cy="-168" rx="5.5" ry="7" fill="#fff"/>
+      <circle cx="-11" cy="-167" r="3.6" fill="#2a1a10"/><circle cx="13" cy="-167" r="3.6" fill="#2a1a10"/></g>
+    <path d="M-8 -150 Q0 -141 8 -150" stroke="#6b2a1a" stroke-width="3.4" fill="none" stroke-linecap="round"/>
+  </g></g>
+
+  <!-- the hose, the nozzle and its visible spray fan: drawn in absolute stage space -->
+  <path id="hoseLine" fill="none" stroke="#2f9e5b" stroke-width="10" stroke-linecap="round"/>
+  <path id="hoseLine2" fill="none" stroke="#3fb86a" stroke-width="4" stroke-linecap="round" stroke-dasharray="1 13" opacity=".8"/>
+  <g id="sprayFan"></g>
+  <g id="spray"></g>
+  <g id="nozzleG">
+    <path id="nozzleCone" fill="#8a8f96" stroke="#5c6066" stroke-width="2"/>
+    <circle id="nozzleTip" r="6" fill="#dfe3e6" stroke="#5c6066" stroke-width="2"/>
+  </g>
+
+  <!-- hit targets: they never move mid-gesture -->
+  <ellipse id="anandiHit" cx="${ANANDI.x}" cy="${ANANDI.y - 130}" rx="105" ry="230" fill="transparent" role="button" tabindex="0" aria-label="Anandi. Tap her to turn her round the garden."/>
+  <circle id="sunHit" cx="${SUN.x}" cy="${SUN.y}" r="${SUN.r + 24}" fill="transparent" role="button" tabindex="0" aria-label="The Sun. Tap it to hear what it says."/>
+  <circle id="nozzleHit" r="30" fill="transparent" role="slider" tabindex="0" aria-label="The end of the hose. Drag it up or down to spray higher or lower." aria-valuemin="${ANGLE_MIN}" aria-valuemax="${ANGLE_MAX}"/>
+  `;
+}
+build();
+
+/* ---- helpers --------------------------------------------------------------- */
+function clientOf(x, y){
+  const m = svg.getScreenCTM(); if (!m) return {x: innerWidth / 2, y: innerHeight / 2};
+  const p = svg.createSVGPoint(); p.x = x; p.y = y; return p.matrixTransform(m);
+}
+function squash(el, cx, cy, amt = 0.14, ms = 480){
+  return tween(0, 1, ms, t => {
+    const k = Math.sin(t * Math.PI * 3) * (1 - t) * amt;
+    el.setAttribute('transform', `${el.dataset.base || ''} translate(${cx} ${cy}) scale(${(1 + k).toFixed(3)} ${(1 - k).toFixed(3)}) translate(${-cx} ${-cy})`);
+  }, x => x);
+}
+const splash = () => { for (let i = 0; i < 3; i++) tone(700 + i * 140, 0.08, 'sine', 0.05, i * 0.05, 400); };
+const shimmer = () => { [660, 880, 1100, 1320].forEach((f, i) => tone(f, 0.35, 'sine', 0.07, i * 0.06)); };
+
+/* nozzle position, in stage coordinates, at the current angle and facing */
+function handlePos(angle = S.angle, facing = S.facing){
+  const s = facing === 'away' ? 1 : -1;
+  const a = angle * Math.PI / 180;
+  return {x: ANANDI.x + s * ANANDI_SCALE * (PIVOT.x + HANDLE_R * Math.cos(a)), y: ANANDI.y + ANANDI_SCALE * (PIVOT.y - HANDLE_R * Math.sin(a))};
+}
+const pivotAbs = () => ({x: ANANDI.x + sx() * ANANDI_SCALE * PIVOT.x, y: ANANDI.y + ANANDI_SCALE * PIVOT.y});
+
+/* The rainbow, drawn as what it really is: a circle of critical angle around the
+   point in the sky exactly opposite the Sun (the antisolar point), sliced by the
+   horizon. Anandi's own eye stays the circle's centre, so it is really "behind"
+   her whenever it is visible — the optics (maxAlpha, from bowStats) decide only
+   WHETHER it shows and how strongly; degrees-to-pixels (PXPERDEG) just draws
+   that circle at a size worth finding. */
+function rainbowArcSVG(maxAlpha){
+  if (maxAlpha <= 0.4) return '';
+  const vis = (maxAlpha - 0.4) / 0.6;                       // only fade in over the "getting warmer" range
+  const cx = ANANDI.x;
+  const depth = SUN_ALT * PXPERDEG;                         // antisolar point, this far below the horizon
+  const mid = (BAND[0] + BAND[1]) / 2 * PXPERDEG;            // radius of the middle of the band, in pixels
+  const ringW = 17;
+  let s = '';
+  for (let i = 0; i < 7; i++) {
+    const R = mid + (i - 3) * ringW;
+    const hw = Math.sqrt(Math.max(0, R * R - depth * depth));
+    const color = spectrumColor(i / 6);
+    s += `<path d="M${f1(cx - hw)} ${HORIZON_Y} A${f1(R)} ${f1(R)} 0 0 1 ${f1(cx + hw)} ${HORIZON_Y}" fill="none" stroke="${color}" stroke-width="${ringW + 0.6}" opacity="${(vis * 0.94).toFixed(2)}" stroke-linecap="round"/>`;
+  }
+  return `<g>${s}</g>`;
+}
+
+/* ---- paint: everything that depends on the state -------------------------- */
+function paint(){
+  $('anandiFlip').setAttribute('transform', `translate(${ANANDI.x} ${ANANDI.y}) scale(${sx()} 1)`);
+  const hp = handlePos();
+  const piv = pivotAbs();
+  const midx = (piv.x + hp.x) / 2, midy = Math.max(piv.y, hp.y) + 34;
+  $('hoseLine').setAttribute('d', `M${f1(piv.x)} ${f1(piv.y)} Q${f1(midx)} ${f1(midy)} ${f1(hp.x)} ${f1(hp.y)}`);
+  $('hoseLine2').setAttribute('d', `M${f1(piv.x)} ${f1(piv.y)} Q${f1(midx)} ${f1(midy)} ${f1(hp.x)} ${f1(hp.y)}`);
+  $('nozzleHit').setAttribute('cx', f1(hp.x)); $('nozzleHit').setAttribute('cy', f1(hp.y));
+  $('nozzleHit').setAttribute('aria-valuenow', Math.round(S.angle));
+
+  /* the nozzle: a little funnel pointing the way the spray goes */
+  const dirx = sx() * Math.cos(S.angle * Math.PI / 180), diry = -Math.sin(S.angle * Math.PI / 180);
+  const perpx = -diry, perpy = dirx;
+  const back = {x: hp.x - dirx * 22, y: hp.y - diry * 22};
+  const wideL = {x: back.x + perpx * 13, y: back.y + perpy * 13}, wideR = {x: back.x - perpx * 13, y: back.y - perpy * 13};
+  const tipL = {x: hp.x + perpx * 7, y: hp.y + perpy * 7}, tipR = {x: hp.x - perpx * 7, y: hp.y - perpy * 7};
+  $('nozzleCone').setAttribute('d', `M${f1(wideL.x)} ${f1(wideL.y)} L${f1(tipL.x)} ${f1(tipL.y)} L${f1(tipR.x)} ${f1(tipR.y)} L${f1(wideR.x)} ${f1(wideR.y)} Z`);
+  $('nozzleTip').setAttribute('cx', f1(hp.x)); $('nozzleTip').setAttribute('cy', f1(hp.y));
+
+  /* a visible fan of spray lines, fanning out either side of the main jet */
+  let fan = '';
+  for (const d of [-16, -8, 0, 8, 16]) {
+    const a = (S.angle + d) * Math.PI / 180, fx = sx() * Math.cos(a), fy = -Math.sin(a);
+    fan += `<line x1="${f1(hp.x)}" y1="${f1(hp.y)}" x2="${f1(hp.x + fx * 46)}" y2="${f1(hp.y + fy * 46)}" stroke="#eaf6ff" stroke-width="3" stroke-linecap="round" opacity=".55"/>`;
+  }
+  $('sprayFan').innerHTML = fan;
+
+  /* the jet is computed facing +x, then mirrored onto whichever side she faces —
+     plain water; the rainbow itself is drawn separately, in the sky. */
+  const jet = trajectory(S.angle, 0, 0, 70).map(p => ({x: hp.x + p.x * sx(), y: hp.y + p.y}));
+  $('spray').innerHTML = jet.map((p, i) => `<circle cx="${f1(p.x)}" cy="${f1(p.y)}" r="${i % 3 === 0 ? 4.2 : 3}" fill="#eaf6ff" opacity=".75"/>`).join('');
+
+  const stat = bowStats(S.angle, S.facing, 0, 0);
+  $('rainbowArc').innerHTML = rainbowArcSVG(stat.maxAlpha);
+  for (let i = 0; i < FLOWER_X.length; i++) $('fhead-' + i).innerHTML = petals(0, 0, FLOWER_R[i], S.painted ? SPECTRUM[i] : '#ffffff');
+  $('milliHead').setAttribute('transform', `translate(-6 ${S.milliUp ? -46 : -40}) rotate(${S.milliUp ? -14 : 0})`);
+  return stat;
+}
+
+/* ---- turning round, and the sun ------------------------------------------- */
+let spinning = false;
+function turnAround(){
+  if (spinning) return;
+  spinning = true;
+  const from = sx(), to = -from;
+  S.facing = S.facing === 'away' ? 'toward' : 'away';
+  sound('boing');
+  tween(from, to, reduced() ? 0 : 420, v => {
+    $('anandiFlip').setAttribute('transform', `translate(${ANANDI.x} ${ANANDI.y}) scale(${v.toFixed(3)} 1)`);
+  }).then(() => { spinning = false; paint(); afterChange(); });
+  track('turn', {facing: S.facing});
+  if (S.facing === 'away') discover('turned', clientOf(ANANDI.x, ANANDI.y - 200));
+}
+$('anandiHit').addEventListener('click', turnAround);
+$('anandiHit').addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); turnAround(); } });
+
+function tapSun(){
+  say('I stay right here! Turn Anandi round so I am behind her.');
+  squash($('sunSquish'), 0, 0, 0.14, 460);
+  sound('chime');
+  track('tapSun', {});
+  discover('sunspeaks', clientOf(SUN.x, SUN.y));
+}
+$('sunHit').addEventListener('click', tapSun);
+$('sunHit').addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); tapSun(); } });
+
+/* ---- the hose: drag its end to aim higher or lower ------------------------- */
+drag($('nozzleHit'), svg, {
+  move(p){
+    const piv = pivotAbs();
+    const vx = (p.x - piv.x) * sx(), vy = piv.y - p.y;
+    let a = Math.atan2(vy, vx) * 180 / Math.PI;
+    S.angle = clamp(a, ANGLE_MIN, ANGLE_MAX);
+    paint(); afterChange();
+  },
+  end(){ track('angle', {angle: Math.round(S.angle)}); },
+});
+$('nozzleHit').addEventListener('keydown', e => {
+  const k = {ArrowUp: 2, ArrowRight: 2, ArrowDown: -2, ArrowLeft: -2}[e.key];
+  if (!k) return;
+  e.preventDefault(); S.angle = clamp(S.angle + k, ANGLE_MIN, ANGLE_MAX); paint(); afterChange();
+});
+
+/* ---- what the model reaches --------------------------------------------- */
+let sayT = 0;
+function sayLater(line){ clearTimeout(sayT); sayT = setTimeout(() => say(line), 300); }
+function afterChange(){
+  const stat = bowStats(S.angle, S.facing, 0, 0);
+  if (stat.maxAlpha > 0.02) sfxOnce();
+  if (stat.maxAlpha >= 0.85) {
+    const first = discover('rainbow', clientOf(handlePos().x, handlePos().y - 40));
+    if (first) { S.painted = true; sayLater('A rainbow! Sunshine and raindrops, together.'); shimmer(); paint(); }
+  }
+  if (stat.colours >= 6) discover('allcolours', clientOf(handlePos().x, handlePos().y - 60));
+  if ((stat.maxAlpha >= 0.85 || found('allcolours')) && !S.milliUp) {
+    S.milliUp = true; paint(); sound('pop'); discover('millisees', clientOf(MILLI.x, MILLI.y - 60));
+  }
+}
+let lastSplash = 0;
+function sfxOnce(){ const t = performance.now(); if (t - lastSplash < 900) return; lastSplash = t; splash(); }
+
+/* ============================================================================
+   Start
+   ============================================================================ */
+findings($('finds'), [
+  {id: 'turned',     icon: '🔄', label: 'Sun behind her!', say: 'Now the Sun is behind Anandi.'},
+  {id: 'rainbow',    icon: '🌈', label: 'A rainbow!', say: 'You found the rainbow, hiding in the water.'},
+  {id: 'allcolours', icon: '🎨', label: 'All the colours', say: 'Violet, indigo, blue, green, yellow, orange, red — all seven!'},
+  {id: 'sunspeaks',  icon: '☀️', label: 'The Sun never moves', say: 'The Sun stays still. You have to turn round to find it behind you.'},
+  {id: 'millisees',  icon: '🐈', label: 'Milli looks up', say: 'Milli the cat looks up at the rainbow too!'},
+], () => say('You found a whole rainbow, and Milli saw it too!'));
+
+let spoke = false;
+function hello(){ if (spoke) return; spoke = true; say('Spray the hose, and turn Anandi round the garden. Can you find where the rainbow hides?'); }
+$('hear').addEventListener('click', () => { spoke = true; say('Turn Anandi so the Sun is behind her, then spray the hose up into the sky.'); });
+svg.addEventListener('pointerdown', hello, {once: true});
+
+paint();
+if (shared) { spoke = true; afterChange(); }
+window.applyFeatures = () => paint();
+window.PG_STATE = () => JSON.parse(JSON.stringify(S));
+window.PG_MODEL = {SUN_ALT, BAND, sunDropletEyeAngle, dropletLook, trajectory, bowStats, spectrumColor, ANANDI, PIVOT, HANDLE_R, MILLI, handlePos};
+</script>
+</body>
+</html>

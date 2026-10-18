@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Grapher</title>
+<meta name="description" content="Type a law and watch it: an expression grapher with found sliders, pan and zoom, trace, roots, turning points, intersections, a draggable tangent and the area under the curve as a Riemann sum.">
+<link rel="icon" href="../favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600&family=Inter:wght@400;500;600;700&family=Nunito:wght@500;700;800&family=Newsreader:opsz,wght@6..72,400;6..72,500&family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="../play.css">
+<link rel="stylesheet" href="graph.css">
+<style>
+/* Only the reference page's own chrome. The grapher brings its own. */
+body{background:var(--bg); color:var(--ink); font:var(--base)/1.5 var(--font); margin:0; padding:20px 18px 48px}
+.wrap{max-width:1180px; margin:0 auto}
+h1{font:600 26px/1.2 var(--font-head); margin:0 0 6px}
+.lede{color:var(--ink-2); margin:0 0 18px; max-width:64ch}
+.strip{display:flex; flex-wrap:wrap; gap:6px; margin:0 0 14px; align-items:center}
+.strip .kick{font:600 11.5px var(--font); letter-spacing:.07em; text-transform:uppercase; color:var(--ink-3); margin-right:4px}
+.strip button{border:1px solid var(--hair-2); background:var(--card); color:var(--ink-2); border-radius:99px;
+  padding:5px 12px; cursor:pointer; font:13px var(--font); min-height:calc(var(--tap) - 8px)}
+.strip button:hover{border-color:var(--accent); color:var(--accent)}
+.strip button[aria-pressed="true"]{background:var(--accent); border-color:var(--accent); color:#fff}
+.help{margin:22px 0 0; padding:14px 16px; background:var(--card); border:1px solid var(--hair);
+  border-radius:var(--radius); box-shadow:var(--shadow)}
+.help h2{font:600 15px var(--font-head); margin:0 0 8px}
+.help ul{margin:0; padding-left:20px; color:var(--ink-2); font-size:14px}
+.help li{margin-bottom:3px}
+.help code{font:13px var(--font-mono); background:var(--sunk); padding:1px 5px; border-radius:5px; color:var(--ink)}
+</style>
+</head>
+<body data-band="modeller">
+<div class="wrap">
+  <h1>The grapher</h1>
+  <p class="lede">Type a law and watch it. Any letter you use that is not <code>x</code> becomes a slider, so
+    <code>a sin(bx + c)</code> arrives with three of them. Everything the page tells you — a root, a turning point,
+    a slope, an area — is found on the curve that is actually drawn, never from a formula about it.</p>
+
+  <div class="strip" role="group" aria-label="Examples">
+    <span class="kick">try</span>
+    <button type="button" data-ex="quad">x² − 5x + 6</button>
+    <button type="button" data-ex="wave">a sin(bx + c)</button>
+    <button type="button" data-ex="cubic">x³ − 3x</button>
+    <button type="button" data-ex="recip">1/x</button>
+    <button type="button" data-ex="tan">tan x</button>
+    <button type="button" data-ex="growth">2ˣ and log x</button>
+    <button type="button" data-ex="throw">a thrown ball</button>
+  </div>
+
+  <div class="strip" role="group" aria-label="Band">
+    <span class="kick">band</span>
+    <button type="button" data-band="tiny">Tiny</button>
+    <button type="button" data-band="explorer">Explorer</button>
+    <button type="button" data-band="tinkerer">Tinkerer</button>
+    <button type="button" data-band="modeller" aria-pressed="true">Modeller</button>
+    <button type="button" data-band="theorist">Theorist</button>
+  </div>
+
+  <div id="grapher"></div>
+
+  <div class="help">
+    <h2>How to drive it</h2>
+    <ul>
+      <li><b>Zoom</b> — scroll on the paper. <code>shift</code>+scroll stretches x only, <code>alt</code>+scroll y only.</li>
+      <li><b>Pan</b> — drag the paper. <em>fit</em> asks the curves where they are; <em>square</em> makes one unit of x
+        the same length as one unit of y, so a circle looks like a circle.</li>
+      <li><b>trace</b> — drag along a curve and read the pair off. Arrow keys step, <code>shift</code> steps finer.</li>
+      <li><b>points</b> — marks every root, turning point and crossing in view, found by scanning and bisecting.</li>
+      <li><b>tangent</b> — drag the ring; the slope is a central difference on the sampled curve.</li>
+      <li><b>area</b> — drag either edge, then push the strips from 1 to 200 and watch the sum close on the true value.</li>
+      <li><b>Writing it</b> — <code>2x</code>, <code>3sin x</code> and <code>x(x+1)</code> all work without a <code>×</code>.
+        <code>|x|</code> is the size of x. <code>pi</code> and <code>e</code> are themselves. Angles are in radians.</li>
+    </ul>
+  </div>
+</div>
+
+<script src="../play.js"></script>
+<script src="graph.js"></script>
+<script>
+'use strict';
+
+/* The examples. Each one is here because it breaks a different grapher:
+   the reciprocal and the tangent break naive path-joining, the cubic breaks
+   "a parabola has one turning point", and the ball is the first time the x
+   axis is a distance rather than a number. */
+const EX = {
+  quad:   {view: {x0: -2, x1: 6, y0: -3, y1: 8},
+           curves: [{expr: 'x^2 - 5x + 6'}], marks: true},
+  wave:   {view: {x0: -2 * Math.PI, x1: 2 * Math.PI, y0: -3.4, y1: 3.4}, xUnit: 'pi',
+           curves: [{expr: 'a*sin(b*x + c)'}],
+           sliders: {a: {min: -3, max: 3, step: 0.1, value: 2}, b: {min: -3, max: 3, step: 0.1, value: 1},
+                     c: {min: -3.2, max: 3.2, step: 0.05, value: 0}}},
+  cubic:  {view: {x0: -3, x1: 3, y0: -4.5, y1: 4.5},
+           curves: [{expr: 'x^3 - 3x'}], marks: true},
+  recip:  {view: {x0: -5, x1: 5, y0: -5, y1: 5}, curves: [{expr: '1/x'}]},
+  tan:    {view: {x0: -2 * Math.PI, x1: 2 * Math.PI, y0: -6, y1: 6}, xUnit: 'pi',
+           curves: [{expr: 'tan(x)'}]},
+  growth: {view: {x0: -1, x1: 8, y0: -2, y1: 9},
+           curves: [{expr: '2^x'}, {expr: 'log(x)'}, {expr: 'x'}], marks: true},
+  /* Class 11 projectile: y = x tan θ − g x² / (2 u² cos² θ), θ in degrees so a
+     learner can set it from the slider they expect. */
+  throw:  {view: {x0: 0, x1: 46, y0: 0, y1: 22},
+           curves: [{expr: 'x*tan(T*pi/180) - 9.8*x^2/(2*u^2*(cos(T*pi/180))^2)'}],
+           sliders: {T: {min: 5, max: 85, step: 1, value: 45}, u: {min: 5, max: 30, step: 0.5, value: 20}},
+           marks: true},
+};
+
+let G = null;
+function build(key){
+  const ex = EX[key] || EX.quad;
+  const host = document.getElementById('grapher');
+  host.innerHTML = '';
+  G = Bench.graph(Object.assign({mount: host, onChange: st => { LAST = st; }}, ex));
+  window.PG_GRAPH = G;
+  for (const b of document.querySelectorAll('[data-ex]'))
+    b.setAttribute('aria-pressed', b.getAttribute('data-ex') === key ? 'true' : 'false');
+  CURRENT = key;
+  return G;
+}
+
+let CURRENT = 'quad', LAST = null;
+
+document.addEventListener('click', e => {
+  const ex = e.target.closest('[data-ex]');
+  if (ex) { build(ex.getAttribute('data-ex')); return; }
+  const bd = e.target.closest('[data-band]');
+  if (bd) {
+    document.body.setAttribute('data-band', bd.getAttribute('data-band'));
+    for (const b of document.querySelectorAll('[data-band]'))
+      b.setAttribute('aria-pressed', b === bd ? 'true' : 'false');
+  }
+});
+
+build('quad');
+
+/* What the tests read. `PG_MODEL` is the maths with no DOM attached, exactly as
+   a page that only wants a root would import it. */
+window.PG_MODEL = Bench.graph.math;
+window.PG_STATE = () => (G ? G.state() : null);
+window.PG_EXAMPLE = () => CURRENT;
+window.PG_BUILD = build;
+</script>
+</body>
+</html>

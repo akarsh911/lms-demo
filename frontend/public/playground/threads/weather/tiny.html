@@ -1,0 +1,775 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Which Season Is It</title>
+<meta name="description" content="Class 1–2: turn the year wheel and watch the sky and the tree change through five seasons. Dress Chintu for the sun, the rain and the cold.">
+<link rel="icon" href="../../favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600&family=Inter:wght@400;500;600;700&family=Nunito:wght@500;700;800&display=swap">
+<link rel="stylesheet" href="../../play.css">
+<style>
+/* Tiny: the stage is almost the whole page. */
+.pg-main.tiny-main{grid-template-columns:minmax(0,1fr) 250px; padding-top:12px; padding-bottom:12px}
+.tiny-main .pg-stage{align-self:start; min-height:0}
+.pg-intro{display:flex; align-items:baseline; gap:18px; flex-wrap:wrap; padding-top:12px}
+.pg-intro p{margin:0}
+#stage{background:#8fd3ff}
+#wheelHit{cursor:grab}
+#wheelHit.dragging{cursor:grabbing}
+.itemHit{cursor:grab}
+.itemHit.dragging{cursor:grabbing}
+#chintuHit, #wishHit, #hubHit{cursor:pointer}
+svg [tabindex]:focus{outline:none}
+svg [tabindex]:focus-visible{outline:none; stroke:#ffd84a; stroke-width:4; stroke-dasharray:8 8}
+.fade{transition:opacity .5s}
+.hear{width:100%; min-height:76px; font-size:24px; font-family:var(--font-head); border-radius:var(--radius)}
+.hear .ic{font-size:30px}
+.finds-card h3{display:flex; align-items:center; gap:8px}
+.seasons{display:grid; grid-template-columns:repeat(5,1fr); gap:4px; margin-top:4px}
+.seasons svg{width:100%; height:auto; display:block}
+@media (max-width:980px){ .pg-main.tiny-main{grid-template-columns:1fr} }
+</style>
+</head>
+<body>
+<header class="pg-top"></header>
+
+<div class="pg-intro">
+  <h1>Which season is it?</h1>
+  <p>Turn the year wheel. Dress Chintu for the sun, the rain and the cold.</p>
+</div>
+
+<main class="pg-main tiny-main">
+  <section class="pg-stage" id="stageWrap">
+    <svg id="stage" viewBox="0 0 1000 640" role="img" aria-label="Chintu stands in his garden next to a tree. A year wheel with the months turns the seasons. A row of clothes waits on a shelf: drag or tap them to dress Chintu."></svg>
+  </section>
+
+  <aside class="pg-side">
+    <button class="btn primary hear" id="hear" aria-label="Hear what to do"><span class="ic">🔊</span> Hear it</button>
+    <div class="card finds-card"><h3>⭐ Found</h3><div id="finds"></div></div>
+    <div class="card"><h3>🗓️ Seasons</h3><div class="seasons" id="seasonsSeen" aria-label="Seasons Chintu has seen this year"></div></div>
+  </aside>
+</main>
+
+<script src="../../play.js"></script>
+<script>
+'use strict';
+const {$, clamp, lerp, loop, tween, sound, tone, say, track, findings, found,
+       shareState, sharedState, mount, reduced, drag, mulberry32} = Play;
+mount({thread: 'weather', band: 'tiny'});
+
+/* MODEL:start ==================================================================
+   A year in Chintu's town (a town in north India; the numbers are about New Delhi's
+   long-term monthly averages: mean temperature in °C, rain in mm per month).
+   The child never sees a number. Everything on the stage comes from them:
+
+   day d (0..365) → temperature T(d) and rain R(d), by smooth periodic interpolation
+   between the middles of the months.
+
+   The season is READ OFF the weather, the way a child notices it (the book's five
+   seasons: spring, summer, rainy season, autumn, winter):
+       rainy (monsoon)  if R ≥ 90 mm a month
+       winter           else if T ≤ 16 °C
+       summer           else if T ≥ 30 °C, or the days are warming and T ≥ 27 °C
+       spring           else if the days are warming
+       autumn           else (the days are cooling after the rains)
+
+   Chintu's comfort comes from what he wears:
+       feels = T + 4·warmth − (sun hat or umbrella in hot sun ? 4 : 0) − (rain ? 5 : 0)
+       too hot above 31, too cold below 16, and wet if it rains and he has neither an
+       umbrella nor a raincoat. Nothing is ever "wrong": a sweater in summer is funny.
+
+   The tree follows the seasons, smoothed over three weeks either side, so it changes
+   gradually: new leaves and flowers in spring, mangoes in summer, lush in the rains,
+   leaves turning and falling in autumn, thin in winter.
+   ============================================================================ */
+const TEMP = [14.3, 17.5, 22.9, 29.1, 33.1, 33.3, 31.2, 30.1, 29.1, 25.8, 20.1, 15.4];
+const RAIN = [19, 20, 15, 10, 30, 74, 210, 248, 124, 17, 6, 8];
+const MDAYS = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+const YEAR = 365;
+const MSTART = MDAYS.reduce((a, n, i) => (a.push(i ? a[i - 1] + MDAYS[i - 1] : 0), a), []);
+const MID = MSTART.map((s, i) => s + MDAYS[i] / 2);
+const wrapD = d => ((d % YEAR) + YEAR) % YEAR;
+const monthOf = d => { d = wrapD(d); let m = 11; for (let i = 0; i < 12; i++) if (d < MSTART[i] + MDAYS[i]) { m = i; break; } return m; };
+
+/* smooth (cosine) interpolation round the year between month-middle values */
+function interp(tab, d){
+  d = wrapD(d);
+  let i = 11; for (let k = 0; k < 12; k++) if (d >= MID[k]) i = k;
+  const j = (i + 1) % 12;
+  const d0 = MID[i], d1 = j > i ? MID[j] : MID[j] + YEAR, x = d < d0 ? d + YEAR : d;
+  const t = (x - d0) / (d1 - d0), s = (1 - Math.cos(t * Math.PI)) / 2;
+  return tab[i] + (tab[j] - tab[i]) * s;
+}
+const tempAt = d => interp(TEMP, d);
+const rainAt = d => interp(RAIN, d);
+const trendAt = d => tempAt(d + 10) - tempAt(d - 10);
+const RAINY = 90, COLD = 16, HOT = 30, WARM = 27;
+function seasonAt(d){
+  const T = tempAt(d), R = rainAt(d);
+  if (R >= RAINY) return 'monsoon';
+  if (T <= COLD) return 'winter';
+  if (T >= HOT) return 'summer';
+  if (trendAt(d) > 0) return T >= WARM ? 'summer' : 'spring';
+  return 'autumn';
+}
+const SEASONS = ['spring', 'summer', 'monsoon', 'autumn', 'winter'];
+
+const CLOTHES = {
+  sunhat:  {slot: 'head', warmth: 0, shade: true,  dry: false, name: 'a sun hat'},
+  cap:     {slot: 'head', warmth: 1, shade: false, dry: false, name: 'a woolly cap'},
+  sweater: {slot: 'body', warmth: 2, shade: false, dry: false, name: 'a sweater'},
+  raincoat:{slot: 'body', warmth: 1, shade: false, dry: true,  name: 'a raincoat'},
+  muffler: {slot: 'neck', warmth: 1, shade: false, dry: false, name: 'a muffler'},
+  umbrella:{slot: 'hand', warmth: 0, shade: true,  dry: true,  name: 'an umbrella'},
+};
+const ITEM_ORDER = ['sunhat', 'umbrella', 'raincoat', 'sweater', 'cap', 'muffler'];
+const TOO_HOT = 31, TOO_COLD = 16;
+function comfort(d, wearing){
+  const T = tempAt(d), raining = rainAt(d) >= RAINY;
+  const w = wearing.reduce((a, k) => a + CLOTHES[k].warmth, 0);
+  const shade = wearing.some(k => CLOTHES[k].shade);
+  const dry = wearing.some(k => CLOTHES[k].dry);
+  const sunHot = !raining && T >= HOT;
+  const feels = T + 4 * w - (sunHot && shade ? 4 : 0) - (raining ? 5 : 0);
+  const wet = raining && !dry;
+  const mood = wet ? 'wet' : feels > TOO_HOT ? 'hot' : feels < TOO_COLD ? 'cold' : 'happy';
+  return {T, raining, warmth: w, shade, dry, feels, wet, mood};
+}
+/* "Silly clothes": too hot in warm things, or soaked in a sun hat. */
+function silly(c, wearing){ return (c.mood === 'hot' && c.warmth >= 2) || (c.wet && wearing.includes('sunhat')); }
+
+const TREE = {spring: {leaves: .8, tint: 0, flowers: 1, fruit: 0}, summer: {leaves: .9, tint: 0, flowers: 0, fruit: 1},
+              monsoon: {leaves: 1, tint: 0, flowers: 0, fruit: 0}, autumn: {leaves: .5, tint: 1, flowers: 0, fruit: 0},
+              winter: {leaves: .3, tint: .4, flowers: 0, fruit: 0}};
+function treeAt(d){
+  const o = {leaves: 0, tint: 0, flowers: 0, fruit: 0}; let n = 0;
+  for (let k = -21; k <= 21; k += 3) { const t = TREE[seasonAt(d + k)]; for (const p in o) o[p] += t[p]; n++; }
+  for (const p in o) o[p] /= n;
+  return o;
+}
+/* How green the ground is: the rain of the last six weeks. */
+function greenAt(d){ let s = 0; for (let k = 0; k < 42; k += 3) s += rainAt(d - k); return clamp(s / 14 / 160, 0, 1); }
+/* MODEL:end */
+
+/* ---- state: plain data --------------------------------------------------- */
+const S = {d: 14, wearing: [], turned: 0, seen: {}, lastSeason: null, lastMood: null, touched: false};
+const shared = sharedState();
+if (shared) {
+  if (isFinite(+shared.d)) S.d = wrapD(+shared.d);
+  if (Array.isArray(shared.w)) S.wearing = shared.w.filter(k => CLOTHES[k]);
+}
+shareState(() => ({d: Math.round(S.d), w: S.wearing.slice()}));
+
+/* ============================================================================
+   The stage: drawn once, then only patched.
+   ============================================================================ */
+const svg = $('stage');
+const f1 = n => (+n).toFixed(1);
+const TAU = Math.PI * 2;
+const W = {x: 152, y: 154, r: 116};                   // the year wheel
+const CH = {x: 610, y: 528};                          // Chintu's feet
+const TR = {x: 372, y: 512};                          // the tree's foot
+const SHELF = {y: 596, x0: 300, dx: 112};             // the clothes shelf
+const COL = {winter: '#7fb0de', spring: '#f08cbc', summer: '#ffb42a', monsoon: '#3f8fb0', autumn: '#e0783a'};
+const WORD = {winter: 'winter', spring: 'spring', summer: 'summer', monsoon: 'the rainy season', autumn: 'autumn'};
+
+const mix = (a, b, t) => {
+  t = clamp(t, 0, 1);
+  const pa = [1, 3, 5].map(i => parseInt(a.slice(i, i + 2), 16)), pb = [1, 3, 5].map(i => parseInt(b.slice(i, i + 2), 16));
+  return '#' + pa.map((v, i) => Math.round(v + (pb[i] - v) * t).toString(16).padStart(2, '0')).join('');
+};
+
+/* little season icons, centred on 0,0, about 36 across */
+const ICON = {
+  summer: `<circle r="10" fill="#ffd23f" stroke="#e08a00" stroke-width="2.5"/><g stroke="#e08a00" stroke-width="3" stroke-linecap="round">${[0, 1, 2, 3, 4, 5, 6, 7].map(i => { const a = i / 8 * TAU; return `<path d="M${f1(15 * Math.cos(a))} ${f1(15 * Math.sin(a))} L${f1(20 * Math.cos(a))} ${f1(20 * Math.sin(a))}"/>`; }).join('')}</g>`,
+  monsoon: `<path d="M-16 2 a8 8 0 0 1 4 -14 a11 11 0 0 1 20 -2 a8 8 0 0 1 8 16 Z" fill="#eef3f8" stroke="#5a6b7d" stroke-width="2.5" stroke-linejoin="round"/><g stroke="#2f7de1" stroke-width="3" stroke-linecap="round"><path d="M-9 8 l-3 8"/><path d="M0 8 l-3 8"/><path d="M9 8 l-3 8"/></g>`,
+  winter: `<g stroke="#2d5f9a" stroke-width="3" stroke-linecap="round">${[0, 1, 2].map(i => `<g transform="rotate(${i * 60})"><path d="M0 -17 V17"/><path d="M-5 -12 L0 -7 L5 -12 M-5 12 L0 7 L5 12"/></g>`).join('')}</g>`,
+  spring: `<g>${[0, 1, 2, 3, 4].map(i => `<ellipse cx="0" cy="-9" rx="6" ry="9" fill="#ff8fc0" stroke="#d24f8a" stroke-width="2" transform="rotate(${i * 72})"/>`).join('')}<circle r="5.5" fill="#ffd23f" stroke="#e08a00" stroke-width="2"/></g>`,
+  autumn: `<path d="M0 -17 C12 -10 14 6 0 16 C-14 6 -12 -10 0 -17 Z" fill="#f08a3a" stroke="#a84a14" stroke-width="2.5" stroke-linejoin="round"/><path d="M0 -12 V20" stroke="#a84a14" stroke-width="2.5" stroke-linecap="round"/>`,
+};
+
+/* the clothes, drawn at shelf size, centred */
+const ITEM_ART = {
+  sunhat: `<ellipse cx="0" cy="8" rx="40" ry="11" fill="#e9c46a" stroke="#a8792a" stroke-width="3"/><path d="M-22 8 C-22 -22 22 -22 22 8 Z" fill="#f2d27e" stroke="#a8792a" stroke-width="3" stroke-linejoin="round"/><path d="M-21 0 C-8 4 8 4 21 0 L21 7 C8 11 -8 11 -21 7 Z" fill="#e2553f"/>`,
+  umbrella: `<path d="M-40 4 C-38 -30 38 -30 40 4 C33 -3 27 -3 20 4 C13 -3 7 -3 0 4 C-7 -3 -13 -3 -20 4 C-27 -3 -33 -3 -40 4 Z" fill="#2f7de1" stroke="#1d4f99" stroke-width="3" stroke-linejoin="round"/><path d="M-20 4 C-18 -18 -6 -27 0 -27 C-10 -18 -11 -6 -20 4 Z M20 4 C18 -18 6 -27 0 -27 C10 -18 11 -6 20 4 Z" fill="#e2453d"/><path d="M0 -27 V28 q0 8 -8 8 q-7 0 -7 -7" fill="none" stroke="#5e3d20" stroke-width="4" stroke-linecap="round"/>`,
+  raincoat: `<path d="M-16 -30 L16 -30 L32 -16 L28 32 L-28 32 L-32 -16 Z" fill="#ffd21f" stroke="#b58a00" stroke-width="3" stroke-linejoin="round"/><path d="M-16 -30 C-10 -20 10 -20 16 -30" fill="#f0c000" stroke="#b58a00" stroke-width="3"/><path d="M0 -22 V32" stroke="#b58a00" stroke-width="2.5"/><circle cx="-5" cy="-6" r="2.6" fill="#b58a00"/><circle cx="-5" cy="10" r="2.6" fill="#b58a00"/>`,
+  sweater: `<path d="M-18 -30 L18 -30 L40 -14 L34 4 L24 -2 L24 30 L-24 30 L-24 -2 L-34 4 L-40 -14 Z" fill="#c8323a" stroke="#7d1a1f" stroke-width="3" stroke-linejoin="round"/><path d="M-24 6 l6 -6 l6 6 l6 -6 l6 6 l6 -6 l6 6 l6 -6 l6 6" fill="none" stroke="#fff" stroke-width="3" stroke-linejoin="round"/><path d="M-10 -30 C-6 -22 6 -22 10 -30" fill="none" stroke="#7d1a1f" stroke-width="3"/>`,
+  cap: `<path d="M-26 12 C-26 -26 26 -26 26 12 Z" fill="#7b5cd6" stroke="#4b358f" stroke-width="3" stroke-linejoin="round"/><rect x="-28" y="6" width="56" height="12" rx="6" fill="#a58cf0" stroke="#4b358f" stroke-width="3"/><circle cx="0" cy="-22" r="9" fill="#fff" stroke="#b9b0d8" stroke-width="2"/><path d="M-14 -6 v10 M-4 -10 v14 M6 -10 v14 M16 -6 v10" stroke="#9d85ee" stroke-width="3" stroke-linecap="round"/>`,
+  muffler: `<path d="M-34 -14 C-12 -2 12 -2 34 -14 L34 0 C12 12 -12 12 -34 0 Z" fill="#2f9e5b" stroke="#1d6b3b" stroke-width="3" stroke-linejoin="round"/><path d="M14 4 L24 34 L10 36 L4 6 Z" fill="#2f9e5b" stroke="#1d6b3b" stroke-width="3" stroke-linejoin="round"/><path d="M-20 -6 v10 M0 -3 v10 M20 -6 v10 M14 20 l12 -2" stroke="#fff" stroke-width="3" stroke-linecap="round"/>`,
+};
+
+function build(){
+  const rnd = mulberry32(7);
+  /* the tree's leaves, flowers and mangoes: fixed places, only their looks change */
+  let leaves = '', flowers = '', fruit = '';
+  const canopy = [];
+  for (let i = 0; i < 70; i++) {
+    const a = rnd() * TAU, rr = Math.sqrt(rnd());
+    const x = TR.x + Math.cos(a) * 118 * rr, y = TR.y - 250 + Math.sin(a) * 88 * rr;
+    canopy.push([x, y]);
+    leaves += `<circle class="leaf" cx="${f1(x)}" cy="${f1(y)}" r="${f1(18 + rnd() * 10)}" data-k="${rnd().toFixed(3)}"/>`;
+  }
+  for (let i = 0; i < 18; i++) {
+    const [x, y] = canopy[i * 3 + 1];
+    flowers += `<g class="flower" data-k="${(i / 18).toFixed(3)}" transform="translate(${f1(x)} ${f1(y)})">${[0, 1, 2, 3, 4].map(j => `<circle cx="${f1(6 * Math.cos(j / 5 * TAU))}" cy="${f1(6 * Math.sin(j / 5 * TAU))}" r="4.6" fill="#ff8fc0"/>`).join('')}<circle r="3.4" fill="#ffd23f"/></g>`;
+  }
+  for (let i = 0; i < 9; i++) {
+    const [x, y] = canopy[i * 7 + 3];
+    fruit += `<g class="mango" data-k="${(i / 9).toFixed(3)}" transform="translate(${f1(x)} ${f1(y + 14)})"><path d="M0 -12 V-4" stroke="#3a6b2a" stroke-width="2.5"/><ellipse cx="1" cy="6" rx="9" ry="12" fill="#ffb21f" stroke="#c4760a" stroke-width="2"/><ellipse cx="-3" cy="2" rx="3" ry="4" fill="#ffe08a"/></g>`;
+  }
+  /* rain: fixed drops that the loop slides down */
+  let rain = '';
+  for (let i = 0; i < 80; i++) rain += `<path class="drop" d="M0 0 l-5 18" data-x="${f1(rnd() * 1060)}" data-y="${f1(rnd() * 640)}" data-v="${f1(520 + rnd() * 260)}"/>`;
+  /* the wheel: twelve months, each coloured by the season in its middle */
+  let wedges = '', labels = '';
+  for (let m = 0; m < 12; m++) {
+    const a0 = MSTART[m] / YEAR * TAU - Math.PI / 2, a1 = (MSTART[m] + MDAYS[m]) / YEAR * TAU - Math.PI / 2, am = (a0 + a1) / 2;
+    const s = seasonAt(MID[m]);
+    const p = (a, r) => `${f1(W.x + r * Math.cos(a))} ${f1(W.y + r * Math.sin(a))}`;
+    wedges += `<path d="M${W.x} ${W.y} L${p(a0, W.r)} A${W.r} ${W.r} 0 0 1 ${p(a1, W.r)} Z" fill="${COL[s]}" stroke="#fff" stroke-width="3" class="wedge" data-m="${m}"/>`;
+    const lx = W.x + 88 * Math.cos(am), ly = W.y + 88 * Math.sin(am);
+    labels += `<text x="${f1(lx)}" y="${f1(ly + 5)}" text-anchor="middle" font-size="14.5" font-weight="800" fill="#fff" font-family="Nunito, sans-serif" style="paint-order:stroke" stroke="rgba(0,0,0,.28)" stroke-width="3">${MONTHS[m]}</text>`;
+    labels += `<g transform="translate(${f1(W.x + 58 * Math.cos(am))} ${f1(W.y + 58 * Math.sin(am))}) scale(.62)" opacity=".95">${ICON[s]}</g>`;
+  }
+  const shelfItems = ITEM_ORDER.map((k, i) => {
+    const x = SHELF.x0 + i * SHELF.dx;
+    return `<g id="ghost-${k}" transform="translate(${x} ${SHELF.y})" opacity="0"><rect x="-48" y="-38" width="96" height="76" rx="18" fill="none" stroke="#fff" stroke-width="3" stroke-dasharray="7 7"/></g>
+      <g id="item-${k}" transform="translate(${x} ${SHELF.y})"><g id="itemS-${k}">${ITEM_ART[k]}</g></g>`;
+  }).join('');
+  const itemHits = ITEM_ORDER.map((k, i) => `<rect class="itemHit" id="hit-${k}" data-k="${k}" x="${SHELF.x0 + i * SHELF.dx - 52}" y="${SHELF.y - 42}" width="104" height="84" rx="18" fill="transparent" role="button" tabindex="0" aria-label="${CLOTHES[k].name}. Tap or drag it onto Chintu."/>`).join('');
+
+  svg.innerHTML = `
+  <defs>
+    <linearGradient id="gSky" x1="0" y1="0" x2="0" y2="1"><stop id="sky0" offset="0" stop-color="#6fc1ff"/><stop id="sky1" offset="1" stop-color="#d9f1ff"/></linearGradient>
+    <radialGradient id="gSun" cx="40%" cy="38%"><stop offset="0" stop-color="#fff6c8"/><stop offset=".6" stop-color="#ffcf3d"/><stop offset="1" stop-color="#f29a12"/></radialGradient>
+    <radialGradient id="gGlow"><stop offset=".3" stop-color="#ffe27a" stop-opacity=".6"/><stop offset="1" stop-color="#ffe27a" stop-opacity="0"/></radialGradient>
+    <linearGradient id="gMist" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity="0"/><stop offset=".6" stop-color="#fff" stop-opacity=".75"/><stop offset="1" stop-color="#fff" stop-opacity=".2"/></linearGradient>
+    <filter id="soft" x="-20%" y="-20%" width="140%" height="140%"><feDropShadow dx="0" dy="4" stdDeviation="5" flood-color="#000" flood-opacity=".28"/></filter>
+    <clipPath id="clipStage"><rect width="1000" height="640"/></clipPath>
+  </defs>
+  <g clip-path="url(#clipStage)">
+  <rect width="1000" height="640" fill="url(#gSky)"/>
+  <g id="sunG">
+    <circle id="sunGlow" cx="0" cy="0" r="120" fill="url(#gGlow)"/>
+    <g id="sunRays" fill="#ffc83a">${Array.from({length: 12}, (_, i) => { const a = i / 12 * TAU, b = 0.13; return `<path d="M${f1(52 * Math.cos(a - b))} ${f1(52 * Math.sin(a - b))} L${f1(80 * Math.cos(a))} ${f1(80 * Math.sin(a))} L${f1(52 * Math.cos(a + b))} ${f1(52 * Math.sin(a + b))} Z"/>`; }).join('')}</g>
+    <circle r="48" fill="url(#gSun)"/>
+    <circle cx="-15" cy="-6" r="5" fill="#6b3a10"/><circle cx="15" cy="-6" r="5" fill="#6b3a10"/>
+    <path id="sunMouth" d="M-14 10 Q0 22 14 10" fill="none" stroke="#6b3a10" stroke-width="4" stroke-linecap="round"/>
+    <ellipse cx="-26" cy="8" rx="7" ry="4.5" fill="#ff8a5c" opacity=".5"/><ellipse cx="26" cy="8" rx="7" ry="4.5" fill="#ff8a5c" opacity=".5"/>
+  </g>
+  <g id="fluffy" opacity=".9">
+    <g transform="translate(700 120)"><ellipse rx="56" ry="20" fill="#fff"/><circle cx="-18" cy="-14" r="20" fill="#fff"/><circle cx="14" cy="-18" r="24" fill="#fff"/></g>
+    <g transform="translate(380 70) scale(.8)"><ellipse rx="56" ry="20" fill="#fff"/><circle cx="-18" cy="-14" r="20" fill="#fff"/><circle cx="14" cy="-18" r="24" fill="#fff"/></g>
+  </g>
+  <g id="storm" opacity="0">
+    ${[[300, 60, 1.3], [520, 40, 1.6], [760, 70, 1.4], [980, 50, 1.3], [620, 130, 1.1]].map(([x, y, k]) => `<g transform="translate(${x} ${y}) scale(${k})"><ellipse rx="80" ry="30" fill="#7a8796"/><circle cx="-30" cy="-22" r="32" fill="#8793a1"/><circle cx="22" cy="-30" r="38" fill="#8f9ba8"/><ellipse cx="0" cy="12" rx="70" ry="14" fill="#6a7684"/></g>`).join('')}
+  </g>
+  <!-- far hills -->
+  <path id="hills" d="M0 430 C120 360 220 380 320 410 C430 350 560 360 660 405 C780 360 900 370 1000 400 L1000 520 L0 520 Z" fill="#8cc7a0"/>
+  <!-- Chintu's house -->
+  <g transform="translate(880 470)">
+    <rect x="-70" y="-110" width="140" height="110" rx="8" fill="#ffe3b3" stroke="#8a5a2b" stroke-width="4"/>
+    <path d="M-88 -104 L0 -172 L88 -104 Z" fill="#e2553f" stroke="#8f2e22" stroke-width="4" stroke-linejoin="round"/>
+    <rect x="-18" y="-58" width="36" height="58" rx="14" fill="#8a5a2b"/>
+    <rect x="-56" y="-86" width="30" height="28" rx="4" fill="#bfe6ff" stroke="#8a5a2b" stroke-width="3"/>
+    <rect x="26" y="-86" width="30" height="28" rx="4" fill="#bfe6ff" stroke="#8a5a2b" stroke-width="3"/>
+  </g>
+  <!-- the ground -->
+  <path id="ground" d="M0 470 C200 452 420 458 600 466 C780 474 900 462 1000 466 L1000 640 L0 640 Z" fill="#7cc46a"/>
+  <g id="grassTufts" fill="none" stroke-width="4" stroke-linecap="round">${Array.from({length: 22}, (_, i) => { const x = 20 + i * 46 + (i % 3) * 7, y = 490 + (i % 4) * 12; return `<path d="M${x} ${y} l-5 -12 M${x} ${y} l0 -15 M${x} ${y} l6 -12"/>`; }).join('')}</g>
+  <ellipse id="puddle" cx="455" cy="540" rx="80" ry="15" fill="#6fa9d8" opacity="0"/>
+
+  <!-- the tree -->
+  <g id="tree">
+    <path d="M${TR.x - 22} ${TR.y} C${TR.x - 14} ${TR.y - 90} ${TR.x - 18} ${TR.y - 160} ${TR.x - 6} ${TR.y - 230} L${TR.x + 10} ${TR.y - 230} C${TR.x + 18} ${TR.y - 160} ${TR.x + 14} ${TR.y - 90} ${TR.x + 26} ${TR.y} Z" fill="#8a5a2b" stroke="#5e3d20" stroke-width="3"/>
+    <path d="M${TR.x} ${TR.y - 150} C${TR.x - 40} ${TR.y - 190} ${TR.x - 70} ${TR.y - 210} ${TR.x - 90} ${TR.y - 250}" fill="none" stroke="#8a5a2b" stroke-width="12" stroke-linecap="round"/>
+    <path d="M${TR.x + 4} ${TR.y - 170} C${TR.x + 40} ${TR.y - 205} ${TR.x + 70} ${TR.y - 225} ${TR.x + 92} ${TR.y - 262}" fill="none" stroke="#8a5a2b" stroke-width="11" stroke-linecap="round"/>
+    <path d="M${TR.x + 2} ${TR.y - 222} L${TR.x + 4} ${TR.y - 300}" stroke="#8a5a2b" stroke-width="10" stroke-linecap="round"/>
+    <g id="leaves">${leaves}</g>
+    <g id="mangoes">${fruit}</g>
+    <g id="flowers">${flowers}</g>
+    <g id="birds" opacity="0">
+      <g id="bird1" transform="translate(${TR.x - 92} ${TR.y - 262})"><ellipse cx="0" cy="-10" rx="14" ry="11" fill="#3f7fd8"/><circle cx="10" cy="-20" r="8" fill="#3f7fd8"/><circle cx="12" cy="-22" r="2" fill="#fff"/><path d="M17 -20 l7 2 l-7 2 Z" fill="#f29a1f"/><path d="M-12 -10 l-10 -4 l4 8 Z" fill="#2c5fa8"/></g>
+      <g id="bird2" transform="translate(${TR.x + 92} ${TR.y - 268}) scale(-1 1)"><ellipse cx="0" cy="-10" rx="14" ry="11" fill="#e2553f"/><circle cx="10" cy="-20" r="8" fill="#e2553f"/><circle cx="12" cy="-22" r="2" fill="#fff"/><path d="M17 -20 l7 2 l-7 2 Z" fill="#f29a1f"/><path d="M-12 -10 l-10 -4 l4 8 Z" fill="#b8321f"/></g>
+      <g id="notes" fill="#6a3fc2" font-family="Fredoka, sans-serif" font-size="26" font-weight="600"><text id="n1" x="${TR.x - 70}" y="${TR.y - 300}">♪</text><text id="n2" x="${TR.x + 60}" y="${TR.y - 312}">♫</text></g>
+    </g>
+  </g>
+  <g id="falling">${Array.from({length: 7}, (_, i) => `<path class="fall" d="M0 -9 C7 -5 8 4 0 9 C-8 4 -7 -5 0 -9 Z" fill="${['#f08a3a', '#e2b33a', '#c8551f'][i % 3]}" opacity="0"/>`).join('')}</g>
+
+  <!-- the peacock dances in the rain; the frog hops (the book's rainy-season poem) -->
+  <g id="peacock" opacity="0" transform="translate(96 560)">
+    <g id="tail">${Array.from({length: 11}, (_, i) => { const a = -Math.PI + i / 10 * Math.PI; return `<g transform="rotate(${f1(a * 180 / Math.PI + 90)})"><path d="M0 0 L-9 -84 Q0 -96 9 -84 Z" fill="#1f8a70"/><ellipse cx="0" cy="-80" rx="9" ry="11" fill="#2f7de1"/><circle cx="0" cy="-80" r="5" fill="#16305e"/><circle cx="0" cy="-81" r="2.4" fill="#ffd23f"/></g>`; }).join('')}</g>
+    <ellipse cx="0" cy="-16" rx="18" ry="24" fill="#1d5fb8"/>
+    <path d="M2 -34 C0 -50 4 -60 10 -66" stroke="#1d5fb8" stroke-width="10" fill="none" stroke-linecap="round"/>
+    <circle cx="11" cy="-68" r="8" fill="#1d5fb8"/><circle cx="14" cy="-70" r="2" fill="#fff"/><path d="M18 -68 l8 3 l-8 2 Z" fill="#f2b21f"/>
+    <path d="M8 -76 l-2 -10 M11 -77 l0 -11 M14 -76 l3 -10" stroke="#1d5fb8" stroke-width="2"/>
+    <path d="M-6 6 v14 M6 6 v14" stroke="#8a6a3a" stroke-width="3.5" stroke-linecap="round"/>
+  </g>
+  <g id="frog" opacity="0" transform="translate(470 546)">
+    <g id="frogBody"><ellipse cx="0" cy="-12" rx="22" ry="15" fill="#4caf50" stroke="#2e7d32" stroke-width="2.5"/>
+      <circle cx="-10" cy="-26" r="8" fill="#4caf50" stroke="#2e7d32" stroke-width="2.5"/><circle cx="10" cy="-26" r="8" fill="#4caf50" stroke="#2e7d32" stroke-width="2.5"/>
+      <circle cx="-10" cy="-27" r="3.5" fill="#1a1a1a"/><circle cx="10" cy="-27" r="3.5" fill="#1a1a1a"/>
+      <path d="M-9 -10 Q0 -4 9 -10" stroke="#1b5e20" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+      <path d="M-20 -2 l-10 4 M20 -2 l10 4" stroke="#2e7d32" stroke-width="4" stroke-linecap="round"/></g>
+  </g>
+
+  <!-- Chintu -->
+  <g transform="translate(${CH.x} ${CH.y})"><g id="chintu">
+    <ellipse cx="0" cy="2" rx="70" ry="12" fill="#000" opacity=".15"/>
+    <g id="shiver">
+      <g id="umbrellaWorn" opacity="0">
+        <path d="M58 -120 V-318" stroke="#5e3d20" stroke-width="6" stroke-linecap="round"/>
+        <g transform="translate(58 -318) scale(2.5)"><path d="M-40 4 C-38 -30 38 -30 40 4 C33 -3 27 -3 20 4 C13 -3 7 -3 0 4 C-7 -3 -13 -3 -20 4 C-27 -3 -33 -3 -40 4 Z" fill="#2f7de1" stroke="#1d4f99" stroke-width="1.6" stroke-linejoin="round"/><path d="M-20 4 C-18 -18 -6 -27 0 -27 C-10 -18 -11 -6 -20 4 Z M20 4 C18 -18 6 -27 0 -27 C10 -18 11 -6 20 4 Z" fill="#e2453d"/></g>
+      </g>
+      <path d="M-18 -4 L-18 -92 M18 -4 L18 -92" stroke="#c98a5a" stroke-width="20" stroke-linecap="round"/>
+      <path d="M-30 -2 h22 M8 -2 h22" stroke="#6b3a1a" stroke-width="10" stroke-linecap="round"/>
+      <path d="M-36 -118 L36 -118 L40 -78 L4 -78 L0 -90 L-4 -78 L-40 -78 Z" fill="#2c5fa8" stroke="#1d3f73" stroke-width="3" stroke-linejoin="round"/>
+      <path d="M-38 -196 C-44 -170 -42 -140 -38 -112 L38 -112 C42 -140 44 -170 38 -196 C20 -206 -20 -206 -38 -196 Z" fill="#ff8a3d" stroke="#b8561c" stroke-width="3" stroke-linejoin="round"/>
+      <path d="M-10 -196 C-10 -186 10 -186 10 -196" fill="none" stroke="#b8561c" stroke-width="3"/>
+      <path id="armL" d="M-38 -190 C-58 -168 -64 -140 -60 -116" stroke="#c98a5a" stroke-width="17" fill="none" stroke-linecap="round"/>
+      <path id="armR" d="M38 -190 C58 -168 62 -140 58 -120" stroke="#c98a5a" stroke-width="17" fill="none" stroke-linecap="round"/>
+      <g id="sweaterWorn" opacity="0">
+        <path d="M-40 -198 C-46 -170 -44 -140 -40 -108 L40 -108 C44 -140 46 -170 40 -198 C20 -208 -20 -208 -40 -198 Z" fill="#c8323a" stroke="#7d1a1f" stroke-width="3" stroke-linejoin="round"/>
+        <path d="M-40 -130 l8 -8 l8 8 l8 -8 l8 8 l8 -8 l8 8 l8 -8 l8 8 l8 -8 l8 8" fill="none" stroke="#fff" stroke-width="4" stroke-linejoin="round"/>
+        <path d="M-40 -192 C-60 -168 -66 -140 -62 -112 M40 -192 C60 -168 64 -140 60 -116" stroke="#c8323a" stroke-width="22" fill="none" stroke-linecap="round"/>
+        <path d="M-12 -200 C-10 -188 10 -188 12 -200" fill="none" stroke="#7d1a1f" stroke-width="4"/>
+      </g>
+      <g id="raincoatWorn" opacity="0">
+        <path d="M-42 -200 C-50 -160 -52 -110 -50 -70 L50 -70 C52 -110 50 -160 42 -200 C22 -210 -22 -210 -42 -200 Z" fill="#ffd21f" stroke="#b58a00" stroke-width="3" stroke-linejoin="round"/>
+        <path d="M-42 -194 C-62 -168 -68 -140 -64 -112 M42 -194 C62 -168 66 -140 62 -116" stroke="#ffd21f" stroke-width="22" fill="none" stroke-linecap="round"/>
+        <path d="M0 -196 V-70" stroke="#b58a00" stroke-width="3"/><circle cx="-8" cy="-170" r="4" fill="#b58a00"/><circle cx="-8" cy="-140" r="4" fill="#b58a00"/><circle cx="-8" cy="-110" r="4" fill="#b58a00"/>
+        <path d="M-40 -214 C-44 -270 44 -270 40 -214" fill="#ffd21f" stroke="#b58a00" stroke-width="3"/>
+      </g>
+      <circle cx="-60" cy="-112" r="10" fill="#c98a5a"/><circle cx="58" cy="-118" r="10" fill="#c98a5a"/>
+      <!-- head -->
+      <rect x="-9" y="-212" width="18" height="16" fill="#c98a5a"/>
+      <circle cx="-44" cy="-248" r="10" fill="#c98a5a"/><circle cx="44" cy="-248" r="10" fill="#c98a5a"/>
+      <circle cx="0" cy="-250" r="44" fill="#d89a68"/>
+      <circle id="faceTint" cx="0" cy="-250" r="44" fill="#ff4d3d" opacity="0"/>
+      <path id="hair" d="M-44 -256 C-46 -300 46 -300 44 -256 C34 -276 10 -282 -6 -272 C-18 -284 -36 -276 -44 -256 Z" fill="#2a1a10"/>
+      <g id="eyes"><ellipse cx="-16" cy="-252" rx="7" ry="9" fill="#fff"/><ellipse cx="16" cy="-252" rx="7" ry="9" fill="#fff"/>
+        <circle id="pl" cx="-15" cy="-251" r="4.5" fill="#2a1a10"/><circle id="pr" cx="17" cy="-251" r="4.5" fill="#2a1a10"/></g>
+      <g id="eyesShut" opacity="0" stroke="#2a1a10" stroke-width="3.5" fill="none" stroke-linecap="round"><path d="M-23 -252 q7 -6 14 0 M9 -252 q7 -6 14 0"/></g>
+      <path id="browL" d="M-24 -266 q8 -5 16 0" stroke="#2a1a10" stroke-width="3.5" fill="none" stroke-linecap="round"/>
+      <path id="browR" d="M8 -266 q8 -5 16 0" stroke="#2a1a10" stroke-width="3.5" fill="none" stroke-linecap="round"/>
+      <ellipse cx="-28" cy="-234" rx="8" ry="5" fill="#ff7a6a" opacity=".45"/><ellipse cx="28" cy="-234" rx="8" ry="5" fill="#ff7a6a" opacity=".45"/>
+      <path id="mouth" d="M-14 -230 Q0 -216 14 -230" stroke="#6b2a1a" stroke-width="4" fill="none" stroke-linecap="round"/>
+      <g id="mouthHot" opacity="0"><path d="M-12 -232 Q0 -208 12 -232 Z" fill="#7a1f16"/><ellipse cx="0" cy="-219" rx="6" ry="5" fill="#ff7a8a"/></g>
+      <path id="mouthCold" opacity="0" d="M-14 -226 l5 -5 l5 5 l5 -5 l5 5 l5 -5" stroke="#3a4a7a" stroke-width="3.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+      <path id="mouthWet" opacity="0" d="M-12 -222 Q0 -234 12 -222" stroke="#6b2a1a" stroke-width="4" fill="none" stroke-linecap="round"/>
+      <g id="mufflerWorn" opacity="0"><path d="M-30 -214 C-10 -200 10 -200 30 -214 L32 -196 C10 -184 -10 -184 -32 -196 Z" fill="#2f9e5b" stroke="#1d6b3b" stroke-width="3" stroke-linejoin="round"/>
+        <path d="M14 -194 L24 -150 L8 -148 L2 -192 Z" fill="#2f9e5b" stroke="#1d6b3b" stroke-width="3" stroke-linejoin="round"/><path d="M-16 -206 v12 M4 -202 v12 M10 -164 l14 -2" stroke="#fff" stroke-width="3.5" stroke-linecap="round"/></g>
+      <g id="sunhatWorn" opacity="0" transform="translate(0 -284) scale(1.6)">${ITEM_ART.sunhat}</g>
+      <g id="capWorn" opacity="0" transform="translate(0 -282) scale(1.62)">${ITEM_ART.cap}</g>
+      <g id="sweat" opacity="0" fill="#7fd0ff" stroke="#3a8fd0" stroke-width="1.5">
+        <path class="sw" d="M50 -268 q6 10 0 14 q-6 -4 0 -14 Z"/><path class="sw" d="M-52 -258 q6 10 0 14 q-6 -4 0 -14 Z"/><path class="sw" d="M40 -296 q6 10 0 14 q-6 -4 0 -14 Z"/></g>
+      <g id="brr" opacity="0" fill="none" stroke="#9fd0ff" stroke-width="4" stroke-linecap="round"><path d="M-70 -260 q-10 -6 -20 0 M-72 -240 q-12 -4 -22 4 M70 -260 q10 -6 20 0 M72 -240 q12 -4 22 4"/></g>
+      <g id="drips" opacity="0" fill="#5aa9e6">${[[-30, -292], [20, -296], [46, -270], [-48, -262]].map(([x, y]) => `<path class="dp" data-x="${x}" data-y="${y}" d="M0 0 q5 8 0 12 q-5 -4 0 -12 Z"/>`).join('')}</g>
+    </g>
+  </g></g>
+  <g id="bubble" opacity="0" class="fade" pointer-events="none">
+    <rect x="768" y="318" width="190" height="74" rx="30" fill="#fff" filter="url(#soft)"/>
+    <path d="M772 346 L728 352 L776 372 Z" fill="#fff"/>
+    <g id="bubbleArt" transform="translate(863 355)"></g>
+  </g>
+
+  <!-- the rain, over everything outside -->
+  <g id="rain" stroke="#dbeeff" stroke-width="2.6" stroke-linecap="round" opacity="0">${rain}</g>
+  <rect id="mist" x="0" y="330" width="1000" height="200" fill="url(#gMist)" opacity="0" pointer-events="none"/>
+
+  <!-- the clothes shelf -->
+  <g filter="url(#soft)">
+    <rect x="236" y="552" width="752" height="84" rx="22" fill="#b07a45"/>
+    <rect x="236" y="552" width="752" height="14" rx="7" fill="#c9925a"/>
+  </g>
+  ${shelfItems}
+
+  <!-- the year wheel -->
+  <g id="wheel" filter="url(#soft)">
+    <circle cx="${W.x}" cy="${W.y}" r="${W.r + 10}" fill="#fff"/>
+    ${wedges}
+    ${labels}
+    <g id="hand">
+      <path d="M-8 0 L-5 -50 L-14 -50 L0 -70 L14 -50 L5 -50 L8 0 Z" fill="#3a2a1a" stroke="#fff" stroke-width="3" stroke-linejoin="round"/>
+      <path d="M-16 -${W.r + 24} L16 -${W.r + 24} L0 -${W.r - 2} Z" fill="#3a2a1a" stroke="#fff" stroke-width="3" stroke-linejoin="round"/>
+    </g>
+    <circle cx="${W.x}" cy="${W.y}" r="36" fill="#fff" stroke="#3a2a1a" stroke-width="4"/>
+    <g id="hubIcon" transform="translate(${W.x} ${W.y}) scale(1.25)"></g>
+  </g>
+  <g id="wheelHint" pointer-events="none">
+    <path d="M${f1(W.x + 138 * Math.cos(-1.1))} ${f1(W.y + 138 * Math.sin(-1.1))} A138 138 0 0 1 ${f1(W.x + 138 * Math.cos(0.1))} ${f1(W.y + 138 * Math.sin(0.1))}" fill="none" stroke="#fff" stroke-width="7" stroke-linecap="round" stroke-dasharray="2 15"/>
+    <path transform="translate(${f1(W.x + 138 * Math.cos(0.1))} ${f1(W.y + 138 * Math.sin(0.1))}) rotate(${f1(0.1 * 180 / Math.PI + 90)})" d="M-12 -12 L0 2 L12 -12" fill="none" stroke="#fff" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
+    <g id="hintHand"><path transform="scale(1.2)" d="M-6 0 L-6 -34 Q-6 -42 1 -42 Q8 -42 8 -34 L8 -14 L20 -14 Q30 -14 30 -4 L30 16 Q30 30 16 30 L2 30 Q-12 30 -16 18 L-24 4 Q-27 -3 -20 -5 Q-14 -6 -10 2 Z" fill="#fff" stroke="#3a2a1a" stroke-width="3" stroke-linejoin="round"/></g>
+  </g>
+
+  <!-- the "try this" card -->
+  <g id="wish" filter="url(#soft)">
+    <rect x="852" y="14" width="136" height="150" rx="26" fill="#fff"/>
+    <g id="wishArt" transform="translate(920 78)"></g>
+    <g transform="translate(962 142)"><circle r="15" fill="#ff7a2f"/><path d="M-7 -4 h4 l6 -5 v18 l-6 -5 h-4 Z" fill="#fff"/><path d="M6 -5 q4 5 0 10" stroke="#fff" stroke-width="2" fill="none" stroke-linecap="round"/></g>
+  </g>
+  </g>
+
+  <!-- hit targets: they never move -->
+  <circle id="wheelHit" cx="${W.x}" cy="${W.y}" r="${W.r + 14}" fill="transparent" role="slider" tabindex="0" aria-label="The year wheel. Drag round it to move through the months. Arrow keys also turn it." aria-valuemin="0" aria-valuemax="365"/>
+  <rect id="chintuHit" x="${CH.x - 80}" y="${CH.y - 300}" width="160" height="300" rx="30" fill="transparent" role="button" tabindex="0" aria-label="Chintu. Tap him to hear how he feels."/>
+  ${itemHits}
+  <rect id="wishHit" x="852" y="14" width="136" height="150" rx="26" fill="transparent" role="button" tabindex="0" aria-label="What to try next. Tap to hear it."/>
+  `;
+  /* the side panel: the seasons seen so far */
+  $('seasonsSeen').innerHTML = SEASONS.map(s => `<svg viewBox="-24 -24 48 48" id="seen-${s}" aria-label="${s}" style="opacity:.25;filter:grayscale(1)"><circle r="22" fill="${COL[s]}" opacity=".25"/>${ICON[s]}</svg>`).join('');
+}
+build();
+
+/* ---- helpers --------------------------------------------------------------- */
+const $$ = sel => Array.from(svg.querySelectorAll(sel));
+function clientOf(x, y){
+  const m = svg.getScreenCTM(); if (!m) return {x: innerWidth / 2, y: innerHeight / 2};
+  const p = svg.createSVGPoint(); p.x = x; p.y = y; const q = p.matrixTransform(m);
+  return {x: q.x, y: q.y};
+}
+let lastSnd = 0;
+const sfx = (fn, gap = 220) => { const t = performance.now(); if (t - lastSnd < gap) return; lastSnd = t; fn(); };
+const chirp = () => { tone(2200, 0.08, 'sine', 0.05, 0, 2900); tone(2400, 0.08, 'sine', 0.05, 0.12, 3100); };
+const croak = () => { tone(140, 0.16, 'square', 0.05, 0, 110); tone(150, 0.16, 'square', 0.05, 0.22, 115); };
+const brr = () => { for (let i = 0; i < 6; i++) tone(170 + (i % 2) * 25, 0.05, 'square', 0.03, i * 0.06); };
+const phew = () => tone(520, 0.4, 'sine', 0.07, 0, 300);
+const splash = () => tone(900, 0.25, 'triangle', 0.05, 0, 200);
+function squash(el, cx, cy, amt = 0.14, ms = 520){
+  return tween(0, 1, ms, t => {
+    const k = Math.sin(t * Math.PI * 3) * (1 - t) * amt;
+    el.setAttribute('transform', `translate(${cx} ${cy}) scale(${(1 + k).toFixed(3)} ${(1 - k).toFixed(3)}) translate(${-cx} ${-cy})`);
+  }, x => x).then(() => el.removeAttribute('transform'));
+}
+
+/* ---- paint: everything that depends on the state -------------------------- */
+function paint(){
+  const d = S.d, T = tempAt(d), R = rainAt(d), s = seasonAt(d);
+  const heat = clamp((T - 20) / 13, 0, 1), cold = clamp((20 - T) / 6, 0, 1), wetK = clamp((R - 60) / 80, 0, 1);
+  /* sky */
+  $('sky0').setAttribute('stop-color', mix(mix('#6fc1ff', '#9fc4e0', cold), '#6c7a8a', wetK));
+  $('sky1').setAttribute('stop-color', mix(mix(mix('#d9f1ff', '#ffe7a8', heat), '#eef2f4', cold), '#a9b4bf', wetK));
+  $('sunG').setAttribute('transform', `translate(540 ${f1(96 + cold * 50)}) scale(${(0.85 + heat * 0.3).toFixed(3)})`);
+  $('sunG').setAttribute('opacity', (1 - wetK).toFixed(2));
+  $('sunGlow').setAttribute('opacity', (0.3 + heat * 0.7).toFixed(2));
+  $('storm').setAttribute('opacity', wetK.toFixed(2));
+  $('fluffy').setAttribute('opacity', (0.9 * (1 - wetK) * (1 - heat * 0.7)).toFixed(2));
+  $('rain').setAttribute('opacity', R >= RAINY ? 0.9 : 0);
+  $('mist').setAttribute('opacity', (cold * 0.85).toFixed(2));
+  /* ground: dry in the heat, green after rain */
+  const g = greenAt(d);
+  $('ground').setAttribute('fill', mix(mix('#9cc47a', '#d4b46a', heat), '#4fae5a', g));
+  $('hills').setAttribute('fill', mix(mix('#9cc4a6', '#c9b27c', heat), '#5aa36a', g));
+  $('grassTufts').setAttribute('stroke', mix(mix('#6f9a55', '#b08a3a', heat), '#2f8a3a', g));
+  $('puddle').setAttribute('opacity', (wetK * 0.8).toFixed(2));
+  /* the tree */
+  const tr = treeAt(d);
+  const leafCol = mix(mix('#3aa35a', '#9ab83a', tr.tint * 0.5), '#e0782a', clamp(tr.tint * 1.2 - 0.2, 0, 1));
+  for (const el of $$('.leaf')) {
+    const k = +el.dataset.k;
+    const on = k < tr.leaves;
+    el.setAttribute('fill', k < 0.3 ? mix(leafCol, '#2f8a4a', 0.25) : k > 0.7 ? mix(leafCol, '#ffd060', 0.12) : leafCol);
+    el.setAttribute('opacity', on ? 1 : 0);
+  }
+  for (const el of $$('.flower')) el.setAttribute('opacity', +el.dataset.k < tr.flowers ? 1 : 0);
+  for (const el of $$('.mango')) el.setAttribute('opacity', +el.dataset.k < tr.fruit ? 1 : 0);
+  $('birds').setAttribute('opacity', tr.flowers > 0.5 ? 1 : 0);
+  /* animals of the rainy season */
+  $('peacock').setAttribute('opacity', R >= RAINY ? 1 : 0);
+  $('frog').setAttribute('opacity', R >= RAINY ? 1 : 0);
+  /* the wheel */
+  const ang = d / YEAR * 360;
+  $('hand').setAttribute('transform', `translate(${W.x} ${W.y}) rotate(${ang.toFixed(2)})`);
+  if (paint.hub !== s) { $('hubIcon').innerHTML = ICON[s]; paint.hub = s; }
+  $('wheelHit').setAttribute('aria-valuenow', Math.round(d));
+  $('wheelHit').setAttribute('aria-valuetext', `${MONTH_NAMES[monthOf(d)]}: ${WORD[s]}`);
+  /* Chintu */
+  const c = comfort(d, S.wearing);
+  for (const k of ITEM_ORDER) {
+    const on = S.wearing.includes(k);
+    $(k + 'Worn').setAttribute('opacity', on ? 1 : 0);
+    $('ghost-' + k).setAttribute('opacity', on ? 1 : 0);
+    if (drg.k !== k) $('item-' + k).setAttribute('opacity', on ? 0.28 : 1);
+  }
+  const m = c.mood;
+  $('mouth').setAttribute('opacity', m === 'happy' ? 1 : 0);
+  $('mouthHot').setAttribute('opacity', m === 'hot' ? 1 : 0);
+  $('mouthCold').setAttribute('opacity', m === 'cold' ? 1 : 0);
+  $('mouthWet').setAttribute('opacity', m === 'wet' ? 1 : 0);
+  $('faceTint').setAttribute('fill', m === 'cold' ? '#6fa8ff' : '#ff4d3d');
+  $('faceTint').setAttribute('opacity', m === 'hot' ? 0.3 : m === 'cold' ? 0.32 : 0);
+  $('sweat').setAttribute('opacity', m === 'hot' ? 1 : 0);
+  $('brr').setAttribute('opacity', m === 'cold' ? 1 : 0);
+  $('drips').setAttribute('opacity', m === 'wet' ? 1 : 0);
+  $('browL').setAttribute('d', m === 'happy' ? 'M-24 -266 q8 -5 16 0' : 'M-24 -262 q8 -8 16 -6');
+  $('browR').setAttribute('d', m === 'happy' ? 'M8 -266 q8 -5 16 0' : 'M8 -268 q8 2 16 6');
+  $('chintuHit').setAttribute('aria-label', `Chintu. He feels ${({happy: 'just right', hot: 'too hot', cold: 'too cold', wet: 'wet'})[m]}. Tap him.`);
+}
+
+/* ---- the world reacts: seasons, moods and discoveries -------------------- */
+const SEASON_LINE = {
+  winter: 'Winter! Brrr, it is cold.',
+  spring: 'Spring! Flowers bloom and the birds sing.',
+  summer: 'Summer! The sun is shining and it is so hot.',
+  monsoon: 'The rainy season! Pitter patter. The peacock dances and the frog hops.',
+  autumn: 'Autumn! The leaves fall on the ground.',
+};
+const MOOD_LINE = {happy: 'Just right! Thank you!', hot: 'Phew! I am too hot!', cold: 'Brrr! I am so cold!', wet: 'Oh no! I am getting all wet!'};
+function react(quiet){
+  const s = seasonAt(S.d), c = comfort(S.d, S.wearing);
+  if (S.touched) {
+    if (!S.seen[s]) { S.seen[s] = true; paintSeen(); }
+    if (s !== S.lastSeason && S.lastSeason) {
+      Play.sound('pop');
+      if (!quiet) sayLater(SEASON_LINE[s]);
+      if (s === 'monsoon') sfx(croak, 0);
+      if (s === 'spring') sfx(chirp, 0);
+    }
+  }
+  if (c.mood !== S.lastMood && S.lastMood) {
+    if (c.mood === 'hot') sfx(phew, 300); else if (c.mood === 'cold') sfx(brr, 300); else if (c.mood === 'wet') sfx(splash, 300); else sfx(() => Play.sound('chime'), 300);
+    if (!quiet && S.touched) sayLater(MOOD_LINE[c.mood]);
+    showBubble(c.mood);
+    if (c.mood === 'happy') squash($('chintu'), 0, 0, 0.1, 600);
+  }
+  S.lastSeason = s; S.lastMood = c.mood;
+  if (!S.touched) return;
+  const at = clientOf(CH.x, CH.y - 280);
+  if (s === 'winter' && c.mood === 'happy' && c.warmth >= 2) discover('winter', at);
+  if (s === 'summer' && c.mood === 'happy' && c.shade && tempAt(S.d) >= HOT) discover('summer', at);
+  if (s === 'monsoon' && c.mood === 'happy' && c.dry) discover('monsoon', at);
+  if (s === 'spring' && S.turned > 0.05 && treeAt(S.d).flowers > 0.6) discover('spring', clientOf(TR.x, TR.y - 260));
+  if (s === 'autumn' && treeAt(S.d).tint > 0.6) discover('autumn', clientOf(TR.x, TR.y - 260));
+  if (silly(c, S.wearing)) discover('silly', at);
+}
+/* each discovery moves the wish card on */
+function discover(id, at){ const first = Play.discover(id, at); if (first) nextGoalSoon(); return first; }
+/* voice lines queue politely: a new one waits for the last to finish */
+let sayT = 0;
+function sayLater(line){ clearTimeout(sayT); sayT = setTimeout(() => say(line), 350); }
+function paintSeen(){ for (const s of SEASONS) { const el = $('seen-' + s); if (el) { el.style.opacity = S.seen[s] ? 1 : .25; el.style.filter = S.seen[s] ? 'none' : 'grayscale(1)'; } } }
+
+/* a thought bubble shows the mood as a picture */
+const MOOD_ART = {
+  happy: `<path d="M-30 -8 q30 30 60 0" stroke="#2f9e5b" stroke-width="7" fill="none" stroke-linecap="round"/><circle cx="-18" cy="-18" r="5" fill="#2f9e5b"/><circle cx="18" cy="-18" r="5" fill="#2f9e5b"/>`,
+  hot: `<g transform="translate(-40 0) scale(.9)">${ICON.summer}</g><path d="M-6 -16 C20 -26 30 -6 18 8 C8 18 -6 12 -6 -16 Z" fill="#7fd0ff" stroke="#3a8fd0" stroke-width="2.5" transform="translate(30 0)"/>`,
+  cold: `<g transform="translate(-30 0) scale(.9)">${ICON.winter}</g><text x="12" y="10" font-size="28" font-weight="800" fill="#2d5f9a" font-family="Fredoka, sans-serif">brr</text>`,
+  wet: `<g transform="translate(-34 -2) scale(1)">${ICON.monsoon}</g><text x="4" y="12" font-size="30" font-weight="800" fill="#2f7de1" font-family="Fredoka, sans-serif">!</text><g transform="translate(34 -2) scale(.5)">${ITEM_ART.umbrella}</g>`,
+};
+let bubT = 0;
+function showBubble(mood){
+  $('bubbleArt').innerHTML = MOOD_ART[mood];
+  $('bubble').setAttribute('opacity', 1);
+  clearTimeout(bubT); bubT = setTimeout(() => $('bubble').setAttribute('opacity', 0), 2600);
+}
+
+/* ---- the year wheel: an angular drag; where you point is the day ---------- */
+function dayFromPoint(p){
+  const a = Math.atan2(p.x - W.x, -(p.y - W.y));              // clockwise from the top
+  return ((a / TAU) * YEAR + YEAR) % YEAR;
+}
+function setDay(nd){
+  let dd = nd - S.d; if (dd > YEAR / 2) dd -= YEAR; if (dd < -YEAR / 2) dd += YEAR;
+  S.turned += Math.abs(dd) / YEAR;
+  S.d = wrapD(nd);
+  firstTouch();
+  paint(); react();
+}
+function firstTouch(){
+  if (S.touched) return;
+  S.touched = true;
+  $('wheelHint').setAttribute('opacity', 0);
+  hello();
+}
+drag($('wheelHit'), svg, {
+  start(p){ if (Math.hypot(p.x - W.x, p.y - W.y) < 10) return false; setDay(dayFromPoint(p)); },
+  move(p){ if (Math.hypot(p.x - W.x, p.y - W.y) < 8) return; setDay(dayFromPoint(p)); },
+  end(){ track('wheel', {day: Math.round(S.d), season: seasonAt(S.d)}); },
+});
+$('wheelHit').addEventListener('keydown', e => {
+  const k = {ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1}[e.key];
+  if (!k) return;
+  e.preventDefault(); setDay(S.d + k * 10);
+});
+
+/* ---- the clothes: tap to put on or take off, or drag onto Chintu ---------- */
+const drg = {k: null, x0: 0, y0: 0, moved: 0};
+function home(k){ const i = ITEM_ORDER.indexOf(k); return {x: SHELF.x0 + i * SHELF.dx, y: SHELF.y}; }
+function putOn(k){
+  const slot = CLOTHES[k].slot;
+  const off = S.wearing.filter(j => CLOTHES[j].slot === slot && j !== k);
+  S.wearing = S.wearing.filter(j => CLOTHES[j].slot !== slot).concat(k);
+  Play.sound('snap');
+  say(`${CLOTHES[k].name[0].toUpperCase() + CLOTHES[k].name.slice(1)}!`);
+  track('wear', {item: k, off, day: Math.round(S.d)});
+}
+function takeOff(k){ S.wearing = S.wearing.filter(j => j !== k); Play.sound('pop'); track('takeOff', {item: k}); }
+function toggle(k){ firstTouch(); if (S.wearing.includes(k)) takeOff(k); else putOn(k); paint(); react(); }
+for (const k of ITEM_ORDER) {
+  const hit = $('hit-' + k);
+  drag(hit, svg, {
+    start(p){ drg.k = k; drg.x0 = p.x; drg.y0 = p.y; drg.moved = 0; if (!S.wearing.includes(k)) $('item-' + k).setAttribute('opacity', 1); },
+    move(p){
+      if (drg.k !== k) return;
+      drg.moved = Math.max(drg.moved, Math.hypot(p.x - drg.x0, p.y - drg.y0));
+      const h = home(k);
+      $('item-' + k).setAttribute('transform', `translate(${f1(h.x + p.x - drg.x0)} ${f1(h.y + p.y - drg.y0)}) scale(1.15)`);
+      $('item-' + k).setAttribute('opacity', 1);
+    },
+    end(p){
+      if (drg.k !== k) return;
+      drg.k = null;
+      const h = home(k), el = $('item-' + k);
+      const onChintu = p.x > CH.x - 110 && p.x < CH.x + 110 && p.y > CH.y - 330 && p.y < CH.y + 10;
+      if (drg.moved < 12) { el.setAttribute('transform', `translate(${h.x} ${h.y})`); toggle(k); return; }
+      if (onChintu) { el.setAttribute('transform', `translate(${h.x} ${h.y})`); firstTouch(); putOn(k); paint(); react(); return; }
+      /* dropped somewhere else: it floats home, nothing lost */
+      const x1 = h.x + p.x - drg.x0, y1 = h.y + p.y - drg.y0;
+      tween(0, 1, 320, t => el.setAttribute('transform', `translate(${f1(lerp(x1, h.x, t))} ${f1(lerp(y1, h.y, t))})`)).then(() => paint());
+      if (S.wearing.includes(k)) { takeOff(k); paint(); react(); }
+      else Play.sound('boing');
+    },
+  });
+  hit.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(k); } });
+}
+
+/* ---- Chintu, the wish card, the Hear button ------------------------------- */
+function tapChintu(){
+  firstTouch();
+  const c = comfort(S.d, S.wearing);
+  say(c.mood === 'happy' ? `I feel just right. It is ${WORD[seasonAt(S.d)]}!` : MOOD_LINE[c.mood]);
+  showBubble(c.mood);
+  squash($('chintu'), 0, 0, 0.12, 560);
+  Play.sound('boing');
+  track('tapChintu', {mood: c.mood});
+}
+$('chintuHit').addEventListener('click', tapChintu);
+$('chintuHit').addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); tapChintu(); } });
+
+const WISH = {
+  winter: {line: 'Brrr! It is winter. Chintu is cold. Can you give him something warm to wear?', art: `
+    <rect x="-56" y="-50" width="112" height="100" rx="18" fill="#dfeaf2"/><g transform="translate(-28 -18)">${ICON.winter}</g>
+    <g transform="translate(18 14) scale(.8)">${ITEM_ART.sweater}</g>`},
+  spring: {line: 'Turn the year wheel to spring. Can you make the flowers bloom?', art: `
+    <rect x="-56" y="-50" width="112" height="100" rx="18" fill="#dff4ff"/><g transform="translate(-24 -14) scale(1.3)">${ICON.spring}</g>
+    <g transform="translate(22 14)">${ICON.spring}</g><path d="M-54 36 H54" stroke="#4fae5a" stroke-width="12"/>`},
+  summer: {line: 'Turn the wheel to summer. It is hot and sunny! What should Chintu wear?', art: `
+    <rect x="-56" y="-50" width="112" height="100" rx="18" fill="#fff0c2"/><g transform="translate(-24 -18) scale(1.2)">${ICON.summer}</g>
+    <g transform="translate(18 18) scale(.75)">${ITEM_ART.sunhat}</g>`},
+  monsoon: {line: 'Now the rainy season! Keep Chintu dry in the rain.', art: `
+    <rect x="-56" y="-50" width="112" height="100" rx="18" fill="#d6dee6"/><g transform="translate(-24 -16) scale(1.2)">${ICON.monsoon}</g>
+    <g transform="translate(20 14) scale(.62)">${ITEM_ART.umbrella}</g>`},
+  autumn: {line: 'Turn the wheel to autumn. Watch the leaves fall!', art: `
+    <rect x="-56" y="-50" width="112" height="100" rx="18" fill="#ffe9d2"/><g transform="translate(-20 -10) scale(1.3)">${ICON.autumn}</g>
+    <g transform="translate(26 22) rotate(40) scale(.8)">${ICON.autumn}</g>`},
+  silly: {line: 'Something silly! Put a sweater on Chintu in the hot summer. What happens?', art: `
+    <rect x="-56" y="-50" width="112" height="100" rx="18" fill="#ffe4dc"/><g transform="translate(-26 -18)">${ICON.summer}</g>
+    <g transform="translate(18 12) scale(.8)">${ITEM_ART.sweater}</g><text x="-40" y="42" font-size="26" font-weight="800" fill="#e2453d" font-family="Fredoka, sans-serif">?!</text>`},
+};
+const GOALS = ['winter', 'spring', 'summer', 'monsoon', 'autumn', 'silly'];
+const currentGoal = () => GOALS.find(g => !found(g)) || null;
+let shownGoal;
+function paintWish(){
+  const g = currentGoal();
+  if (g === shownGoal) return;
+  shownGoal = g;
+  $('wishArt').innerHTML = g ? WISH[g].art : `<rect x="-56" y="-50" width="112" height="100" rx="18" fill="#fff1c9"/>
+    <path d="M0 -34 L10 -10 L36 -8 L16 8 L22 34 L0 20 L-22 34 L-16 8 L-36 -8 L-10 -10 Z" fill="#ffc53d" stroke="#f29a1f" stroke-width="3" stroke-linejoin="round"/>`;
+  squash($('wishArt').parentNode, 920, 90, 0.12, 500);
+}
+function sayGoal(){
+  const g = currentGoal();
+  say(g ? WISH[g].line : 'Spring, summer, the rainy season, autumn and winter. Five seasons in a year!');
+  squash($('wish'), 920, 90, 0.1, 400);
+  track('hear', {goal: g});
+}
+function nextGoalSoon(ms = 3000){ setTimeout(() => { paintWish(); const g = currentGoal(); if (g) say(WISH[g].line); }, ms); }
+let spokeHello = false;
+function hello(){ if (spokeHello) return; spokeHello = true; say('Hello! I am Chintu. ' + (currentGoal() ? WISH[currentGoal()].line : '')); }
+$('wishHit').addEventListener('click', () => { spokeHello = true; sayGoal(); });
+$('wishHit').addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); spokeHello = true; sayGoal(); } });
+$('hear').addEventListener('click', () => { spokeHello = true; sayGoal(); });
+
+/* ---- little life: rain, falling leaves, dancing, blinking ----------------- */
+let T = 0, blinkT = 2;
+const drops = $$('.drop').map(el => ({el, x: +el.dataset.x, y: +el.dataset.y, v: +el.dataset.v}));
+const falls = $$('.fall').map((el, i) => ({el, t: i / 7}));
+const dripEls = $$('.dp').map(el => ({el, x: +el.dataset.x, y: +el.dataset.y}));
+function idle(dt){
+  T += dt;
+  const R = rainAt(S.d), raining = R >= RAINY, tr = treeAt(S.d), mood = comfort(S.d, S.wearing).mood;
+  const still = reduced();
+  if (raining && !still) for (const q of drops) { q.y += q.v * dt; q.x -= q.v * dt * 0.28; if (q.y > 640) { q.y -= 660; q.x = (q.x + 1060 * 0.37) % 1060; } q.el.setAttribute('transform', `translate(${f1(q.x)} ${f1(q.y)})`); }
+  else if (raining && still && !idle.placed) { for (const q of drops) q.el.setAttribute('transform', `translate(${f1(q.x)} ${f1(q.y)})`); idle.placed = true; }
+  /* falling leaves in autumn */
+  const falling = tr.tint > 0.55 && tr.leaves < 0.8;
+  for (const f of falls) {
+    if (!falling || still) { f.el.setAttribute('opacity', 0); continue; }
+    f.t = (f.t + dt * 0.18) % 1;
+    const x0 = TR.x - 100 + falls.indexOf(f) * 33, y = TR.y - 250 + f.t * 280;
+    const x = x0 + Math.sin(f.t * 9 + falls.indexOf(f)) * 26;
+    f.el.setAttribute('transform', `translate(${f1(x)} ${f1(y)}) rotate(${f1(f.t * 540)})`);
+    f.el.setAttribute('opacity', f.t > 0.92 ? 0 : 1);
+  }
+  if (still) return;
+  /* sun rays breathe */
+  $('sunRays').setAttribute('transform', `rotate(${f1(T * 8)}) scale(${(1 + 0.05 * Math.sin(T * 2.5)).toFixed(3)})`);
+  /* peacock dances, frog hops */
+  if (raining) {
+    $('tail').setAttribute('transform', `scale(${(0.9 + 0.12 * Math.sin(T * 3)).toFixed(3)}) rotate(${f1(6 * Math.sin(T * 2))})`);
+    const hop = Math.max(0, Math.sin(T * 3.2));
+    $('frogBody').setAttribute('transform', `translate(${f1(Math.sin(T * 0.8) * 30)} ${f1(-hop * 34)})`);
+  }
+  if (tr.flowers > 0.5) {
+    $('n1').setAttribute('transform', `translate(0 ${f1(-10 * ((T * 0.7) % 1))})`);
+    $('n2').setAttribute('transform', `translate(0 ${f1(-10 * ((T * 0.7 + 0.5) % 1))})`);
+    $('bird1').setAttribute('transform', `translate(${TR.x - 92} ${f1(TR.y - 262 - Math.abs(Math.sin(T * 5)) * 4)})`);
+  }
+  /* Chintu */
+  blinkT -= dt;
+  const shut = blinkT < 0.13 && blinkT > 0;
+  $('eyes').setAttribute('opacity', shut ? 0 : 1); $('eyesShut').setAttribute('opacity', shut ? 1 : 0);
+  if (blinkT < 0) blinkT = 2 + Math.random() * 3;
+  $('shiver').setAttribute('transform', mood === 'cold' ? `translate(${f1(Math.sin(T * 60) * 2.5)} 0)` : mood === 'happy' ? `translate(0 ${f1(-Math.abs(Math.sin(T * 2.2)) * 3)})` : '');
+  $$('.sw').forEach((el, i) => el.setAttribute('transform', `translate(0 ${f1(((T * 0.9 + i / 3) % 1) * 30)})`));
+  for (const q of dripEls) q.el.setAttribute('transform', `translate(${q.x} ${f1(q.y + ((T * 1.4 + q.x / 50) % 1) * 60)})`);
+  if (!S.touched) {
+    const k = (T * 0.5) % 1, a = -1.1 + 1.2 * k;
+    $('hintHand').setAttribute('transform', `translate(${f1(W.x + 138 * Math.cos(a) + 4)} ${f1(W.y + 138 * Math.sin(a) + 10)})`);
+    $('hintHand').setAttribute('opacity', k > 0.9 ? 0 : 1);
+  }
+  if (tr.flowers > 0.5 && Math.random() < dt * 0.25) sfx(chirp, 1500);
+}
+
+/* ============================================================================
+   Start
+   ============================================================================ */
+findings($('finds'), [
+  {id: 'winter',  icon: '🧣', label: 'Cosy in winter',   say: 'Warm and cosy! In winter we wear sweaters and woolly caps.'},
+  {id: 'spring',  icon: '🌸', label: 'Spring flowers',   say: 'Spring! Flowers bloom and the birds sing.'},
+  {id: 'summer',  icon: '👒', label: 'Shady summer',     say: 'Summer is hot! A hat keeps the sun off Chintu.'},
+  {id: 'monsoon', icon: '☔', label: 'Dry in the rain',  say: 'The rainy season! The umbrella keeps Chintu dry. The peacock dances and the frog hops.'},
+  {id: 'autumn',  icon: '🍂', label: 'Falling leaves',   say: 'Autumn! Leaves fall on the ground.'},
+  {id: 'silly',   icon: '🤪', label: 'Silly clothes!',   say: 'Silly clothes! That is not right for this weather. Ha ha!'},
+], () => { say('You found them all! Spring, summer, the rainy season, autumn and winter. Five seasons in a year!'); paintWish(); });
+
+S.lastSeason = seasonAt(S.d); S.lastMood = comfort(S.d, S.wearing).mood;
+paint(); paintWish(); paintSeen();
+if (shared) { firstTouch(); spokeHello = true; react(true); }
+loop(dt => idle(dt));
+svg.addEventListener('pointerdown', () => { if (S.touched) return; hello(); });
+window.applyFeatures = () => paint();
+window.PG_STATE = () => {
+  const c = comfort(S.d, S.wearing);
+  return Object.assign(JSON.parse(JSON.stringify(S)), {month: MONTHS[monthOf(S.d)], season: seasonAt(S.d), T: tempAt(S.d), rain: rainAt(S.d),
+    mood: c.mood, feels: c.feels, tree: treeAt(S.d), goal: currentGoal()});
+};
+window.PG_MODEL = {TEMP, RAIN, MDAYS, MSTART, MID, tempAt, rainAt, trendAt, seasonAt, comfort, silly, treeAt, greenAt, monthOf, CLOTHES, W, CH, SHELF, ITEM_ORDER};
+</script>
+</body>
+</html>

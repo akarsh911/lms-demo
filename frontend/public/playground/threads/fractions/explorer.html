@@ -1,0 +1,416 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Fraction Wall</title>
+<meta name="description" content="Class 3–5: Gopi's chocolate shop. Drag pieces from the fraction wall to build bars, and fill the customers' orders — halves from quarters, 2/3 against 3/4, a whole from mixed pieces.">
+<link rel="icon" href="../../favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600&family=Nunito:wght@500;700;800&display=swap">
+<link rel="stylesheet" href="../../play.css">
+<style>
+/* Only what this page needs beyond play.css. */
+html{scrollbar-gutter:stable}
+#stageWrap{align-self:start; min-height:0}
+.brick{cursor:grab}
+.brick.dragging{cursor:grabbing}
+.barBrick{cursor:pointer}
+.barBrick:hover rect{filter:brightness(1.08)}
+.missions{list-style:none; margin:0; padding:0; display:grid; gap:8px}
+.missions li{display:grid; grid-template-columns:30px 1fr; gap:8px; align-items:center; font-weight:700; font-size:15px; line-height:1.3; color:var(--ink-2)}
+.missions li i{width:28px; height:28px; border-radius:50%; border:2.5px dashed var(--hair-2); display:grid; place-items:center; font-style:normal; font-size:15px; color:#fff}
+.missions li.done{color:var(--ink)}
+.missions li.done i{border:none; background:var(--good); animation:tickPop .5s var(--spring)}
+.missions li.done span{text-decoration:line-through; text-decoration-color:var(--good); text-decoration-thickness:2px}
+@keyframes tickPop{0%{transform:scale(.3)}100%{transform:scale(1)}}
+.fr{display:inline-flex; flex-direction:column; align-items:center; vertical-align:middle; line-height:1; font-weight:800; font-size:.82em; margin:0 2px}
+.fr b{padding:0 2px}
+.fr b:first-child{border-bottom:2px solid currentColor; padding-bottom:1px}
+.fr b:last-child{padding-top:1px}
+.gopi{font-size:15.5px; font-weight:700; line-height:1.45}
+.note{font-size:13px; color:var(--ink-3); margin:6px 0 0}
+</style>
+</head>
+<body>
+<header class="pg-top"></header>
+
+<div class="pg-intro">
+  <h1>The fraction wall</h1>
+  <p>Gopi sells strawberry chocolate. Every bar on the wall is exactly one whole long, cut into equal pieces.
+     Drag pieces down into Bar A or Bar B to fill the customers’ orders. Tap a piece in a bar to put it back.</p>
+</div>
+
+<main class="pg-main">
+  <section class="pg-stage" id="stageWrap">
+    <svg id="stage" viewBox="0 0 1000 600" role="img" aria-label="A fraction wall of chocolate pieces above two bars you can build"></svg>
+  </section>
+
+  <aside class="pg-side">
+    <div class="card">
+      <div class="kicker">Gopi says</div>
+      <div class="gopi" id="gopiSays">Welcome to my shop! Drag a piece of chocolate down into Bar A.</div>
+    </div>
+    <div class="card">
+      <div class="kicker">Today’s orders</div>
+      <ul class="missions" id="missions"></ul>
+      <div class="row" style="margin-top:10px">
+        <button class="btn sm" id="clearA">Empty Bar A</button>
+        <button class="btn sm" id="clearB">Empty Bar B</button>
+      </div>
+    </div>
+    <div id="poe"></div>
+    <div class="card"><div class="kicker">Discoveries</div><div id="finds"></div></div>
+  </aside>
+</main>
+
+<script src="../../play.js"></script>
+<script>
+'use strict';
+const {$, esc, clamp, drag, sound, say, track, toast, tween, predict, findings, discover, found,
+       shareState, sharedState, mount, reduced} = Play;
+mount({thread: 'fractions', band: 'explorer'});
+
+/* MODEL:start ==================================================================
+   Exact fractions. A bar is a list of pieces; each piece is 1/d of a whole. Its
+   length is the exact sum, kept as a whole-number numerator and denominator in
+   lowest terms (never a decimal, so 1/3 + 1/3 + 1/3 is exactly 1, not 0.999).
+   ============================================================================ */
+function gcd(a, b){ a = Math.abs(a); b = Math.abs(b); while (b) { [a, b] = [b, a % b]; } return a || 1; }
+const lcm = (a, b) => a / gcd(a, b) * b;
+class Fr {
+  constructor(n, d = 1){ if (d === 0) throw new Error('zero denominator'); if (d < 0) { n = -n; d = -d; } const g = gcd(n, d); this.n = n / g; this.d = d / g; }
+  add(o){ return new Fr(this.n * o.d + o.n * this.d, this.d * o.d); }
+  sub(o){ return new Fr(this.n * o.d - o.n * this.d, this.d * o.d); }
+  cmp(o){ return Math.sign(this.n * o.d - o.n * this.d); }
+  eq(o){ return this.n === o.n && this.d === o.d; }
+  /* The same number written with a bigger denominator, if it can be: 3/4 -> 9/12. */
+  over(d){ return d % this.d === 0 ? {n: this.n * d / this.d, d} : null; }
+  toString(){ return this.d === 1 ? String(this.n) : this.n + '/' + this.d; }
+}
+const ZERO = new Fr(0), ONE = new Fr(1);
+/* The length of a bar made of pieces 1/d1, 1/d2, … */
+const total = pieces => pieces.reduce((s, d) => s.add(new Fr(1, d)), ZERO);
+/* Do two bars look different (different pieces) while having the same length? */
+const sameLengthDifferentLook = (a, b) => a.length > 0 && b.length > 0 && total(a).eq(total(b)) &&
+  [...a].sort((x, y) => x - y).join(',') !== [...b].sort((x, y) => x - y).join(',');
+const kinds = pieces => new Set(pieces).size;
+/* MODEL:end */
+
+const KINDS = [1, 2, 3, 4, 5, 6, 8, 10, 12];
+const NAMES = {1: '1 whole', 2: 'halves', 3: 'thirds', 4: 'quarters', 5: 'fifths', 6: 'sixths', 8: 'eighths', 10: 'tenths', 12: 'twelfths'};
+const NAME1 = {1: 'whole', 2: 'half', 3: 'third', 4: 'quarter', 5: 'fifth', 6: 'sixth', 8: 'eighth', 10: 'tenth', 12: 'twelfth'};
+function mix(a, b, t){
+  const pa = [1, 3, 5].map(i => parseInt(a.slice(i, i + 2), 16)), pb = [1, 3, 5].map(i => parseInt(b.slice(i, i + 2), 16));
+  return '#' + pa.map((v, i) => Math.round(v + (pb[i] - v) * t).toString(16).padStart(2, '0')).join('');
+}
+const COL = {}, INK = {};
+KINDS.forEach((d, i) => { COL[d] = mix('#e0567a', '#fbd0dc', i / (KINDS.length - 1)); INK[d] = i < 4 ? '#ffffff' : '#8c1f45'; });
+const fracHTML = f => f.d === 1 ? `<b style="font-weight:800">${f.n}</b>` : `<span class="fr"><b>${f.n}</b><b>${f.d}</b></span>`;
+
+/* ---- state: plain data --------------------------------------------------- */
+const S = {bars: {A: [], B: []}, sel: 'A', missions: {}, compared: false};
+const shared = sharedState();
+if (shared && shared.bars) for (const k of ['A', 'B']) {
+  const list = (shared.bars[k] || []).map(Number).filter(d => KINDS.includes(d));
+  let t = ZERO; S.bars[k] = [];
+  for (const d of list) { const n = t.add(new Fr(1, d)); if (n.cmp(ONE) <= 0) { S.bars[k].push(d); t = n; } }
+}
+shareState(() => ({bars: {A: S.bars.A.slice(), B: S.bars.B.slice()}}));
+
+/* ============================================================================
+   The stage: built once, then patched.
+   ============================================================================ */
+const svg = $('stage');
+const WX = 120, WW = 720;                      // the wall and the bars share one ruler: 1 whole = 720 px
+const WY = 64, RH = 30, RG = 3;               // wall rows
+const RULER = 392;
+const BARS = {A: {y: 404, h: 46}, B: {y: 484, h: 46}};
+const rowY = i => WY + i * (RH + RG);
+
+function brickSVG(d, x, y, w, h, extra = ''){
+  return `<rect x="${x + 1}" y="${y}" width="${w - 2}" height="${h}" rx="6" fill="${COL[d]}" stroke="#b83a60" stroke-opacity=".35" ${extra}/>
+    <rect x="${x + 4}" y="${y + 3}" width="${Math.max(0, w - 8)}" height="${Math.max(0, h * 0.28)}" rx="4" fill="#fff" opacity=".22" pointer-events="none"/>
+    <text x="${x + w / 2}" y="${y + h / 2 + 5.5}" text-anchor="middle" fill="${INK[d]}" font-size="${w < 64 ? 14 : 15.5}" font-weight="800" pointer-events="none">${d === 1 ? '1' : '1/' + d}</text>`;
+}
+function build(){
+  let wall = '';
+  KINDS.forEach((d, i) => {
+    const y = rowY(i), w = WW / d;
+    wall += `<text x="${WX - 12}" y="${y + RH / 2 + 5}" text-anchor="end" fill="#7a3550" font-size="14" font-weight="800">${NAMES[d]}</text>`;
+    for (let k = 0; k < d; k++) wall += `<g class="brick" data-d="${d}" data-k="${k}">${brickSVG(d, WX + k * w, y, w, RH)}</g>`;
+  });
+  /* the ruler: 0 to 1 whole, pink ticks at the quarters */
+  let ruler = `<line x1="${WX}" y1="${RULER}" x2="${WX + WW}" y2="${RULER}" stroke="#1b2a3a" stroke-width="2"/>`;
+  for (let k = 0; k <= 12; k++) { const x = WX + WW * k / 12, big = k % 3 === 0; ruler += `<line x1="${x}" y1="${RULER - (big ? 8 : 4)}" x2="${x}" y2="${RULER}" stroke="#e0567a" stroke-width="${big ? 2.5 : 1.5}"/>`; }
+  ruler += `<text x="${WX}" y="${RULER - 12}" text-anchor="middle" fill="#1b2a3a" font-size="13" font-weight="800">0</text>
+            <text x="${WX + WW}" y="${RULER - 12}" text-anchor="middle" fill="#1b2a3a" font-size="13" font-weight="800">1 whole</text>`;
+  let bars = '', pieces = '';
+  for (const k of ['A', 'B']) {
+    const b = BARS[k];
+    pieces += `<g id="bar${k}"></g>`;
+    bars += `<text x="${WX - 12}" y="${b.y + b.h / 2 + 6}" text-anchor="end" fill="#1b2a3a" font-size="17" font-weight="800" style="font-family:Fredoka,Nunito,sans-serif">Bar ${k}</text>
+      <rect id="slot${k}" class="slot" data-bar="${k}" x="${WX}" y="${b.y}" width="${WW}" height="${b.h}" rx="10" fill="#fff" stroke="#e0567a" stroke-width="2" stroke-dasharray="6 6"/>
+      <text id="empty${k}" x="${WX + WW / 2}" y="${b.y + b.h / 2 + 5}" text-anchor="middle" fill="#d88aa3" font-size="14" font-weight="700" pointer-events="none">drop pieces here</text>
+      <text id="cap${k}" x="${WX}" y="${b.y + b.h + 18}" fill="#44586e" font-size="14" font-weight="700"></text>
+      <g id="tot${k}"></g>`;
+  }
+  svg.innerHTML = `
+  <defs>
+    <pattern id="stripes" width="40" height="40" patternUnits="userSpaceOnUse" patternTransform="rotate(0)"><rect width="20" height="40" fill="#e0567a"/><rect x="20" width="20" height="40" fill="#fff"/></pattern>
+    <linearGradient id="gShop" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff5f8"/><stop offset="1" stop-color="#fde8ef"/></linearGradient>
+  </defs>
+  <rect width="1000" height="600" fill="url(#gShop)"/>
+  <rect x="0" y="0" width="1000" height="26" fill="url(#stripes)"/>
+  <path d="M0 26 ${Array.from({length: 25}, (_, i) => `Q${i * 40 + 20} 42 ${i * 40 + 40} 26`).join(' ')} Z" fill="#e0567a"/>
+  <rect x="370" y="4" width="260" height="34" rx="12" fill="#fff" stroke="#b83a60" stroke-width="2.5"/>
+  <text x="500" y="27" text-anchor="middle" fill="#b83a60" font-size="16" font-weight="800" letter-spacing=".1em" style="font-family:Fredoka,Nunito,sans-serif">GOPI’S CHOCOLATE SHOP</text>
+  <rect x="${WX - 6}" y="${WY - 6}" width="${WW + 12}" height="${rowY(KINDS.length) - WY + 9}" rx="12" fill="#6b3a2a" opacity=".12"/>
+  <g id="wall">${wall}</g>
+  ${ruler}
+  <g id="ends" pointer-events="none"><line id="endA" stroke="#1b2a3a" stroke-width="2" stroke-dasharray="4 5" opacity="0"/><line id="endB" stroke="#1b2a3a" stroke-width="2" stroke-dasharray="4 5" opacity="0"/></g>
+  ${bars}
+  <g id="cmp" opacity="0" pointer-events="none">
+    <rect id="cmpBand" y="${BARS.A.y - 4}" height="${BARS.B.y + BARS.B.h - BARS.A.y + 8}" fill="#2f9e5b" opacity=".16" rx="4"/>
+    <text id="cmpText" x="${WX + WW / 2}" y="582" text-anchor="middle" fill="#1d6b3f" font-size="16" font-weight="800"></text>
+  </g>
+  ${pieces}
+  <g id="gopi" transform="translate(922 214)">
+    <g id="gopiBody">
+      <path d="M-44 70 Q-50 20 0 16 Q50 20 44 70Z" fill="#f28fb0"/>
+      <path d="M-26 40 L26 40 L22 70 L-22 70Z" fill="#fff"/><path d="M-4 50 a5 5 0 0 1 8 0 a5 5 0 0 1 8 6 l-12 10 l-12 -10 a5 5 0 0 1 8 -6z" transform="translate(-4 -2)" fill="#e0567a"/>
+      <ellipse cx="-44" cy="-6" rx="30" ry="36" fill="#9aa7b8"/><ellipse cx="-44" cy="-4" rx="19" ry="25" fill="#f4a6bd"/>
+      <ellipse cx="44" cy="-6" rx="30" ry="36" fill="#9aa7b8"/><ellipse cx="44" cy="-4" rx="19" ry="25" fill="#f4a6bd"/>
+      <circle cx="0" cy="-4" r="38" fill="#aab6c6"/>
+      <path id="trunk" d="M0 8 Q-2 40 16 50 Q26 54 28 44" stroke="#aab6c6" stroke-width="16" fill="none" stroke-linecap="round"/>
+      <path d="M0 8 Q-2 40 16 50" stroke="#8f9cae" stroke-width="2" fill="none" stroke-dasharray="3 6" opacity=".6"/>
+      <g id="eyes"><circle cx="-14" cy="-10" r="6" fill="#1b2a3a"/><circle cx="14" cy="-10" r="6" fill="#1b2a3a"/><circle cx="-12" cy="-12" r="2" fill="#fff"/><circle cx="16" cy="-12" r="2" fill="#fff"/></g>
+      <path id="brows" d="M-20 -22 L-8 -20 M8 -20 L20 -22" stroke="#6b7789" stroke-width="3" stroke-linecap="round" opacity="0"/>
+      <circle cx="-24" cy="4" r="6" fill="#f28fb0" opacity=".55"/><circle cx="24" cy="4" r="6" fill="#f28fb0" opacity=".55"/>
+      <path id="mouth" d="M-12 12 Q-6 20 0 16" stroke="#5a2a3a" stroke-width="3" fill="none" stroke-linecap="round"/>
+      <path d="M-30 -36 Q-40 -64 -16 -62 Q-12 -84 8 -76 Q28 -86 32 -62 Q48 -60 32 -36Z" fill="#fff" stroke="#e2d6dc" stroke-width="2"/>
+      <rect x="-30" y="-42" width="62" height="10" rx="3" fill="#fff" stroke="#e2d6dc" stroke-width="2"/>
+    </g>
+    <text y="104" text-anchor="middle" fill="#7a3550" font-size="16" font-weight="800" style="font-family:Fredoka,Nunito,sans-serif">Gopi</text>
+  </g>
+  <g id="ghost" pointer-events="none" opacity="0"></g>
+  `;
+}
+
+/* ---- paint: bars, captions, totals, comparison ---------------------------- */
+function caption(pieces){
+  if (!pieces.length) return '';
+  const counts = new Map(); for (const d of pieces) counts.set(d, (counts.get(d) || 0) + 1);
+  const parts = [...counts].sort((a, b) => a[0] - b[0]).map(([d, c]) => d === 1 ? (c === 1 ? '1' : c + ' × 1') : c === 1 ? '1/' + d : c + ' × 1/' + d);
+  const t = total(pieces);
+  if (counts.size === 1) { const [[d, c]] = [...counts]; const raw = c + '/' + d; return raw === t.toString() ? `${parts[0]} = ${raw}` : `${parts[0]} = ${raw} = ${t}`; }
+  return parts.join(' + ') + ' = ' + t;
+}
+function fracSVG(x, y, f, size, col){
+  if (f.d === 1) return `<text x="${x - 38}" y="${y + size * 0.35}" text-anchor="start" fill="${col}" font-size="${size * 1.1}" font-weight="800">${f.n === 1 ? '1 whole!' : f.n}</text>`;
+  const w = Math.max(String(f.n).length, String(f.d).length) * size * 0.62 + 8;
+  return `<text x="${x}" y="${y - 4}" text-anchor="middle" fill="${col}" font-size="${size}" font-weight="800">${f.n}</text>
+    <line x1="${x - w / 2}" y1="${y + 1}" x2="${x + w / 2}" y2="${y + 1}" stroke="${col}" stroke-width="2.5" stroke-linecap="round"/>
+    <text x="${x}" y="${y + size * 0.95}" text-anchor="middle" fill="${col}" font-size="${size}" font-weight="800">${f.d}</text>`;
+}
+const barLen = k => total(S.bars[k]);
+function paint(){
+  for (const k of ['A', 'B']) {
+    const b = BARS[k], list = S.bars[k];
+    let x = WX, h = '';
+    list.forEach((d, i) => { const w = WW / d; h += `<g class="barBrick" data-bar="${k}" data-i="${i}">${brickSVG(d, x, b.y + 3, w, b.h - 6)}</g>`; x += w; });
+    $('bar' + k).innerHTML = h;
+    $('empty' + k).setAttribute('opacity', list.length ? 0 : 1);
+    $('slot' + k).setAttribute('stroke-dasharray', S.sel === k ? '' : '6 6');
+    $('slot' + k).setAttribute('stroke-width', S.sel === k ? 3 : 2);
+    $('cap' + k).textContent = caption(list);
+    const t = barLen(k);
+    $('tot' + k).innerHTML = list.length ? `<text x="${WX + WW + 18}" y="${b.y + b.h / 2 + 6}" fill="#1b2a3a" font-size="20" font-weight="800">=</text>` + fracSVG(WX + WW + 70, b.y + b.h / 2 - 2, t, 20, '#b83a60') : '';
+    const endX = WX + WW * t.n / t.d;
+    const e = $('end' + k);
+    e.setAttribute('x1', endX); e.setAttribute('x2', endX); e.setAttribute('y1', BARS.A.y - 8); e.setAttribute('y2', BARS.B.y + BARS.B.h + 6);
+    e.setAttribute('opacity', list.length ? .55 : 0);
+  }
+  /* the comparison: both bars built — how much longer is one than the other? */
+  const a = barLen('A'), bb = barLen('B'), both = S.bars.A.length && S.bars.B.length;
+  if (both) {
+    const c = a.cmp(bb), lo = c <= 0 ? a : bb, hi = c <= 0 ? bb : a;
+    const x0 = WX + WW * lo.n / lo.d, x1 = WX + WW * hi.n / hi.d;
+    $('cmpBand').setAttribute('x', x0 - (c === 0 ? 3 : 0)); $('cmpBand').setAttribute('width', Math.max(6, x1 - x0));
+    $('cmpText').textContent = c === 0 ? `Bar A and Bar B are exactly the same length: ${a} = ${bb}` :
+      `Bar ${c > 0 ? 'A' : 'B'} is longer, by ${hi.sub(lo)} of a bar`;
+    $('cmp').setAttribute('opacity', 1);
+  } else $('cmp').setAttribute('opacity', 0);
+  renderMissions();
+}
+
+/* ---- missions: orders that tick themselves when a bar is right ------------- */
+const MISSIONS = [
+  {id: 'halfq',    text: 'Riya wants <b>half a bar</b>, made only of quarters.'},
+  {id: 'half3',    text: 'Arjun wants <b>half a bar</b>, made from <b>three different kinds</b> of piece.'},
+  {id: 'compare',  text: 'Which is more chocolate, <b>2/3</b> or <b>3/4</b>? Build one in each bar.'},
+  {id: 'whole',    text: 'Dadi wants <b>one whole bar</b> made of <b>mixed</b> pieces.'},
+  {id: 'twelfths', text: 'Make <b>3/4</b> of a bar using only <b>twelfths</b>.'},
+];
+function renderMissions(){
+  $('missions').innerHTML = MISSIONS.map(m => `<li class="${S.missions[m.id] ? 'done' : ''}"><i aria-hidden="true">${S.missions[m.id] ? '✓' : ''}</i><span>${m.text}</span></li>`).join('');
+}
+function gopi(txt, mood){
+  $('gopiSays').innerHTML = txt;
+  const happy = mood === 'happy', oops = mood === 'oops';
+  $('mouth').setAttribute('d', happy ? 'M-14 10 Q-4 26 6 12' : oops ? 'M-10 18 Q-4 10 2 18' : 'M-12 12 Q-6 20 0 16');
+  $('brows').setAttribute('opacity', oops ? 1 : 0);
+  if (happy && !reduced()) {
+    const g = $('gopiBody');
+    tween(0, 1, 500, k => g.setAttribute('transform', `translate(0 ${(-Math.sin(k * Math.PI) * 16).toFixed(1)})`));
+  }
+}
+function tick(id, sayLine){
+  if (S.missions[id]) return false;
+  S.missions[id] = true; renderMissions(); track('mission', {id});
+  return true;
+}
+function check(changed){
+  const at = barScreen(changed);
+  const bars = ['A', 'B'].map(k => ({k, p: S.bars[k], t: barLen(k)}));
+  const HALF = new Fr(1, 2), TT = new Fr(2, 3), TQ = new Fr(3, 4);
+  for (const b of bars) {
+    if (b.p.length && b.p.every(d => d === 4) && b.t.eq(HALF)) { tick('halfq'); discover('halfq', at); }
+    if (b.t.eq(HALF) && kinds(b.p) >= 3) { tick('half3'); discover('half3', at); }
+    if (b.t.eq(ONE) && kinds(b.p) >= 2) { tick('whole'); discover('whole', at); }
+    if (b.p.length && b.p.every(d => d === 12) && b.t.eq(TQ)) { tick('twelfths'); discover('twelfths', at); }
+  }
+  const a = bars[0].t, bb = bars[1].t;
+  if ((a.eq(TT) && bb.eq(TQ)) || (a.eq(TQ) && bb.eq(TT))) {
+    S.compared = true;
+    if (tick('compare')) discover('compare', at);
+    explainCompare();
+  }
+  if (sameLengthDifferentLook(S.bars.A, S.bars.B)) discover('equiv', at);
+}
+function explainCompare(){
+  if (!POE || !POE.locked || POE.explained || !S.compared) return;
+  const TT = new Fr(2, 3), TQ = new Fr(3, 4), L = lcm(TT.d, TQ.d), a = TT.over(L), b = TQ.over(L);
+  POE.explain(`3/4 is longer. Cut both into ${NAME1[L]}s: 2/3 = <b>${a.n}/${L}</b> and 3/4 = <b>${b.n}/${L}</b>, so 3/4 is more by <b>${TQ.sub(TT)}</b> of a bar.`);
+}
+function barScreen(k){
+  if (!k) return null;
+  const m = svg.getScreenCTM(); if (!m) return null;
+  const t = barLen(k), p = svg.createSVGPoint(); p.x = WX + WW * t.n / t.d; p.y = BARS[k].y + BARS[k].h / 2;
+  const r = p.matrixTransform(m); return {x: r.x, y: r.y};
+}
+
+/* ---- adding and removing pieces ------------------------------------------- */
+function addPiece(k, d){
+  const t = barLen(k), n = t.add(new Fr(1, d));
+  if (n.cmp(ONE) > 0) {
+    sound('boing');
+    gopi(`Oops! That piece won’t fit. ${fracHTML(t)} + ${fracHTML(new Fr(1, d))} would make ${fracHTML(n)}, and a bar is only <b>one whole</b> long.`, 'oops');
+    track('tooLong', {bar: k, d});
+    return false;
+  }
+  S.bars[k].push(d); S.sel = k;
+  sound('snap');
+  track('addPiece', {bar: k, d, total: n.toString()});
+  paint();
+  const done = n.eq(ONE);
+  gopi(done ? `Bar ${k} is exactly <b>one whole</b> bar now!` : `Bar ${k} is ${fracHTML(n)} of a bar long.`, done ? 'happy' : null);
+  if (done) sound('chime');
+  check(k);
+  return true;
+}
+function removePiece(k, i){
+  const d = S.bars[k].splice(i, 1)[0];
+  sound('pop'); track('removePiece', {bar: k, d});
+  paint();
+  const t = barLen(k);
+  gopi(S.bars[k].length ? `One ${NAME1[d]} back on the wall. Bar ${k} is ${fracHTML(t)} now.` : `Bar ${k} is empty.`);
+  check(k);
+}
+
+build();
+/* Drag a piece off the wall. The wall piece never moves (it holds the pointer); a ghost follows. */
+const ghost = $('ghost');
+let DR = null;
+for (const el of document.querySelectorAll('#wall .brick')) {
+  const d = +el.dataset.d, k = +el.dataset.k, w = WW / d, x0 = WX + k * w, y0 = rowY(KINDS.indexOf(d));
+  drag(el, svg, {
+    start(p){
+      DR = {d, ox: p.x - x0, oy: p.y - y0, sx: p.x, sy: p.y, moved: false, over: null};
+      ghost.innerHTML = brickSVG(d, 0, 0, w, RH);
+      ghost.setAttribute('transform', `translate(${x0} ${y0})`);
+      ghost.setAttribute('opacity', .92);
+      sound('tick');
+    },
+    move(p){
+      if (!DR) return;
+      if (Math.hypot(p.x - DR.sx, p.y - DR.sy) > 6) DR.moved = true;
+      ghost.setAttribute('transform', `translate(${(p.x - DR.ox).toFixed(1)} ${(p.y - DR.oy).toFixed(1)})`);
+      DR.over = overBar(p);
+      for (const kk of ['A', 'B']) $('slot' + kk).setAttribute('fill', DR.over === kk ? '#ffe3ec' : '#fff');
+    },
+    end(p){
+      if (!DR) return;
+      const target = DR.moved ? overBar(p) : S.sel;       // a tap adds to the chosen bar
+      for (const kk of ['A', 'B']) $('slot' + kk).setAttribute('fill', '#fff');
+      const ok = target ? addPiece(target, DR.d) : false;
+      if (ok || reduced()) ghost.setAttribute('opacity', 0);
+      else {
+        const from = ghost.getAttribute('transform').match(/-?[\d.]+/g).map(Number);
+        tween(0, 1, 260, t => ghost.setAttribute('transform', `translate(${(from[0] + (x0 - from[0]) * t).toFixed(1)} ${(from[1] + (y0 - from[1]) * t).toFixed(1)})`))
+          .then(() => ghost.setAttribute('opacity', 0));
+      }
+      DR = null;
+    },
+  });
+}
+function overBar(p){
+  if (p.x < WX - 60 || p.x > WX + WW + 80) return null;
+  for (const k of ['A', 'B']) { const b = BARS[k]; if (p.y >= b.y - 22 && p.y <= b.y + b.h + 22) return k; }
+  return null;
+}
+/* Tap a piece in a bar to put it back; tap an empty bar to choose it. */
+svg.addEventListener('click', e => {
+  const bb = e.target.closest('.barBrick');
+  if (bb) { removePiece(bb.dataset.bar, +bb.dataset.i); return; }
+  const sl = e.target.closest('.slot');
+  if (sl) { S.sel = sl.dataset.bar; sound('tick'); paint(); gopi(`Bar ${S.sel} is chosen. Tap a piece on the wall to add it here.`); }
+});
+function clearBar(k){ if (!S.bars[k].length) return; S.bars[k] = []; sound('whoosh'); track('clearBar', {bar: k}); paint(); gopi(`Bar ${k} is empty again.`); }
+$('clearA').addEventListener('click', () => clearBar('A'));
+$('clearB').addEventListener('click', () => clearBar('B'));
+
+/* ============================================================================
+   Start
+   ============================================================================ */
+findings($('finds'), [
+  {id: 'halfq',    icon: '🍫', label: 'Two quarters make a half',        hint: 'Riya’s order', say: 'Two quarters make one half!'},
+  {id: 'half3',    icon: '🧩', label: 'Half, three ways at once',          hint: 'Arjun’s order', say: 'Three different pieces, and still exactly one half.'},
+  {id: 'compare',  icon: '⚖️', label: '3/4 is more than 2/3',              hint: 'Build both and compare', say: 'Three quarters is a little bit more than two thirds.'},
+  {id: 'whole',    icon: '⭐', label: 'A whole from mixed pieces',         hint: 'Dadi’s order', say: 'Different pieces, one whole bar!'},
+  {id: 'twelfths', icon: '🔢', label: '9/12 is the same as 3/4',           hint: 'Only twelfths', say: 'Nine twelfths is the same as three quarters.'},
+  {id: 'equiv',    icon: '🟰', label: 'Equivalent fractions',              hint: 'Two bars that look different but are the same length', say: 'Equivalent fractions! They look different, but they are the same amount.'},
+], () => { toast('All six found! Gopi says you can run the shop tomorrow.', 4200); gopi('You found everything! You can run my shop tomorrow.', 'happy'); });
+
+const POE = predict($('poe'), {
+  id: 'two-thirds-three-quarters',
+  q: 'Which is more chocolate: <b>2/3</b> of a bar or <b>3/4</b> of a bar?',
+  options: [
+    {id: 'tt', text: '2/3 is more'},
+    {id: 'tq', text: '3/4 is more', right: true},
+    {id: 'same', text: 'They are the same'},
+  ],
+  confidence: false,
+  onLock(){ say('Now build both bars and see!'); explainCompare(); },
+});
+
+paint();
+check(null);
+say('Welcome to Gopi’s chocolate shop! Drag a piece of chocolate down into a bar.');
+window.PG_STATE = () => ({bars: {A: S.bars.A.slice(), B: S.bars.B.slice()}, totals: {A: barLen('A').toString(), B: barLen('B').toString()}, sel: S.sel, missions: Object.assign({}, S.missions)});
+window.PG_MODEL = {Fr, gcd, lcm, total, sameLengthDifferentLook, kinds};
+window.PG_VIEW = {WX, WW, WY, RH, RG, BARS, KINDS};   // geometry, read-only, for tests
+</script>
+</body>
+</html>

@@ -1,0 +1,286 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Light Through Things</title>
+<meta name="description" content="Class 3: shine a torch through glass, paper, wood and cloth, and see how much light gets through — clearly, partly, or not at all.">
+<link rel="icon" href="../../favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600&family=Nunito:wght@500;700;800&display=swap">
+<link rel="stylesheet" href="../../play.css">
+<style>
+/* Only what this page needs beyond play.css. */
+#stageWrap{align-self:start; min-height:0}
+.missions{list-style:none; margin:0; padding:0; display:grid; gap:7px}
+.missions li{display:grid; grid-template-columns:30px 1fr; gap:8px; align-items:center; font-weight:700; font-size:15px; line-height:1.3; color:var(--ink-2)}
+.missions li i{width:28px; height:28px; border-radius:50%; border:2.5px dashed var(--hair-2); display:grid; place-items:center; font-style:normal; font-size:15px; color:#fff}
+.missions li.done{color:var(--ink)}
+.missions li.done i{border:none; background:var(--good); animation:tickPop .5s var(--spring)}
+.missions li.done span{text-decoration:line-through; text-decoration-color:var(--good); text-decoration-thickness:2px}
+@keyframes tickPop{0%{transform:scale(.3)}100%{transform:scale(1)}}
+.note{font-size:13px; color:var(--ink-3); margin:6px 0 0}
+.matCard{cursor:pointer}
+.matCard.on rect.matBg{stroke:var(--accent); stroke-width:3}
+#torchHit{cursor:grab}
+#torchHit.dragging{cursor:grabbing}
+.sorted{display:grid; gap:5px; font-size:14px; font-weight:700}
+.sorted .row{display:grid; grid-template-columns:24px 1fr auto; gap:8px; align-items:center; padding:4px 6px; border-radius:8px; background:var(--sunk)}
+.sorted b{font-variant-numeric:tabular-nums; color:var(--ink-2); font-size:12.5px}
+</style>
+</head>
+<body>
+<header class="pg-top"></header>
+
+<div class="pg-intro">
+  <h1>Light through things</h1>
+  <p>Turn on the torch and move it closer or further away. Tap a material to test it in the beam: does the light get through clearly, partly, or not at all?</p>
+</div>
+
+<main class="pg-main">
+  <section class="pg-stage" id="stageWrap">
+    <svg id="stage" viewBox="0 0 1000 620" role="img" aria-label="A torch shining through a test slot onto a screen. Drag the torch, and tap a material below to test it."></svg>
+  </section>
+
+  <aside class="pg-side">
+    <div class="card">
+      <div class="kicker">Missions</div>
+      <ul class="missions" id="missionsList"></ul>
+    </div>
+    <div class="card">
+      <div class="kicker">Right now</div>
+      <div id="readout" style="font-size:14.5px; font-weight:700; color:var(--ink); min-height:44px"></div>
+      <p class="note" id="hintNote">Tap "Torch off / on", or drag the torch closer and further away.</p>
+    </div>
+    <div class="card">
+      <div class="kicker">Clearest to darkest, so far</div>
+      <div class="sorted" id="sorted"><p class="note" style="margin:0">Test a few materials to build this list!</p></div>
+    </div>
+    <div class="card"><div class="kicker">Discoveries</div><div id="finds"></div></div>
+  </aside>
+</main>
+
+<script src="../../play.js"></script>
+<script>
+'use strict';
+const {$, esc, clamp, fmt, drag, loop, sound, say, track, toast, findings, discover, found,
+       shareState, sharedState, mount, reduced} = Play;
+mount({thread: 'materials', band: 'explorer'});
+
+/* MODEL:start ==================================================================
+   Each material has a fixed transmittance T: the fraction of the torch's light
+   that gets through it (glass lets almost all of it through; wood lets almost
+   none). The torch's own light at the slot depends on how close it is —
+   nearer is brighter — and whether it is switched on at all. What actually
+   lands on the screen is computed fresh every time, from both of those:
+       screen brightness = torch light at the slot x material's T
+   A coloured material (like red cellophane) also tints whatever light gets
+   through it, the way a coloured torch cover would.
+   Nothing about "what the screen looks like for wood" is stored anywhere —
+   only T, the torch's distance, and whether it is on.
+   ============================================================================ */
+const MATERIALS = [
+  {id: 'glass',  name: 'Window glass',        T: 0.95, cat: 'transparent', tint: null,      col: '#bfe3ee'},
+  {id: 'bottle', name: 'Plastic bottle',       T: 0.85, cat: 'transparent', tint: null,      col: '#cdeaf0'},
+  {id: 'butter', name: 'Butter paper',         T: 0.45, cat: 'translucent', tint: null,      col: '#f3e8c9'},
+  {id: 'cloth',  name: 'Cotton cloth',         T: 0.30, cat: 'translucent', tint: null,      col: '#e7dccb'},
+  {id: 'cello',  name: 'Red cellophane',       T: 0.35, cat: 'translucent', tint: '#e0453a', col: '#e79a94'},
+  {id: 'wood',   name: 'Wood plank',           T: 0.02, cat: 'opaque',      tint: null,      col: '#a9793f'},
+  {id: 'spoon',  name: 'Steel spoon',          T: 0.00, cat: 'opaque',      tint: null,      col: '#aeb6bd'},
+  {id: 'card',   name: 'Cardboard',            T: 0.01, cat: 'opaque',      tint: null,      col: '#c9a877'},
+];
+const NEAR = 0.12, FAR = 1;                                       /* torch position: fraction 0 (at the slot) to 1 (far away) */
+const torchLight = frac => 1 - 0.7 * clamp((frac - NEAR) / (FAR - NEAR), 0, 1);   /* nearer is brighter */
+const screenBrightness = (frac, on, T) => (on ? torchLight(frac) : 0) * T;
+const categoryOf = T => T >= 0.75 ? 'transparent' : T >= 0.12 ? 'translucent' : 'opaque';
+const seesThrough = T => T >= 0.75 ? 'clearly' : T >= 0.12 ? 'partly' : 'not at all';
+/* MODEL:end */
+
+/* ---- state: plain data --------------------------------------------------- */
+const S = {torchFrac: 0.55, torchOn: true, current: null, tested: {}, missions: {}};
+const shared = sharedState();
+if (shared) { S.torchFrac = clamp(+shared.f, NEAR, FAR) || 0.55; if (MATERIALS.some(m => m.id === shared.m)) S.current = shared.m; }
+shareState(() => ({f: +S.torchFrac.toFixed(2), m: S.current}));
+
+/* ---- missions -------------------------------------------------------------- */
+const MISSIONS = [
+  {id: 'see-clear',  text: 'Test something you can see through clearly'},
+  {id: 'see-some',   text: 'Test something you can only see through partly'},
+  {id: 'see-none',   text: 'Test something you cannot see through at all'},
+  {id: 'colour',     text: 'Test the red cellophane — what happens to the light?'},
+  {id: 'tested-all', text: 'Test every material on the shelf'},
+];
+function renderMissions(){
+  $('missionsList').innerHTML = MISSIONS.map(m => {
+    const done = S.missions[m.id];
+    return `<li class="${done ? 'done' : ''}"><i aria-hidden="true">${done ? '✓' : ''}</i><span>${esc(m.text)}</span></li>`;
+  }).join('');
+}
+function tickMission(id, line, at){
+  if (S.missions[id]) return;
+  S.missions[id] = true;
+  renderMissions();
+  sound('chime');
+  track('mission', {id});
+  if (line && !found(id)) say(line);
+  discover(id, at);
+}
+
+/* ============================================================================
+   The stage: built once, then patched.
+   ============================================================================ */
+const svg = $('stage');
+const TORCH_X0 = 130, TORCH_X1 = 560, TORCH_Y = 300;
+const SLOT_X = 610, SCREEN_X = 900;
+const CARDS_Y = 480, CARD_W = 90, CARD_H = 100, CARD_GAP = 8;
+
+function torchX(){ return TORCH_X0 + (1 - (S.torchFrac - NEAR) / (FAR - NEAR)) * (TORCH_X1 - TORCH_X0); }
+function buildStage(){
+  let cards = '';
+  MATERIALS.forEach((m, i) => {
+    const x = 40 + i * (CARD_W + CARD_GAP);
+    cards += `<g class="matCard" data-m="${m.id}" transform="translate(${x} ${CARDS_Y})" role="button" aria-label="Test ${esc(m.name)}">
+      <rect class="matBg" width="${CARD_W}" height="${CARD_H}" rx="12" fill="${m.col}" stroke="#8a94a6" stroke-width="1.5"/>
+      <rect class="matHit" width="${CARD_W}" height="${CARD_H}" fill="transparent"/>
+      <text x="${CARD_W / 2}" y="${CARD_H - 14}" text-anchor="middle" font-size="11.5" font-weight="800" fill="#2b3a4a">${esc(m.name)}</text>
+      <text id="tick-${m.id}" x="${CARD_W - 12}" y="20" text-anchor="middle" font-size="16" opacity="0">✓</text>
+    </g>`;
+  });
+  svg.innerHTML = `
+  <defs>
+    <radialGradient id="gBeam" cx="0%" cy="50%"><stop offset="0" stop-color="#fff6c8" stop-opacity=".95"/><stop offset="1" stop-color="#fff6c8" stop-opacity="0"/></radialGradient>
+    <radialGradient id="gGlow" cx="50%" cy="50%"><stop id="glowStop0" offset="0" stop-color="#fff6c8" stop-opacity=".95"/><stop id="glowStop1" offset="1" stop-color="#fff6c8" stop-opacity="0"/></radialGradient>
+  </defs>
+  <rect width="1000" height="620" fill="#152238"/>
+  <text x="500" y="40" text-anchor="middle" font-size="18" font-weight="800" fill="#dce6f2" style="font-family:Fredoka,Nunito,sans-serif">Shine the torch through it!</text>
+
+  <!-- the screen / wall -->
+  <rect x="${SCREEN_X - 6}" y="150" width="70" height="300" fill="#26374f" stroke="#3d5573" stroke-width="2"/>
+  <circle id="glow" cx="${SCREEN_X + 29}" cy="${TORCH_Y}" r="90" fill="url(#gGlow)"/>
+  <text x="${SCREEN_X + 29}" y="140" text-anchor="middle" font-size="12.5" font-weight="700" fill="#9fb3c8">SCREEN</text>
+
+  <!-- the slot with the material under test -->
+  <rect x="${SLOT_X - 8}" y="150" width="16" height="330" fill="#1d2b40" stroke="#3d5573" stroke-width="2"/>
+  <text x="${SLOT_X}" y="140" text-anchor="middle" font-size="12.5" font-weight="700" fill="#9fb3c8">TEST SLOT</text>
+  <rect id="sample" x="${SLOT_X - 22}" y="180" width="44" height="270" rx="4" opacity="0"/>
+
+  <!-- the beam -->
+  <path id="beam" fill="url(#gBeam)"/>
+
+  <!-- the torch, on a track -->
+  <line x1="${TORCH_X0}" y1="${TORCH_Y + 60}" x2="${TORCH_X1}" y2="${TORCH_Y + 60}" stroke="#3d5573" stroke-width="3" stroke-dasharray="3 7"/>
+  <text x="${(TORCH_X0 + TORCH_X1) / 2}" y="${TORCH_Y + 84}" text-anchor="middle" font-size="12" fill="#9fb3c8">drag the torch closer or further away</text>
+  <g id="torchG">
+    <rect x="-16" y="-24" width="60" height="48" rx="10" fill="#e8b23d" stroke="#a9762a" stroke-width="3"/>
+    <rect x="40" y="-16" width="16" height="32" rx="4" fill="#f5d98a"/>
+    <circle id="torchBulb" cx="52" cy="0" r="10" fill="#fff6c8"/>
+    <rect x="-30" y="-9" width="16" height="18" rx="4" fill="#a9762a"/>
+  </g>
+  <rect id="torchHit" x="-40" y="${TORCH_Y - 34}" width="120" height="68" fill="transparent" role="slider" aria-label="Drag the torch"/>
+  <g id="onoffG" transform="translate(70 ${TORCH_Y - 70})">
+    <rect id="onoffBg" width="128" height="38" rx="19" fill="#2f9e5b"/>
+    <text id="onoffText" x="64" y="25" text-anchor="middle" font-size="14" font-weight="800" fill="#fff">Torch: ON</text>
+  </g>
+
+  <!-- the material shelf -->
+  <text x="40" y="${CARDS_Y - 16}" font-size="13" font-weight="700" fill="#dce6f2">TAP TO TEST</text>
+  ${cards}
+  `;
+  document.querySelectorAll('.matCard').forEach(el => el.addEventListener('click', () => test(el.dataset.m)));
+  $('onoffG').addEventListener('click', () => { S.torchOn = !S.torchOn; sound('tick'); track('torch', {on: S.torchOn}); paint(); });
+}
+buildStage();   // build the stage once, before anything (drag handlers below) can reach into it
+function paintBeam(){
+  const tx = torchX(), sample = S.current ? MATERIALS.find(m => m.id === S.current) : null;
+  $('torchG').setAttribute('transform', `translate(${tx.toFixed(1)} ${TORCH_Y})`);
+  $('torchHit').setAttribute('x', tx - 40);
+  $('torchBulb').setAttribute('opacity', S.torchOn ? 1 : 0.25);
+  const light = S.torchOn ? torchLight(S.torchFrac) : 0;
+  /* beam: a wedge from the torch to the slot */
+  const bx0 = tx + 62, bh0 = 8 + 4 * light, bh1 = 30 + 20 * light;
+  $('beam').setAttribute('d', `M${bx0} ${TORCH_Y - bh0} L${SLOT_X} ${TORCH_Y - bh1} L${SLOT_X} ${TORCH_Y + bh1} L${bx0} ${TORCH_Y + bh0}Z`);
+  $('beam').setAttribute('opacity', light);
+  /* the sample in the slot */
+  if (sample) {
+    $('sample').setAttribute('opacity', 0.92);
+    $('sample').setAttribute('fill', sample.col);
+  } else $('sample').setAttribute('opacity', 0);
+  /* the glow on the screen: brightness x colour, computed fresh */
+  const T = sample ? sample.T : 1, bTot = clamp(screenBrightness(S.torchFrac, S.torchOn, T), 0, 1);
+  const col = (sample && sample.tint && T > 0) ? sample.tint : '#fff6c8';
+  $('glowStop0').setAttribute('stop-color', col); $('glowStop0').setAttribute('stop-opacity', clamp(bTot * 1.05, 0, 1).toFixed(2));
+  $('glowStop1').setAttribute('stop-color', col);
+  $('glow').setAttribute('r', 40 + 70 * bTot);
+  document.querySelectorAll('.matCard').forEach(el => el.classList.toggle('on', el.dataset.m === S.current));
+  paintReadout(sample, bTot);
+}
+function paintReadout(sample, bTot){
+  if (!sample) { $('readout').textContent = S.torchOn ? 'No material in the slot yet — pick one below!' : 'The torch is off.'; return; }
+  const pct = Math.round(sample.T * 100);
+  $('readout').innerHTML = `<b>${esc(sample.name)}</b> is <b>${sample.cat}</b>: you can see through it <b>${seesThrough(sample.T)}</b>.
+    ${S.torchOn ? `The screen is getting ${Math.round(bTot * 100)}% as bright as the bare torch (the material lets ${pct}% of the light through).` : 'Turn the torch on to see!'}`;
+}
+function paintSorted(){
+  const list = Object.keys(S.tested).map(id => MATERIALS.find(m => m.id === id)).sort((a, b) => b.T - a.T);
+  if (!list.length) { $('sorted').innerHTML = '<p class="note" style="margin:0">Test a few materials to build this list!</p>'; return; }
+  $('sorted').innerHTML = list.map((m, i) => `<div class="row"><span>${i + 1}</span><span>${esc(m.name)}</span><b>${Math.round(m.T * 100)}%</b></div>`).join('');
+}
+function paint(){ paintBeam(); paintSorted(); }
+
+/* ---- interaction ------------------------------------------------------------ */
+function test(id){
+  S.current = id; sound('tick');
+  const m = MATERIALS.find(x => x.id === id);
+  S.tested[id] = true;
+  $('tick-' + id).setAttribute('opacity', 1);
+  track('test', {material: id, T: m.T});
+  paint();
+  check(m);
+}
+function check(m){
+  const at = (() => { const r = svg.getBoundingClientRect(); return {x: r.left + (SCREEN_X + 29) / 1000 * r.width, y: r.top + TORCH_Y / 620 * r.height}; })();
+  if (m.cat === 'transparent') tickMission('see-clear', `${m.name} is transparent — you can see through it clearly!`, at);
+  if (m.cat === 'translucent') tickMission('see-some', `${m.name} is translucent — you can see through it a little.`, at);
+  if (m.cat === 'opaque') tickMission('see-none', `${m.name} is opaque — no light gets through at all.`, at);
+  if (m.id === 'cello') tickMission('colour', 'The light coming through is red now — a coloured material tints the light!', at);
+  if (MATERIALS.every(x => S.tested[x.id])) tickMission('tested-all', 'You tested everything on the shelf — and sorted them from clearest to darkest!', at);
+}
+
+drag($('torchHit'), svg, {
+  start(){ sound('tick'); },
+  move(p){
+    const frac = clamp(1 - (p.x - TORCH_X0) / (TORCH_X1 - TORCH_X0), NEAR, FAR);
+    S.torchFrac = NEAR + (FAR - NEAR) * clamp((frac - NEAR) / (FAR - NEAR), 0, 1);
+    paint();
+  },
+  end(){ track('torchDrag', {frac: +S.torchFrac.toFixed(2)}); },
+});
+$('torchHit').addEventListener('keydown', e => {
+  const k = {ArrowRight: 1, ArrowUp: -1, ArrowLeft: -1, ArrowDown: 1}[e.key]; if (!k) return;
+  e.preventDefault(); S.torchFrac = clamp(S.torchFrac + k * 0.05, NEAR, FAR); paint();
+});
+
+/* the torch's beam shimmers gently; skipped under reduced motion */
+if (!reduced()) loop((dt, t) => { $('torchBulb').setAttribute('r', (9.5 + Math.sin(t * 6) * 0.8).toFixed(2)); });
+
+/* ============================================================================
+   Start
+   ============================================================================ */
+findings($('finds'), [
+  {id: 'see-clear',  icon: '🔍', label: 'Transparent: see through clearly', hint: 'Test the glass or the plastic bottle'},
+  {id: 'see-some',   icon: '🌫️', label: 'Translucent: see through partly', hint: 'Test the butter paper or the cloth'},
+  {id: 'see-none',   icon: '🚫', label: 'Opaque: no light gets through', hint: 'Test the wood or the spoon'},
+  {id: 'colour',     icon: '🔴', label: 'Coloured light', hint: 'Test the red cellophane'},
+  {id: 'tested-all', icon: '🏆', label: 'Sorted them all, clearest to darkest', hint: 'Test every material on the shelf'},
+], () => toast('You tested everything! Glass, plastic, paper, cloth, wood and metal all let through different amounts of light.', 4400));
+
+renderMissions();
+paint();
+say('Turn on the torch, and tap a material to see how much light gets through it.');
+
+window.PG_STATE = () => JSON.parse(JSON.stringify(S));
+window.PG_MODEL = {MATERIALS, torchLight, screenBrightness, categoryOf, seesThrough, NEAR, FAR};
+</script>
+</body>
+</html>

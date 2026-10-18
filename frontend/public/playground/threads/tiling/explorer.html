@@ -1,0 +1,376 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tangrams And Tiles</title>
+<meta name="description" content="Class 3 and 5: fit tangram-style pieces back into a square (and a diamond), then find out why triangles, squares and hexagons tile a floor and pentagons never do.">
+<link rel="icon" href="../../favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600&family=Inter:wght@400;500;600;700&family=Nunito:wght@500;700;800&family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="../../play.css">
+<style>
+/* Only what this page needs beyond play.css. */
+.pg-stage{min-height:0}
+.tabs{display:flex; gap:4px; padding:10px 12px 0; border-bottom:1px solid var(--hair); background:var(--card); flex-wrap:wrap}
+.tab{border:1px solid transparent; border-bottom:none; background:none; padding:8px 14px; border-radius:10px 10px 0 0; cursor:pointer;
+  font-family:"Fredoka",var(--font-head); font-size:16px; color:var(--ink-3); margin-bottom:-1px}
+.tab[aria-selected="true"]{background:var(--card); border-color:var(--hair); color:var(--ink); border-bottom:1px solid var(--card)}
+.big{font-family:"Fredoka",var(--font-head); font-size:20px; font-weight:600; line-height:1.3}
+.note{font-size:12.5px; color:var(--ink-3); margin:6px 0 0}
+.say{font-size:14px; margin:6px 0 0; padding:8px 10px; border-radius:var(--radius-sm); background:var(--sunk)}
+.chips{display:flex; flex-wrap:wrap; gap:6px; margin:4px 0}
+.chip{border:1px solid var(--hair-2); background:var(--card); border-radius:99px; padding:6px 12px; font-size:13px; cursor:pointer; font-weight:600; color:var(--ink-2)}
+.chip[aria-pressed="true"]{background:var(--accent-soft); border-color:var(--accent); color:var(--ink)}
+.stepBtn{min-height:36px; min-width:36px; border-radius:99px; border:1px solid var(--hair-2); background:var(--card); font-size:18px; font-weight:700; cursor:pointer; color:var(--ink)}
+.stepBtn:disabled{opacity:.4; cursor:default}
+.stepRow{display:flex; align-items:center; gap:10px; margin:6px 0}
+.stepRow .n{min-width:24px; text-align:center; font-weight:700; font-variant-numeric:tabular-nums}
+.piece{cursor:grab} .piece.dragging{cursor:grabbing}
+svg text{pointer-events:none}
+</style>
+</head>
+<body>
+<header class="pg-top"></header>
+
+<div class="pg-intro">
+  <h1>Tangrams and tiles</h1>
+  <p>Fill a shape with tangram-style pieces, then tile a floor with no gaps.</p>
+</div>
+
+<main class="pg-main wide-side">
+  <section class="pg-stage" id="stageWrap">
+    <div class="tabs" role="tablist">
+      <button class="tab" role="tab" id="tabTan" aria-selected="true">The tangram pieces</button>
+      <button class="tab" role="tab" id="tabTile" aria-selected="false">Tiling the floor</button>
+    </div>
+    <svg id="stageA" viewBox="0 0 1000 560" role="img" aria-label="Four triangle pieces cut from a square. Drag them onto the dashed outline; tap a piece to turn it."></svg>
+    <svg id="stageB" viewBox="0 0 1000 560" role="img" aria-label="Copies of a regular shape placed round a point, to see whether they leave a gap or overlap."></svg>
+  </section>
+
+  <aside class="pg-side">
+    <div id="poe"></div>
+
+    <div class="card" id="cardA">
+      <div class="kicker">The tangram pieces</div>
+      <div class="chips">
+        <button class="chip" id="targetSquare" aria-pressed="true">Fill the square</button>
+        <button class="chip" id="targetDiamond" aria-pressed="false">Fill the diamond</button>
+      </div>
+      <div class="big num" id="aBig">0% covered</div>
+      <p class="note">Drag a piece onto the outline. Tap a piece to turn it a quarter turn.</p>
+      <p class="say" id="aSay"></p>
+      <div class="row" style="margin-top:6px"><button class="btn sm" id="aReset">Scatter the pieces again</button></div>
+    </div>
+
+    <div class="card" id="cardB" hidden>
+      <div class="kicker">Tiling the floor</div>
+      <div class="chips" role="group" aria-label="Which shape">
+        <button class="chip" data-n="3" aria-pressed="true">Triangle</button>
+        <button class="chip" data-n="4" aria-pressed="false">Square</button>
+        <button class="chip" data-n="5" aria-pressed="false">Pentagon</button>
+        <button class="chip" data-n="6" aria-pressed="false">Hexagon</button>
+        <button class="chip" data-n="8" aria-pressed="false">Octagon</button>
+      </div>
+      <div class="stepRow"><span>Copies round the point</span><button class="stepBtn" id="kMinus">–</button><span class="n" id="kNum">1</span><button class="stepBtn" id="kPlus">+</button></div>
+      <div class="big num" id="bBig"></div>
+      <p class="say" id="bSay"></p>
+    </div>
+
+    <div class="card"><div class="kicker">To find</div><div id="finds"></div></div>
+  </aside>
+</main>
+
+<script src="../../play.js"></script>
+<script>
+'use strict';
+const {$, esc, clamp, fmt, drag, sound, say, track, toast, predict, findings, discover, found,
+       shareState, sharedState, mount, svgPoint} = Play;
+mount({thread: 'tiling', band: 'explorer'});
+
+/* MODEL:start ==================================================================
+   Two small, exact computations. Nothing is a picture of "solved".
+
+   1. The tangram pieces (Maths Mela 3, Ch 5 "Fun with Shapes", §Tangram). Four
+      congruent right-triangle pieces are cut from a square by joining its centre
+      to two opposite corners. Whether the pieces you have placed truly fill an
+      outline is computed by real polygon clipping (Sutherland–Hodgman): each
+      piece is clipped against the target outline, the clipped areas are summed
+      by the shoelace formula, and any area where two pieces overlap each other
+      is subtracted. The outline is "filled" only when that sum equals the
+      outline's own area, with nothing left over outside it.
+   2. Tiling the floor (Ganita Prakash 7, Ch 6 "Constructions and Tilings"; and
+      Maths Mela 5, Ch 7 "Shapes and Patterns"). A regular polygon with n sides
+      has interior angle (n − 2) × 180 / n. Copies placed edge to edge round one
+      shared point use up that angle each time. They tile with no gap and no
+      overlap only when some whole number of copies adds up to exactly 360°.
+   ============================================================================ */
+const shoelace = pts => { let s = 0; for (let i = 0; i < pts.length; i++) { const [x0, y0] = pts[i], [x1, y1] = pts[(i + 1) % pts.length]; s += x0 * y1 - x1 * y0; } return Math.abs(s) / 2; };
+function segInter(p1, p2, p3, p4){
+  const [x1, y1] = p1, [x2, y2] = p2, [x3, y3] = p3, [x4, y4] = p4;
+  const den = (x1 - x2) * (y3 - y4) - (y1 - y2) * (x3 - x4);
+  const t = ((x1 - x3) * (y3 - y4) - (y1 - y3) * (x3 - x4)) / den;
+  return [x1 + t * (x2 - x1), y1 + t * (y2 - y1)];
+}
+/* Sutherland–Hodgman: clip a polygon against a CONVEX, counter-clockwise clip polygon. */
+function clipPoly(subject, clipPg){
+  let output = subject;
+  for (let i = 0; i < clipPg.length; i++) {
+    if (!output.length) break;
+    const input = output; output = [];
+    const A = clipPg[i], B = clipPg[(i + 1) % clipPg.length];
+    const inside = p => (B[0] - A[0]) * (p[1] - A[1]) - (B[1] - A[1]) * (p[0] - A[0]) >= -1e-9;
+    for (let j = 0; j < input.length; j++) {
+      const cur = input[j], prev = input[(j + input.length - 1) % input.length];
+      const curIn = inside(cur), prevIn = inside(prev);
+      if (curIn) { if (!prevIn) output.push(segInter(prev, cur, A, B)); output.push(cur); }
+      else if (prevIn) output.push(segInter(prev, cur, A, B));
+    }
+  }
+  return output;
+}
+/* How much of `target` the `pieces` (each a convex polygon) truly cover: counted
+   once even where pieces overlap each other, and separately how much of each
+   piece falls outside the target. */
+function coverage(pieces, target){
+  let sumIntersect = 0, overflow = 0;
+  for (const poly of pieces) {
+    const area = shoelace(poly), it = clipPoly(poly, target), ia = it.length >= 3 ? shoelace(it) : 0;
+    sumIntersect += ia; overflow += area - ia;
+  }
+  let overlap = 0;
+  for (let i = 0; i < pieces.length; i++) for (let j = i + 1; j < pieces.length; j++) {
+    const it = clipPoly(pieces[i], pieces[j]);
+    if (it.length >= 3) overlap += shoelace(it);
+  }
+  const targetArea = shoelace(target);
+  return {covered: clamp((sumIntersect - overlap) / targetArea, 0, 1), overflow, overlap, targetArea};
+}
+/* The four tangram pieces: a right triangle, apex at the origin, hypotenuse
+   below it. Rotating by quarter turns and moving the apex is all a piece does. */
+const PIECE_LOCAL = [[-2, -2], [2, -2], [0, 0]];
+const rot90 = ([x, y]) => [-y, x];
+function rotN([x, y], steps){ let p = [x, y]; for (let i = 0; i < ((steps % 4) + 4) % 4; i++) p = rot90(p); return p; }
+const placePiece = (pos, steps) => PIECE_LOCAL.map(p => { const r = rotN(p, steps); return [r[0] + pos[0], r[1] + pos[1]]; });
+const TARGETS = {
+  square: [[0, 0], [4, 0], [4, 4], [0, 4]],
+  diamond: [[2, 0], [4, 2], [2, 4], [0, 2]],
+};
+/* Tiling: a regular n-gon with one vertex at the origin, its first edge along
+   originAngle (degrees), built like a turtle: n − 1 more edges, turning by the
+   exterior angle (360/n) each time. */
+const interiorAngle = n => (n - 2) * 180 / n;
+function regularPoly(n, side, originAngle){
+  const ext = 360 / n; let heading = originAngle, x = 0, y = 0;
+  const pts = [[0, 0]];
+  for (let i = 0; i < n - 1; i++) {
+    x += side * Math.cos(heading * Math.PI / 180); y += side * Math.sin(heading * Math.PI / 180);
+    pts.push([x, y]); heading += ext;
+  }
+  return pts;
+}
+/* MODEL:end */
+
+const RUST = '#c0392b', CLAY = '#e0785a', SAND = '#f5e6d3', SAND2 = '#e8cfa8', INK = '#1d2327';
+
+/* ---- state -------------------------------------------------------------------- */
+const START_PIECES = [{pos: [-3, 4], rot: 0}, {pos: [7, 4], rot: 1}, {pos: [-3, 0], rot: 2}, {pos: [7, 0], rot: 3}];
+const S = {tab: 'tan', target: 'square', pieces: START_PIECES.map(p => ({pos: p.pos.slice(), rot: p.rot})),
+  tShape: 3, tCopies: 1};
+const shared = sharedState();
+if (shared) {
+  if (['tan', 'tile'].includes(shared.tab)) S.tab = shared.tab;
+  if (['square', 'diamond'].includes(shared.target)) S.target = shared.target;
+  if ([3, 4, 5, 6, 8].includes(+shared.tShape)) S.tShape = +shared.tShape;
+  if (shared.tCopies) S.tCopies = clamp(+shared.tCopies | 0, 1, 8);
+}
+shareState(() => ({tab: S.tab, target: S.target, tShape: S.tShape, tCopies: S.tCopies}));
+
+/* ============================================================================
+   Tab 1: the tangram pieces
+   ============================================================================ */
+const svgA = $('stageA');
+const UNIT = 65, ORIGIN = {x: 370, y: 420};
+const toScreen = ([lx, ly]) => [ORIGIN.x + lx * UNIT, ORIGIN.y - ly * UNIT];
+const toLocal = (sx, sy) => [(sx - ORIGIN.x) / UNIT, (ORIGIN.y - sy) / UNIT];
+const ptStr = poly => poly.map(p => { const [x, y] = toScreen(p); return `${x.toFixed(1)},${y.toFixed(1)}`; }).join(' ');
+function buildA(){
+  svgA.innerHTML = `
+  <rect x="0" y="0" width="1000" height="560" fill="#fbfaf6"/>
+  <text x="500" y="40" text-anchor="middle" font-size="14" font-weight="700" letter-spacing=".08em" fill="#4a555b">FOUR PIECES, CUT FROM ONE SQUARE</text>
+  <polygon id="targetOutline" fill="none" stroke="${RUST}" stroke-width="4" stroke-dasharray="10 7"/>
+  <g id="tray"></g>
+  <g id="pieces"></g>
+  <text id="aPct" x="500" y="522" text-anchor="middle" font-size="23" font-weight="600" fill="${INK}" font-family="Fredoka, Inter, sans-serif"></text>
+  `;
+  const g = $('pieces');
+  for (let i = 0; i < 4; i++) {
+    const el = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+    el.setAttribute('id', 'piece' + i); el.setAttribute('class', 'piece');
+    el.setAttribute('fill', i % 2 ? CLAY : SAND2); el.setAttribute('stroke', '#8a4a2f'); el.setAttribute('stroke-width', '2.5');
+    el.setAttribute('tabindex', '0'); el.setAttribute('role', 'button');
+    el.setAttribute('aria-label', 'A tangram piece. Drag to move it, tap or press Enter to turn it a quarter turn.');
+    g.appendChild(el);
+  }
+}
+function paintA(){
+  const target = TARGETS[S.target];
+  $('targetOutline').setAttribute('points', ptStr(target));
+  const worldPieces = S.pieces.map(p => placePiece(p.pos, p.rot));
+  for (let i = 0; i < 4; i++) $('piece' + i).setAttribute('points', ptStr(worldPieces[i]));
+  /* Only pieces actually touching the outline count towards covering it — a
+     piece still waiting on the tray is not "hanging over the edge". */
+  const inPlay = worldPieces.filter(poly => clipPoly(poly, target).length >= 3);
+  const cov = coverage(inPlay.length ? inPlay : worldPieces, target);
+  $('aPct').textContent = `${Math.round(cov.covered * 100)}% of the ${S.target} covered`;
+  $('aBig').textContent = `${Math.round(cov.covered * 100)}% covered`;
+  $('aSay').textContent = cov.covered > 0.99 && cov.overflow < 0.05 && cov.overlap < 0.05
+    ? `Exactly filled! The pieces' areas add up to the ${S.target}'s own area — nothing missing, nothing hanging over.`
+    : cov.overlap > 0.05 ? `Some pieces overlap each other — that area is not really "extra" cover.`
+    : `${Math.round(cov.covered * 100)}% covered so far. Drag the other pieces onto the outline.`;
+  return cov;
+}
+function checkA(){
+  const cov = paintA();
+  if (cov.covered > 0.99 && cov.overflow < 0.05 && cov.overlap < 0.05) {
+    sound('chime'); track('cover', {target: S.target});
+    discover(S.target === 'square' ? 'wholesquare' : 'diamond');
+  }
+}
+buildA();
+const SNAP = 0.2;
+function setupPiece(i){
+  const el = $('piece' + i);
+  let off = [0, 0], moved = 0, start = [0, 0];
+  drag(el, svgA, {
+    start(p){ const lp = toLocal(p.x, p.y); off = [lp[0] - S.pieces[i].pos[0], lp[1] - S.pieces[i].pos[1]]; moved = 0; start = lp; },
+    move(p){
+      const lp = toLocal(p.x, p.y);
+      moved = Math.max(moved, Math.hypot(lp[0] - start[0], lp[1] - start[1]));
+      S.pieces[i].pos = [Math.round((lp[0] - off[0]) / SNAP) * SNAP, Math.round((lp[1] - off[1]) / SNAP) * SNAP];
+      paintA();
+    },
+    end(){
+      if (moved < 0.12) { S.pieces[i].rot = (S.pieces[i].rot + 1) % 4; sound('tick'); }
+      checkA();
+      track('piece', {i, pos: S.pieces[i].pos, rot: S.pieces[i].rot});
+    },
+  });
+  el.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); S.pieces[i].rot = (S.pieces[i].rot + 1) % 4; sound('tick'); checkA(); } });
+}
+for (let i = 0; i < 4; i++) setupPiece(i);
+$('targetSquare').addEventListener('click', () => { S.target = 'square'; sound('tick'); $('targetSquare').setAttribute('aria-pressed', true); $('targetDiamond').setAttribute('aria-pressed', false); checkA(); });
+$('targetDiamond').addEventListener('click', () => { S.target = 'diamond'; sound('tick'); $('targetDiamond').setAttribute('aria-pressed', true); $('targetSquare').setAttribute('aria-pressed', false); checkA(); });
+$('aReset').addEventListener('click', () => {
+  S.pieces = START_PIECES.map(p => ({pos: p.pos.slice(), rot: p.rot}));
+  sound('tick'); checkA();
+});
+
+/* ============================================================================
+   Tab 2: tiling the floor
+   ============================================================================ */
+const svgB = $('stageB');
+const P = {x: 500, y: 300}, SIDE = 112, GAP_R = 200;
+const SHAPE_NAME = {3: 'triangle', 4: 'square', 5: 'pentagon', 6: 'hexagon', 8: 'octagon'};
+function buildB(){
+  svgB.innerHTML = `
+  <rect x="0" y="0" width="1000" height="560" fill="#fbfaf6"/>
+  <text x="500" y="40" text-anchor="middle" font-size="14" font-weight="700" letter-spacing=".08em" fill="#4a555b">COPIES OF ONE SHAPE, ROUND A SHARED POINT</text>
+  <path id="gapWedge" fill="#c0392b" opacity=".18"/>
+  <g id="copies"></g>
+  <circle cx="${P.x}" cy="${P.y}" r="6" fill="${INK}"/>
+  <text id="bAngle" x="${P.x}" y="${P.y + 205}" text-anchor="middle" font-size="26" font-weight="600" fill="${INK}" font-family="Fredoka, Inter, sans-serif"></text>
+  <text id="bVerdict" x="${P.x}" y="${P.y + 238}" text-anchor="middle" font-size="17" font-weight="600"></text>
+  `;
+}
+/* The fan of copies is always centred on the upward direction from P, so it
+   looks balanced in the frame however many copies are shown. */
+function paintB(){
+  const n = S.tShape, ang = interiorAngle(n), k = S.tCopies, total = ang * k;
+  const base = 90 - total / 2;
+  let copies = '';
+  for (let i = 0; i < k; i++) {
+    const localPts = regularPoly(n, SIDE, base + i * ang);
+    const pts = localPts.map(([x, y]) => `${(P.x + x).toFixed(1)},${(P.y - y).toFixed(1)}`).join(' ');
+    const overlapping = (i + 1) * ang > 360.01;
+    copies += `<polygon points="${pts}" fill="${overlapping ? '#c0392b' : (i % 2 ? CLAY : SAND2)}" opacity="${overlapping ? 0.45 : 1}" stroke="#8a4a2f" stroke-width="2.5"/>`;
+  }
+  $('copies').innerHTML = copies;
+  if (total < 359.99) {
+    const a0 = base + total, a1 = base + 360;
+    const arc = (a) => `${(P.x + GAP_R * Math.cos(a * Math.PI / 180)).toFixed(1)},${(P.y - GAP_R * Math.sin(a * Math.PI / 180)).toFixed(1)}`;
+    const gapSweep = a1 - a0, largeArc = gapSweep > 180 ? 1 : 0;
+    $('gapWedge').setAttribute('d', `M${P.x} ${P.y} L${arc(a0)} A${GAP_R} ${GAP_R} 0 ${largeArc} 0 ${arc(a1)} Z`);
+    $('gapWedge').setAttribute('opacity', 0.18);
+  } else $('gapWedge').setAttribute('opacity', 0);
+  $('kNum').textContent = k;
+  $('kMinus').disabled = k <= 1; $('kPlus').disabled = k >= 8;
+  const exact = Math.abs(total - 360) < 0.01;
+  $('bAngle').textContent = `${k} × ${fmt(ang, 0)}° = ${fmt(total, 0)}°`;
+  $('bVerdict').textContent = exact ? 'Exactly a full turn: no gap, no overlap — it tiles!' : total < 360 ? `${fmt(360 - total, 0)}° short of a full turn: a gap.` : `${fmt(total - 360, 0)}° too many: it overlaps.`;
+  $('bVerdict').setAttribute('fill', exact ? '#1f8a55' : '#b5541f');
+  const plural = k === 1 ? SHAPE_NAME[n] : SHAPE_NAME[n] + 's';
+  $('bBig').textContent = `${SHAPE_NAME[n][0].toUpperCase()}${SHAPE_NAME[n].slice(1)}: interior angle ${fmt(ang, 0)}°`;
+  $('bSay').textContent = exact ? `${k} copies of a regular ${SHAPE_NAME[n]} close up perfectly round the point.`
+    : total < 360 ? `Only ${k} ${plural} ${k === 1 ? 'fits' : 'fit'} before a gap opens — try one more.`
+    : `${k} ${plural} already overlap. This shape does not tile on its own.`;
+  if (exact) { sound('chime'); discover(n === 3 ? 'trianglestile' : n === 4 ? 'squarestile' : n === 6 ? 'hexagonstile' : null); }
+  if (n === 5 && k >= 4) discover('pentagonfails');
+}
+buildB();
+function setShape(n){ S.tShape = n; S.tCopies = 1; paintB(); track('shape', {n}); }
+$$('#cardB .chip').forEach(el => el.addEventListener('click', () => {
+  sound('tick');
+  $$('#cardB .chip').forEach(c => c.setAttribute('aria-pressed', c === el));
+  setShape(+el.dataset.n);
+}));
+function $$(sel){ return Array.from(document.querySelectorAll(sel)); }
+$('kMinus').addEventListener('click', () => { sound('tick'); S.tCopies = clamp(S.tCopies - 1, 1, 8); paintB(); });
+$('kPlus').addEventListener('click', () => { sound('tick'); S.tCopies = clamp(S.tCopies + 1, 1, 8); paintB(); });
+
+/* ============================================================================
+   Wiring
+   ============================================================================ */
+function setTab(t){
+  S.tab = t;
+  $('tabTan').setAttribute('aria-selected', t === 'tan'); $('tabTile').setAttribute('aria-selected', t === 'tile');
+  $('stageA').toggleAttribute('hidden', t !== 'tan'); $('stageB').toggleAttribute('hidden', t !== 'tile');
+  $('cardA').hidden = t !== 'tan'; $('cardB').hidden = t !== 'tile';
+  if (t === 'tan') checkA(); else paintB();
+  track('tab', {tab: t});
+}
+$('tabTan').addEventListener('click', () => { sound('tick'); setTab('tan'); });
+$('tabTile').addEventListener('click', () => { sound('tick'); setTab('tile'); });
+
+/* ============================================================================
+   Start
+   ============================================================================ */
+findings($('finds'), [
+  {id: 'wholesquare',  icon: '◻', label: 'Four pieces, one square', hint: 'Drag all four pieces onto the square outline', say: 'The four pieces fit back into the square they were cut from.'},
+  {id: 'diamond',      icon: '◇', label: 'Two pieces, one diamond', hint: 'Fill the diamond outline with two pieces', say: 'Turn two pieces and they make a diamond instead!'},
+  {id: 'trianglestile',icon: '△', label: 'Six triangles tile exactly', hint: 'Try the triangle: how many fit round a point?', say: '6 × 60° = 360°. Triangles tile a floor perfectly.'},
+  {id: 'squarestile',  icon: '▢', label: 'Four squares tile exactly', hint: 'Try the square', say: '4 × 90° = 360°. Squares tile a floor perfectly.'},
+  {id: 'hexagonstile', icon: '⬡', label: 'Three hexagons tile exactly', hint: 'Try the hexagon', say: '3 × 120° = 360°. Hexagons tile a floor perfectly.'},
+  {id: 'pentagonfails',icon: '⬠', label: 'Pentagons never fit exactly', hint: 'Try the pentagon, past three copies', say: 'Three pentagons leave a gap; a fourth already overlaps. Regular pentagons cannot tile a floor.'},
+], () => say('You found every way these shapes fit together — and the one shape that never quite does.'));
+
+const POE = predict($('poe'), {
+  id: 'pentagon-tile',
+  q: 'Three regular pentagons are placed round a point, edge to edge, and there is a small gap left. Will a fourth pentagon fit into that gap exactly?',
+  confidence: false,
+  options: [
+    {id: 'yes', text: 'Yes, a fourth pentagon fits the gap exactly.'},
+    {id: 'no', text: 'No — a fourth pentagon is too wide and will overlap.', right: true},
+    {id: 'depends', text: 'It depends on the size of the pentagons.'},
+  ],
+  onLock(){ say('Try the pentagon on the tiling tab and count the copies.'); },
+});
+
+say('Fit the tangram pieces into the square, then see which shapes tile a floor without any gaps.');
+setTab('tan');
+window.applyFeatures = () => setTab(S.tab);
+window.PG_STATE = () => JSON.parse(JSON.stringify(S));
+window.PG_MODEL = {shoelace, clipPoly, coverage, PIECE_LOCAL, placePiece, TARGETS, interiorAngle, regularPoly, toScreen};
+</script>
+</body>
+</html>

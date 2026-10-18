@@ -1,0 +1,637 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Secant to Tangent</title>
+<meta name="description" content="Class 11–12: slide the second point of a secant towards the first until it becomes the tangent; measure how fast the difference quotient converges, where it breaks, and use f′ = 0 to make the biggest open box from a sheet.">
+<link rel="icon" href="../../favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600&family=Inter:wght@400;500;600;700&family=Nunito:wght@500;700;800&family=Newsreader:opsz,wght@6..72,400;6..72,500&family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="../../play.css">
+<style>
+/* Only what this page needs beyond play.css. */
+.pg-stage{align-self:start; min-height:0}
+svg text.m{font-family:var(--font-mono)}
+svg text.serif{font-family:"Newsreader",Georgia,serif}
+.tabs{display:flex; gap:4px; padding:10px 12px 0; border-bottom:1px solid var(--hair); background:var(--card)}
+.tab{border:1px solid transparent; border-bottom:none; background:none; padding:8px 14px; border-radius:8px 8px 0 0; cursor:pointer;
+  font-family:"Newsreader",Georgia,serif; font-size:17px; color:var(--ink-3); margin-bottom:-1px}
+.tab[aria-selected="true"]{background:var(--card); border-color:var(--hair); color:var(--ink); border-bottom:1px solid var(--card)}
+.gate{position:absolute; left:0; right:0; top:48px; bottom:0; display:grid; place-items:center; pointer-events:none}
+.gate span{background:rgba(29,35,39,.85); color:#fff; padding:10px 16px; border-radius:99px; font-weight:600; font-size:14px}
+.chips{display:flex; flex-wrap:wrap; gap:6px; margin:4px 0 8px}
+.chip{border:1px solid var(--hair-2); background:var(--card); border-radius:99px; padding:4px 11px; font-size:13px; cursor:pointer; font-weight:600; color:var(--ink-2)}
+.chip[aria-pressed="true"]{background:var(--accent-soft); border-color:var(--accent); color:var(--ink)}
+.chip:disabled{opacity:.45; cursor:default}
+.lab{font-size:11.5px; font-weight:700; color:var(--ink-3); letter-spacing:.06em; text-transform:uppercase; margin-top:6px}
+.readout{display:grid; grid-template-columns:auto 1fr; gap:3px 12px; font-size:13px; align-items:baseline}
+.readout span{color:var(--ink-2)}
+.readout b{font-family:var(--font-mono); font-weight:600; font-size:12.5px; font-variant-numeric:tabular-nums; text-align:right; overflow-wrap:anywhere}
+.note{font-size:12.5px; color:var(--ink-3); margin:6px 0 0}
+.why p{font-size:13.5px; margin-bottom:.55em}
+.ctl output{min-width:84px; font-family:var(--font-mono); font-size:13px}
+.hit{cursor:grab}
+.hit.dragging{cursor:grabbing}
+@media (max-width:1180px) and (min-width:981px){ .pg-main.wide-side{grid-template-columns:minmax(0,1fr) 340px} }
+</style>
+</head>
+<body>
+<header class="pg-top"></header>
+
+<div class="pg-intro">
+  <h1>Secant to tangent</h1>
+  <p>Draw a chord through two points of a curve and slide the second point in towards the first. Its slope settles on a number: the derivative.
+     Measure how fast it settles, change the rule for the difference quotient, find the point where the computer’s arithmetic breaks it —
+     and then use f′ = 0 to fold the biggest open box from a sheet of tin.</p>
+</div>
+
+<main class="pg-main wide-side">
+  <section class="pg-stage" id="stageWrap">
+    <div class="tabs" role="tablist">
+      <button class="tab" role="tab" id="tabS" aria-selected="true">Secant → tangent</button>
+      <button class="tab" role="tab" id="tabB" aria-selected="false">The open box</button>
+    </div>
+    <svg id="stageS" viewBox="0 0 1000 640" role="img" aria-label="A curve with a secant through P and Q, the graph of the difference quotient, and a log-log plot of its error against h"></svg>
+    <svg id="stageB" viewBox="0 0 1000 640" role="img" aria-label="A sheet with squares cut from its corners, the box it folds into, and graphs of the volume and its derivative" hidden></svg>
+    <div class="gate" id="gate"><span>Make your prediction first →</span></div>
+  </section>
+
+  <aside class="pg-side">
+    <div id="poeS"></div>
+    <div id="poeB" hidden></div>
+
+    <div class="card" id="cardS">
+      <div class="kicker">The function</div>
+      <div class="chips" id="fChips"></div>
+      <div class="lab">The difference quotient</div>
+      <div class="chips" id="mChips">
+        <button class="chip" data-m="fwd" aria-pressed="true">forward [f(x+h) − f(x)] / h</button>
+        <button class="chip" data-m="bwd" aria-pressed="false">backward [f(x) − f(x−h)] / h</button>
+        <button class="chip" data-m="sym" aria-pressed="false">symmetric [f(x+h) − f(x−h)] / 2h</button>
+      </div>
+      <div class="ctl"><label for="hs">|h| = 10^−s</label><input type="range" id="hs" min="0" max="13" step="0.05" value="0.3"><output id="hOut">0.5</output></div>
+      <div class="chips" id="sgnChips">
+        <button class="chip" data-s="1" aria-pressed="true">Q to the right (h &gt; 0)</button>
+        <button class="chip" data-s="-1" aria-pressed="false">Q to the left (h &lt; 0)</button>
+      </div>
+      <p class="note">Drag P and Q along the curve.</p>
+      <div class="readout" id="readS" style="margin-top:8px"></div>
+    </div>
+
+    <div class="card" id="cardB" hidden>
+      <div class="kicker">The sheet</div>
+      <div class="chips" id="sheetChips">
+        <button class="chip" data-sh="sq18" aria-pressed="true">tin 18 × 18 cm</button>
+        <button class="chip" data-sh="r4524" aria-pressed="false">tin 45 × 24 cm</button>
+        <button class="chip" data-sh="al83" aria-pressed="false">aluminium 8 × 3 m</button>
+      </div>
+      <div class="ctl"><label for="cx">cut x</label><input type="range" id="cx" min="0" max="9" step="0.01" value="1"><output id="cxOut">1.00</output></div>
+      <p class="note">Or drag the corner of a cut square.</p>
+      <div class="readout" id="readB" style="margin-top:8px"></div>
+    </div>
+
+    <div class="card why" id="whyCard" hidden>
+      <div class="kicker">What the model says</div>
+      <div id="why"></div>
+    </div>
+
+    <div class="card"><div class="kicker">To find</div><div id="finds"></div></div>
+  </aside>
+</main>
+
+<script src="../../play.js"></script>
+<script>
+'use strict';
+const {$, esc, clamp, fmt, drag, sound, say, track, toast, predict, findings, discover, found,
+       shareState, sharedState, mount, reduced} = Play;
+mount({thread: 'algebra', band: 'theorist'});
+
+/* MODEL:start ==================================================================
+   1. Difference quotients, computed in ordinary double-precision arithmetic, exactly as
+      a calculator would: forward [f(x+h) − f(x)]/h, backward [f(x) − f(x−h)]/h and
+      symmetric [f(x+h) − f(x−h)]/2h. Each function also carries its derivative from
+      the rules of NCERT Class 11 Ch 12 (d/dx xⁿ = nxⁿ⁻¹, d/dx sin x = cos x), used only
+      to MEASURE the error of the quotient. The error is sampled at h = 10⁰, 10^−½, …,
+      10⁻¹⁴ and a straight line is fitted to log|error| against log h over 10⁻¹ … 10⁻⁴:
+      its slope is the order of the quotient. Below about 10⁻⁸ the subtraction
+      f(x+h) − f(x) loses its digits and the error climbs again: that is round-off, and
+      it is real, not simulated.
+   2. The open box: squares of side x cut from the corners of an L × W sheet give
+      V(x) = x(L − 2x)(W − 2x). V′ and V″ from the rules; the biggest box is also found
+      by searching V itself (golden-section), and the two must agree.
+   ============================================================================ */
+const PI = Math.PI;
+const FUN = {
+  stone: {label: 's = 4.9t²', v: 't', f: t => 4.9 * t * t, d: t => 9.8 * t, d2: () => 9.8, lo: 0, hi: 3.5, y0: -2, y1: 60, dy0: -2, dy1: 36, x0: 2, units: ' m/s'},
+  quad:  {label: 'f = 2x² + 3x − 5', v: 'x', f: x => 2 * x * x + 3 * x - 5, d: x => 4 * x + 3, d2: () => 4, lo: -3, hi: 2, y0: -7.5, y1: 10, dy0: -10, dy1: 12, x0: -1, units: ''},
+  cubic: {label: 'f = x³ − 3x', v: 'x', f: x => x * x * x - 3 * x, d: x => 3 * x * x - 3, d2: x => 6 * x, lo: -2.5, hi: 2.5, y0: -9, y1: 9, dy0: -4.5, dy1: 16, x0: 1.6, units: ''},
+  sin:   {label: 'f = sin x', v: 'x', f: Math.sin, d: Math.cos, d2: x => -Math.sin(x), lo: 0, hi: 2 * PI, y0: -1.35, y1: 1.35, dy0: -1.35, dy1: 1.35, x0: 1, units: ''},
+  abs:   {label: 'f = |x|', v: 'x', f: Math.abs, d: x => x > 0 ? 1 : x < 0 ? -1 : NaN, d2: () => 0, lo: -2, hi: 2, y0: -0.6, y1: 2.2, dy0: -1.6, dy1: 1.6, x0: 0.8, units: ''},
+};
+function quotient(fid, x, h, m){
+  const f = FUN[fid].f;
+  if (m === 'fwd') return (f(x + h) - f(x)) / h;
+  if (m === 'bwd') return (f(x) - f(x - h)) / h;
+  return (f(x + h) - f(x - h)) / (2 * h);
+}
+/* |error| at h = 10^(−k/2), k = 0 … 28, for a quotient at x. */
+function errorSweep(fid, x, m, sgn = 1){
+  const d = FUN[fid].d(x), out = [];
+  for (let k = 0; k <= 28; k++) { const h = Math.pow(10, -k / 2); out.push({h, err: Math.abs(quotient(fid, x, sgn * h, m) - d)}); }
+  return out;
+}
+/* Least-squares slope of log10|err| against log10 h, over 1e-1 ≥ h ≥ 1e-4. Null if the quotient is (almost) exact there. */
+function fitOrder(sweep){
+  const pts = sweep.filter(p => p.h <= 0.1 + 1e-12 && p.h >= 1e-4 - 1e-16);
+  if (pts.some(p => p.err < 1e-12)) return null;
+  const X = pts.map(p => Math.log10(p.h)), Y = pts.map(p => Math.log10(p.err)), n = X.length;
+  const mx = X.reduce((a, b) => a + b) / n, my = Y.reduce((a, b) => a + b) / n;
+  let sxy = 0, sxx = 0; for (let i = 0; i < n; i++) { sxy += (X[i] - mx) * (Y[i] - my); sxx += (X[i] - mx) ** 2; }
+  return sxy / sxx;
+}
+/* The open box. */
+const vol = (L, W, x) => x * (L - 2 * x) * (W - 2 * x);
+const dvol = (L, W, x) => 12 * x * x - 4 * (L + W) * x + L * W;
+const d2vol = (L, W, x) => 24 * x - 4 * (L + W);
+const critical = (L, W) => ((L + W) - Math.sqrt((L + W) ** 2 - 3 * L * W)) / 6;
+function searchMax(L, W){
+  let a = 0, b = Math.min(L, W) / 2; const g = (Math.sqrt(5) - 1) / 2;
+  for (let i = 0; i < 120; i++) { const c = b - g * (b - a), d = a + g * (b - a); if (vol(L, W, c) > vol(L, W, d)) b = d; else a = c; }
+  return (a + b) / 2;
+}
+/* MODEL:end */
+
+/* ---- formatting ---------------------------------------------------------- */
+const SUP = {'-': '⁻', '.': '·', 0: '⁰', 1: '¹', 2: '²', 3: '³', 4: '⁴', 5: '⁵', 6: '⁶', 7: '⁷', 8: '⁸', 9: '⁹'};
+const mnus = s => String(s).replace(/^-/, '−');
+function sci(v, dp = 2){
+  if (!isFinite(v)) return '—'; if (v === 0) return '0';
+  const e = Math.floor(Math.log10(Math.abs(v)));
+  if (e >= -3 && e < 5) return mnus(+v.toPrecision(dp + 2));
+  return mnus((v / Math.pow(10, e)).toFixed(dp)) + '×10' + String(e).split('').map(c => SUP[c]).join('');
+}
+const dig = (v, n = 12) => isFinite(v) ? mnus(v.toFixed(n)) : '—';
+const hTxt = h => { const a = Math.abs(h); const e = Math.log10(a); return (h < 0 ? '−' : '') + (Math.abs(e - Math.round(e)) < 1e-9 && e < -2 ? '10' + String(Math.round(e)).split('').map(c => SUP[c]).join('') : sci(a, 2)); };
+const SHEETS = {sq18: {L: 18, W: 18, u: 'cm', src: 'Exercise 6.5, Q17'}, r4524: {L: 45, W: 24, u: 'cm', src: 'Exercise 6.5, Q18'}, al83: {L: 8, W: 3, u: 'm', src: 'Example 36'}};
+
+/* ---- state: plain data --------------------------------------------------- */
+const S = {tab: 'S', f: 'stone', x0: 2, hs: 0.3, sgn: 1, m: 'fwd', seenPos: false, seenNeg: false, absPos: false, absNeg: false,
+           sheet: 'sq18', cx: 1, boxFound: [], lockedS: false, lockedB: false};
+const shared = sharedState();
+if (shared) {
+  if (['S', 'B'].includes(shared.tab)) S.tab = shared.tab;
+  if (FUN[shared.f]) { S.f = shared.f; S.x0 = clamp(+shared.x0 || 0, FUN[S.f].lo, FUN[S.f].hi); }
+  if (['fwd', 'bwd', 'sym'].includes(shared.m)) S.m = shared.m;
+  S.hs = clamp(+shared.hs || 0, 0, 13); S.sgn = shared.sgn === -1 ? -1 : 1;
+  if (SHEETS[shared.sheet]) S.sheet = shared.sheet;
+  S.cx = clamp(+shared.cx || 1, 0, Math.min(SHEETS[S.sheet].L, SHEETS[S.sheet].W) / 2);
+}
+shareState(() => ({tab: S.tab, f: S.f, x0: S.x0, m: S.m, hs: S.hs, sgn: S.sgn, sheet: S.sheet, cx: S.cx}));
+const hNow = () => S.sgn * Math.pow(10, -S.hs);
+
+/* ============================================================================
+   Stage 1: secant, tangent, the quotient graph and the error plot
+   ============================================================================ */
+const sS = $('stageS');
+const GM = {x: 60, y: 30, w: 500, h: 300}, GD = {x: 60, y: 380, w: 500, h: 220}, GE = {x: 640, y: 330, w: 320, h: 250};
+const CUR = '#d6453d', SEC = '#3057c9', TAN = '#6a3fc2', INK = '#1d2327';
+const mx = x => GM.x + (x - FUN[S.f].lo) / (FUN[S.f].hi - FUN[S.f].lo) * GM.w;
+const my = y => GM.y + GM.h - (y - FUN[S.f].y0) / (FUN[S.f].y1 - FUN[S.f].y0) * GM.h;
+const dyv = y => GD.y + GD.h - (y - FUN[S.f].dy0) / (FUN[S.f].dy1 - FUN[S.f].dy0) * GD.h;
+const umx = px => FUN[S.f].lo + (px - GM.x) / GM.w * (FUN[S.f].hi - FUN[S.f].lo);
+const ex = l => GE.x + (-l) / 14 * GE.w;                         // log10 h from 0 to −14, left to right
+const ey = l => GE.y + GE.h - (l + 16) / 17 * GE.h;              // log10 err from −16 to 1
+function buildS(){
+  sS.innerHTML = `
+  <defs><clipPath id="clipM"><rect x="${GM.x}" y="${GM.y}" width="${GM.w}" height="${GM.h}"/></clipPath>
+        <clipPath id="clipD"><rect x="${GD.x}" y="${GD.y}" width="${GD.w}" height="${GD.h}"/></clipPath></defs>
+  <rect x="0" y="0" width="1000" height="640" fill="#fbfaf6"/>
+  <rect x="${GM.x}" y="${GM.y}" width="${GM.w}" height="${GM.h}" fill="#fff" stroke="#e2ded2"/>
+  <rect x="${GD.x}" y="${GD.y}" width="${GD.w}" height="${GD.h}" fill="#fff" stroke="#e2ded2"/>
+  <text x="${GM.x}" y="20" font-size="12" font-weight="700" fill="#4a555b" letter-spacing=".08em" id="tM">THE CURVE, THE SECANT PQ AND THE TANGENT AT P</text>
+  <text x="${GD.x}" y="${GD.y - 10}" font-size="12" font-weight="700" fill="#4a555b" letter-spacing=".08em" id="tD">THE SLOPE OF PQ AT EVERY x, FOR THIS h</text>
+  <g id="axM"></g><g id="axD"></g>
+  <g clip-path="url(#clipM)">
+    <path id="curveM" fill="none" stroke="${CUR}" stroke-width="3"/>
+    <line id="tan" stroke="${TAN}" stroke-width="1.8" stroke-dasharray="7 5"/>
+    <line id="sec" stroke="${SEC}" stroke-width="2.4"/>
+    <path id="rise" fill="none" stroke="${SEC}" stroke-width="1.2" stroke-dasharray="3 3"/>
+    <g id="statM"></g>
+  </g>
+  <text id="pLab" font-size="14" font-weight="700" fill="${INK}" class="serif">P</text>
+  <text id="qLab" font-size="14" font-weight="700" fill="${SEC}" class="serif">Q</text>
+  <circle class="hit" id="hQ" r="9" fill="${SEC}" stroke="#fff" stroke-width="2.5"/>
+  <circle class="hit" id="hP" r="10" fill="${INK}" stroke="#fff" stroke-width="2.5"/>
+  <g clip-path="url(#clipD)">
+    <path id="dExact" fill="none" stroke="${TAN}" stroke-width="1.6" stroke-dasharray="6 5"/>
+    <path id="dQuot" fill="none" stroke="${SEC}" stroke-width="2.6"/>
+    <line id="dNow" stroke="${INK}" stroke-width="1" stroke-dasharray="2 4"/>
+    <circle id="dDot" r="5" fill="${SEC}" stroke="#fff" stroke-width="2"/>
+  </g>
+  <g id="numPanel"></g>
+  <text x="${GE.x}" y="${GE.y - 34}" font-size="12" font-weight="700" fill="#4a555b" letter-spacing=".08em">MEASURED: |QUOTIENT − f′(x)| AGAINST h</text>
+  <rect x="${GE.x}" y="${GE.y}" width="${GE.w}" height="${GE.h}" fill="#fff" stroke="#e2ded2"/>
+  <g id="axE"></g>
+  <path id="eLine" fill="none" stroke="${SEC}" stroke-width="2"/>
+  <g id="eDots"></g>
+  <line id="eFit" stroke="${TAN}" stroke-width="2" stroke-dasharray="6 4"/>
+  <line id="eNow" y1="${GE.y}" y2="${GE.y + GE.h}" stroke="${INK}" stroke-dasharray="2 4"/>
+  <text id="eFitT" x="${GE.x}" y="${GE.y - 12}" font-size="12.5" fill="${TAN}" font-weight="700" class="m"></text>
+  <text id="eRound" x="${GE.x + GE.w - 8}" y="${GE.y + GE.h - 10}" font-size="11.5" fill="#b3361f" text-anchor="end"></text>`;
+  let ax = '';
+  for (let l = 0; l >= -14; l -= 2) ax += `<line x1="${ex(l)}" y1="${GE.y}" x2="${ex(l)}" y2="${GE.y + GE.h}" stroke="#f0ede4"/><text x="${ex(l)}" y="${GE.y + GE.h + 15}" font-size="10.5" text-anchor="middle" fill="#7c878c" class="m">10${String(l).split('').map(c => SUP[c]).join('') || '⁰'}</text>`;
+  for (let l = 0; l >= -16; l -= 4) ax += `<line x1="${GE.x}" y1="${ey(l)}" x2="${GE.x + GE.w}" y2="${ey(l)}" stroke="#f0ede4"/><text x="${GE.x - 5}" y="${ey(l) + 4}" font-size="10.5" text-anchor="end" fill="#7c878c" class="m">10${String(l).split('').map(c => SUP[c]).join('') || '⁰'}</text>`;
+  ax += `<text x="${GE.x + GE.w}" y="${GE.y + GE.h + 32}" font-size="11" text-anchor="end" fill="#7c878c">h, smaller to the right →</text>`;
+  $('axE').innerHTML = ax;
+}
+function axesFor(){
+  const F = FUN[S.f];
+  const step = (lo, hi) => { const r = (hi - lo) / 6, p = Math.pow(10, Math.floor(Math.log10(r))); for (const m of [1, 2, 5, 10]) if (m * p >= r) return m * p; };
+  const xs = S.f === 'sin' ? [0, PI / 2, PI, 3 * PI / 2, 2 * PI] : (() => { const s = step(F.lo, F.hi), a = []; for (let v = Math.ceil(F.lo / s) * s; v <= F.hi + 1e-9; v += s) a.push(+v.toFixed(6)); return a; })();
+  const xl = v => S.f === 'sin' ? ['0', 'π/2', 'π', '3π/2', '2π'][Math.round(v / (PI / 2))] : mnus(v);
+  let m = '', d = '';
+  for (const v of xs) {
+    m += `<line x1="${mx(v)}" y1="${GM.y}" x2="${mx(v)}" y2="${GM.y + GM.h}" stroke="${Math.abs(v) < 1e-9 ? '#9aa3a6' : '#f0ede4'}"/><text x="${mx(v)}" y="${GM.y + GM.h + 15}" font-size="10.5" text-anchor="middle" fill="#7c878c" class="m">${xl(v)}</text>`;
+    d += `<line x1="${mx(v)}" y1="${GD.y}" x2="${mx(v)}" y2="${GD.y + GD.h}" stroke="${Math.abs(v) < 1e-9 ? '#9aa3a6' : '#f0ede4'}"/><text x="${mx(v)}" y="${GD.y + GD.h + 15}" font-size="10.5" text-anchor="middle" fill="#7c878c" class="m">${xl(v)}</text>`;
+  }
+  const sy = step(F.y0, F.y1), sd = step(F.dy0, F.dy1);
+  for (let v = Math.ceil(F.y0 / sy) * sy; v <= F.y1; v += sy) m += `<line x1="${GM.x}" y1="${my(v)}" x2="${GM.x + GM.w}" y2="${my(v)}" stroke="${Math.abs(v) < 1e-9 ? '#9aa3a6' : '#f0ede4'}"/><text x="${GM.x - 6}" y="${my(v) + 4}" font-size="10.5" text-anchor="end" fill="#7c878c" class="m">${mnus(+v.toFixed(4))}</text>`;
+  for (let v = Math.ceil(F.dy0 / sd) * sd; v <= F.dy1; v += sd) d += `<line x1="${GD.x}" y1="${dyv(v)}" x2="${GD.x + GD.w}" y2="${dyv(v)}" stroke="${Math.abs(v) < 1e-9 ? '#9aa3a6' : '#f0ede4'}"/><text x="${GD.x - 6}" y="${dyv(v) + 4}" font-size="10.5" text-anchor="end" fill="#7c878c" class="m">${mnus(+v.toFixed(4))}</text>`;
+  $('axM').innerHTML = m; $('axD').innerHTML = d;
+  let c = '';
+  for (let i = 0; i <= 400; i++) { const x = F.lo + (F.hi - F.lo) * i / 400; c += (i ? 'L' : 'M') + mx(x).toFixed(1) + ' ' + clamp(my(F.f(x)), -500, 1500).toFixed(1); }
+  $('curveM').setAttribute('d', c);
+  $('tM').textContent = S.f === 'stone' ? 'THE FALLING STONE: DISTANCE s AGAINST TIME t, WITH THE SECANT PQ' : 'THE CURVE, THE SECANT PQ AND THE TANGENT AT P';
+}
+function lineThrough(x, y, m, x0, x1){ return [x0, y + m * (x0 - x), x1, y + m * (x1 - x)]; }
+function setL(id, a){ const el = $(id); el.setAttribute('x1', mx(a[0]).toFixed(1)); el.setAttribute('y1', clamp(my(a[1]), -3000, 3000).toFixed(1)); el.setAttribute('x2', mx(a[2]).toFixed(1)); el.setAttribute('y2', clamp(my(a[3]), -3000, 3000).toFixed(1)); }
+function paintS(){
+  const F = FUN[S.f], x = S.x0, h = hNow(), y = F.f(x), d = F.d(x), q = quotient(S.f, x, h, S.m);
+  /* the secant through the two points the quotient uses */
+  const pts = S.m === 'fwd' ? [x, x + h] : S.m === 'bwd' ? [x - h, x] : [x - h, x + h];
+  const qx = S.m === 'bwd' ? x - h : x + h;
+  setL('sec', lineThrough(pts[0], F.f(pts[0]), q, F.lo, F.hi));
+  $('rise').setAttribute('d', `M${mx(pts[0]).toFixed(1)} ${my(F.f(pts[0])).toFixed(1)} H${mx(pts[1]).toFixed(1)} V${my(F.f(pts[1])).toFixed(1)}`);
+  const tanOk = S.lockedS && isFinite(d);
+  $('tan').setAttribute('opacity', tanOk ? 1 : 0);
+  if (tanOk) setL('tan', lineThrough(x, y, d, F.lo, F.hi));
+  $('hP').setAttribute('cx', mx(x).toFixed(1)); $('hP').setAttribute('cy', my(y).toFixed(1));
+  let qxs = clamp(qx, F.lo, F.hi);
+  /* When Q is closer to P than a fingertip, its handle waits a little way along the curve so it can still be grabbed. */
+  const sgnQ = Math.sign(qx - x) || 1, near = Math.abs(mx(qxs) - mx(x)) < 14;
+  if (near) qxs = clamp(x + sgnQ * 16 / GM.w * (F.hi - F.lo), F.lo, F.hi);
+  $('hQ').setAttribute('cx', mx(qxs).toFixed(1)); $('hQ').setAttribute('cy', clamp(my(F.f(qxs)), GM.y, GM.y + GM.h).toFixed(1));
+  $('hQ').setAttribute('fill-opacity', near ? .45 : 1);
+  $('pLab').setAttribute('x', mx(x) - 18); $('pLab').setAttribute('y', my(y) - 10);
+  $('qLab').setAttribute('x', mx(qxs) + 10); $('qLab').setAttribute('y', clamp(my(F.f(qxs)), GM.y + 14, GM.y + GM.h) - 10);
+  $('qLab').textContent = near ? 'Q (almost at P)' : 'Q';
+  /* the quotient as a function of x, at this h */
+  let g = '', e = '';
+  for (let i = 0; i <= 300; i++) {
+    const t = F.lo + (F.hi - F.lo) * i / 300, v = quotient(S.f, t, h, S.m), w = F.d(t);
+    g += (i ? 'L' : 'M') + mx(t).toFixed(1) + ' ' + clamp(dyv(v), -500, 1500).toFixed(1);
+    if (isFinite(w)) e += (e && isFinite(F.d(F.lo + (F.hi - F.lo) * (i - 1) / 300)) ? 'L' : 'M') + mx(t).toFixed(1) + ' ' + clamp(dyv(w), -500, 1500).toFixed(1);
+  }
+  $('dQuot').setAttribute('d', S.lockedS ? g : '');
+  $('dExact').setAttribute('d', S.lockedS ? e : '');
+  $('dNow').setAttribute('x1', mx(x)); $('dNow').setAttribute('x2', mx(x)); $('dNow').setAttribute('y1', GD.y); $('dNow').setAttribute('y2', GD.y + GD.h);
+  $('dDot').setAttribute('cx', mx(x)); $('dDot').setAttribute('cy', clamp(dyv(q), GD.y, GD.y + GD.h)); $('dDot').setAttribute('opacity', S.lockedS ? 1 : 0);
+  /* stationary points: where this quotient changes sign */
+  let st = '';
+  if (S.lockedS && Math.abs(h) < 0.05 && S.f !== 'abs') {
+    let prev = quotient(S.f, F.lo, h, S.m);
+    for (let i = 1; i <= 500; i++) {
+      const t = F.lo + (F.hi - F.lo) * i / 500, v = quotient(S.f, t, h, S.m);
+      if (prev * v < 0) { const tt = t - (F.hi - F.lo) / 1000, fy = F.f(tt), mxm = prev > 0; st += `<path d="M${mx(tt) - 6} ${my(fy)} l6 -6 l6 6 l-6 6z" fill="${mxm ? '#2f7d4f' : '#c9416a'}"/><text x="${mx(tt)}" y="${my(fy) + (mxm ? -12 : 22)}" font-size="11.5" font-weight="700" text-anchor="middle" fill="${mxm ? '#2f7d4f' : '#c9416a'}">${mxm ? 'max' : 'min'}</text>`; }
+      prev = v;
+    }
+  }
+  $('statM').innerHTML = st;
+  paintNums(F, x, h, y, d, q);
+  paintErr(F, x);
+}
+function paintNums(F, x, h, y, d, q){
+  const X0 = 600, v = F.v;
+  let s = `<text x="${X0}" y="44" font-size="12" font-weight="700" fill="#4a555b" letter-spacing=".08em">THE NUMBERS</text>`;
+  if (!S.lockedS) { $('numPanel').innerHTML = s + `<text x="${X0}" y="72" font-size="13.5" fill="#7c878c">They appear once you have made a prediction.</text>`; return; }
+  const q1 = S.m === 'sym' ? `[f(${v}+h) − f(${v}−h)] / 2h` : S.m === 'fwd' ? `[f(${v}+h) − f(${v})] / h` : `[f(${v}) − f(${v}−h)] / h`;
+  const rows = [
+    [`P: ${v}`, dig(x, 4)], ['h', hTxt(h)], [q1, dig(q, 12)], [`f′(${v}) by the rules`, isFinite(d) ? dig(d, 12) : 'does not exist'],
+    ['error', isFinite(d) ? sci(Math.abs(q - d)) : '—'],
+  ];
+  rows.forEach((r, i) => s += `<text x="${X0}" y="${72 + i * 24}" font-size="13" fill="#4a555b">${esc(r[0])}</text><text x="980" y="${72 + i * 24}" font-size="13.5" text-anchor="end" fill="${i === 2 ? SEC : i === 3 ? TAN : INK}" class="m" font-weight="600">${esc(r[1])}</text>`);
+  if (S.f === 'stone') s += `<text x="${X0}" y="${72 + 5 * 24 + 4}" font-size="12.5" fill="#4a555b">average velocity over [${dig(Math.min(x, x + h), 4)}, ${dig(Math.max(x, x + h), 4)}] s</text>`;
+  $('numPanel').innerHTML = s;
+}
+let SWEEP = null, ORDER = null;
+function paintErr(F, x){
+  if (!S.lockedS) { $('eLine').setAttribute('d', ''); $('eDots').innerHTML = ''; $('eFit').setAttribute('opacity', 0); $('eFitT').textContent = ''; $('eRound').textContent = ''; $('eNow').setAttribute('opacity', 0); return; }
+  if (!isFinite(F.d(x))) {
+    SWEEP = null; ORDER = null;
+    $('eLine').setAttribute('d', ''); $('eDots').innerHTML = ''; $('eFit').setAttribute('opacity', 0);
+    $('eFitT').textContent = 'f′ does not exist here: nothing to measure';
+    $('eRound').textContent = ''; $('eNow').setAttribute('opacity', 0); return;
+  }
+  SWEEP = errorSweep(S.f, x, S.m, S.sgn); ORDER = fitOrder(SWEEP);
+  const lg = p => Math.log10(Math.max(p.err, 1e-16));
+  $('eLine').setAttribute('d', SWEEP.map((p, i) => (i ? 'L' : 'M') + ex(Math.log10(p.h)).toFixed(1) + ' ' + ey(lg(p)).toFixed(1)).join(''));
+  $('eDots').innerHTML = SWEEP.map(p => `<circle cx="${ex(Math.log10(p.h)).toFixed(1)}" cy="${ey(lg(p)).toFixed(1)}" r="2.6" fill="${p.err < 1e-16 ? '#9aa3a6' : SEC}"/>`).join('');
+  if (ORDER != null) {
+    const fit = SWEEP.filter(p => p.h <= 0.1 + 1e-12 && p.h >= 1e-4 - 1e-16), a = fit[0], b = fit[fit.length - 1];
+    const ya = lg(a), l1 = Math.log10(b.h), yb = ya + ORDER * (l1 - Math.log10(a.h));
+    $('eFit').setAttribute('x1', ex(Math.log10(a.h))); $('eFit').setAttribute('y1', ey(ya));
+    $('eFit').setAttribute('x2', ex(l1)); $('eFit').setAttribute('y2', ey(yb)); $('eFit').setAttribute('opacity', 1);
+    $('eFitT').textContent = `fitted slope ${ORDER.toFixed(2)}: error ∝ h${ORDER > 1.5 ? '²' : ''}`;
+  } else { $('eFit').setAttribute('opacity', 0); $('eFitT').textContent = 'exact at every h (error below 10⁻¹²)'; }
+  const best = SWEEP.reduce((a, b) => b.err < a.err ? b : a);
+  $('eRound').textContent = best.h > 1e-13 && SWEEP[SWEEP.length - 1].err > 10 * Math.max(best.err, 1e-16) ? `best near h = ${hTxt(best.h)}; below that, round-off` : '';
+  $('eNow').setAttribute('x1', ex(-S.hs)); $('eNow').setAttribute('x2', ex(-S.hs)); $('eNow').setAttribute('opacity', 1);
+}
+
+/* ============================================================================
+   Stage 2: the open box
+   ============================================================================ */
+const sB = $('stageB');
+const GV = {x: 540, y: 40, w: 420, h: 250}, GP = {x: 540, y: 360, w: 420, h: 230};
+const BOXC = '#b8c3c9', CUTC = '#d6453d';
+function buildB(){
+  sB.innerHTML = `
+  <defs><pattern id="hatch" width="7" height="7" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="7" height="7" fill="#fde6e3"/><line x1="0" y1="0" x2="0" y2="7" stroke="${CUTC}" stroke-width="2"/></pattern>
+    <linearGradient id="gTin" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#e3e8eb"/><stop offset="1" stop-color="#b6c0c6"/></linearGradient></defs>
+  <rect x="0" y="0" width="1000" height="640" fill="#fbfaf6"/>
+  <text x="30" y="26" font-size="12" font-weight="700" fill="#4a555b" letter-spacing=".08em" id="tSheet">THE SHEET</text>
+  <g id="sheetG"></g>
+  <circle class="hit" id="hX" r="10" fill="${CUTC}" stroke="#fff" stroke-width="2.5"/>
+  <text x="30" y="372" font-size="12" font-weight="700" fill="#4a555b" letter-spacing=".08em">THE BOX IT FOLDS INTO</text>
+  <g id="boxG"></g>
+  <text x="${GV.x}" y="26" font-size="12" font-weight="700" fill="#4a555b" letter-spacing=".08em">VOLUME V(x) = x(L − 2x)(W − 2x)</text>
+  <rect x="${GV.x}" y="${GV.y}" width="${GV.w}" height="${GV.h}" fill="#fff" stroke="#e2ded2"/>
+  <g id="axV"></g><path id="vCurve" fill="none" stroke="${CUR}" stroke-width="2.8"/><line id="vTan" stroke="${TAN}" stroke-width="1.6" stroke-dasharray="6 4"/>
+  <g id="vMark"></g>
+  <text x="${GP.x}" y="${GP.y - 14}" font-size="12" font-weight="700" fill="#4a555b" letter-spacing=".08em">ITS DERIVATIVE V′(x), AND ITS SIGN</text>
+  <rect x="${GP.x}" y="${GP.y}" width="${GP.w}" height="${GP.h}" fill="#fff" stroke="#e2ded2"/>
+  <clipPath id="clipP"><rect x="${GP.x}" y="${GP.y}" width="${GP.w}" height="${GP.h}"/></clipPath>
+  <g id="axP"></g><path id="pCurve" fill="none" stroke="${SEC}" stroke-width="2.6" clip-path="url(#clipP)"/><g id="pMark"></g>`;
+}
+function paintBox(){
+  const sh = SHEETS[S.sheet], L = sh.L, W = sh.W, x = S.cx, xm = W / 2, V = vol(L, W, x), dV = dvol(L, W, x);
+  /* the sheet, top view */
+  const sc = Math.min(440 / L, 280 / W), ox = 30 + (440 - L * sc) / 2, oy = 44 + (290 - W * sc) / 2, c = x * sc;
+  let g = `<rect x="${ox}" y="${oy}" width="${L * sc}" height="${W * sc}" fill="url(#gTin)" stroke="#6b7479"/>`;
+  for (const [cx, cy] of [[ox, oy], [ox + L * sc - c, oy], [ox, oy + W * sc - c], [ox + L * sc - c, oy + W * sc - c]]) g += `<rect x="${cx}" y="${cy}" width="${c}" height="${c}" fill="url(#hatch)" stroke="${CUTC}"/>`;
+  g += `<path d="M${ox + c} ${oy + c} H${ox + L * sc - c} V${oy + W * sc - c} H${ox + c} Z" fill="none" stroke="#4a555b" stroke-dasharray="5 4"/>`;
+  g += `<text x="${ox + L * sc / 2}" y="${oy - 6}" font-size="12.5" text-anchor="middle" fill="#4a555b">L = ${L} ${sh.u}</text><text x="${ox + L * sc + 6}" y="${oy + W * sc / 2}" font-size="12.5" fill="#4a555b">W = ${W}</text>`;
+  if (S.lockedB) g += `<text x="${ox + L * sc / 2}" y="${oy + W * sc / 2 + 5}" font-size="13" text-anchor="middle" fill="#1d2327" class="m">base ${fmt(L - 2 * x, 2)} × ${fmt(W - 2 * x, 2)}</text>`;
+  $('sheetG').innerHTML = g;
+  $('hX').setAttribute('cx', (ox + c).toFixed(1)); $('hX').setAttribute('cy', (oy + c).toFixed(1));
+  $('tSheet').textContent = `THE SHEET (${sh.src.toUpperCase()}): CUT x = ${fmt(x, 2)} ${sh.u}`;
+  /* the box, in a simple oblique view, at a scale that fits the largest box */
+  const bs = Math.min(400 / (L + 0.55 * W), 200 / (0.42 * W + W / 2)), l = (L - 2 * x) * bs, w = (W - 2 * x) * bs, hh = x * bs;
+  const P = (X, Y, Z) => [50 + X + Y * 0.55, 612 - Z - Y * 0.42];
+  const poly = (pts, fill, op = 1) => `<path d="M${pts.map(p => P(...p).map(v => v.toFixed(1)).join(' ')).join(' L')} Z" fill="${fill}" stroke="#4a555b" stroke-width="1.2" opacity="${op}"/>`;
+  let bx = '';
+  if (x > 1e-6 && l > 0 && w > 0) {
+    bx += poly([[0, w, 0], [l, w, 0], [l, w, hh], [0, w, hh]], '#aeb9bf');           // back wall
+    bx += poly([[0, 0, 0], [0, w, 0], [0, w, hh], [0, 0, hh]], '#c3ccd1');           // left wall
+    bx += poly([[0, 0, 0], [l, 0, 0], [l, w, 0], [0, w, 0]], '#d9dfe2');             // base
+    bx += poly([[l, 0, 0], [l, w, 0], [l, w, hh], [l, 0, hh]], '#c9d2d6', .92);      // right wall
+    bx += poly([[0, 0, 0], [l, 0, 0], [l, 0, hh], [0, 0, hh]], '#dfe5e8', .9);       // front wall
+  } else bx += `<text x="140" y="560" font-size="13" fill="#7c878c">${x <= 1e-6 ? 'No cut, no walls: a flat sheet holds nothing.' : 'The cuts meet: nothing is left for a base.'}</text>`;
+  if (S.lockedB) bx += `<text x="30" y="400" font-size="15" fill="#1d2327" class="m">V = ${fmt(x, 2)} × ${fmt(L - 2 * x, 2)} × ${fmt(W - 2 * x, 2)} = ${fmt(V, 2)} ${sh.u}³</text>`;
+  $('boxG').innerHTML = bx;
+  /* V(x) and V'(x) */
+  const xc = critical(L, W), Vmax = vol(L, W, xc), dmin = Math.min(dvol(L, W, xm), dvol(L, W, clamp((L + W) / 6, 0, xm))), dmax = dvol(L, W, 0);
+  const vx = t => GV.x + t / xm * GV.w, vy = v => GV.y + GV.h - v / (Vmax * 1.15) * GV.h;
+  const px = t => GP.x + t / xm * GP.w, py = v => GP.y + GP.h - (v - dmin * 1.1) / (dmax * 1.1 - dmin * 1.1) * GP.h;
+  let a = '', p = '';
+  for (let k = 0; k <= 4; k++) { const t = xm * k / 4; a += `<text x="${vx(t)}" y="${GV.y + GV.h + 15}" font-size="10.5" text-anchor="middle" fill="#7c878c" class="m">${+t.toFixed(3)}</text>`; p += `<text x="${px(t)}" y="${GP.y + GP.h + 15}" font-size="10.5" text-anchor="middle" fill="#7c878c" class="m">${+t.toFixed(3)}</text>`; }
+  a += `<text x="${GV.x + GV.w}" y="${GV.y + GV.h + 30}" font-size="11" text-anchor="end" fill="#7c878c">x (${sh.u}) →</text><text x="${GV.x - 5}" y="${vy(0) + 4}" font-size="10.5" text-anchor="end" fill="#7c878c" class="m">0</text>`;
+  p += `<line x1="${GP.x}" y1="${py(0)}" x2="${GP.x + GP.w}" y2="${py(0)}" stroke="#9aa3a6"/><text x="${GP.x - 5}" y="${py(0) + 4}" font-size="10.5" text-anchor="end" fill="#7c878c" class="m">0</text>`;
+  $('axV').innerHTML = a; $('axP').innerHTML = p;
+  let cv = '', cp = '';
+  for (let i = 0; i <= 200; i++) { const t = xm * i / 200; cv += (i ? 'L' : 'M') + vx(t).toFixed(1) + ' ' + vy(vol(L, W, t)).toFixed(1); cp += (i ? 'L' : 'M') + px(t).toFixed(1) + ' ' + py(dvol(L, W, t)).toFixed(1); }
+  $('vCurve').setAttribute('d', cv); $('pCurve').setAttribute('d', S.lockedB ? cp : '');
+  const w0 = xm * 0.1;
+  if (S.lockedB) { $('vTan').setAttribute('x1', vx(Math.max(0, x - w0))); $('vTan').setAttribute('y1', vy(V + dV * (Math.max(0, x - w0) - x))); $('vTan').setAttribute('x2', vx(Math.min(xm, x + w0))); $('vTan').setAttribute('y2', vy(V + dV * (Math.min(xm, x + w0) - x))); }
+  $('vTan').setAttribute('opacity', S.lockedB ? 1 : 0);
+  let vm = `<circle cx="${vx(x)}" cy="${vy(V)}" r="5.5" fill="${CUR}" stroke="#fff" stroke-width="2"/>`;
+  if (S.boxFound.includes(S.sheet)) vm += `<line x1="${vx(xc)}" y1="${GV.y}" x2="${vx(xc)}" y2="${GV.y + GV.h}" stroke="#2f7d4f" stroke-dasharray="4 4"/><text x="${vx(xc) + 6}" y="${GV.y + 16}" font-size="12" fill="#2f7d4f" font-weight="700" class="m">max V(${+xc.toFixed(4)}) = ${+Vmax.toFixed(3)}</text>`;
+  $('vMark').innerHTML = vm;
+  let pm = '';
+  if (S.lockedB) {
+    pm += `<circle cx="${px(x)}" cy="${py(dV)}" r="5.5" fill="${SEC}" stroke="#fff" stroke-width="2"/>` +
+      `<rect x="${GP.x}" y="${GP.y + GP.h - 22}" width="${px(xc) - GP.x}" height="22" fill="#2f7d4f" opacity=".12"/><rect x="${px(xc)}" y="${GP.y + GP.h - 22}" width="${GP.x + GP.w - px(xc)}" height="22" fill="#c9416a" opacity=".12"/>` +
+      `<text x="${(GP.x + px(xc)) / 2}" y="${GP.y + GP.h - 7}" font-size="12" text-anchor="middle" fill="#2f7d4f" font-weight="700">V′ &gt; 0: V rising</text>` +
+      `<text x="${(px(xc) + GP.x + GP.w) / 2}" y="${GP.y + GP.h - 7}" font-size="12" text-anchor="middle" fill="#c9416a" font-weight="700">V′ &lt; 0: V falling</text>`;
+  }
+  $('pMark').innerHTML = pm;
+}
+
+/* ============================================================================
+   Narrator, findings, explanations
+   ============================================================================ */
+function paintWhy(){
+  const locked = S.tab === 'S' ? S.lockedS : S.lockedB;
+  $('whyCard').hidden = !locked;
+  if (!locked) return;
+  let t = '';
+  if (S.tab === 'S') {
+    const F = FUN[S.f], x = S.x0, h = hNow(), q = quotient(S.f, x, h, S.m), d = F.d(x);
+    if (S.f === 'abs' && Math.abs(x) < 1e-9) {
+      t = `<p>At x = 0 the quotient is <span class="mono">${dig(quotient('abs', 0, Math.abs(h), 'fwd'), 4)}</span> for every h &gt; 0 and <span class="mono">${dig(quotient('abs', 0, -Math.abs(h), 'fwd'), 4)}</span> for every h &lt; 0. ` +
+        `The right-hand and left-hand limits differ, so <b>the limit does not exist: |x| has no derivative at 0</b>, and no single tangent. (The symmetric quotient gives 0 here — a number that is not a derivative.)</p>`;
+    } else {
+      t = `<p>The slope of PQ is <span class="mono">${dig(q, 8)}</span>; the tangent’s is <span class="mono">${isFinite(d) ? dig(d, 8) : '—'}</span>. ` +
+        `As h → 0 the chord turns into the tangent, and the quotient graph below settles onto f′.</p>`;
+      if (ORDER != null) t += `<p>Measured: the error falls like h<sup>${ORDER.toFixed(2)}</sup>. ${S.m === 'sym' ? 'The symmetric quotient cancels the h term of the Taylor series, so its error is ∝ h².' : `A one-sided quotient is off by about ½f″(x)·h${Math.abs(F.d2(x)) < 1e-9 ? ' — but f″ = 0 here, so the next term, ∝ h², is what you see' : ''}.`}</p>`;
+      else if (isFinite(d)) t += `<p>The error is below 10⁻¹² at every h: for a quadratic ${S.m === 'sym' ? 'the symmetric quotient is exact' : 'this cannot happen'} — f(x+h) − f(x−h) = 2h·f′(x) with nothing left over.</p>`;
+      if (S.hs > 9) t += `<p><b>h = ${hTxt(h)} is too small.</b> f(x+h) and f(x) agree in almost all of their 16 digits, and subtracting them throws those digits away. The limit is fine; the arithmetic is not.</p>`;
+      if (S.f === 'cubic' && Math.abs(d) < 0.02) t += `<p>f′ = 0 here: a stationary point. f″(${dig(x, 2)}) = ${fmt(F.d2(x), 2)} ${F.d2(x) < 0 ? '&lt; 0: a local maximum' : '&gt; 0: a local minimum'} (second derivative test).</p>`;
+    }
+  } else {
+    const sh = SHEETS[S.sheet], L = sh.L, W = sh.W, x = S.cx, xc = critical(L, W);
+    t = `<p>V′(x) = 12x² − ${4 * (L + W)}x + ${L * W} = <span class="mono">${fmt(dvol(L, W, x), 3)}</span> at x = ${fmt(x, 2)}: ` +
+      (Math.abs(x - xc) <= tolB(L, W) ? `<b>zero, near enough</b>. The box can grow no more.` : dvol(L, W, x) > 0 ? `positive, so a slightly bigger cut makes a bigger box.` : `negative, so the box is shrinking: cut less.`) + `</p>` +
+      `<p>A deeper cut makes the walls taller but the base smaller. V′ = 0 at x = ${+xc.toFixed(4)} (the other root, ${+(((L + W) + Math.sqrt((L + W) ** 2 - 3 * L * W)) / 6).toFixed(4)}, would need a cut wider than half the sheet). ` +
+      `V″ = ${fmt(d2vol(L, W, xc), 2)} &lt; 0 there: a maximum.</p>`;
+  }
+  $('why').innerHTML = t;
+}
+const tolB = (L, W) => Math.max(0.02, 0.004 * Math.min(L, W));
+function checkS(){
+  if (!S.lockedS) return;
+  const F = FUN[S.f], x = S.x0, h = hNow(), q = quotient(S.f, x, h, S.m), d = F.d(x);
+  if (isFinite(d) && Math.abs(h) <= 1e-3 && Math.abs(q - d) < 1e-2) discover('tangent');
+  if (S.f === 'stone' && Math.abs(x - 2) < 1e-9 && Math.abs(h) <= 0.0101) {
+    if (h > 0) S.seenPos = true; else S.seenNeg = true;
+    if (S.seenPos && S.seenNeg) { discover('stone'); explainS(); }
+  }
+  if (S.f === 'abs' && Math.abs(x) < 1e-9 && S.m !== 'sym') {
+    if (h > 0) S.absPos = true; else S.absNeg = true;
+    if (S.absPos && S.absNeg) discover('kink');
+  }
+  if (S.m === 'sym' && ORDER != null && Math.abs(ORDER - 2) < 0.15) discover('order2');
+  if (SWEEP && S.hs >= 10) {
+    const e = Math.abs(q - d), e6 = SWEEP[12].err;
+    if (e > 10 * e6) discover('roundoff');
+  }
+  if (S.f === 'cubic' && Math.abs(Math.abs(x) - 1) < 0.011 && Math.abs(h) < 0.05) discover('stationary');
+}
+let EXPL = {S: false, B: false};
+function explainS(){
+  if (EXPL.S || !POES) return;
+  EXPL.S = true;
+  const lo = quotient('stone', 2, -0.01, 'fwd'), hi = quotient('stone', 2, 0.01, 'fwd'), lo2 = quotient('stone', 2, -1e-6, 'fwd'), hi2 = quotient('stone', 2, 1e-6, 'fwd');
+  POES.explain(`From the left, over [1.99, 2] the stone averages <b>${dig(lo, 3)} m/s</b>; from the right, over [2, 2.01], <b>${dig(hi, 3)} m/s</b> — the book’s Tables 12.2 and 12.3. ` +
+    `Shrink h to 10⁻⁶ and they become ${dig(lo2, 6)} and ${dig(hi2, 6)}. Both sides close in on one number: <b>the velocity at t = 2 is 19.6 m/s</b>, the slope of the tangent. ` +
+    `“No distance in no time” is 0/0, which is why we take a limit instead of dividing.`);
+}
+function checkB(){
+  if (!S.lockedB) return;
+  const sh = SHEETS[S.sheet], xc = critical(sh.L, sh.W);
+  if (Math.abs(S.cx - xc) <= tolB(sh.L, sh.W)) {
+    if (!S.boxFound.includes(S.sheet)) S.boxFound.push(S.sheet);
+    discover('box');
+    if (S.boxFound.length >= 2) discover('box2');
+    if (!EXPL.B && POEB) {
+      EXPL.B = true;
+      const L = 18, W = 18;
+      POEB.explain(`For the 18 cm square, V(x) = x(18 − 2x)². The model’s V′(x) = 12x² − 144x + 324 = 12(x − 3)(x − 9) is zero at x = 3 (x = 9 leaves no base). ` +
+        `V(2) = ${vol(L, W, 2)}, <b>V(3) = ${vol(L, W, 3)} cm³</b>, V(4) = ${vol(L, W, 4)}; V″(3) = ${d2vol(L, W, 3)} &lt; 0. ` +
+        `The tallest box (x → 9) and the widest base (x → 0) both hold nothing: the best is where V stops rising, V′ = 0.`);
+    }
+  }
+}
+
+/* ============================================================================
+   Paint and controls
+   ============================================================================ */
+buildS(); buildB();
+function paint(){
+  const s = S.tab === 'S';
+  $('tabS').setAttribute('aria-selected', s); $('tabB').setAttribute('aria-selected', !s);
+  $('stageS').toggleAttribute('hidden', !s); $('stageB').toggleAttribute('hidden', s);
+  $('cardS').hidden = !s; $('cardB').hidden = s; $('poeS').hidden = !s; $('poeB').hidden = s;
+  $('gate').hidden = s ? S.lockedS : S.lockedB;
+  if (s) { paintS(); paintSideS(); checkS(); }
+  else { checkB(); paintBox(); paintSideB(); }
+  paintWhy();
+}
+function paintSideS(){
+  document.querySelectorAll('#fChips .chip').forEach(c => c.setAttribute('aria-pressed', c.dataset.f === S.f));
+  document.querySelectorAll('#mChips .chip').forEach(c => c.setAttribute('aria-pressed', c.dataset.m === S.m));
+  document.querySelectorAll('#sgnChips .chip').forEach(c => c.setAttribute('aria-pressed', +c.dataset.s === S.sgn));
+  $('hs').value = S.hs; $('hOut').textContent = hTxt(hNow());
+  if (!S.lockedS) { $('readS').innerHTML = ''; return; }
+  const F = FUN[S.f], d = F.d(S.x0);
+  $('readS').innerHTML = `<span>slope of PQ</span><b>${dig(quotient(S.f, S.x0, hNow(), S.m), 10)}</b><span>f′ (rules)</span><b>${isFinite(d) ? dig(d, 10) : 'none'}</b>` +
+    (ORDER != null ? `<span>measured order</span><b>${ORDER.toFixed(3)}</b>` : '');
+}
+function paintSideB(){
+  const sh = SHEETS[S.sheet];
+  document.querySelectorAll('#sheetChips .chip').forEach(c => c.setAttribute('aria-pressed', c.dataset.sh === S.sheet));
+  $('cx').max = Math.min(sh.L, sh.W) / 2; $('cx').value = S.cx; $('cxOut').textContent = fmt(S.cx, 2) + ' ' + sh.u;
+  if (!S.lockedB) { $('readB').innerHTML = ''; return; }
+  const L = sh.L, W = sh.W, x = S.cx;
+  $('readB').innerHTML = `<span>V(x)</span><b>${fmt(vol(L, W, x), 3)} ${sh.u}³</b><span>V′(x)</span><b>${fmt(dvol(L, W, x), 3)}</b><span>V″(x)</span><b>${fmt(d2vol(L, W, x), 2)}</b>`;
+}
+$('tabS').addEventListener('click', () => { S.tab = 'S'; sound('tick'); paint(); track('tab', {tab: 'secant'}); });
+$('tabB').addEventListener('click', () => { S.tab = 'B'; sound('tick'); paint(); track('tab', {tab: 'box'}); });
+$('fChips').innerHTML = Object.entries(FUN).map(([id, F]) => `<button class="chip" data-f="${id}" aria-pressed="${id === S.f}">${esc(F.label)}</button>`).join('');
+$('fChips').addEventListener('click', e => {
+  const c = e.target.closest('[data-f]'); if (!c || c.disabled) return;
+  S.f = c.dataset.f; S.x0 = FUN[S.f].x0; axesFor(); sound('pop'); paint(); track('function', {f: S.f});
+});
+$('mChips').addEventListener('click', e => { const c = e.target.closest('[data-m]'); if (!c || c.disabled) return; S.m = c.dataset.m; sound('tick'); paint(); track('method', {m: S.m}); });
+$('sgnChips').addEventListener('click', e => { const c = e.target.closest('[data-s]'); if (!c || c.disabled) return; S.sgn = +c.dataset.s; sound('tick'); paint(); });
+$('hs').addEventListener('input', e => { S.hs = +e.target.value; paint(); });
+$('hs').addEventListener('change', () => track('h', {h: hNow()}));
+const snapX = v => Math.round(v * 100) / 100;
+drag($('hP'), sS, {
+  start(){ if (!S.lockedS) return false; },
+  move(p){ const F = FUN[S.f]; S.x0 = clamp(snapX(umx(p.x)), F.lo, F.hi); paint(); },
+  end(){ track('dragP', {x: S.x0}); },
+});
+drag($('hQ'), sS, {
+  start(){ if (!S.lockedS) return false; },
+  move(p){
+    const F = FUN[S.f], xq = clamp(umx(p.x), F.lo, F.hi);
+    let h = S.m === 'bwd' ? S.x0 - xq : xq - S.x0;
+    if (Math.abs(h) < 1e-4) h = (h < 0 ? -1 : 1) * 1e-4;
+    S.sgn = h < 0 ? -1 : 1; S.hs = clamp(Math.round(-Math.log10(Math.abs(h)) * 20) / 20, 0, 13);
+    paint();
+  },
+  end(){ track('dragQ', {h: hNow()}); },
+});
+$('sheetChips').addEventListener('click', e => {
+  const c = e.target.closest('[data-sh]'); if (!c || c.disabled) return;
+  S.sheet = c.dataset.sh; const sh = SHEETS[S.sheet]; S.cx = +(Math.min(sh.L, sh.W) / 12).toFixed(2); sound('pop'); paint(); track('sheet', {sheet: S.sheet});
+});
+$('cx').addEventListener('input', e => { S.cx = +e.target.value; paint(); });
+$('cx').addEventListener('change', () => track('cut', {x: S.cx}));
+drag($('hX'), sB, {
+  start(){ if (!S.lockedB) return false; },
+  move(p){
+    const sh = SHEETS[S.sheet], sc = Math.min(440 / sh.L, 280 / sh.W), ox = 30 + (440 - sh.L * sc) / 2, oy = 44 + (290 - sh.W * sc) / 2;
+    const v = ((p.x - ox) + (p.y - oy)) / 2 / sc;
+    S.cx = clamp(Math.round(v * 100) / 100, 0, Math.min(sh.L, sh.W) / 2); paint();
+  },
+  end(){ track('dragCut', {x: S.cx}); },
+});
+function lockS(lock){
+  document.querySelectorAll('#fChips .chip, #mChips .chip, #sgnChips .chip').forEach(c => c.disabled = lock);
+  $('hs').disabled = lock;
+  for (const id of ['hP', 'hQ']) $(id).style.pointerEvents = lock ? 'none' : '';
+}
+function lockB(lock){
+  document.querySelectorAll('#sheetChips .chip').forEach(c => c.disabled = lock);
+  $('cx').disabled = lock; $('hX').style.pointerEvents = lock ? 'none' : '';
+}
+
+/* ============================================================================
+   Start
+   ============================================================================ */
+findings($('finds'), [
+  {id: 'tangent',    icon: '⟋', label: 'The secant becomes the tangent', hint: 'Bring Q very close to P'},
+  {id: 'stone',      icon: '↓', label: 'The stone at t = 2 s: 19.6 m/s, from both sides', hint: 'Close in on t = 2 from the left and the right'},
+  {id: 'kink',       icon: '∨', label: '|x| at 0: two one-sided limits, no derivative', hint: 'Try |x| at 0 from both sides'},
+  {id: 'order2',     icon: '²', label: 'The symmetric quotient: error ∝ h²', hint: 'Change the rule for the quotient'},
+  {id: 'roundoff',   icon: '≈', label: 'Too small an h: round-off wins', hint: 'Make h smaller than 10⁻¹⁰'},
+  {id: 'stationary', icon: '◇', label: 'f′ = 0: a maximum or a minimum', hint: 'Find where x³ − 3x turns'},
+  {id: 'box',        icon: '▭', label: 'The biggest box is where V′ = 0', hint: 'Cut the corners just right'},
+  {id: 'box2',       icon: '▯', label: 'A second sheet, a second maximum', hint: 'Try another sheet'},
+], () => toast('All eight: the derivative as a limit, measured, broken, and put to work.', 4200));
+
+const POES = predict($('poeS'), {
+  id: 'stone-velocity',
+  q: 'A stone dropped from a cliff has fallen s = 4.9t² metres after t seconds. How fast is it moving at the instant t = 2 s?',
+  options: [
+    {id: 'avg',  text: '9.8 m/s — its average speed over the first 2 seconds.'},
+    {id: 'inst', text: '19.6 m/s.', right: true},
+    {id: 'none', text: 'It cannot be found: in one instant it moves no distance, and 0/0 means nothing.'},
+    {id: 'g',    text: '4.9 m/s.'},
+  ],
+  onLock(){ S.lockedS = true; lockS(false); paint(); },
+});
+const POEB = predict($('poeB'), {
+  id: 'open-box',
+  q: 'Cut equal squares of side x from the corners of an 18 cm × 18 cm square of tin and fold up the sides into an open box. Which x gives the biggest box?',
+  options: [
+    {id: 'nine', text: 'Nearly 9 cm: the tallest possible box.'},
+    {id: 'half', text: '4.5 cm: halfway.'},
+    {id: 'three', text: '3 cm.', right: true},
+    {id: 'one',  text: '1 cm: keep the base as big as possible.'},
+  ],
+  onLock(){ S.lockedB = true; lockB(false); paint(); },
+});
+lockS(!POES.locked); lockB(!POEB.locked);
+if (!Play.FF('predict')) { S.lockedS = S.lockedB = true; }
+axesFor();
+paint();
+window.applyFeatures = () => paint();
+window.PG_STATE = () => JSON.parse(JSON.stringify(S));
+window.PG_MODEL = {FUN, quotient, errorSweep, fitOrder, vol, dvol, d2vol, critical, searchMax};
+</script>
+</body>
+</html>

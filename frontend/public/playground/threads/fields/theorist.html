@@ -1,0 +1,599 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Moving charges and magnetism</title>
+<meta name="description" content="CBSE Class 12 Physics, Ch 4 Moving Charges and Magnetism: fire a charge into a magnetic field and integrate F = q(E + v x B) in 3-D to get its circle, helix or straight line; then cross E and B into a velocity selector, and tune a cyclotron to resonance.">
+<link rel="icon" href="../../favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600&family=Inter:wght@400;500;600;700&family=Nunito:wght@500;700;800&family=Newsreader:opsz,wght@6..72,400;6..72,500&family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="../../play.css">
+<style>
+.pg-stage{background:#fbfaf6}
+.tabs{display:flex; gap:4px; padding:8px; background:var(--sunk); border-bottom:1px solid var(--hair)}
+.tabs button{flex:1; border:0; background:transparent; border-radius:8px; padding:8px 10px; font-weight:600; font-size:14px; cursor:pointer; color:var(--ink-2)}
+.tabs button[aria-selected="true"]{background:var(--card); color:var(--ink); box-shadow:var(--shadow)}
+.gate{position:absolute; inset:52px 0 0 0; display:grid; place-items:center; pointer-events:none}
+.gate span{background:rgba(29,35,39,.86); color:#fff; padding:10px 16px; border-radius:99px; font-weight:600; font-size:14px}
+.seg{display:flex; flex-wrap:wrap; background:var(--sunk); border-radius:9px; padding:3px; gap:3px; margin:6px 0}
+.seg button{flex:1 1 auto; border:0; background:transparent; border-radius:7px; padding:5px 8px; font-weight:600; font-size:12.5px; cursor:pointer; color:var(--ink-2)}
+.seg button[aria-pressed="true"]{background:var(--card); color:var(--ink); box-shadow:var(--shadow)}
+.seg button:disabled{cursor:default; opacity:.5}
+.ctl{grid-template-columns:100px 1fr 92px; margin:2px 0}
+.ctl label{font-size:12.5px; line-height:1.2}
+.ctl output{font-family:var(--font-mono); font-size:12px; font-weight:600; min-width:0}
+.readout{display:grid; grid-template-columns:1fr auto; gap:2px 12px; font-size:13px; align-items:baseline}
+.readout span{color:var(--ink-2)}
+.readout b{font-family:var(--font-mono); font-weight:600; font-size:12.5px; font-variant-numeric:tabular-nums; text-align:right}
+.readout .sep{grid-column:1/-1; height:1px; background:var(--hair); margin:4px 0}
+.why p{font-size:13.5px; margin-bottom:.5em}
+.why b{color:var(--ink)}
+.hint{font-size:12.5px; color:var(--ink-3); margin:6px 0 0}
+.btn[aria-pressed="true"]{background:var(--accent-soft); border-color:var(--accent)}
+svg text.m{font-family:var(--font-mono)}
+svg text.serif{font-family:"Newsreader",Georgia,serif}
+@media (max-width:1180px) and (min-width:981px){ .pg-main.wide-side{grid-template-columns:minmax(0,1fr) 350px} }
+</style>
+</head>
+<body>
+<header class="pg-top"></header>
+
+<div class="pg-intro">
+  <h1>Moving charges and magnetism</h1>
+  <p>CBSE Class 12 Physics, Chapter 4. A charge feels the Lorentz force <b>F = q(E + v &times; B)</b>. Nothing here is a drawn circle or a drawn
+     spiral: the page integrates that force in three dimensions, step by step (RK4), from whatever speed, angle, mass and field you set, and the
+     path &mdash; a circle, a straight line, or a helix &mdash; comes out of the integration. Then cross an E field with a B field into a velocity
+     selector, and use the same integrator inside a cyclotron.</p>
+</div>
+
+<main class="pg-main wide-side">
+  <section class="pg-stage" id="stageWrap">
+    <div class="tabs" role="tablist" aria-label="Two experiments">
+      <button role="tab" id="tabHelix" data-tab="helix" aria-selected="true">Circular and helical motion</button>
+      <button role="tab" id="tabSel" data-tab="sel" aria-selected="false">Velocity selector and the cyclotron</button>
+    </div>
+    <svg id="helixStage" viewBox="0 0 1000 660" role="img" aria-label="A charged particle's path in a magnetic field, traced by integrating the Lorentz force, and a scatter plot of the period measured at different speeds"></svg>
+    <svg id="selStage" viewBox="0 0 1000 660" role="img" aria-label="A velocity selector with crossed E and B fields, and a cyclotron spiralling a charge outward in resonance" hidden></svg>
+    <div class="gate" id="gate"><span>Make your prediction first &rarr;</span></div>
+  </section>
+
+  <aside class="pg-side">
+    <div id="poe"></div>
+
+    <div class="card" id="ctlHelix">
+      <div class="kicker">The particle</div>
+      <div class="seg" id="partSeg">
+        <button data-part="electron" aria-pressed="true">electron</button>
+        <button data-part="proton" aria-pressed="false">proton</button>
+        <button data-part="ion" aria-pressed="false">heavy ion</button>
+      </div>
+      <div class="ctl" id="ctlIonMass" hidden><label for="ionMass">Mass / mₑ</label><input type="range" id="ionMass" min="1" max="4" step="0.02" value="2"><output id="ionMassOut"></output></div>
+      <div class="row"><button class="btn sm" id="btnSign" aria-pressed="true">charge: &minus;</button></div>
+      <div class="ctl"><label for="speed">Speed v</label><input type="range" id="speed" min="5" max="7.7" step="0.02" value="6.5"><output id="speedOut"></output></div>
+      <div class="ctl"><label for="angle">Angle to B</label><input type="range" id="angle" min="0" max="90" step="1" value="35"><output id="angleOut">35&deg;</output></div>
+      <div class="ctl"><label for="bfield">Field B</label><input type="range" id="bfield" min="-3.2" max="-1" step="0.02" value="-3"><output id="bfieldOut"></output></div>
+      <div class="kicker" style="margin-top:8px">From the book</div>
+      <div class="seg" id="presetSeg">
+        <button data-preset="ex43">Example 4.3</button>
+        <button data-preset="ex411">Exercise 4.11</button>
+      </div>
+      <p class="hint">Speed and field are set on a log scale &mdash; drag all the way to see both ends. 90&deg; is a circle, 0&deg; is a straight line, anything between is a helix.</p>
+    </div>
+
+    <div class="card" id="ctlSel" hidden>
+      <div class="kicker">The velocity selector</div>
+      <div class="ctl"><label for="selE">Field E</label><input type="range" id="selE" min="500" max="20000" step="100" value="6000"><output id="selEOut"></output></div>
+      <div class="ctl"><label for="selB">Field B</label><input type="range" id="selB" min="0.005" max="0.2" step="0.001" value="0.05"><output id="selBOut"></output></div>
+      <div class="ctl"><label for="selV">Speed v</label><input type="range" id="selV" min="1e4" max="2e6" step="1e4" value="500000"><output id="selVOut"></output></div>
+      <div class="row"><button class="btn sm" id="btnSnapV">Set v = E/B exactly</button></div>
+      <div class="kicker" style="margin-top:10px">The cyclotron</div>
+      <div class="ctl"><label for="cycB">Field B</label><input type="range" id="cycB" min="0.1" max="2" step="0.01" value="1"><output id="cycBOut"></output></div>
+      <div class="ctl"><label for="cycDetune">Applied freq.</label><input type="range" id="cycDetune" min="-30" max="30" step="1" value="0"><output id="cycDetuneOut">0%</output></div>
+      <div class="row"><button class="btn sm" id="btnTune">Tune to resonance</button></div>
+      <p class="hint">The cyclotron kicks the proton across the gap every half-turn. Its own half-turn time never changes with speed &mdash; only the applied frequency can fall out of step.</p>
+    </div>
+
+    <div class="card" id="measureCard">
+      <div class="kicker" id="measureKick">Measured</div>
+      <div id="meters"></div>
+    </div>
+
+    <div class="card why" id="whyCard" hidden>
+      <div class="kicker">What the model is doing</div>
+      <div id="why"></div>
+    </div>
+
+    <div class="card"><div class="kicker">To find</div><div id="finds"></div></div>
+  </aside>
+</main>
+
+<script src="../../play.js"></script>
+<script>
+'use strict';
+const {$, esc, clamp, fmt, drag, loop, sound, say, track, toast, predict, findings, discover, found,
+       shareState, sharedState, mount, reduced} = Play;
+mount({thread: 'fields', band: 'theorist'});
+const $$ = s => Array.from(document.querySelectorAll(s));
+
+/* MODEL:start ==================================================================
+   The Lorentz force, Eq. (4.3) of the chapter: F = q(E + v x B). Everything below
+   is one RK4 integrator of dv/dt = (q/m)(E + v x B), dx/dt = v, called with
+   different E and B for each experiment -- no path is a drawn circle or spiral.
+
+   TAB I. B = (0,0,Bz), E = 0. Splitting v into a part perpendicular to B and a
+   part v_par along it (Sec 4.3): the perpendicular part traces a circle of
+   radius r = m v_perp / (|q| B) [Eq. 4.5] at the cyclotron frequency
+   nu_c = |q| B / (2 pi m) [Eq. 4.6(a), independent of speed], while v_par carries
+   the particle along B, so the two together trace a helix of pitch
+   p = v_par x T = 2 pi m v_par / (|q| B) [Eq. 4.6(b)].
+
+   TAB II. Velocity selector: E = (0,Ey,0), B = (0,0,Bz), v0 = (v0,0,0). The net
+   sideways force is q(Ey - v0 Bz); it is exactly zero, for either sign of q,
+   only at v0 = Ey/Bz.
+   Cyclotron: B = (0,0,Bz) only; the particle is kicked by an accelerating
+   voltage every half cyclotron period T/2 = pi m/(|q| Bz), a time that does NOT
+   depend on the particle's speed. If the applied voltage's own frequency
+   matches 1/T exactly the kicks stay in phase and the energy -- so the radius,
+   r = sqrt(2 m E_k)/(|q| Bz) -- climbs every crossing; detuned, the phase drifts
+   and the kicks start cancelling.
+   ============================================================================ */
+const E_CHARGE = 1.602176634e-19, M_E = 9.1093837015e-31, M_P = 1.67262192369e-27;
+
+/* One RK4 step of dv/dt = (q/m)(E + v x B), dx/dt = v. */
+function rk4Step(s, dt, qom, E, B){
+  const deriv = st => {
+    const vx = st[3], vy = st[4], vz = st[5];
+    const ax = qom * (E[0] + vy * B[2] - vz * B[1]);
+    const ay = qom * (E[1] + vz * B[0] - vx * B[2]);
+    const az = qom * (E[2] + vx * B[1] - vy * B[0]);
+    return [vx, vy, vz, ax, ay, az];
+  };
+  const add = (a, b, h) => a.map((v, i) => v + b[i] * h);
+  const k1 = deriv(s), k2 = deriv(add(s, k1, dt / 2)), k3 = deriv(add(s, k2, dt / 2)), k4 = deriv(add(s, k3, dt));
+  return s.map((v, i) => v + (dt / 6) * (k1[i] + 2 * k2[i] + 2 * k3[i] + k4[i]));
+}
+/* Integrate `steps` RK4 steps of size dt from state0 = [x,y,z,vx,vy,vz]; returns the array of states. */
+function integrate(state0, dt, steps, q, m, E, B){
+  const qom = q / m, out = [state0.slice()];
+  let s = state0.slice();
+  for (let i = 0; i < steps; i++) { s = rk4Step(s, dt, qom, E, B); out.push(s.slice()); }
+  return out;
+}
+function cyclotronPeriod(m, q, Bz){ return 2 * Math.PI * m / (Math.abs(q) * Bz); }
+function cyclotronFreq(m, q, Bz){ return Math.abs(q) * Bz / (2 * Math.PI * m); }
+function larmorRadius(m, q, vPerp, Bz){ return m * vPerp / (Math.abs(q) * Bz); }
+/* Trace a helix: B along z only, v0 at angle alpha (deg) to B. Returns {states, dt, steps, T}. */
+function traceHelix(q, m, v0, alphaDeg, Bz, revolutions){
+  const a = alphaDeg * Math.PI / 180, vPerp = v0 * Math.sin(a), vPar = v0 * Math.cos(a);
+  const T = cyclotronPeriod(m, q, Bz), dt = T / 90, steps = Math.max(4, Math.round(revolutions * 90));
+  const state0 = [0, 0, 0, vPerp, 0, vPar];
+  return {states: integrate(state0, dt, steps, q, m, [0, 0, 0], [0, 0, Bz]), dt, steps, T, vPerp, vPar};
+}
+/* Trace the velocity selector: v0 along x, E along y, B along z, over a short
+   physical length (metres). The step is capped at a fraction of the particle's
+   OWN cyclotron period in this B, not just the transit time -- otherwise a slow
+   particle (many gyrations during its transit) makes the plain RK4 step blow up. */
+function traceSelector(q, m, v0, Ey, Bz, lengthM){
+  const transit = lengthM / v0, Tcyc = cyclotronPeriod(m, q, Bz);
+  const dt = Math.min(transit / 240, Tcyc / 24);
+  const steps = Math.min(4000, Math.max(24, Math.ceil(transit / dt)));
+  const state0 = [0, 0, 0, v0, 0, 0];
+  return integrate(state0, dt, steps, q, m, [0, Ey, 0], [0, 0, Bz]);
+}
+/* The cyclotron: N half-turn crossings; the applied voltage has angular frequency
+   (1 + detune) x the natural angular frequency. dE is the energy (J) gained on a
+   perfectly-timed crossing; a detuned crossing gains dE*cos(phase mismatch). */
+function cyclotronRun(m, q, Bz, detune, N, dE){
+  const wNat = 2 * Math.PI * cyclotronFreq(m, q, Bz), wApp = wNat * (1 + detune), halfT = Math.PI * m / (Math.abs(q) * Bz);
+  const v0 = 1e5;
+  let E = 0.5 * m * v0 * v0;                 // a small starting kinetic energy so r0 > 0
+  const rows = [{k: 0, t: 0, E, r: larmorRadius(m, q, v0, Bz), phase: 0}];
+  let t = 0;
+  for (let k = 1; k <= N; k++) {
+    t += halfT;
+    const phase = ((wApp - wNat) * t) % (2 * Math.PI);
+    const gain = dE * Math.cos(phase);
+    E = Math.max(0.5 * m * v0 * v0 * 0.25, E + gain);
+    const v = Math.sqrt(2 * E / m);
+    rows.push({k, t, E, r: larmorRadius(m, q, v, Bz), phase});
+  }
+  return rows;
+}
+/* The path starts ON the circle, not at its centre, so the farthest point from
+   the origin is a diameter away, not a radius: measure the radius from the
+   bounding box of the (x,y) trace instead. */
+function measuredRadius(states){
+  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+  for (const s of states) { minX = Math.min(minX, s[0]); maxX = Math.max(maxX, s[0]); minY = Math.min(minY, s[1]); maxY = Math.max(maxY, s[1]); }
+  return ((maxX - minX) + (maxY - minY)) / 4;
+}
+/* MODEL:end */
+
+const PARTICLES = {electron: {m: M_E, label: 'electron'}, proton: {m: M_P, label: 'proton'}, ion: {m: 2 * M_P, label: 'heavy ion'}};
+
+/* ---- state ---------------------------------------------------------------- */
+const S = {tab: 'helix', locked: false,
+  part: 'electron', ionMassU: 2, sign: -1, logV: 6.5, angle: 35, logB: -3,
+  selE: 6000, selB: 0.05, selV: 5e5,
+  cycB: 1, detune: 0, tuneClicks: 0, speedsTried: new Set()};
+function massOf(){ return S.part === 'ion' ? S.ionMassU * M_E : PARTICLES[S.part].m; }
+function qOf(){ return S.sign * E_CHARGE; }
+
+/* ============================================================================
+   Tab 1: the helix. Projection: x,y (perpendicular to B) skewed into an ellipse,
+   z (along B) straight up the screen -- a standard oblique/cavalier view.
+   ============================================================================ */
+const hs = $('helixStage');
+/* The 3-D path panel (left) and the period-vs-speed panel (right) each get a
+   full, generous region of the stage; the path is re-fitted to ITS bounding
+   box, centred in its panel, every time speed, field or angle changes -- so a
+   fast particle's wide circle and a slow one's tight circle both fill it. */
+const PANEL = {x0: 40, x1: 630, y0: 66, y1: 644};
+const HC = {tilt: 0.42, az: 0.5};
+const SCAT = {x0: 700, x1: 964, y0: 100, y1: 560};
+function buildHelix(){
+  hs.innerHTML = `
+  <rect width="1000" height="660" fill="#fbfaf6"/>
+  <text x="24" y="30" class="serif" font-size="18" fill="#1d2327">The path, integrated from F = q(v &times; B)</text>
+  <text x="24" y="48" font-size="12" fill="#6a767c">up the page is along B; the circle across B is drawn side-on, skewed into an ellipse</text>
+  <line id="axisLine" stroke="#8a8f93" stroke-width="1.6" marker-end="url(#ahAxis)"/>
+  <text id="bLabel" font-size="14" font-weight="700" fill="#2f6fd0">B</text>
+  <path id="helixPath" fill="none" stroke="#6a3fc2" stroke-width="2.4"/>
+  <circle id="partDot" r="7.5" fill="#d6453d" stroke="#fff" stroke-width="2"/>
+  <line id="vArrow" stroke="#0f7a5c" stroke-width="2.6" marker-end="url(#ahH)"/>
+  <defs>
+    <marker id="ahH" markerWidth="7" markerHeight="7" refX="3.5" refY="3.5" orient="auto"><path d="M0 0 L7 3.5 L0 7Z" fill="#0f7a5c"/></marker>
+    <marker id="ahAxis" markerWidth="8" markerHeight="8" refX="4" refY="4" orient="auto"><path d="M0 0 L8 4 L0 8Z" fill="#2f6fd0"/></marker>
+  </defs>
+  <text x="${SCAT.x0}" y="${SCAT.y0 - 34}" class="serif" font-size="16" fill="#1d2327">Period T, measured at each speed you try</text>
+  <text x="${SCAT.x0}" y="${SCAT.y0 - 16}" font-size="12" fill="#6a767c">flat if &nu;&#8320; = qB/2&pi;m really doesn't depend on speed</text>
+  <rect x="${SCAT.x0}" y="${SCAT.y0}" width="${SCAT.x1 - SCAT.x0}" height="${SCAT.y1 - SCAT.y0}" fill="#fff" stroke="#e2ded2"/>
+  <g id="scatAxes"></g>
+  <line id="scatFormula" stroke="#6a3fc2" stroke-width="1.8" stroke-dasharray="6 4"/>
+  <text id="scatFormulaLab" font-size="11.5" fill="#6a3fc2" font-weight="700"></text>
+  <g id="scatPts"></g>
+  <text x="${(SCAT.x0 + SCAT.x1) / 2}" y="${SCAT.y1 + 40}" text-anchor="middle" font-size="12.5" fill="#4a555b">speed v (m/s), log scale &#8594;</text>
+  <text x="${SCAT.x0 - 46}" y="${(SCAT.y0 + SCAT.y1) / 2}" text-anchor="middle" font-size="12.5" fill="#4a555b" transform="rotate(-90 ${SCAT.x0 - 46} ${(SCAT.y0 + SCAT.y1) / 2})">period T (s)</text>
+  <rect id="helixVeil" x="${SCAT.x0 - 10}" y="0" width="${1000 - SCAT.x0 + 10}" height="660" fill="#fbfaf6" opacity=".95"/>
+  <text id="helixVeilT" x="${(SCAT.x0 + 970) / 2}" y="330" text-anchor="middle" fill="#7c878c" font-size="13.5" font-weight="600">Measurements appear once you have predicted.</text>
+  `;
+}
+let TRACE = null, PTS = [];
+function fmtE(v){ if (!isFinite(v) || v === 0) return '0'; const a = Math.abs(v), e = Math.floor(Math.log10(a));
+  return e >= -2 && e < 4 ? fmt(v, e >= 2 ? 0 : 2) : (v / Math.pow(10, e)).toFixed(2) + '×10' + sup(e); }
+const sup = e => String(e).split('').map(c => '⁰¹²³⁴⁵⁶⁷⁸⁹'['0123456789'.indexOf(c)] || (c === '-' ? '⁻' : c)).join('');
+function computeHelix(){
+  const q = qOf(), m = massOf(), v0 = Math.pow(10, S.logV), Bz = Math.pow(10, S.logB), a = S.angle;
+  /* Show enough revolutions to read as periodic, but not so many that a steep
+     pitch (large v-parallel) draws a radius-vs-length ratio so extreme the
+     loops shrink to a thread: fewer revolutions when the pitch is long
+     compared with the radius, more when the helix is nearly flat. */
+  let revs;
+  if (a > 85) revs = 1.6;
+  else if (a < 5) revs = 1.2;
+  else {
+    const rad = a * Math.PI / 180, rApprox = larmorRadius(m, q, v0 * Math.sin(rad), Bz), pApprox = v0 * Math.cos(rad) * cyclotronPeriod(m, q, Bz);
+    revs = clamp(5 / Math.max(pApprox / Math.max(rApprox, 1e-15), 0.6), 1.8, 3.2);
+  }
+  TRACE = traceHelix(q, m, v0, a, Bz, revs);
+  return TRACE;
+}
+function paintHelix(){
+  const T = computeHelix(), states = T.states;
+  /* Fit the path's OWN bounding box into the panel, centred, every time --
+     rather than a worst-case estimate -- so a wide circle and a tight one both
+     fill the frame. az rotates the view a little so the circular part reads as
+     an ellipse; tilt is how much of that "depth" rotation shows as a vertical
+     wobble (the standard oblique/cavalier trick for drawing a helix in 2-D). */
+  const raw = states.map(s => {
+    const x = s[0], y = s[1], z = s[2];
+    const rx = x * Math.cos(HC.az) - y * Math.sin(HC.az), ry = x * Math.sin(HC.az) + y * Math.cos(HC.az);
+    return {ux: rx, uy: -z - ry * HC.tilt};
+  });
+  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+  for (const p of raw) { minX = Math.min(minX, p.ux); maxX = Math.max(maxX, p.ux); minY = Math.min(minY, p.uy); maxY = Math.max(maxY, p.uy); }
+  if (maxX - minX < 1e-12) { minX -= 1e-9; maxX += 1e-9; }
+  const spanY = Math.max(maxY - minY, 1e-12);
+  const topPad = spanY * 0.16, botPad = spanY * 0.05;          // room for the B arrowhead and label above the path
+  const minYext = minY - topPad, maxYext = maxY + botPad;
+  const marginX = 26, marginY = 14;
+  const targetW = (PANEL.x1 - PANEL.x0) - 2 * marginX, targetH = (PANEL.y1 - PANEL.y0) - 2 * marginY;
+  const scale = Math.min(targetW / (maxX - minX), targetH / (maxYext - minYext)) * 0.98;
+  const offX = (PANEL.x0 + PANEL.x1) / 2 - scale * (minX + maxX) / 2;
+  const offY = (PANEL.y0 + PANEL.y1) / 2 - scale * (minYext + maxYext) / 2;
+  const proj = (x, y, z) => {
+    const rx = x * Math.cos(HC.az) - y * Math.sin(HC.az), ry = x * Math.sin(HC.az) + y * Math.cos(HC.az);
+    return {sx: offX + rx * scale, sy: offY + (-z - ry * HC.tilt) * scale};
+  };
+  let d = '';
+  for (let i = 0; i < states.length; i++) { const p = proj(states[i][0], states[i][1], states[i][2]); d += (i ? 'L' : 'M') + p.sx.toFixed(1) + ' ' + p.sy.toFixed(1); }
+  $('helixPath').setAttribute('d', d);
+  /* the B axis: a single vertical line through x=y=0, arrowed in the direction of increasing z */
+  const axisTopY = offY + minYext * scale, axisBotY = offY + maxYext * scale, axisX = offX;
+  $('axisLine').setAttribute('x1', axisX.toFixed(1)); $('axisLine').setAttribute('y1', axisBotY.toFixed(1));
+  $('axisLine').setAttribute('x2', axisX.toFixed(1)); $('axisLine').setAttribute('y2', (axisTopY + 12).toFixed(1));
+  $('bLabel').setAttribute('x', (axisX + 10).toFixed(1)); $('bLabel').setAttribute('y', (axisTopY + 8).toFixed(1));
+  /* velocity arrow at the start */
+  const p0 = proj(0, 0, 0), p1 = proj(states[3][0], states[3][1], states[3][2]);
+  const vlen = Math.hypot(p1.sx - p0.sx, p1.sy - p0.sy) || 1, ux = (p1.sx - p0.sx) / vlen, uy = (p1.sy - p0.sy) / vlen;
+  $('vArrow').setAttribute('x1', p0.sx); $('vArrow').setAttribute('y1', p0.sy);
+  $('vArrow').setAttribute('x2', (p0.sx + ux * 50).toFixed(1)); $('vArrow').setAttribute('y2', (p0.sy + uy * 50).toFixed(1));
+  window._helixProj = proj; window._helixStates = states; window._helixT = T;
+  paintDot(0);
+  paintMeasure(T);
+}
+let CLOCK = 0;
+function paintDot(tsec){
+  const T = window._helixT, states = window._helixStates, proj = window._helixProj; if (!T) return;
+  const frac = reduced() ? 0 : (tsec / (T.dt * T.steps * 2.2)) % 1;
+  const i = clamp(Math.floor(frac * (states.length - 1)), 0, states.length - 1);
+  const p = proj(states[i][0], states[i][1], states[i][2]);
+  $('partDot').setAttribute('cx', p.sx.toFixed(1)); $('partDot').setAttribute('cy', p.sy.toFixed(1));
+}
+/* the period-vs-speed scatter: every time the learner tries a speed, plot the
+   MEASURED period (half the time between two same-sign zero-crossings of y) */
+function measuredPeriod(states, dt){
+  let prevSign = Math.sign(states[0][1]) || 1, crossings = [];
+  for (let i = 1; i < states.length; i++) { const s = Math.sign(states[i][1]) || prevSign; if (s > 0 && prevSign <= 0) crossings.push(i); prevSign = s; }
+  if (crossings.length < 2) return null;
+  return (crossings[crossings.length - 1] - crossings[0]) * dt / (crossings.length - 1);
+}
+function paintMeasure(T){
+  const q = qOf(), m = massOf(), Bz = Math.pow(10, S.logB), v0 = Math.pow(10, S.logV);
+  const rFormula = larmorRadius(m, q, T.vPerp, Bz), TFormula = cyclotronPeriod(m, q, Bz);
+  const rMeasured = measuredRadius(T.states);
+  const pitchFormula = T.vPar * TFormula;
+  const zAtOneT = (() => { const n = Math.round(TFormula / T.dt); return n < T.states.length ? T.states[n][2] - T.states[0][2] : null; })();
+  if (!S.locked) { $('meters').innerHTML = '<p class="hint" style="margin:0">The measurements appear once you have made a prediction.</p>'; return; }
+  $('whyCard').hidden = false;
+  const row = (a, b) => `<span>${a}</span><b>${b}</b>`, sep = '<i class="sep"></i>';
+  $('measureKick').textContent = 'Measured, from the trace';
+  $('meters').innerHTML = `<div class="readout">` +
+    row('radius, formula r=mv&perp;/qB', fmtE(rFormula) + ' m') + row('radius, measured from the path', fmtE(rMeasured) + ' m') + sep +
+    row('period T, formula 2&pi;m/qB', fmtE(TFormula) + ' s') + row('cyclotron frequency &nu;', fmtE(1 / TFormula) + ' Hz') + sep +
+    row('pitch, formula v&#8741;T', fmtE(pitchFormula) + ' m') + (zAtOneT != null ? row('advance along B in one T', fmtE(zAtOneT) + ' m') : '') + `</div>`;
+  let t = `<p>The integrator steps F = q(v &times; B) forward ${T.steps} times; the radius it traces (${fmtE(rMeasured)} m) matches m v&perp;/|q|B (${fmtE(rFormula)} m) to within the step size.</p>`;
+  if (S.angle > 85) t += `<p>At 90&deg; there is no v&#8741;, so the path never advances along B: a closed circle.</p>`;
+  else if (S.angle < 5) t += `<p>At 0&deg; there is no v&perp;, so q(v &times; B) is never sideways: a straight line along B.</p>`;
+  else t += `<p>Both parts are present, so the particle circles AND drifts along B at the same time: a helix of pitch ${fmtE(pitchFormula)} m.</p>`;
+  $('why').innerHTML = t;
+  /* the scatter of period vs speed */
+  const key = v0.toExponential(2);
+  if (!S.speedsTried.has(key)) { S.speedsTried.add(key); PTS.push({v: v0, T: measuredPeriod(T.states, T.dt) || TFormula}); }
+  paintScatter(TFormula);
+}
+function paintScatter(TFormula){
+  const vs = PTS.map(p => p.v), vmin = Math.min(...vs, Math.pow(10, 5)), vmax = Math.max(...vs, Math.pow(10, 7.7));
+  const ts = PTS.map(p => p.T).concat([TFormula]);
+  const tlo = Math.min(...ts) * 0.7, thi = Math.max(...ts) * 1.3;
+  const lvmin = Math.log10(vmin), lvmax = Math.log10(vmax);
+  const px = v => SCAT.x0 + (Math.log10(v) - lvmin + 0.001) / (lvmax - lvmin + 0.002) * (SCAT.x1 - SCAT.x0);
+  const py = t => SCAT.y1 - clamp((t - tlo) / (thi - tlo || 1), 0, 1) * (SCAT.y1 - SCAT.y0);
+  $('scatFormula').setAttribute('x1', SCAT.x0); $('scatFormula').setAttribute('x2', SCAT.x1);
+  $('scatFormula').setAttribute('y1', py(TFormula).toFixed(1)); $('scatFormula').setAttribute('y2', py(TFormula).toFixed(1));
+  $('scatFormulaLab').setAttribute('x', SCAT.x1 - 6); $('scatFormulaLab').setAttribute('y', (py(TFormula) - 8).toFixed(1));
+  $('scatFormulaLab').setAttribute('text-anchor', 'end'); $('scatFormulaLab').textContent = 'formula: T = 2πm/qB';
+  $('scatPts').innerHTML = PTS.map(p => `<circle cx="${px(p.v).toFixed(1)}" cy="${py(p.T).toFixed(1)}" r="5" fill="#d6453d" stroke="#fff" stroke-width="1.6"/>`).join('');
+  /* x: one tick per decade of speed; y: five even ticks over the period range shown */
+  let ax = '';
+  const eLo = Math.floor(lvmin), eHi = Math.ceil(lvmax);
+  for (let e = eLo; e <= eHi; e++) {
+    const x = px(Math.pow(10, e)); if (x < SCAT.x0 - 1 || x > SCAT.x1 + 1) continue;
+    ax += `<line x1="${x.toFixed(1)}" y1="${SCAT.y0}" x2="${x.toFixed(1)}" y2="${SCAT.y1}" stroke="#f1eee6"/><text x="${x.toFixed(1)}" y="${SCAT.y1 + 18}" text-anchor="middle" font-size="11" class="m" fill="#6a767c">10${sup(e)}</text>`;
+  }
+  for (let k = 0; k <= 4; k++) {
+    const t = tlo + (thi - tlo) * k / 4, y = py(t);
+    ax += `<line x1="${SCAT.x0}" y1="${y.toFixed(1)}" x2="${SCAT.x1}" y2="${y.toFixed(1)}" stroke="#f1eee6"/><text x="${SCAT.x0 - 8}" y="${(y + 4).toFixed(1)}" text-anchor="end" font-size="11" class="m" fill="#6a767c">${fmtE(t)}</text>`;
+  }
+  $('scatAxes').innerHTML = ax;
+}
+
+/* ============================================================================
+   Tab 2: velocity selector (top) + cyclotron (bottom).
+   ============================================================================ */
+const ss = $('selStage');
+const SEL = {x0: 60, x1: 560, y: 150, h: 160};
+const CYC = {cx: 300, cy: 480, r0: 20, rmax: 150};
+const CG = {x0: 620, x1: 970, y0: 40, y1: 250};
+function buildSel(){
+  ss.innerHTML = `
+  <rect width="1000" height="660" fill="#fbfaf6"/>
+  <text x="24" y="30" class="serif" font-size="17" fill="#1d2327">The velocity selector: crossed E and B</text>
+  <text x="24" y="48" font-size="12" fill="#6a767c">E pushes it one way, v &times; B the other; only one speed cancels, for either sign of charge</text>
+  <rect x="${SEL.x0}" y="${SEL.y - SEL.h / 2}" width="${SEL.x1 - SEL.x0}" height="${SEL.h}" fill="#eef2fb" stroke="#c9d3e8"/>
+  <g id="eArrowsG"></g>
+  <line x1="${SEL.x0}" y1="${SEL.y}" x2="${SEL.x1 + 40}" y2="${SEL.y}" stroke="#c8ccd0" stroke-dasharray="4 4"/>
+  <path id="selPath" fill="none" stroke="#d6453d" stroke-width="2.4"/>
+  <circle id="selDot" r="6" fill="#d6453d" stroke="#fff" stroke-width="2"/>
+  <text id="selVerdict" x="${SEL.x1 + 50}" y="${SEL.y + 5}" font-size="13" font-weight="700" fill="#1d2327"></text>
+  <text x="${SEL.x0}" y="${SEL.y - SEL.h / 2 - 10}" font-size="12" fill="#4a555b">&times; B out of the page</text>
+  <line x1="900" y1="60" x2="900" y2="30" stroke="#1d2327"/>
+  <text x="24" y="290" class="serif" font-size="17" fill="#1d2327">The cyclotron: a proton kicked every half-turn</text>
+  <text x="24" y="308" font-size="12" fill="#6a767c">the half-turn time never changes with speed; only the applied voltage can drift out of step with it</text>
+  <g id="cycArcsG"></g>
+  <circle id="cycDot" r="6" fill="#d6453d" stroke="#fff" stroke-width="2"/>
+  <text x="${CG.x0}" y="${CG.y0 - 14}" class="serif" font-size="15" fill="#1d2327">Radius after each crossing</text>
+  <rect x="${CG.x0}" y="${CG.y0}" width="${CG.x1 - CG.x0}" height="${CG.y1 - CG.y0}" fill="#fff" stroke="#e2ded2"/>
+  <g id="cgAxes"></g>
+  <path id="cgCurve" fill="none" stroke="#6a3fc2" stroke-width="2.2"/>
+  <rect id="selVeil" x="0" y="0" width="1000" height="660" fill="#fbfaf6" opacity=".95"/>
+  <text id="selVeilT" x="500" y="330" text-anchor="middle" fill="#7c878c" font-size="14" font-weight="600">Measurements appear once you have predicted.</text>
+  `;
+}
+const SEL_LENGTH_M = 1e-4;    // the selector plate length this model uses, in metres (a proton, so the field ranges below stay numerically stable)
+function paintSel(){
+  const q = E_CHARGE, m = M_P, states = traceSelector(q, m, S.selV, S.selE, S.selB, SEL_LENGTH_M);
+  const xPx = xm => SEL.x0 + xm / SEL_LENGTH_M * (SEL.x1 - SEL.x0);
+  let maxDy = 0; for (const s of states) maxDy = Math.max(maxDy, Math.abs(s[1]));
+  const sc = maxDy > 1e-12 ? Math.min(SEL.h / 2 - 8, 70) / maxDy : 0;
+  let d = '';
+  for (let i = 0; i < states.length; i++) { const x = xPx(states[i][0]), y = SEL.y - states[i][1] * sc; d += (i ? 'L' : 'M') + x.toFixed(1) + ' ' + y.toFixed(1); }
+  $('selPath').setAttribute('d', d);
+  const last = states[states.length - 1], lx = xPx(last[0]), ly = SEL.y - last[1] * sc;
+  $('selDot').setAttribute('cx', lx.toFixed(1)); $('selDot').setAttribute('cy', ly.toFixed(1));
+  let arrows = '';
+  for (let i = 0; i < 5; i++) { const x = SEL.x0 + 30 + i * 110; arrows += `<line x1="${x}" y1="${SEL.y + SEL.h / 2 - 6}" x2="${x}" y2="${SEL.y - SEL.h / 2 + 6}" stroke="#7b8bd0" stroke-width="1.6" marker-end="url(#ahSel)"/>`; }
+  $('eArrowsG').innerHTML = `<defs><marker id="ahSel" markerWidth="7" markerHeight="7" refX="3.5" refY="3.5" orient="auto"><path d="M0 0 L7 3.5 L0 7Z" fill="#7b8bd0"/></marker></defs>` + arrows;
+  const vSel = S.selE / S.selB, close = Math.abs(S.selV / vSel - 1) < 0.01;
+  $('selVerdict').textContent = close ? 'goes straight through' : (S.selV > vSel ? 'deflects (too fast: v > E/B)' : 'deflects (too slow: v < E/B)');
+  if (!S.locked) { return; }
+  const cyc = cyclotronRun(M_P, E_CHARGE, S.cycB, S.detune / 100, 40, 6e-18);
+  paintCyclotron(cyc);
+  paintSelMeasure(vSel, close, cyc);
+}
+function paintCyclotron(rows){
+  const rMax = Math.max(...rows.map(r => r.r), 1e-9), scale = CYC.rmax / rMax;
+  /* draw as a growing spiral polyline, a quarter-turn of view per crossing (illustrative
+     of the growing radius, not the exact dee geometry, which the "why" text says plainly) */
+  let d = '', pts = [];
+  for (let i = 0; i < rows.length; i++) { const ang = i * (Math.PI / 2), r = rows[i].r * scale; pts.push([CYC.cx + r * Math.sin(ang), CYC.cy - r * Math.cos(ang)]); }
+  for (let i = 0; i < pts.length; i++) d += (i ? 'L' : 'M') + pts[i][0].toFixed(1) + ' ' + pts[i][1].toFixed(1);
+  $('cycArcsG').innerHTML = `<path d="${d}" fill="none" stroke="#6a3fc2" stroke-width="2"/><circle cx="${CYC.cx}" cy="${CYC.cy}" r="3" fill="#1d2327"/>`;
+  const last = pts[pts.length - 1];
+  $('cycDot').setAttribute('cx', last[0].toFixed(1)); $('cycDot').setAttribute('cy', last[1].toFixed(1));
+  const rmaxG = Math.max(...rows.map(r => r.r)) * 1.1;
+  const cx_ = k => CG.x0 + k / (rows.length - 1) * (CG.x1 - CG.x0), cy_ = r => CG.y1 - clamp(r / rmaxG, 0, 1) * (CG.y1 - CG.y0);
+  $('cgCurve').setAttribute('d', rows.map((r, i) => (i ? 'L' : 'M') + cx_(i).toFixed(1) + ' ' + cy_(r.r).toFixed(1)).join(''));
+  $('cgAxes').innerHTML = `<text x="${CG.x0 + 6}" y="${CG.y0 + 16}" font-size="11" fill="#6a767c">radius (m)</text><text x="${CG.x0}" y="${CG.y1 + 16}" font-size="11" fill="#6a767c">crossing number →</text>`;
+  window._cycRows = rows;
+}
+function paintSelMeasure(vSel, close, cyc){
+  $('whyCard').hidden = false;
+  const row = (a, b) => `<span>${a}</span><b>${b}</b>`, sep = '<i class="sep"></i>';
+  const rGain = cyc[cyc.length - 1].r - cyc[0].r;
+  $('measureKick').textContent = 'Measured';
+  $('meters').innerHTML = `<div class="readout">` + row('selector speed E/B', fmtE(vSel) + ' m/s') + row('your speed v', fmtE(S.selV) + ' m/s') + row('net sideways force', close ? '≈ 0' : fmtE(Math.abs(E_CHARGE * (S.selE - S.selV * S.selB))) + ' N') + sep +
+    row('cyclotron half-turn time', fmtE(cyclotronPeriod(M_P, E_CHARGE, S.cycB) / 2) + ' s') + row('applied frequency', (S.detune >= 0 ? '+' : '') + S.detune + '% off resonance') + row('radius gained, 40 crossings', fmtE(rGain) + ' m') + `</div>`;
+  let t = close ? `<p>At v = E/B the electric and magnetic forces are equal and opposite for any charge, so the beam goes straight through: this is how a velocity selector picks one speed out of many.</p>`
+                : `<p>q(E &minus; vB) is not zero here, so the beam bends. The model integrates the full Lorentz force, so the curve you see is not a plain parabola: v&#8339; itself changes a little too, from the v &times; B term.</p>`;
+  t += S.detune === 0 ? `<p>Tuned exactly to the cyclotron's own frequency, every crossing adds energy in step, and the radius climbs steadily: ${fmtE(rGain)} m over 40 crossings.</p>`
+                      : `<p>Detuned by ${S.detune}%, the kicks drift in and out of phase with the particle's arrival, and the radius gained (${fmtE(rGain)} m) is far less than at resonance.</p>`;
+  $('why').innerHTML = t;
+}
+
+/* ============================================================================
+   Findings
+   ============================================================================ */
+function checkHelix(){
+  if (!S.locked || !TRACE) return;
+  const m = massOf(), q = qOf(), Bz = Math.pow(10, S.logB);
+  const rMeasured = measuredRadius(TRACE.states);
+  const rFormula = larmorRadius(m, q, TRACE.vPerp, Bz);
+  if (S.angle >= 89) discover('circle');
+  if (S.angle <= 1) discover('straightline');
+  if (S.angle > 5 && S.angle < 85) discover('helix');
+  if (rFormula > 1e-9 && Math.abs(rMeasured / rFormula - 1) < 0.03) discover('radiusformula');
+  if (S.speedsTried.size >= 2) {
+    const Ts = PTS.map(p => p.T), spread = (Math.max(...Ts) - Math.min(...Ts)) / (Ts.reduce((a, b) => a + b, 0) / Ts.length);
+    if (spread < 0.03) discover('freqindependent');
+  }
+}
+function checkSign(){ if (S.locked) discover('chargesign'); }
+function checkSel(){
+  if (!S.locked) return;
+  const vSel = S.selE / S.selB;
+  if (Math.abs(S.selV / vSel - 1) < 0.01) discover('selector');
+}
+function checkCyc(){
+  if (!S.locked || !window._cycRows) return;
+  const rows = window._cycRows, ratio = rows[rows.length - 1].r / rows[0].r;
+  if (S.detune === 0 && ratio > 2) discover('resonance');
+  if (Math.abs(S.detune) >= 15 && ratio < 1.5) discover('detuned');
+}
+
+/* ============================================================================
+   Controls
+   ============================================================================ */
+buildHelix(); buildSel();
+function refreshHelixCtl(){
+  $('speedOut').textContent = fmtE(Math.pow(10, S.logV)) + ' m/s';
+  $('angleOut').textContent = S.angle + '°';
+  $('bfieldOut').textContent = fmtE(Math.pow(10, S.logB)) + ' T';
+  $('ionMassOut').textContent = fmt(S.ionMassU, 2) + ' mₑ';
+  $('btnSign').textContent = 'charge: ' + (S.sign > 0 ? '+' : '−');
+  $$('#partSeg button').forEach(b => b.setAttribute('aria-pressed', b.dataset.part === S.part));
+  $('ctlIonMass').hidden = S.part !== 'ion';
+}
+function onHelixChange(){ paintHelix(); checkHelix(); refreshHelixCtl(); }
+$('partSeg').addEventListener('click', e => { const b = e.target.closest('[data-part]'); if (!b) return; S.part = b.dataset.part; sound('tick'); onHelixChange(); });
+$('ionMass').addEventListener('input', e => { S.ionMassU = +e.target.value; onHelixChange(); });
+$('btnSign').addEventListener('click', () => { S.sign *= -1; sound('tick'); onHelixChange(); checkSign(); track('sign', {sign: S.sign}); });
+$('speed').addEventListener('input', e => { S.logV = +e.target.value; onHelixChange(); });
+$('speed').addEventListener('change', () => track('speed', {v: Math.pow(10, S.logV)}));
+$('angle').addEventListener('input', e => { S.angle = +e.target.value; onHelixChange(); });
+$('bfield').addEventListener('input', e => { S.logB = +e.target.value; onHelixChange(); });
+$('presetSeg').addEventListener('click', e => {
+  const b = e.target.closest('[data-preset]'); if (!b) return; sound('pop');
+  if (b.dataset.preset === 'ex43') { S.part = 'ion'; S.ionMassU = 9e-31 / M_E; S.logV = Math.log10(3e7); S.angle = 90; S.logB = Math.log10(6e-4); S.sign = -1; }
+  if (b.dataset.preset === 'ex411') { S.part = 'electron'; S.logV = Math.log10(4.8e6); S.angle = 90; S.logB = Math.log10(6.5e-4); S.sign = -1; }
+  $('speed').value = S.logV; $('angle').value = S.angle; $('bfield').value = S.logB;
+  onHelixChange(); track('preset', {p: b.dataset.preset});
+});
+
+function refreshSelCtl(){
+  $('selEOut').textContent = fmtE(S.selE) + ' V/m'; $('selBOut').textContent = fmtE(S.selB) + ' T'; $('selVOut').textContent = fmtE(S.selV) + ' m/s';
+  $('cycBOut').textContent = fmtE(S.cycB) + ' T'; $('cycDetuneOut').textContent = (S.detune >= 0 ? '+' : '') + S.detune + '%';
+}
+function onSelChange(){ paintSel(); checkSel(); checkCyc(); refreshSelCtl(); }
+$('selE').addEventListener('input', e => { S.selE = +e.target.value; onSelChange(); });
+$('selB').addEventListener('input', e => { S.selB = +e.target.value; onSelChange(); });
+$('selV').addEventListener('input', e => { S.selV = +e.target.value; onSelChange(); });
+$('btnSnapV').addEventListener('click', () => { S.selV = clamp(S.selE / S.selB, +$('selV').min, +$('selV').max); $('selV').value = S.selV; sound('pop'); onSelChange(); track('snapV', {}); });
+$('cycB').addEventListener('input', e => { S.cycB = +e.target.value; onSelChange(); });
+$('cycDetune').addEventListener('input', e => { S.detune = +e.target.value; onSelChange(); });
+$('btnTune').addEventListener('click', () => { S.detune = 0; $('cycDetune').value = 0; sound('pop'); onSelChange(); track('tune', {}); });
+
+function showTab(tab){
+  S.tab = tab;
+  $('helixStage').toggleAttribute('hidden', tab !== 'helix'); $('selStage').toggleAttribute('hidden', tab !== 'sel');
+  $$('.tabs button').forEach(b => b.setAttribute('aria-selected', b.dataset.tab === tab));
+  $('ctlHelix').hidden = tab !== 'helix'; $('ctlSel').hidden = tab !== 'sel';
+  if (tab === 'helix') onHelixChange(); else onSelChange();
+}
+$$('.tabs button').forEach(b => b.addEventListener('click', () => { sound('tick'); showTab(b.dataset.tab); track('tab', {tab: b.dataset.tab}); }));
+function lockControls(lock){
+  $$('#partSeg button, #ionMass, #btnSign, #speed, #angle, #bfield, #presetSeg button, #selE, #selB, #selV, #btnSnapV, #cycB, #cycDetune, #btnTune').forEach(b => b.disabled = lock);
+  $('gate').hidden = !lock;
+}
+
+findings($('finds'), [
+  {id: 'circle',           icon: '○', label: 'v perpendicular to B: a closed circle', hint: 'Set the angle to 90°'},
+  {id: 'straightline',     icon: '│', label: 'v along B: a straight line', hint: 'Set the angle to 0°'},
+  {id: 'helix',            icon: '⤳', label: 'v at an angle: a helix', hint: 'Try an angle between 0° and 90°'},
+  {id: 'radiusformula',    icon: 'r', label: 'The traced radius matches mv⟂/qB', hint: 'Any setting will do'},
+  {id: 'freqindependent',  icon: 'ν', label: 'The period doesn’t depend on speed', hint: 'Try two very different speeds'},
+  {id: 'chargesign',       icon: '±', label: 'Flip the charge, flip the sense of rotation', hint: 'Press the charge-sign button'},
+  {id: 'selector',         icon: '→', label: 'v = E/B goes straight through', hint: '"Set v = E/B exactly"'},
+  {id: 'resonance',        icon: '◉', label: 'Tuned exactly, the radius climbs every crossing', hint: 'Tune the cyclotron to resonance'},
+  {id: 'detuned',          icon: '✗', label: 'Detuned, the kicks stop adding up', hint: 'Move the applied frequency off resonance'},
+], () => toast('All nine found: the Lorentz force, measured every way the chapter uses it.', 4200));
+
+const POE = predict($('poe'), {
+  id: 'helix-angle',
+  q: 'A charged particle enters a magnetic field at an angle, so its velocity has a part along the field and a part across it. What path does it trace?',
+  options: [
+    {id: 'straight', text: 'A straight line, because a magnetic force never does work'},
+    {id: 'circle', text: 'A perfect circle'},
+    {id: 'helix', text: 'A helix, circling around while sliding along the field', right: true},
+    {id: 'stop', text: 'It slows to a stop'},
+  ],
+  onLock(){
+    S.locked = true; lockControls(false);
+    $('helixVeil').remove(); $('helixVeilT').remove(); $('selVeil').remove(); $('selVeilT').remove();
+    if (S.tab === 'helix') onHelixChange(); else onSelChange();
+    if (POE && !POE.explained) POE.explain(`With the angle at ${S.angle}°, the model finds a radius of ${fmtE(larmorRadius(massOf(), qOf(), TRACE.vPerp, Math.pow(10, S.logB)))} m and a pitch of ${fmtE(TRACE.vPar * TRACE.T)} m &mdash; both at once, so it is a helix.`, POE.choice === 'helix');
+  },
+});
+lockControls(!POE.locked);
+if (!Play.FF('predict')) S.locked = true;
+showTab('helix');
+refreshHelixCtl(); refreshSelCtl();
+loop(dt => { CLOCK += dt; if (S.tab === 'helix' && TRACE) paintDot(CLOCK); });
+
+window.PG_STATE = () => ({tab: S.tab, locked: S.locked, part: S.part, sign: S.sign, mass: massOf(), v0: Math.pow(10, S.logV), angle: S.angle, B: Math.pow(10, S.logB),
+  selE: S.selE, selB: S.selB, selV: S.selV, cycB: S.cycB, detune: S.detune, speedsTried: S.speedsTried.size});
+window.PG_MODEL = {E_CHARGE, M_E, M_P, rk4Step, integrate, cyclotronPeriod, cyclotronFreq, larmorRadius, traceHelix, traceSelector, cyclotronRun};
+</script>
+</body>
+</html>

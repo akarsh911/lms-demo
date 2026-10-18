@@ -1,0 +1,634 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tissues in Action</title>
+<meta name="description" content="Class 9-10: build a ball-and-socket, hinge or pivot joint and try to move a limb through every angle. The joint's own geometry — not a rule you are told — decides which movements it allows.">
+<link rel="icon" href="../../favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600&family=Inter:wght@400;500;600;700&family=Nunito:wght@500;700;800&family=Newsreader:opsz,wght@6..72,400;6..72,500&family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="../../play.css">
+<style>
+/* Only what this page needs beyond play.css. */
+.gate{position:absolute; left:62%; right:0; top:0; height:100%; display:grid; place-items:center; pointer-events:none}
+.gate span{background:rgba(29,35,39,.86); color:#fff; padding:10px 16px; border-radius:99px; font-weight:600; font-size:14px; text-align:center}
+.pg-stage{align-self:start; min-height:0}
+.leftcol{display:flex; flex-direction:column; gap:12px; min-width:0}
+.leftcol > .pg-stage{align-self:stretch}
+#padHit{cursor:grab} #padHit.dragging{cursor:grabbing}
+#knobHit{cursor:grab} #knobHit.dragging{cursor:grabbing}
+.seg{display:grid; grid-auto-flow:column; grid-auto-columns:1fr; gap:4px; background:var(--sunk); padding:4px; border-radius:var(--radius-sm); margin-bottom:6px}
+.seg button{border:0; background:transparent; border-radius:7px; min-height:34px; font-weight:600; font-size:12.5px; cursor:pointer; color:var(--ink-2); padding:0 4px}
+.seg button[aria-pressed="true"]{background:var(--card); color:var(--ink); box-shadow:var(--shadow)}
+.why p{font-size:13.5px; margin-bottom:.5em}
+.note{font-size:12.5px; color:var(--ink-3); margin:6px 0 0}
+.readout{display:grid; grid-template-columns:1fr auto; gap:3px 12px; font-size:12.8px; align-items:baseline}
+.readout span{color:var(--ink-2)}
+.readout b{font-family:var(--font-mono); font-weight:600; font-size:12.5px; font-variant-numeric:tabular-nums; text-align:right}
+.readout .sep{grid-column:1/-1; height:1px; background:var(--hair); margin:3px 0}
+.below{display:grid; grid-template-columns:1fr 1fr; gap:12px; align-items:start}
+.below:has(#whyCard[hidden]){grid-template-columns:1fr}
+@media (max-width:1200px){ .pg-main.wide-side{grid-template-columns:minmax(0,1fr) 340px} .below{grid-template-columns:1fr} }
+svg text.m{font-family:var(--font-mono)}
+.legend-row{display:flex; gap:14px; flex-wrap:wrap; margin:2px 0 0}
+</style>
+</head>
+<body>
+<header class="pg-top"></header>
+
+<div class="pg-intro">
+  <h1>Tissues in action</h1>
+  <p>A joint is two bones meeting: what decides whether it swings like a shoulder, hinges like a knee, or only spins like your neck is the
+     <b>shape</b> where the bones meet. Build each kind, then try to move the limb every way you can think of — the geometry itself will
+     stop you where a real joint stops you. Watch the ligament (a strap of tissue that only connects bone to bone) and the tendon
+     (which connects the pulling muscle to the bone) work as you move it.</p>
+  <div class="syl">CBSE Class 9 Science &middot; Ch 3 Tissues</div>
+</div>
+
+<main class="pg-main wide-side">
+  <div class="leftcol">
+  <section class="pg-stage" id="stageWrap">
+    <svg id="stage" viewBox="0 0 1000 620" role="img" aria-label="A joint with a moving limb, a pad to swing it and a dial to twist it, and a readout of the angles, the ligament and the tendon"></svg>
+    <div class="gate" id="gate"><span>Make your prediction first &rarr;</span></div>
+  </section>
+
+  <div class="below">
+    <div class="card why" id="whyCard" hidden>
+      <div class="kicker">What the model says</div>
+      <div id="why"></div>
+    </div>
+    <div class="card"><div class="kicker">To find</div><div id="finds"></div></div>
+  </div>
+  </div>
+
+  <aside class="pg-side">
+    <div id="poe"></div>
+
+    <div class="card" id="typeCard">
+      <div class="kicker">Which joint?</div>
+      <div class="seg" id="typeSeg">
+        <button data-type="ball" aria-pressed="false">Ball-and-socket</button>
+        <button data-type="hinge" aria-pressed="true">Hinge</button>
+        <button data-type="pivot" aria-pressed="false">Pivot</button>
+      </div>
+      <div class="kicker">Which one?</div>
+      <div class="seg" id="exSeg"></div>
+      <p class="note" id="typeNote"></p>
+    </div>
+
+    <div class="card" id="readCard">
+      <div class="kicker">Readout</div>
+      <div class="readout" id="readout"></div>
+    </div>
+
+    <div class="card" id="tissueCard">
+      <div class="row" style="justify-content:space-between">
+        <div class="kicker" style="margin:0">Tissues</div>
+        <button class="btn sm" id="btnTissue" aria-pressed="true">Hide labels</button>
+      </div>
+      <div class="legend-row">
+        <span style="color:#8a6a1a;font-weight:700;font-size:12px">&#9724; bone</span>
+        <span style="color:#2f6d94;font-weight:700;font-size:12px">&#9724; cartilage</span>
+        <span style="color:#b5892a;font-weight:700;font-size:12px">&#9724; ligament</span>
+        <span style="color:#6a3fc2;font-weight:700;font-size:12px">&#9724; tendon &amp; muscle</span>
+      </div>
+      <p class="note">Ligaments join bone to bone and only stretch tighter; they do not pull. Tendons join muscle to bone: the muscle shortens, the tendon carries the pull.</p>
+    </div>
+  </aside>
+</main>
+
+<script src="../../play.js"></script>
+<script>
+'use strict';
+const {$, esc, clamp, fmt, drag, sound, say, track, toast, predict, findings, discover, found,
+       shareState, sharedState, mount, reduced} = Play;
+mount({thread: 'body', band: 'modeller'});
+
+/* MODEL:start ==================================================================
+   A joint's geometry, not a rule, decides what moves. Each joint type is a shape:
+     ball-and-socket — a sphere in a cup: free to swing on any axis through its
+       centre (flexion/extension, abduction/adduction, and long-axis rotation),
+       limited only by how far the capsule and ligaments let the ball travel
+       before its neck meets the socket's rim.
+     hinge — a pin through a cylinder: free on ONE axis only (flexion/extension).
+       There is no surface at all for it to turn on sideways or to twist on, so
+       any attempt along those axes is caught at essentially zero.
+     pivot — a peg turning inside a ring: free to spin about the peg's own axis,
+       and nothing else — the ring has no room for the peg to swing.
+   The limb's direction is a real 3-D unit vector, built from the flexion angle
+   (a rotation about the joint's side-to-side axis) followed by the abduction
+   angle (a rotation about the joint's front-back axis); rotation about the
+   limb's own long axis does not change that vector, so it is shown by spinning
+   a pair of markers around the bone's own axis, computed the same way.
+   The scene is drawn with a cabinet projection (45°, depth halved) — a real,
+   fixed projection, not a hand-tuned drawing.
+   A ligament and a tendon are each a straight strap between a fixed point on
+   the still bone and a point on the moving bone; their length is measured in
+   3-D and compared with their length at rest (0°,0°,0°) to show how much they
+   have stretched (ligament) or shortened (tendon) — from the geometry, not a
+   lookup keyed by joint or angle.
+   ============================================================================ */
+const JOINTS = {
+  ball:  {label: 'Ball-and-socket', examples: [
+    {id: 'shoulder', name: 'Shoulder', range: {flex: [-50, 180], abd: [0, 180], rot: [-80, 80]}},
+    {id: 'hip',      name: 'Hip',      range: {flex: [-20, 125], abd: [0, 45],  rot: [-45, 45]}},
+  ]},
+  hinge: {label: 'Hinge', examples: [
+    {id: 'elbow', name: 'Elbow', range: {flex: [0, 145]}},
+    {id: 'knee',  name: 'Knee',  range: {flex: [0, 140]}},
+  ]},
+  pivot: {label: 'Pivot', examples: [
+    {id: 'neck',     name: 'Neck (atlas on axis)',   range: {rot: [-80, 80]}},
+    {id: 'forearm',  name: 'Forearm (radius on ulna)', range: {rot: [-85, 90]}},
+  ]},
+};
+const deg = Math.PI / 180;
+/* A real 3-D unit vector for the limb, from two rotations. */
+function dir3(flexDeg, abdDeg){
+  const f = flexDeg * deg, a = abdDeg * deg, cf = Math.cos(f), sf = Math.sin(f), ca = Math.cos(a), sa = Math.sin(a);
+  return {x: -cf * sa, y: cf * ca, z: sf};
+}
+const dot = (a, b) => a.x * b.x + a.y * b.y + a.z * b.z;
+const cross = (a, b) => ({x: a.y * b.z - a.z * b.y, y: a.z * b.x - a.x * b.z, z: a.x * b.y - a.y * b.x});
+const norm = v => { const m = Math.hypot(v.x, v.y, v.z) || 1; return {x: v.x / m, y: v.y / m, z: v.z / m}; };
+const add3 = (a, b, s = 1) => ({x: a.x + b.x * s, y: a.y + b.y * s, z: a.z + b.z * s});
+const scale3 = (a, s) => ({x: a.x * s, y: a.y * s, z: a.z * s});
+const dist3 = (a, b) => Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z);
+/* Two vectors perpendicular to d, spanning the plane across the bone's own axis. */
+function perpBasis(d){
+  const ref = Math.abs(d.z) < 0.9 ? {x: 0, y: 0, z: 1} : {x: 1, y: 0, z: 0};
+  const u = norm(cross(d, ref)), v = norm(cross(d, u));
+  return {u, v};
+}
+/* Cabinet projection: 45 degrees, depth halved. A real fixed projection, not a fudge. */
+const CK = 0.5, C45 = Math.SQRT1_2;
+function project(v, cx, cy, L){ return {x: cx + L * (v.x + CK * v.z * C45), y: cy + L * (v.y - CK * v.z * C45)}; }
+/* Ligament and tendon: fixed anchors on the still bone, points along the moving bone. */
+const LIG_A = {x: 0.42, y: -0.16, z: 0.24}, LIG_T = 0.55;
+const TEN_A = {x: -0.36, y: -0.20, z: -0.16}, TEN_T = 0.62;
+const MUS_O = {x: -0.62, y: -0.66, z: -0.24};   // the muscle's own origin, further up the still bone than TEN_A
+function strapRatio(d, anchor, t){
+  const rest = dist3(anchor, scale3(dir3(0, 0), t));
+  const now = dist3(anchor, scale3(d, t));
+  return now / rest;
+}
+function freeAxes(ex){ return Object.keys(ex.range); }
+function rangeOf(ex, axis){ return ex.range[axis] || [0, 0]; }
+/* MODEL:end */
+
+/* ---- state: plain data ----------------------------------------------------- */
+const S = {type: 'hinge', exIdx: 1, ang: {flex: 0, abd: 0, rot: 0}, locked: false, tissueLabels: true, flash: null};
+const SEEN_MAX = new Set();
+const shared = sharedState();
+if (shared && JOINTS[shared.type]) {
+  S.type = shared.type;
+  S.exIdx = clamp(shared.exIdx | 0, 0, JOINTS[S.type].examples.length - 1);
+  for (const k of ['flex', 'abd', 'rot']) if (isFinite(+shared.ang && shared.ang[k])) S.ang[k] = +shared.ang[k];
+}
+shareState(() => ({type: S.type, exIdx: S.exIdx, ang: S.ang}));
+const currentEx = () => JOINTS[S.type].examples[S.exIdx];
+
+/* ============================================================================
+   The stage: built once, then patched.
+   ============================================================================ */
+const svg = $('stage');
+const JX = 280, JY = 320, LBONE = 190, LPROX = 130;
+const FLEX_DOM = [-70, 210], ABD_DOM = [-40, 210];
+const PAD = {x: 610, y: 56, w: 300, h: 244};
+const KNOB = {cx: 760, cy: 460, r: 96};
+const padXOf = abd => PAD.x + clamp((abd - ABD_DOM[0]) / (ABD_DOM[1] - ABD_DOM[0]), 0, 1) * PAD.w;
+const padYOf = flex => PAD.y + PAD.h - clamp((flex - FLEX_DOM[0]) / (FLEX_DOM[1] - FLEX_DOM[0]), 0, 1) * PAD.h;
+const knobPt = rotDeg => { const t = (rotDeg - 90) * deg; return {x: KNOB.cx + KNOB.r * Math.cos(t), y: KNOB.cy + KNOB.r * Math.sin(t)}; };
+
+function build(){
+  svg.innerHTML = `
+  <rect x="0" y="0" width="1000" height="620" fill="#fbfaf6"/>
+  <text x="20" y="24" fill="#4a555b" font-size="12" font-weight="700" letter-spacing=".08em">THE JOINT</text>
+  <text id="jointSub" x="118" y="24" fill="#7c878c" font-size="11"></text>
+  <line x1="0" y1="34" x2="1000" y2="34" stroke="#e2ded2"/>
+
+  <!-- the joint scene: capsule, bones, cartilage, ligament and tendon+muscle, in that
+       stacking order, so each sits correctly against the others. -->
+  <ellipse id="capsule" cx="${JX}" cy="${JY}" fill="#ffeef5" stroke="#e3b6cf" stroke-width="1.4" opacity=".55"/>
+  <g id="jointIcon"></g>
+  <g id="proxBoneG"></g>
+  <g id="distBoneG"></g>
+  <ellipse id="muscleBelly" fill="#c96b6b" stroke="#8a3f3f" stroke-width="1.3"/>
+  <circle id="musDot" r="4" fill="#8a3f3f"/>
+  <line id="tenLine" stroke="#6a3fc2" stroke-linecap="round"/>
+  <circle id="tenB" r="4.5" fill="#6a3fc2"/>
+  <g id="ligTies"></g>
+  <line id="ligLine" stroke-width="7" stroke-linecap="round"/>
+  <circle id="ligA" r="4" fill="#8a6a1a"/><circle id="ligB" r="4" fill="#8a6a1a"/>
+  <line id="twistBar" stroke="#4a555b" stroke-width="2.4"/>
+  <circle id="twistA" r="4" fill="#4a555b"/><circle id="twistB" r="4" fill="#4a555b"/>
+  <circle id="skullNose" r="4.2" fill="#5a4530" opacity="0"/>
+  <g id="labels" font-size="10.5" font-weight="700"></g>
+  <circle id="flashRing" cx="${JX}" cy="${JY}" r="30" fill="none" stroke="#d6453d" stroke-width="4" opacity="0"/>
+
+  <line x1="590" y1="40" x2="590" y2="580" stroke="#e2ded2"/>
+
+  <!-- the pad: move the limb -->
+  <text x="${PAD.x}" y="46" fill="#4a555b" font-size="12" font-weight="700" letter-spacing=".06em">MOVE THE LIMB</text>
+  <rect x="${PAD.x}" y="${PAD.y}" width="${PAD.w}" height="${PAD.h}" fill="#fbfaf6" stroke="#e2ded2"/>
+  <line id="padZeroX" stroke="#d8d3c6" stroke-dasharray="3 3"/>
+  <line id="padZeroY" stroke="#d8d3c6" stroke-dasharray="3 3"/>
+  <rect id="padAllow" fill="var(--accent-soft)" stroke="var(--accent)" stroke-width="1.2" opacity=".8"/>
+  <text id="padLock" x="${PAD.x + PAD.w / 2}" y="${PAD.y + PAD.h / 2 + 4}" text-anchor="middle" fill="#a08868" font-size="26" opacity="0">&#128274;</text>
+  <text x="${PAD.x - 6}" y="${PAD.y + 10}" fill="#7c878c" font-size="9.5" text-anchor="end">flex &uarr;</text>
+  <text x="${PAD.x - 6}" y="${PAD.y + PAD.h - 2}" fill="#7c878c" font-size="9.5" text-anchor="end">ext &darr;</text>
+  <text x="${PAD.x + 4}" y="${PAD.y + PAD.h + 16}" fill="#7c878c" font-size="9.5">add.</text>
+  <text x="${PAD.x + PAD.w - 4}" y="${PAD.y + PAD.h + 16}" fill="#7c878c" font-size="9.5" text-anchor="end">abduction &rarr;</text>
+  <circle id="padGhost" r="7" fill="none" stroke="#d6453d" stroke-width="2" opacity="0"/>
+  <circle id="padDot" r="9" fill="var(--accent)" stroke="#fff" stroke-width="2"/>
+  <rect id="padHit" x="${PAD.x}" y="${PAD.y}" width="${PAD.w}" height="${PAD.h}" fill="transparent" tabindex="0" role="slider" aria-label="Move the limb: flexion up and down, abduction left and right"/>
+
+  <!-- the dial: twist the limb -->
+  <text x="${KNOB.cx}" y="${KNOB.cy - KNOB.r - 16}" fill="#4a555b" font-size="12" font-weight="700" letter-spacing=".06em" text-anchor="middle">TWIST</text>
+  <circle cx="${KNOB.cx}" cy="${KNOB.cy}" r="${KNOB.r}" fill="#fbfaf6" stroke="#e2ded2"/>
+  <path id="knobAllow" fill="none" stroke="var(--accent)" stroke-width="7" opacity=".8"/>
+  <text id="knobLock" x="${KNOB.cx}" y="${KNOB.cy + 9}" text-anchor="middle" fill="#a08868" font-size="26" opacity="0">&#128274;</text>
+  <line id="knobLine" stroke="#5a6570" stroke-width="3"/>
+  <circle id="knobDot" r="10" fill="var(--accent)" stroke="#fff" stroke-width="2"/>
+  <rect id="knobHit" x="${KNOB.cx - KNOB.r - 14}" y="${KNOB.cy - KNOB.r - 14}" width="${(KNOB.r + 14) * 2}" height="${(KNOB.r + 14) * 2}" fill="transparent" tabindex="0" role="slider" aria-label="Twist the limb about its own length"/>
+  <text x="${KNOB.cx}" y="${KNOB.cy + KNOB.r + 22}" text-anchor="middle" fill="#7c878c" font-size="10.5">Only spins the bone; does not move its tip.</text>
+  `;
+}
+
+/* ---- recognisable bones, per joint and example: static shapes, rebuilt only on a
+   type/example switch, then only ROTATED (and, for the moving bone, RESCALED to its
+   own projected length) every frame — never replaced mid-drag. ---------------------- */
+const PROX_COL = '#dcc998', PROX_DARK = '#9c8a5a', DIST_COL = '#efe4c8', DIST_DARK = '#b9a97c';
+/* A long bone (humerus, femur, tibia): a bulbous end at the joint (x=0), a shaft,
+   and a smaller rounded cap at the far end. One shape serves every long bone. */
+function longBoneHTML(len, w, head, col, dark){
+  const x0 = head * 0.55, x1 = len - w * 0.32;
+  return `<rect x="${x0.toFixed(1)}" y="${(-w / 2).toFixed(1)}" width="${Math.max(4, x1 - x0).toFixed(1)}" height="${w.toFixed(1)}" rx="${(w / 2).toFixed(1)}" fill="${col}" stroke="${dark}" stroke-width="1.3"/>
+    <circle cx="${(head * 0.55).toFixed(1)}" cy="0" r="${head.toFixed(1)}" fill="${col}" stroke="${dark}" stroke-width="1.3"/>
+    <circle cx="${(len - w * 0.28).toFixed(1)}" cy="0" r="${(w * 0.42).toFixed(1)}" fill="${col}" stroke="${dark}" stroke-width="1.3"/>`;
+}
+/* The forearm (radius and ulna) or the lower leg: two long bones side by side. */
+function pairedBoneHTML(len, w, col, dark){
+  const gap = w * 1.7, bw = w * 0.6, head = bw * 0.95;
+  return `<g transform="translate(0,${(-gap / 2).toFixed(1)})">${longBoneHTML(len, bw, head, col, dark)}</g>
+    <g transform="translate(0,${(gap / 2).toFixed(1)})">${longBoneHTML(len * 0.94, bw, head * 0.85, col, dark)}</g>`;
+}
+/* A flat blade bone (scapula, pelvis): narrow at the joint, broad further in,
+   with a shallow cup notched into its joint end — the socket a ball sits in. */
+function bladeHTML(len, w, col, dark){
+  return `<path d="M0,${(-w * 0.15).toFixed(1)} Q${(len * 0.3).toFixed(1)},${(-w * 0.5).toFixed(1)} ${(len * 0.68).toFixed(1)},${(-w * 0.52).toFixed(1)}
+      Q${len.toFixed(1)},${(-w * 0.5).toFixed(1)} ${len.toFixed(1)},0 Q${len.toFixed(1)},${(w * 0.5).toFixed(1)} ${(len * 0.68).toFixed(1)},${(w * 0.52).toFixed(1)}
+      Q${(len * 0.3).toFixed(1)},${(w * 0.5).toFixed(1)} 0,${(w * 0.15).toFixed(1)} Q${(w * 0.12).toFixed(1)},0 0,${(-w * 0.15).toFixed(1)} Z" fill="${col}" stroke="${dark}" stroke-width="1.3"/>
+    <path d="M3,${(-w * 0.22).toFixed(1)} A ${(w * 0.26).toFixed(1)} ${(w * 0.26).toFixed(1)} 0 0 0 3 ${(w * 0.22).toFixed(1)}" fill="none" stroke="${dark}" stroke-width="3.2"/>`;
+}
+/* The neck's still side: shoulders/trunk, and the atlas — the ring C1 makes,
+   for the skull to turn on. */
+function atlasHTML(len, col, dark){
+  const trunkCx = len * 0.62;
+  return `<ellipse cx="${trunkCx.toFixed(1)}" cy="0" rx="${(len * 0.34).toFixed(1)}" ry="42" fill="${col}" stroke="${dark}" stroke-width="1.3"/>
+    <circle cx="18" cy="0" r="23" fill="${col}" stroke="${dark}" stroke-width="7"/>
+    <circle cx="18" cy="0" r="23" fill="none" stroke="#fff" stroke-width="1" opacity=".5"/>`;
+}
+/* The skull: an oval with a small jaw and a nose that turns as the twist does. */
+const NECK_R = 0.32;   // where the skull sits, as a fraction of the reference bone length — close to the joint
+function skullHTML(len, col, dark){
+  const cx = len * NECK_R, rx = 33, ry = 29;
+  return `<ellipse cx="${cx.toFixed(1)}" cy="0" rx="${rx}" ry="${ry}" fill="${col}" stroke="${dark}" stroke-width="1.3"/>
+    <path d="M${(cx - 6).toFixed(1)},${(ry * 0.55).toFixed(1)} q10 12 2 ${(ry * 0.55).toFixed(1)}" fill="none" stroke="${dark}" stroke-width="2.2"/>
+    <circle cx="${(cx - 9).toFixed(1)}" cy="${(-ry * 0.35).toFixed(1)}" r="3" fill="${dark}"/>`;
+}
+/* Which bone shape each joint and example gets. */
+const BONES = {
+  ball:  [{prox: {k: 'blade', w: 76, name: 'scapula'},  dist: {k: 'long', w: 34, head: 24, name: 'humerus'}},
+          {prox: {k: 'blade', w: 84, name: 'pelvis'},   dist: {k: 'long', w: 40, head: 27, name: 'femur'}}],
+  hinge: [{prox: {k: 'long', w: 30, head: 17, name: 'humerus'}, dist: {k: 'paired', w: 14, name: 'radius & ulna'}},
+          {prox: {k: 'long', w: 36, head: 21, name: 'femur'},   dist: {k: 'long', w: 24, head: 15, name: 'tibia'}}],
+  pivot: [{prox: {k: 'atlas', name: 'atlas (C1)'},              dist: {k: 'skull', name: 'skull'}},
+          {prox: {k: 'long', w: 24, head: 13, name: 'humerus'}, dist: {k: 'paired', w: 12, name: 'radius & ulna'}}],
+};
+function boneHTML(spec, len, col, dark){
+  if (spec.k === 'long') return longBoneHTML(len, spec.w, spec.head, col, dark);
+  if (spec.k === 'paired') return pairedBoneHTML(len, spec.w, col, dark);
+  if (spec.k === 'blade') return bladeHTML(len, spec.w, col, dark);
+  if (spec.k === 'atlas') return atlasHTML(len, col, dark);
+  if (spec.k === 'skull') return skullHTML(len, col, dark);
+  return '';
+}
+/* The radius of the bulb at the joint end — for the cartilage cap that caps it. */
+function headOf(spec){
+  if (spec.k === 'long') return spec.head;
+  if (spec.k === 'paired') return spec.w * 0.6 * 0.95;
+  if (spec.k === 'blade') return spec.w * 0.3;
+  if (spec.k === 'atlas') return 23;
+  return 30;   // skull
+}
+/* The small extra context that isn't a bone: the hinge's knuckle, the forearm's pivot ring. */
+function jointIconHTML(){
+  if (S.type === 'hinge') return `<rect x="${JX - 30}" y="${JY - 26}" width="60" height="52" rx="10" fill="none" stroke="#b9a97c" stroke-width="4"/>
+    <ellipse cx="${JX}" cy="${JY}" rx="9" ry="22" fill="#c9b98a" stroke="#8a7a52" stroke-width="1.6"/>`;
+  if (S.type === 'pivot' && S.exIdx === 1) return `<circle cx="${JX}" cy="${JY}" r="27" fill="none" stroke="#b9a97c" stroke-width="5"/>`;
+  return '';
+}
+
+/* ---- render: the model, the pad and the dial, all from the same state ---- */
+function render(){
+  const ex = currentEx(), a = S.ang, spec = BONES[S.type][S.exIdx];
+  const proxDir = {x: 0, y: -1, z: 0};
+  const d = dir3(a.flex, a.abd);
+  /* The neck is the one example where the "moving" part (the skull) sits ABOVE the
+     joint rather than hanging below it like every limb here: flip the drawing only,
+     never the true d that strapRatio and the findings measure. */
+  const flipNeck = S.type === 'pivot' && S.exIdx === 0;
+  const proxDirDraw = flipNeck ? {x: 0, y: 1, z: 0} : proxDir;
+  const dDraw = flipNeck ? scale3(d, -1) : d;
+  const flipV = v => flipNeck ? {x: v.x, y: -v.y, z: v.z} : v;   // the still bone's own anchors flip with it
+  const proxTip = project(proxDirDraw, JX, JY, LPROX), distTip = project(dDraw, JX, JY, LBONE);
+  const angProx = Math.atan2(proxTip.y - JY, proxTip.x - JX) * 180 / Math.PI;
+  const angDist = Math.atan2(distTip.y - JY, distTip.x - JX) * 180 / Math.PI;
+  const lenDist = Math.hypot(distTip.x - JX, distTip.y - JY) || 1, scaleDist = lenDist / LBONE;
+  $('proxBoneG').setAttribute('transform', `translate(${JX},${JY}) rotate(${angProx.toFixed(2)})`);
+  $('distBoneG').setAttribute('transform', `translate(${JX},${JY}) rotate(${angDist.toFixed(2)}) scale(${scaleDist.toFixed(3)},1)`);
+
+  /* ligament and tendon: real 3-D straps, coloured / thickened from their own computed stretch.
+     ligR/tenR are measured on the true d; ligBp/tenBp are drawn on dDraw, so the neck's flip
+     never touches the numbers, only where the strap is painted. */
+  const ligR = strapRatio(d, LIG_A, LIG_T), tenR = strapRatio(d, TEN_A, TEN_T);
+  const ligAp = project(flipV(LIG_A), JX, JY, LBONE), ligBp = project(scale3(dDraw, LIG_T), JX, JY, LBONE);
+  const tenAp = project(flipV(TEN_A), JX, JY, LBONE), tenBp = project(scale3(dDraw, TEN_T), JX, JY, LBONE);
+  $('ligA').setAttribute('cx', ligAp.x); $('ligA').setAttribute('cy', ligAp.y);
+  $('ligB').setAttribute('cx', ligBp.x); $('ligB').setAttribute('cy', ligBp.y);
+  $('ligLine').setAttribute('x1', ligAp.x); $('ligLine').setAttribute('y1', ligAp.y);
+  $('ligLine').setAttribute('x2', ligBp.x); $('ligLine').setAttribute('y2', ligBp.y);
+  const t = clamp((ligR - 1) / 0.5, 0, 1);
+  const ligCol = `rgb(${Math.round(181 + (214 - 181) * t)},${Math.round(137 + (69 - 137) * t)},${Math.round(42 + (61 - 42) * t)})`;
+  $('ligLine').setAttribute('stroke', ligCol);
+  /* the strap's cross-ties, so it reads as a band, not a wire */
+  const ligDx = ligBp.x - ligAp.x, ligDy = ligBp.y - ligAp.y, ligLen = Math.hypot(ligDx, ligDy) || 1;
+  const pxp = -ligDy / ligLen, pyp = ligDx / ligLen;
+  let ties = '';
+  for (const tt of [0.3, 0.5, 0.7]) {
+    const cx = ligAp.x + ligDx * tt, cy = ligAp.y + ligDy * tt;
+    ties += `<line x1="${(cx - pxp * 4.6).toFixed(1)}" y1="${(cy - pyp * 4.6).toFixed(1)}" x2="${(cx + pxp * 4.6).toFixed(1)}" y2="${(cy + pyp * 4.6).toFixed(1)}" stroke="#6b5215" stroke-width="1.6" opacity=".65"/>`;
+  }
+  $('ligTies').innerHTML = ties;
+
+  /* the tendon runs from the muscle belly's own tip to its bony insertion; the belly
+     itself shortens and bulges by the same computed tenR that used to just recolour a line. */
+  const musOp = project(flipV(MUS_O), JX, JY, LBONE);
+  const bx = tenAp.x - musOp.x, by = tenAp.y - musOp.y, bellyFull = Math.hypot(bx, by) || 1, angBelly = Math.atan2(by, bx) * 180 / Math.PI;
+  const midX = (musOp.x + tenAp.x) / 2, midY = (musOp.y + tenAp.y) / 2;
+  const contract = clamp(tenR, 0.72, 1.15);
+  const bellyLen = bellyFull * 0.7 * contract, bellyW = 15 / contract;
+  $('muscleBelly').setAttribute('cx', midX); $('muscleBelly').setAttribute('cy', midY);
+  $('muscleBelly').setAttribute('rx', (bellyLen / 2).toFixed(1)); $('muscleBelly').setAttribute('ry', (bellyW / 2).toFixed(1));
+  $('muscleBelly').setAttribute('transform', `rotate(${angBelly.toFixed(2)} ${midX.toFixed(1)} ${midY.toFixed(1)})`);
+  $('musDot').setAttribute('cx', musOp.x); $('musDot').setAttribute('cy', musOp.y);
+  const bux = bx / bellyFull, buy = by / bellyFull;
+  const bellyEndX = midX + bux * (bellyLen / 2), bellyEndY = midY + buy * (bellyLen / 2);
+  $('tenLine').setAttribute('x1', bellyEndX); $('tenLine').setAttribute('y1', bellyEndY);
+  $('tenLine').setAttribute('x2', tenBp.x); $('tenLine').setAttribute('y2', tenBp.y);
+  $('tenLine').setAttribute('stroke-width', fmt(clamp(2 + 5 * (1 - clamp(tenR, 0.55, 1.15)), 1.5, 7), 1));
+  $('tenB').setAttribute('cx', tenBp.x); $('tenB').setAttribute('cy', tenBp.y);
+
+  /* twist markers: two points spun about the bone's own axis, projected the same way */
+  const {u, v} = perpBasis(dDraw), rr = a.rot * deg, mid = scale3(dDraw, 0.55);
+  const mA = add3(add3(mid, u, 0.12 * Math.cos(rr)), v, 0.12 * Math.sin(rr));
+  const mB = add3(add3(mid, u, -0.12 * Math.cos(rr)), v, -0.12 * Math.sin(rr));
+  const pA = project(mA, JX, JY, LBONE), pB = project(mB, JX, JY, LBONE);
+  $('twistA').setAttribute('cx', pA.x); $('twistA').setAttribute('cy', pA.y);
+  $('twistB').setAttribute('cx', pB.x); $('twistB').setAttribute('cy', pB.y);
+  $('twistBar').setAttribute('x1', pA.x); $('twistBar').setAttribute('y1', pA.y);
+  $('twistBar').setAttribute('x2', pB.x); $('twistBar').setAttribute('y2', pB.y);
+
+  /* the nose: a face turning is the one honest way to SEE a neck twist on a flat page */
+  const skullP = project(scale3(dDraw, NECK_R), JX, JY, LBONE);
+  if (flipNeck) {
+    const noseCentre = scale3(dDraw, NECK_R);
+    const nose3 = add3(add3(noseCentre, u, 0.14 * Math.cos(rr)), v, 0.14 * Math.sin(rr));
+    const noseP = project(nose3, JX, JY, LBONE);
+    $('skullNose').setAttribute('cx', noseP.x); $('skullNose').setAttribute('cy', noseP.y);
+    $('skullNose').setAttribute('opacity', 1);
+  } else $('skullNose').setAttribute('opacity', 0);
+
+  const distLabelP = flipNeck ? skullP : distTip;
+  $('labels').innerHTML = S.tissueLabels ? `
+    <text x="${proxTip.x - 30}" y="${proxTip.y - (flipNeck ? -18 : 10)}" fill="#8a6a1a">${esc(spec.prox.name)}</text>
+    <text x="${distLabelP.x + (flipNeck ? 38 : -20)}" y="${distLabelP.y + (flipNeck ? 4 : 18)}" fill="#8a6a1a">${esc(spec.dist.name)}</text>
+    <text x="${ligBp.x + 8}" y="${ligBp.y - 6}" fill="#8a6a1a">ligament</text>
+    <text x="${musOp.x - 40}" y="${musOp.y - 8}" fill="#8a3f3f">muscle</text>
+    <text x="${tenBp.x - 54}" y="${tenBp.y + 16}" fill="#4a2f8a">tendon</text>` : '';
+
+  const flashOn = S.flash && performance.now() < S.flash.until;
+  $('flashRing').setAttribute('opacity', flashOn ? 0.85 : 0);
+
+  updatePad(ex, a); updateKnob(ex, a);
+  $('readout').innerHTML = readoutHTML(ex, a, ligR, tenR);
+  $('jointSub').textContent = `${JOINTS[S.type].label} · ${ex.name}`;
+  if (S.locked) paintWhy(ex, a);
+  checkFinds(a);
+}
+function paintWhy(ex, a){
+  $('whyCard').hidden = false;
+  let p;
+  if (S.type === 'ball') p = `It is free on all three axes here: flexion <b>${fmt(a.flex, 0)}&deg;</b>, abduction <b>${fmt(a.abd, 0)}&deg;</b>,
+    twist <b>${fmt(a.rot, 0)}&deg;</b> &mdash; each one stopped only by how far its own capsule lets the ball travel before the neck meets the socket's rim.`;
+  else if (S.type === 'hinge') p = `Flexion is <b>${fmt(a.flex, 0)}&deg;</b> of its 0&deg;&ndash;${ex.range.flex[1]}&deg; range. Abduction and twist stay locked at
+    <b>0&deg;</b>: a pin through a cylinder has no curved surface for the bone to ride on in those directions.`;
+  else p = `Twist is <b>${fmt(a.rot, 0)}&deg;</b> of its ${ex.range.rot[0]}&deg;&ndash;${ex.range.rot[1]}&deg; range. Flexion and abduction stay locked at
+    <b>0&deg;</b>: a peg inside a ring can spin, but the ring gives it nowhere else to go.`;
+  $('why').innerHTML = `<p>You are moving the <b>${esc(ex.name)}</b>, a ${JOINTS[S.type].label.toLowerCase()} joint. ${p}</p>`;
+}
+function updatePad(ex, a){
+  const zx = padXOf(0), zy = padYOf(0);
+  $('padZeroX').setAttribute('x1', zx); $('padZeroX').setAttribute('x2', zx); $('padZeroX').setAttribute('y1', PAD.y); $('padZeroX').setAttribute('y2', PAD.y + PAD.h);
+  $('padZeroY').setAttribute('y1', zy); $('padZeroY').setAttribute('y2', zy); $('padZeroY').setAttribute('x1', PAD.x); $('padZeroY').setAttribute('x2', PAD.x + PAD.w);
+  const rf = rangeOf(ex, 'flex'), ra = rangeOf(ex, 'abd');
+  const x0 = ex.range.abd ? padXOf(ra[0]) : zx - 3, x1 = ex.range.abd ? padXOf(ra[1]) : zx + 3;
+  const y0 = ex.range.flex ? padYOf(rf[1]) : zy - 3, y1 = ex.range.flex ? padYOf(rf[0]) : zy + 3;
+  $('padAllow').setAttribute('x', x0); $('padAllow').setAttribute('y', y0);
+  $('padAllow').setAttribute('width', Math.max(2, x1 - x0)); $('padAllow').setAttribute('height', Math.max(2, y1 - y0));
+  const px = padXOf(a.abd), py = padYOf(a.flex);
+  $('padDot').setAttribute('cx', px); $('padDot').setAttribute('cy', py);
+  const bothLocked = !ex.range.flex && !ex.range.abd;
+  $('padLock').setAttribute('opacity', bothLocked ? 0.9 : 0);
+  const ghostOn = S.flash && S.flash.kind === 'locked' && performance.now() < S.flash.until;
+  $('padGhost').setAttribute('opacity', ghostOn && S.flash.pad ? 0.9 : 0);
+  if (ghostOn && S.flash.pad) { $('padGhost').setAttribute('cx', S.flash.pad.x); $('padGhost').setAttribute('cy', S.flash.pad.y); }
+}
+function updateKnob(ex, a){
+  const rr = rangeOf(ex, 'rot'), free = !!ex.range.rot;
+  const pt = knobPt(a.rot);
+  $('knobLine').setAttribute('x1', KNOB.cx); $('knobLine').setAttribute('y1', KNOB.cy);
+  $('knobLine').setAttribute('x2', pt.x); $('knobLine').setAttribute('y2', pt.y);
+  $('knobDot').setAttribute('cx', pt.x); $('knobDot').setAttribute('cy', pt.y);
+  $('knobLock').setAttribute('opacity', free ? 0 : 0.9);
+  if (free) {
+    const p0 = knobPt(rr[0]), p1 = knobPt(rr[1]), large = (rr[1] - rr[0]) > 180 ? 1 : 0;
+    $('knobAllow').setAttribute('d', `M${p0.x} ${p0.y} A ${KNOB.r} ${KNOB.r} 0 ${large} 1 ${p1.x} ${p1.y}`);
+  } else $('knobAllow').setAttribute('d', '');
+}
+function readoutHTML(ex, a, ligR, tenR){
+  const line = (label, axis) => {
+    const free = ex.range[axis];
+    if (!free) return `<span>${label}</span><b>locked &#128274;</b>`;
+    return `<span>${label} (${free[0]}&deg; to ${free[1]}&deg;)</span><b>${fmt(a[axis], 0)}&deg;</b>`;
+  };
+  return `${line('Flex / extend', 'flex')}${line('Abd / adduct', 'abd')}${line('Twist', 'rot')}
+    <i class="sep"></i>
+    <span>Ligament (bone&ndash;bone)</span><b>${fmt(ligR * 100, 0)}%</b>
+    <span>Tendon (muscle&ndash;bone)</span><b>${fmt(tenR * 100, 0)}%</b>`;
+}
+
+/* ---- the model's own decision: project onto the free axes, clamp to range ---- */
+function attemptAxis(axis, raw){
+  const ex = currentEx(), free = ex.range[axis];
+  if (!free) {
+    if (Math.abs(raw) > 4) flashLocked(axis);
+    S.ang[axis] = 0;
+    return;
+  }
+  const [mn, mx] = free, c = clamp(raw, mn, mx);
+  if (raw > mx + 2 || raw < mn - 2) flashLimit();
+  S.ang[axis] = c;
+}
+function flashLocked(axis){
+  S.flash = {axis, kind: 'locked', until: performance.now() + 420};
+  sound('oops');
+  discover('blocked');
+  checkExplain();
+  setTimeout(render, 440);
+}
+function flashLimit(){
+  S.flash = {kind: 'limit', until: performance.now() + 260};
+  sound('tick');
+  const key = S.type + ':' + S.exIdx; SEEN_MAX.add(key);
+  discover('capsuleLimit');
+  if (S.type === 'ball' && SEEN_MAX.has('ball:0') && SEEN_MAX.has('ball:1')) discover('compareRanges');
+  setTimeout(render, 280);
+}
+function checkFinds(a){
+  if (S.type === 'ball' && Math.abs(a.flex) >= 25 && Math.abs(a.abd) >= 25 && Math.abs(a.rot) >= 15) discover('threeWays');
+  if (S.type === 'hinge' && a.flex >= 20) discover('oneWay');
+  if (S.type === 'pivot' && Math.abs(a.rot) >= 30) discover('twistOnly');
+}
+
+/* ---- drag: the pad moves flex/abd, the dial twists rot ---- */
+build();
+drag($('padHit'), svg, {
+  start(){ if (!S.locked) return false; },
+  move(p){
+    S.pendingAbd = ABD_DOM[0] + clamp((p.x - PAD.x) / PAD.w, -0.3, 1.3) * (ABD_DOM[1] - ABD_DOM[0]);
+    S.pendingFlex = FLEX_DOM[0] + clamp((PAD.y + PAD.h - p.y) / PAD.h, -0.3, 1.3) * (FLEX_DOM[1] - FLEX_DOM[0]);
+    attemptAxis('abd', S.pendingAbd); attemptAxis('flex', S.pendingFlex);
+    render();
+  },
+});
+drag($('knobHit'), svg, {
+  start(){ if (!S.locked) return false; },
+  move(p){
+    const th = Math.atan2(p.y - KNOB.cy, p.x - KNOB.cx) / deg;
+    let rot = th + 90; if (rot > 180) rot -= 360; if (rot < -180) rot += 360;
+    attemptAxis('rot', rot);
+    render();
+  },
+});
+
+/* ---- type / example switching ---- */
+function renderExSeg(){
+  $('exSeg').innerHTML = JOINTS[S.type].examples.map((e, i) => `<button data-ex="${i}" aria-pressed="${i === S.exIdx}">${esc(e.name)}</button>`).join('');
+  $('typeNote').textContent = S.type === 'ball' ? 'Free on three axes, each with its own limit.'
+    : S.type === 'hinge' ? 'Free on one axis only: there is no surface to turn on sideways.'
+    : 'Free to spin about its own axis, and nothing else.';
+  $('jointIcon').innerHTML = jointIconHTML();
+  /* The bones themselves: built once per type/example, then only rotated (never
+     replaced) every frame in render(), so a drag in progress never loses them. */
+  const spec = BONES[S.type][S.exIdx], showCap = S.type !== 'pivot';
+  const capHTML = (bspec) => showCap ? `<circle cx="${(headOf(bspec) * 0.55).toFixed(1)}" cy="0" r="${(headOf(bspec) * 0.72).toFixed(1)}" fill="none" stroke="#bfe3f5" stroke-width="4"/>` : '';
+  $('proxBoneG').innerHTML = boneHTML(spec.prox, LPROX, PROX_COL, PROX_DARK) + capHTML(spec.prox);
+  $('distBoneG').innerHTML = boneHTML(spec.dist, LBONE, DIST_COL, DIST_DARK) + capHTML(spec.dist);
+  const capsuleR = Math.max(headOf(spec.prox), headOf(spec.dist)) * 1.05 + 8;
+  $('capsule').setAttribute('rx', capsuleR.toFixed(1)); $('capsule').setAttribute('ry', (capsuleR * 0.8).toFixed(1));
+}
+$('typeSeg').addEventListener('click', e => {
+  const b = e.target.closest('[data-type]'); if (!b || !S.locked) return;
+  S.type = b.dataset.type; S.exIdx = 0; S.ang = {flex: 0, abd: 0, rot: 0};
+  for (const x of $$('#typeSeg button')) x.setAttribute('aria-pressed', x === b);
+  sound('tick'); track('jointType', {type: S.type}); renderExSeg(); render();
+});
+$('exSeg').addEventListener('click', e => {
+  const b = e.target.closest('[data-ex]'); if (!b || !S.locked) return;
+  S.exIdx = +b.dataset.ex;
+  const ex = currentEx();
+  for (const axis of ['flex', 'abd', 'rot']) attemptAxis(axis, S.ang[axis]);
+  sound('tick'); track('jointExample', {id: ex.id});
+  renderExSeg();   // a different example can mean different bones, not just a different range
+  render();
+});
+function $$(sel){ return Array.from(document.querySelectorAll(sel)); }
+$('btnTissue').addEventListener('click', () => {
+  S.tissueLabels = !S.tissueLabels;
+  $('btnTissue').setAttribute('aria-pressed', S.tissueLabels);
+  $('btnTissue').textContent = S.tissueLabels ? 'Hide labels' : 'Show labels';
+  render();
+});
+
+function lockControls(lock){
+  $('padHit').style.pointerEvents = lock ? 'none' : '';
+  $('knobHit').style.pointerEvents = lock ? 'none' : '';
+  for (const b of $$('#typeSeg button, #exSeg button')) b.disabled = lock;
+  $('btnTissue').disabled = lock;
+  $('gate').hidden = !lock;
+}
+
+/* ============================================================================
+   Start
+   ============================================================================ */
+renderExSeg();
+findings($('finds'), [
+  {id: 'oneWay',       icon: '🦵', label: 'A hinge moves one way', hint: 'Flex the elbow or the knee'},
+  {id: 'blocked',      icon: '⛔', label: 'Blocked, not broken', hint: 'Try to swing a hinge or a pivot sideways'},
+  {id: 'threeWays',    icon: '🏀', label: 'A ball-and-socket moves three ways', hint: 'Flex, abduct and twist a shoulder or hip together'},
+  {id: 'twistOnly',    icon: '🔄', label: 'A pivot only turns', hint: 'Twist the neck or the forearm'},
+  {id: 'capsuleLimit', icon: '🪢', label: 'The joint sets its own limit', hint: 'Push any free axis to the edge of its range'},
+  {id: 'compareRanges', icon: '⚖️', label: 'Same kind of joint, different limits', hint: 'Reach the limit on both the shoulder and the hip'},
+], () => toast('All six. The joint’s own shape decided every one of those limits.', 4800));
+
+const POE = predict($('poe'), {
+  id: 'knee-sideways',
+  q: 'Try to swing your knee out to the side, the way your arm swings out at the shoulder. What will the knee do?',
+  options: [
+    {id: 'free',    text: 'It swings out just as freely as the arm does'},
+    {id: 'stopped', text: 'It moves a little, then the joint itself stops it', right: true},
+    {id: 'nothing', text: 'It cannot move even a millimetre'},
+    {id: 'hard',    text: 'It swings out fully, but only if you push hard'},
+  ],
+  onLock(){
+    S.locked = true;
+    lockControls(false);
+    say('Now try the pad and the dial. Start with the knee, then try a shoulder.');
+    render();
+  },
+});
+lockControls(!POE.locked);
+if (!Play.FF('predict')) S.locked = true;
+render();
+
+/* Explain once the learner has actually met a hinge's or a pivot's block. */
+let explained = false;
+function checkExplain(){
+  if (explained || !found('blocked')) return;
+  explained = true;
+  const ligPct = fmt(strapRatio(dir3(S.ang.flex, S.ang.abd), LIG_A, LIG_T) * 100, 0);
+  POE.explain(`A hinge, like the knee, is a pin through a cylinder: the bone ends are shaped so there is only one axis for them to turn on.
+    There is no matching curve for the joint to ride on sideways, so the capsule and the ligaments around it catch the bone within a few
+    degrees. The Readout card shows it: the ligament strap is already at <b>${ligPct}%</b> of its resting length &mdash; that strap, not
+    a rule, is what is stopping the sideways push.`);
+}
+
+window.PG_STATE = () => ({type: S.type, exIdx: S.exIdx, ang: Object.assign({}, S.ang), locked: S.locked,
+  found: Array.from(Play.EVENTS.filter(e => e.type === 'finding').map(e => e.id))});
+window.PG_MODEL = {JOINTS, dir3, project, strapRatio, freeAxes, rangeOf, attemptAxis, currentEx: () => currentEx()};
+</script>
+</body>
+</html>

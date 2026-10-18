@@ -1,0 +1,642 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Enzyme Kinetics</title>
+<meta name="description" content="Class 11: a pond of enzyme and substrate molecules. Substrates wander into active sites and are turned into product one at a time; the rate is counted. Add substrate until the enzymes are saturated, fit Vmax and Km, heat them until they denature, change the pH, and compare a competitive with a non-competitive inhibitor.">
+<link rel="icon" href="../../favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600&family=Inter:wght@400;500;600;700&family=Nunito:wght@500;700;800&family=Newsreader:opsz,wght@6..72,400;6..72,500&family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="../../play.css">
+<style>
+/* Only what this page needs beyond play.css. */
+.gate{position:absolute; left:0; right:0; top:55%; height:45%; display:grid; place-items:center; pointer-events:none}
+.gate span{background:rgba(29,35,39,.86); color:#fff; padding:10px 16px; border-radius:99px; font-weight:600; font-size:14px}
+.pg-stage{align-self:start; min-height:0}
+@media (max-width:1100px){ .pg-main.wide-side{grid-template-columns:minmax(0,1fr) 340px} }
+.seg{display:grid; grid-auto-flow:column; grid-auto-columns:1fr; gap:4px; background:var(--sunk); padding:4px; border-radius:var(--radius-sm); margin:4px 0 8px}
+.seg button{border:0; background:transparent; border-radius:7px; min-height:30px; font-weight:600; font-size:12.5px; cursor:pointer; color:var(--ink-2)}
+.seg button[aria-pressed="true"]{background:var(--card); color:var(--ink); box-shadow:var(--shadow)}
+.seg button:disabled{opacity:.5; cursor:default}
+.ctl{grid-template-columns:118px 1fr 70px; margin:2px 0}
+.ctl label{font-size:12.5px; line-height:1.2}
+.ctl output{font-family:var(--font-mono); font-size:12.5px; font-weight:600; min-width:0}
+.btns{display:flex; flex-wrap:wrap; gap:6px; margin:6px 0 2px}
+.btn[aria-pressed="true"]{background:var(--accent-soft); border-color:var(--accent)}
+.readout{display:grid; grid-template-columns:1fr auto; gap:2px 12px; font-size:13px; align-items:baseline}
+.readout span{color:var(--ink-2)}
+.readout b{font-family:var(--font-mono); font-weight:600; font-size:12.5px; font-variant-numeric:tabular-nums; text-align:right}
+.readout .sep{grid-column:1/-1; height:1px; background:var(--hair); margin:4px 0}
+.why p{font-size:13.5px; margin-bottom:.5em}
+.why .mono{font-size:12.5px}
+.note{font-size:12.5px; color:var(--ink-3); margin:6px 0 0}
+.veil{font-size:13px; color:var(--ink-3)}
+select{width:100%}
+svg text.m{font-family:var(--font-mono)}
+svg text.serif{font-family:"Newsreader",Georgia,serif}
+</style>
+</head>
+<body>
+<header class="pg-top"></header>
+
+<div class="pg-intro">
+  <h1>Enzyme kinetics</h1>
+  <p>Every dot is a molecule. Substrates wander about at random; when one drifts into an enzyme’s active site it binds, and the enzyme either turns it into product or lets it go.
+     The rate is simply the products counted each second, and the page records it whenever the pond has settled. Add substrate until every enzyme is busy, fit V<sub>max</sub> and K<sub>m</sub>
+     from your own points, then heat the enzymes, change the pH, and set a competitive inhibitor against a non-competitive one.</p>
+  <div class="syl">CBSE Class 11 Biology · Ch 9 Biomolecules</div>
+</div>
+
+<main class="pg-main wide-side">
+  <section class="pg-stage" id="stageWrap">
+    <svg id="stage" viewBox="0 0 1000 770" role="img" aria-label="A pond of enzyme molecules with substrate, product and inhibitor molecules, a live count of what the enzymes are doing, and graphs of rate against substrate, temperature and pH"></svg>
+    <div class="gate" id="gate"><span>Make your prediction first →</span></div>
+  </section>
+
+  <aside class="pg-side">
+    <div id="poe"></div>
+
+    <div class="card" id="pondCard">
+      <div class="row" style="justify-content:space-between">
+        <div class="kicker" style="margin:0">The pond</div>
+        <button class="btn sm" id="btnFast" aria-pressed="false" title="Run the pond eight times faster">⏩ ×8</button>
+      </div>
+      <select id="preset" aria-label="Which enzyme" style="margin:6px 0">
+        <option value="sdh">Succinic dehydrogenase (Krebs cycle)</option>
+        <option value="pepsin">Pepsin (stomach)</option>
+        <option value="trypsin">Trypsin (small intestine)</option>
+        <option value="thermo">An enzyme from a hot spring</option>
+      </select>
+      <div class="ctl"><label for="subs">Substrate [S]</label><input type="range" id="subs" min="0" max="480" step="20" value="40"><output id="subsOut">40</output></div>
+      <div class="ctl"><label for="enz">Enzyme molecules</label><input type="range" id="enz" min="4" max="16" step="1" value="10"><output id="enzOut">10</output></div>
+      <div class="ctl"><label for="temp">Temperature</label><input type="range" id="temp" min="0" max="90" step="1" value="37"><output id="tempOut">37 °C</output></div>
+      <div class="ctl"><label for="ph">pH</label><input type="range" id="ph" min="1" max="12" step="0.5" value="7.5"><output id="phOut">7.5</output></div>
+      <div class="btns"><button class="btn sm" id="btnFresh">↺ Fresh enzymes</button><button class="btn sm" id="btnClear">Clear my points</button></div>
+      <p class="note">[S] is the number of substrate molecules in the pond, held steady: each one used is replaced from the edge.</p>
+    </div>
+
+    <div class="card" id="inhCard">
+      <div class="kicker">Inhibitor</div>
+      <div class="seg" id="inhSeg"><button data-inh="none" aria-pressed="true">None</button><button data-inh="comp" aria-pressed="false">Competitive</button><button data-inh="non" aria-pressed="false">Non-competitive</button></div>
+      <div class="ctl"><label for="inh">Inhibitor molecules</label><input type="range" id="inh" min="0" max="120" step="10" value="60"><output id="inhOut">60</output></div>
+      <p class="note" id="inhNote">Malonate looks like succinate, so it fits the active site of succinic dehydrogenase but cannot react (NCERT’s example).</p>
+    </div>
+
+    <div class="card" id="measureCard">
+      <div class="kicker">Measured</div>
+      <div id="measureVeil" class="veil">The measurements appear once you have made a prediction.</div>
+      <div id="measure" hidden>
+        <div class="readout">
+          <span>Rate now (last 4 s)</span><b id="mRate">—</b>
+          <span>Enzymes busy (ES)</span><b id="mBusy">—</b>
+          <span>This point</span><b id="mRec">—</b>
+          <i class="sep"></i>
+          <span>Fitted V<sub>max</sub></span><b id="mVmax">—</b>
+          <span>Fitted K<sub>m</sub></span><b id="mKm">—</b>
+          <span>Fastest rate you measured</span><b id="mKcat">—</b>
+        </div>
+      </div>
+    </div>
+
+    <div class="card why" id="whyCard" hidden>
+      <div class="kicker">What the model says</div>
+      <div id="why"></div>
+    </div>
+
+    <div class="card"><div class="kicker">To find</div><div id="finds"></div></div>
+  </aside>
+</main>
+
+<script src="../../play.js"></script>
+<script>
+'use strict';
+const {$, $$, clamp, fmt, loop, sound, say, track, toast, predict, findings, discover, found,
+       shareState, sharedState, mount, reduced, mulberry32} = Play;
+mount({thread: 'enzymes', band: 'theorist'});
+
+/* MODEL:start ==================================================================
+   A pond of enzyme and substrate molecules, simulated one molecule at a time.
+   Substrate (and inhibitor) molecules wander by Brownian motion. An enzyme's active site
+   is a pocket: a substrate that wanders into it binds (the ES complex). While bound it is
+   turned into product at a rate kcat, or falls out unchanged at a rate koff. Nothing here
+   is a formula for the rate: the rate is the number of products counted per second.
+     • Temperature: every step of catalysis runs faster when warm, kcat doubling per 10 °C
+       (NCERT’s rule of thumb), and the molecules jiggle faster. Above the enzyme’s limit
+       each molecule may unfold (denature) at any moment, for good.
+     • pH: the active site works only when its charged groups carry the right charge. The
+       site gains and loses a proton all the time; the fraction of time it is right depends
+       on pH through two pKa values either side of the optimum.
+     • A competitive inhibitor looks like the substrate and sits in the active site without
+       reacting. A non-competitive inhibitor binds a second site; while it sits there the
+       active site is bent out of shape: it lets go of any substrate and cannot take another.
+   The substrate is held at the level you set: each molecule used is replaced at the edge.
+   ============================================================================ */
+const W = 290, H = 190, RC = 9, KCAT = 8, KOFF = 2, KOFF_I = 12, KOFF_A = 25, D0 = 5000, FLIP = 20, SUB = 1 / 120;
+const PRESETS = {
+  sdh:    {name: 'Succinic dehydrogenase', sub: 'succinate', prod: 'fumarate', inh: 'malonate', opt: 7.5, tmax: 40},
+  pepsin: {name: 'Pepsin', sub: 'protein', prod: 'peptides', inh: 'a look-alike peptide', opt: 2.0, tmax: 40},
+  trypsin:{name: 'Trypsin', sub: 'protein', prod: 'peptides', inh: 'a look-alike peptide', opt: 8.0, tmax: 40},
+  thermo: {name: 'Enzyme from a hot spring', sub: 'substrate', prod: 'product', inh: 'a look-alike', opt: 7.0, tmax: 82},
+};
+const kcatAt = T => KCAT * Math.pow(2, (T - 37) / 10);
+const kdAt = (T, tmax) => T > tmax ? 0.012 * Math.exp((T - tmax) / 2) : 0;
+function phFrac(pH, opt){ return 1 / (1 + Math.pow(10, opt - 1.4 - pH) + Math.pow(10, pH - opt - 1.4)); }
+function gauss(r){ let u = 0, v = 0; while (u === 0) u = r(); v = r(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v); }
+
+function makePond(par, rngF){
+  const p = Object.assign({E: 10, S: 60, T: 37, pH: 7.5, inh: 'none', I: 0, preset: 'sdh', seed: 5}, par);
+  const r = rngF(p.seed);
+  const P = {p, r, t: 0, enz: [], mol: [], made: 0, log: [], nid: 1};
+  setEnzymes(P, p.E);
+  for (let i = 0; i < p.S; i++) P.mol.push(newMol(P, 'S'));
+  for (let i = 0; i < p.I; i++) P.mol.push(newMol(P, 'I'));
+  return P;
+}
+function setEnzymes(P, n){
+  const r = P.r;
+  while (P.enz.length < n) {
+    const i = P.enz.length, cols = 4, gx = W / cols, rows = Math.ceil(16 / cols), gy = H / rows;
+    const cx = (i % cols + 0.5) * gx + (r() - 0.5) * 18, cy = (Math.floor(i / cols) + 0.5) * gy + (r() - 0.5) * 10;
+    P.enz.push({id: i, x: cx, y: cy, st: 'free', s: null, allo: null, ok: r() < phFrac(P.p.pH, PRESETS[P.p.preset].opt), dead: false, fold: 0});
+  }
+  while (P.enz.length > n) { const e = P.enz.pop(); release(P, e); }
+}
+function newMol(P, kind, edge){
+  const r = P.r; let x = r() * W, y = r() * H;
+  if (edge) { const s = r() * 4 | 0; x = s === 0 ? 0 : s === 1 ? W : r() * W; y = s === 2 ? 0 : s === 3 ? H : r() * H; }
+  return {id: P.nid++, k: kind, x, y, b: null, life: kind === 'P' ? 1.6 : 0};
+}
+const site = e => ({x: e.x, y: e.y - 8});
+const allo = e => ({x: e.x + 11, y: e.y + 4});
+/* a molecule that lets go is pushed just clear of the site it left */
+function eject(m, e, al){ m.b = null; if (al) { m.x = e.x + 11 + RC + 2; } else { m.y = e.y - 8 - RC - 2; } }
+function release(P, e){
+  if (e.s) { eject(e.s, e); e.s = null; }
+  if (e.allo) { eject(e.allo, e, true); e.allo = null; }
+  e.st = 'free';
+}
+function stepPond(P, dt){
+  const p = P.p, r = P.r, pre = PRESETS[p.preset];
+  const kc = kcatAt(p.T), D = D0 * (p.T + 273) / 310, sd = Math.sqrt(2 * D * dt), fr = phFrac(p.pH, pre.opt), kd = kdAt(p.T, pre.tmax);
+  P.t += dt;
+  for (const m of P.mol) {
+    if (m.b) continue;
+    m.x += sd * gauss(r); m.y += sd * gauss(r);
+    if (m.x < 0) m.x = -m.x; if (m.x > W) m.x = 2 * W - m.x; if (m.y < 0) m.y = -m.y; if (m.y > H) m.y = 2 * H - m.y;
+    if (m.k === 'P') m.life -= dt;
+  }
+  for (const e of P.enz) {
+    if (e.dead) { e.fold = Math.min(1, e.fold + dt * 1.5); continue; }
+    if (kd > 0 && r() < kd * dt) { release(P, e); e.dead = true; P.log.push({t: P.t, type: 'dead'}); continue; }
+    if (r() < FLIP * dt) e.ok = r() < fr;
+    if (e.st === 'ES') {
+      if (!e.allo && e.ok && r() < kc * dt) {                   // catalysis: substrate becomes product
+        const m = e.s; m.k = 'P'; m.life = 1.6; m.b = null; e.s = null; e.st = 'free'; P.made++; P.log.push({t: P.t, type: 'P'});
+        P.mol.push(newMol(P, 'S', true));                         // the reservoir tops the substrate back up
+      } else if (r() < KOFF * dt) { eject(e.s, e); e.s = null; e.st = 'free'; }
+    } else if (e.st === 'EI') {
+      if (r() < KOFF_I * dt) { eject(e.s, e); e.s = null; e.st = 'free'; }
+    }
+    if (e.allo && r() < KOFF_A * dt) { eject(e.allo, e, true); e.allo = null; }
+    const cs = site(e), ca = allo(e);
+    for (const m of P.mol) {
+      if (m.b || m.k === 'P') continue;
+      if (e.st === 'free' && e.ok && !e.allo && (m.k === 'S' || (m.k === 'I' && p.inh === 'comp'))) {
+        const dx = m.x - cs.x, dy = m.y - cs.y;
+        if (dx * dx + dy * dy < RC * RC) { m.b = e; e.s = m; e.st = m.k === 'S' ? 'ES' : 'EI'; m.x = cs.x; m.y = cs.y; continue; }
+      }
+      if (!e.allo && m.k === 'I' && p.inh === 'non') {
+        const dx = m.x - ca.x, dy = m.y - ca.y;
+        if (dx * dx + dy * dy < RC * RC) { m.b = e; e.allo = m; m.x = ca.x; m.y = ca.y; if (e.s) { eject(e.s, e); e.s = null; e.st = 'free'; } }
+      }
+    }
+  }
+  P.mol = P.mol.filter(m => !(m.k === 'P' && m.life <= 0));
+  /* hold the substrate and inhibitor at the level set (count free + bound) */
+  const cnt = k => P.mol.filter(m => m.k === k).length;
+  let ns = cnt('S');
+  while (ns > p.S) { const i = P.mol.findIndex(m => m.k === 'S' && !m.b); if (i < 0) break; P.mol.splice(i, 1); ns--; }
+  while (ns < p.S) { P.mol.push(newMol(P, 'S', true)); ns++; }
+  let ni = cnt('I');
+  while (ni > p.I) { const i = P.mol.findIndex(m => m.k === 'I' && !m.b); if (i < 0) break; P.mol.splice(i, 1); ni--; }
+  while (ni < p.I) { P.mol.push(newMol(P, 'I', true)); ni++; }
+  if (P.log.length > 4000) P.log.splice(0, P.log.length - 3000);
+}
+/* The rate, measured: products counted over the last `win` seconds. */
+function rate(P, win){ const t0 = P.t - win; let n = 0; for (let i = P.log.length - 1; i >= 0 && P.log[i].t > t0; i--) if (P.log[i].type === 'P') n++; return n / Math.min(win, P.t); }
+function states(P){ const s = {free: 0, ES: 0, EI: 0, allo: 0, dead: 0, off: 0}; for (const e of P.enz) { if (e.dead) s.dead++; else { s[e.st]++; if (e.allo) s.allo++; if (!e.ok && e.st === 'free') s.off++; } } return s; }
+/* Least-squares Michaelis–Menten fit: for each trial Km, the best Vmax is closed-form. */
+function fitMM(pts){
+  if (pts.length < 3) return null;
+  let best = null;
+  for (let lk = Math.log(2); lk <= Math.log(5000); lk += 0.01) {
+    const Km = Math.exp(lk); let a = 0, b = 0;
+    for (const q of pts) { const f = q.S / (Km + q.S); a += q.v * f; b += f * f; }
+    const V = a / b; let e = 0; for (const q of pts) { const d = q.v - V * q.S / (Km + q.S); e += d * d; }
+    if (!best || e < best.e) best = {Km, Vmax: V, e};
+  }
+  return best;
+}
+/* For tests: run the pond at fixed conditions and measure the steady rate. */
+function measure(par, settle = 3, win = 30, rngF){
+  const P = makePond(par, rngF); const n1 = Math.round(settle / SUB), n2 = Math.round(win / SUB);
+  for (let i = 0; i < n1; i++) stepPond(P, SUB);
+  const m0 = P.made; let busy = 0;
+  for (let i = 0; i < n2; i++) { stepPond(P, SUB); const s = states(P); busy += s.ES; }
+  const alive = P.enz.filter(e => !e.dead).length;
+  return {v: (P.made - m0) / win, busy: busy / n2 / Math.max(1, P.p.E), alive};
+}
+/* MODEL:end */
+
+
+/* ---- state: plain data --------------------------------------------------- */
+const DEF = {preset: 'sdh', S: 40, E: 10, T: 37, pH: 7.5, inh: 'none', I: 60};
+const S = {par: Object.assign({}, DEF), fast: false, locked: false, pts: [], since: 0, busyAcc: 0, busyN: 0, m0: 0, recorded: false, trace: [], hot: false};
+const shared = sharedState();
+if (shared && shared.par) for (const k of ['S', 'E', 'T', 'pH', 'I']) if (isFinite(+shared.par[k])) S.par[k] = +shared.par[k];
+shareState(() => ({par: Object.assign({}, S.par)}));
+let P = makePond(pondPar(), mulberry32);
+function pondPar(){ const p = S.par; return {E: p.E, S: p.S, T: p.T, pH: p.pH, inh: p.inh, I: p.inh === 'none' ? 0 : p.I, preset: p.preset, seed: 5}; }
+function syncPond(){ const q = pondPar(); Object.assign(P.p, q); setEnzymes(P, q.E); }
+
+/* ============================================================================
+   The stage: built once, then patched.
+   ============================================================================ */
+const svg = $('stage');
+const NS = 'http://www.w3.org/2000/svg';
+const PD = {x: 20, y: 38, k: 2};                          // the pond: sim units × 2
+const px = x => PD.x + x * PD.k, py = y => PD.y + y * PD.k;
+const COL = {S: '#f29a1f', P: '#e0567a', Ic: '#7b5cd6', In: '#3f7fd8', enz: '#319795'};
+const RV = {x: 44, y: 496, w: 416, h: 220};               // rate against [S]
+const RT = {x: 544, y: 496, w: 190, h: 220};              // rate against temperature
+const RP = {x: 790, y: 496, w: 190, h: 220};              // rate against pH
+const ENZ_BODY = 'M-20 -6 C -23 -20, -10 -24, -8 -19 L -6 -12 Q 0 -5, 6 -12 L 8 -19 C 10 -24, 23 -20, 20 -6 C 25 8, 13 22, 0 21 C -13 22, -25 8, -20 -6 Z';
+const ENZ_LOOSE = 'M-24 -4 C -18 -18, -8 6, -2 -8 S 10 -20, 14 -2 S 26 14, 12 16 S -4 26, -10 12 S -28 12, -24 -4';
+
+function build(){
+  svg.innerHTML = `
+  <defs>
+    <radialGradient id="gPond" cx="45%" cy="35%" r="85%"><stop offset="0" stop-color="#f4fbfa"/><stop offset="1" stop-color="#dcefec"/></radialGradient>
+    <radialGradient id="gEnz" cx="40%" cy="30%" r="80%"><stop offset="0" stop-color="#7fd0c6"/><stop offset="1" stop-color="#2a8a80"/></radialGradient>
+    <clipPath id="clipPond"><rect x="${PD.x}" y="${PD.y}" width="${290 * PD.k}" height="${190 * PD.k}" rx="14"/></clipPath>
+  </defs>
+  <rect x="0" y="0" width="1000" height="448" fill="#fbfaf6"/>
+  <text x="20" y="26" fill="#1f5e58" font-size="12" font-weight="700" letter-spacing=".08em">THE POND</text>
+  <text id="pondSub" x="600" y="26" fill="#5a7c78" font-size="11" text-anchor="end"></text>
+  <rect x="${PD.x}" y="${PD.y}" width="${290 * PD.k}" height="${190 * PD.k}" rx="14" fill="url(#gPond)" stroke="#b7dcd6"/>
+  <g clip-path="url(#clipPond)">
+    <g id="enzLayer"></g>
+    <path id="molS" fill="${COL.S}" stroke="#fff" stroke-width=".6"/>
+    <path id="molP" fill="${COL.P}"/>
+    <path id="molIc" fill="${COL.Ic}" stroke="#fff" stroke-width=".6"/>
+    <path id="molIn" fill="${COL.In}" stroke="#fff" stroke-width=".6"/>
+  </g>
+  <g id="legend"></g>
+
+  <!-- what the enzymes are doing -->
+  <text x="630" y="26" fill="#4a555b" font-size="12" font-weight="700" letter-spacing=".08em">THE ENZYMES, NOW</text>
+  <g id="stateBar"></g>
+  <text x="630" y="130" fill="#4a555b" font-size="11" font-weight="700" letter-spacing=".06em">PRODUCTS PER SECOND, COUNTED</text>
+  <g id="trAxes"></g>
+  <path id="trLine" fill="none" stroke="${COL.P}" stroke-width="2"/>
+  <text id="trNow" x="980" y="130" fill="${COL.P}" font-size="13" font-weight="700" text-anchor="end" class="m"></text>
+  <text x="630" y="274" fill="#4a555b" font-size="11" font-weight="700" letter-spacing=".06em">WHY SO FAST: THE ACTIVATION ENERGY</text>
+  <g id="energy"></g>
+  <line x1="0" y1="448" x2="1000" y2="448" stroke="#e2ded2"/>
+
+  <!-- the graphs -->
+  <rect x="0" y="449" width="1000" height="321" fill="#fbfaf6"/>
+  <text x="20" y="474" fill="#4a555b" font-size="12" font-weight="700" letter-spacing=".08em">RATE AGAINST [S]: YOUR POINTS</text>
+  <text x="524" y="474" fill="#4a555b" font-size="12" font-weight="700" letter-spacing=".08em">AGAINST TEMPERATURE</text>
+  <text x="780" y="474" fill="#4a555b" font-size="12" font-weight="700" letter-spacing=".08em">AGAINST pH</text>
+  <g id="axes"></g>
+  <g id="fits"></g>
+  <g id="ptsV"></g><g id="ptsT"></g><g id="ptsP"></g>
+  <g id="nowMarks"></g>
+
+  <rect id="veil" x="0" y="449" width="1000" height="321" fill="#fbfaf6" opacity=".96"/>
+  <rect id="rvHit" x="${RV.x}" y="${RV.y}" width="${RV.w}" height="${RV.h}" fill="transparent" style="cursor:ew-resize" tabindex="0" role="slider" aria-label="Substrate: click or drag along the graph"/>
+  <text id="veilT" x="500" y="620" text-anchor="middle" fill="#7c878c" font-size="15" font-weight="600">Your measurements appear once you have made a prediction.</text>
+  `;
+  const lg = [['substrate', COL.S], ['product', COL.P], ['competitive inhibitor', COL.Ic], ['non-competitive inhibitor', COL.In]];
+  let x = 22, h = '';
+  for (const [t, c] of lg) { h += `<circle cx="${x + 5}" cy="${PD.y + 190 * PD.k + 14}" r="4.5" fill="${c}"/><text x="${x + 13}" y="${PD.y + 190 * PD.k + 18}" fill="#4a555b" font-size="10.5">${t}</text>`; x += t.length * 5.4 + 30; }
+  $('legend').innerHTML = h;
+  drawEnergy();
+}
+/* NCERT’s carbonic anhydrase figures, and the barrier they imply at 37 °C */
+function drawEnergy(){
+  const k0 = 200 / 3600, k1 = 600000, ratio = k1 / k0, dEa = 8.314 * 310 * Math.log(ratio) / 1000;
+  const X = 640, Y = 284, w = 330;
+  const curve = top => `M${X} ${Y + 70} C ${X + 60} ${Y + 70}, ${X + 110} ${Y + 70 - top}, ${X + 160} ${Y + 70 - top} C ${X + 210} ${Y + 70 - top}, ${X + 240} ${Y + 92}, ${X + w} ${Y + 92}`;
+  $('energy').innerHTML = `<path d="${curve(64)}" fill="none" stroke="#9aa3a6" stroke-width="2" stroke-dasharray="5 4"/><path d="${curve(26)}" fill="none" stroke="${COL.enz}" stroke-width="2.4"/>` +
+    `<text x="${X + 160}" y="${Y + 2}" fill="#6a737b" font-size="10" text-anchor="middle">without enzyme</text><text x="${X + 160}" y="${Y + 40}" fill="${COL.enz}" font-size="10" font-weight="700" text-anchor="middle">with enzyme</text>` +
+    `<text x="${X}" y="${Y + 84}" fill="#4a555b" font-size="10">S</text><text x="${X + w}" y="${Y + 106}" fill="#4a555b" font-size="10" text-anchor="end">P</text>` +
+    `<text x="${X}" y="${Y + 120}" fill="#4a555b" font-size="10.5">CO₂ + H₂O → H₂CO₃ (NCERT): <tspan class="m">200</tspan> an hour alone,</text>` +
+    `<text x="${X}" y="${Y + 134}" fill="#4a555b" font-size="10.5"><tspan class="m">600,000</tspan> a second with carbonic anhydrase:</text>` +
+    `<text x="${X}" y="${Y + 150}" fill="#1d2327" font-size="10.5" font-weight="600"><tspan class="m">${(ratio / 1e7).toFixed(2)} × 10⁷</tspan> times faster, as if the barrier were <tspan class="m">${dEa.toFixed(0)} kJ/mol</tspan> lower</text>`;
+}
+/* scales */
+let VTOP = 100;
+const rvx = s => RV.x + s / 480 * RV.w, rvy = v => RV.y + RV.h - clamp(v, 0, VTOP) / VTOP * RV.h;
+const rtx = T => RT.x + T / 90 * RT.w, rty = v => RT.y + RT.h - clamp(v, 0, VTOP) / VTOP * RT.h;
+const rpx = q => RP.x + (q - 1) / 11 * RP.w, rpy = v => RP.y + RP.h - clamp(v, 0, VTOP) / VTOP * RP.h;
+function drawAxes(){
+  let a = '';
+  const box = (B, xs, fx, xl, fy) => {
+    a += `<rect x="${B.x}" y="${B.y}" width="${B.w}" height="${B.h}" fill="#fff" stroke="#e2ded2"/>`;
+    for (const x of xs) a += `<line x1="${fx(x)}" y1="${B.y}" x2="${fx(x)}" y2="${B.y + B.h}" stroke="#f0ede4"/><text x="${fx(x)}" y="${B.y + B.h + 14}" fill="#7c878c" font-size="10" text-anchor="middle" class="m">${x}</text>`;
+    for (let v = 0; v <= VTOP; v += VTOP / 4) a += `<line x1="${B.x}" y1="${fy(v)}" x2="${B.x + B.w}" y2="${fy(v)}" stroke="#f0ede4"/><text x="${B.x - 5}" y="${fy(v) + 4}" fill="#7c878c" font-size="10" text-anchor="end" class="m">${Math.round(v)}</text>`;
+    a += `<text x="${B.x + B.w}" y="${B.y + B.h + 28}" fill="#7c878c" font-size="10" text-anchor="end">${xl}</text>`;
+  };
+  box(RV, [0, 80, 160, 240, 320, 400, 480], rvx, '[S], substrate molecules →', rvy);
+  box(RT, [0, 30, 60, 90], rtx, 'temperature, °C →', rty);
+  box(RP, [1, 4, 7, 10], rpx, 'pH →', rpy);
+  a += `<text x="${RV.x - 24}" y="${RV.y - 8}" fill="#7c878c" font-size="10">rate, products per s</text>`;
+  $('axes').innerHTML = a;
+}
+
+/* ---- the pond -------------------------------------------------------------------- */
+const EV = new Map();
+function paintPond(){
+  for (const e of P.enz) {
+    let v = EV.get(e);
+    if (!v) {
+      const g = document.createElementNS(NS, 'g');
+      g.innerHTML = `<path class="body" d="${ENZ_BODY}" fill="url(#gEnz)" stroke="#1f6b63" stroke-width="1.2"/><path class="loose" d="${ENZ_LOOSE}" fill="none" stroke="#8fb9b4" stroke-width="3" stroke-linecap="round" opacity="0"/>` +
+        `<path class="lid" d="M-8 -19 Q 0 -26, 8 -19" fill="none" stroke="#1f6b63" stroke-width="2.4" stroke-linecap="round" opacity="0"/>` +
+        `<circle class="chg" cx="0" cy="-10" r="3" fill="none" stroke="#b9e3dd" stroke-width="1.4"/><circle class="al" cx="22" cy="8" r="4.5" fill="#bfe3de" stroke="#1f6b63" stroke-width="1"/>`;
+      $('enzLayer').appendChild(g);
+      v = {g, body: g.querySelector('.body'), loose: g.querySelector('.loose'), lid: g.querySelector('.lid'), chg: g.querySelector('.chg'), al: g.querySelector('.al')};
+      EV.set(e, v);
+    }
+    v.g.setAttribute('transform', `translate(${px(e.x).toFixed(1)} ${py(e.y).toFixed(1)})`);
+    v.body.setAttribute('opacity', (1 - e.fold).toFixed(2)); v.loose.setAttribute('opacity', e.fold.toFixed(2));
+    v.lid.setAttribute('opacity', e.st === 'ES' ? 1 : 0);             // induced fit: the site closes round its substrate
+    v.chg.setAttribute('stroke', e.dead ? 'none' : e.ok ? '#b9e3dd' : '#e05d5d');
+    v.al.setAttribute('opacity', e.dead ? 0 : 1);
+    v.body.setAttribute('fill', e.allo ? '#9fb7d8' : 'url(#gEnz)');
+  }
+  for (const [e, v] of EV) if (!P.enz.includes(e)) { v.g.remove(); EV.delete(e); }
+  const d = {S: '', P: '', Ic: '', In: ''}, r = 3.2;
+  for (const m of P.mol) {
+    const k = m.k === 'I' ? (P.p.inh === 'non' ? 'In' : 'Ic') : m.k, X = px(m.x), Y = py(m.y);
+    d[k] += `M${(X - r).toFixed(1)} ${Y.toFixed(1)}a${r} ${r} 0 1 0 ${2 * r} 0a${r} ${r} 0 1 0 ${-2 * r} 0`;
+  }
+  $('molS').setAttribute('d', d.S); $('molP').setAttribute('d', d.P); $('molIc').setAttribute('d', d.Ic); $('molIn').setAttribute('d', d.In);
+  const pre = PRESETS[P.p.preset];
+  $('pondSub').textContent = `${pre.name}: ${pre.sub} → ${pre.prod} · ${P.p.T} °C · pH ${P.p.pH}`;
+}
+function paintStates(){
+  const s = states(P), n = P.enz.length || 1;
+  const parts = [['busy with substrate (ES)', s.ES - 0, COL.S], ['blocked in the active site', s.EI, COL.Ic], ['bent by the second site', s.allo, COL.In],
+                 ['free, site charged wrong', s.off, '#e05d5d'], ['free and ready', s.free - s.off - s.allo, '#7fd0c6'], ['denatured', s.dead, '#9aa3a6']];
+  let x = 630, h = '';
+  const W = 350;
+  for (const [, c, col] of parts) { const w = Math.max(0, c) / n * W; if (w > 0) h += `<rect x="${x.toFixed(1)}" y="42" width="${w.toFixed(1)}" height="18" fill="${col}"/>`; x += Math.max(0, w); }
+  h += `<rect x="630" y="42" width="${W}" height="18" fill="none" stroke="#c9d6d4"/>`;
+  parts.forEach(([lab, c, col], i) => { const cx = 630 + (i % 2) * 176, cy = 78 + Math.floor(i / 2) * 16;
+    h += `<rect x="${cx}" y="${cy - 8}" width="9" height="9" rx="2" fill="${col}"/><text x="${cx + 13}" y="${cy}" fill="#4a555b" font-size="10">${lab}: <tspan class="m" font-weight="600">${Math.max(0, c)}</tspan></text>`; });
+  $('stateBar').innerHTML = h;
+}
+function paintTrace(){
+  const tr = S.trace, X = 640, Y = 140, w = 340, hgt = 100, top = Math.max(20, VTOP);
+  let d = '';
+  const t1 = P.t, win = 30;
+  for (const q of tr) { if (q.t < t1 - win) continue; d += (d ? 'L' : 'M') + (X + (q.t - (t1 - win)) / win * w).toFixed(1) + ' ' + (Y + hgt - clamp(q.v, 0, top) / top * hgt).toFixed(1); }
+  $('trLine').setAttribute('d', d);
+  $('trAxes').innerHTML = `<rect x="${X}" y="${Y}" width="${w}" height="${hgt}" fill="#fff" stroke="#e2ded2"/><text x="${X - 4}" y="${Y + 8}" fill="#7c878c" font-size="9.5" text-anchor="end" class="m">${Math.round(top)}</text><text x="${X - 4}" y="${Y + hgt}" fill="#7c878c" font-size="9.5" text-anchor="end" class="m">0</text><text x="${X + w}" y="${Y + hgt + 12}" fill="#7c878c" font-size="9.5" text-anchor="end">last 30 s →</text>`;
+  $('trNow').textContent = fmt(rate(P, 4), 1) + ' /s';
+}
+
+/* ---- measuring: a point is recorded when the pond has settled ------------------------- */
+const SETTLE = 1.5, WIN = 6;
+const keyV = q => [q.preset, q.T, q.pH, q.inh, q.inh === 'none' ? 0 : q.I, q.E, q.alive].join('|');
+const keyT = q => [q.preset, q.S, q.pH, q.inh, q.inh === 'none' ? 0 : q.I, q.E].join('|');
+const keyP = q => [q.preset, q.S, q.T, q.inh, q.inh === 'none' ? 0 : q.I, q.E, q.alive].join('|');
+function alive(){ return P.enz.filter(e => !e.dead).length; }
+function changed(){ S.since = 0; S.recorded = false; S.busyAcc = 0; S.busyN = 0; }
+function measureTick(dt){
+  S.since += dt;
+  if (S.since < SETTLE) { S.m0 = P.made; S.busyAcc = 0; S.busyN = 0; return; }
+  S.busyAcc += states(P).ES; S.busyN++;
+  if (!S.recorded && S.since >= SETTLE + WIN) {
+    const q = Object.assign({}, S.par, {I: S.par.inh === 'none' ? 0 : S.par.I, alive: alive(), v: (P.made - S.m0) / WIN, busy: S.busyAcc / S.busyN / Math.max(1, P.enz.length), t: P.t, n: S.pts.length});
+    S.pts.push(q); if (S.pts.length > 120) S.pts.shift();
+    S.recorded = true;
+    track('measure', {S: q.S, T: q.T, pH: q.pH, inh: q.inh, v: +q.v.toFixed(2)});
+    if (S.locked) { sound('tick'); paintPlots(); checkPoints(q); }
+  }
+}
+function famFit(key){ const pts = S.pts.filter(q => keyV(q) === key); return pts.length >= 4 ? Object.assign(fitMM(pts), {n: pts.length, minS: Math.min(...pts.map(q => q.S)), maxS: Math.max(...pts.map(q => q.S))}) : null; }
+function paintPlots(){
+  if (!S.locked) return;
+  const cur = Object.assign({}, S.par, {I: S.par.inh === 'none' ? 0 : S.par.I, alive: alive()});
+  const top = Math.max(40, ...S.pts.map(q => q.v * 1.15));
+  const nt = Math.ceil(top / 20) * 20;
+  if (nt !== VTOP) { VTOP = nt; drawAxes(); }
+  const kv = keyV(cur), kt = keyT(cur), kp = keyP(cur);
+  const famCol = q => q.inh === 'comp' ? COL.Ic : q.inh === 'non' ? COL.In : '#1f6b63';
+  let a = '', b = '', c = '';
+  for (const q of S.pts) {
+    const on = keyV(q) === kv;
+    a += `<circle cx="${rvx(q.S).toFixed(1)}" cy="${rvy(q.v).toFixed(1)}" r="${on ? 4.5 : 3}" fill="${famCol(q)}" opacity="${on ? 1 : .35}" stroke="#fff" stroke-width="1"/>`;
+    const onT = keyT(q) === kt;
+    if (onT) b += `<circle cx="${rtx(q.T).toFixed(1)}" cy="${rty(q.v).toFixed(1)}" r="4" fill="#c05621" stroke="#fff" stroke-width="1"/>`;
+    if (keyP(q) === kp) c += `<circle cx="${rpx(q.pH).toFixed(1)}" cy="${rpy(q.v).toFixed(1)}" r="4" fill="#2b6cb0" stroke="#fff" stroke-width="1"/>`;
+  }
+  $('ptsV').innerHTML = a; $('ptsT').innerHTML = b; $('ptsP').innerHTML = c;
+  /* fitted curves: the current family bold, the others faint */
+  const fams = [...new Set(S.pts.map(keyV))];
+  let f = '';
+  for (const k of fams) {
+    const fit = famFit(k); if (!fit) continue;
+    const q0 = S.pts.find(q => keyV(q) === k), on = k === kv;
+    let d = ''; for (let s = 0; s <= 480; s += 8) d += (d ? 'L' : 'M') + rvx(s).toFixed(1) + ' ' + rvy(fit.Vmax * s / (fit.Km + s)).toFixed(1);
+    f += `<path d="${d}" fill="none" stroke="${famCol(q0)}" stroke-width="${on ? 2 : 1.2}" opacity="${on ? .9 : .35}" ${on ? '' : 'stroke-dasharray="5 4"'}/>`;
+    if (on) {
+      f += `<line x1="${RV.x}" y1="${rvy(fit.Vmax)}" x2="${RV.x + RV.w}" y2="${rvy(fit.Vmax)}" stroke="#1d2327" stroke-dasharray="3 3" opacity=".6"/><text x="${RV.x + RV.w - 4}" y="${rvy(fit.Vmax) - 5}" fill="#1d2327" font-size="10.5" text-anchor="end" font-weight="700">V<tspan font-size="8" dy="2">max</tspan><tspan dy="-2"> ${fmt(fit.Vmax, 1)}</tspan></text>`;
+      if (fit.Km <= 480) f += `<line x1="${RV.x}" y1="${rvy(fit.Vmax / 2)}" x2="${rvx(fit.Km)}" y2="${rvy(fit.Vmax / 2)}" stroke="#1d2327" stroke-dasharray="2 3" opacity=".5"/><line x1="${rvx(fit.Km)}" y1="${rvy(fit.Vmax / 2)}" x2="${rvx(fit.Km)}" y2="${RV.y + RV.h}" stroke="#1d2327" stroke-dasharray="2 3" opacity=".5"/>` +
+        `<text x="${rvx(fit.Km) + 4}" y="${RV.y + RV.h - 6}" fill="#1d2327" font-size="10.5" font-weight="700">K<tspan font-size="8" dy="2">m</tspan><tspan dy="-2"> ${fmt(fit.Km, 0)}</tspan></text><text x="${RV.x + 4}" y="${rvy(fit.Vmax / 2) - 4}" fill="#4a555b" font-size="10">V<tspan font-size="8" dy="2">max</tspan><tspan dy="-2">/2</tspan></text>`;
+    }
+  }
+  $('fits').innerHTML = f;
+}
+function paintNow(){
+  if (!S.locked) return;
+  const v = rate(P, 4);
+  $('nowMarks').innerHTML = `<circle cx="${rvx(S.par.S).toFixed(1)}" cy="${rvy(v).toFixed(1)}" r="6" fill="none" stroke="#1d2327" stroke-width="1.4" stroke-dasharray="2 2"/>` +
+    `<circle cx="${rtx(S.par.T).toFixed(1)}" cy="${rty(v).toFixed(1)}" r="5" fill="none" stroke="#1d2327" stroke-dasharray="2 2"/><circle cx="${rpx(S.par.pH).toFixed(1)}" cy="${rpy(v).toFixed(1)}" r="5" fill="none" stroke="#1d2327" stroke-dasharray="2 2"/>`;
+  const s = states(P), n = P.enz.length;
+  $('mRate').textContent = fmt(v, 1) + ' /s';
+  $('mBusy').textContent = `${s.ES} of ${n} (${fmt(100 * s.ES / Math.max(1, n), 0)} %)`;
+  $('mRec').textContent = S.recorded ? 'recorded ✓' : S.since < SETTLE ? 'settling…' : `counting ${fmt(S.since - SETTLE, 1)} / ${WIN} s`;
+  const cur = Object.assign({}, S.par, {I: S.par.inh === 'none' ? 0 : S.par.I, alive: alive()});
+  const fit = famFit(keyV(cur));
+  $('mVmax').textContent = fit ? fmt(fit.Vmax, 1) + ' /s' : 'needs 4 points';
+  $('mKm').textContent = fit ? fmt(fit.Km, 0) + ' molecules' : '—';
+  const fam = S.pts.filter(q => keyV(q) === keyV(cur));
+  $('mKcat').textContent = fam.length ? fmt(Math.max(...fam.map(q => q.v)), 1) + ' /s' : '—';
+}
+function paintWhy(){
+  if (!S.locked) return;
+  $('whyCard').hidden = false;
+  const s = states(P), n = P.enz.length, p = S.par, pre = PRESETS[p.preset];
+  const cap = (n - s.dead) * kcatAt(p.T) * phFrac(p.pH, pre.opt);
+  let t = `<p><b class="mono">${s.ES}</b> of ${n} enzymes hold a substrate right now. Each turns one over in about <span class="mono">${fmt(1 / kcatAt(p.T), 2)}</span> s at ${p.T} °C, and only while its site carries the right charge, so ${n - s.dead} working enzymes cannot beat about <span class="mono">${fmt(cap, 0)}</span> products a second however much substrate you add.</p>`;
+  const fit = famFit(keyV(Object.assign({}, p, {I: p.inh === 'none' ? 0 : p.I, alive: alive()})));
+  if (fit && p.inh === 'none' && fit.Vmax > 1.05 * cap) t += `<p>Your fitted V<sub>max</sub> (<span class="mono">${fmt(fit.Vmax, 0)}</span>) is a little above that. The pond fills its enzymes more sharply than the Michaelis–Menten curve, so the fitted curve overshoots: the model and the formula part company here.</p>`;
+  if (s.dead) t += `<p><b>${s.dead} enzyme${s.dead > 1 ? 's have' : ' has'} unfolded.</b> The chain has lost its shape, and with it the active site. Cooling does not fold it back.</p>`;
+  if (s.off > 0.3 * n) t += `<p>At pH ${p.pH} the active site of ${pre.name.toLowerCase()} has the wrong charge much of the time (<span class="mono">${s.off}</span> sites now). It works best near pH ${pre.opt}.</p>`;
+  if (p.T <= 12 && !s.dead) t += `<p>Cold slows every step, but nothing is damaged: warm it and the rate comes back.</p>`;
+  if (p.inh === 'comp') t += `<p><b>Competitive:</b> <span class="mono">${s.EI}</span> sites are filled by the inhibitor. More substrate wins them back, because each free site is taken by whichever molecule arrives first.</p>`;
+  if (p.inh === 'non') t += `<p><b>Non-competitive:</b> <span class="mono">${s.allo}</span> enzymes have the inhibitor in their second site. Their active site is bent, and no amount of substrate can undo that.</p>`;
+  $('why').innerHTML = t;
+}
+
+/* ---- findings: reached by the model, never by a button ---------------------------- */
+function checkPoints(q){
+  const fam = S.pts.filter(o => keyV(o) === keyV(q));
+  if (fam.length >= 3 && q.busy >= 0.85 && q.inh === 'none') { discover('sat'); maybeExplain(q); }
+  const fit = famFit(keyV(q));
+  if (fit && fit.n >= 5 && fit.minS <= 0.6 * fit.Km && fit.maxS >= 2.5 * fit.Km && q.inh === 'none') discover('km');
+  /* cold: a cold point far below a warm one, then warm again and back */
+  const cold = S.pts.filter(o => o.T <= 10), warm = S.pts.filter(o => o.T >= 30 && o.T <= 40);
+  for (const c of cold) for (const w0 of warm) for (const w1 of warm)
+    if (w0.S === c.S && w1.S === c.S && w0.alive === c.alive && w1.alive === c.alive && w0.n < c.n && w1.n > c.n && c.v <= 0.35 * w0.v && w1.v >= 0.8 * w0.v) discover('cold');
+  /* pH: an optimum with lower rates on both sides */
+  const opt = PRESETS[q.preset].opt, ph = S.pts.filter(o => keyP(o) === keyP(q));
+  const best = ph.filter(o => Math.abs(o.pH - opt) <= 0.75);
+  if (best.length) { const vb = Math.max(...best.map(o => o.v));
+    if (ph.some(o => o.pH <= opt - 2 && o.v <= 0.5 * vb) && ph.some(o => o.pH >= opt + 2 && o.v <= 0.5 * vb)) discover('ph'); }
+  /* inhibitors, compared with the same enzyme and conditions without one */
+  if (q.inh !== 'none' && fit && fit.n >= 4) {
+    const k0 = keyV(Object.assign({}, q, {inh: 'none', I: 0}));
+    const f0 = famFit(k0);
+    if (f0) {
+      if (q.inh === 'comp' && fit.Km >= 1.5 * f0.Km && Math.abs(fit.Vmax - f0.Vmax) <= 0.25 * f0.Vmax) discover('comp');
+      /* The learner's Km comes from six measured points, and those carry the pond's own noise:
+         measured over three sweeps, the fitted Km wandered 32%, 52% and 68% from the no-inhibitor
+         baseline while the true Km had not moved at all — and a competitive inhibitor's Km drift
+         landed inside that same range. So Km cannot tell the two apart at six points, and asking
+         it to made this finding fire only about one time in three. Vmax can: it came out at 0.48,
+         0.49 and 0.54 of baseline every time, against 0.74-0.95 for a competitive inhibitor.
+         Judge on the part the data actually supports, and keep Km only as a sanity bound. */
+      if (q.inh === 'non' && fit.Vmax <= 0.7 * f0.Vmax && Math.abs(fit.Km - f0.Km) <= 1.0 * f0.Km) discover('noncomp');
+    }
+  }
+}
+function checkState(){
+  if (!S.locked) return;
+  const s = states(P);
+  if (S.par.T > PRESETS[S.par.preset].tmax) S.hot = true;
+  if (S.hot && s.dead >= P.enz.length / 2 && S.par.T <= 40 && S.since >= SETTLE + 2) discover('heat');
+}
+let EXPLAINED = false;
+function maybeExplain(q){
+  if (EXPLAINED || !POE) return;
+  EXPLAINED = true;
+  const fam = S.pts.filter(o => keyV(o) === keyV(q)).sort((a, b) => a.S - b.S);
+  const lo = fam[0], hi = fam[fam.length - 1];
+  POE.explain(`Your own points: at [S] = ${lo.S} the pond made <b>${fmt(lo.v, 1)}</b> products a second; at [S] = ${hi.S}, <b>${fmt(hi.v, 1)}</b>. ` +
+    `With ${hi.S} substrate molecules, <b>${fmt(hi.busy * 100, 0)} %</b> of the enzymes were already holding one, so extra substrate has nowhere to go. ` +
+    `The rate levels off at V<sub>max</sub>, set by how many enzymes there are and how fast each works, not by the substrate.`);
+}
+
+/* ============================================================================
+   Controls
+   ============================================================================ */
+build();
+const LIMS = {subs: 'S', enz: 'E', temp: 'T', ph: 'pH', inh: 'I'};
+const OUT = {S: v => String(v), E: v => String(v), T: v => v + ' °C', pH: v => String(v), I: v => String(v)};
+function syncControls(){ for (const id in LIMS) { const k = LIMS[id]; $(id).value = S.par[k]; $(id + 'Out').textContent = OUT[k](S.par[k]); } }
+for (const id in LIMS) {
+  const k = LIMS[id];
+  $(id).addEventListener('input', e => { S.par[k] = +e.target.value; $(id + 'Out').textContent = OUT[k](S.par[k]); syncPond(); changed(); });
+  $(id).addEventListener('change', () => track('set', {k, v: S.par[k]}));
+}
+$('preset').addEventListener('change', e => {
+  S.par.preset = e.target.value; const pre = PRESETS[S.par.preset];
+  S.par.pH = pre.opt; syncControls(); fresh(); syncPond(); changed(); S.hot = false;
+  $('inhNote').textContent = S.par.preset === 'sdh' ? 'Malonate looks like succinate, so it fits the active site of succinic dehydrogenase but cannot react (NCERT’s example).'
+    : `A competitive inhibitor here is ${pre.inh}: it fits the active site but cannot react.`;
+  track('preset', {p: S.par.preset});
+});
+$('inhSeg').addEventListener('click', e => { const b = e.target.closest('button'); if (!b || b.disabled) return;
+  S.par.inh = b.dataset.inh; $$('#inhSeg button').forEach(x => x.setAttribute('aria-pressed', x === b)); syncPond(); changed(); sound('tick'); track('inhibitor', {k: S.par.inh}); });
+function fresh(){ for (const e of P.enz) release(P, e); P.enz = []; setEnzymes(P, S.par.E); }
+$('btnFresh').addEventListener('click', () => { fresh(); S.hot = false; changed(); sound('whoosh'); });
+$('btnClear').addEventListener('click', () => { S.pts = []; paintPlots(); sound('whoosh'); });
+/* Click or drag along the rate–[S] graph to set the substrate there. */
+Play.drag($('rvHit'), svg, {
+  start(p){ if (!S.locked) return false; setS(p.x); },
+  move(p){ setS(p.x); },
+  end(){ track('set', {k: 'S', v: S.par.S, by: 'graph'}); },
+});
+function setS(X){ const v = clamp(Math.round((X - RV.x) / RV.w * 480 / 20) * 20, 0, 480); if (v === S.par.S) return; S.par.S = v; $('subs').value = v; $('subsOut').textContent = v; syncPond(); changed(); }
+$('btnFast').addEventListener('click', () => { S.fast = !S.fast; $('btnFast').setAttribute('aria-pressed', S.fast); sound('tick'); });
+function lockControls(lock){
+  for (const id of ['subs', 'enz', 'temp', 'ph', 'inh', 'preset', 'btnFresh', 'btnClear', 'btnFast']) $(id).disabled = lock;
+  $$('#inhSeg button').forEach(b => b.disabled = lock);
+  $('rvHit').style.pointerEvents = lock ? 'none' : '';
+  $('gate').hidden = !lock;
+}
+
+/* ============================================================================
+   Start
+   ============================================================================ */
+drawAxes();
+findings($('finds'), [
+  {id: 'sat',     icon: '▁▃▅▆▆', label: 'Saturated: the rate levels off', hint: 'Keep adding substrate and record the rate'},
+  {id: 'km',      icon: '½', label: 'Half speed at Kₘ', hint: 'Record points below and well above the bend'},
+  {id: 'cold',    icon: '❄', label: 'Cold only slows it', hint: 'Chill the pond, then warm it again'},
+  {id: 'heat',    icon: '🔥', label: 'Too hot: denatured for good', hint: 'Heat it past 45 °C, then cool it'},
+  {id: 'ph',      icon: '⚗', label: 'Each enzyme has its best pH', hint: 'Measure either side of the optimum'},
+  {id: 'comp',    icon: '⇄', label: 'Competitive: more substrate wins it back', hint: 'Record a curve with a competitive inhibitor'},
+  {id: 'noncomp', icon: '⊘', label: 'Non-competitive: Vₘₐₓ falls', hint: 'Now a non-competitive one'},
+], () => toast('All seven. You have measured an enzyme the way a biochemist does.', 4800));
+
+const POE = predict($('poe'), {
+  id: 'saturation',
+  q: 'The amount of enzyme stays the same. You keep adding more and more substrate. What happens to the rate of reaction?',
+  options: [
+    {id: 'prop',  text: 'It keeps rising in proportion to the substrate'},
+    {id: 'level', text: 'It rises, then levels off at a maximum', right: true},
+    {id: 'fall',  text: 'It rises, then falls as the pond gets crowded'},
+    {id: 'same',  text: 'It stays the same: enzymes work at one speed'},
+  ],
+  onLock(){
+    S.locked = true;
+    lockControls(false);
+    for (const id of ['veil', 'veilT']) $(id).remove();
+    $('measureVeil').hidden = true; $('measure').hidden = false;
+    say('Now measure. Change the substrate and let each point record.');
+    changed(); paintPlots(); paintWhy();
+  },
+});
+lockControls(!POE.locked);
+if (!Play.FF('predict')) S.locked = true;
+syncControls();
+changed();
+
+/* The pond steps at 1/120 s; ×8 runs eight times as many steps per frame.
+   Under reduced motion it runs in quarter-second jumps. */
+const RM = reduced();
+let acc = 0, slowT = 0, trT = 0;
+loop(dt => {
+  acc += dt;
+  if (RM && acc < 0.25) return;
+  const n = Math.min(160, Math.round(acc * (S.fast ? 8 : 1) / SUB)); acc = 0;
+  for (let i = 0; i < n; i++) { stepPond(P, SUB); measureTick(SUB); }
+  trT += n * SUB; if (trT > 0.25) { trT = 0; S.trace.push({t: P.t, v: rate(P, 2)}); while (S.trace.length > 400) S.trace.shift(); }
+  checkState();
+  paintPond(); paintStates(); paintTrace();
+  slowT += dt; if (slowT > 0.2 || RM) { slowT = 0; paintNow(); paintWhy(); }
+});
+window.PG_STATE = () => ({par: Object.assign({}, S.par), locked: S.locked, fast: S.fast, t: P.t, made: P.made, states: states(P), alive: alive(), since: S.since, recorded: S.recorded,
+  pts: S.pts.map(q => ({S: q.S, T: q.T, pH: q.pH, inh: q.inh, I: q.I, v: q.v, busy: q.busy, alive: q.alive})), fit: famFit(keyV(Object.assign({}, S.par, {I: S.par.inh === 'none' ? 0 : S.par.I, alive: alive()})))});
+window.PG_MODEL = {makePond: par => makePond(par, mulberry32), stepPond, measure: (par, settle, win) => measure(par, settle, win, mulberry32), fitMM, kcatAt, kdAt, phFrac, PRESETS, KCAT, KOFF, RC};
+</script>
+</body>
+</html>

@@ -1,0 +1,658 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Selection and Drift</title>
+<meta name="description" content="Class 12: a population of peppered moths on a tree, generation after generation. Birds eat the moths they can see, survivors breed at random, and allele frequencies move by selection, drift and gene flow, or hold still as Hardy and Weinberg said.">
+<link rel="icon" href="../../favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600&family=Inter:wght@400;500;600;700&family=Nunito:wght@500;700;800&family=Newsreader:opsz,wght@6..72,400;6..72,500&family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="../../play.css">
+<style>
+/* Only what this page needs beyond play.css. */
+.tabs{display:flex; gap:4px; padding:10px 12px 0; border-bottom:1px solid var(--hair); background:var(--card)}
+.tab{border:1px solid transparent; border-bottom:none; background:none; padding:8px 14px; border-radius:8px 8px 0 0; cursor:pointer; white-space:nowrap;
+  font-family:"Newsreader",Georgia,serif; font-size:17px; color:var(--ink-3); margin-bottom:-1px}
+.tab[aria-selected="true"]{background:var(--card); border-color:var(--hair); color:var(--ink); border-bottom:1px solid var(--card)}
+.tab small{font-family:var(--font); font-size:11px; color:var(--ink-3); margin-right:6px; font-weight:700}
+.tab:disabled{opacity:.5; cursor:default}
+.gate{position:absolute; left:0; right:0; top:30%; height:40%; display:grid; place-items:center; pointer-events:none}
+.gate span{background:rgba(29,35,39,.86); color:#fff; padding:10px 16px; border-radius:99px; font-weight:600; font-size:14px}
+.pg-stage{align-self:start; min-height:0}
+.pg-stage > svg{display:block; width:100%; height:auto; touch-action:none; user-select:none}
+.leftcol{display:flex; flex-direction:column; gap:12px; min-width:0}
+.leftcol > .pg-stage{align-self:stretch}
+.below{display:grid; grid-template-columns:1fr 1fr; gap:12px; align-items:start}
+@media (max-width:1200px){ .pg-main.wide-side{grid-template-columns:minmax(0,1fr) 340px} .below{grid-template-columns:1fr} .ctl{grid-template-columns:92px 1fr 70px} }
+.readout{display:grid; grid-template-columns:1fr auto; gap:2px 12px; font-size:13px; align-items:baseline}
+.readout span{color:var(--ink-2)}
+.readout b{font-family:var(--font-mono); font-weight:600; font-size:12.5px; font-variant-numeric:tabular-nums; text-align:right}
+.readout .sep{grid-column:1/-1; height:1px; background:var(--hair); margin:4px 0}
+.ctl{grid-template-columns:112px 1fr 80px; margin:2px 0}
+.ctl label{font-size:12.5px; line-height:1.2}
+.ctl output{font-family:var(--font-mono); font-size:12.5px; font-weight:600; min-width:0}
+.seg{display:grid; grid-auto-flow:column; grid-auto-columns:1fr; gap:4px; background:var(--sunk); padding:4px; border-radius:var(--radius-sm)}
+.seg button{border:0; background:transparent; border-radius:7px; min-height:30px; font-weight:600; font-size:13px; cursor:pointer; color:var(--ink-2)}
+.seg button[aria-pressed="true"]{background:var(--card); color:var(--ink); box-shadow:var(--shadow)}
+.seg button:disabled{opacity:.5; cursor:default}
+.why p{font-size:13.5px; margin-bottom:.5em}
+.why .mono{font-size:12.5px}
+.note{font-size:12.5px; color:var(--ink-3); margin:6px 0 0}
+.veil{font-size:13px; color:var(--ink-3)}
+svg text.m{font-family:var(--font-mono)}
+svg text.serif{font-family:"Newsreader",Georgia,serif}
+</style>
+</head>
+<body>
+<header class="pg-top"></header>
+
+<div class="pg-intro">
+  <h1>Selection and drift</h1>
+  <p>A population of peppered moths on a tree trunk, one generation after another. Birds eat the moths they can see against the bark. The survivors breed
+     at random, and each moth gets two alleles drawn by chance from their gene pool. Nothing tells the allele frequencies where to go. They move because of who was
+     eaten and who happened to be drawn, or they stay still, as Hardy and Weinberg said they would. Blacken the bark, shrink the population, let migrants in, and measure what happens.</p>
+  <div class="syl">CBSE Class 12 Biology · Ch 6 Evolution</div>
+</div>
+
+<main class="pg-main wide-side">
+  <div class="leftcol">
+  <section class="pg-stage" id="stageWrap">
+    <div class="tabs" role="tablist">
+      <button class="tab" role="tab" id="tabA" aria-selected="true"><small>1</small>Alleles: melanism, drift, Hardy–Weinberg</button>
+      <button class="tab" role="tab" id="tabT" aria-selected="false"><small>2</small>A trait under selection</button>
+    </div>
+    <svg id="stage" viewBox="0 0 1000 700" role="img" aria-label="Peppered moths resting on a tree trunk, with plots of allele frequency over the generations, genotype frequencies against Hardy–Weinberg, and the survival of pale and dark moths"></svg>
+    <div class="gate" id="gate"><span>Make your prediction first →</span></div>
+  </section>
+  <div class="below">
+    <div class="card why" id="whyCard" hidden>
+      <div class="kicker">What the model says</div>
+      <div id="why"></div>
+    </div>
+    <div class="card"><div class="kicker">To find</div><div id="finds"></div></div>
+  </div>
+  </div>
+
+  <aside class="pg-side">
+    <div id="poe"></div>
+
+    <div class="card" id="runCard">
+      <div class="row" style="justify-content:space-between">
+        <div class="row" style="gap:6px">
+          <button class="btn sm primary" id="btnRun">▶ Run</button>
+          <button class="btn sm" id="btnStep">+1 generation</button>
+        </div>
+        <div class="seg" id="speedSeg" style="min-width:150px"><button data-sp="2" aria-pressed="true">Slow</button><button data-sp="10" aria-pressed="false">Fast</button></div>
+      </div>
+      <p class="note" id="genNote"></p>
+    </div>
+
+    <div class="card" id="forceCard">
+      <div class="kicker">What the moths face</div>
+      <div class="ctl"><label for="pol">Soot on the bark</label><input type="range" id="pol" min="0" max="100" step="5" value="0"><output id="polOut">0 %</output></div>
+      <div class="seg" id="barkSeg" hidden><button data-mode="uniform" aria-pressed="true">Plain grey bark</button><button data-mode="soot" aria-pressed="false">Sooty bark</button><button data-mode="patchy" aria-pressed="false">Patchy bark</button></div>
+      <div class="ctl"><label for="birds">Birds hunting</label><input type="range" id="birds" min="0" max="100" step="5" value="0"><output id="birdsOut">none</output></div>
+      <div class="ctl" id="migRow"><label for="mig">Migrants each generation</label><input type="range" id="mig" min="0" max="20" step="1" value="0"><output id="migOut">0 %</output></div>
+      <div class="ctl" id="pmRow"><label for="pm">Melanic allele in migrants</label><input type="range" id="pm" min="0" max="100" step="5" value="50"><output id="pmOut">0.50</output></div>
+    </div>
+
+    <div class="card" id="popCard">
+      <div class="kicker" id="popKick">The population</div>
+      <div id="alleleCtl">
+        <div class="ctl"><label for="nsize">Population size</label><input type="range" id="nsize" min="0" max="8" step="1" value="8"><output id="nsizeOut">5000</output></div>
+        <div class="ctl"><label for="p0">Start: melanic allele</label><input type="range" id="p0" min="0" max="100" step="5" value="10"><output id="p0Out">0.10</output></div>
+        <div class="row" style="margin-top:6px; gap:6px">
+          <button class="btn sm" id="btnNew">↺ New population</button>
+          <button class="btn sm" id="btnColony" title="Ten moths fly to an island and found a new population">🏝 Found a colony of 10</button>
+        </div>
+      </div>
+      <div id="traitCtl" hidden>
+        <p class="note" style="margin-top:0">1000 moths whose wing darkness is set by many genes: each young moth is the average of its parents, give or take.</p>
+        <button class="btn sm" id="btnNewT" style="margin-top:6px">↺ New population</button>
+      </div>
+    </div>
+
+    <div class="card" id="measureCard">
+      <div class="kicker">Measured this generation</div>
+      <div id="measureVeil" class="veil">The measurements appear once you have made a prediction.</div>
+      <div id="measure" hidden><div class="readout" id="readout"></div></div>
+    </div>
+  </aside>
+</main>
+
+<script src="../../play.js"></script>
+<script>
+'use strict';
+const {$, esc, clamp, fmt, loop, sound, say, track, toast, predict, findings, discover, found,
+       shareState, sharedState, mount, reduced, mulberry32} = Play;
+mount({thread: 'evolution', band: 'theorist'});
+
+/* MODEL:start ==================================================================
+   Peppered moths (Biston betularia), one gene: C (melanic, dominant; CC and Cc are dark) and c (pale, cc).
+   Each generation of N moths:
+     1. Birds hunt. A moth's chance of being seen grows with its contrast against the bark:
+            survival = 1 − birds × |moth tone − bark tone|,  pale tone 0.15, dark 0.9, bark 0.15 (lichen) → 0.85 (soot).
+        Who survives is drawn at random, moth by moth.
+     2. The survivors' alleles, with a fraction m replaced by migrants' alleles, make the gene pool.
+     3. N young moths each draw two alleles at random from the pool (random mating).
+   Selection is step 1, gene flow is step 2, and drift is the chance in steps 1 and 3. With no birds, no migrants
+   and a large N, nothing is left to change p, and the genotypes fall at p², 2pq, q².
+   The trait tab: wing darkness z (0–1) set by many genes. A young moth's z is its parents' average plus a
+   scatter whose size comes from the parents' own spread, so with no selection the spread stays put.
+   ============================================================================ */
+const TONE = {pale: 0.15, dark: 0.9};
+const barkTone = pol => 0.15 + 0.7 * pol;
+const SIZES = [10, 20, 50, 100, 200, 500, 1000, 2000, 5000];
+/* A bird finds a moth more easily the more it stands out from the bark. */
+function survival(pol, birds){ const b = barkTone(pol); return {pale: 1 - birds * Math.abs(TONE.pale - b), dark: 1 - birds * Math.abs(TONE.dark - b)}; }
+function binom(n, p, R){ if (p <= 0) return 0; if (p >= 1) return n; let k = 0; for (let i = 0; i < n; i++) if (R() < p) k++; return k; }
+const pOf = g => { const N = g.CC + g.Cc + g.cc; return N ? (2 * g.CC + g.Cc) / (2 * N) : 0; };
+function makePop(N, p, R){
+  const g = {CC: 0, Cc: 0, cc: 0};
+  for (let i = 0; i < N; i++) { const a = R() < p, b = R() < p; if (a && b) g.CC++; else if (a || b) g.Cc++; else g.cc++; }
+  return g;
+}
+/* One generation: birds eat, survivors (and any migrants) make the gene pool, N offspring are drawn from it at random. */
+function generation(g, par, R){
+  const sv = survival(par.pol, par.birds), N = par.N;
+  const s = {CC: binom(g.CC, sv.dark, R), Cc: binom(g.Cc, sv.dark, R), cc: binom(g.cc, sv.pale, R)};
+  const alive = s.CC + s.Cc + s.cc;
+  let p = alive ? (2 * s.CC + s.Cc) / (2 * alive) : pOf(g);
+  p = (1 - par.m) * p + par.m * par.pm;
+  const next = {CC: 0, Cc: 0, cc: 0};
+  for (let i = 0; i < N; i++) { const a = R() < p, b = R() < p; if (a && b) next.CC++; else if (a || b) next.Cc++; else next.cc++; }
+  return {next, surv: s, pool: p};
+}
+/* The same generation in an infinite population: selection and migration, no drift. */
+function deterministic(p, par){
+  const sv = survival(par.pol, par.birds), q = 1 - p, wbar = (1 - q * q) * sv.dark + q * q * sv.pale;
+  const p2 = wbar > 0 ? p * sv.dark / wbar : p;
+  return (1 - par.m) * p2 + par.m * par.pm;
+}
+/* Observed genotypes against Hardy–Weinberg's p², 2pq, q² (χ², one degree of freedom). */
+function hwChi(g){
+  const N = g.CC + g.Cc + g.cc, p = pOf(g), q = 1 - p, E = [N * p * p, 2 * N * p * q, N * q * q], O = [g.CC, g.Cc, g.cc];
+  let chi = 0; for (let i = 0; i < 3; i++) if (E[i] >= 1) chi += (O[i] - E[i]) ** 2 / E[i];
+  return {chi, E, O, p, q, N};
+}
+/* Founders: n moths drawn at random from the population carry only the alleles they happen to have. */
+function foundColony(g, n, N, R){
+  const pool = []; for (const [k, c] of [['CC', g.CC], ['Cc', g.Cc], ['cc', g.cc]]) for (let i = 0; i < c; i++) pool.push(k);
+  let a = 0; for (let i = 0; i < n; i++) { const j = i + Math.floor(R() * (pool.length - i)); [pool[i], pool[j]] = [pool[j], pool[i]]; a += pool[i] === 'CC' ? 2 : pool[i] === 'Cc' ? 1 : 0; }
+  const pf = a / (2 * n);
+  return {g: makePop(N, pf, R), pf};
+}
+/* The trait. */
+const TRAIT = {N: 1000, mean0: 0.5, sd0: 0.12};
+function traitSurvival(z, mode, birds){
+  const d = mode === 'patchy' ? Math.min(Math.abs(z - 0.15), Math.abs(z - 0.85)) : Math.abs(z - (mode === 'soot' ? 0.85 : 0.5));
+  return Math.max(0, 1 - birds * d * 1.6);   // on patchy bark each moth rests on the patch that hides it best
+}
+function gauss(R){ let u = 0; while (u === 0) u = R(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * R()); }
+function makeTrait(N, R){ const z = new Float64Array(N); for (let i = 0; i < N; i++) z[i] = clamp(TRAIT.mean0 + TRAIT.sd0 * gauss(R), 0, 1); return z; }
+function stats(z){ let m = 0; for (const v of z) m += v; m /= z.length; let s = 0; for (const v of z) s += (v - m) ** 2; return {mean: m, sd: Math.sqrt(s / z.length)}; }
+function traitGen(z, par, R){
+  const N = z.length, surv = [];
+  for (let i = 0; i < N; i++) if (R() < traitSurvival(z[i], par.mode, par.birds)) surv.push(z[i]);
+  if (surv.length < 2) return {z: z.slice(), alive: surv.length};
+  const out = new Float64Array(N), seg = stats(surv).sd / Math.SQRT2;
+  for (let i = 0; i < N; i++) { const a = surv[Math.floor(R() * surv.length)], b = surv[Math.floor(R() * surv.length)];
+    out[i] = clamp((a + b) / 2 + seg * gauss(R), 0, 1); }
+  return {z: out, alive: surv.length};
+}
+/* MODEL:end */
+
+/* ---- state: plain data --------------------------------------------------- */
+const NREP = 7;
+const DEF = {pol: 0, birds: 0, mig: 0, pm: 50, nsize: 8, p0: 10, mode: 'uniform'};
+const S = {par: Object.assign({}, DEF), tab: 'a', running: false, speed: 2, locked: false, seed: 20260918, gen: 0,
+           hist: [], reps: [], events: [], hwStreak: 0, hwStartP: null, phenMin: 1, lastChi: null, lastSurv: null,
+           tGen: 0, tHist: [], tStart: null, tStreak: 0};
+const shared = sharedState();
+if (shared && shared.par) for (const k in DEF) if (shared.par[k] != null) S.par[k] = typeof DEF[k] === 'string' ? String(shared.par[k]) : +shared.par[k];
+S.par.nsize = clamp(Math.round(S.par.nsize), 0, SIZES.length - 1);
+if (!['uniform', 'soot', 'patchy'].includes(S.par.mode)) S.par.mode = 'uniform';
+shareState(() => ({par: Object.assign({}, S.par)}));
+let R = mulberry32(S.seed);
+const par = () => ({pol: S.par.pol / 100, birds: S.par.birds / 100, m: S.par.mig / 100, pm: S.par.pm / 100, N: SIZES[S.par.nsize]});
+let POP = null, REPS = [], Z = null, LASTGEN = null;
+function newPopulation(){
+  const N = SIZES[S.par.nsize], p0 = S.par.p0 / 100;
+  POP = makePop(N, p0, R); REPS = Array.from({length: NREP}, () => makePop(N, p0, R));
+  S.gen = 0; S.hist = [{gen: 0, p: pOf(POP), ph: 1 - POP.cc / N}]; S.reps = REPS.map(g => [pOf(g)]); S.events = [];
+  S.hwStreak = 0; S.hwStartP = pOf(POP); S.phenMin = 1 - POP.cc / N; LASTGEN = null; S.lastSurv = null; S.detFrom = 0;
+  assignDisplay(null);
+}
+function newTrait(){ Z = makeTrait(TRAIT.N, R); S.tGen = 0; const st = stats(Z); S.tHist = [{gen: 0, mean: st.mean, sd: st.sd}]; S.tStart = {gen: 0, mean: st.mean, sd: st.sd, mode: S.par.mode, birds: S.par.birds}; S.tStreak = 0; Z0 = Z.slice(); assignTraitDisplay(null); }
+let Z0 = null;
+
+/* ============================================================================
+   The stage: built once, then patched.
+   ============================================================================ */
+const svg = $('stage');
+const NM = 120, TR = {x: 26, y: 20, w: 300, h: 660};
+const PL = {x: 410, y: 44, w: 560, h: 250}, HW = {x: 410, y: 372, w: 260, h: 170}, SV = {x: 730, y: 372, w: 240, h: 170};
+const HI = {x: 410, y: 44, w: 560, h: 330}, MS = {x: 410, y: 452, w: 560, h: 150};
+const GREEN = '#5a7d2a';
+const MOTH_POS = (() => { const r = mulberry32(99), pts = [];
+  for (let i = 0; i < NM; i++) { let best = null, bd = -1;
+    for (let t = 0; t < 30; t++) { const c = {x: TR.x + 26 + r() * (TR.w - 52), y: TR.y + 30 + r() * (TR.h - 60)}; let d = 1e9; for (const q of pts) d = Math.min(d, Math.hypot(q.x - c.x, (q.y - c.y) * 1.3)); if (d > bd) { bd = d; best = c; } }
+    pts.push(Object.assign(best, {rot: (r() - .5) * 50, s: 0.9 + r() * 0.25})); }
+  return pts; })();
+const mothPath = 'M0 -2 C -6 -9, -17 -8, -18 -1 C -17 5, -9 7, -2 4 L 0 6 L 2 4 C 9 7, 17 5, 18 -1 C 17 -8, 6 -9, 0 -2 Z';
+function build(){
+  const r = mulberry32(4);
+  let bark = ''; for (let i = 0; i < 34; i++) { const x = TR.x + 8 + r() * (TR.w - 16); let d = `M${x.toFixed(1)} ${TR.y}`; for (let y = TR.y; y < TR.y + TR.h; y += 40) d += ` Q ${(x + (r() - .5) * 18).toFixed(1)} ${y + 20}, ${(x + (r() - .5) * 10).toFixed(1)} ${y + 40}`; bark += `<path d="${d}"/>`; }
+  let lich = ''; for (let i = 0; i < 26; i++) { const cx = TR.x + 20 + r() * (TR.w - 40), cy = TR.y + 20 + r() * (TR.h - 40), rx = 16 + r() * 34, ry = 12 + r() * 26;
+    lich += `<ellipse cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" rx="${rx.toFixed(1)}" ry="${ry.toFixed(1)}" transform="rotate(${((r() - .5) * 60).toFixed(0)} ${cx.toFixed(1)} ${cy.toFixed(1)})"/>`; }
+  let patches = ''; for (let i = 0; i < 9; i++) { const cy = TR.y + i * TR.h / 9; patches += `<rect x="${TR.x}" y="${cy.toFixed(1)}" width="${TR.w}" height="${(TR.h / 9 / 2).toFixed(1)}"/>`; }
+  let moths = ''; MOTH_POS.forEach((m, i) => { moths += `<g id="m${i}" transform="translate(${m.x.toFixed(1)} ${m.y.toFixed(1)}) rotate(${m.rot.toFixed(0)}) scale(${m.s.toFixed(2)})"><path id="mw${i}" d="${mothPath}" stroke-width=".6"/><circle id="ms${i}" cx="-9" cy="-2" r="1.3"/><circle cx="8" cy="0" r="1.1" id="mt${i}"/><ellipse cx="0" cy="1" rx="1.6" ry="5.5" id="mb${i}"/><circle id="mr${i}" r="16" fill="none" stroke="#d6453d" stroke-width="2" opacity="0"/></g>`; });
+  svg.innerHTML = `
+  <defs>
+    <linearGradient id="gBg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fbfaf6"/><stop offset="1" stop-color="#f4f1ea"/></linearGradient>
+    <linearGradient id="gShade" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#000" stop-opacity=".28"/><stop offset=".25" stop-color="#000" stop-opacity="0"/><stop offset=".75" stop-color="#000" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity=".32"/></linearGradient>
+    <clipPath id="clipTrunk"><rect x="${TR.x}" y="${TR.y}" width="${TR.w}" height="${TR.h}" rx="22"/></clipPath>
+  </defs>
+  <rect x="0" y="0" width="1000" height="700" fill="url(#gBg)"/>
+  <g clip-path="url(#clipTrunk)">
+    <rect id="barkBase" x="${TR.x}" y="${TR.y}" width="${TR.w}" height="${TR.h}"/>
+    <g id="lichen" fill="#c9d4b2" stroke="#b3c09a" stroke-width="1">${lich}</g>
+    <g id="patches" fill="#d8d6c8" opacity="0">${patches}</g>
+    <rect id="soot" x="${TR.x}" y="${TR.y}" width="${TR.w}" height="${TR.h}" fill="#2a2926" opacity="0"/>
+    <g id="barkLines" fill="none" stroke="#000" stroke-opacity=".18" stroke-width="1.6">${bark}</g>
+    <rect x="${TR.x}" y="${TR.y}" width="${TR.w}" height="${TR.h}" fill="url(#gShade)"/>
+    <g id="moths">${moths}</g>
+  </g>
+  <rect x="${TR.x}" y="${TR.y}" width="${TR.w}" height="${TR.h}" rx="22" fill="none" stroke="#5a4a38" stroke-width="1.5" opacity=".6"/>
+  <text id="trunkLab" x="${TR.x + TR.w / 2}" y="${TR.y + TR.h + 15}" text-anchor="middle" fill="#4a555b" font-size="11"></text>
+  <line x1="352" y1="10" x2="352" y2="690" stroke="#e2ded2"/>
+
+  <g id="gA">
+    <text x="372" y="26" fill="#4a555b" font-size="12" font-weight="700" letter-spacing=".08em">FREQUENCY OF THE MELANIC ALLELE, C</text>
+    <g font-size="10.5" font-weight="600"><line x1="740" y1="22" x2="758" y2="22" stroke="${GREEN}" stroke-width="2.6"/><text x="762" y="26" fill="${GREEN}">this population</text>
+      <line x1="856" y1="22" x2="874" y2="22" stroke="#b9bfae" stroke-width="1.4"/><text x="878" y="26" fill="#8a9280">7 more like it</text></g>
+    <g id="plAxes"></g>
+    <g id="plReps" fill="none" stroke="#b9bfae" stroke-width="1.1"></g>
+    <path id="plDet" fill="none" stroke="${GREEN}" stroke-width="1.2" stroke-dasharray="4 4" opacity=".7"/>
+    <path id="plMain" fill="none" stroke="${GREEN}" stroke-width="2.6" stroke-linejoin="round"/>
+    <g id="plEvents"></g>
+    <text id="plNote" x="${PL.x + 8}" y="${PL.y + 16}" fill="#7c878c" font-size="11"></text>
+    <text x="372" y="350" fill="#4a555b" font-size="12" font-weight="700" letter-spacing=".08em">GENOTYPES AGAINST HARDY–WEINBERG</text>
+    <g id="hwG"></g>
+    <text x="712" y="350" fill="#4a555b" font-size="12" font-weight="700" letter-spacing=".08em">WHO THE BIRDS LEFT</text>
+    <g id="svG"></g>
+    <g id="alleleText"></g>
+  </g>
+
+  <g id="gT" style="display:none">
+    <text x="372" y="26" fill="#4a555b" font-size="12" font-weight="700" letter-spacing=".08em">WING DARKNESS IN THE POPULATION</text>
+    <g font-size="10.5" font-weight="600"><rect x="742" y="15" width="14" height="10" fill="${GREEN}" opacity=".75"/><text x="760" y="24" fill="${GREEN}">now</text>
+      <rect x="796" y="15" width="14" height="10" fill="none" stroke="#9aa3a6" stroke-dasharray="3 2"/><text x="814" y="24" fill="#7c878c">start</text>
+      <line x1="848" y1="20" x2="866" y2="20" stroke="#d6453d" stroke-width="2"/><text x="870" y="24" fill="#b0352c">chance of surviving</text></g>
+    <g id="hiAxes"></g><path id="hiStart" fill="none" stroke="#9aa3a6" stroke-width="1.4" stroke-dasharray="4 3"/><g id="hiBars"></g><path id="hiFit" fill="none" stroke="#d6453d" stroke-width="2"/>
+    <text id="hiNote" x="${HI.x + 8}" y="${HI.y + 16}" fill="#7c878c" font-size="11"></text>
+    <text x="372" y="432" fill="#4a555b" font-size="12" font-weight="700" letter-spacing=".08em">MEAN AND SPREAD, GENERATION BY GENERATION</text>
+    <g id="msAxes"></g><path id="msBand" fill="${GREEN}" opacity=".16"/><path id="msMean" fill="none" stroke="${GREEN}" stroke-width="2.2"/>
+    <text id="msNote" x="${MS.x + 8}" y="${MS.y + 16}" fill="#7c878c" font-size="11"></text>
+    <g id="kindG"></g>
+  </g>
+  <rect id="veil" x="353" y="0" width="647" height="700" fill="#fbfaf6" opacity=".95"/>
+  <text id="veilT" x="676" y="350" text-anchor="middle" fill="#7c878c" font-size="15" font-weight="600">The plots switch on once you have made a prediction.</text>
+  `;
+}
+
+/* ---- scales ------------------------------------------------------------------- */
+let GWIN = 100;
+const gx = g => PL.x + g / GWIN * PL.w, py = p => PL.y + PL.h - clamp(p, 0, 1) * PL.h;
+function drawAxesA(){
+  let a = `<rect x="${PL.x}" y="${PL.y}" width="${PL.w}" height="${PL.h}" fill="#fff" stroke="#e2ded2"/>`;
+  for (const p of [0, 0.25, 0.5, 0.75, 1]) a += `<line x1="${PL.x}" y1="${py(p)}" x2="${PL.x + PL.w}" y2="${py(p)}" stroke="#f0ede4"/><text x="${PL.x - 6}" y="${py(p) + 4}" fill="#7c878c" font-size="10" text-anchor="end" class="m">${p}</text>`;
+  const step = GWIN <= 100 ? 20 : GWIN <= 200 ? 40 : 100;
+  for (let g = 0; g <= GWIN; g += step) a += `<text x="${gx(g)}" y="${PL.y + PL.h + 14}" fill="#7c878c" font-size="10" text-anchor="middle" class="m">${g}</text>`;
+  a += `<text x="${PL.x + PL.w}" y="${PL.y + PL.h + 28}" fill="#7c878c" font-size="10.5" text-anchor="end">generations →</text><text x="${PL.x - 40}" y="${PL.y + PL.h / 2}" fill="#7c878c" font-size="11" font-weight="700" text-anchor="end">p</text>`;
+  $('plAxes').innerHTML = a;
+}
+const hx = z => HI.x + z * HI.w, NB = 25;
+let HTOP = 0.2;
+const hy = f => HI.y + HI.h - clamp(f / HTOP, 0, 1) * HI.h;
+const mx = g => MS.x + g / Math.max(30, S.tHist.length ? S.tHist[S.tHist.length - 1].gen : 30) * MS.w, my = z => MS.y + MS.h - clamp(z, 0, 1) * MS.h;
+function drawAxesT(){
+  let a = `<rect x="${HI.x}" y="${HI.y}" width="${HI.w}" height="${HI.h}" fill="#fff" stroke="#e2ded2"/>`;
+  for (const z of [0, 0.25, 0.5, 0.75, 1]) a += `<text x="${hx(z)}" y="${HI.y + HI.h + 14}" fill="#7c878c" font-size="10" text-anchor="middle" class="m">${z}</text>`;
+  a += `<text x="${HI.x}" y="${HI.y + HI.h + 28}" fill="#7c878c" font-size="10.5">pale</text><text x="${HI.x + HI.w}" y="${HI.y + HI.h + 28}" fill="#7c878c" font-size="10.5" text-anchor="end">dark: wing darkness →</text>`;
+  a += `<rect x="${HI.x}" y="${HI.y + HI.h + 32}" width="${HI.w}" height="6" fill="url(#gTone)"/>`;
+  a += `<linearGradient id="gTone"><stop offset="0" stop-color="${mothFill(0)}"/><stop offset="1" stop-color="${mothFill(1)}"/></linearGradient>`;
+  $('hiAxes').innerHTML = a;
+  let b = `<rect x="${MS.x}" y="${MS.y}" width="${MS.w}" height="${MS.h}" fill="#fff" stroke="#e2ded2"/>`;
+  for (const z of [0, 0.5, 1]) b += `<line x1="${MS.x}" y1="${my(z)}" x2="${MS.x + MS.w}" y2="${my(z)}" stroke="#f0ede4"/><text x="${MS.x - 6}" y="${my(z) + 4}" fill="#7c878c" font-size="10" text-anchor="end" class="m">${z}</text>`;
+  b += `<text x="${MS.x + MS.w}" y="${MS.y + MS.h + 14}" fill="#7c878c" font-size="10.5" text-anchor="end">generations →  (band = mean ± 1 sd)</text>`;
+  $('msAxes').innerHTML = b;
+}
+function mothFill(z){ const c0 = [236, 232, 218], c1 = [40, 37, 34]; return `rgb(${c0.map((c, j) => Math.round(c + (c1[j] - c) * z)).join(',')})`; }
+
+/* ---- the trunk and its moths ------------------------------------------------------ */
+const SHOW = Array.from({length: NM}, () => ({kind: 'cc', z: 0.5, dead: false}));
+let genT = 0;       // seconds since the last generation, for the birds' work to fade
+function assignDisplay(res){
+  /* the moths on the trunk are a random sample of the real population; the ones marked eaten follow the model's own survival in each class */
+  const g = res ? res.prev : POP, N = g.CC + g.Cc + g.cc;
+  const pick = []; for (let i = 0; i < NM; i++) { const u = R() * N; pick.push(u < g.CC ? 'CC' : u < g.CC + g.Cc ? 'Cc' : 'cc'); }
+  for (let i = 0; i < NM; i++) {
+    const k = pick[i]; SHOW[i].kind = k;
+    const frac = res ? res.surv[k] / Math.max(1, g[k]) : 1;
+    SHOW[i].dead = R() > frac;
+  }
+  genT = 0;
+}
+function assignTraitDisplay(deadFrac){
+  for (let i = 0; i < NM; i++) { const z = Z[Math.floor(R() * Z.length)]; SHOW[i].z = z; SHOW[i].dead = deadFrac ? R() > traitSurvival(z, S.par.mode, S.par.birds / 100) : false; }
+  genT = 0;
+}
+function paintTrunk(){
+  const pol = S.tab === 'a' ? S.par.pol / 100 : S.par.mode === 'soot' ? 1 : S.par.mode === 'patchy' ? 1 : 0.5;
+  const base = S.tab === 't' && S.par.mode === 'uniform' ? '#8f8a7e' : pol > 0.5 ? '#4a463f' : '#a39d8e';
+  $('barkBase').setAttribute('fill', base);
+  $('lichen').setAttribute('opacity', (S.tab === 'a' ? (1 - pol) * 0.95 : 0).toFixed(2));
+  $('soot').setAttribute('opacity', (S.tab === 'a' ? pol * 0.72 : S.par.mode === 'soot' ? 0.62 : S.par.mode === 'patchy' ? 0.62 : 0).toFixed(2));
+  $('patches').setAttribute('opacity', S.tab === 't' && S.par.mode === 'patchy' ? 1 : 0);
+  const fade = clamp(genT * Math.max(S.speed, 2) / 0.8, 0, 1);
+  for (let i = 0; i < NM; i++) {
+    const m = SHOW[i], dark = S.tab === 'a' ? m.kind !== 'cc' : null;
+    const fill = S.tab === 'a' ? (dark ? '#2e2b28' : '#ebe7da') : mothFill(m.z);
+    $('mw' + i).setAttribute('fill', fill); $('mw' + i).setAttribute('stroke', S.tab === 'a' ? (dark ? '#141210' : '#8a8676') : '#6b665a');
+    const speck = S.tab === 'a' ? (dark ? '#141210' : '#57544b') : 'transparent';
+    $('ms' + i).setAttribute('fill', speck); $('mt' + i).setAttribute('fill', speck); $('mb' + i).setAttribute('fill', S.tab === 'a' ? (dark ? '#1a1816' : '#6b675c') : '#4a463f');
+    const gone = m.dead && S.locked && (S.gen > 0 || S.tGen > 0);
+    $('m' + i).setAttribute('opacity', gone ? (1 - fade).toFixed(2) : 1);
+    $('mr' + i).setAttribute('opacity', gone ? (Math.sin(Math.PI * Math.min(1, fade * 1.2)) * 0.9).toFixed(2) : 0);
+  }
+  $('trunkLab').textContent = S.tab === 'a' ? (pol < 0.2 ? 'bark covered in pale lichen (clean air)' : pol > 0.7 ? 'lichen killed, bark blackened by soot' : 'lichen dying, soot settling') :
+    {uniform: 'plain grey bark', soot: 'sooty bark', patchy: 'bark in pale and dark patches'}[S.par.mode];
+}
+
+/* ---- tab 1 plots ------------------------------------------------------------------ */
+function paintA(){
+  const last = S.hist[S.hist.length - 1];
+  if (last.gen > GWIN) { GWIN = last.gen <= 200 ? 200 : Math.ceil(last.gen / 100) * 100; drawAxesA(); }
+  const L = arr => arr.map((p, g) => (g ? 'L' : 'M') + gx(g + (S.hist[0].gen)).toFixed(1) + ' ' + py(p).toFixed(1)).join('');
+  $('plMain').setAttribute('d', S.hist.map((h, i) => (i ? 'L' : 'M') + gx(h.gen).toFixed(1) + ' ' + py(h.p).toFixed(1)).join(''));
+  $('plReps').innerHTML = S.reps.map(r => `<path d="${L(r)}"/>`).join('');
+  /* the deterministic path (no drift) from where this population started */
+  const i0 = Math.min(S.detFrom || 0, S.hist.length - 1);
+  let p = S.hist[i0].p, d = `M${gx(S.hist[i0].gen).toFixed(1)} ${py(p).toFixed(1)}`;
+  for (let i = i0 + 1; i < S.hist.length; i++) { p = deterministic(p, S.hist[i].par || par()); d += `L${gx(S.hist[i].gen).toFixed(1)} ${py(p).toFixed(1)}`; }
+  $('plDet').setAttribute('d', d);
+  $('plEvents').innerHTML = S.events.map(e => `<line x1="${gx(e.gen).toFixed(1)}" y1="${PL.y}" x2="${gx(e.gen).toFixed(1)}" y2="${PL.y + PL.h}" stroke="#b07a2a" stroke-dasharray="3 3"/><text x="${(gx(e.gen) + 4).toFixed(1)}" y="${PL.y + PL.h - 6}" fill="#8a5a1a" font-size="10" font-weight="600">${esc(e.lab)}</text>`).join('');
+  $('plNote').textContent = `generation ${S.gen} · N = ${SIZES[S.par.nsize]} · p = ${last.p.toFixed(3)} · dashed: an infinite population`;
+  /* Hardy–Weinberg */
+  const hw = hwChi(POP), cat = ['CC', 'Cc', 'cc'], exp = [hw.p * hw.p, 2 * hw.p * hw.q, hw.q * hw.q], bw = 58;
+  let h = `<rect x="${HW.x}" y="${HW.y}" width="${HW.w}" height="${HW.h}" fill="#fff" stroke="#e2ded2"/>`;
+  for (const f of [0, 0.5, 1]) h += `<line x1="${HW.x}" y1="${HW.y + HW.h - f * HW.h}" x2="${HW.x + HW.w}" y2="${HW.y + HW.h - f * HW.h}" stroke="#f0ede4"/><text x="${HW.x - 6}" y="${HW.y + HW.h - f * HW.h + 4}" fill="#7c878c" font-size="10" text-anchor="end" class="m">${f}</text>`;
+  cat.forEach((c, i) => { const x = HW.x + 22 + i * (bw + 24), obs = hw.O[i] / hw.N, y = HW.y + HW.h - obs * HW.h, ye = HW.y + HW.h - exp[i] * HW.h;
+    h += `<rect x="${x}" y="${y.toFixed(1)}" width="${bw}" height="${(HW.y + HW.h - y).toFixed(1)}" rx="3" fill="${i < 2 ? '#3b3733' : '#d8d3c2'}" stroke="${i < 2 ? '#1a1816' : '#9a9483'}"/>` +
+      `<line x1="${x - 6}" y1="${ye.toFixed(1)}" x2="${x + bw + 6}" y2="${ye.toFixed(1)}" stroke="#d6453d" stroke-width="2.4"/>` +
+      `<text x="${x + bw / 2}" y="${HW.y + HW.h + 14}" fill="#4a555b" font-size="11" font-weight="700" text-anchor="middle">${c}</text>` +
+      `<text x="${x + bw / 2}" y="${HW.y + HW.h + 27}" fill="#7c878c" font-size="9.5" text-anchor="middle" class="m">${obs.toFixed(3)}</text>`; });
+  h += `<text x="${HW.x}" y="${HW.y + HW.h + 44}" fill="#b0352c" font-size="10.5"><tspan font-weight="700">red:</tspan> p² = ${exp[0].toFixed(3)}, 2pq = ${exp[1].toFixed(3)}, q² = ${exp[2].toFixed(3)}</tspan></text>`;
+  h += `<text x="${HW.x}" y="${HW.y + HW.h + 60}" fill="${hw.chi < 3.84 ? '#2f7d4a' : '#b0352c'}" font-size="10.5" font-weight="600" class="m">χ² = ${hw.chi.toFixed(2)} ${hw.chi < 3.84 ? '< 3.84: fits Hardy–Weinberg' : '> 3.84: departs from it'}</text>`;
+  $('hwG').innerHTML = h;
+  /* who the birds left: survival measured in the last generation */
+  const sv = S.lastSurv; let s = `<rect x="${SV.x}" y="${SV.y}" width="${SV.w}" height="${SV.h}" fill="#fff" stroke="#e2ded2"/>`;
+  if (sv) {
+    const bars = [['pale', sv.pale, '#d8d3c2', '#9a9483'], ['melanic', sv.dark, '#3b3733', '#1a1816']];
+    bars.forEach(([lab, v, f, st], i) => { const x = SV.x + 34 + i * 100, y = SV.y + SV.h - (isFinite(v) ? v : 0) * SV.h;
+      s += `<rect x="${x}" y="${y.toFixed(1)}" width="64" height="${(SV.y + SV.h - y).toFixed(1)}" rx="3" fill="${f}" stroke="${st}"/><text x="${x + 32}" y="${SV.y + SV.h + 14}" fill="#4a555b" font-size="11" font-weight="700" text-anchor="middle">${lab}</text>` +
+        `<text x="${x + 32}" y="${(y - 5).toFixed(1)}" fill="#4a555b" font-size="10.5" text-anchor="middle" class="m">${isFinite(v) ? (v * 100).toFixed(0) + ' %' : '—'}</text>`; });
+    const rel = sv.pale / sv.dark;
+    s += `<text x="${SV.x}" y="${SV.y + SV.h + 30}" fill="#4a555b" font-size="10.5">survived; relative fitness of pale <tspan class="m" font-weight="700">${isFinite(rel) ? rel.toFixed(2) : '—'}</tspan></text>`;
+    s += `<text x="${SV.x}" y="${SV.y + SV.h + 46}" fill="#7c878c" font-size="10.5">selection against pale, s = <tspan class="m">${isFinite(rel) ? (1 - rel).toFixed(2) : '—'}</tspan></text>`;
+  } else s += `<text x="${SV.x + SV.w / 2}" y="${SV.y + SV.h / 2}" fill="#7c878c" font-size="11" text-anchor="middle">run a generation</text>`;
+  $('svG').innerHTML = s;
+  const N = POP.CC + POP.Cc + POP.cc;
+  $('alleleText').innerHTML = `<text x="372" y="648" fill="#4a555b" font-size="12"><tspan font-weight="700">p</tspan> (C) = <tspan class="m">${hw.p.toFixed(3)}</tspan>   <tspan font-weight="700">q</tspan> (c) = <tspan class="m">${hw.q.toFixed(3)}</tspan>   p² + 2pq + q² = <tspan class="m">${(exp[0] + exp[1] + exp[2]).toFixed(3)}</tspan></text>` +
+    `<text x="372" y="668" fill="#4a555b" font-size="12">melanic moths: <tspan class="m" font-weight="700">${((1 - POP.cc / N) * 100).toFixed(1)} %</tspan> of ${N}   (dark = CC or Cc, because C is dominant)</text>`;
+}
+
+/* ---- tab 2 plots ------------------------------------------------------------------ */
+function histo(z){ const h = new Float64Array(NB); for (const v of z) h[Math.min(NB - 1, Math.floor(v * NB))]++; for (let i = 0; i < NB; i++) h[i] /= z.length; return h; }
+function paintT(){
+  const h = histo(Z), h0 = histo(Z0);
+  HTOP = Math.max(0.12, Math.ceil(Math.max(...h, ...h0) * 20 + 0.5) / 20);
+  const bw = HI.w / NB;
+  $('hiBars').innerHTML = Array.from(h).map((f, i) => `<rect x="${(HI.x + i * bw + 1).toFixed(1)}" y="${hy(f).toFixed(1)}" width="${(bw - 2).toFixed(1)}" height="${(HI.y + HI.h - hy(f)).toFixed(1)}" fill="${GREEN}" opacity=".75"/>`).join('');
+  let d = ''; Array.from(h0).forEach((f, i) => { d += (i ? 'L' : 'M') + (HI.x + i * bw).toFixed(1) + ' ' + hy(f).toFixed(1) + 'L' + (HI.x + (i + 1) * bw).toFixed(1) + ' ' + hy(f).toFixed(1); });
+  $('hiStart').setAttribute('d', d);
+  let fit = ''; for (let i = 0; i <= 100; i++) { const z = i / 100; fit += (i ? 'L' : 'M') + hx(z).toFixed(1) + ' ' + (HI.y + HI.h - traitSurvival(z, S.par.mode, S.par.birds / 100) * HI.h * 0.9).toFixed(1); }
+  $('hiFit').setAttribute('d', fit);
+  const st = stats(Z);
+  $('hiNote').textContent = `generation ${S.tGen} · mean ${st.mean.toFixed(3)} · spread (sd) ${st.sd.toFixed(3)}`;
+  const H = S.tHist, gmax = Math.max(30, H[H.length - 1].gen);
+  const X = g => MS.x + g / gmax * MS.w;
+  $('msMean').setAttribute('d', H.map((q, i) => (i ? 'L' : 'M') + X(q.gen).toFixed(1) + ' ' + my(q.mean).toFixed(1)).join(''));
+  $('msBand').setAttribute('d', H.map((q, i) => (i ? 'L' : 'M') + X(q.gen).toFixed(1) + ' ' + my(q.mean + q.sd).toFixed(1)).join('') + H.slice().reverse().map(q => 'L' + X(q.gen).toFixed(1) + ' ' + my(q.mean - q.sd).toFixed(1)).join('') + 'Z');
+  $('msNote').textContent = `start: mean ${S.tStart.mean.toFixed(2)}, sd ${S.tStart.sd.toFixed(3)} → now: mean ${st.mean.toFixed(2)}, sd ${st.sd.toFixed(3)}`;
+  const kind = traitKind();
+  $('kindG').innerHTML = `<text x="372" y="648" fill="#4a555b" font-size="12.5">${kind ? `<tspan font-weight="700">${kind.name}.</tspan> ${kind.text}` : 'Set the bark and the birds, then run the generations.'}</text>`;
+}
+function traitKind(){
+  if (!S.tStart || S.tGen - S.tStart.gen < 3) return null;
+  const st = stats(Z), dm = st.mean - S.tStart.mean, r = st.sd / S.tStart.sd;
+  if (Math.abs(dm) >= 0.1) return {name: 'Directional selection', text: `The mean has moved ${dm > 0 ? 'darker' : 'paler'} by ${Math.abs(dm).toFixed(2)}.`};
+  if (r <= 0.85) return {name: 'Stabilising selection', text: `More moths near the mean; the spread has shrunk to ${(r * 100).toFixed(0)} %.`};
+  if (r >= 1.15) return {name: 'Disruptive selection', text: `More moths at both ends; the spread has grown to ${(r * 100).toFixed(0)} %.`};
+  return {name: 'Little change', text: 'Mean and spread are holding.'};
+}
+
+/* ---- readouts ---------------------------------------------------------------------- */
+function paintMeasure(){
+  $('genNote').textContent = S.tab === 'a' ? `Generation ${S.gen}. Each generation: birds hunt, survivors breed at random.` : `Generation ${S.tGen} of the trait population.`;
+  if (!S.locked) return;
+  if (S.tab === 'a') {
+    const hw = hwChi(POP), N = hw.N, sv = survival(S.par.pol / 100, S.par.birds / 100);
+    $('readout').innerHTML = `<span>Melanic allele p, pale q</span><b>${hw.p.toFixed(3)}, ${hw.q.toFixed(3)}</b>
+      <span>CC : Cc : cc</span><b>${POP.CC} : ${POP.Cc} : ${POP.cc}</b>
+      <span>Expected, N·(p² : 2pq : q²)</span><b>${hw.E.map(v => v.toFixed(0)).join(' : ')}</b>
+      <span>χ² against Hardy–Weinberg</span><b>${hw.chi.toFixed(2)}</b><i class="sep"></i>
+      <span>Chance a bird misses a pale moth</span><b>${(sv.pale * 100).toFixed(0)} %</b>
+      <span>Chance a bird misses a melanic moth</span><b>${(sv.dark * 100).toFixed(0)} %</b>
+      <span>Change in p since generation 0</span><b>${(hw.p - S.hist[0].p >= 0 ? '+' : '') + (hw.p - S.hist[0].p).toFixed(3)}</b>
+      <span>Spread of the 8 populations (sd of p)</span><b>${sdOfReps().toFixed(3)}</b>`;
+  } else {
+    const st = stats(Z);
+    $('readout').innerHTML = `<span>Mean wing darkness</span><b>${st.mean.toFixed(3)}</b><span>Spread (sd)</span><b>${st.sd.toFixed(3)}</b>
+      <span>Change in mean since start</span><b>${(st.mean - S.tStart.mean >= 0 ? '+' : '') + (st.mean - S.tStart.mean).toFixed(3)}</b><span>Spread now / at start</span><b>${(st.sd / S.tStart.sd).toFixed(2)}</b>`;
+  }
+}
+function sdOfReps(){ const ps = [pOf(POP), ...REPS.map(pOf)], m = ps.reduce((a, b) => a + b) / ps.length; return Math.sqrt(ps.reduce((a, b) => a + (b - m) ** 2, 0) / ps.length); }
+function paintWhy(){
+  if (!S.locked) return;
+  $('whyCard').hidden = false;
+  let t = '';
+  if (S.tab === 'a') {
+    const hw = hwChi(POP), sv = survival(S.par.pol / 100, S.par.birds / 100), N = hw.N, P = par();
+    if (P.birds === 0 && P.m === 0) t += N >= 1000 ? `<p><b>Nothing is acting</b> but chance, and with ${N} moths chance is small: each generation p moves by about ±<span class="mono">${Math.sqrt(hw.p * hw.q / (2 * N)).toFixed(3)}</span> (√(pq/2N)).</p>`
+      : `<p><b>Only ${N} moths.</b> Each generation p wanders by about ±<span class="mono">${Math.sqrt(hw.p * hw.q / (2 * N)).toFixed(3)}</span> by pure chance, and the wandering does not come back: sooner or later one allele is lost. That is genetic drift.</p>`;
+    else if (P.birds > 0) t += `<p><b>Selection.</b> On this bark a bird misses ${(sv.pale * 100).toFixed(0)} % of pale moths and ${(sv.dark * 100).toFixed(0)} % of melanic ones, so ${sv.pale < sv.dark ? 'melanic' : 'pale'} moths leave more young. p should go ${sv.pale < sv.dark ? 'up' : 'down'}.</p>`;
+    if (P.m > 0) t += `<p><b>Gene flow.</b> ${(P.m * 100).toFixed(0)} % of each gene pool comes from migrants with p = ${P.pm.toFixed(2)}, pulling this population towards them.</p>`;
+    if (hw.q > 0 && hw.q < 0.2 && P.birds > 0 && sv.pale < sv.dark) t += `<p>The pale allele hides in Cc moths, which look dark, so the birds cannot remove it: q falls ever more slowly. No variant is completely wiped out.</p>`;
+  } else {
+    const k = traitKind(); t += k ? `<p><b>${k.name}.</b> ${k.text} The red curve is each moth's chance of surviving: the birds take the moths that stand out from this bark.</p>` : `<p>The red curve is each moth's chance of surviving on this bark. Run some generations.</p>`;
+  }
+  $('why').innerHTML = t;
+}
+
+/* ---- findings: reached by the model, never by a button -------------------------------- */
+function checkA(){
+  if (!S.locked) return;
+  const P = par(), N = P.N, p = pOf(POP), ph = 1 - POP.cc / N, hw = hwChi(POP);
+  if (P.birds === 0 && P.m === 0 && N >= 1000) { if (S.hwStreak === 0) S.hwStartP = S.hist[S.hist.length - 2] ? S.hist[S.hist.length - 2].p : p; S.hwStreak++; } else S.hwStreak = 0;
+  if (S.hwStreak >= 20 && Math.abs(p - S.hwStartP) <= 0.04 && hw.chi < 3.84) { discover('hw'); maybeExplain(); }
+  S.phenMin = Math.min(S.phenMin, ph);
+  if (P.birds > 0 && P.pol >= 0.7 && ph >= 0.8 && S.phenMin <= 0.3) discover('soot');
+  const prev = S.hist[S.hist.length - 2];
+  if (N <= 50 && P.birds === 0 && P.m === 0 && prev && prev.p > 0 && prev.p < 1 && (p === 0 || p === 1)) discover('drift');
+  if (P.m > 0 && p >= 0.02 && p <= 0.98 && S.hist.slice(0, -1).some(h => h.p === 0 || h.p === 1)) discover('flow');
+}
+function checkT(){
+  if (!S.locked || !S.tStart) return;
+  const st = stats(Z), n = S.tGen - S.tStart.gen, b = S.par.birds / 100;
+  if (n < 8 || b < 0.3) return;
+  if (S.par.mode === 'uniform' && st.sd <= 0.75 * S.tStart.sd && Math.abs(st.mean - S.tStart.mean) <= 0.06) discover('stabilising');
+  if (S.par.mode === 'soot' && st.mean - S.tStart.mean >= 0.15) discover('directional');
+  if (S.par.mode === 'patchy' && st.sd >= 1.3 * S.tStart.sd) discover('disruptive');
+}
+let EXPLAINED = false;
+function maybeExplain(){
+  if (EXPLAINED || !POE) return;
+  EXPLAINED = true;
+  const hw = hwChi(POP), p0 = S.hwStartP;
+  POE.explain(`With no birds, no migrants and ${hw.N} moths, p went from <span class="mono">${p0.toFixed(3)}</span> to <span class="mono">${hw.p.toFixed(3)}</span> over ${S.hwStreak} generations. ` +
+    `The genotypes came out at CC <span class="mono">${(hw.O[0] / hw.N).toFixed(3)}</span>, Cc <span class="mono">${(hw.O[1] / hw.N).toFixed(3)}</span>, cc <span class="mono">${(hw.O[2] / hw.N).toFixed(3)}</span>, against p² = <span class="mono">${(hw.p ** 2).toFixed(3)}</span>, 2pq = <span class="mono">${(2 * hw.p * hw.q).toFixed(3)}</span>, q² = <span class="mono">${(hw.q ** 2).toFixed(3)}</span> (χ² ${hw.chi.toFixed(2)}). ` +
+    `Being dominant only decides which moths <i>look</i> dark; it does not make an allele more common. Each young moth draws its alleles from the pool in proportion to their frequency, so without selection, gene flow, mutation or drift, <b>allele frequencies stay put</b>. That is the Hardy–Weinberg principle.`);
+}
+
+/* ============================================================================
+   Running generations
+   ============================================================================ */
+function stepA(){
+  const P = par();
+  const prev = POP, res = generation(POP, P, R);
+  const sd = {CC: res.surv.CC, Cc: res.surv.Cc, cc: res.surv.cc};
+  S.lastSurv = {pale: prev.cc ? sd.cc / prev.cc : NaN, dark: prev.CC + prev.Cc ? (sd.CC + sd.Cc) / (prev.CC + prev.Cc) : NaN};
+  POP = res.next; S.gen++;
+  REPS = REPS.map(g => generation(g, P, R).next);
+  S.hist.push({gen: S.gen, p: pOf(POP), ph: 1 - POP.cc / P.N, par: P});
+  REPS.forEach((g, i) => S.reps[i].push(pOf(g)));
+  assignDisplay({prev, surv: sd});
+  checkA();
+}
+function stepT(){
+  const out = traitGen(Z, {mode: S.par.mode, birds: S.par.birds / 100}, R);
+  assignTraitDisplay(true);
+  Z = out.z; S.tGen++;
+  const st = stats(Z); S.tHist.push({gen: S.tGen, mean: st.mean, sd: st.sd});
+  checkT();
+}
+function step(){ if (S.tab === 'a') stepA(); else stepT(); paintAll(); }
+function paintAll(){
+  paintTrunk();
+  if (S.locked) { if (S.tab === 'a') paintA(); else paintT(); }
+  paintMeasure();
+}
+
+/* ============================================================================
+   Controls
+   ============================================================================ */
+build(); drawAxesA(); drawAxesT();
+const OUT = {pol: v => v + ' %', birds: v => v ? v + ' %' : 'none', mig: v => v + ' %', pm: v => (v / 100).toFixed(2), nsize: v => String(SIZES[v]), p0: v => (v / 100).toFixed(2)};
+function syncControls(){
+  for (const id in OUT) { $(id).value = S.par[id]; $(id + 'Out').textContent = OUT[id](S.par[id]); }
+  document.querySelectorAll('#barkSeg button').forEach(b => b.setAttribute('aria-pressed', b.dataset.mode === S.par.mode));
+  document.querySelectorAll('#speedSeg button').forEach(b => b.setAttribute('aria-pressed', +b.dataset.sp === S.speed));
+  const a = S.tab === 'a';
+  $('barkSeg').hidden = a; $('pol').closest('.ctl').hidden = !a; $('migRow').hidden = !a; $('pmRow').hidden = !a;
+  $('alleleCtl').hidden = !a; $('traitCtl').hidden = a;
+  $('tabA').setAttribute('aria-selected', a); $('tabT').setAttribute('aria-selected', !a);
+  $('gA').style.display = a ? '' : 'none'; $('gT').style.display = a ? 'none' : '';
+}
+for (const id in OUT) {
+  $(id).addEventListener('input', e => {
+    S.par[id] = +e.target.value; $(id + 'Out').textContent = OUT[id](S.par[id]);
+    if (id === 'birds' && S.tab === 't') resetTraitStart();
+    if (id === 'nsize') { const N = SIZES[S.par.nsize], p = pOf(POP); POP = makePop(N, p, R); REPS = REPS.map(g => makePop(N, pOf(g), R)); S.hist[S.hist.length - 1].p = pOf(POP); REPS.forEach((g, i) => { S.reps[i][S.reps[i].length - 1] = pOf(g); }); S.detFrom = S.hist.length - 1; S.events.push({gen: S.gen, lab: 'N = ' + N}); assignDisplay(null); }
+    if (id === 'p0') { /* applies to the next new population */ }
+    paintAll();
+  });
+  $(id).addEventListener('change', () => track('set', {k: id, v: S.par[id]}));
+}
+function resetTraitStart(){ const st = stats(Z); S.tStart = {gen: S.tGen, mean: st.mean, sd: st.sd, mode: S.par.mode, birds: S.par.birds}; }
+document.querySelectorAll('#barkSeg button').forEach(b => b.addEventListener('click', () => { if (b.disabled) return; S.par.mode = b.dataset.mode; resetTraitStart(); syncControls(); paintAll(); sound('tick'); track('set', {k: 'mode', v: S.par.mode}); }));
+document.querySelectorAll('#speedSeg button').forEach(b => b.addEventListener('click', () => { S.speed = +b.dataset.sp; syncControls(); sound('tick'); }));
+function setRunning(on){ S.running = on; $('btnRun').textContent = on ? '❚❚ Pause' : '▶ Run'; }
+$('btnRun').addEventListener('click', () => { setRunning(!S.running); sound('tick'); track('run', {on: S.running}); });
+$('btnStep').addEventListener('click', () => { setRunning(false); step(); sound('tick'); });
+$('btnNew').addEventListener('click', () => { newPopulation(); GWIN = 100; drawAxesA(); paintAll(); sound('whoosh'); track('new', {N: SIZES[S.par.nsize], p0: S.par.p0 / 100}); });
+$('btnColony').addEventListener('click', () => {
+  const p1 = pOf(POP), N = SIZES[S.par.nsize], f = foundColony(POP, 10, N, R);
+  POP = f.g; REPS = REPS.map(g => foundColony(g, 10, N, R).g);
+  const last = S.hist.length - 1;
+  S.hist[last] = {gen: S.gen, p: pOf(POP), ph: 1 - POP.cc / N, par: par()}; REPS.forEach((g, i) => { S.reps[i][last] = pOf(g); });
+  S.detFrom = last;
+  S.events.push({gen: S.gen, lab: '10 founders'});
+  assignDisplay(null); sound('whoosh'); track('colony', {from: p1, founders: f.pf});
+  if (S.locked && Math.abs(f.pf - p1) >= 0.15) discover('founder');
+  S.lastFound = {from: p1, to: f.pf};
+  paintAll(); paintWhy();
+});
+$('btnNewT').addEventListener('click', () => { newTrait(); paintAll(); sound('whoosh'); });
+function setTab(t){ S.tab = t; syncControls(); paintAll(); paintWhy(); track('tab', {tab: t}); }
+$('tabA').addEventListener('click', () => { if (!$('tabA').disabled) setTab('a'); });
+$('tabT').addEventListener('click', () => { if (!$('tabT').disabled) setTab('t'); });
+function lockControls(lock){
+  for (const id of ['pol', 'birds', 'mig', 'pm', 'nsize', 'p0', 'btnRun', 'btnStep', 'btnNew', 'btnColony', 'btnNewT', 'tabT']) $(id).disabled = lock;
+  document.querySelectorAll('#barkSeg button').forEach(b => b.disabled = lock);
+  $('gate').hidden = !lock;
+}
+
+/* ============================================================================
+   Start
+   ============================================================================ */
+findings($('finds'), [
+  {id: 'hw',          icon: '=', label: 'Nothing acting, nothing changes', hint: 'Large population, no birds, no migrants'},
+  {id: 'soot',        icon: '🏭', label: 'Soot turns the moths dark', hint: 'Blacken the bark, bring the birds'},
+  {id: 'drift',       icon: '🎲', label: 'Drift: a small population loses an allele', hint: 'Shrink the population'},
+  {id: 'founder',     icon: '🏝', label: 'Founder effect', hint: 'Found a colony'},
+  {id: 'flow',        icon: '⇄', label: 'Gene flow brings a lost allele back', hint: 'After an allele is lost, let migrants in'},
+  {id: 'stabilising', icon: '∩', label: 'Stabilising selection', hint: 'Tab 2: plain grey bark'},
+  {id: 'directional', icon: '→', label: 'Directional selection', hint: 'Tab 2: sooty bark'},
+  {id: 'disruptive',  icon: '⋃', label: 'Disruptive selection', hint: 'Tab 2: patchy bark'},
+], () => toast('All eight. You have watched evolution happen, and not happen, for the reasons the textbook gives.', 4800));
+
+const POE = predict($('poe'), {
+  id: 'hw',
+  q: 'The melanic allele C is dominant. In a large population with no predators, no migration and no mutation, what happens to its frequency over many generations?',
+  options: [
+    {id: 'rise', text: 'It rises, because dominant alleles spread'},
+    {id: 'fall', text: 'It falls'},
+    {id: 'same', text: 'It stays about the same', right: true},
+    {id: 'swing', text: 'It swings until one allele is lost'},
+  ],
+  onLock(){
+    S.locked = true;
+    lockControls(false);
+    for (const id of ['veil', 'veilT']) $(id).remove();
+    $('measureVeil').hidden = true; $('measure').hidden = false;
+    say('Now run the generations and watch p.');
+    paintAll(); paintWhy();
+  },
+});
+newPopulation(); newTrait();
+lockControls(!POE.locked);
+if (!Play.FF('predict')) S.locked = true;
+syncControls(); paintAll();
+
+/* Generations tick at 2 a second (or 10). Under reduced motion they come in quarter-second batches and nothing fades. */
+const RM = reduced();
+let acc = 0, gAcc = 0, whyT = 0;
+loop(dt => {
+  acc += dt;
+  if (RM && acc < 0.25) return;
+  genT += RM ? 10 : acc;
+  if (S.running && S.locked) {
+    gAcc += acc * S.speed;
+    let n = 0; while (gAcc >= 1 && n < 20) { gAcc--; n++; if (S.tab === 'a') stepA(); else stepT(); }
+    if (n) { if (S.tab === 'a') paintA(); else paintT(); paintMeasure(); }
+    whyT += acc; if (whyT > 0.5) { whyT = 0; paintWhy(); }
+  }
+  paintTrunk();
+  acc = 0;
+});
+window.applyFeatures = () => paintAll();
+window.PG_STATE = () => ({par: Object.assign({}, S.par), tab: S.tab, running: S.running, locked: S.locked, gen: S.gen, tGen: S.tGen,
+  p: pOf(POP), pop: Object.assign({}, POP), N: SIZES[S.par.nsize], chi: hwChi(POP).chi, hist: S.hist.map(h => ({gen: h.gen, p: h.p, ph: h.ph})), reps: REPS.map(pOf),
+  trait: stats(Z), tStart: S.tStart && Object.assign({}, S.tStart), events: S.events.slice(), lastFound: S.lastFound || null});
+window.PG_MODEL = {survival, generation, deterministic, hwChi, makePop, foundColony, pOf, traitGen, traitSurvival, makeTrait, stats, mulberry32, barkTone, TONE, SIZES, TRAIT};
+</script>
+</body>
+</html>

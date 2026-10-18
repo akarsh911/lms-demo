@@ -1,0 +1,851 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Rays and Waves</title>
+<meta name="description" content="Class 11–12: build a telescope and a compound microscope from two thin lenses and measure their magnifying power; add waves from two slits and measure the fringe width; turn polaroids and test Malus's law.">
+<link rel="icon" href="../../favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Newsreader:opsz,wght@6..72,400;6..72,500&family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="../../play.css">
+<style>
+/* Only what this page needs beyond play.css. */
+.gate{position:absolute; inset:0; display:grid; place-items:center; pointer-events:none}
+.gate span{background:rgba(15,26,43,.85); color:#fff; padding:10px 16px; border-radius:99px; font-weight:600; font-size:14px}
+.seg{display:grid; grid-auto-flow:column; grid-auto-columns:1fr; gap:4px; background:var(--sunk); padding:4px; border-radius:var(--radius-sm)}
+.seg button{border:0; background:transparent; border-radius:6px; min-height:30px; font-weight:600; font-size:13px; cursor:pointer; color:var(--ink-2); padding:0 6px; line-height:1.2}
+.seg button[aria-pressed="true"]{background:var(--card); color:var(--ink); box-shadow:var(--shadow)}
+.seg button:disabled{opacity:.5; cursor:default}
+.seg.small{margin-top:8px}
+.note{font-size:12.5px; color:var(--ink-3); margin:6px 0 0}
+.nums{display:grid; grid-template-columns:1fr auto; gap:3px 12px; font-size:13.5px}
+.nums b{font-family:var(--font-mono); font-weight:600; font-variant-numeric:tabular-nums; text-align:right}
+.nums .eq{grid-column:1/-1; font-family:var(--font-mono); font-size:12.5px; color:var(--ink-2); margin:4px 0 0; padding:6px 8px; background:var(--sunk); border-radius:8px}
+.why p{font-size:14px}
+.why b{color:var(--ink)}
+.drag{cursor:grab} .drag.dragging{cursor:grabbing}
+.scrub{cursor:ew-resize}
+.leftcol{display:flex; flex-direction:column; gap:var(--gap); min-width:0; align-self:start}
+.leftcol .pg-stage{align-self:stretch; min-height:0}
+.ctl output{min-width:84px}
+</style>
+</head>
+<body>
+<header class="pg-top"></header>
+
+<div class="pg-intro">
+  <h1>Rays and waves</h1>
+  <p>Two views of light. As rays: build a telescope and a compound microscope from two thin lenses, trace the light through them, and measure the magnifying power yourself.
+     As waves: add the waves from two slits, point by point, measure the fringe width, and push the set-up until λD/d stops being true. Then turn polaroids and test Malus’s law.</p>
+</div>
+
+<main class="pg-main wide-side">
+  <div class="leftcol">
+    <section class="pg-stage" id="stageWrap">
+      <svg id="stage" viewBox="0 0 1000 660" role="img" aria-label="An optics bench for a telescope or microscope, Young's double slit with the screen and intensity, and a set of polaroids, with a linked graph below"></svg>
+      <div class="gate" id="gate"><span>Make your prediction first →</span></div>
+    </section>
+    <div class="card why" id="whyCard" hidden>
+      <div class="kicker">What is happening</div>
+      <div id="why"></div>
+    </div>
+  </div>
+
+  <aside class="pg-side">
+    <div id="poe"></div>
+
+    <div class="card" id="ctlCard">
+      <div class="seg" role="group" aria-label="Which bench">
+        <button id="tabInst" aria-pressed="true">Instruments</button>
+        <button id="tabSlits" aria-pressed="false">Two slits</button>
+        <button id="tabPol" aria-pressed="false">Polaroids</button>
+      </div>
+
+      <div id="ctlInst">
+        <div class="seg small" role="group" aria-label="Which instrument">
+          <button id="modeTele" aria-pressed="true">Astronomical telescope</button>
+          <button id="modeMicro" aria-pressed="false">Compound microscope</button>
+        </div>
+        <div id="teleCtl">
+          <div class="ctl"><label for="tfo">Objective, f<sub>o</sub></label><input type="range" id="tfo" min="20" max="120" step="1" value="100"><output id="tfoOut" class="num"></output></div>
+          <div class="ctl"><label for="tfe">Eyepiece, f<sub>e</sub></label><input type="range" id="tfe" min="1" max="10" step="0.5" value="5"><output id="tfeOut" class="num"></output></div>
+          <div class="ctl"><label for="tsep">Lens separation</label><input type="range" id="tsep" min="90" max="120" step="0.05" value="102"><output id="tsepOut" class="num"></output></div>
+        </div>
+        <div id="microCtl" hidden>
+          <div class="ctl"><label for="mfo">Objective, f<sub>o</sub></label><input type="range" id="mfo" min="0.5" max="4" step="0.1" value="1"><output id="mfoOut" class="num"></output></div>
+          <div class="ctl"><label for="mfe">Eyepiece, f<sub>e</sub></label><input type="range" id="mfe" min="1" max="5" step="0.1" value="2"><output id="mfeOut" class="num"></output></div>
+          <div class="ctl"><label for="mtube">Tube length, L</label><input type="range" id="mtube" min="10" max="25" step="0.5" value="20"><output id="mtubeOut" class="num"></output></div>
+          <div class="ctl"><label for="muo">Focus: object at</label><input type="range" id="muo" min="1.0" max="1.2" step="0.0001" value="1.06"><output id="muoOut" class="num"></output></div>
+        </div>
+        <p class="note">Drag the eyepiece along the bench to change the separation. Every configuration you settle on is measured and plotted.</p>
+      </div>
+
+      <div id="ctlSlits" hidden>
+        <div class="ctl"><label for="lam">Wavelength, λ</label><input type="range" id="lam" min="400" max="700" step="5" value="600"><output id="lamOut" class="num"></output></div>
+        <div class="ctl"><label for="dsl">Slit separation, d</label><input type="range" id="dsl" min="0" max="12" step="1" value="8"><output id="dslOut" class="num"></output></div>
+        <div class="ctl"><label for="scr">Screen distance, D</label><input type="range" id="scr" min="0.05" max="2" step="0.05" value="1.4"><output id="scrOut" class="num"></output></div>
+        <div class="ctl"><label for="wid">Slit width, a</label><input type="range" id="wid" min="0" max="6" step="1" value="1"><output id="widOut" class="num"></output></div>
+        <p class="note">Drag the two cursors on the intensity graph onto bright fringes; on release each settles on the nearest maximum.</p>
+      </div>
+
+      <div id="ctlPol" hidden>
+        <div class="ctl"><label for="th1">Polaroid P₁</label><input type="range" id="th1" min="0" max="180" step="1" value="0"><output id="th1Out" class="num"></output></div>
+        <div class="ctl"><label for="th2">Polaroid P₂</label><input type="range" id="th2" min="0" max="180" step="1" value="30"><output id="th2Out" class="num"></output></div>
+        <div class="row" style="margin-top:4px"><button class="btn sm" id="btnP3" aria-pressed="false">Slide a third polaroid in between</button></div>
+        <div id="p3Ctl" hidden><div class="ctl"><label for="th3">Middle polaroid</label><input type="range" id="th3" min="0" max="180" step="1" value="45"><output id="th3Out" class="num"></output></div></div>
+        <p class="note">You can also turn a polaroid by dragging its rim. Each setting you leave is measured.</p>
+      </div>
+    </div>
+
+    <div class="card" id="numCard">
+      <div class="kicker">Measured</div>
+      <div id="nums"></div>
+    </div>
+
+    <div class="card"><div class="kicker">To find</div><div id="finds"></div></div>
+  </aside>
+</main>
+
+<script src="../../play.js"></script>
+<script>
+'use strict';
+const {$, esc, clamp, fmt, drag, loop, sound, say, track, toast, predict, findings, discover, found,
+       shareState, sharedState, mount, reduced} = Play;
+mount({thread: 'light', band: 'theorist'});
+
+/* MODEL:start ==================================================================
+   RAYS. Two ideal thin lenses on one axis. A ray at height y with slope u leaves a
+   lens of focal length f with slope u − y/f (the paraxial law that gives
+   1/v − 1/u = 1/f). Rays from the object are traced through the objective and the
+   eyepiece; the final image is where they (or their extensions) meet. The
+   magnifying power is MEASURED as tan β / tan α: β is the angle the final image
+   subtends at an eye at the eyepiece; α is the angle the star subtends
+   (telescope) or the angle the object subtends at the near point D = 25 cm
+   (microscope). NCERT's formulas, m = f_o/f_e and m = (L/f_o)(D/f_e), are then
+   compared with it.
+
+   WAVES. Each slit is a row of 24 Huygens sources, all in phase. At a point y on
+   the screen every source contributes a unit phasor e^{ikr}, with r the exact
+   distance from that source (no small-angle approximation). The intensity is the
+   squared length of the sum. Fringes, their spacing, the single-slit envelope
+   and missing orders all come out of that sum.
+
+   POLARISATION. Light is a transverse field. A polaroid passes only the
+   component of E along its axis. Unpolarised light is a mixture of every
+   direction: the page averages over 180 of them.
+   ============================================================================ */
+const D_NEAR = 25;                          // cm, least distance of distinct vision
+/* Trace one ray (y, u) through lenses [{x, f, ap}] in order. Returns the path and the last state. */
+function throughLenses(x0, y0, u0, lenses){
+  let x = x0, y = y0, u = u0;
+  const pts = [{x, y}];
+  for (const L of lenses) {
+    y = y + u * (L.x - x); x = L.x;
+    pts.push({x, y});
+    if (Math.abs(y) > L.ap) return {pts, blocked: true, x, y, u};
+    u = u - y / L.f;
+  }
+  return {pts, blocked: false, x, y, u};
+}
+function meetLines(rays){                   // rays: {x, y, u}; least squares on y = y0 + u (X − x)
+  let a = 0, b = 0, c = 0, e = 0, f = 0;
+  for (const r of rays) {
+    const L = Math.hypot(1, r.u), dx = 1 / L, dy = r.u / L;
+    const m11 = 1 - dx * dx, m12 = -dx * dy, m22 = 1 - dy * dy;
+    a += m11; b += m12; c += m22; e += m11 * r.x + m12 * r.y; f += m12 * r.x + m22 * r.y;
+  }
+  const det = a * c - b * b;
+  if (rays.length < 2 || det < 1e-12 * rays.length * rays.length) return {parallel: true, u: rays.length ? rays[0].u : 0};
+  return {x: (c * e - b * f) / det, y: (a * f - b * e) / det};
+}
+/* The telescope: objective at x = 0, eyepiece at x = s. A star alpha (rad) off the axis. */
+function telescope(fo, fe, s, alpha = 0.2 * Math.PI / 180){
+  const lenses = [{x: 0, f: fo, ap: 2.5}, {x: s, f: fe, ap: 1.5}], ta = Math.tan(alpha), rays = [];
+  for (let k = -4; k <= 4; k++) {
+    const y0 = k / 4 * 2.2 + ta * 0;
+    const r = throughLenses(-0.15 * s, y0 - ta * 0.15 * s, ta, lenses);
+    rays.push(r);
+  }
+  return finish(rays, s, ta, lenses, {fo, fe, s, formula: fo / fe, tanRef: ta});
+}
+/* The microscope: object h tall at u_o in front of the objective (x = 0), eyepiece at s = f_o + L + f_e. */
+function microscope(fo, fe, L, uo, h = 0.01){
+  const s = fo + L + fe, lenses = [{x: 0, f: fo, ap: 0.45}, {x: s, f: fe, ap: 1.0}], rays = [];
+  for (let k = -4; k <= 4; k++) {
+    const y0 = k / 4 * 0.4;
+    rays.push(throughLenses(-uo, h, (y0 - h) / uo, lenses));
+  }
+  return finish(rays, s, h / D_NEAR, lenses, {fo, fe, L, uo, s, h, formula: (L / fo) * (D_NEAR / fe), tanRef: h / D_NEAR});
+}
+function finish(rays, s, tanRef, lenses, o){
+  const ok = rays.filter(r => !r.blocked);
+  /* the image made by the objective alone */
+  const mid = ok.map(r => { const p = r.pts[1]; return {x: p.x, y: p.y, u: r.pts.length > 2 ? (r.pts[2].y - p.y) / (r.pts[2].x - p.x) : 0}; });
+  const I1 = meetLines(mid);
+  const fin = meetLines(ok.map(r => ({x: r.x, y: r.y, u: r.u})));
+  let tanB, vFinal, where;
+  if (fin.parallel) { tanB = fin.u; vFinal = Infinity; where = 'infinity'; }
+  else {
+    vFinal = fin.x - s;                                   // < 0: a virtual image on the object side of the eyepiece
+    tanB = vFinal < 0 ? fin.y / (s - fin.x) : NaN;
+    where = vFinal < 0 ? 'virtual' : 'real';
+    if (Math.abs(vFinal) > 1e7) { vFinal = Infinity; where = 'infinity'; tanB = ok[0].u; }
+  }
+  const m = tanB / tanRef;
+  return Object.assign(o, {rays, lenses, I1, fin, tanB, vFinal, where, m, used: ok.length});
+}
+
+/* Young's double slit. Distances in metres. Returns the (normalised) intensity at y. */
+const NSUB = 24;
+function sourcesOf(d, a){
+  const S = [];
+  for (const c of [-d / 2, d / 2]) for (let j = 0; j < NSUB; j++) S.push({y: c - a / 2 + a * (j + 0.5) / NSUB, slit: c < 0 ? 0 : 1});
+  return S;
+}
+/* r − D without cancellation error */
+const pathEx = (D, dy) => dy * dy / (Math.sqrt(D * D + dy * dy) + D);
+function phasors(y, lam, d, D, a){
+  const k = 2 * Math.PI / lam, sums = [{re: 0, im: 0}, {re: 0, im: 0}];
+  for (const s of sourcesOf(d, a)) { const ph = k * pathEx(D, y - s.y); sums[s.slit].re += Math.cos(ph); sums[s.slit].im += Math.sin(ph); }
+  return sums;
+}
+function intensity(y, lam, d, D, a){
+  const [p, q] = phasors(y, lam, d, D, a), re = p.re + q.re, im = p.im + q.im;
+  return (re * re + im * im) / (4 * NSUB * NSUB);
+}
+/* The phase difference between the centres of the two slits at y (radians), exact. */
+const phaseDiff = (y, lam, d, D) => 2 * Math.PI / lam * (pathEx(D, y + d / 2) - pathEx(D, y - d / 2));
+/* The nearest maximum to y: scan a window, then refine by golden section. */
+function nearestMax(y, lam, d, D, a, win){
+  let best = y, bi = -1;
+  for (let k = -40; k <= 40; k++) { const t = y + k / 40 * win, I = intensity(t, lam, d, D, a); if (I > bi) { bi = I; best = t; } }
+  let lo = best - win / 40, hi = best + win / 40;
+  for (let k = 0; k < 60; k++) { const m1 = lo + (hi - lo) * 0.382, m2 = lo + (hi - lo) * 0.618; if (intensity(m1, lam, d, D, a) >= intensity(m2, lam, d, D, a)) hi = m2; else lo = m1; }
+  return (lo + hi) / 2;
+}
+/* Measure the fringe width between two cursors: N spacings, counted from the phase. */
+function fringeWidth(yA, yB, lam, d, D){
+  const N = Math.round(Math.abs(phaseDiff(yB, lam, d, D) - phaseDiff(yA, lam, d, D)) / (2 * Math.PI));
+  return {N, beta: N ? Math.abs(yB - yA) / N : null};
+}
+
+/* Polaroids. theta in degrees; a list of pass axes in order. Returns I/I_lamp. */
+function polarised(axes){
+  let tot = 0;
+  const M = 180;
+  for (let k = 0; k < M; k++) {
+    const ph = k / M * Math.PI;
+    let ex = Math.cos(ph), ey = Math.sin(ph);
+    for (const t of axes) { const px = Math.cos(t * Math.PI / 180), py = Math.sin(t * Math.PI / 180), c = ex * px + ey * py; ex = c * px; ey = c * py; }
+    tot += ex * ex + ey * ey;
+  }
+  return tot / M;
+}
+/* MODEL:end */
+
+/* ---- state: plain data ---------------------------------------------------- */
+const DS = [0.002, 0.005, 0.01, 0.02, 0.05, 0.1, 0.14, 0.2, 0.28, 0.4, 0.56, 1, 2];     // mm
+const AF = [1 / 20, 1 / 10, 1 / 5, 1 / 4, 1 / 3, 1 / 2.5, 1 / 2];                        // a as a fraction of d
+const AF_LAB = ['d/20', 'd/10', 'd/5', 'd/4', 'd/3', 'd/2.5', 'd/2'];
+const S = {tab: 'inst', locked: false,
+  mode: 'tele', tfo: 100, tfe: 5, tsep: 102, mfo: 1, mfe: 2, mtube: 20, muo: 1.06, instPts: [],
+  lam: 600, dsl: 8, scr: 1.4, wid: 1, cur: [0, 0], active: 1, meas: [],
+  th1: 0, th2: 30, p3: false, th3: 45, polPts: []};
+const shared = sharedState();
+if (shared) {
+  if (['inst', 'slits', 'pol'].includes(shared.tab)) S.tab = shared.tab;
+  if (shared.mode === 'micro') S.mode = 'micro';
+  S.lam = clamp(+shared.lam || 600, 400, 700); S.dsl = clamp(Math.round(+shared.dsl), 0, 12); if (isNaN(S.dsl)) S.dsl = 8;
+  S.scr = clamp(+shared.scr || 1.4, 0.05, 2); S.th1 = clamp(+shared.th1 || 0, 0, 180); S.th2 = clamp(+shared.th2 || 30, 0, 180);
+}
+shareState(() => ({tab: S.tab, mode: S.mode, lam: S.lam, dsl: S.dsl, scr: S.scr, th1: S.th1, th2: S.th2}));
+const dM = () => DS[S.dsl] * 1e-3, aM = () => dM() * AF[S.wid], lamM = () => S.lam * 1e-9;
+const betaF = () => lamM() * S.scr / dM();
+const halfView = () => Math.min(0.9 * S.scr, 6.5 * betaF());
+/* where the objective's image falls exactly at the eyepiece's focus (only used to centre the focus knob's range) */
+const focusOf = () => S.mfo * (S.mfo + S.mtube) / S.mtube;
+
+/* ============================================================================
+   The stage: drawn once, then only patched.
+   ============================================================================ */
+const svg = $('stage');
+const GR = {x: 80, y: 478, w: 480, h: 140};
+const IN = {x: 640, y: 446, w: 340, h: 200};
+const SCR = {x0: 610, x1: 980, y0: 62, y1: 402};          // the screen, face on (two slits)
+
+function build(){
+  svg.innerHTML = `
+  <defs>
+    <radialGradient id="gGlow"><stop offset="0" stop-color="#ffe27a" stop-opacity=".75"/><stop offset="1" stop-color="#ffe27a" stop-opacity="0"/></radialGradient>
+    <clipPath id="clipScene"><rect x="0" y="52" width="1000" height="366"/></clipPath>
+    <marker id="aE" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#f2c230"/></marker>
+    <marker id="aP" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#6a3fc2"/></marker>
+    <marker id="aQ" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#1f8a70"/></marker>
+    <marker id="aR" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#c2410c"/></marker>
+  </defs>
+  <rect x="0" y="0" width="1000" height="420" fill="#0f1520"/>
+
+  <!-- ===================== INSTRUMENTS ===================== -->
+  <g id="vInst">
+    <text x="18" y="28" fill="#aab7c6" font-size="15" font-family="Newsreader, Georgia, serif" id="instTitle">An astronomical telescope</text>
+    <text x="18" y="46" fill="#6f8399" font-size="11.5" id="instSub"></text>
+    <line id="instAxis" y1="215" y2="215" stroke="#34465a" stroke-dasharray="4 6"/>
+    <g id="instMarks" font-size="11.5"></g>
+    <g id="instRays" fill="none" stroke-width="1.3" clip-path="url(#clipScene)"></g>
+    <g id="instBack" fill="none" stroke-width="1" stroke-dasharray="4 4" opacity=".6" clip-path="url(#clipScene)"></g>
+    <g id="instLenses"></g>
+    <g id="instObj"></g>
+    <g id="instEye"></g>
+    <rect id="eyeHit" class="drag" y="60" width="40" height="310" fill="transparent" role="slider" tabindex="0" aria-label="The eyepiece: drag it along the bench"/>
+    <text id="instNote" x="982" y="408" fill="#8ea3b8" font-size="11.5" text-anchor="end"></text>
+  </g>
+
+  <!-- ===================== TWO SLITS ===================== -->
+  <g id="vSlits" display="none">
+    <text x="18" y="28" fill="#aab7c6" font-size="15" font-family="Newsreader, Georgia, serif">Young’s double slit</text>
+    <text x="18" y="46" fill="#6f8399" font-size="11.5">Seen from above, not to scale. Every point of each slit sends out wavelets.</text>
+    <rect x="40" y="200" width="30" height="30" rx="4" fill="#3b4652"/><circle cx="72" cy="215" r="16" fill="url(#gGlow)"/>
+    <line x1="70" y1="215" x2="150" y2="215" id="srcBeam" stroke-width="10" opacity=".35"/>
+    <line x1="150" y1="60" x2="150" y2="370" stroke="#8a9bb0" stroke-width="4"/>
+    <rect x="146" y="172" width="8" height="16" fill="#0f1520"/><rect x="146" y="242" width="8" height="16" fill="#0f1520"/>
+    <text x="140" y="178" fill="#aab7c6" font-size="12" text-anchor="end">S₁</text><text x="140" y="258" fill="#aab7c6" font-size="12" text-anchor="end">S₂</text>
+    <g id="waves" fill="none" stroke-width="1.2"></g>
+    <line x1="560" y1="60" x2="560" y2="370" stroke="#d9dee4" stroke-width="4"/>
+    <text x="560" y="388" fill="#8ea3b8" font-size="11.5" text-anchor="middle">screen</text>
+    <line id="rayA" x1="150" y1="180" stroke="#f2c230" stroke-width="1.4"/><line id="rayB" x1="150" y1="250" stroke="#f2c230" stroke-width="1.4"/>
+    <circle id="pDot" cx="560" r="5" fill="#f2c230"/>
+    <text id="pathLab" x="360" y="404" fill="#f2c230" font-size="12.5" text-anchor="middle" font-family="JetBrains Mono, monospace"></text>
+    <text x="220" y="215" fill="#8ea3b8" font-size="11.5" id="dLab"></text>
+    <text x="360" y="382" fill="#8ea3b8" font-size="11.5" text-anchor="middle" id="DLab"></text>
+    <!-- the screen, face on -->
+    <text x="${SCR.x0}" y="52" fill="#aab7c6" font-size="12" id="scrTitle">The screen, face on (y in mm)</text>
+    <g id="fringes"></g>
+    <rect x="${SCR.x0}" y="${SCR.y0}" width="${SCR.x1 - SCR.x0}" height="${SCR.y1 - SCR.y0}" fill="none" stroke="#3b4a5c"/>
+    <g id="scrTicks" font-size="10.5" fill="#8ea3b8"></g>
+    <line id="scrCurA" x1="${SCR.x0}" x2="${SCR.x1}" stroke="#6a3fc2" stroke-width="1.5" stroke-dasharray="5 4"/>
+    <line id="scrCurB" x1="${SCR.x0}" x2="${SCR.x1}" stroke="#1f8a70" stroke-width="1.5" stroke-dasharray="5 4"/>
+  </g>
+
+  <!-- ===================== POLAROIDS ===================== -->
+  <g id="vPol" display="none">
+    <text x="18" y="28" fill="#aab7c6" font-size="15" font-family="Newsreader, Georgia, serif">Polaroids, looking along the beam</text>
+    <text x="18" y="46" fill="#6f8399" font-size="11.5">The double arrows show the electric field of the light between the sheets.</text>
+    <line x1="60" y1="215" x2="930" y2="215" id="polBeam" stroke="#ffe9a8" stroke-width="16" opacity=".12"/>
+    <g transform="translate(70 215)"><circle r="30" fill="url(#gGlow)"/><circle r="12" fill="#ffe9a8"/></g>
+    <text x="70" y="262" fill="#8ea3b8" font-size="11.5" text-anchor="middle">lamp</text>
+    <g id="polField"></g>
+    <g id="polDiscs"></g>
+    <g id="det"><rect x="885" y="175" width="70" height="80" rx="8" fill="#26303c" stroke="#4a5b70"/><rect id="detGlow" x="893" y="183" width="54" height="64" rx="5" fill="#ffe27a" opacity="0"/>
+      <text x="920" y="276" fill="#8ea3b8" font-size="11.5" text-anchor="middle">light meter</text>
+      <text id="detVal" x="920" y="298" fill="#dce6f0" font-size="15" text-anchor="middle" font-family="JetBrains Mono, monospace"></text></g>
+    <g id="polHits">${['p1', 'p3', 'p2'].map(k => `<circle id="hit_${k}" data-p="${k}" cx="${POLX[k]}" cy="215" r="86" fill="transparent" class="drag polhit" role="slider" tabindex="0" aria-label="Turn this polaroid"/>`).join('')}</g>
+  </g>
+
+  <!-- ===================== below: graph and inset ===================== -->
+  <rect x="0" y="420" width="1000" height="240" fill="#fbfaf6"/>
+  <line x1="0" y1="420" x2="1000" y2="420" stroke="#e2ded2"/>
+  <text x="18" y="446" fill="#1d2327" font-size="15" font-family="Newsreader, Georgia, serif" id="gTitle"></text>
+  <text x="18" y="463" fill="#7c878c" font-size="11.5" id="gSub"></text>
+  <g id="gAxes"></g>
+  <path id="gLine" fill="none" stroke="#6a3fc2" stroke-width="1.8" stroke-linejoin="round"/>
+  <path id="gLine2" fill="none" stroke="#9aa3a6" stroke-width="1.3" stroke-dasharray="5 4"/>
+  <g id="gPts"></g>
+  <g id="curG">
+    <line id="curA" stroke="#6a3fc2" stroke-width="1.6"/><line id="curB" stroke="#1f8a70" stroke-width="1.6"/>
+    <path id="curAh" fill="#6a3fc2"/><path id="curBh" fill="#1f8a70"/>
+    <rect id="curAHit" class="drag scrub" width="26" fill="transparent" role="slider" tabindex="0" aria-label="Cursor A"/>
+    <rect id="curBHit" class="drag scrub" width="26" fill="transparent" role="slider" tabindex="0" aria-label="Cursor B"/>
+  </g>
+  <line x1="${IN.x - 16}" y1="430" x2="${IN.x - 16}" y2="652" stroke="#e2ded2"/>
+  <text x="${IN.x}" y="446" fill="#1d2327" font-size="15" font-family="Newsreader, Georgia, serif" id="inTitle"></text>
+  <g id="inBody" font-size="12.5"></g>
+  `;
+}
+
+/* ---- graph helpers ---------------------------------------------------------- */
+let G = {x0: 0, x1: 1, y0: 0, y1: 1, logx: false, logy: false};
+const tx = v => G.logx ? Math.log10(v) : v, ty = v => G.logy ? Math.log10(v) : v;
+const gx = v => GR.x + (tx(v) - tx(G.x0)) / (tx(G.x1) - tx(G.x0)) * GR.w;
+const gy = v => GR.y + GR.h - (ty(v) - ty(G.y0)) / (ty(G.y1) - ty(G.y0)) * GR.h;
+const gxInv = X => { const t = tx(G.x0) + (X - GR.x) / GR.w * (tx(G.x1) - tx(G.x0)); return G.logx ? Math.pow(10, t) : t; };
+function axes(xl, yl, xt, yt, fx = v => v, fy = v => v){
+  let ax = `<line x1="${GR.x}" y1="${GR.y + GR.h}" x2="${GR.x + GR.w}" y2="${GR.y + GR.h}" stroke="#9aa3a6"/><line x1="${GR.x}" y1="${GR.y}" x2="${GR.x}" y2="${GR.y + GR.h}" stroke="#9aa3a6"/>`;
+  for (const v of xt) ax += `<line x1="${gx(v).toFixed(1)}" y1="${GR.y + GR.h}" x2="${gx(v).toFixed(1)}" y2="${GR.y + GR.h + 4}" stroke="#9aa3a6"/><text x="${gx(v).toFixed(1)}" y="${GR.y + GR.h + 16}" fill="#7c878c" font-size="11" text-anchor="middle" font-family="JetBrains Mono, monospace">${fx(v)}</text>`;
+  for (const v of yt) ax += `<line x1="${GR.x}" y1="${gy(v).toFixed(1)}" x2="${GR.x + GR.w}" y2="${gy(v).toFixed(1)}" stroke="#ece8dc"/><text x="${GR.x - 7}" y="${(gy(v) + 4).toFixed(1)}" fill="#6a3fc2" font-size="11" text-anchor="end" font-family="JetBrains Mono, monospace">${fy(v)}</text>`;
+  ax += `<text x="${GR.x + GR.w}" y="${GR.y + GR.h + 31}" fill="#7c878c" font-size="11" text-anchor="end">${xl}</text>`;
+  ax += `<text x="${GR.x + GR.w}" y="${GR.y - 6}" fill="#6a3fc2" font-size="11" font-weight="600" text-anchor="end">${yl}</text>`;
+  $('gAxes').innerHTML = ax;
+}
+const pathOf = pts => pts.map((p, i) => (i ? 'L' : 'M') + gx(p[0]).toFixed(1) + ' ' + gy(clamp(p[1], G.y0, G.y1)).toFixed(1)).join('');
+const mono = (x, y, t, col = '#1d2327', extra = '') => `<text x="${x}" y="${y}" fill="${col}" font-family="JetBrains Mono, monospace" font-size="12.5"${extra}>${t}</text>`;
+
+/* ---- instruments ---------------------------------------------------------------- */
+let INST = null;
+function instRun(){
+  return S.mode === 'tele' ? telescope(S.tfo, S.tfe, S.tsep) : microscope(S.mfo, S.mfe, S.mtube, S.muo);
+}
+function paintInst(){
+  const R = instRun(); INST = R;
+  const tele = S.mode === 'tele';
+  $('instTitle').textContent = tele ? 'An astronomical telescope' : 'A compound microscope';
+  $('instSub').textContent = tele ? 'Light from a star 0.2° off the axis. Heights are stretched to be seen; lengths are to scale.'
+                                  : 'A 0.1 mm object. Heights are stretched far more than lengths, so the rays can be seen.';
+  /* world → screen */
+  const xmin = tele ? -0.15 * R.s : -R.uo - 0.6, xmax = tele ? R.s * 1.1 + 4 : R.s + 5;
+  const sx = 900 / (xmax - xmin), X = x => 50 + (x - xmin) * sx;
+  const sy = tele ? 56 : 300, Y = y => 215 - y * sy;
+  $('instAxis').setAttribute('x1', 20); $('instAxis').setAttribute('x2', 980);
+  /* rays */
+  let rs = '', bk = '';
+  const col = '#ffd84d';
+  const endX = xmax;
+  for (const r of R.rays) {
+    const pts = r.pts.map(p => [X(p.x), Y(p.y)]);
+    if (!r.blocked) { const yEnd = r.y + r.u * (endX - r.x); pts.push([X(endX), Y(yEnd)]); }
+    rs += `<path d="M${pts.map(p => p[0].toFixed(1) + ' ' + clamp(p[1], -2000, 2000).toFixed(1)).join('L')}" stroke="${col}" opacity="${r.blocked ? .25 : .85}"/>`;
+    /* backward extensions to a virtual final image, when it is on the bench */
+    if (!r.blocked && R.where === 'virtual' && S.locked && R.fin.x > xmin && Math.abs(R.fin.y * sy) < 190) { const xb = R.fin.x; bk += `<line x1="${X(r.x).toFixed(1)}" y1="${Y(r.y).toFixed(1)}" x2="${X(xb).toFixed(1)}" y2="${Y(r.y + r.u * (xb - r.x)).toFixed(1)}" stroke="${col}"/>`; }
+  }
+  $('instRays').innerHTML = rs; $('instBack').innerHTML = bk;
+  /* lenses */
+  let ln = '';
+  R.lenses.forEach((L, k) => {
+    const h = Math.min(L.ap * sy, 168), x = X(L.x), w = 7;
+    ln += `<path d="M${x} ${215 - h} Q${x + 2 * w} 215 ${x} ${215 + h} Q${x - 2 * w} 215 ${x} ${215 - h}Z" fill="#9fd4ff" fill-opacity=".22" stroke="#bfe3ff" stroke-width="1.6"/>`;
+    ln += `<text x="${x}" y="${215 - h - 10}" fill="#bfe3ff" font-size="12" text-anchor="middle">${k ? 'eyepiece' : 'objective'}</text>`;
+  });
+  $('instLenses').innerHTML = ln;
+  /* marks: focal points, the intermediate image */
+  let mk = '';
+  const mark = (x, t, c = '#8ea3b8') => (X(x) > 20 && X(x) < 980) ? `<line x1="${X(x).toFixed(1)}" y1="210" x2="${X(x).toFixed(1)}" y2="220" stroke="${c}" stroke-width="1.5"/><text x="${X(x).toFixed(1)}" y="236" fill="${c}" text-anchor="middle">${t}</text>` : '';
+  if (S.locked) {
+    mk += mark(R.lenses[0].x + R.lenses[0].f, 'F′ₒ') + mark(R.lenses[1].x - R.lenses[1].f, 'Fₑ');
+    if (!R.I1.parallel) mk += `<line x1="${X(R.I1.x).toFixed(1)}" y1="215" x2="${X(R.I1.x).toFixed(1)}" y2="${Y(R.I1.y).toFixed(1)}" stroke="#8fd0ff" stroke-width="2.5"/><text x="${X(R.I1.x).toFixed(1)}" y="${(Y(R.I1.y) + (R.I1.y < 0 ? 16 : -8)).toFixed(1)}" fill="#8fd0ff" font-size="11.5" text-anchor="middle">first image</text>`;
+    if (!tele) mk += `<text x="${(X(0) + X(R.s)) / 2}" y="392" fill="#8ea3b8" text-anchor="middle">tube length L = ${fmt(S.mtube, 1)} cm (from F′ₒ to Fₑ)</text>`;
+  }
+  $('instMarks').innerHTML = mk;
+  /* the object (microscope) */
+  $('instObj').innerHTML = tele ? `<text x="30" y="${Y(-2.5) + 22}" fill="#ffe9a8" font-size="11.5">light from a distant star →</text>`
+    : `<line x1="${X(-R.uo).toFixed(1)}" y1="215" x2="${X(-R.uo).toFixed(1)}" y2="${Y(R.h).toFixed(1)}" stroke="#f2c230" stroke-width="3"/><text x="${X(-R.uo).toFixed(1)}" y="252" fill="#f2c230" font-size="11.5" text-anchor="middle">object</text>`;
+  /* the eye at the eyepiece */
+  const ex = X(R.s) + 16;
+  $('instEye').innerHTML = `<g transform="translate(${ex + 22} 215)"><path d="M-14 -14 Q 4 -22 14 0 Q 4 22 -14 14" fill="#f6efe6" stroke="#cdbfae"/><circle cx="-4" cy="0" r="6" fill="#3b6d8f"/><circle cx="-6" cy="0" r="2.5" fill="#111"/></g>`;
+  $('eyeHit').setAttribute('x', X(R.s) - 20);
+  $('instNote').textContent = !S.locked ? '' : R.where === 'infinity' ? 'The final rays are parallel: the image is at infinity (a relaxed eye).'
+    : R.where === 'virtual' ? `The final image is virtual, ${fmt(-R.vFinal, 1)} cm in front of the eyepiece.` : 'The final rays converge after the eyepiece: no image an eye can use.';
+  /* graph: measured m against the formula (log–log) */
+  G = {x0: 1, x1: 1000, y0: 1, y1: 1000, logx: true, logy: true};
+  $('gTitle').textContent = 'Measured magnifying power against the formula';
+  $('gSub').textContent = tele ? 'Formula for a telescope in normal adjustment: m = fₒ / fₑ.' : 'Formula for a microscope, final image at infinity: m = (L / fₒ)(D / fₑ).';
+  axes('what the formula predicts', '|m| measured by the rays', [1, 10, 100, 1000], [1, 10, 100, 1000], v => v, v => v);
+  $('gLine').setAttribute('d', ''); $('gLine2').setAttribute('d', S.locked ? pathOf([[1, 1], [1000, 1000]]) : '');
+  $('gPts').innerHTML = S.locked ? S.instPts.map(p => `<circle cx="${gx(clamp(p.f, 1, 1000)).toFixed(1)}" cy="${gy(clamp(Math.abs(p.m), 1, 1000)).toFixed(1)}" r="4.5" fill="${p.mode === 'tele' ? '#6a3fc2' : '#1f8a70'}" stroke="#fff" stroke-width="1.4"/>`).join('') +
+    `<text x="${gx(300)}" y="${gy(420)}" fill="#7c878c" font-size="11">m = formula</text>` +
+    (isFinite(R.m) ? `<circle cx="${gx(clamp(R.formula, 1, 1000)).toFixed(1)}" cy="${gy(clamp(Math.abs(R.m), 1, 1000)).toFixed(1)}" r="6.5" fill="none" stroke="#d6453d" stroke-width="2"/>` : '') : '';
+  $('curG').setAttribute('display', 'none');
+  /* inset */
+  $('inTitle').textContent = 'The measurement';
+  let t = '';
+  if (S.locked) {
+    const ang = v => fmt(Math.atan(v) * 180 / Math.PI, 3) + '°';
+    t += mono(IN.x, 474, tele ? `α (star)        = ${ang(R.tanRef)}` : `θ₀ (object at D) = ${ang(R.tanRef)}`);
+    t += mono(IN.x, 496, `β (final image)  = ${isFinite(R.tanB) ? ang(Math.abs(R.tanB)) : '—'}`);
+    t += mono(IN.x, 518, `m = tan β / tan ${tele ? 'α' : 'θ₀'} = ${isFinite(R.m) ? fmt(Math.abs(R.m), 2) : '—'}`, '#6a3fc2', ' font-weight="600"');
+    t += mono(IN.x, 546, tele ? `fₒ / fₑ = ${fmt(S.tfo, 0)} / ${fmt(S.tfe, 1)} = ${fmt(R.formula, 2)}` : `(L/fₒ)(D/fₑ) = (${fmt(S.mtube, 1)}/${fmt(S.mfo, 1)})(25/${fmt(S.mfe, 1)}) = ${fmt(R.formula, 1)}`);
+    const dev = isFinite(R.m) ? (Math.abs(R.m) / R.formula - 1) * 100 : null;
+    t += `<text x="${IN.x}" y="574" fill="${dev != null && Math.abs(dev) < 0.5 ? '#1f7a4f' : '#b5620a'}" font-size="12.5" font-weight="600">${dev == null ? 'No usable image.' : Math.abs(dev) < 0.5 ? 'The rays agree with the formula.' : `The rays differ from the formula by ${fmt(dev, 1)}%.`}</text>`;
+    t += `<text x="${IN.x}" y="598" fill="#4a555b" font-size="12">${R.where === 'infinity' ? 'Final image at infinity: the formula’s assumption holds.' : R.where === 'virtual' ? `Final image at ${fmt(-R.vFinal, 1)} cm, not at infinity.` : 'Final image real: the formula does not apply.'}</text>`;
+    t += `<text x="${IN.x}" y="620" fill="#4a555b" font-size="12">Final image ${R.m < 0 ? 'inverted' : 'erect'}; ${R.used} of 9 rays get through both lenses.</text>`;
+  }
+  $('inBody').innerHTML = t;
+}
+
+/* ---- two slits ------------------------------------------------------------------ */
+let SLIT = null;
+function paintSlits(){
+  const lam = lamM(), d = dM(), D = S.scr, a = aM(), Yh = halfView();
+  const col = lamColour(S.lam);
+  $('srcBeam').setAttribute('stroke', col);
+  /* wavefronts from each slit: crests drawn schematically (1 crest per 18 px) */
+  let wv = '';
+  for (const cy of [180, 250]) for (let k = 1; k <= 22; k++) { const r = k * 18; if (r > 420) break; wv += `<path d="M${150 + r * Math.cos(-1.2)} ${cy + r * Math.sin(-1.2)} A${r} ${r} 0 0 1 ${150 + r * Math.cos(1.2)} ${cy + r * Math.sin(1.2)}" stroke="${col}" opacity="${(0.42 - k * 0.015).toFixed(2)}"/>`; }
+  $('waves').innerHTML = `<g clip-path="none">${wv}</g>`;
+  /* the point P on the schematic screen follows cursor B */
+  const yB = S.cur[S.active], py = 215 - clamp(yB / Yh, -1, 1) * 150;
+  $('pDot').setAttribute('cy', py.toFixed(1));
+  for (const [id, y0] of [['rayA', 180], ['rayB', 250]]) { $(id).setAttribute('x2', 560); $(id).setAttribute('y2', py.toFixed(1)); $(id).setAttribute('y1', y0); }
+  const dPath = pathEx(D, yB + d / 2) - pathEx(D, yB - d / 2);
+  $('pathLab').textContent = S.locked ? `S₂P − S₁P = ${fmt(dPath * 1e9, 0)} nm = ${fmt(dPath / lam, 3)} λ` : '';
+  $('dLab').textContent = `d = ${fmtLen(d)}`; $('DLab').textContent = `D = ${fmt(D, 2)} m`;
+  /* the screen, face on: 240 bands */
+  let fr = '';
+  const NB = 240, hb = (SCR.y1 - SCR.y0) / NB;
+  if (S.locked) for (let k = 0; k < NB; k++) {
+    const y = Yh - (k + 0.5) / NB * 2 * Yh, I = intensity(y, lam, d, D, a);
+    fr += `<rect x="${SCR.x0}" y="${(SCR.y0 + k * hb).toFixed(2)}" width="${SCR.x1 - SCR.x0}" height="${(hb + 0.3).toFixed(2)}" fill="${col}" opacity="${Math.min(1, Math.sqrt(I)).toFixed(3)}"/>`;
+  }
+  $('fringes').innerHTML = fr;
+  let tk = '';
+  for (const f of [-1, -0.5, 0, 0.5, 1]) { const yy = SCR.y0 + (1 - (f + 1) / 2) * (SCR.y1 - SCR.y0); tk += `<text x="${SCR.x0 - 4}" y="${(yy + 4).toFixed(1)}" text-anchor="end">${fmt(f * Yh * 1000, Yh < 0.01 ? 1 : 0)}</text>`; }
+  $('scrTicks').innerHTML = tk;
+  const scrY = y => SCR.y0 + (1 - (y / Yh + 1) / 2) * (SCR.y1 - SCR.y0);
+  $('scrCurA').setAttribute('y1', scrY(S.cur[0]).toFixed(1)); $('scrCurA').setAttribute('y2', scrY(S.cur[0]).toFixed(1));
+  $('scrCurB').setAttribute('y1', scrY(S.cur[1]).toFixed(1)); $('scrCurB').setAttribute('y2', scrY(S.cur[1]).toFixed(1));
+  $('scrCurA').setAttribute('opacity', S.locked ? 1 : 0); $('scrCurB').setAttribute('opacity', S.locked ? 1 : 0);
+  /* graph: intensity across the screen */
+  G = {x0: -Yh * 1000, x1: Yh * 1000, y0: 0, y1: 1.05, logx: false, logy: false};
+  $('gTitle').textContent = 'Intensity across the screen';
+  $('gSub').textContent = 'The sum of 48 wavelets at each point. Dashed: the single-slit envelope.';
+  const tks = [-1, -0.5, 0, 0.5, 1].map(f => f * Yh * 1000);
+  axes('position on the screen, y (mm)', 'I / I₀', tks, [0, 0.5, 1], v => fmt(v, Yh < 0.01 ? 2 : 1), v => v.toFixed(1));
+  const pts = [], env = [];
+  for (let k = 0; k <= 480; k++) {
+    const y = -Yh + 2 * Yh * k / 480, I = intensity(y, lam, d, D, a);
+    pts.push([y * 1000, I]);
+    const [p, q] = phasors(y, lam, d, D, a), I1 = (p.re * p.re + p.im * p.im) / (NSUB * NSUB);
+    env.push([y * 1000, I1]);
+  }
+  $('gLine').setAttribute('d', S.locked ? pathOf(pts) : '');
+  $('gLine2').setAttribute('d', S.locked ? pathOf(env) : '');
+  $('gPts').innerHTML = '';
+  /* cursors */
+  $('curG').setAttribute('display', S.locked ? '' : 'none');
+  const cx = y => gx(y * 1000);
+  for (const [k, id] of [[0, 'A'], [1, 'B']]) {
+    const x = cx(S.cur[k]);
+    $('cur' + id).setAttribute('x1', x.toFixed(1)); $('cur' + id).setAttribute('x2', x.toFixed(1)); $('cur' + id).setAttribute('y1', GR.y - 4); $('cur' + id).setAttribute('y2', GR.y + GR.h);
+    $('cur' + id + 'h').setAttribute('d', `M${(x - 7).toFixed(1)} ${GR.y - 16}L${(x + 7).toFixed(1)} ${GR.y - 16}L${x.toFixed(1)} ${GR.y - 5}Z`);
+    $('cur' + id + 'Hit').setAttribute('x', (x - 13).toFixed(1)); $('cur' + id + 'Hit').setAttribute('y', GR.y - 20); $('cur' + id + 'Hit').setAttribute('height', GR.h + 22);
+  }
+  const fw = fringeWidth(S.cur[0], S.cur[1], lam, d, D);
+  SLIT = {fw, betaF: betaF(), Yh};
+  /* inset: phasors at the active cursor */
+  $('inTitle').textContent = `Phasors at cursor ${S.active ? 'B' : 'A'}`;
+  let t = '';
+  if (S.locked) {
+    const [p, q] = phasors(S.cur[S.active], lam, d, D, a), sc = 40 / NSUB, o = {x: IN.x + 100, y: 556};
+    const P = {x: o.x + p.re * sc, y: o.y - p.im * sc}, Q = {x: P.x + q.re * sc, y: P.y - q.im * sc};
+    t += `<circle cx="${o.x}" cy="${o.y}" r="${(2 * NSUB * sc).toFixed(1)}" fill="none" stroke="#ece8dc"/>`;
+    t += `<line x1="${o.x}" y1="${o.y}" x2="${P.x.toFixed(1)}" y2="${P.y.toFixed(1)}" stroke="#6a3fc2" stroke-width="2.4" marker-end="url(#aP)"/>`;
+    t += `<line x1="${P.x.toFixed(1)}" y1="${P.y.toFixed(1)}" x2="${Q.x.toFixed(1)}" y2="${Q.y.toFixed(1)}" stroke="#1f8a70" stroke-width="2.4" marker-end="url(#aQ)"/>`;
+    t += `<line x1="${o.x}" y1="${o.y}" x2="${Q.x.toFixed(1)}" y2="${Q.y.toFixed(1)}" stroke="#c2410c" stroke-width="2" stroke-dasharray="5 3" marker-end="url(#aR)"/>`;
+    const dph = phaseDiff(S.cur[S.active], lam, d, D);
+    t += `<text x="${IN.x + 232}" y="486" fill="#6a3fc2" font-size="12">from S₁</text><text x="${IN.x + 232}" y="504" fill="#1f8a70" font-size="12">from S₂</text><text x="${IN.x + 232}" y="522" fill="#c2410c" font-size="12">their sum</text>`;
+    t += mono(IN.x + 232, 552, `φ = ${fmt(((dph / Math.PI) % 2 + 2) % 2, 2)}π`, '#1d2327', ' font-size="12"');
+    t += mono(IN.x + 232, 572, `I/I₀ = ${fmt(intensity(S.cur[S.active], lam, d, D, a), 3)}`, '#1d2327', ' font-size="12"');
+  }
+  $('inBody').innerHTML = t;
+}
+function fmtLen(m){ return m >= 1e-3 ? fmt(m * 1000, 2) + ' mm' : fmt(m * 1e6, 1) + ' µm'; }
+/* An approximate sRGB colour for a wavelength (for drawing only). */
+function lamColour(l){
+  let r = 0, g = 0, b = 0;
+  if (l < 440) { r = (440 - l) / 60; b = 1; } else if (l < 490) { g = (l - 440) / 50; b = 1; } else if (l < 510) { g = 1; b = (510 - l) / 20; }
+  else if (l < 580) { r = (l - 510) / 70; g = 1; } else if (l < 645) { r = 1; g = (645 - l) / 65; } else r = 1;
+  const f = l < 420 ? 0.4 + 0.6 * (l - 380) / 40 : l > 680 ? 0.4 + 0.6 * (720 - l) / 40 : 1;
+  const h = v => Math.round(255 * Math.pow(clamp(v * f, 0, 1), 0.8)).toString(16).padStart(2, '0');
+  return '#' + h(r) + h(g) + h(b);
+}
+
+/* ---- polaroids --------------------------------------------------------------------- */
+let POL = null;
+const POLX = {p1: 290, p3: 490, p2: 690};
+function polAxes(){ return S.p3 ? [S.th1, S.th3, S.th2] : [S.th1, S.th2]; }
+function paintPol(){
+  const ax = polAxes(), I = polarised(ax), I1 = polarised([S.th1]);
+  POL = {I, I1, rel: I / I1};
+  let discs = '', field = '';
+  const disc = (x, th, lab, id) => {
+    const a = th * Math.PI / 180, dx = Math.sin(a) * 70, dy = -Math.cos(a) * 70;
+    return `<g><circle cx="${x}" cy="215" r="78" fill="#6a7f95" fill-opacity=".18" stroke="#9fb3c8" stroke-width="2"/>` +
+      Array.from({length: 7}, (_, k) => { const o = (k - 3) * 18; return `<line x1="${(x + dx + o * Math.cos(a)).toFixed(1)}" y1="${(215 + dy + o * Math.sin(a)).toFixed(1)}" x2="${(x - dx + o * Math.cos(a)).toFixed(1)}" y2="${(215 - dy + o * Math.sin(a)).toFixed(1)}" stroke="#9fb3c8" stroke-width="1" opacity="${(0.55 - Math.abs(k - 3) * 0.12).toFixed(2)}"/>`; }).join('') +
+      `<line x1="${(x + dx).toFixed(1)}" y1="${(215 + dy).toFixed(1)}" x2="${(x - dx).toFixed(1)}" y2="${(215 - dy).toFixed(1)}" stroke="#dce6f0" stroke-width="2.5"/>` +
+      `<text x="${x}" y="318" fill="#aab7c6" font-size="12.5" text-anchor="middle">${lab}, ${fmt(th, 0)}°</text></g>`;
+  };
+  discs += disc(POLX.p1, S.th1, 'P₁', 'p1');
+  if (S.p3) discs += disc(POLX.p3, S.th3, 'middle', 'p3');
+  discs += disc(POLX.p2, S.th2, 'P₂', 'p2');
+  $('polDiscs').innerHTML = discs;
+  /* the field between the sheets: a double arrow along the last axis, length ∝ amplitude */
+  const arrow = (x, th, amp) => {
+    if (amp < 0.01) return `<text x="${x}" y="219" fill="#8ea3b8" font-size="12" text-anchor="middle">dark</text>`;
+    const a = th * Math.PI / 180, L = 36 * amp, dx = Math.sin(a) * L, dy = -Math.cos(a) * L;
+    return `<line x1="${(x - dx).toFixed(1)}" y1="${(215 - dy).toFixed(1)}" x2="${(x + dx).toFixed(1)}" y2="${(215 + dy).toFixed(1)}" stroke="#f2c230" stroke-width="2.6" marker-start="url(#aE)" marker-end="url(#aE)"/>`;
+  };
+  /* unpolarised: arrows in many directions */
+  let un = '';
+  for (let k = 0; k < 6; k++) { const a = k * 30 * Math.PI / 180, L = 26; un += `<line x1="${(180 - Math.sin(a) * L).toFixed(1)}" y1="${(215 + Math.cos(a) * L).toFixed(1)}" x2="${(180 + Math.sin(a) * L).toFixed(1)}" y2="${(215 - Math.cos(a) * L).toFixed(1)}" stroke="#f2c230" stroke-width="1.6" opacity=".7"/>`; }
+  field += un + `<text x="180" y="262" fill="#8ea3b8" font-size="11" text-anchor="middle">unpolarised</text>`;
+  const seq = S.p3 ? [[390, S.th1, [S.th1]], [590, S.th3, [S.th1, S.th3]], [790, S.th2, ax]] : [[490, S.th1, [S.th1]], [790, S.th2, ax]];
+  for (const [x, th, list] of seq) field += arrow(x, th, Math.sqrt(polarised(list) * 2)) + `<text x="${x}" y="262" fill="#8ea3b8" font-size="11" text-anchor="middle">${fmt(polarised(list) * 100, 1)}%</text>`;
+  $('polField').innerHTML = S.locked ? field : un;
+  $('detGlow').setAttribute('opacity', S.locked ? Math.min(1, I * 2).toFixed(3) : 0);
+  $('detVal').textContent = S.locked ? fmt(I * 100, 2) + '%' : '';
+  /* the drag targets never move; the middle one only exists while that polaroid is in */
+  $('hit_p3').setAttribute('display', S.p3 ? '' : 'none');
+  /* graph: I after P₂ (as a fraction of I after P₁) against the angle between them */
+  G = {x0: 0, x1: 180, y0: 0, y1: 1.05, logx: false, logy: false};
+  $('gTitle').textContent = 'Light through P₂ against the angle between P₁ and P₂';
+  $('gSub').textContent = 'Each setting you leave is a point: I₂ as a fraction of what leaves P₁.';
+  axes('angle between the pass axes, θ (degrees)', 'I₂ / I₁', [0, 30, 60, 90, 120, 150, 180], [0, 0.25, 0.5, 0.75, 1], v => v, v => v.toFixed(2));
+  const cur = [];
+  if (found('malus')) for (let t = 0; t <= 180; t += 2) cur.push([t, Math.cos(t * Math.PI / 180) ** 2]);
+  $('gLine').setAttribute('d', S.locked ? pathOf(cur) : ''); $('gLine2').setAttribute('d', '');
+  $('gPts').innerHTML = S.locked ? S.polPts.map(p => `<circle cx="${gx(p.theta).toFixed(1)}" cy="${gy(p.rel).toFixed(1)}" r="4.5" fill="#6a3fc2" stroke="#fff" stroke-width="1.4"/>`).join('') +
+    (found('malus') ? `<text x="${gx(90)}" y="${gy(0.9)}" fill="#6a3fc2" font-size="12" font-family="JetBrains Mono, monospace" text-anchor="middle">I₂ = I₁ cos²θ</text>` : '') : '';
+  $('curG').setAttribute('display', 'none');
+  $('inTitle').textContent = 'Readings';
+  let t = '';
+  if (S.locked) {
+    t += mono(IN.x, 474, `after P₁: I₁ = ${fmt(I1 * 100, 2)}% of the lamp`, '#4a555b');
+    const rows = S.polPts.slice(-5);
+    t += `<text x="${IN.x}" y="500" fill="#4a555b" font-weight="700" font-size="12">θ</text><text x="${IN.x + 70}" y="500" fill="#4a555b" font-weight="700" font-size="12">I₂/I₁</text><text x="${IN.x + 160}" y="500" fill="#4a555b" font-weight="700" font-size="12">cos²θ</text>`;
+    rows.forEach((p, k) => { const y = 520 + k * 19; t += mono(IN.x, y, fmt(p.theta, 0) + '°') + mono(IN.x + 70, y, fmt(p.rel, 4)) + mono(IN.x + 160, y, fmt(Math.cos(p.theta * Math.PI / 180) ** 2, 4)); });
+    if (!rows.length) t += `<text x="${IN.x}" y="530" fill="#9aa3a6">Turn P₂ and let go to take a reading.</text>`;
+  }
+  $('inBody').innerHTML = t;
+}
+function wirePolHits(){
+  for (const el of document.querySelectorAll('.polhit')) {
+    const k = el.dataset.p, cx = POLX[k];
+    drag(el, svg, {
+      start(){ if (!S.locked) return false; },
+      move(p){ let th = Math.round(Math.atan2(p.x - cx, -(p.y - 215)) * 180 / Math.PI); th = ((th % 180) + 180) % 180; S['th' + k.slice(1)] = th; paint(); },
+      end(){ recordPol(); },
+    });
+  }
+}
+
+/* ---- numbers ----------------------------------------------------------------------- */
+function nums(rows, eq){ $('nums').innerHTML = `<div class="nums">${rows.map(r => `<span>${r[0]}</span><b>${r[1]}</b>`).join('')}${eq ? `<div class="eq">${eq}</div>` : ''}</div>`; }
+function paintNums(){
+  if (!S.locked) { $('nums').innerHTML = '<p style="font-size:13px;color:var(--ink-3);margin:0">The measurements appear once you have made a prediction.</p>'; return; }
+  if (S.tab === 'inst') {
+    const R = INST;
+    nums([['fₒ, fₑ', `${fmt(R.fo, R.fo < 5 ? 1 : 0)} cm, ${fmt(R.fe, 1)} cm`], ['Lens separation', fmt(R.s, 2) + ' cm'], ...(S.mode === 'micro' ? [['Object distance', fmt(R.uo, 4) + ' cm']] : []),
+          ['Final image', R.where === 'infinity' ? 'at infinity' : R.where === 'virtual' ? fmt(-R.vFinal, 1) + ' cm away' : 'real (unusable)'],
+          ['Measured |m|', isFinite(R.m) ? fmt(Math.abs(R.m), 2) : '—'], ['Formula', fmt(R.formula, 2)]],
+         S.mode === 'tele' ? `normal adjustment: separation = fₒ + fₑ = ${fmt(R.fo + R.fe, 2)} cm` : `L = separation − fₒ − fₑ = ${fmt(R.L, 2)} cm`);
+  } else if (S.tab === 'slits') {
+    const fw = SLIT.fw, bf = SLIT.betaF;
+    nums([['λ', S.lam + ' nm'], ['d', fmtLen(dM())], ['D', fmt(S.scr, 2) + ' m'], ['a', fmtLen(aM()) + ' (' + AF_LAB[S.wid] + ')'],
+          ['Cursors apart', fmt(Math.abs(S.cur[1] - S.cur[0]) * 1000, 3) + ' mm'], ['Fringe spacings between', String(fw.N)],
+          ['Measured β', fw.beta ? fmt(fw.beta * 1000, 3) + ' mm' : '—'], ['λD/d', fmt(bf * 1000, 3) + ' mm']],
+         fw.beta ? `β / (λD/d) = ${fmt(fw.beta / bf, 4)}` : 'Drag cursor B onto another bright fringe.');
+  } else {
+    nums([['After P₁', fmt(POL.I1 * 100, 2) + '% of the lamp'], ['At the meter', fmt(POL.I * 100, 2) + '% of the lamp'],
+          ['Angle P₁ to P₂', fmt(angBetweenAxes(S.th1, S.th2), 0) + '°'], ...(S.p3 ? [['Middle polaroid', fmt(S.th3, 0) + '°']] : [])],
+         S.p3 ? `I = (I₀/2) cos²θ₁ cos²θ₂ = ${fmt(POL.I * 100, 2)}%` : `I₂/I₁ = ${fmt(POL.rel, 4)},  cos²θ = ${fmt(Math.cos(angBetweenAxes(S.th1, S.th2) * Math.PI / 180) ** 2, 4)}`);
+  }
+}
+const angBetweenAxes = (a, b) => { let t = Math.abs(a - b) % 180; return t > 90 ? 180 - t : t; };
+function paintWhy(){
+  if (!S.locked) return;
+  $('whyCard').hidden = false;
+  let t = '';
+  if (S.tab === 'inst') {
+    const R = INST;
+    if (S.mode === 'tele') t = `<p>The objective makes a small real image of the star at its focus, ${fmt(R.fo, 0)} cm behind it. The eyepiece is a magnifier looking at that image. ` +
+      (R.where === 'infinity' ? `Because the first image sits exactly at the eyepiece’s focus, the light leaves in parallel rays: <b>normal adjustment</b>. The rays measure m = <b>${fmt(Math.abs(R.m), 2)}</b>, and fₒ/fₑ = ${fmt(R.formula, 2)}.</p>`
+       : `The first image is ${fmt(Math.abs(R.s - R.fo - R.fe), 2)} cm ${R.s > R.fo + R.fe ? 'inside' : 'beyond'} the eyepiece’s focus, so the final image is ${R.where === 'virtual' ? 'virtual, at ' + fmt(-R.vFinal, 1) + ' cm' : 'real, and useless to an eye'}. The formula fₒ/fₑ assumes infinity; here the rays measure ${isFinite(R.m) ? fmt(Math.abs(R.m), 2) : '—'}.</p>`);
+    else t = `<p>The objective (fₒ = ${fmt(R.fo, 1)} cm) makes a real, inverted, magnified first image ${fmt(R.I1.x, 2)} cm behind it; the eyepiece magnifies that again. ` +
+      (R.where === 'infinity' ? `The first image is at the eyepiece’s focus, so the final image is at infinity and m = (L/fₒ)(D/fₑ) = <b>${fmt(R.formula, 1)}</b>; the rays measure <b>${fmt(Math.abs(R.m), 1)}</b>.</p>`
+       : `The final image is ${R.where === 'virtual' ? 'at ' + fmt(-R.vFinal, 1) + ' cm' : 'real'}, not at infinity, so the rays measure ${isFinite(R.m) ? fmt(Math.abs(R.m), 1) : '—'} against the formula’s ${fmt(R.formula, 1)}. Turn the focus until the final rays are parallel.</p>`);
+  } else if (S.tab === 'slits') {
+    const fw = SLIT.fw, bf = SLIT.betaF, big = Math.max(Math.abs(S.cur[0]), Math.abs(S.cur[1])) / S.scr;
+    t = `<p>At each point on the screen the 48 wavelets arrive with different path lengths. Where the path difference S₂P − S₁P is a whole number of wavelengths they add: a bright fringe. The formula λD/d = ${fmt(bf * 1000, 3)} mm assumes the screen is far away compared with the fringes (small angles).</p>`;
+    if (fw.beta) t += `<p>Between your cursors: <b>${fw.N} fringe spacing${fw.N === 1 ? '' : 's'}</b> in ${fmt(Math.abs(S.cur[1] - S.cur[0]) * 1000, 3)} mm, so β = <b>${fmt(fw.beta * 1000, 3)} mm</b>, ${fmt((fw.beta / bf - 1) * 100, 2)}% from λD/d.` + (big > 0.15 ? ` Here the fringes are at ${fmt(Math.atan(big) * 180 / Math.PI, 0)}° from the axis, where sin θ and tan θ are no longer equal, so the spacing stretches.` : '') + '</p>';
+    const ratio = 1 / AF[S.wid], n = Math.round(ratio), ord = n + (n === 2 ? 'nd' : n === 3 ? 'rd' : 'th');
+    if (Math.abs(ratio - n) < 0.01 && n * lamM() / dM() < 1 && n * betaF() < SLIT.Yh) t += `<p>The slits are ${n} times as far apart as they are wide, so the single-slit envelope is zero exactly where the ${ord} bright fringe should be: a <b>missing order</b>.</p>`;
+  } else {
+    const th = angBetweenAxes(S.th1, S.th2);
+    t = S.p3 ? `<p>P₁ and P₂ are ${fmt(th, 0)}° apart${th > 89.5 ? ', crossed' : ''}. The middle polaroid takes the component of the field along its own axis, turning it part of the way; P₂ then takes a component again. The light at the meter is ${fmt(POL.I * 100, 2)}% of the lamp.</p>`
+      : `<p>P₁ passes half of the unpolarised light (${fmt(POL.I1 * 100, 1)}%), all vibrating along its axis. P₂ passes only the component of that field along its own axis, E cos θ, so the intensity falls as cos²θ: <b>Malus’s law</b>. Here θ = ${fmt(th, 0)}°, cos²θ = ${fmt(Math.cos(th * Math.PI / 180) ** 2, 4)}.</p>`;
+  }
+  $('why').innerHTML = t;
+}
+
+/* ---- paint ------------------------------------------------------------------------- */
+function paint(){
+  for (const t of ['Inst', 'Slits', 'Pol']) {
+    const on = S.tab === t.toLowerCase();
+    $('v' + t).setAttribute('display', on ? '' : 'none');
+    $('ctl' + t).hidden = !on;
+    $('tab' + t).setAttribute('aria-pressed', on);
+  }
+  $('modeTele').setAttribute('aria-pressed', S.mode === 'tele'); $('modeMicro').setAttribute('aria-pressed', S.mode === 'micro');
+  $('teleCtl').hidden = S.mode !== 'tele'; $('microCtl').hidden = S.mode !== 'micro';
+  /* the separation and focus sliders follow the lenses chosen */
+  const sep = $('tsep'); sep.min = (S.tfo + S.tfe - 10).toFixed(2); sep.max = (S.tfo + S.tfe + 10).toFixed(2); S.tsep = clamp(S.tsep, +sep.min, +sep.max); sep.value = S.tsep;
+  /* the focus knob: fine steps of 1 µm of object distance, over a range that suits these lenses */
+  const fo = S.mfo, uo = $('muo'), foc = focusOf(), n = Math.round(Math.max(0.006, 0.8 * fo * fo / S.mtube) / 1e-4);
+  uo.min = String(foc - n * 1e-4); uo.max = String(foc + 2 * n * 1e-4); uo.step = '0.0001';
+  S.muo = clamp(S.muo, +uo.min, +uo.max); uo.value = S.muo; S.muo = +uo.value;
+  $('tfo').value = S.tfo; $('tfoOut').textContent = S.tfo + ' cm'; $('tfe').value = S.tfe; $('tfeOut').textContent = fmt(S.tfe, 1) + ' cm'; $('tsepOut').textContent = fmt(S.tsep, 2) + ' cm';
+  $('mfo').value = S.mfo; $('mfoOut').textContent = fmt(S.mfo, 1) + ' cm'; $('mfe').value = S.mfe; $('mfeOut').textContent = fmt(S.mfe, 1) + ' cm';
+  $('mtube').value = S.mtube; $('mtubeOut').textContent = fmt(S.mtube, 1) + ' cm'; $('muoOut').textContent = fmt(S.muo, 4) + ' cm';
+  $('lam').value = S.lam; $('lamOut').textContent = S.lam + ' nm'; $('dsl').value = S.dsl; $('dslOut').textContent = fmtLen(dM());
+  $('scr').value = S.scr; $('scrOut').textContent = fmt(S.scr, 2) + ' m'; $('wid').value = S.wid; $('widOut').textContent = AF_LAB[S.wid];
+  $('th1').value = S.th1; $('th1Out').textContent = S.th1 + '°'; $('th2').value = S.th2; $('th2Out').textContent = S.th2 + '°'; $('th3').value = S.th3; $('th3Out').textContent = S.th3 + '°';
+  $('btnP3').setAttribute('aria-pressed', S.p3); $('btnP3').textContent = S.p3 ? 'Take the middle polaroid out' : 'Slide a third polaroid in between'; $('p3Ctl').hidden = !S.p3;
+  if (S.tab === 'inst') paintInst();
+  if (S.tab === 'slits') paintSlits();
+  if (S.tab === 'pol') paintPol();
+  paintNums(); paintWhy(); check();
+}
+
+/* ---- findings -------------------------------------------------------------------- */
+let EXPLAINED = false;
+function check(){
+  if (!S.locked) return;
+  if (S.tab === 'inst' && INST && isFinite(INST.m)) {
+    const R = INST, dev = Math.abs(Math.abs(R.m) / R.formula - 1);
+    if (S.mode === 'tele' && R.where === 'infinity' && R.formula >= 10 && dev < 0.005) discover('tele');
+    if (S.mode === 'micro' && (R.where === 'infinity' || Math.abs(R.vFinal) > 1000) && Math.abs(R.m) >= 100 && dev < 0.01) discover('micro');
+  }
+  if (S.tab === 'slits' && SLIT) {
+    const fw = SLIT.fw, bf = SLIT.betaF, big = Math.max(Math.abs(S.cur[0]), Math.abs(S.cur[1])) / S.scr;
+    if (fw.beta && big < 0.05 && Math.abs(fw.beta / bf - 1) < 0.01) discover('fringe');
+    if (fw.beta && big > 0.3 && Math.abs(fw.beta / bf - 1) > 0.1) discover('break');
+    const ratio = 1 / AF[S.wid], n = Math.round(ratio);
+    if (Math.abs(ratio - n) < 0.01 && n * bf < SLIT.Yh) {
+      const yn = S.scr * Math.tan(Math.asin(Math.min(0.999, n * lamM() / dM())));
+      if (intensity(yn, lamM(), dM(), S.scr, aM()) < 0.02) discover('missing');
+    }
+  }
+  if (S.tab === 'pol') {
+    const pts = S.polPts, th = pts.map(p => p.theta).sort((a, b) => a - b);
+    let distinct = th.length ? 1 : 0; for (let k = 1; k < th.length; k++) if (th[k] - th[k - 1] >= 15) distinct++;
+    if (distinct >= 4 && pts.every(p => Math.abs(p.rel - Math.cos(p.theta * Math.PI / 180) ** 2) < 1e-3)) discover('malus');
+    if (S.p3 && angBetweenAxes(S.th1, S.th2) === 90 && POL.I > 0.05) discover('third');
+  }
+  maybeExplain();
+}
+function maybeExplain(){
+  if (EXPLAINED || !POE) return;
+  const ms = S.meas.filter(m => m.small);
+  for (const a of ms) for (const b of ms) {
+    if (a === b || Math.abs(a.lam - b.lam) > 1 || Math.abs(a.D - b.D) > 1e-6 || b.d / a.d < 1.5) continue;
+    EXPLAINED = true;
+    POE.explain(`You measured β = <b>${fmt(a.beta * 1000, 3)} mm</b> with d = ${fmtLen(a.d)} and β = <b>${fmt(b.beta * 1000, 3)} mm</b> with d = ${fmtLen(b.d)} (λ = ${a.lam} nm, D = ${fmt(a.D, 2)} m). ` +
+      `The slits are ${fmt(b.d / a.d, 2)} times farther apart and the fringes are ${fmt(a.beta / b.beta, 2)} times closer: β ∝ 1/d. ` +
+      `Bringing the slits together (smaller d) makes the path difference change more slowly across the screen, so the fringes spread out.`);
+    return;
+  }
+}
+function recordInst(){
+  const R = INST; if (!R || !isFinite(R.m)) return;
+  const last = S.instPts[S.instPts.length - 1];
+  if (last && Math.abs(last.f - R.formula) < 1e-6 && Math.abs(last.m - R.m) < 1e-6) return;
+  S.instPts.push({mode: S.mode, f: R.formula, m: R.m}); if (S.instPts.length > 40) S.instPts.shift();
+  track('instrument', {mode: S.mode, formula: R.formula, measured: R.m}); paint();
+}
+function recordPol(){
+  if (S.p3) return;
+  const th = angBetweenAxes(S.th1, S.th2), last = S.polPts[S.polPts.length - 1];
+  if (last && Math.abs(last.theta - th) < 0.5) return;
+  S.polPts.push({theta: th, rel: POL.rel}); if (S.polPts.length > 30) S.polPts.shift();
+  sound('tick'); track('malus', {theta: th, rel: POL.rel}); paint();
+}
+let T1 = 0, T2 = 0;
+const recordInstSoon = () => { clearTimeout(T1); T1 = setTimeout(recordInst, 400); };
+const recordPolSoon = () => { clearTimeout(T2); T2 = setTimeout(recordPol, 400); };
+
+/* ============================================================================
+   Controls
+   ============================================================================ */
+build();
+wirePolHits();
+const on = (id, ev, fn) => $(id).addEventListener(ev, fn);
+for (const t of ['Inst', 'Slits', 'Pol']) on('tab' + t, 'click', () => { S.tab = t.toLowerCase(); sound('pop'); track('tab', {tab: S.tab}); paint(); });
+on('modeTele', 'click', () => { S.mode = 'tele'; sound('pop'); paint(); recordInstSoon(); });
+on('modeMicro', 'click', () => { S.mode = 'micro'; S.muo = focusOf() - 5e-4; sound('pop'); paint(); recordInstSoon(); });
+for (const id of ['tfo', 'tfe', 'tsep', 'mfo', 'mfe', 'mtube', 'muo']) {
+  on(id, 'input', e => { S[id] = +e.target.value; paint(); });
+  on(id, 'change', recordInstSoon);
+}
+for (const id of ['lam', 'dsl', 'scr', 'wid']) on(id, 'input', e => { S[id] = +e.target.value; S.cur = [clamp(S.cur[0], -halfView(), halfView()), clamp(S.cur[1], -halfView(), halfView())]; paint(); });
+for (const id of ['th1', 'th2', 'th3']) { on(id, 'input', e => { S[id] = +e.target.value; paint(); }); on(id, 'change', recordPolSoon); }
+on('btnP3', 'click', () => { S.p3 = !S.p3; sound('pop'); track('thirdPolaroid', {on: S.p3}); paint(); });
+
+drag($('eyeHit'), svg, {
+  start(){ if (!S.locked) return false; },
+  move(p){
+    const R = INST, tele = S.mode === 'tele';
+    const xmin = tele ? -0.15 * R.s : -R.uo - 0.6, xmax = tele ? R.s * 1.1 + 4 : R.s + 5, sx = 900 / (xmax - xmin);
+    const s = xmin + (p.x - 50) / sx;
+    if (tele) S.tsep = clamp(Math.round(s * 20) / 20, S.tfo + S.tfe - 10, S.tfo + S.tfe + 10);
+    else S.mtube = clamp(Math.round((s - S.mfo - S.mfe) * 2) / 2, 10, 25);
+    paint();
+  },
+  end(){ recordInst(); },
+});
+/* the cursors: drag, then settle on the nearest bright fringe */
+for (const [k, id] of [[0, 'curAHit'], [1, 'curBHit']]) drag($(id), svg, {
+  start(){ if (!S.locked) return false; S.active = k; },
+  move(p){ S.cur[k] = clamp(gxInv(p.x) / 1000, -halfView(), halfView()); paint(); },
+  end(){
+    const lam = lamM(), d = dM(), D = S.scr;
+    /* the local spacing, from the exact phase: how far y must move for the phase to change by π */
+    const y = S.cur[k], g = Math.abs(phaseDiff(y + 1e-7, lam, d, D) - phaseDiff(y - 1e-7, lam, d, D)) / 2e-7;
+    S.cur[k] = clamp(nearestMax(y, lam, d, D, aM(), Math.PI / g), -halfView(), halfView());
+    sound('tick');
+    paint();
+    const fw = SLIT.fw;
+    if (fw.beta) {
+      const big = Math.max(Math.abs(S.cur[0]), Math.abs(S.cur[1])) / D;
+      S.meas.push({lam: S.lam, d, D, beta: fw.beta, small: big < 0.05}); if (S.meas.length > 30) S.meas.shift();
+      track('fringeWidth', {lam: S.lam, d, D, beta: fw.beta, N: fw.N});
+      check();
+    }
+  },
+});
+
+function lockControls(lock){
+  for (const id of ['modeTele', 'modeMicro', 'tfo', 'tfe', 'tsep', 'mfo', 'mfe', 'mtube', 'muo', 'lam', 'dsl', 'scr', 'wid', 'th1', 'th2', 'th3', 'btnP3']) $(id).disabled = lock;
+  $('gate').hidden = !lock;
+}
+
+/* ============================================================================
+   Start
+   ============================================================================ */
+findings($('finds'), [
+  {id: 'tele',    icon: '🔭', label: 'Telescope: m = fₒ/fₑ, measured', hint: 'Set a telescope to normal adjustment'},
+  {id: 'micro',   icon: '🔬', label: 'Microscope: m = (L/fₒ)(D/fₑ), measured', hint: 'Focus a microscope past ×100 for a relaxed eye'},
+  {id: 'fringe',  icon: '≡', label: 'Fringe width = λD/d, measured', hint: 'Measure across several fringes near the centre'},
+  {id: 'break',   icon: '⚠', label: 'Where λD/d breaks: wide angles', hint: 'Make the fringes spread to large angles, then measure'},
+  {id: 'missing', icon: '∅', label: 'A missing order', hint: 'What if the slit width divides the separation exactly?'},
+  {id: 'malus',   icon: '∠', label: 'Malus’s law: I = I₁ cos²θ', hint: 'Take readings at four or more angles'},
+  {id: 'third',   icon: '⧗', label: 'A third polaroid lets light through crossed ones', hint: 'Cross P₁ and P₂, then slide one in between'},
+], () => toast('All seven: rays for instruments, waves for fringes and polarisation.', 4200));
+
+const POE = predict($('poe'), {
+  id: 'ydse-d',
+  q: 'In Young’s double-slit experiment the two slits are moved closer together, so d is halved. λ and D stay the same. What happens to the bright fringes on the screen?',
+  options: [
+    {id: 'wider',   text: 'They become twice as far apart.', right: true},
+    {id: 'closer',  text: 'They become half as far apart.'},
+    {id: 'same',    text: 'Their spacing does not change; only their brightness does.'},
+    {id: 'vanish',  text: 'They disappear: the slits must stay far apart to interfere.'},
+  ],
+  onLock(){
+    S.locked = true;
+    lockControls(false);
+    say('Now measure. Build an instrument, then go to the two slits.');
+    paint();
+  },
+});
+lockControls(!POE.locked);
+if (!Play.FF('predict')) S.locked = true;
+paint();
+window.applyFeatures = () => paint();
+window.PG_STATE = () => JSON.parse(JSON.stringify(Object.assign({}, S, {
+  inst: INST ? {m: INST.m, formula: INST.formula, where: INST.where, vFinal: isFinite(INST.vFinal) ? INST.vFinal : 'inf', s: INST.s} : null,
+  slit: SLIT ? {N: SLIT.fw.N, beta: SLIT.fw.beta, betaF: SLIT.betaF} : null,
+  pol: POL})));
+window.PG_MODEL = {throughLenses, telescope, microscope, intensity, phasors, phaseDiff, nearestMax, fringeWidth, polarised, pathEx, D_NEAR};
+</script>
+</body>
+</html>

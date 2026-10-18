@@ -1,0 +1,593 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Graphs Of Motion</title>
+<meta name="description" content="Class 9–10: drive a car or push a block whose motion is integrated from the forces on it. Its position–time, velocity–time and acceleration–time graphs draw themselves, and slopes and areas are measured between two cursors.">
+<link rel="icon" href="../../favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600&family=Inter:wght@400;500;600;700&family=Nunito:wght@500;700;800&family=Newsreader:opsz,wght@6..72,400;6..72,500&family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="../../play.css">
+<style>
+/* Only what this page needs beyond play.css. */
+.pg-stage{background:#fafaf7}
+.gate{position:absolute; inset:0; display:grid; place-items:center; pointer-events:none}
+.gate span{background:rgba(29,35,39,.86); color:#fff; padding:10px 16px; border-radius:99px; font-weight:600; font-size:14px}
+.seg{display:grid; grid-template-columns:1fr 1fr; gap:4px; background:var(--sunk); padding:4px; border-radius:var(--radius-sm); margin-bottom:8px}
+.seg button{border:0; background:transparent; border-radius:7px; min-height:32px; font-weight:600; font-size:13px; cursor:pointer; color:var(--ink-2); line-height:1.2; padding:4px 6px}
+.seg button[aria-pressed="true"]{background:var(--card); color:var(--ink); box-shadow:var(--shadow)}
+.seg button:disabled{opacity:.5; cursor:default}
+.ctl{grid-template-columns:112px 1fr 84px; margin:2px 0}
+.ctl label{font-size:12.5px; line-height:1.2}
+.ctl output{font-size:13px; min-width:0}
+.hint{font-size:12.5px; color:var(--ink-3); margin:6px 0 0}
+.why p{font-size:13.5px; margin-bottom:.5em}
+.why b{color:var(--ink)}
+.eq{font-family:var(--font-mono); font-size:12.5px; background:var(--sunk); border-radius:8px; padding:6px 8px; margin:6px 0; line-height:1.6}
+table.log{width:100%; border-collapse:collapse; font-size:12.5px; font-variant-numeric:tabular-nums}
+table.log th{font-size:11px; text-transform:uppercase; letter-spacing:.04em; color:var(--ink-3); font-weight:700; text-align:right; padding:3px 4px; border-bottom:1px solid var(--hair)}
+table.log td{text-align:right; padding:3px 4px; border-bottom:1px solid var(--hair)}
+.gHit{cursor:ew-resize}
+@media (max-width:1180px) and (min-width:981px){ .pg-main.wide-side{grid-template-columns:minmax(0,1fr) 340px} }
+</style>
+</head>
+<body>
+<header class="pg-top"></header>
+
+<div class="pg-intro">
+  <h1>Graphs of motion, laws of force</h1>
+  <p>NCERT Class 9 Science, Chapter 4 <i>Describing Motion Around Us</i> and Chapter 6 <i>How Forces Affect Motion</i>. The car and the block
+     move only because of the forces on them: each instant the model works out the net force, divides by the mass and steps the motion on.
+     Their graphs draw themselves. Drag the two cursors across any graph to measure a slope or an area, and watch the car show where it was.</p>
+</div>
+
+<main class="pg-main wide-side">
+  <section class="pg-stage" id="stageWrap">
+    <svg id="stage" viewBox="0 0 1000 660" role="img" aria-label="A car on a straight road, with live position-time, velocity-time and acceleration-time graphs, two cursors and the kinematic equations checked between them"></svg>
+    <div class="gate" id="gate"><span>Make your prediction first →</span></div>
+  </section>
+
+  <aside class="pg-side">
+    <div id="poe"></div>
+
+    <div class="card" id="ctlCard">
+      <div class="kicker">Experiment</div>
+      <div class="seg" id="scSeg" role="group" aria-label="Experiment">
+        <button data-sc="drive" aria-pressed="true">Free drive</button>
+        <button data-sc="brake" aria-pressed="false">Brake test · Ex 4.8</button>
+        <button data-sc="sports" aria-pressed="false">Sports car · Ex 6.6</button>
+        <button data-sc="block" aria-pressed="false">Push a block · Ex 6.5</button>
+      </div>
+      <div id="ctlDrive">
+        <div class="ctl"><label for="mass">Mass</label><input type="range" id="mass" min="500" max="3000" step="100" value="1500"><output id="massOut">1500 kg</output></div>
+        <div class="ctl"><label for="mu">Friction, μ</label><input type="range" id="mu" min="0" max="0.3" step="0.01" value="0"><output id="muOut">0</output></div>
+        <div class="ctl"><label for="pedal">Engine / brake force</label><input type="range" id="pedal" min="-6000" max="6000" step="500" value="3000"><output id="pedalOut">3000 N</output></div>
+        <p class="hint" id="driveHint">Change the force while the car runs: + is the engine, − is the brakes (they slow the car but never push it backwards).</p>
+      </div>
+      <div id="ctlBrake" hidden>
+        <div class="ctl"><label for="u">Speed when the brakes go on</label><input type="range" id="u" min="5" max="40" step="0.5" value="15"><output id="uOut">15 m/s</output></div>
+        <p class="hint">The brakes push back on the 1500 kg car with 6000 N (a = −4 m s⁻²), as in Example 4.8, until it stops.</p>
+      </div>
+      <div id="ctlSports" hidden>
+        <p class="hint" style="margin-top:0">A 1500 kg sports car: 3000 N forward for 5 s, no force for 5 s, then brakes of 3000 N for 5 s (Fig. 6.21).</p>
+      </div>
+      <div id="ctlBlock" hidden>
+        <div class="ctl"><label for="push">Push on the 25 kg block</label><input type="range" id="push" min="0" max="100" step="5" value="55"><output id="pushOut">55 N</output></div>
+        <p class="hint">Friction can hold back at most 50 N, as in Example 6.5.</p>
+      </div>
+      <div class="row" style="margin-top:8px">
+        <button class="btn primary" id="btnGo">▶ Go</button>
+        <button class="btn sm" id="btnReset">↺ Reset</button>
+        <button class="btn sm" id="btnFast" aria-pressed="false" title="Run three times faster">×3</button>
+      </div>
+    </div>
+
+    <div class="card" id="numCard">
+      <div class="kicker">Between the cursors</div>
+      <div id="nums"><p class="hint" style="margin:0">The measurements appear once you have made a prediction.</p></div>
+    </div>
+
+    <div class="card" id="lawCard" hidden>
+      <div class="kicker">Your F = ma log (free drive)</div>
+      <div id="lawLog"></div>
+    </div>
+
+    <div class="card why" id="whyCard" hidden>
+      <div class="kicker">What the model says</div>
+      <div id="why"></div>
+    </div>
+
+    <div class="card"><div class="kicker">To find</div><div id="finds"></div></div>
+  </aside>
+</main>
+
+<script src="../../play.js"></script>
+<script>
+'use strict';
+const {$, esc, clamp, fmt, drag, loop, sound, say, track, toast, predict, findings, discover, found,
+       shareState, sharedState, mount, reduced} = Play;
+mount({thread: 'motion', band: 'modeller'});
+
+/* MODEL:start ==================================================================
+   One object on a straight, level track. Every instant:
+       net force = applied force + friction
+       a = net force / m                                  (Newton's second law, Eq. 6.1)
+   Friction opposes the motion with its full strength f_max = μ·m·g once the object
+   slides. At rest it holds the object still for any applied force up to f_max, and
+   only a larger force moves it (Example 6.5). Velocity and position are stepped on at
+   DT = 1 ms (exact for piecewise-constant forces), so the graphs, slopes and areas are
+   read from the motion; no kinematic formula is used to draw anything.
+   ============================================================================ */
+const G = 9.8, DT = 0.001;
+function stepBody(s, dt, F, m, fmax){
+  let fr;
+  if (s.v === 0) {
+    if (Math.abs(F) <= fmax + 1e-9) { s.a = 0; s.fr = -F; s.t += dt; return s; }
+    fr = -Math.sign(F) * fmax;
+  } else fr = -Math.sign(s.v) * fmax;
+  const a = (F + fr) / m;
+  let v1 = s.v + a * dt;
+  if (s.v !== 0 && Math.sign(v1) !== Math.sign(s.v) && Math.abs(F) <= fmax + 1e-9) {
+    const tStop = Math.abs(s.v / a);
+    s.x += s.v * tStop / 2; s.v = 0; s.a = a; s.fr = fr; s.t += dt; return s;   // stops inside this step
+  }
+  s.x += (s.v + v1) / 2 * dt; s.v = v1; s.a = a; s.fr = fr; s.t += dt;
+  return s;
+}
+/* A whole run: force(t) is the applied force; samples every 20 ms. */
+function simulate(p){
+  const s = {t: 0, x: p.x0 || 0, v: p.u || 0, a: 0, fr: 0};
+  const out = [{t: 0, x: s.x, v: s.v, a: 0, F: p.force(0)}];
+  const n = Math.round(p.tEnd / DT);
+  for (let i = 1; i <= n; i++) {
+    const F = p.force(s.t);
+    stepBody(s, DT, F, p.m, typeof p.fmax === 'function' ? p.fmax(s.t) : p.fmax);
+    if (i % 20 === 0) out.push({t: +s.t.toFixed(6), x: s.x, v: s.v, a: s.a, F});
+    if (p.stopWhenStill && s.v === 0 && s.t > 0.05) { out.push({t: s.t, x: s.x, v: 0, a: 0, F}); break; }
+  }
+  return out;
+}
+/* Area under a sampled v–t curve between t1 and t2 (trapezium rule on the samples). */
+function areaVT(samples, t1, t2){
+  let A = 0;
+  for (let i = 1; i < samples.length; i++) {
+    const a = samples[i - 1], b = samples[i];
+    const lo = Math.max(a.t, t1), hi = Math.min(b.t, t2);
+    if (hi <= lo) continue;
+    const va = a.v + (b.v - a.v) * (lo - a.t) / (b.t - a.t), vb = a.v + (b.v - a.v) * (hi - a.t) / (b.t - a.t);
+    A += (va + vb) / 2 * (hi - lo);
+  }
+  return A;
+}
+function sampleAt(samples, t){
+  if (!samples.length) return {t: 0, x: 0, v: 0, a: 0, F: 0};
+  if (t <= samples[0].t) return samples[0];
+  for (let i = 1; i < samples.length; i++) if (samples[i].t >= t) {
+    const a = samples[i - 1], b = samples[i], k = (t - a.t) / (b.t - a.t || 1);
+    return {t, x: a.x + (b.x - a.x) * k, v: a.v + (b.v - a.v) * k, a: b.a, F: b.F, fr: b.fr};
+  }
+  return samples[samples.length - 1];
+}
+/* The book's experiments, as forces. */
+const SCEN = {
+  drive:  {m: 1500, span: 1000, tEnd: 30, vMax: 40, aMax: 5},
+  brake:  {m: 1500, span: 250, tEnd: 12, vMax: 40, aMax: 5},
+  sports: {m: 1500, span: 120, tEnd: 16, vMax: 12, aMax: 3},
+  block:  {m: 25,   span: 3,   tEnd: 4,  vMax: 1.2, aMax: 1},
+};
+function brakeRun(u){ return simulate({m: 1500, fmax: 6000, u, tEnd: 30, force: () => 0, stopWhenStill: true}); }
+function sportsRun(){ return simulate({m: 1500, fmax: t => t >= 10 && t < 15 ? 3000 : 0, u: 0, tEnd: 16, force: t => t < 5 ? 3000 : 0, stopWhenStill: false}); }
+function blockRun(F){ return simulate({m: 25, fmax: 50, u: 0, tEnd: 4, force: () => F}); }
+/* MODEL:end */
+
+/* ---- state --------------------------------------------------------------- */
+const S = {
+  sc: 'drive', locked: false, m: 1500, mu: 0, pedal: 3000, u: 15, push: 55,
+  running: false, fast: false, body: null, samples: [], t1: 0, t2: 5, brakeLog: [], law: [], hold: {t: 0, key: ''}, coast: 0, balT: 0,
+};
+const shared = sharedState();
+if (shared) {
+  if (SCEN[shared.sc]) S.sc = shared.sc;
+  for (const k of ['m', 'mu', 'pedal', 'u', 'push']) if (shared[k] != null && isFinite(+shared[k])) S[k] = +shared[k];
+}
+shareState(() => ({sc: S.sc, m: S.m, mu: S.mu, pedal: S.pedal, u: S.u, push: S.push}));
+
+const massOf = () => S.sc === 'drive' ? S.m : SCEN[S.sc].m;
+/* Brakes act like friction: they oppose the motion with up to their full force and can never drive the car backwards. */
+const fmaxOf = t => S.sc === 'drive' ? S.mu * S.m * G + Math.max(0, -S.pedal) : S.sc === 'block' ? 50 : S.sc === 'brake' ? 6000 : (t >= 10 && t < 15 ? 3000 : 0);
+const forceAt = t => S.sc === 'drive' ? Math.max(0, S.pedal) : S.sc === 'brake' ? 0 : S.sc === 'block' ? S.push : (t < 5 ? 3000 : 0);
+const tEndOf = () => S.sc === 'brake' ? Math.max(4, Math.ceil(S.u / 4) + 1) : SCEN[S.sc].tEnd;
+
+/* ============================================================================
+   Stage
+   ============================================================================ */
+const svg = $('stage');
+const set = (id, attrs) => { const el = $(id); for (const k in attrs) el.setAttribute(k, attrs[k]); return el; };
+const RD = {x0: 70, x1: 930, y: 84};
+const GX = {x: 70, y: 190, w: 400, h: 200, key: 'x', col: '#3057c9', name: 'POSITION–TIME', unit: 'm'};
+const GV = {x: 560, y: 190, w: 400, h: 200, key: 'v', col: '#d6453d', name: 'VELOCITY–TIME', unit: 'm/s'};
+const GA = {x: 70, y: 456, w: 400, h: 160, key: 'a', col: '#2f9e5b', name: 'ACCELERATION–TIME', unit: 'm/s²'};
+const GRAPHS = [GX, GV, GA];
+const EQ = {x: 560, y: 446};
+
+function build(){
+  const gFrame = g => `
+    <text x="${g.x}" y="${g.y - 14}" font-size="12.5" font-weight="700" fill="${g.col}" letter-spacing=".06em">${g.name}</text>
+    <text x="${g.x + g.w}" y="${g.y - 14}" font-size="11" fill="#7c878c" text-anchor="end">${g.unit} against s</text>
+    <rect x="${g.x}" y="${g.y}" width="${g.w}" height="${g.h}" fill="#ffffff" stroke="#dfddd3"/>
+    <g id="ax${g.key}"></g>
+    <path id="shade${g.key}" fill="${g.col}" opacity=".13"/>
+    <path id="curve${g.key}" fill="none" stroke="${g.col}" stroke-width="2.6" stroke-linejoin="round"/>
+    <line id="chord${g.key}" stroke="#1d2327" stroke-width="1.6" stroke-dasharray="6 4"/>
+    <line id="c1${g.key}" y1="${g.y}" y2="${g.y + g.h}" stroke="#7b5cd6" stroke-width="2"/>
+    <line id="c2${g.key}" y1="${g.y}" y2="${g.y + g.h}" stroke="#e8890c" stroke-width="2"/>
+    <circle id="d1${g.key}" r="4.5" fill="#7b5cd6" stroke="#fff" stroke-width="1.5"/>
+    <circle id="d2${g.key}" r="4.5" fill="#e8890c" stroke="#fff" stroke-width="1.5"/>
+    <rect id="now${g.key}" y="${g.y}" width="1.5" height="${g.h}" fill="#1d2327" opacity=".35"/>
+    <rect class="gHit" id="hit${g.key}" x="${g.x - 8}" y="${g.y}" width="${g.w + 16}" height="${g.h}" fill="transparent" tabindex="0" role="slider" aria-label="${g.name} graph: drag to move the nearer cursor"/>`;
+  svg.innerHTML = `
+  <defs>
+    <marker id="mG" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="4.5" markerHeight="4.5" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#2f9e5b"/></marker>
+    <marker id="mR" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="4.5" markerHeight="4.5" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#d6453d"/></marker>
+    <marker id="mK" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="4.5" markerHeight="4.5" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#1d2327"/></marker>
+  </defs>
+  <rect x="0" y="0" width="1000" height="660" fill="#fafaf7"/>
+  <rect x="0" y="0" width="1000" height="140" fill="#e9f1f8"/>
+  <text x="22" y="26" font-size="12.5" font-weight="700" fill="#4a555b" letter-spacing=".06em" id="roadTitle">A STRAIGHT ROAD</text>
+  <text id="clock" x="978" y="28" font-size="18" font-weight="600" text-anchor="end" fill="#1d2327" class="m">t = 0.00 s</text>
+  <rect x="0" y="${RD.y}" width="1000" height="50" fill="#6d747a"/>
+  <line x1="0" y1="${RD.y + 25}" x2="1000" y2="${RD.y + 25}" stroke="#f4f4f0" stroke-width="2" stroke-dasharray="18 14"/>
+  <g id="roadTicks"></g>
+  <g id="ghost" opacity=".35"><g id="ghostBody"></g></g>
+  <g id="car"><g id="carBody"></g></g>
+  <line id="fApp" stroke="#2f9e5b" stroke-width="5" marker-end="url(#mG)"/>
+  <text id="fAppT" font-size="12" font-weight="700" fill="#1e7a45" text-anchor="middle"></text>
+  <line id="fFr" stroke="#d6453d" stroke-width="5" marker-end="url(#mR)"/>
+  <text id="fFrT" font-size="12" font-weight="700" fill="#b0302a" text-anchor="middle"></text>
+  <line id="fNet" stroke="#1d2327" stroke-width="3" marker-end="url(#mK)"/>
+  <text id="fNetT" font-size="12" font-weight="700" fill="#1d2327" text-anchor="middle"></text>
+  ${GRAPHS.map(gFrame).join('')}
+  <text x="${EQ.x}" y="${EQ.y}" font-size="12.5" font-weight="700" fill="#4a555b" letter-spacing=".06em">THE EQUATIONS, CHECKED BETWEEN THE CURSORS</text>
+  <g id="eqs" class="m" font-size="13.5" style="white-space:pre"></g>
+  <rect id="veil" x="0" y="142" width="1000" height="518" fill="#fafaf7" opacity=".94"/>
+  <text id="veilT" x="500" y="430" text-anchor="middle" fill="#7c878c" font-size="15" font-weight="600">The graphs appear once you have made a prediction.</text>`;
+  wireGraphs();
+}
+const carSVG = sc => sc === 'block'
+  ? `<rect x="-26" y="-44" width="52" height="44" rx="4" fill="#b98a52" stroke="#6b4a2b" stroke-width="2"/><text x="0" y="-18" font-size="11" font-weight="700" fill="#3a2a1a" text-anchor="middle">25 kg</text>`
+  : `<path d="M-44 -12 L-40 -26 Q-36 -32 -28 -32 L-14 -32 L-4 -44 L22 -44 L34 -30 L44 -28 Q48 -26 48 -20 L48 -12 Z" fill="${sc === 'sports' ? '#d6453d' : '#2f7de1'}" stroke="#1d2327" stroke-width="1.5"/>
+     <path d="M-2 -41 L20 -41 L29 -31 L-10 -31 Z" fill="#cfe6f7"/>
+     <circle cx="-26" cy="-10" r="9" fill="#1d2327"/><circle cx="-26" cy="-10" r="3.5" fill="#aab"/>
+     <circle cx="30" cy="-10" r="9" fill="#1d2327"/><circle cx="30" cy="-10" r="3.5" fill="#aab"/>`;
+const niceStep = span => { const raw = span / 8, p = Math.pow(10, Math.floor(Math.log10(raw))); for (const k of [1, 2, 2.5, 5, 10]) if (k * p >= raw) return k * p; return 10 * p; };
+function axesFor(){
+  const sc = SCEN[S.sc], tE = tEndOf();
+  const xMax = S.sc === 'brake' ? Math.max(20, Math.ceil(S.u * S.u / 8 / 20) * 20 + 20) : sc.span;
+  const vMax = S.sc === 'brake' ? Math.max(10, Math.ceil(S.u / 5) * 5) : sc.vMax;
+  return {tE, x: [0, xMax], v: [0, vMax], a: [-sc.aMax, sc.aMax], span: xMax};
+}
+let AX = null;
+const gx = (g, t) => g.x + t / AX.tE * g.w;
+const gy = (g, val) => { const [lo, hi] = AX[g.key]; return g.y + g.h - (clamp(val, lo, hi) - lo) / (hi - lo) * g.h; };
+const rx = x => RD.x0 + x / AX.span * (RD.x1 - RD.x0);
+function drawAxes(){
+  AX = axesFor();
+  for (const g of GRAPHS) {
+    const [lo, hi] = AX[g.key], st = niceStep(hi - lo), ts = niceStep(AX.tE);
+    let s = '';
+    for (let v = Math.ceil(lo / st) * st; v <= hi + 1e-9; v += st) {
+      const y = gy(g, v);
+      s += `<line x1="${g.x}" y1="${y.toFixed(1)}" x2="${g.x + g.w}" y2="${y.toFixed(1)}" stroke="${Math.abs(v) < 1e-9 ? '#9aa39a' : '#eeede6'}"/>` +
+           `<text x="${g.x - 6}" y="${(y + 4).toFixed(1)}" font-size="10.5" fill="#7c878c" text-anchor="end">${+v.toFixed(2)}</text>`;
+    }
+    for (let t = 0; t <= AX.tE + 1e-9; t += ts) s += `<text x="${gx(g, t).toFixed(1)}" y="${g.y + g.h + 14}" font-size="10.5" fill="#7c878c" text-anchor="middle">${+t.toFixed(2)}</text>`;
+    $('ax' + g.key).innerHTML = s;
+  }
+  const st = niceStep(AX.span);
+  let r = '';
+  for (let x = 0; x <= AX.span + 1e-9; x += st) r += `<line x1="${rx(x).toFixed(1)}" y1="${RD.y + 50}" x2="${rx(x).toFixed(1)}" y2="${RD.y + 44}" stroke="#fff"/><text x="${rx(x).toFixed(1)}" y="${RD.y + 64}" font-size="11" fill="#4a555b" text-anchor="middle">${+x.toFixed(2)} m</text>`;
+  $('roadTicks').innerHTML = r;
+  $('carBody').innerHTML = carSVG(S.sc); $('ghostBody').innerHTML = carSVG(S.sc);
+  $('roadTitle').textContent = S.sc === 'block' ? 'A 25 kg BLOCK ON A LEVEL FLOOR' : S.sc === 'brake' ? 'A 1500 kg CAR BRAKING' : S.sc === 'sports' ? 'A 1500 kg SPORTS CAR, MOVING EAST' : `A ${S.m} kg CAR ON A STRAIGHT ROAD`;
+}
+
+/* ---- the run ------------------------------------------------------------- */
+function resetRun(){
+  S.running = false;
+  const u = S.sc === 'brake' ? S.u : 0;
+  S.body = {t: 0, x: 0, v: u, a: 0, fr: 0};
+  S.samples = [{t: 0, x: 0, v: u, a: 0, F: forceAt(0)}];
+  S.coast = 0; S.balT = 0; S.hold = {t: 0, key: ''};
+  drawAxes();
+  S.t1 = clamp(S.t1, 0, AX.tE); S.t2 = clamp(S.t2, 0, AX.tE);
+  if (S.t2 <= S.t1) { S.t1 = 0; S.t2 = AX.tE / 2; }
+}
+function go(){
+  if (S.running) { S.running = false; paint(); return; }
+  if (S.body.t >= AX.tE - 1e-6 || S.done) { resetRun(); S.done = false; }
+  S.running = true; sound('whoosh');
+  track('go', {sc: S.sc, m: massOf(), F: forceAt(0), u: S.u});
+  if (reduced() && S.sc !== 'drive') { advance(AX.tE + 1); }
+  paint();
+}
+/* Step the model on by dt of simulated time. */
+function advance(dtSim){
+  const m = massOf(), b = S.body;
+  const n = Math.max(1, Math.round(dtSim / DT));
+  for (let i = 0; i < n; i++) {
+    if (b.t >= AX.tE - 1e-9) break;
+    const F = forceAt(b.t), fmax = fmaxOf(b.t);
+    stepBody(b, DT, F, m, fmax);
+    const last = S.samples[S.samples.length - 1];
+    if (b.t - last.t >= 0.02 - 1e-9) S.samples.push({t: b.t, x: b.x, v: b.v, a: b.a, F, fr: b.fr});
+    if (S.sc === 'brake' && b.v === 0 && b.t > 0.05) { endRun(); return; }
+    liveChecks(DT, F, m, fmax);
+  }
+  if (b.t >= AX.tE - 1e-9) endRun();
+}
+function endRun(){
+  const b = S.body;
+  S.running = false; S.done = true;
+  S.samples.push({t: b.t, x: b.x, v: b.v, a: b.a, F: forceAt(b.t), fr: b.fr});
+  sound('chime');
+  if (S.sc === 'brake') {
+    S.brakeLog.push({u: S.u, d: b.x, t: b.t});
+    track('braked', {u: S.u, d: +b.x.toFixed(2)});
+    const L = S.brakeLog;
+    for (const p of L) for (const q of L) if (q.u > 0 && Math.abs(p.u - 2 * q.u) < 1e-9) discover('four');
+  }
+  check();
+}
+/* Things that are true of the motion while it happens. */
+function liveChecks(dt, F, m, fmax){
+  const b = S.body;
+  /* balanced: a force is applied, and friction cancels it exactly, for a whole second */
+  if (Math.abs(F) > 0 && b.a === 0 && Math.abs(b.fr + F) < 1e-6) { S.balT += dt; if (S.balT >= 1) discover('balanced'); } else S.balT = 0;
+  /* first law: no friction, no force, and the car keeps its speed */
+  if (S.sc === 'drive' && fmax === 0 && F === 0 && Math.abs(b.v) > 0.5) { S.coast += dt; if (S.coast >= 4) discover('firstlaw'); } else S.coast = 0;
+  /* the F = ma log: a steady force for a whole second in free drive */
+  if (S.sc === 'drive' && F !== 0 && b.v !== 0) {
+    const key = F + '|' + m + '|' + S.mu;
+    if (S.hold.key === key) S.hold.t += dt; else S.hold = {t: 0, key};
+    if (S.hold.t >= 1 && !S.law.some(r => r.key === key)) {
+      const net = F + b.fr;
+      S.law.push({key, F, m, mu: S.mu, net, a: b.a});
+      track('fma', {F, m, net, a: +b.a.toFixed(3)});
+      lawTable();
+      for (const p of S.law) for (const q of S.law) if (Math.abs(p.net - q.net) < 1 && q.m >= 1.9 * p.m && Math.abs(p.net) > 0) discover('secondlaw');
+    }
+  } else S.hold = {t: 0, key: ''};
+}
+function lawTable(){
+  $('lawCard').hidden = S.sc !== 'drive' || !S.law.length;
+  $('lawLog').innerHTML = `<table class="log"><tr><th style="text-align:left">Net force</th><th>Mass</th><th>a measured</th><th>F/m</th></tr>` +
+    S.law.slice(-6).map(r => `<tr><td style="text-align:left">${fmt(r.net, 0)} N</td><td>${r.m} kg</td><td><b>${fmt(r.a, 3)}</b> m/s²</td><td>${fmt(r.net / r.m, 3)}</td></tr>`).join('') + '</table>';
+}
+
+/* ---- cursor measurements -------------------------------------------------- */
+function measure(){
+  const sm = S.samples, t1 = Math.min(S.t1, S.t2), t2 = Math.max(S.t1, S.t2);
+  const tMaxData = sm.length ? sm[sm.length - 1].t : 0;
+  const a = sampleAt(sm, Math.min(t1, tMaxData)), b = sampleAt(sm, Math.min(t2, tMaxData));
+  const dt = b.t - a.t;
+  const dx = b.x - a.x, area = areaVT(sm, a.t, b.t);
+  let vmin = Infinity, vmax = -Infinity, amin = Infinity, amax = -Infinity;
+  for (const p of sm) if (p.t > a.t + 1e-6 && p.t <= b.t + 1e-6) { vmin = Math.min(vmin, p.v); vmax = Math.max(vmax, p.v); amin = Math.min(amin, p.a); amax = Math.max(amax, p.a); }
+  const aAvg = dt > 0 ? (b.v - a.v) / dt : 0;
+  return {a, b, dt, dx, area, vAvg: dt > 0 ? dx / dt : 0, aAvg, constA: isFinite(amin) && amax - amin < 1e-6, constV: isFinite(vmin) && vmax - vmin < 0.01,
+          sPred: a.v * dt + 0.5 * aAvg * dt * dt, vPred: a.v + aAvg * dt, v2Pred: a.v * a.v + 2 * aAvg * dx};
+}
+function check(){
+  if (!S.locked) return;
+  const q = measure();
+  if (S.moved && q.dt >= 2 && q.constV && Math.abs(q.vAvg) > 0.5) discover('slope');
+  if (S.moved && q.dt >= 1 && Math.abs(q.aAvg) > 0.2 && Math.abs(q.area) > 1 && Math.abs(q.area - q.dx) < 0.01 * Math.abs(q.dx) + 0.01) discover('area');
+  maybeExplain();
+}
+
+/* ---- paint ------------------------------------------------------------------ */
+function paint(){
+  const b = S.body, sm = S.samples;
+  /* road */
+  const vis = S.locked;
+  const px = clamp(rx(b.x), RD.x0 - 40, RD.x1 + 40);
+  set('car', {transform: `translate(${px.toFixed(1)} ${RD.y + 40})`});
+  const F = forceAt(b.t), m = massOf();
+  const fs = 70 / (S.sc === 'block' ? 100 : 6000);
+  const arrow = (id, x0, f, y, txt) => {
+    const lab = $(id + 'T');
+    if (!vis || Math.abs(f) < 1e-6) { set(id, {opacity: 0}); lab.textContent = ''; return; }
+    set(id, {x1: x0.toFixed(1), y1: y, x2: (x0 + f * fs).toFixed(1), y2: y, opacity: 1});
+    lab.setAttribute('x', (x0 + f * fs / 2).toFixed(1)); lab.setAttribute('y', y - 8); lab.textContent = txt;
+  };
+  const net = F + (b.fr || 0);
+  arrow('fApp', px, F, RD.y + 8, `${fmt(Math.abs(F), 0)} N`);
+  arrow('fFr', px, b.fr || 0, RD.y + 30, `${S.sc === 'brake' || (S.sc === 'sports' && b.t >= 10) || (S.sc === 'drive' && S.pedal < 0) ? 'brakes' : 'friction'} ${fmt(Math.abs(b.fr || 0), 0)} N`);
+  arrow('fNet', px, net, RD.y - 30, `net ${fmt(Math.abs(net), 0)} N`);
+  $('clock').textContent = `t = ${b.t.toFixed(2)} s · x = ${fmt(b.x, 2)} m · v = ${fmt(b.v, 2)} m/s`;
+  /* ghost at the second cursor */
+  const g2 = sampleAt(sm, Math.min(Math.max(S.t1, S.t2), sm[sm.length - 1].t));
+  set('ghost', {transform: `translate(${clamp(rx(g2.x), RD.x0 - 40, RD.x1 + 40).toFixed(1)} ${RD.y + 40})`, opacity: !S.running && sm.length > 2 ? 0.35 : 0});
+  /* graphs */
+  for (const g of GRAPHS) {
+    let d = '';
+    for (let i = 0; i < sm.length; i++) {
+      const p = sm[i];
+      if (g.key === 'a' && i > 0) d += 'L' + gx(g, p.t).toFixed(1) + ' ' + gy(g, sm[i - 1].a).toFixed(1);
+      d += (i ? 'L' : 'M') + gx(g, p.t).toFixed(1) + ' ' + gy(g, p[g.key]).toFixed(1);
+    }
+    $('curve' + g.key).setAttribute('d', vis ? d : '');
+    set('now' + g.key, {x: gx(g, b.t).toFixed(1)});
+    for (const [c, t] of [['1', S.t1], ['2', S.t2]]) {
+      const p = sampleAt(sm, Math.min(t, sm[sm.length - 1].t));
+      set('c' + c + g.key, {x1: gx(g, t).toFixed(1), x2: gx(g, t).toFixed(1)});
+      set('d' + c + g.key, {cx: gx(g, t).toFixed(1), cy: gy(g, p[g.key]).toFixed(1), opacity: t <= sm[sm.length - 1].t + 1e-6 ? 1 : 0});
+    }
+  }
+  const q = measure();
+  /* area under v–t between the cursors */
+  let sh = '';
+  if (q.dt > 0) {
+    const pts = sm.filter(p => p.t >= q.a.t && p.t <= q.b.t);
+    sh = `M${gx(GV, q.a.t).toFixed(1)} ${gy(GV, 0).toFixed(1)}L${gx(GV, q.a.t).toFixed(1)} ${gy(GV, q.a.v).toFixed(1)}` +
+      pts.map(p => `L${gx(GV, p.t).toFixed(1)} ${gy(GV, p.v).toFixed(1)}`).join('') +
+      `L${gx(GV, q.b.t).toFixed(1)} ${gy(GV, q.b.v).toFixed(1)}L${gx(GV, q.b.t).toFixed(1)} ${gy(GV, 0).toFixed(1)}Z`;
+  }
+  $('shadev').setAttribute('d', vis ? sh : '');
+  $('shadex').setAttribute('d', ''); $('shadea').setAttribute('d', '');
+  const chord = (g, va, vb) => q.dt > 0 && vis ? set('chord' + g.key, {x1: gx(g, q.a.t), y1: gy(g, va), x2: gx(g, q.b.t), y2: gy(g, vb), opacity: 1}) : set('chord' + g.key, {opacity: 0});
+  chord(GX, q.a.x, q.b.x); chord(GV, q.a.v, q.b.v); set('chorda', {opacity: 0});
+  paintEqs(q);
+  paintNums(q);
+  paintSide();
+  paintWhy(q);
+  check();
+}
+function paintEqs(q){
+  if (!S.locked) { $('eqs').innerHTML = ''; return; }
+  const u = q.a.v, v = q.b.v, t = q.dt, s = q.dx, a = q.aAvg;
+  const okc = (x, y) => Math.abs(x - y) <= 0.01 * Math.max(1, Math.abs(y)) ? '#1e7a45' : '#b0302a';
+  const line = (i, txt, col) => `<text x="${EQ.x}" y="${EQ.y + 28 + i * 25}" fill="${col || '#1d2327'}">${txt}</text>`;
+  let h = line(0, `u = ${fmt(u, 2)} m/s · v = ${fmt(v, 2)} m/s · t = ${fmt(t, 2)} s`, '#4a555b') +
+          line(1, `a = (v − u)/t = ${fmt(a, 3)} m/s²`, '#2f7a3a') +
+          line(2, `s measured = ${fmt(s, 2)} m · area under v–t = ${fmt(q.area, 2)} m`, okc(q.area, s)) +
+          line(3, `v = u + at → ${fmt(q.vPred, 2)} m/s`, okc(q.vPred, v)) +
+          line(4, `s = ut + ½at² → ${fmt(q.sPred, 2)} m`, okc(q.sPred, s)) +
+          line(5, `v² = u² + 2as → ${fmt(q.v2Pred, 1)} (v² = ${fmt(v * v, 1)})`, okc(q.v2Pred, v * v));
+  h += `<text x="${EQ.x}" y="${EQ.y + 28 + 6 * 25 + 4}" font-family="Inter,system-ui,sans-serif" font-size="12" fill="#5b666b">${t <= 0 ? 'Drag the cursors apart on any graph.' : q.constA ? 'a is constant here: all three hold (green).' : 'a changes in here: they need not hold (red).'}</text>`;
+  $('eqs').innerHTML = h;
+}
+function paintNums(q){
+  if (!S.locked) return;
+  const m = massOf();
+  $('nums').innerHTML = `<div class="readout" style="display:grid;grid-template-columns:1fr auto;gap:2px 10px;font-size:13px">
+    <span>From ${fmt(q.a.t, 2)} s to ${fmt(q.b.t, 2)} s</span><b class="mono">Δt = ${fmt(q.dt, 2)} s</b>
+    <span>Displacement (x–t)</span><b class="mono">${fmt(q.dx, 2)} m</b>
+    <span>Area under v–t</span><b class="mono">${fmt(q.area, 2)} m</b>
+    <span>Slope of x–t = average velocity</span><b class="mono">${fmt(q.vAvg, 2)} m/s</b>
+    <span>Slope of v–t = average acceleration</span><b class="mono">${fmt(q.aAvg, 3)} m/s²</b>
+    <span>Net force at the orange cursor</span><b class="mono">${fmt((q.b.F || 0) + (q.b.fr || 0), 0)} N</b>
+    <span>m × a there</span><b class="mono">${fmt(m * q.b.a, 0)} N</b></div>`;
+}
+function paintSide(){
+  document.querySelectorAll('#scSeg button').forEach(b => { b.setAttribute('aria-pressed', b.dataset.sc === S.sc); b.disabled = !S.locked || S.running; });
+  $('ctlDrive').hidden = S.sc !== 'drive'; $('ctlBrake').hidden = S.sc !== 'brake'; $('ctlSports').hidden = S.sc !== 'sports'; $('ctlBlock').hidden = S.sc !== 'block';
+  $('mass').value = S.m; $('massOut').textContent = S.m + ' kg';
+  $('mu').value = S.mu; $('muOut').textContent = S.mu.toFixed(2);
+  $('pedal').value = S.pedal; $('pedalOut').textContent = (S.pedal > 0 ? '+' : '') + S.pedal + ' N';
+  $('u').value = S.u; $('uOut').textContent = `${S.u} m/s`;
+  $('push').value = S.push; $('pushOut').textContent = S.push + ' N';
+  for (const id of ['mass', 'mu', 'u', 'push']) $(id).disabled = !S.locked || S.running;
+  $('pedal').disabled = !S.locked;
+  $('btnGo').disabled = !S.locked; $('btnReset').disabled = !S.locked; $('btnFast').disabled = !S.locked;
+  $('btnGo').textContent = S.running ? '❚❚ Pause' : S.done ? '↺ Run again' : '▶ Go';
+  $('btnFast').setAttribute('aria-pressed', S.fast);
+  $('lawCard').hidden = S.sc !== 'drive' || !S.law.length;
+}
+function paintWhy(q){
+  if (!S.locked) return;
+  $('whyCard').hidden = false;
+  const b = S.body, m = massOf(), F = forceAt(b.t), fmax = fmaxOf(b.t), net = F + (b.fr || 0);
+  let h = `<p>Now: applied force <b>${fmt(F, 0)} N</b>, friction and brakes <b>${fmt(b.fr || 0, 0)} N</b> (they can reach ${fmt(fmax, 0)} N), so the net force is <b>${fmt(net, 0)} N</b>. ` +
+    `a = F/m = ${fmt(net, 0)} ÷ ${m} = <b>${fmt(net / m, 3)} m/s²</b>.</p>`;
+  if (b.v === 0 && F !== 0 && Math.abs(F) <= fmax + 1e-9) h += `<p>The push is no bigger than friction can hold, so friction matches it exactly: the forces are <b>balanced</b> and nothing moves.</p>`;
+  else if (net === 0 && b.v !== 0) h += `<p>No net force, so the velocity does not change: a straight x–t line and a flat v–t line.</p>`;
+  else if (b.v !== 0 && Math.sign(net) !== Math.sign(b.v)) h += `<p>The net force points against the motion, so the car is slowing down: its v–t line slopes down.</p>`;
+  if (S.sc === 'brake' && S.brakeLog.length) {
+    const r = S.brakeLog[S.brakeLog.length - 1];
+    h += `<p>Last brake test: from <b>${r.u} m/s</b> (${fmt(r.u * 3.6, 0)} km/h) the car stopped in <b>${fmt(r.d, 1)} m</b> and ${fmt(r.t, 2)} s.</p>`;
+  }
+  $('why').innerHTML = h;
+}
+
+/* ---- graph cursors: drag on any graph; the nearer cursor follows --------------- */
+function wireGraphs(){
+  for (const g of GRAPHS) {
+    let which = 2;
+    const tOf = p => clamp((p.x - g.x) / g.w * AX.tE, 0, AX.tE);
+    const moveTo = p => { const t = Math.round(tOf(p) / 0.05) * 0.05; if (which === 1) S.t1 = t; else S.t2 = t; paint(); };
+    drag($('hit' + g.key), svg, {
+      start(p){ if (!S.locked) return false; const t = tOf(p); which = Math.abs(t - S.t1) < Math.abs(t - S.t2) ? 1 : 2; moveTo(p); },
+      move: moveTo,
+      end(){ S.moved = true; check(); track('cursor', {t1: S.t1, t2: S.t2, graph: g.key}); },
+    });
+    $('hit' + g.key).addEventListener('keydown', e => {
+      const d = {ArrowRight: 0.1, ArrowLeft: -0.1}[e.key]; if (!d || !S.locked) return;
+      e.preventDefault(); S.t2 = clamp(S.t2 + d, 0, AX.tE); paint();
+    });
+  }
+}
+
+/* ---- controls ------------------------------------------------------------ */
+build();
+$('scSeg').addEventListener('click', e => {
+  const b = e.target.closest('[data-sc]'); if (!b || b.disabled) return;
+  S.sc = b.dataset.sc; S.done = false; sound('tick');
+  S.t1 = 0; S.t2 = 2;
+  resetRun(); track('scenario', {sc: S.sc}); paint();
+});
+const onRange = (id, key, reset) => $(id).addEventListener('input', e => { S[key] = +e.target.value; if (reset && !S.running) { resetRun(); S.done = false; } paint(); });
+onRange('mass', 'm', true); onRange('mu', 'mu', false); onRange('pedal', 'pedal', false); onRange('u', 'u', true); onRange('push', 'push', true);
+$('btnGo').addEventListener('click', go);
+$('btnReset').addEventListener('click', () => { resetRun(); S.done = false; sound('tick'); paint(); });
+$('btnFast').addEventListener('click', () => { S.fast = !S.fast; paint(); });
+
+loop(dt => {
+  if (!S.running) return;
+  advance(dt * (S.fast ? 3 : 1));
+  paint();
+});
+
+/* ---- findings, predict, start -------------------------------------------- */
+findings($('finds'), [
+  {id: 'slope',     icon: '╱', label: 'A straight x–t line: its slope is the velocity', hint: 'Measure across a stretch of steady speed'},
+  {id: 'area',      icon: '◩', label: 'Area under v–t is the displacement',             hint: 'Measure while the speed is changing'},
+  {id: 'four',      icon: '×4', label: 'Twice the speed, four times the stopping distance', hint: 'Brake from one speed, then from double'},
+  {id: 'balanced',  icon: '⇄', label: 'Balanced forces: no acceleration',              hint: 'Push no harder than friction can hold'},
+  {id: 'firstlaw',  icon: '∞', label: 'No friction, no force: it never slows down',    hint: 'Let go of the pedal with μ = 0'},
+  {id: 'secondlaw', icon: 'F', label: 'Double the mass, half the acceleration',       hint: 'Same force, twice the mass'},
+], () => toast('All six found: you have measured Newton’s first two laws from graphs you made.', 4200));
+
+let EXPLAINED = false;
+function maybeExplain(){
+  if (EXPLAINED || !found('four')) return;
+  EXPLAINED = true;
+  const L = S.brakeLog;
+  let p = null, q = null;
+  for (const a of L) for (const b of L) if (Math.abs(a.u - 2 * b.u) < 1e-9) { p = b; q = a; }
+  if (!p) return;
+  const d54 = brakeRun(15), d108 = brakeRun(30);
+  POE.explain(`You braked from ${p.u} m/s and stopped in <b>${fmt(p.d, 1)} m</b>; from ${q.u} m/s you needed <b>${fmt(q.d, 1)} m</b>, ${fmt(q.d / p.d, 2)} times as far. ` +
+    `At 54 km/h the model stops in ${fmt(d54[d54.length - 1].x, 1)} m and at 108 km/h in ${fmt(d108[d108.length - 1].x, 1)} m (Example 4.8: 28.1 m and 112.5 m). ` +
+    `Twice the speed takes twice the time to lose, and the car covers ground twice as fast while it does: the v–t triangle is twice as tall and twice as wide, so its area is four times as big.`);
+}
+
+const POE = predict($('poe'), {
+  id: 'braking-distance',
+  q: 'A car’s brakes slow it at 4 m s⁻². From 54 km/h it stops in about 28 m. From 108 km/h, twice as fast, with the same brakes, it stops in about…',
+  options: [
+    {id: 'same', text: '28 m: the brakes are the same.'},
+    {id: 'double', text: '56 m: twice the speed, twice the distance.'},
+    {id: 'four', text: '112 m: four times the distance.', right: true},
+    {id: 'more', text: 'It cannot stop at all.'},
+  ],
+  onLock(){
+    S.locked = true;
+    $('gate').hidden = true;
+    $('veil').remove(); $('veilT').remove();
+    say('Now find out. Try the brake test at fifteen and thirty metres per second.');
+    paint();
+  },
+});
+if (!Play.FF('predict')) S.locked = true;
+$('gate').hidden = S.locked;
+resetRun();
+paint();
+window.applyFeatures = () => paint();
+window.PG_STATE = () => JSON.parse(JSON.stringify({sc: S.sc, locked: S.locked, running: S.running, done: !!S.done, m: S.m, mu: S.mu, pedal: S.pedal, u: S.u, push: S.push,
+  t: S.body.t, x: S.body.x, v: S.body.v, a: S.body.a, t1: S.t1, t2: S.t2, brakeLog: S.brakeLog, law: S.law, meas: measure()}));
+window.PG_MODEL = {stepBody, simulate, areaVT, sampleAt, brakeRun, sportsRun, blockRun, G};
+</script>
+</body>
+</html>

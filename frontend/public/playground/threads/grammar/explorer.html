@@ -1,0 +1,276 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Plural and A/An Machine</title>
+<meta name="description" content="Class 3-5: drop a toy into the machine. It picks 'a' or 'an' by the sound of the word, and prints the plural by its own rule.">
+<link rel="icon" href="../../favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600&family=Nunito:wght@500;700;800&display=swap">
+<link rel="stylesheet" href="../../play.css">
+<style>
+/* Only what this page needs beyond play.css. */
+.toy{cursor:pointer}
+.toy:hover .toyBg{filter:brightness(1.08)}
+.lever{cursor:pointer}
+.missions{list-style:none; margin:0; padding:0; display:grid; gap:8px}
+.missions li{display:grid; grid-template-columns:28px 1fr; gap:8px; align-items:center; font-weight:700; font-size:14.5px; line-height:1.3; color:var(--ink-2)}
+.missions li i{width:26px; height:26px; border-radius:50%; border:2.5px dashed var(--hair-2); display:grid; place-items:center; font-style:normal; font-size:14px; color:#fff}
+.missions li.done{color:var(--ink)}
+.missions li.done i{border:none; background:var(--good); animation:tickPop .5s var(--spring)}
+.missions li.done span{text-decoration:line-through; text-decoration-color:var(--good); text-decoration-thickness:2px}
+@keyframes tickPop{0%{transform:scale(.3)}100%{transform:scale(1)}}
+.says{font-size:15.5px; font-weight:700; line-height:1.4; min-height:44px}
+</style>
+</head>
+<body>
+<header class="pg-top"></header>
+
+<div class="pg-intro">
+  <h1>The plural and a/an machine</h1>
+  <p>Tap a toy to send it into the machine. It listens to the SOUND the word starts with to choose "a" or "an", and
+     flip the lever to see it print "many" by its own spelling rule.</p>
+</div>
+
+<main class="pg-main">
+  <section class="pg-stage" id="stageWrap">
+    <svg id="stage" viewBox="0 0 1000 660" role="img" aria-label="A toy shop machine with a shelf of toys, a ticket printer, and an output tray"></svg>
+  </section>
+
+  <aside class="pg-side">
+    <div class="card">
+      <div class="kicker">The machine says</div>
+      <div class="says" id="says">Tap a toy on the shelf to begin!</div>
+    </div>
+    <div class="card">
+      <div class="kicker">Missions</div>
+      <ul class="missions" id="missions"></ul>
+    </div>
+    <div class="card"><div class="kicker">Discoveries</div><div id="finds"></div></div>
+  </aside>
+</main>
+
+<script src="../../play.js"></script>
+<script>
+'use strict';
+const {$, $$, esc, clamp, sound, say, track, toast, findings, discover, found,
+       shareState, sharedState, mount, reduced} = Play;
+mount({thread: 'grammar', band: 'explorer'});
+
+/* MODEL:start ==================================================================
+   Two small, real rules — not a table of finished answers.
+
+   1. a/an is chosen from the SOUND the next word starts with, not its letter.
+      For nearly every word the sound matches the first letter (vowel letter =
+      vowel sound), which is the rule Class 3's "Best Friends" teaches. Two
+      words in the tray are the classic exceptions where sound and letter
+      disagree — a silent 'h' (hour) and a consonant 'y' sound spelled with a
+      vowel letter (unicorn) — because that IS the rule, sound over spelling.
+   2. The plural is built by the -s / -es / -ies spelling rule Class 3's
+      "Talking Toys" teaches (add -s; add -es after s, sh, ch, x, z, o; change
+      a consonant + y to -ies), applied fresh to whichever word was dropped in
+      — never looked up per word.
+   ============================================================================ */
+const SOUND_EXCEPTIONS = {hour: 'vowel', unicorn: 'consonant'};
+function article(word){
+  const w = word.toLowerCase();
+  const vowelSound = SOUND_EXCEPTIONS[w] ? SOUND_EXCEPTIONS[w] === 'vowel' : /^[aeiou]/.test(w);
+  return {a: vowelSound ? 'an' : 'a', vowelSound};
+}
+function pluralize(word){
+  const w = word.toLowerCase();
+  if (/[^aeiou]y$/.test(w)) return {word: w.slice(0, -1) + 'ies', rule: 'ies', why: `${w} ends in a consonant + y, so the y changes to ${'‘'}ies${'’'}`};
+  if (/(s|sh|ch|x|z|o)$/.test(w)) return {word: w + 'es', rule: 'es', why: `${w} ends in a sound that needs an extra syllable, so it takes ${'‘'}es${'’'}`};
+  return {word: w + 's', rule: 's', why: `most words just add ${'‘'}s${'’'}`};
+}
+/* MODEL:end */
+
+const WORDS = [
+  {k: 'dog', icon: 'dog'}, {k: 'cat', icon: 'cat'}, {k: 'doll', icon: 'doll'}, {k: 'train', icon: 'train'},
+  {k: 'ball', icon: 'ball'}, {k: 'box', icon: 'box'}, {k: 'bus', icon: 'bus'}, {k: 'mango', icon: 'mango'},
+  {k: 'brush', icon: 'brush'}, {k: 'baby', icon: 'baby'}, {k: 'candy', icon: 'candy'}, {k: 'umbrella', icon: 'umbrella'},
+  {k: 'elephant', icon: 'elephant'}, {k: 'egg', icon: 'egg'}, {k: 'hour', icon: 'hour'}, {k: 'unicorn', icon: 'unicorn'},
+];
+const RULE_LABEL = {s: 'ADD –S', es: 'ADD –ES', ies: 'CHANGE Y → IES'};
+
+/* ---- icons: simple, recognisable, drawn in code, centred at (0,0) --------------- */
+const ICON = {
+  dog(c){ return `<circle r="18" fill="${c}"/><path d="M-16 -8 Q-24 -20 -14 -24Z M16 -8 Q24 -20 14 -24Z" fill="${c}"/><ellipse cx="0" cy="8" rx="9" ry="6" fill="#fff"/><circle cx="-7" cy="-4" r="2.6" fill="#2b1a12"/><circle cx="7" cy="-4" r="2.6" fill="#2b1a12"/><circle cx="0" cy="7" r="2.2" fill="#2b1a12"/>`; },
+  cat(c){ return `<circle r="17" fill="${c}"/><path d="M-16 -10 L-8 -22 L-2 -10Z M16 -10 L8 -22 L2 -10Z" fill="${c}"/><circle cx="-7" cy="-2" r="2.6" fill="#2b1a12"/><circle cx="7" cy="-2" r="2.6" fill="#2b1a12"/><path d="M-4 6 Q0 10 4 6" stroke="#2b1a12" stroke-width="2" fill="none"/><path d="M-24 4 L-6 2 M-24 10 L-6 8 M24 4 L6 2 M24 10 L6 8" stroke="#7a5230" stroke-width="1.4"/>`; },
+  doll(c){ return `<path d="M-14 20 L14 20 L9 -6 L-9 -6Z" fill="${c}"/><circle cy="-16" r="12" fill="#e9c9a0"/><path d="M-12 -16 Q-12 -28 0 -27 Q12 -28 12 -16 Q7 -22 0 -21 Q-7 -22 -12 -16Z" fill="#5a3a20"/><circle cx="-4" cy="-16" r="1.8" fill="#2b1a12"/><circle cx="4" cy="-16" r="1.8" fill="#2b1a12"/>`; },
+  train(c){ return `<rect x="-22" y="-4" width="44" height="18" rx="4" fill="${c}"/><rect x="-8" y="-18" width="18" height="16" rx="3" fill="${c}"/><circle cx="10" cy="-22" r="4" fill="${c}"/><circle cx="-12" cy="16" r="6" fill="#3d4650"/><circle cx="10" cy="16" r="6" fill="#3d4650"/><rect x="-4" y="-14" width="8" height="8" fill="#dff1ff"/>`; },
+  ball(c){ return `<circle r="17" fill="${c}"/><path d="M-17 0 Q0 -12 17 0 M-17 0 Q0 12 17 0" stroke="#fff" stroke-width="2" fill="none"/>`; },
+  box(c){ return `<rect x="-16" y="-14" width="32" height="28" rx="2" fill="${c}"/><rect x="-4" y="-14" width="8" height="28" fill="#fff" opacity=".85"/><rect x="-16" y="-3" width="32" height="6" fill="#fff" opacity=".85"/>`; },
+  bus(c){ return `<rect x="-22" y="-12" width="44" height="22" rx="6" fill="${c}"/><rect x="-17" y="-7" width="10" height="9" fill="#dff1ff"/><rect x="-3" y="-7" width="10" height="9" fill="#dff1ff"/><rect x="11" y="-7" width="8" height="9" fill="#dff1ff"/><circle cx="-12" cy="12" r="5.5" fill="#3d4650"/><circle cx="12" cy="12" r="5.5" fill="#3d4650"/>`; },
+  mango(c){ return `<path d="M0 -18 C16 -14 18 8 0 20 C-16 8 -14 -14 0 -18Z" fill="${c}"/><rect x="-1.5" y="-21" width="3" height="6" fill="#5a7a2f"/>`; },
+  brush(c){ return `<rect x="-3" y="0" width="6" height="20" rx="2" fill="#8a5a2b"/><path d="M-11 -16 Q0 -26 11 -16 L8 2 L-8 2Z" fill="${c}"/>`; },
+  baby(c){ return `<circle cy="-6" r="15" fill="#e9c9a0"/><path d="M-11 12 Q0 22 11 12 L9 -2 L-9 -2Z" fill="${c}"/><path d="M-8 -18 Q0 -24 8 -18" stroke="#5a3a20" stroke-width="4" fill="none" stroke-linecap="round"/><circle cx="-4" cy="-6" r="1.8" fill="#2b1a12"/><circle cx="4" cy="-6" r="1.8" fill="#2b1a12"/>`; },
+  candy(c){ return `<circle r="12" fill="${c}"/><path d="M-12 0 L-22 -8 L-22 8Z M12 0 L22 -8 L22 8Z" fill="${c}"/>`; },
+  umbrella(c){ return `<path d="M-20 0 A20 20 0 0 1 20 0 Z" fill="${c}"/><line x1="0" y1="0" x2="0" y2="22" stroke="#5a3a20" stroke-width="3"/><path d="M0 22 Q6 22 6 16" stroke="#5a3a20" stroke-width="3" fill="none"/>`; },
+  elephant(c){ return `<ellipse cy="0" rx="20" ry="15" fill="${c}"/><circle cx="14" cy="-10" r="12" fill="${c}"/><ellipse cx="7" cy="-9" rx="8" ry="11" fill="#8a94a6"/><path d="M22 -2 Q34 10 26 22 Q24 25 21 22 Q28 10 18 -2Z" fill="${c}"/><circle cx="16" cy="-13" r="2" fill="#2b1a12"/>`; },
+  egg(c){ return `<path d="M0 -20 C14 -20 16 6 0 20 C-16 6 -14 -20 0 -20Z" fill="${c}"/>`; },
+  hour(c){ return `<circle r="17" fill="#fff" stroke="${c}" stroke-width="3"/><line x1="0" y1="0" x2="0" y2="-10" stroke="${c}" stroke-width="2.5" stroke-linecap="round"/><line x1="0" y1="0" x2="7" y2="4" stroke="${c}" stroke-width="2.5" stroke-linecap="round"/><circle r="2" fill="${c}"/>`; },
+  unicorn(c){ return `<path d="M-14 8 Q-16 -8 -2 -12 L4 -22 L8 -12 Q16 -8 12 6 Q10 14 0 14 Q-12 14 -14 8Z" fill="${c}"/><path d="M4 -22 L1 -10 L7 -10Z" fill="#ffd23f"/><circle cx="6" cy="-8" r="1.8" fill="#2b1a12"/><path d="M-2 -12 Q-10 -14 -14 -22" stroke="#c2569b" stroke-width="3" fill="none" stroke-linecap="round"/>`; },
+};
+const COLS = {dog: '#c9995c', cat: '#f0a04b', doll: '#e0567a', train: '#3f7fd8', ball: '#d6453d', box: '#f29a1f',
+  bus: '#2f9e5b', mango: '#ffb400', brush: '#8a5cf6', baby: '#f4c199', candy: '#e0567a', umbrella: '#16a3a3',
+  elephant: '#8b95a3', egg: '#faf3e0', hour: '#3d4650', unicorn: '#fff'};
+const iconSVG = (k, scale = 1) => `<g transform="scale(${scale})">${ICON[k](COLS[k])}</g>`;
+
+/* ---- state: plain data ----------------------------------------------------- */
+const S = {current: null, many: false, missions: {}};
+const shared = sharedState();
+if (shared && WORDS.some(w => w.k === shared.current)) { S.current = shared.current; S.many = !!shared.many; }
+shareState(() => ({current: S.current, many: S.many}));
+
+/* ============================================================================
+   The stage: a toy shop shelf, a printing machine, and an output tray.
+   ============================================================================ */
+const svg = $('stage');
+const SHELF_Y = 90, SHELF_COLS = 8, SHELF_GAP_X = 118, SHELF_GAP_Y = 96, SHELF_X0 = 79;
+const MACHINE = {x: 500, y: 400};
+const TRAY_Y = 560;
+function slotPos(i){ return {x: SHELF_X0 + (i % SHELF_COLS) * SHELF_GAP_X, y: SHELF_Y + Math.floor(i / SHELF_COLS) * SHELF_GAP_Y}; }
+function build(){
+  let shelf = '';
+  WORDS.forEach((w, i) => {
+    const p = slotPos(i);
+    shelf += `<g class="toy" id="toy_${w.k}" data-k="${w.k}" transform="translate(${p.x} ${p.y})">
+      <circle class="toyBg" r="36" fill="#fff" stroke="#e2ded2" stroke-width="2"/>${iconSVG(w.icon, 1)}
+      <text y="52" text-anchor="middle" font-size="13" font-weight="700" fill="#5a4a34">${esc(w.k)}</text></g>`;
+  });
+  svg.innerHTML = `
+  <defs>
+    <linearGradient id="gWall" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff6df"/><stop offset="1" stop-color="#ffe9b8"/></linearGradient>
+    <linearGradient id="gMachine" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#6fb1e0"/><stop offset="1" stop-color="#3f7fd8"/></linearGradient>
+  </defs>
+  <rect width="1000" height="660" fill="url(#gWall)"/>
+  <rect x="0" y="0" width="1000" height="${SHELF_Y + 2 * SHELF_GAP_Y - 30}" fill="#fff" opacity=".35"/>
+  <g id="shelfPlanks">${[SHELF_Y + 46, SHELF_Y + 46 + SHELF_GAP_Y].map(y => `<rect x="20" y="${y}" width="960" height="10" rx="3" fill="#c98b4f"/>`).join('')}</g>
+  <text x="30" y="30" fill="#8a6a34" font-size="14" font-weight="700" letter-spacing=".04em">THE TOY SHOP SHELF — tap a toy!</text>
+  <g id="shelf">${shelf}</g>
+
+  <!-- the machine -->
+  <g id="machineG" transform="translate(${MACHINE.x} ${MACHINE.y})">
+    <rect x="-170" y="-90" width="340" height="200" rx="26" fill="url(#gMachine)"/>
+    <rect x="-170" y="-90" width="340" height="40" rx="26" fill="#fff" opacity=".18"/>
+    <circle cx="120" cy="-50" r="34" fill="#eaf3ff"/>
+    <g id="eyesOpen"><circle cx="108" cy="-52" r="6" fill="#1b2a3a"/><circle cx="132" cy="-52" r="6" fill="#1b2a3a"/></g>
+    <path id="faceMouth" d="M105 -34 Q120 -26 135 -34" stroke="#1b2a3a" stroke-width="3" fill="none" stroke-linecap="round"/>
+    <rect x="-150" y="-70" width="120" height="60" rx="10" fill="#26323f"/>
+    <text id="ticketPlaceholder" x="-90" y="-38" text-anchor="middle" fill="#7f93ab" font-size="12.5" font-weight="700">drop a toy in!</text>
+    <g id="ticketG" opacity="0">
+      <rect x="-150" y="-72" width="120" height="64" rx="6" fill="#fff" stroke="#d7e2ee" stroke-width="2"/>
+      <text id="ticketArt" x="-90" y="-58" text-anchor="middle"></text>
+      <text id="ticketText" x="-90" y="-24" text-anchor="middle" font-size="17" font-weight="800" fill="#1b2a3a" font-family="Fredoka, sans-serif"></text>
+      <text id="ticketWhy" x="-90" y="-12" text-anchor="middle" font-size="10" fill="#7c878c"></text>
+    </g>
+    <rect x="20" y="-70" width="130" height="60" rx="8" fill="#1d2733" opacity="0" id="ruleBoxBg"/>
+    <text id="ruleLabel" x="85" y="-36" text-anchor="middle" font-size="14" font-weight="800" fill="#ffd23f" opacity="0"></text>
+    <text id="ruleWhy" x="85" y="-16" text-anchor="middle" font-size="10" fill="#c9d6e5" opacity="0"></text>
+    <g id="lever" class="lever" transform="translate(0 40)">
+      <rect x="-90" y="-18" width="180" height="36" rx="18" fill="#26323f"/>
+      <circle id="leverKnob" cx="-54" cy="0" r="20" fill="#ffd23f"/>
+      <text x="-54" y="34" text-anchor="middle" font-size="12" font-weight="800" fill="#eaf3ff">ONE</text>
+      <text x="54" y="34" text-anchor="middle" font-size="12" font-weight="800" fill="#eaf3ff">MANY</text>
+    </g>
+  </g>
+
+  <!-- output tray -->
+  <g id="outputG"></g>
+  `;
+  for (const w of WORDS) wireToy(w.k);
+  $('lever').addEventListener('click', () => { S.many = !S.many; sound('tick'); run(true); track('many', {many: S.many}); });
+}
+function wireToy(k){
+  $('toy_' + k).addEventListener('click', () => { S.current = k; sound('pop'); run(true); track('pickToy', {word: k}); });
+}
+
+/* ---- rendering -------------------------------------------------------------- */
+function run(spoken){
+  const knobX = S.many ? 54 : -54;
+  $('leverKnob').setAttribute('cx', knobX);
+  if (!S.current) { $('outputG').innerHTML = ''; $('says').textContent = 'Tap a toy on the shelf to begin!'; return; }
+  const word = S.current;
+  const art = article(word);
+  const pl = pluralize(word);
+  const shown = S.many ? pl.word : word;
+  /* ticket */
+  $('ticketPlaceholder').setAttribute('opacity', 0);
+  $('ticketG').setAttribute('opacity', 1);
+  $('ticketArt').innerHTML = iconSVG(WORDS.find(w => w.k === word).icon, 0.55);
+  $('ticketText').textContent = S.many ? shown : `${art.a} ${word}`;
+  $('ticketWhy').textContent = S.many ? '' : (art.vowelSound ? 'starts with a vowel SOUND' : 'starts with a consonant sound');
+  /* rule plate, only when "many" */
+  $('ruleBoxBg').setAttribute('opacity', S.many ? 1 : 0);
+  $('ruleLabel').setAttribute('opacity', S.many ? 1 : 0);
+  $('ruleWhy').setAttribute('opacity', S.many ? 1 : 0);
+  $('ruleLabel').textContent = S.many ? RULE_LABEL[pl.rule] : '';
+  $('ruleWhy').textContent = S.many ? pl.why : '';
+  /* output tray: ONE icon, or THREE — the quantity is drawn, not just named */
+  const count = S.many ? 3 : 1;
+  const spacing = 90;
+  let out = '';
+  for (let i = 0; i < count; i++) {
+    const x = MACHINE.x + (i - (count - 1) / 2) * spacing;
+    out += `<g transform="translate(${x} ${TRAY_Y})">${iconSVG(WORDS.find(w => w.k === word).icon, 1.1)}</g>`;
+  }
+  out += `<text x="${MACHINE.x}" y="${TRAY_Y + 56}" text-anchor="middle" font-size="19" font-weight="800" fill="#1b2a3a" font-family="Fredoka, sans-serif">${esc(shown)}</text>`;
+  $('outputG').innerHTML = out;
+
+  const line = S.many ? `“${shown}” — I ${pl.rule === 's' ? 'just add' : pl.rule === 'es' ? 'add' : 'change the y and add'} ${'‘'}${pl.rule}${'’'}!` : `${art.a === 'an' ? 'AN' : 'A'}! ${word} starts with a ${art.vowelSound ? 'vowel' : 'consonant'} SOUND.`;
+  $('says').textContent = line;
+  $('eyesOpen').setAttribute('opacity', 1);
+  if (spoken) { sound('chime'); say(S.many ? `${shown}` : `${art.a} ${word}`); }
+  check(word, art, pl);
+}
+
+/* ---- missions and discoveries: reached by the model, never a button -------------- */
+const MISSIONS = [
+  {id: 'sayA',  text: 'Make the machine say “a”'},
+  {id: 'sayAn', text: 'Make the machine say “an”'},
+  {id: 'addS',  text: 'Add –s to make many'},
+  {id: 'addES', text: 'Add –es to make many'},
+  {id: 'addIES', text: 'Find a word that changes y to –ies'},
+  {id: 'trick', text: 'Find a word where the SOUND surprises you'},
+];
+function paintMissions(){
+  $('missions').innerHTML = MISSIONS.map(m => `<li class="${S.missions[m.id] ? 'done' : ''}"><i>${S.missions[m.id] ? '✓' : ''}</i><span>${esc(m.text)}</span></li>`).join('');
+}
+function check(word, art, pl){
+  if (!S.many) {
+    if (art.a === 'a') { S.missions.sayA = true; discover('article-a'); }
+    if (art.a === 'an') { S.missions.sayAn = true; discover('article-an'); }
+    if ((word === 'hour' || word === 'unicorn')) { S.missions.trick = true; discover('trick'); }
+  } else {
+    if (pl.rule === 's') { S.missions.addS = true; discover('plural-s'); }
+    if (pl.rule === 'es') { S.missions.addES = true; discover('plural-es'); }
+    if (pl.rule === 'ies') { S.missions.addIES = true; discover('plural-ies'); }
+  }
+  paintMissions();
+}
+
+/* ============================================================================
+   Start
+   ============================================================================ */
+build();
+findings($('finds'), [
+  {id: 'article-a',  icon: 'A',   label: 'Says “a” for a consonant sound', hint: 'Try a toy that starts with a consonant'},
+  {id: 'article-an', icon: 'AN',  label: 'Says “an” for a vowel sound',     hint: 'Try a toy that starts with a vowel sound'},
+  {id: 'plural-s',   icon: '+s',  label: 'The usual rule: just add –s',          hint: 'Flip the lever to MANY'},
+  {id: 'plural-es',  icon: '+es', label: 'Add –es after s, sh, ch, x, z or o',   hint: 'Try box, bus, brush or mango'},
+  {id: 'plural-ies', icon: '+ies', label: 'y changes to –ies',                   hint: 'Try baby or candy'},
+  {id: 'trick',      icon: '🎉', label: 'A word where the sound surprises you', hint: 'hour and unicorn do not sound like their first letter'},
+], () => toast('All six found! You listen for sounds, not just letters, like a real reader.', 4200));
+paintMissions();
+run(false);
+if (S.current) run(false);
+
+window.applyFeatures = () => run(false);
+window.PG_STATE = () => ({current: S.current, many: S.many, missions: Object.assign({}, S.missions)});
+window.PG_MODEL = {article, pluralize, WORDS: WORDS.map(w => w.k)};
+</script>
+</body>
+</html>

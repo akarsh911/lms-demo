@@ -1,0 +1,658 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Microbes in Human Welfare</title>
+<meta name="description" content="Class 12: a jar of curd, a sewage aeration tank and a biogas digester, each run by microbial growth computed step by step. Set the temperature law yourself, measure how fast the microbes work, and break the process.">
+<link rel="icon" href="../../favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600&family=Inter:wght@400;500;600;700&family=Nunito:wght@500;700;800&family=Newsreader:opsz,wght@6..72,400;6..72,500&family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="../../play.css">
+<style>
+/* Only what this page needs beyond play.css. */
+.pg-stage{align-self:start; min-height:0}
+.gate{position:absolute; inset:0; display:grid; place-items:center; pointer-events:none}
+.gate span{background:rgba(20,40,30,.86); color:#fff; padding:10px 16px; border-radius:99px; font-weight:600; font-size:14px}
+.seg{display:grid; grid-template-columns:repeat(3,1fr); gap:4px; background:var(--sunk); padding:4px; border-radius:var(--radius-sm); margin-bottom:8px}
+.seg button{border:0; background:transparent; border-radius:7px; min-height:32px; font-weight:600; font-size:13px; cursor:pointer; color:var(--ink-2)}
+.seg button[aria-pressed="true"]{background:var(--card); color:var(--ink); box-shadow:var(--shadow)}
+.ctl{grid-template-columns:150px 1fr 90px; margin:4px 0}
+.ctl label{font-size:12.5px; line-height:1.2}
+.ctl output{font-family:var(--font-mono); font-size:12.5px; font-weight:600; min-width:0}
+.readout{display:grid; grid-template-columns:1fr auto; gap:3px 12px; font-size:13px; align-items:baseline}
+.readout span{color:var(--ink-2)}
+.readout b{font-family:var(--font-mono); font-weight:600; font-size:12.5px; font-variant-numeric:tabular-nums; text-align:right}
+.readout .eq{grid-column:1/-1; font-family:var(--font-mono); font-size:11.5px; color:var(--ink-3); margin:-1px 0 3px}
+.readout .sep{grid-column:1/-1; height:1px; background:var(--hair); margin:4px 0}
+.why p{font-size:13.5px; margin-bottom:.5em}
+.note{font-size:12.5px; color:var(--ink-3); margin:6px 0 0}
+.kicker2{font-size:11px; letter-spacing:.07em; text-transform:uppercase; font-weight:700; color:var(--ink-3); margin:6px 0 2px}
+#curdHit, #sewHit, #bioHit{cursor:grab}
+#curdHit.dragging, #sewHit.dragging, #bioHit.dragging{cursor:grabbing}
+</style>
+</head>
+<body>
+<header class="pg-top"></header>
+
+<div class="pg-intro">
+  <h1>Microbes in human welfare</h1>
+  <p>Three microbial processes, each computed from a population of microbes that grows, feeds and runs out of food. Ferment a jar of milk into curd, run a sewage aeration
+     tank until the water is clean enough to release, and fill a biogas digester with methane from cattle dung. The temperature law that sets how fast each microbe works
+     is a slider you can change yourself &mdash; measure what it does, and find where the process breaks. NCERT Class 12 Biology, Chapter 8.</p>
+</div>
+
+<main class="pg-main wide-side">
+  <section class="pg-stage" id="stageWrap">
+    <svg id="stage" viewBox="0 0 1000 700" role="img" aria-label="A jar of curd, a sewage aeration tank, or a biogas digester, with a graph of the microbial process over time"></svg>
+    <div class="gate" id="gate"><span>Make your prediction first &rarr;</span></div>
+  </section>
+
+  <aside class="pg-side">
+    <div id="poe"></div>
+
+    <div class="card" id="ctlCard">
+      <div class="seg" role="tablist">
+        <button id="tabCurd" aria-pressed="true">Curd</button>
+        <button id="tabSewage" aria-pressed="false">Sewage plant</button>
+        <button id="tabBiogas" aria-pressed="false">Biogas</button>
+      </div>
+      <div id="ctlCurd">
+        <div class="ctl"><label for="cT">Temperature</label><input type="range" id="cT" min="2" max="70" step="1" value="30"><output id="cTOut">30 &deg;C</output></div>
+        <div class="ctl"><label for="cQ">Temperature law, Q&#8321;&#8320;</label><input type="range" id="cQ" min="1.5" max="4" step="0.1" value="2.5"><output id="cQOut">2.5</output></div>
+        <div class="ctl"><label for="cI">Starter curd added</label><input type="range" id="cI" min="0.2" max="5" step="0.1" value="1"><output id="cIOut">1.0%</output></div>
+        <div class="ctl"><label for="cTime">Hours since starter added</label><input type="range" id="cTime" min="0" max="30" step="0.2" value="10"><output id="cTimeOut">10.0 h</output></div>
+        <p class="note">Q&#8321;&#8320; is how many times faster <i>Lactobacillus</i> grows for every 10&nbsp;&deg;C warmer &mdash; normally fixed by biology, here it is yours to set. Drag the marker on the graph, or the slider.</p>
+      </div>
+      <div id="ctlSewage" hidden>
+        <div class="ctl"><label for="sX">Activated sludge, X&#8320;</label><input type="range" id="sX" min="100" max="2000" step="10" value="800"><output id="sXOut">800 mg/L</output></div>
+        <div class="ctl"><label for="sHRT">Time in the aeration tank</label><input type="range" id="sHRT" min="0.5" max="24" step="0.1" value="6"><output id="sHRTOut">6.0 h</output></div>
+        <div class="row"><button class="btn primary sm" id="sAirBtn" aria-pressed="true">&#128168; Air pump: ON</button></div>
+        <p class="note">Aerobic bacteria in the sludge oxidise the sewage's organic matter, but only if there is oxygen. Drag the marker on the graph, or the slider.</p>
+      </div>
+      <div id="ctlBiogas" hidden>
+        <div class="ctl"><label for="bT">Slurry temperature</label><input type="range" id="bT" min="5" max="55" step="1" value="35"><output id="bTOut">35 &deg;C</output></div>
+        <div class="ctl"><label for="bQ">Temperature law, Q&#8321;&#8320;</label><input type="range" id="bQ" min="1.5" max="3.5" step="0.1" value="2.2"><output id="bQOut">2.2</output></div>
+        <div class="ctl"><label for="bDay">Days since sealed</label><input type="range" id="bDay" min="0" max="60" step="0.5" value="20"><output id="bDayOut">20 d</output></div>
+        <div class="row"><button class="btn primary sm" id="bLeakBtn" aria-pressed="false">&#128274; Digester: SEALED</button></div>
+        <p class="note"><i>Methanobacterium</i> and the other methanogens in the dung slurry are strict anaerobes: they work only with no oxygen at all. Drag the marker on the graph, or the slider.</p>
+      </div>
+    </div>
+
+    <div class="card" id="numCard">
+      <div class="kicker" id="numKick">Measured</div>
+      <div id="nums"></div>
+    </div>
+
+    <div class="card why" id="whyCard" hidden>
+      <div class="kicker">What the model says</div>
+      <div id="why"></div>
+    </div>
+
+    <div class="card"><div class="kicker">To find</div><div id="finds"></div></div>
+  </aside>
+</main>
+
+<script src="../../play.js"></script>
+<script>
+'use strict';
+const {$, esc, clamp, lerp, fmt, drag, loop, sound, say, track, toast, predict, findings, discover, found,
+       shareState, sharedState, mount, reduced} = Play;
+mount({thread: 'microbes', band: 'theorist'});
+
+/* MODEL:start ==================================================================
+   All three processes share one idea: a microbial population grows on a food
+   source until the food runs out, and something useful (or a problem) is a
+   direct consequence of how much the population has grown.
+
+   1. CURD. A starter dose of Lactobacillus (N0, in the same units as the food
+      supply) grows on the milk's lactose (S) by Monod kinetics:
+        dN/dt = mu(T) * S/(Ks+S) * N,           S(t) = S0 - Y*(N(t)-N0)
+      mu(T) follows a Q10 law away from a reference 37 degC: mu = mu37 * Q10^((T-37)/10).
+      Above 60 degC the culture is killed instead of growing (pasteurisation kills
+      the starter): mu(T) = -0.15*(T-60), and no acid is produced while dying.
+      Lactic acid P accumulates with growth, P(t) = Yps * max(0, N(t)-N0), and it
+      titrates the milk's own natural buffering (phosphate, citrate, casein),
+      which is why pH falls fast at first and then levels out as the buffer and
+      the lactose both run out:
+        pH(t) = pH0 - dpH * P/(P+Phalf)
+      Integrated with RK4, dt = 0.05 h. Curd "sets" when pH first reaches 4.6,
+      the isoelectric point of casein, where the milk proteins coagulate.
+
+   2. SEWAGE. The standard activated-sludge (Lawrence-McCarty) model: bacteria of
+      concentration X consume the sewage's oxygen-demanding organic matter S,
+        dS/dt = -(k * X * S) / (Ks + S),        dX/dt = Y*(-dS/dt) - kd*X
+      k (a bacterium's own maximum substrate-removal rate), Ks, the yield Y and
+      the decay kd are the textbook constants of the model; X0, how much
+      activated sludge is kept in the tank, and the time the sewage spends
+      there are the operator's choices, set here as sliders. With the air pump
+      off, aerobic bacteria cannot oxidise anything: k is treated as 0.
+      Integrated with RK4, dt = 0.001 day, time in hours = days x 24.
+
+   3. BIOGAS. Methanogens are anaerobic archaea; their gas output per day rises
+      towards a ceiling as the digestible slurry is used up, a standard
+      first-order digestion model:
+        dG/dt = k(T) * (Gmax - G),   k(T) = kRef * Q10^((T-Tref)/10), Tref = 35 degC
+      A leak of air poisons the strictly anaerobic methanogens: k is cut to
+      almost nothing. Integrated with RK4, dt = 0.05 day.
+
+   The exact rate constants (mu37, k, Ks, Y, kd, kRef) are representative
+   textbook/engineering values, not measurements printed in the NCERT chapter,
+   which describes these processes qualitatively; they are chosen so the model
+   behaves the way the chapter and standard microbiology describe it.
+   ============================================================================ */
+function rk4(y, dt, deriv){
+  const k1 = deriv(y);
+  const k2 = deriv(y + k1 * dt / 2);
+  const k3 = deriv(y + k2 * dt / 2);
+  const k4 = deriv(y + k3 * dt);
+  return y + dt / 6 * (k1 + 2 * k2 + 2 * k3 + k4);
+}
+function integrate1D(y0, dt, n, deriv){
+  const ys = new Float64Array(n + 1); ys[0] = y0;
+  let y = y0;
+  for (let i = 1; i <= n; i++) { y = rk4(y, dt, deriv); ys[i] = y; }
+  return ys;
+}
+const interp = (arr, t, dt) => {
+  const i = clamp(t / dt, 0, arr.length - 1), i0 = Math.floor(i), f = i - i0;
+  return i0 >= arr.length - 1 ? arr[arr.length - 1] : arr[i0] * (1 - f) + arr[i0 + 1] * f;
+};
+
+/* ---- 1. curd ---- */
+const CURD = {S0: 100, Ks: 5, Y: 1, Yps: 0.9, muRef: 0.9, Tref: 37, pH0: 6.6, dpH: 2.8, Phalf: 20, deathT: 60, deathK: 0.15, dt: 0.05, tMax: 30};
+function muCurd(T, q10, p = CURD){ return T <= p.deathT ? p.muRef * Math.pow(q10, (T - p.Tref) / 10) : -p.deathK * (T - p.deathT); }
+function pHFromP(P, p = CURD){ return p.pH0 - p.dpH * P / (P + p.Phalf); }
+function curdRun(T, q10, inocPct, p = CURD){
+  const N0 = Math.max(1e-6, inocPct / 100 * p.S0), muT = muCurd(T, q10, p);
+  const n = Math.round(p.tMax / p.dt);
+  const deriv = N => muT <= 0 ? muT * N : muT * Math.max(0, p.S0 - p.Y * (N - N0)) / (p.Ks + Math.max(0, p.S0 - p.Y * (N - N0))) * N;
+  const N = integrate1D(N0, p.dt, n, deriv);
+  const P = new Float64Array(n + 1), pH = new Float64Array(n + 1), S = new Float64Array(n + 1);
+  let setTime = null;
+  for (let i = 0; i <= n; i++) {
+    P[i] = muT <= 0 ? 0 : p.Yps * Math.max(0, N[i] - N0);
+    pH[i] = pHFromP(P[i], p);
+    S[i] = Math.max(0, p.S0 - p.Y * (N[i] - N0));
+    if (setTime == null && pH[i] <= 4.6) setTime = i * p.dt;
+  }
+  return {t: p.dt, dt: p.dt, N, P, pH, S, N0, K: N0 + p.Y * p.S0, muT, setTime};
+}
+
+/* ---- 2. sewage ---- */
+const SEW = {S0: 300, Ks: 60, Y: 0.5, kd: 0.06, k: 5, dt: 0.001, tMax: 1.5};   // times in days
+function sewageRun(X0, airOn, p = SEW){
+  const n = Math.round(p.tMax / p.dt), kk = airOn ? p.k : 0;
+  const S = new Float64Array(n + 1), X = new Float64Array(n + 1);
+  S[0] = p.S0; X[0] = X0;
+  for (let i = 1; i <= n; i++) {
+    const dS = ([s, x]) => -(kk * x * s) / (p.Ks + s);
+    const dX = ([s, x]) => p.Y * -dS([s, x]) - p.kd * x;
+    const step = ([s, x], dt) => {
+      const k1s = dS([s, x]), k1x = dX([s, x]);
+      const k2s = dS([s + k1s * dt / 2, x + k1x * dt / 2]), k2x = dX([s + k1s * dt / 2, x + k1x * dt / 2]);
+      const k3s = dS([s + k2s * dt / 2, x + k2x * dt / 2]), k3x = dX([s + k2s * dt / 2, x + k2x * dt / 2]);
+      const k4s = dS([s + k3s * dt, x + k3x * dt]), k4x = dX([s + k3s * dt, x + k3x * dt]);
+      return [Math.max(0, s + dt / 6 * (k1s + 2 * k2s + 2 * k3s + k4s)), Math.max(0, x + dt / 6 * (k1x + 2 * k2x + 2 * k3x + k4x))];
+    };
+    const [ns, nx] = step([S[i - 1], X[i - 1]], p.dt);
+    S[i] = ns; X[i] = nx;
+  }
+  return {dt: p.dt, S, X, X0};
+}
+/* the terminal settling velocity of a floc (Stokes' law), for a floc whose radius grows with the biomass X */
+function flocSettleVel(X, X0, r0 = 0.15e-3){
+  const r = r0 * Math.cbrt(Math.max(X, 1) / X0), g = 9.8, drho = 20, mu = 1.0e-3;   // m, m/s^2, kg/m^3, Pa.s
+  return (2 / 9) * drho * g * r * r / mu;   // m/s
+}
+
+/* ---- 3. biogas ---- */
+const BIO = {Gmax: 100, kRef: 0.15, Tref: 35, dt: 0.05, tMax: 60};
+function kBiogas(T, q10, p = BIO){ return p.kRef * Math.pow(q10, (T - p.Tref) / 10); }
+function biogasRun(T, q10, leaking, p = BIO){
+  const kk = leaking ? kBiogas(T, q10, p) * 0.02 : kBiogas(T, q10, p);
+  const n = Math.round(p.tMax / p.dt);
+  const G = integrate1D(0, p.dt, n, g => kk * (p.Gmax - g));
+  return {dt: p.dt, G, k: kk};
+}
+/* MODEL:end */
+
+/* ---- state ------------------------------------------------------------------- */
+const S = {tab: 'curd', locked: false,
+           cT: 30, cQ: 2.5, cI: 1, cTime: 10,
+           sX: 800, sHRT: 6, sAir: true,
+           bT: 35, bQ: 2.2, bDay: 20, bLeak: false};
+const shared = sharedState();
+if (shared) {
+  if (shared.tab === 'sewage' || shared.tab === 'biogas') S.tab = shared.tab;
+  S.cT = clamp(+shared.cT || 30, 2, 70); S.cQ = clamp(+shared.cQ || 2.5, 1.5, 4); S.cI = clamp(+shared.cI || 1, 0.2, 5); S.cTime = clamp(+shared.cTime || 10, 0, 30);
+  S.sX = clamp(+shared.sX || 800, 100, 2000); S.sHRT = clamp(+shared.sHRT || 6, 0.5, 24); S.sAir = shared.sAir !== false;
+  S.bT = clamp(+shared.bT || 35, 5, 55); S.bQ = clamp(+shared.bQ || 2.2, 1.5, 3.5); S.bDay = clamp(+shared.bDay || 20, 0, 60); S.bLeak = !!shared.bLeak;
+}
+shareState(() => ({tab: S.tab, cT: S.cT, cQ: S.cQ, cI: S.cI, cTime: +S.cTime.toFixed(1),
+  sX: S.sX, sHRT: +S.sHRT.toFixed(1), sAir: S.sAir, bT: S.bT, bQ: S.bQ, bDay: +S.bDay.toFixed(1), bLeak: S.bLeak}));
+
+/* ---- stage geometry ------------------------------------------------------------ */
+const svg = $('stage');
+const INK = '#1d2327', INK2 = '#4a555b', INK3 = '#7c878c', GREEN = '#1f8a4c', BLUE = '#2f6fd0', RED = '#c9432f', AMBER = '#b8781f';
+const GX0 = 108, GX1 = 928, GY0 = 316, GY1 = 556;
+const rnd = Play.mulberry32(7);
+
+function build(){
+  let bactHtml = '', flocHtml = '', bubHtml = '';
+  for (let i = 0; i < 44; i++) {
+    const x = -110 + rnd() * 220, y = -35 + rnd() * 165, rot = rnd() * 360;
+    bactHtml += `<rect class="bact" data-i="${i}" x="${(x - 5).toFixed(1)}" y="${(y - 2.2).toFixed(1)}" width="10" height="4.4" rx="2.2" fill="#f6f0da" stroke="#8a6a2a" stroke-width=".6" transform="rotate(${rot.toFixed(0)} ${x.toFixed(1)} ${y.toFixed(1)})" opacity="0"/>`;
+  }
+  for (let i = 0; i < 26; i++) {
+    const x = 178 + (i % 13) * 40 + rnd() * 8, y = 150 + Math.floor(i / 13) * 60 + rnd() * 14;
+    flocHtml += `<circle class="floc" data-i="${i}" data-x0="${x.toFixed(1)}" data-y0="${y.toFixed(1)}" cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="3" fill="#5b4a2e" opacity="0"/>`;
+  }
+  for (let i = 0; i < 18; i++) {
+    const x = 188 + (i * 27) % 500, dly = (i * 0.31) % 2;
+    bubHtml += `<circle class="bub" data-i="${i}" data-x="${x.toFixed(1)}" data-dly="${dly.toFixed(2)}" cx="${x.toFixed(1)}" cy="248" r="${(2.5 + (i % 3)).toFixed(1)}" fill="#bfe3e6" opacity="0"/>`;
+  }
+  svg.innerHTML = `
+  <rect width="1000" height="700" fill="#fbfaf6"/>
+  <text x="24" y="30" font-size="13" font-weight="700" letter-spacing=".06em" fill="${INK2}" id="sceneTitle"></text>
+  <text x="24" y="48" font-size="11.5" fill="${INK3}" id="sceneSub"></text>
+
+  <!-- ===== curd ===== -->
+  <g id="vCurd">
+    <g id="curdJar" transform="translate(500 170)">
+      <path d="M-140 -90 L140 -90 L120 130 Q120 158 92 158 L-92 158 Q-120 158 -120 130 Z" fill="#fff" stroke="#cfd6da" stroke-width="3"/>
+      <clipPath id="clipJar"><path d="M-136 -88 L136 -88 L117 129 Q117 154 92 154 L-92 154 Q-117 154 -117 129 Z"/></clipPath>
+      <g clip-path="url(#clipJar)">
+        <rect id="milk" x="-140" y="-60" width="280" height="220" fill="#fdf6e3"/>
+        <g id="curdBact">${bactHtml}</g>
+        <path id="curdTexture" fill="none" stroke="#e8d9a0" stroke-width="2" opacity="0"/>
+      </g>
+      <path d="M-140 -90 L140 -90 L120 130 Q120 158 92 158 L-92 158 Q-120 158 -120 130 Z" fill="none" stroke="#cfd6da" stroke-width="3"/>
+      <rect x="-30" y="-118" width="60" height="30" rx="8" fill="#e7ded0"/>
+      <text x="0" y="-176" text-anchor="middle" font-size="12" font-weight="700" fill="${INK2}">starter curd added at t = 0</text>
+      <path d="M0 -160 L0 -122" stroke="${INK3}" stroke-width="1.5" marker-end="url(#arD)"/>
+    </g>
+    <g transform="translate(830 170)">
+      <rect x="-14" y="-90" width="28" height="150" rx="14" fill="#eef0f1" stroke="#c7ced1" stroke-width="2"/>
+      <rect id="thermFill" x="-8" y="0" width="16" rx="8" fill="${AMBER}"/>
+      <circle cx="0" cy="60" r="20" fill="${AMBER}" stroke="#c7ced1" stroke-width="2"/>
+      <text x="0" y="100" text-anchor="middle" font-size="11.5" font-weight="700" fill="${INK2}">temperature</text>
+    </g>
+    <text id="curdNote" x="500" y="266" text-anchor="middle" font-size="13" font-weight="700"></text>
+  </g>
+
+  <!-- ===== sewage ===== -->
+  <g id="vSewage" display="none">
+    <rect x="150" y="90" width="560" height="180" rx="10" fill="#eef3ee" stroke="#b9c9bd" stroke-width="3"/>
+    <text x="430" y="76" text-anchor="middle" font-size="12" font-weight="700" fill="${INK2}">AERATION TANK</text>
+    <rect id="sewWater" x="153" y="93" width="554" height="174" fill="#a98a5c"/>
+    <g id="sewFlocs">${flocHtml}</g>
+    <g id="sewBubbles">${bubHtml}</g>
+    <rect x="150" y="255" width="560" height="18" fill="#c7bfa3" opacity=".6"/>
+    <rect x="185" y="270" width="16" height="14" fill="#7c878c"/>
+    <path id="diffuserPipe" d="M193 284 L193 64 L860 64" fill="none" stroke="#7c878c" stroke-width="6"/>
+    <g id="pumpG" transform="translate(890 64)">
+      <rect x="-26" y="-18" width="52" height="36" rx="8" fill="#3c4a56"/>
+      <text y="6" text-anchor="middle" font-size="16">&#128168;</text>
+    </g>
+    <g transform="translate(760 205)">
+      <path d="M0 0 h150 v55 h-150 a10 10 0 0 1 -10 -10 v-35 a10 10 0 0 1 10 -10z" fill="#eef3ee" stroke="#b9c9bd" stroke-width="3"/>
+      <text x="75" y="-8" text-anchor="middle" font-size="11.5" font-weight="700" fill="${INK2}">to the river</text>
+      <rect id="riverWater" x="4" y="4" width="142" height="47" fill="#a98a5c"/>
+    </g>
+    <path d="M710 180 L760 232" stroke="#7c878c" stroke-width="10"/>
+    <text id="sewNote" x="430" y="180" text-anchor="middle" font-size="13" font-weight="700"></text>
+  </g>
+
+  <!-- ===== biogas ===== -->
+  <g id="vBiogas" display="none">
+    <path d="M300 260 L700 260 L700 150 Q700 60 500 60 Q300 60 300 150 Z" fill="#f1e6c8" stroke="#a98a4a" stroke-width="3"/>
+    <text x="500" y="76" text-anchor="middle" font-size="12" font-weight="700" fill="#7a5a20">DIGESTER (SEALED)</text>
+    <path id="gasDome" d="M340 260 L660 260 L660 190 Q660 130 500 130 Q340 130 340 190 Z" fill="#e6c65a" stroke="#b8942f" stroke-width="2"/>
+    <rect x="300" y="255" width="400" height="30" fill="#6b4a2b"/>
+    <path d="M240 250 L300 250" stroke="#7c878c" stroke-width="10"/>
+    <text x="215" y="238" text-anchor="middle" font-size="11" font-weight="700" fill="${INK2}">dung slurry</text>
+    <g id="gasPipe">
+      <path d="M500 60 L500 20 L660 20" fill="none" stroke="#7c878c" stroke-width="6"/>
+      <g id="leakMark" transform="translate(580 20)" opacity="0">
+        <path d="M-8 -14 L8 14 M8 -14 L-8 14" stroke="${RED}" stroke-width="4" stroke-linecap="round"/>
+      </g>
+    </g>
+    <g id="flameG" transform="translate(660 20)">
+      <rect x="-4" y="0" width="8" height="20" fill="#7c878c"/>
+      <path id="flame" d="M0 0 q-10 -14 0 -26 q10 12 0 26z" fill="#f2a13d"/>
+    </g>
+    <text x="500" y="242" text-anchor="middle" font-size="13" font-weight="700" id="bioNote"></text>
+  </g>
+
+  <defs>
+    <marker id="arD" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="${INK3}"/></marker>
+    <marker id="arG" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="${INK}"/></marker>
+  </defs>
+
+  <!-- ===== the graph, shared layout, repainted per tab ===== -->
+  <text x="24" y="${GY0 - 18}" font-size="13" font-weight="700" letter-spacing=".06em" fill="${INK2}" id="graphTitle"></text>
+  <g id="gAxes"></g>
+  <path id="curveMain" fill="none" stroke="${GREEN}" stroke-width="2.4"/>
+  <path id="curveAlt" fill="none" stroke="${BLUE}" stroke-width="2" stroke-dasharray="5 4"/>
+  <line id="thresholdLine" stroke="${RED}" stroke-width="1.4" stroke-dasharray="4 4" opacity="0"/>
+  <text id="thresholdLab" font-size="11" font-weight="700" fill="${RED}" opacity="0"/>
+  <line id="timeLine" x1="0" x2="0" stroke="${INK}" stroke-width="1.5" stroke-dasharray="3 3"/>
+  <circle id="timeKnob" r="8" fill="#fff" stroke="${INK}" stroke-width="2"/>
+  <rect id="gHit" width="30" height="30" fill="transparent" role="slider" aria-label="Drag to move along time"/>
+  <g id="legend"></g>
+  <rect id="veil" x="0" y="${GY0 - 34}" width="1000" height="${700 - GY0 + 34}" fill="#fbfaf6" opacity=".93"/>
+  <text id="veilT" x="500" y="${(GY0 + GY1) / 2}" text-anchor="middle" font-size="15" fill="${INK3}">The graph and numbers appear once you have made a prediction.</text>
+  `;
+}
+build();   // build the stage once, before anything (drag handlers below) can reach into it
+
+/* generic axis + label helpers */
+function niceH(h){ return h > 0 && h < 1 ? fmt(h * 60, 0) + ' min' : fmt(h, h < 10 ? 1 : 0) + ' h'; }
+function niceD(d){ return fmt(d, d < 10 ? 1 : 0) + ' d'; }
+const gx = (v, vMax) => GX0 + v / vMax * (GX1 - GX0);
+const gy = (v, vMin, vMax, invert) => invert ? GY0 + (v - vMin) / (vMax - vMin) * (GY1 - GY0) : GY1 - (v - vMin) / (vMax - vMin) * (GY1 - GY0);
+
+function pathFrom(arr, dt, n, tMax, vMin, vMax, invert, everyK){
+  let d = '';
+  for (let i = 0; i <= n; i += everyK) d += (d ? 'L' : 'M') + gx(i * dt, tMax).toFixed(1) + ' ' + gy(arr[i], vMin, vMax, invert).toFixed(1);
+  return d;
+}
+function drawAxes(xMax, xUnit, yLeftTicks, yLeftFmt, yRightTicks, yRightFmt, yRightInvert){
+  let a = `<line x1="${GX0}" y1="${GY1}" x2="${GX1}" y2="${GY1}" stroke="#9aa3a6"/><line x1="${GX0}" y1="${GY0}" x2="${GX0}" y2="${GY1}" stroke="#9aa3a6"/>`;
+  const nTick = 6;
+  for (let i = 0; i <= nTick; i++) {
+    const v = xMax * i / nTick, x = gx(v, xMax);
+    a += `<line x1="${x}" y1="${GY1}" x2="${x}" y2="${GY1 + 5}" stroke="${INK3}"/><text x="${x}" y="${GY1 + 18}" font-size="10.5" text-anchor="middle" fill="${INK3}">${xUnit(v)}</text>`;
+  }
+  for (const v of yLeftTicks) a += `<line x1="${GX0 - 5}" y1="${gy(v, yLeftTicks[0], yLeftTicks[yLeftTicks.length - 1], false)}" x2="${GX0}" y2="${gy(v, yLeftTicks[0], yLeftTicks[yLeftTicks.length - 1], false)}" stroke="${INK3}"/>
+    <text x="${GX0 - 9}" y="${gy(v, yLeftTicks[0], yLeftTicks[yLeftTicks.length - 1], false) + 4}" font-size="10.5" text-anchor="end" fill="${GREEN}">${yLeftFmt(v)}</text>`;
+  if (yRightTicks) for (const v of yRightTicks) a += `<line x1="${GX1}" y1="${gy(v, yRightTicks[0], yRightTicks[yRightTicks.length - 1], yRightInvert)}" x2="${GX1 + 5}" y2="${gy(v, yRightTicks[0], yRightTicks[yRightTicks.length - 1], yRightInvert)}" stroke="${INK3}"/>
+    <text x="${GX1 + 9}" y="${gy(v, yRightTicks[0], yRightTicks[yRightTicks.length - 1], yRightInvert) + 4}" font-size="10.5" text-anchor="start" fill="${BLUE}">${yRightFmt(v)}</text>`;
+  $('gAxes').innerHTML = a;
+}
+
+/* ---- curd painting ---- */
+function paintCurd(){
+  const run = curdRun(S.cT, S.cQ, S.cI);
+  const N_MAX = run.K * 1.05;
+  $('sceneTitle').textContent = 'MILK INTO CURD'; $('sceneSub').textContent = `Lactobacillus, starter ${S.cI.toFixed(1)}% · ${S.cT}°C · Q₁₀ = ${S.cQ.toFixed(1)}`;
+  $('graphTitle').textContent = 'POPULATION (N/K, left) AND pH (right), AGAINST TIME';
+  drawAxes(CURD.tMax, niceH, [0, 0.5, 1], v => v.toFixed(1), [3, 5, 7], v => 'pH ' + v, true);
+  { let d = ''; const n = run.N.length - 1; for (let i = 0; i <= n; i += 4) d += (d ? 'L' : 'M') + gx(i * run.dt, CURD.tMax).toFixed(1) + ' ' + gy(run.N[i] / run.K, 0, 1.05, false).toFixed(1); $('curveMain').setAttribute('d', d); }
+  { let d = ''; const n = run.pH.length - 1; for (let i = 0; i <= n; i += 4) d += (d ? 'L' : 'M') + gx(i * run.dt, CURD.tMax).toFixed(1) + ' ' + gy(run.pH[i], 3, 7, true).toFixed(1); $('curveAlt').setAttribute('d', d); }
+  const ty = gy(4.6, 3, 7, true);
+  $('thresholdLine').setAttribute('x1', GX0); $('thresholdLine').setAttribute('x2', GX1); $('thresholdLine').setAttribute('y1', ty); $('thresholdLine').setAttribute('y2', ty); $('thresholdLine').setAttribute('opacity', 1);
+  $('thresholdLab').setAttribute('x', GX0 + 6); $('thresholdLab').setAttribute('y', ty - 5); $('thresholdLab').setAttribute('opacity', 1); $('thresholdLab').textContent = 'pH 4.6 — curd sets (casein’s isoelectric point)';
+  $('legend').innerHTML = `<circle cx="${GX0 + 6}" cy="${GY0 - 8}" r="4" fill="${GREEN}"/><text x="${GX0 + 14}" y="${GY0 - 4}" font-size="11" fill="${INK2}">N / K (population)</text>
+    <circle cx="${GX0 + 176}" cy="${GY0 - 8}" r="4" fill="${BLUE}"/><text x="${GX0 + 184}" y="${GY0 - 4}" font-size="11" fill="${INK2}">pH</text>`;
+  const tx = gx(S.cTime, CURD.tMax);
+  $('timeLine').setAttribute('x1', tx); $('timeLine').setAttribute('x2', tx); $('timeLine').setAttribute('y1', GY0); $('timeLine').setAttribute('y2', GY1);
+  const curN = interp(run.N, S.cTime, run.dt), curPH = interp(run.pH, S.cTime, run.dt);
+  $('timeKnob').setAttribute('cx', tx); $('timeKnob').setAttribute('cy', gy(curPH, 3, 7, true));
+  $('gHit').setAttribute('x', tx - 15); $('gHit').setAttribute('y', GY0 - 15);
+  /* the jar */
+  const frac = curN / run.K, pHnow = curPH;
+  const milkCol = mix('#fdf6e3', '#f4e6a3', clamp((6.6 - pHnow) / 2.4, 0, 1));
+  $('milk').setAttribute('fill', milkCol);
+  $('curdTexture').setAttribute('opacity', pHnow <= 4.6 ? 0.9 : 0);
+  let tex = ''; for (let i = 0; i < 5; i++) { const y = -20 + i * 30; tex += `M${-110 + (i % 2) * 8} ${y} q30 -10 60 0 q30 10 60 0 q30 -10 60 0`; } $('curdTexture').setAttribute('d', tex);
+  document.querySelectorAll('#curdBact .bact').forEach(el => { const i = +el.dataset.i, show = i < Math.round(44 * Math.pow(frac, 0.4)); el.setAttribute('opacity', show ? 0.85 : 0); });
+  const tFrac = clamp((S.cT - 2) / 68, 0, 1);
+  $('thermFill').setAttribute('y', (-70 * tFrac).toFixed(1)); $('thermFill').setAttribute('height', (70 * tFrac + 10).toFixed(1));
+  $('curdNote').setAttribute('fill', INK2);
+  $('curdNote').textContent = run.muT <= 0 ? 'Too hot: the starter culture is dying, not growing.' :
+    pHnow <= 4.6 ? 'The curd has set.' : `Fermenting — ${(frac * 100).toFixed(0)}% of the way to using up the milk’s food.`;
+  paintCurdNums(run, curN, curPH);
+}
+function mix(a, b, t){
+  const pa = [1, 3, 5].map(i => parseInt(a.slice(i, i + 2), 16)), pb = [1, 3, 5].map(i => parseInt(b.slice(i, i + 2), 16));
+  return '#' + pa.map((v, i) => Math.round(v + (pb[i] - v) * t).toString(16).padStart(2, '0')).join('');
+}
+function paintCurdNums(run, curN, curPH){
+  $('numKick').textContent = 'Measured in the jar';
+  $('nums').innerHTML = `<div class="readout">
+    <span>Growth rate, &mu;(T)</span><b>${run.muT >= 0 ? fmt(run.muT, 3) + ' /h' : fmt(run.muT, 3) + ' /h (dying)'}</b>
+    <span class="eq">&mu; = &mu;₃₇ &times; Q₁₀^((T&minus;37)/10)${run.muT < 0 ? ', above 60°C the culture dies instead' : ''}</span>
+    <span>Population, N/K</span><b>${(curN / run.K * 100).toFixed(1)}%</b>
+    <span>pH now</span><b>${curPH.toFixed(2)}</b>
+    <i class="sep"></i>
+    <span>Time for curd to set</span><b>${run.setTime == null ? 'never, in 30 h' : niceH(run.setTime)}</b>
+  </div>`;
+  $('whyCard').hidden = false;
+  $('why').innerHTML = run.muT < 0
+    ? `<p>Above 60&nbsp;&deg;C the model kills the starter culture instead of growing it &mdash; the same reason boiled or over-heated milk never turns to curd. Acid production stops, and the pH stays near ${CURD.pH0}.</p>`
+    : run.setTime == null
+      ? `<p>At ${S.cT}&nbsp;&deg;C, Q₁₀ = ${S.cQ.toFixed(1)} slows <i>Lactobacillus</i> to &mu; = ${fmt(run.muT, 3)} per hour &mdash; too slow to use up the milk's food and drop the pH to 4.6 within 30 hours.</p>`
+      : `<p>The population grows on the milk's lactose until the lactose runs out, near N/K = 100%. Lactic acid builds up alongside it and titrates the milk's own buffering, so the pH falls fastest in the middle of fermentation and levels out at both ends &mdash; it set at <b>${niceH(run.setTime)}</b>.</p>`;
+}
+
+/* ---- sewage painting ---- */
+function paintSewage(){
+  const run = sewageRun(S.sX, S.sAir);
+  const S_MAX = SEW.S0 * 1.05, X_MAX = 1400;
+  $('sceneTitle').textContent = 'THE AERATION TANK'; $('sceneSub').textContent = `Activated sludge X₀ = ${S.sX} mg/L · air pump ${S.sAir ? 'on' : 'off'}`;
+  $('graphTitle').textContent = 'BOD, mg/L (left) AND BIOMASS X, mg/L (right), AGAINST TIME IN THE TANK';
+  const tMaxH = SEW.tMax * 24;
+  drawAxes(tMaxH, v => fmt(v, 0) + ' h', [0, 150, 300], v => v.toFixed(0), [0, 700, 1400], v => v.toFixed(0), false);
+  { let d = ''; const n = run.S.length - 1, everyK = 40; for (let i = 0; i <= n; i += everyK) d += (d ? 'L' : 'M') + gx(i * run.dt * 24, tMaxH).toFixed(1) + ' ' + gy(run.S[i], 0, S_MAX, false).toFixed(1); $('curveMain').setAttribute('d', d); }
+  { let d = ''; const n = run.X.length - 1, everyK = 40; for (let i = 0; i <= n; i += everyK) d += (d ? 'L' : 'M') + gx(i * run.dt * 24, tMaxH).toFixed(1) + ' ' + gy(run.X[i], 0, X_MAX, false).toFixed(1); $('curveAlt').setAttribute('d', d); }
+  const ty = gy(30, 0, S_MAX, false);
+  $('thresholdLine').setAttribute('x1', GX0); $('thresholdLine').setAttribute('x2', GX1); $('thresholdLine').setAttribute('y1', ty); $('thresholdLine').setAttribute('y2', ty); $('thresholdLine').setAttribute('opacity', 1);
+  $('thresholdLab').setAttribute('x', GX0 + 6); $('thresholdLab').setAttribute('y', ty - 5); $('thresholdLab').setAttribute('opacity', 1); $('thresholdLab').textContent = 'BOD 30 mg/L — a typical discharge standard';
+  $('legend').innerHTML = `<circle cx="${GX0 + 6}" cy="${GY0 - 8}" r="4" fill="${GREEN}"/><text x="${GX0 + 14}" y="${GY0 - 4}" font-size="11" fill="${INK2}">BOD, S</text>
+    <circle cx="${GX0 + 100}" cy="${GY0 - 8}" r="4" fill="${BLUE}"/><text x="${GX0 + 108}" y="${GY0 - 4}" font-size="11" fill="${INK2}">biomass, X</text>`;
+  const hrtH = S.sHRT, tx = gx(hrtH, tMaxH);
+  const curS = interp(run.S, hrtH / 24, run.dt), curX = interp(run.X, hrtH / 24, run.dt);
+  $('timeLine').setAttribute('x1', tx); $('timeLine').setAttribute('x2', tx); $('timeLine').setAttribute('y1', GY0); $('timeLine').setAttribute('y2', GY1);
+  $('timeKnob').setAttribute('cx', tx); $('timeKnob').setAttribute('cy', gy(curS, 0, S_MAX, false));
+  $('gHit').setAttribute('x', tx - 15); $('gHit').setAttribute('y', GY0 - 15);
+  /* the tank art */
+  const removed = 1 - curS / SEW.S0;
+  $('sewWater').setAttribute('fill', mix('#a98a5c', '#bfe3d8', clamp(removed, 0, 1)));
+  $('riverWater').setAttribute('fill', curS <= 30 ? '#bfe3d8' : mix('#a98a5c', '#d8c79a', clamp(removed, 0, 1)));
+  document.querySelectorAll('#sewFlocs .floc').forEach(el => {
+    const i = +el.dataset.i, show = i < Math.round(26 * clamp(curX / X_MAX * 2.2, 0, 1));
+    el.setAttribute('opacity', show ? 0.8 : 0);
+    el.setAttribute('r', (2 + 3 * clamp(curX / SEW.S0, 0, 1)).toFixed(1));
+  });
+  document.querySelectorAll('#sewBubbles .bub').forEach(el => el.setAttribute('opacity', S.sAir ? 0.7 : 0));
+  $('pumpG').setAttribute('opacity', S.sAir ? 1 : 0.3);
+  $('sewNote').textContent = !S.sAir ? 'No air: the aerobic bacteria cannot oxidise the sewage.' : curS <= 30 ? 'Clean enough to release.' : `${(removed * 100).toFixed(0)}% of the BOD removed so far.`;
+  paintSewageNums(run, curS, curX);
+}
+function paintSewageNums(run, curS, curX){
+  const v = flocSettleVel(curX, run.X0);
+  $('numKick').textContent = 'Measured in the tank';
+  $('nums').innerHTML = `<div class="readout">
+    <span>BOD now, S</span><b>${fmt(curS, 0)} mg/L</b>
+    <span>Removed</span><b>${((1 - curS / SEW.S0) * 100).toFixed(1)}%</b>
+    <span>Meets the 30 mg/L standard?</span><b>${curS <= 30 ? 'yes' : 'not yet'}</b>
+    <i class="sep"></i>
+    <span>Biomass now, X</span><b>${fmt(curX, 0)} mg/L</b>
+    <span>Floc settling speed</span><b>${(v * 1000).toFixed(2)} mm/s</b>
+    <span class="eq">Stokes' law, on a floc whose radius grows with X</span>
+  </div>`;
+  $('whyCard').hidden = false;
+  $('why').innerHTML = !S.sAir
+    ? `<p>With the air pump off, k is treated as zero in dS/dt = &minus;kXS/(Ks+S): however much sludge is in the tank, the aerobic bacteria have no oxygen to oxidise the sewage's organic matter with, and the BOD barely moves.</p>`
+    : `<p>${S.sX} mg/L of activated sludge removes BOD fast at first, when S is far above Ks = ${SEW.Ks} mg/L, and slows as S runs low. ${curS <= 30 ? `By ${niceH(S.sHRT)} the water is clean enough to release into a river.` : `It needs longer than ${niceH(S.sHRT)} here to reach the 30 mg/L standard — try more sludge, or more time.`}</p>`;
+}
+
+/* ---- biogas painting ---- */
+function paintBiogas(){
+  const run = biogasRun(S.bT, S.bQ, S.bLeak);
+  $('sceneTitle').textContent = 'THE GOBAR GAS PLANT'; $('sceneSub').textContent = `${S.bT}°C · Q₁₀ = ${S.bQ.toFixed(1)} · ${S.bLeak ? 'air leaking in' : 'sealed, anaerobic'}`;
+  $('graphTitle').textContent = 'CUMULATIVE METHANE, % OF MAXIMUM, AGAINST DAYS SEALED';
+  drawAxes(BIO.tMax, niceD, [0, 50, 100], v => v.toFixed(0) + '%', null, null, false);
+  { let d = ''; const n = run.G.length - 1, everyK = 6; for (let i = 0; i <= n; i += everyK) d += (d ? 'L' : 'M') + gx(i * run.dt, BIO.tMax).toFixed(1) + ' ' + gy(run.G[i], 0, BIO.Gmax * 1.02, false).toFixed(1); $('curveMain').setAttribute('d', d); }
+  $('curveAlt').setAttribute('d', '');
+  $('thresholdLine').setAttribute('opacity', 0); $('thresholdLab').setAttribute('opacity', 0);
+  $('legend').innerHTML = `<circle cx="${GX0 + 6}" cy="${GY0 - 8}" r="4" fill="${GREEN}"/><text x="${GX0 + 14}" y="${GY0 - 4}" font-size="11" fill="${INK2}">cumulative methane, G</text>`;
+  const tx = gx(S.bDay, BIO.tMax), curG = interp(run.G, S.bDay, run.dt);
+  $('timeLine').setAttribute('x1', tx); $('timeLine').setAttribute('x2', tx); $('timeLine').setAttribute('y1', GY0); $('timeLine').setAttribute('y2', GY1);
+  $('timeKnob').setAttribute('cx', tx); $('timeKnob').setAttribute('cy', gy(curG, 0, BIO.Gmax * 1.02, false));
+  $('gHit').setAttribute('x', tx - 15); $('gHit').setAttribute('y', GY0 - 15);
+  const frac = curG / BIO.Gmax;
+  $('gasDome').setAttribute('transform', `translate(0 ${(1 - clamp(frac, 0, 1)) * 46})`);
+  $('leakMark').setAttribute('opacity', S.bLeak ? 1 : 0);
+  const flameH = S.bLeak ? 4 : clamp(6 + frac * 26, 4, 32);
+  $('flame').setAttribute('d', `M0 0 q${-flameH * 0.4} ${-flameH * 0.55} 0 ${-flameH} q${flameH * 0.4} ${flameH * 0.46} 0 ${flameH}z`);
+  $('flame').setAttribute('opacity', frac > 0.02 && !S.bLeak ? 1 : 0.15);
+  $('bioNote').textContent = S.bLeak ? 'Air has got in: the anaerobic methanogens cannot work.' : `${(frac * 100).toFixed(0)}% of the slurry's methane collected so far.`;
+  paintBiogasNums(run, curG);
+}
+function paintBiogasNums(run, curG){
+  $('numKick').textContent = 'Measured in the digester';
+  $('nums').innerHTML = `<div class="readout">
+    <span>Rate constant, k(T)</span><b>${fmt(run.k, 4)} /day</b>
+    <span class="eq">k = kᵣₑᶠ &times; Q₁₀^((T&minus;35)/10)${S.bLeak ? ', &times; 0.02 while air leaks in' : ''}</span>
+    <span>Methane collected</span><b>${(curG / BIO.Gmax * 100).toFixed(1)}%</b>
+    <span>Days to 90% of the total</span><b>${run.k > 1e-4 ? niceD(Math.log(10) / run.k) : 'practically never'}</b>
+  </div>`;
+  $('whyCard').hidden = false;
+  $('why').innerHTML = S.bLeak
+    ? `<p>Methanogens such as <i>Methanobacterium</i> are strict anaerobes &mdash; even a little oxygen stops them working, so k drops to almost nothing and the gas holder barely rises.</p>`
+    : `<p>Gas comes out fastest while there is the most undigested slurry left, and slows as it approaches the ceiling: dG/dt = k(Gmax&minus;G). At ${S.bT}°C, k = ${fmt(run.k, 4)}/day, so 90% of the gas is collected by about ${niceD(Math.log(10) / run.k)}.</p>`;
+}
+
+/* ---- top-level paint / controls ---- */
+function paint(){
+  $('vCurd').setAttribute('display', S.tab === 'curd' ? '' : 'none');
+  $('vSewage').setAttribute('display', S.tab === 'sewage' ? '' : 'none');
+  $('vBiogas').setAttribute('display', S.tab === 'biogas' ? '' : 'none');
+  $('veil').setAttribute('display', S.locked ? 'none' : '');
+  $('veilT').setAttribute('display', S.locked ? 'none' : '');
+  syncControls();
+  if (!S.locked) return;
+  if (S.tab === 'curd') paintCurd(); else if (S.tab === 'sewage') paintSewage(); else paintBiogas();
+  check();
+}
+function syncControls(){
+  $('cT').value = S.cT; $('cTOut').textContent = S.cT + ' °C';
+  $('cQ').value = S.cQ; $('cQOut').textContent = S.cQ.toFixed(1);
+  $('cI').value = S.cI; $('cIOut').textContent = S.cI.toFixed(1) + '%';
+  $('cTime').value = S.cTime; $('cTimeOut').textContent = S.cTime.toFixed(1) + ' h';
+  $('sX').value = S.sX; $('sXOut').textContent = S.sX + ' mg/L';
+  $('sHRT').value = S.sHRT; $('sHRTOut').textContent = S.sHRT.toFixed(1) + ' h';
+  $('sAirBtn').setAttribute('aria-pressed', S.sAir); $('sAirBtn').textContent = (S.sAir ? '💨 Air pump: ON' : '🚫 Air pump: OFF');
+  $('bT').value = S.bT; $('bTOut').textContent = S.bT + ' °C';
+  $('bQ').value = S.bQ; $('bQOut').textContent = S.bQ.toFixed(1);
+  $('bDay').value = S.bDay; $('bDayOut').textContent = S.bDay.toFixed(1) + ' d';
+  $('bLeakBtn').setAttribute('aria-pressed', S.bLeak); $('bLeakBtn').textContent = (S.bLeak ? '💨 Digester: LEAKING' : '🔒 Digester: SEALED');
+  for (const id of ['cT', 'cQ', 'cI', 'cTime', 'sX', 'sHRT', 'sAirBtn', 'bT', 'bQ', 'bDay', 'bLeakBtn']) $(id).disabled = !S.locked;
+}
+function showTab(tab){
+  S.tab = tab; sound('tick');
+  $('tabCurd').setAttribute('aria-pressed', tab === 'curd'); $('tabSewage').setAttribute('aria-pressed', tab === 'sewage'); $('tabBiogas').setAttribute('aria-pressed', tab === 'biogas');
+  $('ctlCurd').hidden = tab !== 'curd'; $('ctlSewage').hidden = tab !== 'sewage'; $('ctlBiogas').hidden = tab !== 'biogas';
+  svg.setAttribute('aria-label', tab === 'curd' ? 'A jar of milk turning to curd, with a graph of population and pH' : tab === 'sewage' ? 'A sewage aeration tank, with a graph of BOD and biomass' : 'A biogas digester, with a graph of cumulative methane');
+  track('tab', {tab});
+  paint();
+}
+$('tabCurd').addEventListener('click', () => showTab('curd'));
+$('tabSewage').addEventListener('click', () => showTab('sewage'));
+$('tabBiogas').addEventListener('click', () => showTab('biogas'));
+
+function onSlide(id, key, fmtFn){ $(id).addEventListener('input', e => { S[key] = +e.target.value; paint(); }); $(id).addEventListener('change', () => track('slide', {id, v: S[key]})); }
+onSlide('cT', 'cT'); onSlide('cQ', 'cQ'); onSlide('cI', 'cI'); onSlide('cTime', 'cTime');
+onSlide('sX', 'sX'); onSlide('sHRT', 'sHRT');
+onSlide('bT', 'bT'); onSlide('bQ', 'bQ'); onSlide('bDay', 'bDay');
+$('sAirBtn').addEventListener('click', () => { S.sAir = !S.sAir; sound('tick'); track('air', {on: S.sAir}); paint(); });
+$('bLeakBtn').addEventListener('click', () => { S.bLeak = !S.bLeak; sound('tick'); track('leak', {leaking: S.bLeak}); paint(); });
+
+/* drag the marker on the graph: moves whichever time value the current tab uses */
+let dragTMax = CURD.tMax;
+drag($('gHit'), svg, {
+  start(){ if (!S.locked) return false; dragTMax = S.tab === 'curd' ? CURD.tMax : S.tab === 'sewage' ? SEW.tMax * 24 : BIO.tMax; },
+  move(p){
+    const v = clamp((p.x - GX0) / (GX1 - GX0) * dragTMax, 0, dragTMax);
+    if (S.tab === 'curd') S.cTime = v; else if (S.tab === 'sewage') S.sHRT = Math.max(0.5, v); else S.bDay = v;
+    paint();
+  },
+  end(){ track('dragTime', {tab: S.tab}); },
+});
+$('gHit').addEventListener('keydown', e => {
+  const k = {ArrowRight: 1, ArrowUp: 1, ArrowLeft: -1, ArrowDown: -1}[e.key]; if (!k || !S.locked) return;
+  e.preventDefault();
+  if (S.tab === 'curd') S.cTime = clamp(S.cTime + k * 0.5, 0, CURD.tMax);
+  else if (S.tab === 'sewage') S.sHRT = clamp(S.sHRT + k * 0.5, 0.5, SEW.tMax * 24);
+  else S.bDay = clamp(S.bDay + k, 0, BIO.tMax);
+  paint();
+});
+
+/* the diffuser's bubbles: decoration only */
+if (!reduced()) loop((dt, t) => {
+  if (S.tab !== 'sewage' || !S.locked || !S.sAir) return;
+  document.querySelectorAll('#sewBubbles .bub').forEach(el => {
+    const dly = +el.dataset.dly, ph = ((t + dly) % 2) / 2, y = 248 - ph * 150;
+    el.setAttribute('cy', y.toFixed(1)); el.setAttribute('opacity', (0.75 * (1 - ph)).toFixed(2));
+  });
+});
+
+/* ---- findings ---------------------------------------------------------------- */
+function check(){
+  if (!S.locked) return;
+  if (S.tab === 'curd') {
+    const run = curdRun(S.cT, S.cQ, S.cI);
+    if (S.cTime >= 24 && run.setTime != null) discover('curd-levels');
+    if (S.cT <= 10 && S.cTime >= 24 && run.setTime == null) discover('curd-cold');
+    if (S.cT >= 62 && S.cTime >= 5 && run.setTime == null) discover('curd-hot');
+  } else if (S.tab === 'sewage') {
+    const run = sewageRun(S.sX, S.sAir), curS = interp(run.S, S.sHRT / 24, run.dt);
+    if (S.sAir && S.sHRT >= 3 && curS / SEW.S0 <= 0.5) discover('sewage-drop');
+    if (!S.sAir && S.sHRT >= 8 && curS / SEW.S0 >= 0.95) discover('sewage-noair');
+  } else {
+    const run = biogasRun(S.bT, S.bQ, S.bLeak), curG = interp(run.G, S.bDay, run.dt);
+    if (!S.bLeak && S.bDay >= 30 && curG / BIO.Gmax >= 0.7) discover('biogas-rise');
+    if (S.bLeak && S.bDay >= 10 && curG / BIO.Gmax < 0.15) discover('biogas-air');
+  }
+  maybeExplain();
+}
+let EXPLAINED = false;
+function maybeExplain(){
+  if (EXPLAINED || !POE || !found('curd-levels')) return;
+  EXPLAINED = true;
+  const run = curdRun(S.cT, S.cQ, S.cI);
+  POE.explain(`In the jar, the population grew until the lactose (its food) ran out near N/K = 100%, and the acid it made levelled the pH out at about ${run.pH[run.pH.length - 1].toFixed(2)} instead of falling forever. The same running-out-of-food pattern showed up in the sewage tank's BOD and the digester's methane.`);
+}
+
+/* ---- start -------------------------------------------------------------------- */
+findings($('finds'), [
+  {id: 'curd-levels', icon: '🥛', label: 'The population and pH both level off', hint: 'Let the curd ferment a long time', say: 'The population and the pH both level off once the food runs out.'},
+  {id: 'curd-cold', icon: '❄️', label: 'Too cold: the curd never sets', hint: 'Try a very low temperature', say: 'In the cold, Lactobacillus grows too slowly to set the curd.'},
+  {id: 'curd-hot', icon: '🔥', label: 'Too hot: the culture dies', hint: 'Try a very high temperature', say: 'Too hot, and the starter culture dies instead of fermenting the milk.'},
+  {id: 'sewage-drop', icon: '📉', label: 'BOD falls with aeration', hint: 'Give the tank enough time and sludge', say: 'The bacteria in the sludge bring the BOD down.'},
+  {id: 'sewage-noair', icon: '🚫', label: 'No air, no drop', hint: 'Turn the air pump off', say: 'Without oxygen, the aerobic bacteria cannot remove the BOD.'},
+  {id: 'biogas-rise', icon: '🔥', label: 'Methane rises to a ceiling', hint: 'Give the digester enough warm days', say: 'The methane collects and levels off as the slurry is used up.'},
+  {id: 'biogas-air', icon: '⚠️', label: 'A leak stops the methanogens', hint: 'Let air into the digester', say: 'Methanogens are strict anaerobes: a little air stops them.'},
+], () => toast('All seven findings! You have run all three microbial processes.', 4200));
+
+const POE = predict($('poe'), {
+  id: 'microbe-limit',
+  q: 'Lactobacillus grows in the milk and makes its own lactic-acid waste as it feeds. Left for many hours, what happens to the population and the milk’s pH?',
+  options: [
+    {id: 'forever', text: 'Both keep changing forever — the bacteria never stop multiplying'},
+    {id: 'level', text: 'Both level off — the bacteria run out of food, and the pH stops falling', right: true},
+    {id: 'phzero', text: 'The population levels off, but the pH keeps falling towards zero'},
+    {id: 'popforever', text: 'The pH levels off, but the population keeps growing forever'},
+  ],
+  onLock(){
+    S.locked = true;
+    $('gate').hidden = true;
+    for (const id of ['cT', 'cQ', 'cI', 'cTime', 'sX', 'sHRT', 'sAirBtn', 'bT', 'bQ', 'bDay', 'bLeakBtn']) $(id).disabled = false;
+    say('Try the jar of curd, the sewage tank and the biogas digester.');
+    paint();
+  },
+});
+if (!Play.FF('predict')) S.locked = true;
+
+showTab(S.tab);
+paint();
+say('Set the temperature yourself, and watch each microbial process work.');
+
+window.PG_STATE = () => JSON.parse(JSON.stringify(S));
+window.PG_MODEL = {muCurd, pHFromP, curdRun, sewageRun, flocSettleVel, kBiogas, biogasRun, CURD, SEW, BIO};
+</script>
+</body>
+</html>

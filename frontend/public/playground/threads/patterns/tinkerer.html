@@ -1,0 +1,630 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Patterns And Primes</title>
+<meta name="description" content="Class 6: grow triangles, squares and hexagons out of dots and count each new layer; run the Sieve of Eratosthenes yourself; arrange figs into rectangles and build factor trees.">
+<link rel="icon" href="../../favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600&family=Inter:wght@400;500;600;700&family=Nunito:wght@500;700;800&family=Newsreader:opsz,wght@6..72,400;6..72,500&family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="../../play.css">
+<style>
+/* Only what this page needs beyond play.css. */
+.pg-stage{align-self:start; min-height:0}
+.tabs{display:flex; gap:4px; padding:10px 12px 0; border-bottom:1px solid var(--hair); background:var(--card); flex-wrap:wrap}
+.tab{border:1px solid transparent; border-bottom:none; background:none; padding:8px 16px; border-radius:10px 10px 0 0; cursor:pointer;
+  font-family:"Fredoka",var(--font-head); font-size:17px; color:var(--ink-3); margin-bottom:-1px}
+.tab[aria-selected="true"]{background:var(--card); border-color:var(--hair); color:var(--ink); border-bottom:1px solid var(--card)}
+.tab:disabled{cursor:default; opacity:.6}
+.gate{position:absolute; left:0; right:0; top:50px; bottom:0; display:grid; place-items:center; pointer-events:none}
+.gate span{background:rgba(29,35,39,.85); color:#fff; padding:10px 16px; border-radius:99px; font-weight:600; font-size:14px}
+.chips{display:flex; flex-wrap:wrap; gap:6px; margin:4px 0 8px}
+.chip{border:1px solid var(--hair-2); background:var(--card); border-radius:99px; padding:6px 12px; font-size:13.5px; cursor:pointer; font-weight:600; color:var(--ink-2)}
+.chip[aria-pressed="true"]{background:var(--accent-soft); border-color:var(--accent); color:var(--ink)}
+.chip:disabled, .btn:disabled{opacity:.45; cursor:default}
+.stepper{display:inline-grid; grid-template-columns:40px 52px 40px; align-items:center; gap:4px}
+.stepper output{font-family:"Fredoka",var(--font-head); font-size:24px; text-align:center; font-weight:600}
+.stepper .btn{padding:0; font-size:20px}
+.lab{font-size:12px; font-weight:700; color:var(--ink-3); letter-spacing:.05em; text-transform:uppercase; margin-top:8px}
+.msg{font-size:13.5px; margin:8px 0 0; min-height:1.4em; color:var(--ink-2)}
+.why p{font-size:14px; margin-bottom:.55em}
+.why b{color:var(--ink)}
+.note{font-size:12.5px; color:var(--ink-3); margin:6px 0 0}
+/* stage colours follow the chrome, so the drawing is right in light and dark */
+.s-bg{fill:var(--card)} .s-sunk{fill:var(--sunk)} .s-hair{stroke:var(--hair)} .s-hair2{stroke:var(--hair-2)}
+.s-ink{fill:var(--ink)} .s-ink2{fill:var(--ink-2)} .s-ink3{fill:var(--ink-3)}
+.s-title{fill:var(--ink-3); font-size:14px; font-weight:700; letter-spacing:.08em}
+.cell{cursor:pointer}
+.cell .x{transition:opacity .18s}
+.rect-hit{cursor:pointer}
+.tnode{cursor:pointer}
+@media (max-width:1180px) and (min-width:981px){ .pg-main.wide-side{grid-template-columns:minmax(0,1fr) 340px} }
+</style>
+</head>
+<body>
+<header class="pg-top"></header>
+
+<div class="pg-intro">
+  <h1>Patterns and primes</h1>
+  <p>Mathematics is the search for patterns, and for the reasons they happen. Grow triangles, squares and hexagons out of dots and count every new layer.
+     Then run the Sieve of Eratosthenes yourself, and arrange figs into rectangles to see why a prime number is special.</p>
+</div>
+
+<main class="pg-main wide-side">
+  <section class="pg-stage" id="stageWrap">
+    <div class="tabs" role="tablist">
+      <button class="tab" role="tab" id="tabDots" aria-selected="true">Dot patterns</button>
+      <button class="tab" role="tab" id="tabSieve" aria-selected="false">The sieve</button>
+      <button class="tab" role="tab" id="tabRect" aria-selected="false">Rectangles and factor trees</button>
+    </div>
+    <svg id="stageD" viewBox="0 0 1000 600" role="img" aria-label="A growing pattern of dots, a graph of how many dots there are at each stage, and the number sequence it makes"></svg>
+    <svg id="stageS" viewBox="0 0 1000 640" role="img" aria-label="The numbers 1 to 100 in a grid for the Sieve of Eratosthenes, and a bar chart of primes in each row" hidden></svg>
+    <svg id="stageF" viewBox="0 0 1000 600" role="img" aria-label="Every rectangle a number of figs can make, and a factor tree" hidden></svg>
+    <div class="gate" id="gate"><span>Make your prediction first →</span></div>
+  </section>
+
+  <aside class="pg-side">
+    <div id="poe"></div>
+
+    <div class="card" id="cardD">
+      <div class="kicker">Shape</div>
+      <div class="chips" id="shapeChips">
+        <button class="chip" data-s="tri" aria-pressed="true">Triangle</button>
+        <button class="chip" data-s="sq" aria-pressed="false">Square</button>
+        <button class="chip" data-s="hex" aria-pressed="false">Hexagon</button>
+      </div>
+      <div class="row" style="justify-content:space-between">
+        <div><div class="lab" style="margin-top:0">Stage</div>
+          <div class="stepper"><button class="btn" id="nDown" aria-label="One stage back">−</button><output id="nOut">4</output><button class="btn" id="nUp" aria-label="Next stage">+</button></div></div>
+        <button class="btn sm" id="btnPair" aria-pressed="false">Add the previous triangle</button>
+      </div>
+      <p class="note">Each stage adds one new layer of dots, in a new colour.</p>
+    </div>
+
+    <div class="card" id="cardS" hidden>
+      <div class="kicker">Run the sieve</div>
+      <p style="font-size:13.5px;margin:0 0 6px">Step 1: cross out 1. Then click the <b>next number that is not crossed out</b>: it is circled, and all its multiples are crossed out.</p>
+      <div class="row"><button class="btn sm" id="btnRest" hidden>Circle all the rest</button><button class="btn sm" id="btnSieveReset">Start again</button></div>
+      <div class="msg" id="sieveMsg"></div>
+    </div>
+
+    <div class="card" id="cardF" hidden>
+      <div class="kicker">How many figs?</div>
+      <div class="ctl"><label for="fn">Figs</label><input type="range" id="fn" min="2" max="100" step="1" value="12"><output id="fnOut" class="num">12</output></div>
+      <p style="font-size:13.5px;margin:0">Click a rectangle to split the number into rows × columns. Keep splitting until only primes are left.</p>
+      <div class="row" style="margin-top:8px"><button class="btn sm" id="btnNewTree">Start a new tree</button></div>
+      <div class="msg" id="treeMsg"></div>
+    </div>
+
+    <div class="card why" id="whyCard" hidden>
+      <div class="kicker">What is happening</div>
+      <div id="why"></div>
+    </div>
+
+    <div class="card"><div class="kicker">To find</div><div id="finds"></div></div>
+  </aside>
+</main>
+
+<script src="../../play.js"></script>
+<script>
+'use strict';
+const {$, esc, clamp, fmt, sound, say, track, toast, predict, findings, discover, found,
+       shareState, sharedState, mount, reduced} = Play;
+mount({thread: 'patterns', band: 'tinkerer'});
+
+/* MODEL:start ==================================================================
+   Nothing here is a table of answers. The dots are GENERATED by each shape's rule and
+   then counted; the sieve crosses out real multiples; rectangles are every rows × columns
+   pair the page can find by trying each number of rows.
+
+   Dots (Ganita Prakash 6, Ch 1, Table 2):
+     triangle  row r (r = 1..n) has r dots, so stage n adds a row of n dots;
+     square    the dot in row i, column j belongs to layer max(i, j): an L-shape of
+               2k − 1 dots — which is why the odd numbers add up to squares;
+     hexagon   a centred hexagon: layer k is the ring of dots at hex-distance k − 1
+               (6(k − 1) of them), giving 1, 7, 19, 37, 61, …
+   "Add the previous triangle" draws the triangle as a staircase and fills the rest of
+   the n × n square with stage n − 1 turned round: T(n) + T(n − 1) = n².
+   ============================================================================ */
+const SQ3 = Math.sqrt(3) / 2;
+function dots(shape, n, pair){
+  const out = [];
+  if (shape === 'sq') {
+    for (let i = 1; i <= n; i++) for (let j = 1; j <= n; j++) out.push({x: j - 1, y: i - 1, layer: Math.max(i, j)});
+  } else if (shape === 'tri') {
+    for (let r = 1; r <= n; r++) for (let c = 1; c <= r; c++)
+      out.push(pair ? {x: c - 1, y: r - 1, layer: r} : {x: (c - 1) - (r - 1) / 2, y: (r - 1) * SQ3, layer: r});
+    if (pair) for (let r = 1; r <= n - 1; r++) for (let c = r + 1; c <= n; c++) out.push({x: c - 1, y: r - 1, layer: 0, other: true, ol: n - c + 1});
+  } else {
+    const R = n - 1;
+    for (let q = -R; q <= R; q++) for (let r = -R; r <= R; r++) {
+      const d = Math.max(Math.abs(q), Math.abs(r), Math.abs(q + r));
+      if (d <= R) out.push({x: q + r / 2, y: r * SQ3, layer: d + 1});
+    }
+  }
+  return out;
+}
+/* The sequence, by counting the generated dots: counts[k] = dots in stages 1..k. */
+function counts(shape, n){
+  const d = dots(shape, n, false), c = [];
+  for (let k = 1; k <= n; k++) c.push(d.filter(p => p.layer <= k).length);
+  return c;
+}
+const layerSizes = (shape, n) => { const d = dots(shape, n, false); return Array.from({length: n}, (_, k) => d.filter(p => p.layer === k + 1).length); };
+
+/* The Sieve of Eratosthenes, as the book's five steps. status: 0 open, 1 crossed, 2 circled. */
+function sieveFresh(N = 100){ return {N, status: new Array(N + 1).fill(0), by: new Array(N + 1).fill(0), circled: [], oneOut: false}; }
+function nextOpen(sv){ for (let k = 2; k <= sv.N; k++) if (sv.status[k] === 0) return k; return 0; }
+/* Circle p and cross out its multiples after it. Returns the numbers newly crossed. */
+function sieveCircle(sv, p){
+  sv.status[p] = 2; sv.circled.push(p);
+  const fresh = [];
+  for (let m = 2 * p; m <= sv.N; m += p) if (sv.status[m] === 0) { sv.status[m] = 1; sv.by[m] = p; fresh.push(m); }
+  return fresh;
+}
+function runSieve(N = 100){ const sv = sieveFresh(N); sv.oneOut = true; let p; while ((p = nextOpen(sv))) sieveCircle(sv, p); return sv; }
+
+/* Every rectangle n figs can make: try each number of rows r ≤ columns. */
+function rects(n){ const out = []; for (let r = 1; r * r <= n; r++) if (n % r === 0) out.push([r, n / r]); return out; }
+const isPrime = n => n > 1 && rects(n).length === 1;
+function factorise(n){ const f = []; let m = n; for (let p = 2; p * p <= m; p++) while (m % p === 0) { f.push(p); m /= p; } if (m > 1) f.push(m); return f; }
+/* MODEL:end */
+
+const COLS = ['#9b4dca', '#e8890c', '#2f9e5b', '#3f7fd8', '#d6453d', '#16a3a3', '#c2569b', '#a07a12', '#5b6bd6', '#e0567a'];
+const SHAPE_NAME = {tri: 'triangular', sq: 'square', hex: 'hexagonal'};
+const NS = 'http://www.w3.org/2000/svg';
+
+/* ---- state: plain data --------------------------------------------------- */
+const S = {tab: 'dots', locked: false, shape: 'tri', n: 4, pair: false, seen: {tri: [], sq: [], hex: []},
+           sv: sieveFresh(), lastFresh: null, lastP: 0, sieveMsg: '',
+           fn: 12, tree: {v: 12, kids: null}, sel: '', done: {}, treeMsg: ''};
+const shared = sharedState();
+if (shared) {
+  if (['tri', 'sq', 'hex'].includes(shared.shape)) S.shape = shared.shape;
+  S.n = clamp(+shared.n || 4, 1, 10); S.pair = !!shared.pair && S.shape === 'tri';
+  S.fn = clamp(+shared.fn || 12, 2, 100); S.tree = {v: S.fn, kids: null};
+}
+shareState(() => ({shape: S.shape, n: S.n, pair: S.pair, fn: S.fn}));
+
+/* ============================================================================
+   Stage 1: dots. Built once; the dot layer is a pool of circles that is patched.
+   ============================================================================ */
+const svgD = $('stageD'), svgS = $('stageS'), svgF = $('stageF');
+const PIC = {x: 20, y: 40, w: 560, h: 350};
+const GR = {x: 660, y: 70, w: 300, h: 280};
+const MAXD = 400;
+function buildDots(){
+  svgD.innerHTML = `
+  <rect class="s-bg" x="0" y="0" width="1000" height="600"/>
+  <rect class="s-sunk" x="600" y="0" width="400" height="400" opacity=".55"/>
+  <text class="s-title" x="20" y="28">THE PATTERN</text>
+  <text id="dCap" class="s-ink2" x="580" y="28" text-anchor="end" font-size="15" font-weight="600"></text>
+  <g id="dotPool"></g>
+  <text class="s-title" x="620" y="28">DOTS AT EACH STAGE</text>
+  <g id="gAx"></g>
+  <path id="gLine" fill="none" stroke="#9b4dca" stroke-width="2.5" stroke-linejoin="round"/>
+  <g id="gPts"></g>
+  <line x1="0" y1="400" x2="1000" y2="400" class="s-hair" stroke-width="1"/>
+  <text class="s-title" x="20" y="428">THE SEQUENCE</text>
+  <g id="seqRows"></g>`;
+  let pool = '';
+  for (let i = 0; i < MAXD; i++) pool += `<circle r="0" cx="0" cy="0"/>`;
+  $('dotPool').innerHTML = pool;
+  let ax = `<line x1="${GR.x}" y1="${GR.y + GR.h}" x2="${GR.x + GR.w}" y2="${GR.y + GR.h}" class="s-hair2" stroke-width="1.2"/>` +
+           `<line x1="${GR.x}" y1="${GR.y}" x2="${GR.x}" y2="${GR.y + GR.h}" class="s-hair2" stroke-width="1.2"/>`;
+  for (let k = 1; k <= 10; k++) ax += `<text class="s-ink3" x="${gx(k)}" y="${GR.y + GR.h + 18}" font-size="13" text-anchor="middle">${k}</text>`;
+  ax += `<text class="s-ink3" x="${GR.x + GR.w / 2}" y="${GR.y + GR.h + 36}" font-size="12" text-anchor="middle" font-weight="600">stage</text>`;
+  ax += `<g id="gYt"></g>`;
+  $('gAx').innerHTML = ax;
+  let pts = '';
+  for (let k = 1; k <= 10; k++) pts += `<circle id="gp${k}" r="5" fill="#9b4dca" style="stroke:var(--card)" stroke-width="2"/>`;
+  $('gPts').innerHTML = pts;
+  let seq = '';
+  const lab = ['Stage', 'Dots', 'Added'];
+  for (let r = 0; r < 3; r++) {
+    seq += `<text class="s-ink2" x="20" y="${470 + r * 42}" font-size="14" font-weight="700">${lab[r]}</text>`;
+    for (let k = 1; k <= 10; k++) seq += `<text id="sq${r}_${k}" x="${120 + (k - 1) * 86}" y="${470 + r * 42}" font-size="${r === 1 ? 21 : 16}" font-weight="${r === 0 ? 500 : 600}" text-anchor="middle" font-family="Fredoka, Inter, sans-serif"></text>`;
+  }
+  $('seqRows').innerHTML = seq;
+}
+let GMAX = 100;
+const gx = k => GR.x + 14 + (k - 1) / 9 * (GR.w - 28);
+const gy = v => GR.y + GR.h - v / GMAX * GR.h;
+
+function paintDots(){
+  const n = S.n, d = dots(S.shape, n, S.pair && S.shape === 'tri');
+  /* fit the picture */
+  let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+  for (const p of d) { x0 = Math.min(x0, p.x); x1 = Math.max(x1, p.x); y0 = Math.min(y0, p.y); y1 = Math.max(y1, p.y); }
+  const span = Math.max(x1 - x0, y1 - y0, 1);
+  const sp = Math.min(46, (PIC.h - 30) / span, (PIC.w - 40) / Math.max(x1 - x0, 1));
+  const cx = PIC.x + PIC.w / 2 - (x0 + x1) / 2 * sp, cy = PIC.y + PIC.h / 2 + 10 - (y0 + y1) / 2 * sp;
+  const r = Math.max(3, Math.min(15, sp * 0.36));
+  const pool = $('dotPool').children;
+  for (let i = 0; i < MAXD; i++) {
+    const c = pool[i], p = d[i];
+    if (!p) { c.setAttribute('r', 0); continue; }
+    c.setAttribute('cx', (cx + p.x * sp).toFixed(1)); c.setAttribute('cy', (cy + p.y * sp).toFixed(1));
+    c.setAttribute('r', r.toFixed(1));
+    if (p.other) { c.style.stroke = ''; c.setAttribute('fill', 'none'); c.setAttribute('stroke', '#9aa3a6'); c.setAttribute('stroke-width', 2); c.setAttribute('stroke-dasharray', ''); }
+    else { c.setAttribute('fill', COLS[(p.layer - 1) % COLS.length]); c.setAttribute('stroke', 'none'); c.style.stroke = p.layer === n ? 'var(--ink)' : ''; c.setAttribute('stroke-width', p.layer === n ? 1.5 : 0); }
+  }
+  const tot = d.filter(p => !p.other).length, oth = d.length - tot;
+  $('dCap').textContent = S.pair && S.shape === 'tri' ? `${tot} coloured + ${oth} grey = ${d.length} dots, a ${n} × ${n} square`
+    : `Stage ${n}: ${tot} dots`;
+  /* graph and sequence: counted from the dots, not typed in */
+  const c = counts(S.shape, 10);
+  GMAX = S.shape === 'tri' ? 60 : S.shape === 'sq' ? 100 : 280;
+  if (S.locked) {
+    $('gLine').setAttribute('d', c.slice(0, n).map((v, i) => (i ? 'L' : 'M') + gx(i + 1).toFixed(1) + ' ' + gy(v).toFixed(1)).join(''));
+    for (let k = 1; k <= 10; k++) {
+      const el = $('gp' + k);
+      el.setAttribute('cx', gx(k).toFixed(1)); el.setAttribute('cy', gy(c[k - 1]).toFixed(1));
+      el.setAttribute('opacity', k <= n ? 1 : 0);
+      el.setAttribute('fill', COLS[(k - 1) % COLS.length]);
+    }
+    let yt = '';
+    const stepY = GMAX / 4;
+    for (let v = 0; v <= GMAX; v += stepY) yt += `<text class="s-ink3" x="${GR.x - 8}" y="${(gy(v) + 4).toFixed(1)}" font-size="12.5" text-anchor="end">${v}</text>` +
+      `<line x1="${GR.x}" x2="${GR.x + GR.w}" y1="${gy(v).toFixed(1)}" y2="${gy(v).toFixed(1)}" class="s-hair" stroke-width="1"/>`;
+    $('gYt').innerHTML = yt;
+  } else {
+    $('gLine').setAttribute('d', ''); for (let k = 1; k <= 10; k++) $('gp' + k).setAttribute('opacity', 0);
+    $('gYt').innerHTML = `<text class="s-ink3" x="${GR.x + GR.w / 2}" y="${GR.y + GR.h / 2}" font-size="13.5" text-anchor="middle">The graph appears after your prediction.</text>`;
+  }
+  for (let k = 1; k <= 10; k++) {
+    const show = k <= n;
+    const t0 = $('sq0_' + k), t1 = $('sq1_' + k), t2 = $('sq2_' + k);
+    t0.textContent = show ? k : ''; t0.setAttribute('class', 's-ink3');
+    t1.textContent = show ? c[k - 1] : ''; t1.setAttribute('fill', COLS[(k - 1) % COLS.length]);
+    t2.textContent = show && k > 1 ? '+' + (c[k - 1] - c[k - 2]) : ''; t2.setAttribute('class', 's-ink2');
+  }
+  /* what the learner has seen, for the "both" finding */
+  const seen = S.seen[S.shape];
+  for (const v of c.slice(0, n)) if (!seen.includes(v)) seen.push(v);
+}
+
+/* ============================================================================
+   Stage 2: the sieve. One hundred cells, built once, patched.
+   ============================================================================ */
+const CELL = 54, SG = {x: 26, y: 40};
+function buildSieve(){
+  let cells = '';
+  for (let k = 1; k <= 100; k++) {
+    const i = (k - 1) % 10, j = Math.floor((k - 1) / 10), x = SG.x + i * CELL, y = SG.y + j * CELL;
+    cells += `<g class="cell" id="cell${k}" data-k="${k}">
+      <rect class="s-sunk" x="${x + 2}" y="${y + 2}" width="${CELL - 4}" height="${CELL - 4}" rx="8"/>
+      <circle class="ring" cx="${x + CELL / 2}" cy="${y + CELL / 2}" r="21" fill="none" stroke="#9b4dca" stroke-width="3" opacity="0"/>
+      <text class="s-ink" x="${x + CELL / 2}" y="${y + CELL / 2 + 6}" font-size="17" font-weight="600" text-anchor="middle" font-family="Fredoka, Inter, sans-serif">${k}</text>
+      <g class="x" opacity="0"><line x1="${x + 12}" y1="${y + 12}" x2="${x + CELL - 12}" y2="${y + CELL - 12}" stroke="#d6453d" stroke-width="2.4" stroke-linecap="round"/>
+        <line x1="${x + CELL - 12}" y1="${y + 12}" x2="${x + 12}" y2="${y + CELL - 12}" stroke="#d6453d" stroke-width="2.4" stroke-linecap="round"/></g>
+    </g>`;
+  }
+  let bars = '';
+  for (let j = 0; j < 10; j++) {
+    const y = SG.y + j * CELL + 12;
+    bars += `<text class="s-ink3" x="640" y="${y + 20}" font-size="13.5" text-anchor="end">${j * 10 + 1}–${j * 10 + 10}</text>
+      <rect id="barO${j}" x="650" y="${y + 6}" height="20" rx="4" fill="#9b4dca" opacity=".18"/>
+      <rect id="barP${j}" x="650" y="${y + 6}" height="20" rx="4" fill="#9b4dca"/>
+      <text id="barT${j}" class="s-ink" y="${y + 21}" font-size="14" font-weight="700"></text>`;
+  }
+  svgS.innerHTML = `
+  <rect class="s-bg" x="0" y="0" width="1000" height="640"/>
+  <text class="s-title" x="26" y="28">THE NUMBERS 1 TO 100</text>
+  <g id="cells">${cells}</g>
+  <text class="s-title" x="600" y="28">PRIMES IN EACH ROW</text>
+  ${bars}
+  <text id="sieveTotal" class="s-ink" x="600" y="${SG.y + 10 * CELL + 28}" font-size="18" font-weight="700" font-family="Fredoka, Inter, sans-serif"></text>
+  <text class="s-ink3" x="600" y="${SG.y + 10 * CELL + 50}" font-size="13">Pale bar: numbers not crossed out yet</text>`;
+}
+function paintSieve(){
+  const sv = S.sv;
+  const fresh = new Set(S.lastFresh || []);
+  let order = 0;
+  for (let k = 1; k <= 100; k++) {
+    const g = $('cell' + k), st = k === 1 ? (sv.oneOut ? 1 : 0) : sv.status[k];
+    const x = g.querySelector('.x'), ring = g.querySelector('.ring'), txt = g.querySelector('text');
+    x.style.transitionDelay = fresh.has(k) && !reduced() ? (order++ * 18) + 'ms' : '0ms';
+    x.setAttribute('opacity', st === 1 ? 0.6 : 0);
+    ring.setAttribute('opacity', st === 2 ? 1 : 0);
+    txt.setAttribute('opacity', st === 1 ? 0.55 : 1);
+    txt.setAttribute('font-weight', st === 2 ? 700 : 600);
+  }
+  const W = 26;
+  for (let j = 0; j < 10; j++) {
+    let p = 0, o = 0;
+    for (let k = j * 10 + 1; k <= j * 10 + 10; k++) { if (k > 1 && sv.status[k] === 2) p++; if (k > 1 && sv.status[k] === 0) o++; }
+    $('barP' + j).setAttribute('width', p * W); $('barO' + j).setAttribute('width', (p + o) * W);
+    $('barT' + j).setAttribute('x', 650 + (p + o) * W + 8); $('barT' + j).textContent = p + (o ? ` + ${o} open` : '');
+  }
+  const done = sv.oneOut && !nextOpen(sv);
+  $('sieveTotal').textContent = done ? `${sv.circled.length} primes from 1 to 100` : `${sv.circled.length} circled so far`;
+  $('sieveMsg').textContent = S.sieveMsg;
+}
+
+/* ============================================================================
+   Stage 3: rectangles of figs, and the factor tree.
+   ============================================================================ */
+function buildRect(){
+  svgF.innerHTML = `
+  <rect class="s-bg" x="0" y="0" width="1000" height="600"/>
+  <text class="s-title" x="20" y="28">EVERY RECTANGLE OF <tspan id="rTitleN">12</tspan> FIGS</text>
+  <g id="rects"></g>
+  <line x1="530" y1="16" x2="530" y2="584" class="s-hair" stroke-width="1"/>
+  <text class="s-title" x="550" y="28">FACTOR TREE</text>
+  <g id="tree"></g>
+  <text id="factLine" class="s-ink" x="765" y="572" font-size="19" font-weight="600" text-anchor="middle" font-family="Fredoka, Inter, sans-serif"></text>`;
+}
+function nodeAt(path){ let nd = S.tree; for (const ch of path) nd = nd.kids[+ch]; return nd; }
+function leaves(nd, path = '', out = []){ if (!nd.kids) out.push({nd, path}); else nd.kids.forEach((k, i) => leaves(k, path + i, out)); return out; }
+function paintRect(){
+  const sel = nodeAt(S.sel), n = sel.v, R = rects(n);
+  $('rTitleN').textContent = n;
+  /* tile size: as big as fits, then one global shrink if the stack is too tall */
+  let sizes = R.map(([r, c]) => Math.min(20, 470 / c));
+  const LAB = 24, top = 46, avail = 590 - top;
+  const H = R.reduce((s, [r], i) => s + r * sizes[i] + LAB, 0);
+  if (H > avail) { const k = (avail - LAB * R.length) / (H - LAB * R.length); sizes = sizes.map(s => s * k); }
+  let y = top, html = '';
+  R.forEach(([r, c], i) => {
+    const s = sizes[i], w = c * s, h = r * s, split = r > 1;
+    html += `<g class="${split ? 'rect-hit' : ''}" id="rc${r}x${c}" data-r="${r}" data-c="${c}">
+      <text class="s-ink2" x="24" y="${y + 15}" font-size="14" font-weight="600">${r} row${r > 1 ? 's' : ''} × ${c} = ${n}${split ? '' : '  (a single line)'}</text>
+      <rect x="20" y="${y + LAB - 4}" width="${Math.max(w + 8, 60)}" height="${h + 8}" rx="6" fill="${split ? '#9b4dca' : '#9aa3a6'}" opacity=".10"/>`;
+    const rr = Math.max(1.2, s * 0.4);
+    for (let a = 0; a < r; a++) for (let b = 0; b < c; b++)
+      html += `<circle cx="${(24 + b * s + s / 2).toFixed(1)}" cy="${(y + LAB + a * s + s / 2).toFixed(1)}" r="${rr.toFixed(1)}" fill="#7a4a8c"/>`;
+    html += `</g>`;
+    y += h + LAB + 8;
+  });
+  $('rects').innerHTML = html;
+  paintTree();
+}
+function paintTree(){
+  /* lay the tree out by leaves: each leaf gets a slot, parents sit above their children's middle */
+  const L = leaves(S.tree), slots = L.length, depthOf = p => p.length;
+  let maxD = 0; L.forEach(l => { maxD = Math.max(maxD, depthOf(l.path)); });
+  const X0 = 560, X1 = 970, Y0 = 70, dy = Math.min(80, 430 / Math.max(1, maxD));
+  const pos = {};
+  let li = 0;
+  (function place(nd, path){
+    if (!nd.kids) { pos[path] = {x: X0 + (li + 0.5) * (X1 - X0) / slots, y: Y0 + path.length * dy}; li++; return; }
+    nd.kids.forEach((k, i) => place(k, path + i));
+    pos[path] = {x: (pos[path + '0'].x + pos[path + '1'].x) / 2, y: Y0 + path.length * dy};
+  })(S.tree, '');
+  let html = '';
+  (function edges(nd, path){ if (!nd.kids) return; nd.kids.forEach((k, i) => { html += `<line x1="${pos[path].x}" y1="${pos[path].y}" x2="${pos[path + i].x}" y2="${pos[path + i].y}" class="s-hair2" stroke-width="2"/>`; edges(k, path + i); }); })(S.tree, '');
+  (function nodes(nd, path){
+    const p = pos[path], prime = isPrime(nd.v), leaf = !nd.kids, isSel = path === S.sel && leaf && !prime;
+    const cls = leaf && !prime ? 'tnode' : '';
+    html += `<g class="${cls}" id="tn${path || 'R'}" data-path="${path}">
+      <circle cx="${p.x}" cy="${p.y}" r="22" style="fill:${prime ? '#9b4dca' : 'var(--card)'}; stroke:${isSel ? '#e8890c' : prime ? '#9b4dca' : 'var(--ink-3)'}" stroke-width="${isSel ? 4 : 2}"/>
+      <text x="${p.x}" y="${p.y + 6}" font-size="${nd.v >= 100 ? 14 : 17}" font-weight="700" text-anchor="middle" style="fill:${prime ? '#fff' : 'var(--ink)'}" font-family="Fredoka, Inter, sans-serif">${nd.v}</text></g>`;
+    if (nd.kids) nd.kids.forEach((k, i) => nodes(k, path + i));
+  })(S.tree, '');
+  $('tree').innerHTML = html;
+  const allPrime = L.every(l => isPrime(l.nd.v));
+  $('factLine').textContent = allPrime ? `${S.tree.v} = ${L.map(l => l.nd.v).sort((a, b) => a - b).join(' × ')}` : '';
+  $('treeMsg').textContent = S.treeMsg;
+}
+
+/* ============================================================================
+   The narrator: words computed from the current state.
+   ============================================================================ */
+function paintWhy(){
+  if (!S.locked) return;
+  $('whyCard').hidden = false;
+  let t = '';
+  if (S.tab === 'dots') {
+    const c = counts(S.shape, S.n), ls = layerSizes(S.shape, S.n), n = S.n, last = c[n - 1];
+    if (S.shape === 'sq') {
+      t = `<p>Stage ${n} is a square of <b>${n} rows of ${n}</b>: ${last} dots. The newest layer is an L-shape of <b>${ls[n - 1]} dots</b>: ${n} along the side, ${n} along the bottom, less the corner they share.</p>` +
+          `<p>So the layers are the odd numbers: <b>${ls.join(' + ')} = ${last}</b>.</p>`;
+    } else if (S.shape === 'tri') {
+      t = S.pair && n > 1
+        ? `<p>The coloured staircase is triangle ${n} (${c[n - 1]} dots). The grey dots are triangle ${n - 1} turned round (${c[n - 2]} dots). Together they fill a square: <b>${c[n - 1]} + ${c[n - 2]} = ${n * n} = ${n} × ${n}</b>.</p>`
+        : `<p>Stage ${n} adds a new row of <b>${n} dots</b> at the bottom, so the triangle holds <b>${ls.join(' + ')} = ${last}</b>. These are the triangular numbers.</p>`;
+    } else {
+      t = `<p>Stage ${n} puts a new ring of <b>${ls[n - 1]} dots</b> round the hexagon${n > 1 ? `: six sides of ${n - 1}` : ''}. Total: <b>${ls.join(' + ')} = ${last}</b>.</p>` +
+          (n > 1 ? `<p>Cut the hexagon from the centre and it falls into 6 triangles of ${c[n - 2] !== undefined ? counts('tri', n - 1)[n - 2] : 0} dots, plus the centre: 6 × ${counts('tri', n - 1)[n - 2]} + 1 = ${last}.</p>` : '');
+    }
+    if (n > 2) {
+      const diffs = c.slice(1).map((v, i) => v - c[i]);
+      t += `<p>The numbers added each time: ${diffs.join(', ')}. ` + (new Set(diffs.slice(1).map((v, i) => v - diffs[i])).size === 1 ? `They go up by the same amount (${diffs[1] - diffs[0]}) every time.` : '') + `</p>`;
+    }
+  } else if (S.tab === 'sieve') {
+    const sv = S.sv, nx = nextOpen(sv), done = sv.oneOut && !nx;
+    if (!sv.oneOut) t = `<p>Nothing is crossed out yet. Step 1: <b>1 is neither prime nor composite</b>, so it goes first.</p>`;
+    else if (!sv.circled.length) t = `<p>1 is crossed out. The first number not crossed out is <b>2</b>.</p>`;
+    else {
+      const p = S.lastP, fr = S.lastFresh || [];
+      t = `<p>You have circled <b>${sv.circled.join(', ')}</b>.</p>`;
+      if (p) t += fr.length ? `<p>${p} crossed out <b>${fr.length} new number${fr.length > 1 ? 's' : ''}</b>${fr.length <= 8 ? ' (' + fr.join(', ') + ')' : ', starting ' + fr.slice(0, 4).join(', ') + ' …'}${fr.length <= 8 ? '.' : ''} ${fr[0] === p * p ? `The first new one is ${p} × ${p} = ${p * p}: smaller multiples of ${p} were already crossed out by smaller primes.` : ''}</p>`
+                            : `<p>${p} crossed out <b>nothing new</b>: its first multiple not yet crossed, ${p} × ${p} = ${p * p}, is bigger than 100. Every number still open must be a prime.</p>`;
+      const open = sv.status.filter((s, k) => k > 1 && s === 0).length;
+      t += done ? `<p><b>Done:</b> ${sv.circled.length} primes from 1 to 100, and ${100 - 1 - sv.circled.length} composite numbers.</p>` : `<p>${open} numbers are still open. The next one to circle is <b>${nx}</b>.</p>`;
+    }
+  } else {
+    const sel = nodeAt(S.sel), R = rects(sel.v), L = leaves(S.tree);
+    t = isPrime(sel.v)
+      ? `<p><b>${sel.v} figs make only one rectangle</b>: a single line, ${sel.v} × 1. Its only factors are 1 and ${sel.v}, so ${sel.v} is a <b>prime</b>.</p>`
+      : `<p>${sel.v} figs make <b>${R.length} rectangles</b>, so ${sel.v} has ${R.length * 2 - (R.some(([r, c]) => r === c) ? 1 : 0)} factors: ${R.map(([r]) => r).concat(R.map(([, c]) => c).reverse()).filter((v, i, a) => a.indexOf(v) === i).join(', ')}. More than two factors: it is <b>composite</b>.</p>`;
+    const open = L.filter(l => !isPrime(l.nd.v));
+    if (S.tree.kids) t += open.length ? `<p>The tree still has ${open.length} composite number${open.length > 1 ? 's' : ''} to break: ${open.map(l => l.nd.v).join(', ')}.</p>`
+      : `<p>Every leaf is prime: the prime factorisation is <b>${S.tree.v} = ${factorise(S.tree.v).join(' × ')}</b>.</p>`;
+    const d = S.done[S.tree.v];
+    if (d && d.length) t += `<p>Trees finished for ${S.tree.v}: first split ${d.join(', then ')}.</p>`;
+  }
+  $('why').innerHTML = t;
+}
+
+/* ============================================================================
+   Findings: reached by the model, never by a button.
+   ============================================================================ */
+function check(){
+  if (!S.locked) return;
+  if (S.tab === 'dots') {
+    if (S.shape === 'sq' && S.n >= 5) { discover('odd'); maybeExplain(); }
+    if (S.shape === 'tri' && S.pair && S.n >= 4) discover('pair');
+    if (S.shape === 'hex' && S.n >= 5) discover('hex');
+    const both = S.seen.tri.filter(v => v > 1 && S.seen.sq.includes(v));
+    if (both.length) discover('both');
+  }
+  if (S.tab === 'sieve' && S.sv.oneOut && !nextOpen(S.sv) && S.sv.circled.length === 25) discover('sieve');
+  if (S.tab === 'rect') {
+    const sel = nodeAt(S.sel);
+    if (isPrime(sel.v) && sel.v >= 5 && !S.tree.kids) discover('line');
+  }
+}
+let EXPLAINED = false;
+function maybeExplain(){
+  if (EXPLAINED || !POE || !POE.locked) return;
+  EXPLAINED = true;
+  const n = Math.max(S.n, 5), ls = layerSizes('sq', n), c = counts('sq', n);
+  POE.explain(`Adding the odd numbers gives the <b>square numbers</b>: ${ls.slice(0, 5).map((v, i) => ls.slice(0, i + 1).join(' + ') + ' = ' + c[i]).slice(1).join('; ')}. ` +
+    `The picture says why: each new L-shaped layer of a square has ${n} + ${n} − 1 = <b>${2 * n - 1}</b> dots at stage ${n}, the next odd number. So the first 10 odd numbers add up to 10 × 10 = ${counts('sq', 10)[9]}.`);
+}
+
+/* ============================================================================
+   Paint everything, wire the controls.
+   ============================================================================ */
+function paint(){
+  $('nOut').textContent = S.n;
+  for (const b of document.querySelectorAll('#shapeChips .chip')) b.setAttribute('aria-pressed', b.dataset.s === S.shape);
+  $('btnPair').hidden = S.shape !== 'tri';
+  $('btnPair').setAttribute('aria-pressed', S.pair);
+  $('btnPair').textContent = S.pair ? 'Hide the previous triangle' : 'Add the previous triangle';
+  $('nDown').disabled = !S.locked || S.n <= 1; $('nUp').disabled = !S.locked || S.n >= 10;
+  $('fn').value = S.fn; $('fnOut').textContent = S.fn;
+  $('btnRest').hidden = !(S.sv.oneOut && S.lastP && !(S.lastFresh || []).length && nextOpen(S.sv));
+  if (S.tab === 'dots') paintDots();
+  if (S.tab === 'sieve') paintSieve();
+  if (S.tab === 'rect') paintRect();
+  paintWhy();
+  check();
+}
+function setTab(t){
+  S.tab = t;
+  const map = {dots: ['tabDots', 'stageD', 'cardD'], sieve: ['tabSieve', 'stageS', 'cardS'], rect: ['tabRect', 'stageF', 'cardF']};
+  for (const [k, [tab, svg, card]] of Object.entries(map)) { $(tab).setAttribute('aria-selected', k === t); $(svg).toggleAttribute('hidden', k !== t); $(card).hidden = k !== t; }
+  paint();
+  track('tab', {tab: t});
+}
+
+buildDots(); buildSieve(); buildRect();
+
+$('tabDots').addEventListener('click', () => setTab('dots'));
+$('tabSieve').addEventListener('click', () => setTab('sieve'));
+$('tabRect').addEventListener('click', () => setTab('rect'));
+$('shapeChips').addEventListener('click', e => {
+  const b = e.target.closest('[data-s]'); if (!b || !S.locked) return;
+  S.shape = b.dataset.s; if (S.shape !== 'tri') S.pair = false;
+  sound('pop'); paint(); track('shape', {shape: S.shape});
+});
+$('nUp').addEventListener('click', () => { if (S.n < 10) { S.n++; sound('note', 330 + S.n * 40, 0.12); paint(); } });
+$('nDown').addEventListener('click', () => { if (S.n > 1) { S.n--; sound('tick'); paint(); } });
+$('btnPair').addEventListener('click', () => { S.pair = !S.pair; sound('snap'); paint(); track('pair', {on: S.pair}); });
+
+/* the sieve: the learner's click is the algorithm's next step */
+$('cells').addEventListener('click', e => {
+  const g = e.target.closest('[data-k]'); if (!g || !S.locked) return;
+  const k = +g.dataset.k, sv = S.sv;
+  S.lastFresh = null;
+  if (k === 1) {
+    if (!sv.oneOut) { sv.oneOut = true; S.sieveMsg = '1 is crossed out: it is neither prime nor composite.'; sound('tick'); }
+    else S.sieveMsg = '1 is already crossed out.';
+  } else if (!sv.oneOut) { S.sieveMsg = 'Step 1 first: cross out 1.'; sound('oops'); }
+  else if (sv.status[k] === 2) S.sieveMsg = `${k} is already circled: a prime.`;
+  else if (sv.status[k] === 1) { S.sieveMsg = `${k} was crossed out by ${sv.by[k]}: ${k} = ${sv.by[k]} × ${k / sv.by[k]}.`; sound('tick'); }
+  else {
+    const nx = nextOpen(sv);
+    if (k !== nx) { S.sieveMsg = `The sieve always takes the next number that is not crossed out: that is ${nx}.`; sound('oops'); }
+    else {
+      const fr = sieveCircle(sv, k);
+      S.lastFresh = fr; S.lastP = k;
+      S.sieveMsg = fr.length ? `${k} is circled; ${fr.length} of its multiples are crossed out.` : `${k} is circled, and nothing new is crossed out.`;
+      sound(fr.length ? 'whoosh' : 'chime'); track('sieve', {p: k, crossed: fr.length});
+    }
+  }
+  paint();
+});
+$('btnRest').addEventListener('click', () => {
+  const sv = S.sv; let p;
+  const got = [];
+  while ((p = nextOpen(sv))) { sieveCircle(sv, p); got.push(p); }
+  S.lastFresh = []; S.lastP = 0;
+  S.sieveMsg = `Circled ${got.length} more: none of them has a multiple left to cross out.`;
+  sound('tada'); paint(); track('sieveRest', {n: got.length});
+});
+$('btnSieveReset').addEventListener('click', () => { S.sv = sieveFresh(); S.lastFresh = null; S.lastP = 0; S.sieveMsg = ''; sound('tick'); paint(); });
+
+/* rectangles and trees */
+function newTree(v){ S.tree = {v, kids: null}; S.sel = ''; S.treeMsg = ''; }
+$('fn').addEventListener('input', e => { S.fn = +e.target.value; newTree(S.fn); paint(); });
+$('fn').addEventListener('change', () => track('figs', {n: S.fn}));
+$('btnNewTree').addEventListener('click', () => { newTree(S.fn); sound('tick'); paint(); });
+$('rects').addEventListener('click', e => {
+  const g = e.target.closest('[data-r]'); if (!g || !S.locked) return;
+  const r = +g.dataset.r, c = +g.dataset.c, sel = nodeAt(S.sel);
+  if (r === 1) { S.treeMsg = isPrime(sel.v) ? `${sel.v} is prime: 1 × ${sel.v} does not break it into smaller numbers.` : `1 × ${sel.v} does not break ${sel.v} into smaller numbers. Pick another rectangle.`; sound('oops'); paint(); return; }
+  sel.kids = [{v: r, kids: null}, {v: c, kids: null}];
+  sound('snap');
+  const open = leaves(S.tree).filter(l => !isPrime(l.nd.v));
+  if (open.length) { S.sel = open[0].path; S.treeMsg = `${sel.v} = ${r} × ${c}. Now break ${open[0].nd.v}.`; }
+  else {
+    S.sel = '';
+    const key = `${S.tree.kids[0].v} × ${S.tree.kids[1].v}`, f = factorise(S.tree.v);
+    const prev = S.done[S.tree.v] || (S.done[S.tree.v] = []);
+    const leafF = leaves(S.tree).map(l => l.nd.v).sort((a, b) => a - b);
+    if (!prev.includes(key)) prev.push(key);
+    S.treeMsg = `Only primes left: ${S.tree.v} = ${leafF.join(' × ')}.`;
+    if (prev.length >= 2 && leafF.join() === f.join()) discover('same');
+    sound('chime'); track('tree', {n: S.tree.v, first: key});
+  }
+  paint();
+});
+$('tree').addEventListener('click', e => {
+  const g = e.target.closest('.tnode'); if (!g || !S.locked) return;
+  S.sel = g.dataset.path; S.treeMsg = ''; sound('tick'); paint();
+});
+
+findings($('finds'), [
+  {id: 'odd',   icon: '▦', label: 'Odd numbers add up to squares', hint: 'Grow a square and count each new layer'},
+  {id: 'pair',  icon: '◩', label: 'Two triangles make a square', hint: 'Put a triangle next to the one before it'},
+  {id: 'both',  icon: '36', label: 'A number that is triangular and square', hint: 'Can the same dots make a triangle and a square?'},
+  {id: 'hex',   icon: '⬡', label: 'Hexagonal numbers: 1, 7, 19, 37, 61', hint: 'What comes after 37?'},
+  {id: 'sieve', icon: '◎', label: '25 primes from 1 to 100', hint: 'Run the sieve to the end'},
+  {id: 'line',  icon: '—', label: 'A prime makes only a line', hint: 'Which numbers of figs make only one rectangle?'},
+  {id: 'same',  icon: '🌳', label: 'Different trees, the same primes', hint: 'Build two different factor trees for one number'},
+], () => toast('All seven found. Patterns, and the reasons for them.', 4200));
+
+const POE = predict($('poe'), {
+  id: 'odd-sums',
+  q: 'Start adding the odd numbers: 1, then 1 + 3, then 1 + 3 + 5, then 1 + 3 + 5 + 7, … What numbers do you get?',
+  options: [
+    {id: 'even',    text: 'The even numbers: 2, 4, 6, 8, …'},
+    {id: 'squares', text: 'The square numbers: 1, 4, 9, 16, …', right: true},
+    {id: 'odd',     text: 'More odd numbers.'},
+    {id: 'none',    text: 'No pattern: they jump about.'},
+  ],
+  onLock(){
+    S.locked = true; lockControls(false);
+    say('Now build the patterns and count.');
+    paint();
+  },
+});
+function lockControls(lock){
+  for (const el of document.querySelectorAll('#cardD button, #cardS button, #cardF button, #cardF input, .tab')) el.disabled = lock;
+  for (const s of [svgD, svgS, svgF]) s.style.pointerEvents = lock ? 'none' : '';
+  $('gate').hidden = !lock;
+}
+lockControls(!POE.locked);
+if (!Play.FF('predict')) { S.locked = true; lockControls(false); }
+paint();
+window.applyFeatures = () => paint();
+window.PG_STATE = () => JSON.parse(JSON.stringify(S));
+window.PG_MODEL = {dots, counts, layerSizes, sieveFresh, sieveCircle, runSieve, nextOpen, rects, isPrime, factorise};
+</script>
+</body>
+</html>

@@ -1,0 +1,425 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tables and SQL</title>
+<meta name="description" content="CBSE Class 12 Computer Science: write a real SQL SELECT and watch a small relational engine run it in stages against two tables — a JOIN as an actual cross product filtered by its ON condition, GROUP BY building buckets, and a primary/foreign key rejecting a bad insert.">
+<link rel="icon" href="../../favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600&family=Inter:wght@400;500;600;700&family=Newsreader:opsz,wght@6..72,400;6..72,500&family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="../../play.css">
+<style>
+.pg-stage{align-self:start; min-height:0; padding:18px 20px 24px; overflow:visible}
+.dbh{font-family:"Newsreader",Georgia,serif; font-size:17px; color:var(--ink); margin:0 0 8px}
+.tblwrap{overflow:auto; max-height:230px; border:1px solid var(--hair); border-radius:8px}
+table.dt{width:100%; border-collapse:collapse; font-family:var(--font-mono); font-size:12.5px; font-variant-numeric:tabular-nums}
+table.dt th{position:sticky; top:0; background:var(--card); font-family:var(--font); font-weight:700; font-size:11px; color:var(--ink-3); text-transform:uppercase; letter-spacing:.03em; padding:6px 9px; border-bottom:1px solid var(--hair); text-align:left; white-space:nowrap}
+table.dt td{padding:4px 9px; border-bottom:1px solid var(--hair); white-space:nowrap}
+table.dt tr:last-child td{border-bottom:none}
+.basepair{display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:14px}
+.pipeline{display:flex; flex-direction:column; gap:4px}
+.stage{margin:10px 0}
+.stage .lbl{font-size:12px; font-weight:700; color:var(--ink-2); margin-bottom:4px; display:flex; align-items:center; gap:6px}
+.stage .cnt{font-family:var(--font-mono); font-weight:400; color:var(--ink-3); font-size:11.5px}
+.arrow{text-align:center; color:var(--ink-3); font-size:15px; margin:2px 0}
+.stage.final .tblwrap{border-color:var(--accent); border-width:2px}
+.stage.final .lbl{color:var(--ink)}
+.err{background:var(--warm-soft); border-radius:8px; padding:8px 10px; font-size:12.5px; color:#8a3b1f; font-family:var(--font-mono)}
+.empty{padding:14px; text-align:center; color:var(--ink-3); font-size:12.5px}
+.kicker{font-size:11px; letter-spacing:.07em; text-transform:uppercase; font-weight:700; color:var(--ink-3); margin-bottom:4px}
+.chips{display:flex; flex-wrap:wrap; gap:6px; margin:4px 0 8px}
+.chip{border:1px solid var(--hair-2); background:var(--card); border-radius:99px; padding:4px 10px; font-size:12px; cursor:pointer; font-weight:600; color:var(--ink-2)}
+.chip[aria-pressed="true"]{background:var(--accent-soft); border-color:var(--accent); color:var(--ink)}
+.chip:disabled{opacity:.45; cursor:default}
+#sqlBox{width:100%; box-sizing:border-box; font-family:var(--font-mono); font-size:12.5px; padding:8px; border:1px solid var(--hair-2); border-radius:8px; background:var(--card); color:var(--ink); resize:vertical; min-height:64px}
+.row2{display:flex; gap:6px; align-items:center; margin-top:6px}
+.inrow{display:flex; gap:6px; align-items:center; margin:5px 0; font-size:12.5px; flex-wrap:wrap}
+.inrow input{font:inherit; font-family:var(--font-mono); padding:4px 6px; border:1px solid var(--hair-2); border-radius:6px; background:var(--card); color:var(--ink); width:64px}
+.note{font-size:12.5px; color:var(--ink-3); margin:6px 0 0}
+.why p{font-size:13.5px; margin-bottom:.55em}
+.gate{position:absolute; left:0; right:0; top:0; bottom:0; display:grid; place-items:center; pointer-events:none; background:rgba(251,250,247,.55)}
+.gate span{background:rgba(29,35,39,.85); color:#fff; padding:10px 16px; border-radius:99px; font-weight:600; font-size:14px}
+@media (max-width:1180px) and (min-width:981px){ .pg-main.wide-side{grid-template-columns:minmax(0,1fr) 340px} }
+</style>
+</head>
+<body>
+<header class="pg-top"></header>
+
+<div class="pg-intro">
+  <h1>Tables and SQL</h1>
+  <p>Two small tables: <b>Student</b> (RollNo is its primary key) and <b>Club</b>, where RollNo
+     points back to Student &mdash; a foreign key. Write a real SQL <code>SELECT</code>, or pick one
+     of the examples, and a small relational engine runs it in stages you can see: a
+     <code>JOIN</code> first builds the full cross product of both tables (every row of one paired
+     with every row of the other), then keeps only the pairs its <code>ON</code> condition matches
+     &mdash; a join is an actual cross-match, not a picture of one. <code>GROUP BY</code> buckets
+     rows before an aggregate is worked out on each bucket, and <code>HAVING</code> filters buckets
+     afterwards. Try adding a row that breaks a key, too (CBSE Class 12 Computer Science: relational
+     model, keys, SQL, joins and aggregates).</p>
+</div>
+
+<main class="pg-main wide-side">
+  <section class="pg-stage" id="stageWrap">
+    <div class="basepair">
+      <div>
+        <div class="dbh">Student <span style="font-size:12px;color:var(--ink-3);font-weight:400">(RollNo is the primary key)</span></div>
+        <div class="tblwrap"><table class="dt" id="tblStudent"></table></div>
+      </div>
+      <div>
+        <div class="dbh">Club <span style="font-size:12px;color:var(--ink-3);font-weight:400">(RollNo is a foreign key to Student)</span></div>
+        <div class="tblwrap"><table class="dt" id="tblClub"></table></div>
+        <div class="inrow">
+          <span>Insert into Club:</span>
+          <span style="white-space:nowrap">RollNo <input id="insRoll" type="number" value="9"></span>
+          <span style="white-space:nowrap">ClubName <input id="insClub" type="text" value="Drama" style="width:84px"></span>
+          <span style="white-space:nowrap">Fee <input id="insFee" type="number" value="100"></span>
+          <button class="btn sm" id="insBtn">Insert</button>
+        </div>
+        <div id="insMsg" class="note"></div>
+      </div>
+    </div>
+    <div class="dbh">Running your query</div>
+    <div class="pipeline" id="pipeline"></div>
+    <div class="gate" id="gate"><span>Make your prediction first &rarr;</span></div>
+  </section>
+
+  <aside class="pg-side">
+    <div id="poe"></div>
+
+    <div class="card" id="cardQ">
+      <div class="kicker">Try a query</div>
+      <div class="chips" id="exChips"></div>
+      <textarea id="sqlBox" spellcheck="false"></textarea>
+      <div class="row2"><button class="btn sm primary" id="runBtn">Run &#9654;</button></div>
+      <p class="note">SELECT ... FROM ... [JOIN ... ON ...] [WHERE ... [AND ...]] [GROUP BY ...] [HAVING ...] [ORDER BY ... [ASC|DESC]]</p>
+    </div>
+
+    <div class="card why" id="whyCard" hidden>
+      <div class="kicker">What the model says</div>
+      <div id="why"></div>
+    </div>
+
+    <div class="card"><div class="kicker">To find</div><div id="finds"></div></div>
+  </aside>
+</main>
+
+<script src="../../play.js"></script>
+<script>
+'use strict';
+const {$, esc, clamp, sound, track, toast, predict, findings, discover, found,
+       shareState, sharedState, mount, reduced, fmt} = Play;
+mount({thread: 'databases', band: 'theorist'});
+
+/* MODEL:start ==================================================================
+   A small SQL SELECT engine (CBSE Class 12 CS: relational model, keys, SQL, joins, aggregates).
+   Real SQL text is tokenized and parsed into a query plan, then run as a staged relational
+   pipeline over two in-memory tables: FROM, then (if JOIN) the full CROSS PRODUCT of both tables
+   filtered by the ON condition — an actual cross-match, computed row by row, never a picture of
+   one — then WHERE, then GROUP BY into buckets with aggregates worked out per bucket, then
+   HAVING, then the SELECT projection, then ORDER BY. Every stage is kept so the page can show the
+   intermediate result sets, not just the final answer. Inserting a row checks the primary key
+   (no duplicate RollNo in Student) and the foreign key (a Club row's RollNo must exist in
+   Student) before it is allowed to change the tables the rest of the page reads from.
+   ============================================================================ */
+const DB = {
+  Student: [
+    {RollNo: 1, Name: 'Aisha', Stream: 'Science', Marks: 88},
+    {RollNo: 2, Name: 'Rohan', Stream: 'Commerce', Marks: 74},
+    {RollNo: 3, Name: 'Meera', Stream: 'Science', Marks: 91},
+    {RollNo: 4, Name: 'Karan', Stream: 'Arts', Marks: 65},
+    {RollNo: 5, Name: 'Divya', Stream: 'Commerce', Marks: 78},
+    {RollNo: 6, Name: 'Farah', Stream: 'Science', Marks: 82},
+  ],
+  Club: [
+    {RollNo: 1, ClubName: 'Chess', Fee: 200},
+    {RollNo: 1, ClubName: 'Music', Fee: 150},
+    {RollNo: 3, ClubName: 'Chess', Fee: 200},
+    {RollNo: 5, ClubName: 'Dance', Fee: 250},
+  ],
+};
+const KEYWORDS = new Set(['SELECT', 'FROM', 'JOIN', 'ON', 'WHERE', 'AND', 'GROUP', 'BY', 'HAVING', 'ORDER', 'ASC', 'DESC']);
+const AGGS = new Set(['COUNT', 'SUM', 'AVG', 'MIN', 'MAX']);
+function tokenize(sql){
+  const toks = []; let i = 0; const s = sql;
+  while (i < s.length) {
+    const c = s[i];
+    if (/\s/.test(c)) { i++; continue; }
+    if (/[A-Za-z_]/.test(c)) { let j = i; while (j < s.length && /[A-Za-z0-9_.]/.test(s[j])) j++; toks.push({t: 'id', v: s.slice(i, j)}); i = j; continue; }
+    if (/[0-9]/.test(c)) { let j = i; while (j < s.length && /[0-9.]/.test(s[j])) j++; toks.push({t: 'num', v: parseFloat(s.slice(i, j))}); i = j; continue; }
+    if (c === "'" || c === '"') { const q = c; let j = i + 1, buf = ''; while (j < s.length && s[j] !== q) { buf += s[j]; j++; } toks.push({t: 'str', v: buf}); i = j + 1; continue; }
+    const two = s.slice(i, i + 2);
+    if (['!=', '<=', '>=', '<>'].includes(two)) { toks.push({t: 'op', v: two}); i += 2; continue; }
+    if ('*,()=<>.'.includes(c)) { toks.push({t: 'op', v: c}); i++; continue; }
+    throw new Error(`Cannot understand '${c}' in the query`);
+  }
+  return toks;
+}
+function parseSQL(sql){
+  const toks = tokenize(sql); let p = 0;
+  const peek = () => toks[p];
+  const isKw = w => toks[p] && toks[p].t === 'id' && toks[p].v.toUpperCase() === w;
+  const eatKw = w => { if (!isKw(w)) throw new Error(`Expected ${w}`); return toks[p++]; };
+  const eatOp = v => { if (!toks[p] || toks[p].v !== v) throw new Error(`Expected '${v}'`); return toks[p++]; };
+  const eatId = () => { if (!toks[p] || toks[p].t !== 'id') throw new Error('Expected a name'); return toks[p++].v; };
+  eatKw('SELECT');
+  const select = [];
+  for (;;) {
+    if (peek() && peek().v === '*') { p++; select.push({type: 'star'}); }
+    else {
+      const name = eatId();
+      if (peek() && peek().v === '(' && AGGS.has(name.toUpperCase())) {
+        p++; const arg = peek().v === '*' ? (p++, '*') : eatId(); eatOp(')');
+        select.push({type: 'agg', fn: name.toUpperCase(), arg, label: `${name.toUpperCase()}(${arg})`});
+      } else select.push({type: 'col', name});
+    }
+    if (peek() && peek().v === ',') { p++; continue; }
+    break;
+  }
+  eatKw('FROM');
+  const from = eatId();
+  let join = null;
+  if (isKw('JOIN')) { p++; const table = eatId(); eatKw('ON'); const left = eatId(); eatOp('='); const right = eatId(); join = {table, on: {left, right}}; }
+  const where = [];
+  if (isKw('WHERE')) {
+    p++;
+    for (;;) {
+      const col = eatId(); const op = toks[p++].v; const vt = toks[p++]; where.push({col, op, val: vt.v});
+      if (isKw('AND')) { p++; continue; }
+      break;
+    }
+  }
+  let groupBy = null;
+  if (isKw('GROUP')) { p++; eatKw('BY'); groupBy = eatId(); }
+  let having = null;
+  if (isKw('HAVING')) { p++; const fn = eatId().toUpperCase(); eatOp('('); const arg = peek().v === '*' ? (p++, '*') : eatId(); eatOp(')'); const op = toks[p++].v; const vt = toks[p++]; having = {fn, arg, op, val: vt.v}; }
+  let orderBy = null;
+  if (isKw('ORDER')) { p++; eatKw('BY'); const col = eatId(); let dir = 'ASC'; if (isKw('ASC') || isKw('DESC')) dir = toks[p++].v.toUpperCase(); orderBy = {col, dir}; }
+  if (p !== toks.length) throw new Error('Unexpected text after the query: ' + toks.slice(p).map(t => t.v).join(' '));
+  return {select, from, join, where, groupBy, having, orderBy};
+}
+function loadTable(name){ if (!DB[name]) throw new Error(`No such table: ${name}`); return DB[name].map(r => ({__tables: [name], [name]: Object.assign({}, r)})); }
+function crossJoin(rowsA, rowsB, tA, tB){ const out = []; for (const a of rowsA) for (const b of rowsB) out.push({__tables: [tA, tB], [tA]: a[tA], [tB]: b[tB]}); return out; }
+function resolveCol(row, colName){
+  if (colName.includes('.')) { const [t, f] = colName.split('.'); return row[t] ? row[t][f] : undefined; }
+  for (const t of row.__tables) if (row[t] && colName in row[t]) return row[t][colName];
+  return undefined;
+}
+function compare(v, op, target){
+  if (v === undefined) return false;
+  const a = (typeof target === 'number' && typeof v === 'string' && !isNaN(+v)) ? +v : v;
+  switch (op) { case '=': return a === target; case '!=': case '<>': return a !== target; case '<': return a < target; case '>': return a > target; case '<=': return a <= target; case '>=': return a >= target; default: throw new Error(`Unknown operator ${op}`); }
+}
+function aggValue(rows, fn, arg){
+  if (fn === 'COUNT') return arg === '*' ? rows.length : rows.filter(r => resolveCol(r, arg) !== undefined).length;
+  const vals = rows.map(r => resolveCol(r, arg)).filter(v => typeof v === 'number');
+  if (fn === 'SUM') return vals.reduce((s, v) => s + v, 0);
+  if (fn === 'AVG') return vals.length ? vals.reduce((s, v) => s + v, 0) / vals.length : null;
+  if (fn === 'MIN') return vals.length ? Math.min(...vals) : null;
+  if (fn === 'MAX') return vals.length ? Math.max(...vals) : null;
+  throw new Error(`Unknown aggregate ${fn}`);
+}
+function run(sql){
+  const ast = parseSQL(sql);
+  const stages = {};
+  const fromRows = loadTable(ast.from);
+  stages.from = fromRows;
+  let afterJoin = fromRows;
+  if (ast.join) {
+    const joinRows = loadTable(ast.join.table);
+    const cross = crossJoin(fromRows, joinRows, ast.from, ast.join.table);
+    stages.cross = cross;
+    const matched = cross.filter(r => resolveCol(r, ast.join.on.left) === resolveCol(r, ast.join.on.right));
+    stages.join = matched; afterJoin = matched;
+  }
+  const filtered = ast.where.length ? afterJoin.filter(r => ast.where.every(c => compare(resolveCol(r, c.col), c.op, c.val))) : afterJoin;
+  stages.where = filtered;
+  let projectedSource = filtered, groupRows = null;
+  if (ast.groupBy) {
+    const buckets = new Map();
+    for (const r of filtered) { const k = resolveCol(r, ast.groupBy); if (!buckets.has(k)) buckets.set(k, []); buckets.get(k).push(r); }
+    groupRows = [...buckets.entries()].map(([key, rows]) => ({__group: true, key, rows, groupCol: ast.groupBy}));
+    stages.group = groupRows;
+    if (ast.having) { groupRows = groupRows.filter(g => compare(aggValue(g.rows, ast.having.fn, ast.having.arg), ast.having.op, ast.having.val)); stages.having = groupRows; }
+    projectedSource = groupRows;
+  } else if (ast.select.some(s => s.type === 'agg')) {
+    /* an aggregate with no GROUP BY treats the whole filtered table as a single bucket */
+    projectedSource = [{__group: true, key: null, rows: filtered, groupCol: null}];
+  }
+  function project(row){
+    const out = {};
+    for (const item of ast.select) {
+      if (item.type === 'star') {
+        if (row.__group) out[row.groupCol] = row.key;
+        else for (const t of row.__tables) for (const [k, v] of Object.entries(row[t])) out[(row.__tables.length > 1 ? t + '.' : '') + k] = v;
+      } else if (item.type === 'col') out[item.name] = row.__group ? (item.name === row.groupCol ? row.key : undefined) : resolveCol(row, item.name);
+      else out[item.label] = row.__group ? aggValue(row.rows, item.fn, item.arg) : aggValue([row], item.fn, item.arg);
+    }
+    return out;
+  }
+  let selected = projectedSource.map(project);
+  stages.select = selected;
+  if (ast.orderBy) {
+    const col = ast.orderBy.col, dir = ast.orderBy.dir;
+    const keyOf = row => row.__group ? (col === row.groupCol ? row.key : aggValue(row.rows, col.split('(')[0], col.includes('(') ? col.slice(col.indexOf('(') + 1, -1) : col)) : resolveCol(row, col);
+    const idx = projectedSource.map((row, i) => ({row, sel: selected[i], key: keyOf(row)}));
+    idx.sort((a, b) => { const c = a.key < b.key ? -1 : a.key > b.key ? 1 : 0; return dir === 'DESC' ? -c : c; });
+    selected = idx.map(x => x.sel); stages.order = selected;
+  }
+  return {ast, stages, rows: selected};
+}
+function stageRows(rows){
+  return rows.map(row => {
+    if (row.__group) return {[row.groupCol]: row.key, 'rows in group': row.rows.length};
+    const o = {}; for (const t of row.__tables) for (const [k, v] of Object.entries(row[t])) o[(row.__tables.length > 1 ? t + '.' : '') + k] = v;
+    return o;
+  });
+}
+function canInsertClub(row){ return DB.Student.some(s => s.RollNo === row.RollNo); }
+function canInsertStudent(row){ return !DB.Student.some(s => s.RollNo === row.RollNo); }
+/* MODEL:end */
+
+/* ---------- examples ---------- */
+const EXAMPLES = [
+  {id: 'select', label: 'WHERE', sql: "SELECT * FROM Student\nWHERE Marks >= 80"},
+  {id: 'order', label: 'ORDER BY', sql: "SELECT Name, Marks FROM Student\nORDER BY Marks DESC"},
+  {id: 'join', label: 'JOIN', sql: "SELECT Student.Name, Club.ClubName\nFROM Student JOIN Club ON Student.RollNo = Club.RollNo"},
+  {id: 'group', label: 'GROUP BY', sql: "SELECT Stream, COUNT(*)\nFROM Student GROUP BY Stream"},
+  {id: 'having', label: 'HAVING', sql: "SELECT Stream, COUNT(*) FROM Student\nGROUP BY Stream HAVING COUNT(*) > 1"},
+  {id: 'agg', label: 'Aggregate, no grouping', sql: "SELECT AVG(Marks) FROM Student"},
+  {id: 'none', label: 'No match', sql: "SELECT * FROM Student WHERE Marks > 1000"},
+];
+
+/* ---------- state ---------- */
+const S = {sql: EXAMPLES[0].sql, locked: false, touched: false, result: null, error: null, lastEx: 'select'};
+const shared = sharedState();
+if (shared && typeof shared.sql === 'string') S.sql = shared.sql;
+shareState(() => ({sql: S.sql}));
+
+function tryRun(){
+  try { S.result = run(S.sql); S.error = null; }
+  catch (e) { S.result = null; S.error = e.message; }
+}
+tryRun();
+
+/* ---------- rendering ---------- */
+function tableHTML(rows, cols){
+  if (!rows.length) return '<div class="empty">No rows.</div>';
+  const columns = cols || Object.keys(rows[0]);
+  return `<table class="dt"><tr>${columns.map(c => `<th>${esc(c)}</th>`).join('')}</tr>` +
+    rows.map(r => `<tr>${columns.map(c => `<td>${r[c] === undefined ? '' : esc(String(r[c] === null ? 'NULL' : typeof r[c] === 'number' ? fmt(r[c], Number.isInteger(r[c]) ? 0 : 2) : r[c]))}</td>`).join('')}</tr>`).join('') + `</table>`;
+}
+function rowsHTML(cols, rows){ return `<tr>${cols.map(c => `<th>${esc(c)}</th>`).join('')}</tr>` + rows.map(r => `<tr>${cols.map(c => `<td>${esc(String(r[c]))}</td>`).join('')}</tr>`).join(''); }
+function paintBase(){
+  $('tblStudent').innerHTML = rowsHTML(['RollNo', 'Name', 'Stream', 'Marks'], DB.Student);
+  $('tblClub').innerHTML = rowsHTML(['RollNo', 'ClubName', 'Fee'], DB.Club);
+}
+function stageCard(label, rows, cls){
+  return `<div class="stage${cls ? ' ' + cls : ''}"><div class="lbl">${esc(label)} <span class="cnt">${rows.length} row${rows.length === 1 ? '' : 's'}</span></div><div class="tblwrap">${tableHTML(stageRows(rows))}</div></div>`;
+}
+function paintPipeline(){
+  if (S.error) { $('pipeline').innerHTML = `<div class="err">${esc(S.error)}</div>`; return; }
+  const st = S.result.stages;
+  let h = '';
+  h += stageCard('FROM ' + S.result.ast.from, st.from);
+  if (st.cross) { h += `<div class="arrow">&darr; JOIN ${esc(S.result.ast.join.table)}: every row of ${esc(S.result.ast.from)} paired with every row of ${esc(S.result.ast.join.table)} &mdash; the cross product</div>`; h += stageCard('Cross product', st.cross); }
+  if (st.join) { h += `<div class="arrow">&darr; keep only pairs where ${esc(S.result.ast.join.on.left)} = ${esc(S.result.ast.join.on.right)}</div>`; h += stageCard('Matched by ON', st.join); }
+  if (S.result.ast.where.length) { h += `<div class="arrow">&darr; WHERE ${esc(S.result.ast.where.map(w => `${w.col} ${w.op} ${w.val}`).join(' AND '))}</div>`; h += stageCard('After WHERE', st.where); }
+  if (st.group) { h += `<div class="arrow">&darr; GROUP BY ${esc(S.result.ast.groupBy)}: bucket the rows above</div>`; h += stageCard('Grouped', st.group); }
+  if (st.having) { h += `<div class="arrow">&darr; HAVING ${esc(S.result.ast.having.fn)}(${esc(S.result.ast.having.arg)}) ${esc(S.result.ast.having.op)} ${esc(String(S.result.ast.having.val))}</div>`; h += stageCard('After HAVING', st.having); }
+  h += `<div class="arrow">&darr; SELECT${S.result.ast.orderBy ? ' ... ORDER BY ' + esc(S.result.ast.orderBy.col) + ' ' + S.result.ast.orderBy.dir : ''}</div>`;
+  const n = S.result.rows.length;
+  h += `<div class="stage final"><div class="lbl">Result <span class="cnt">${n} row${n === 1 ? '' : 's'}</span></div><div class="tblwrap">${tableHTML(S.result.rows)}</div></div>`;
+  $('pipeline').innerHTML = h;
+}
+function paint(){
+  paintBase();
+  paintPipeline();
+  $('gate').hidden = S.locked;
+  $('runBtn').disabled = !S.locked; $('insBtn').disabled = !S.locked;
+  for (const b of $$('#exChips .chip')) { b.setAttribute('aria-pressed', b.dataset.ex === S.lastEx); b.disabled = !S.locked; }
+  checkFindings();
+  paintWhy();
+}
+function $$(sel){ return document.querySelectorAll(sel); }
+
+/* ---------- findings ---------- */
+function checkFindings(){
+  if (!S.locked || !S.touched || S.error) return;
+  const ast = S.result.ast, st = S.result.stages, rows = S.result.rows;
+  if (ast.from === 'Student' && ast.where.length === 1 && ast.where[0].col === 'Marks' && rows.length === 3) discover('select');
+  if (ast.orderBy && ast.orderBy.col === 'Marks' && ast.orderBy.dir === 'DESC' && rows[0] && rows[0].Name === 'Meera') discover('order');
+  if (st.cross && st.cross.length === 24) {
+    const was = discover('join-cross');
+    if (was && !POE.explained) POE.explain(`Running the JOIN example built the cross product first: Student’s 6 rows × Club’s 4 rows = <b>24</b> paired rows, shown as its own stage above. Only after that did the <b>ON Student.RollNo = Club.RollNo</b> condition throw away every pair that didn’t match, leaving 4.`);
+  }
+  if (st.join && st.join.length === 4 && st.cross && st.join.length < st.cross.length) discover('join-match');
+  if (st.group && st.group.length === 3) discover('group');
+  if (st.having && st.having.length === 2) discover('having');
+  if (!ast.groupBy && ast.select.some(s => s.type === 'agg') && rows.length === 1 && Math.abs(rows[0]['AVG(Marks)'] - 478 / 6) < 1e-9) discover('aggregate-all');
+}
+function paintWhy(){
+  $('whyCard').hidden = !S.locked; if (!S.locked) return;
+  $('why').innerHTML = `<p>A <b>JOIN ... ON</b> is computed exactly the way it is defined: pair every row of the first table with every row of the second (the cross product), then throw away every pair the <b>ON</b> condition rejects. What is left is the join.</p>
+    <p><b>GROUP BY</b> sorts rows into buckets by the value named; an aggregate like <b>COUNT</b> or <b>AVG</b> is then worked out separately inside each bucket. <b>HAVING</b> filters those buckets afterwards, the way <b>WHERE</b> filters rows before any grouping happens.</p>
+    <p>A primary key must be unique in its own table; a foreign key must already exist in the table it points to. The engine checks both before it lets an insert change anything.</p>`;
+}
+
+/* ---------- controls ---------- */
+$('exChips').innerHTML = EXAMPLES.map(e => `<button class="chip" data-ex="${e.id}">${esc(e.label)}</button>`).join('');
+$('exChips').addEventListener('click', e => {
+  const b = e.target.closest('[data-ex]'); if (!b || b.disabled) return;
+  const ex = EXAMPLES.find(x => x.id === b.dataset.ex); S.sql = ex.sql; S.lastEx = ex.id; S.touched = true;
+  $('sqlBox').value = S.sql; sound('tick'); tryRun(); paint(); track('example', {id: ex.id});
+});
+$('sqlBox').addEventListener('input', () => { S.sql = $('sqlBox').value; });
+$('runBtn').addEventListener('click', () => {
+  if (!S.locked) return;
+  S.touched = true; S.lastEx = null; sound('tick'); tryRun(); paint(); track('run', {sql: S.sql});
+});
+$('insBtn').addEventListener('click', () => {
+  if (!S.locked) return;
+  const row = {RollNo: clamp(Math.round(+$('insRoll').value || 0), 0, 999), ClubName: $('insClub').value.trim() || 'Club', Fee: clamp(Math.round(+$('insFee').value || 0), 0, 9999)};
+  if (!canInsertClub(row)) {
+    $('insMsg').innerHTML = `<b style="color:#c0392b">Rejected:</b> RollNo ${row.RollNo} is not in Student &mdash; a foreign key must already exist in the table it points to.`;
+    sound('oops'); S.touched = true; discover('constraints'); track('insert', {ok: false, row});
+  } else {
+    DB.Club.push(row);
+    $('insMsg').innerHTML = `<b style="color:#2f9e5b">Inserted.</b> RollNo ${row.RollNo} exists in Student, so the foreign key holds.`;
+    sound('chime'); S.touched = true; tryRun(); track('insert', {ok: true, row});
+  }
+  paint();
+});
+findings($('finds'), [
+  {id: 'select',        icon: '=', label: 'WHERE keeps only the matching rows: Marks ≥ 80 gives 3', hint: 'Run the WHERE example'},
+  {id: 'order',         icon: '↓', label: 'ORDER BY DESC sorts the rows by marks, highest first', hint: 'Run the ORDER BY example'},
+  {id: 'join-cross',    icon: '×', label: 'The cross product of 6 and 4 rows really is 24 rows', hint: 'Run the JOIN example'},
+  {id: 'join-match',    icon: '✓', label: 'The ON condition throws away all but 4 of those 24 pairs', hint: 'Look at the join example’s stages'},
+  {id: 'group',         icon: '⚖', label: 'GROUP BY Stream makes exactly 3 buckets', hint: 'Run the GROUP BY example'},
+  {id: 'having',        icon: '⊕', label: 'HAVING drops the bucket with only 1 row', hint: 'Run the HAVING example'},
+  {id: 'aggregate-all', icon: '÷', label: 'With no GROUP BY, the whole table is one bucket', hint: 'Run the AVG example with no grouping'},
+  {id: 'constraints',   icon: '⛔', label: 'A foreign key rejects a RollNo that does not exist', hint: 'Try inserting a RollNo not in Student'},
+], () => toast('All eight: a real relational engine, staged and checked.', 4200));
+
+const POE = predict($('poe'), {
+  id: 'join-cross',
+  q: 'Student has 6 rows and Club has 4 rows. Before its ON condition filters anything, how many rows does a JOIN’s cross product contain?',
+  options: [
+    {id: 'sum', text: '10, because 6 + 4 = 10.'},
+    {id: 'prod', text: '24, because every row of one pairs with every row of the other.', right: true},
+    {id: 'six', text: '6, the size of the bigger table.'},
+    {id: 'four', text: '4, the size of the smaller table.'},
+  ],
+  onLock(){ S.locked = true; paint(); },
+});
+
+if (!Play.FF('predict')) S.locked = true;
+$('sqlBox').value = S.sql;
+paint();
+window.applyFeatures = () => paint();
+window.PG_STATE = () => ({sql: S.sql, locked: S.locked, error: S.error, rows: S.result ? S.result.rows.length : null,
+  stages: S.result ? Object.fromEntries(Object.entries(S.result.stages).map(([k, v]) => [k, v.length])) : null});
+window.PG_MODEL = {DB, parseSQL, run, resolveCol, aggValue, stageRows, canInsertClub, canInsertStudent};
+</script>
+</body>
+</html>

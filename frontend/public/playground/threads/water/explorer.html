@@ -1,0 +1,811 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Journey of a river</title>
+<meta name="description" content="Class 3–5: rain on a land of hills, forests, fields and a town. Water soaks in, fills the village well, runs off, joins into a river and reaches the sea; build a dam, cause a flood, and let the Sun lift water back into the cloud.">
+<link rel="icon" href="../../favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600&family=Nunito:wght@500;700;800&display=swap">
+<link rel="stylesheet" href="../../play.css">
+<style>
+#stageWrap{align-self:start; min-height:0}
+#mapWrap{position:relative}
+#map{display:block; width:100%; height:auto}
+#ov{position:absolute; inset:0; width:100%; height:100%; touch-action:none; user-select:none; -webkit-user-select:none}
+#paint{cursor:default}
+#paint.brush{cursor:crosshair}
+#cloudHit{cursor:grab}
+#cloudHit.dragging{cursor:grabbing}
+.says{display:grid; grid-template-columns:56px 1fr; gap:10px; align-items:center}
+.says svg{width:56px; height:56px}
+.voice{font-size:15px; font-weight:700; line-height:1.45}
+.missions{list-style:none; margin:0; padding:0; display:grid; gap:7px}
+.missions li{display:grid; grid-template-columns:30px 1fr; gap:8px; align-items:center; font-weight:700; font-size:14.5px; line-height:1.3; color:var(--ink-2)}
+.missions li i{width:28px; height:28px; border-radius:50%; border:2.5px dashed var(--hair-2); display:grid; place-items:center; font-style:normal; font-size:15px; color:#fff}
+.missions li.done{color:var(--ink)}
+.missions li.done i{border:none; background:var(--good); animation:tickPop .5s var(--spring)}
+.missions li.done span{text-decoration:line-through; text-decoration-color:var(--good); text-decoration-thickness:2px}
+@keyframes tickPop{0%{transform:scale(.3)}100%{transform:scale(1)}}
+.strip{display:flex; flex-direction:column; gap:8px; padding:10px 12px 12px; background:var(--sunk); border-top:1px solid var(--hair)}
+.rowb{display:flex; gap:6px; align-items:center; flex-wrap:wrap}
+.rowb .btn{flex:1 1 auto; min-height:46px; padding:0 8px; font-size:14.5px; white-space:nowrap}
+@media (max-width:1180px){ .rowb .lab{display:none} .rowb .btn{font-size:13.5px; padding:0 6px} }
+.rowb .btn[aria-pressed="true"]{background:var(--accent-soft); border-color:var(--accent); border-width:2px}
+.rowb .lab{width:44px; font-size:11px; letter-spacing:.07em; text-transform:uppercase; font-weight:800; color:var(--ink-3)}
+.rowb .day{min-width:64px; text-align:right; font-weight:800; color:var(--ink-2); font-size:14px}
+.seg{display:grid; grid-template-columns:repeat(3,1fr); gap:6px}
+.seg .btn{min-height:46px; padding:0 6px; font-size:14.5px}
+.seg .btn[aria-pressed="true"], .tools .btn[aria-pressed="true"]{background:var(--accent-soft); border-color:var(--accent); border-width:2px}
+.tools{display:grid; grid-template-columns:repeat(3,1fr); gap:6px}
+.tools .btn{min-height:46px; padding:0 6px; font-size:14px}
+.note{font-size:13px; color:var(--ink-3); margin:6px 0 0}
+.ledger{display:flex; height:22px; border-radius:99px; overflow:hidden; background:var(--sunk); margin:6px 0}
+.ledger i{display:block; height:100%; transition:width .3s}
+.keyrow{display:flex; flex-wrap:wrap; gap:4px 12px; font-size:12.5px; font-weight:700; color:var(--ink-2)}
+.keyrow span::before{content:''; display:inline-block; width:10px; height:10px; border-radius:3px; margin-right:5px; background:var(--c)}
+.soaks{display:grid; grid-template-columns:auto 1fr auto; gap:3px 8px; font-size:13.5px; font-weight:700; align-items:center; margin-top:6px}
+.soaks .bar{height:9px; border-radius:99px; background:var(--sunk); overflow:hidden}
+.soaks .bar i{display:block; height:100%; background:#2d8fd6}
+.gate{position:absolute; left:0; right:0; top:12px; display:grid; place-items:center; pointer-events:none}
+.gate span{background:rgba(15,26,43,.86); color:#fff; padding:12px 20px; border-radius:99px; font-weight:700; font-size:16px}
+</style>
+</head>
+<body>
+<header class="pg-top"></header>
+
+<div class="pg-intro">
+  <h1>Journey of a river</h1>
+  <p>This is a made-up land, not a map — but it works like the Godavari’s journey: hills in the west, the sea in the east.
+     Drag the rain cloud, make it rain, and follow the water. Paint trees, fields or a town, and build a dam.</p>
+</div>
+
+<main class="pg-main">
+  <section class="pg-stage" id="stageWrap">
+    <div id="mapWrap">
+      <canvas id="map" width="1000" height="600" aria-label="A land of hills, forests, fields, a town and a village, with the sea on the right"></canvas>
+      <svg id="ov" viewBox="0 0 1000 600" role="img" aria-label="Drag the cloud; paint the land with the chosen tool"></svg>
+      <div class="gate" id="gate" hidden><span>Make a guess first →</span></div>
+    </div>
+    <div class="strip">
+      <div class="rowb" id="rainBtns">
+        <span class="lab">Sky</span>
+        <button class="btn" data-rain="0" aria-pressed="true">☁️ No rain</button>
+        <button class="btn" data-rain="1" aria-pressed="false">🌦️ Rain</button>
+        <button class="btn" data-rain="2" aria-pressed="false">⛈️ Heavy rain</button>
+        <button class="btn" id="sunBtn" aria-pressed="true">☀️ Sun is shining</button>
+        <span class="day" id="dayOut">Day 1</span>
+      </div>
+      <div class="rowb" id="tools">
+        <span class="lab">Land</span>
+        <button class="btn" data-tool="none" aria-pressed="true">✋ Just look</button>
+        <button class="btn" data-tool="forest" aria-pressed="false">🌳 Trees</button>
+        <button class="btn" data-tool="soil" aria-pressed="false">🌾 Fields</button>
+        <button class="btn" data-tool="town" aria-pressed="false">🏙️ Town</button>
+        <button class="btn" data-tool="dam" aria-pressed="false">🧱 Dam</button>
+        <button class="btn" id="resetBtn">↺ Start again</button>
+      </div>
+      <p class="note" id="toolNote" style="margin:0">Drag the cloud over the land. Pick a tool, then drag on the land to paint it.</p>
+    </div>
+  </section>
+
+  <aside class="pg-side">
+    <div class="card says">
+      <svg viewBox="-30 -34 60 64" aria-hidden="true">
+        <path d="M0 -32 Q24 -4 22 10 Q20 28 0 28 Q-20 28 -22 10 Q-24 -4 0 -32Z" fill="#2d8fd6"/>
+        <path d="M-10 -12 Q-14 -2 -12 6" stroke="#fff" stroke-width="4" fill="none" stroke-linecap="round" opacity=".5"/>
+        <circle cx="-7" cy="6" r="3" fill="#0d2a4a"/><circle cx="7" cy="6" r="3" fill="#0d2a4a"/>
+        <path d="M-7 15 Q0 21 7 15" stroke="#0d2a4a" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+        <circle cx="-13" cy="12" r="3" fill="#ff8aa8" opacity=".6"/><circle cx="13" cy="12" r="3" fill="#ff8aa8" opacity=".6"/>
+      </svg>
+      <div><div class="kicker">Godavari says</div><div class="voice" id="voice">I am Godavari! My journey begins high up in the Western Ghats.</div></div>
+    </div>
+    <div id="poe"></div>
+    <div class="card">
+      <div class="kicker">Missions <span id="mcount"></span></div>
+      <ul class="missions" id="missions"></ul>
+    </div>
+    <div class="card">
+      <div class="kicker">Where did the rain go?</div>
+      <div class="ledger" id="ledger"></div>
+      <div class="keyrow"><span style="--c:#8b5e34">soaked into the ground</span><span style="--c:#6fc3f2">on the land now</span><span style="--c:#1f5fa8">reached the sea</span><span style="--c:#f2b134">dried by the Sun</span></div>
+      <div class="soaks" id="soaks"></div>
+    </div>
+    <div class="card"><div class="kicker">Discoveries</div><div id="finds"></div></div>
+  </aside>
+</main>
+
+<script src="../../play.js"></script>
+<script>
+'use strict';
+const {$, esc, clamp, fmt, drag, loop, sound, say, track, toast, predict, findings, discover, found,
+       shareState, sharedState, mount, reduced, mulberry32, svgPoint} = Play;
+mount({thread: 'water', band: 'explorer'});
+
+/* MODEL:start ==================================================================
+   A land of square cells. Each cell has a height z (m), a surface (fields, forest,
+   rock, town, sea), water standing on it w (m) and water held in the ground g (m).
+   Every hour:
+   1. RAIN. The cloud drops water on the cells under it, as long as it holds any.
+   2. SOAK, CREEP, DRY. Standing water soaks into the ground as fast as the surface lets
+      it (forest fastest, then fields, rock slowly, a town not at all) until the ground
+      is full. Under the soil, ground water slowly creeps downhill (a quarter of a percent
+      of it each hour); where the ground is already full it comes out as a spring. That
+      keeps a river flowing long after the rain, and it is the water a well reaches.
+      In sunshine, 0.3% of the standing water dries up each hour.
+   3. FLOW. Water runs downhill. The water surface (z + w) of each cell is compared with
+      its eight neighbours and the water runs to the steepest one below it, never more
+      than half the drop, so a pool levels off instead of sloshing. When a river rises
+      above its banks, a bank becomes the steepest way down and the water spills out:
+      a flood. Trees slow the water: a forest cell lets only part of it move each hour.
+      Water that reaches the sea is counted and leaves the land. Streams are simply the
+      cells where much water keeps moving; where two meet, a tributary joins.
+   4. THE SUN AND THE SEA. In sunshine the Sun lifts water from the sea into the cloud.
+   Nothing is scripted: rivers, floods, full wells and reservoirs all come out of these
+   four rules and the ground the learner paints.
+   ============================================================================ */
+const T = {SOIL: 0, FOREST: 1, ROCK: 2, TOWN: 3, SEA: 4};
+const INF   = [0.003, 0.005, 0.0008, 0, 0];   // m per hour the ground can drink
+const GCAP  = [0.25, 0.35, 0.06, 0, 0];       // m of water the ground can hold
+const ROUGH = [1, 0.4, 1, 1, 1];               // share of the movable water that moves each hour (trees slow it)
+const SEEP = 0.0025, EVAP = 0.003, SEA_EVAP = 1.2, CLOUD_MAX = 700;
+const RAIN = [0, 0.004, 0.02];                  // m per hour: none, rain, heavy rain
+const SQ2 = Math.SQRT2;
+const NBS = [[1, 0, 1], [-1, 0, 1], [0, 1, 1], [0, -1, 1], [1, 1, SQ2], [1, -1, SQ2], [-1, 1, SQ2], [-1, -1, SQ2]];
+
+function newWorld(nx, ny, z, type, g0){
+  const n = nx * ny;
+  const W = {nx, ny, z: Float64Array.from(z), type: Uint8Array.from(type), w: new Float64Array(n), g: new Float64Array(n),
+    F: new Float64Array(n), dw: new Float64Array(n), gin: new Float64Array(n), to: new Int32Array(n).fill(-1), rec: new Int32Array(n), t: 0,
+    cloud: {x: 0, y: 0, r: 8, C: 0},
+    led: {rain: 0, soaked: 0, seeped: 0, toSea: 0, evap: 0, seaEvap: 0, rainOn: [0, 0, 0, 0, 0], soakOn: [0, 0, 0, 0, 0]}};
+  for (let i = 0; i < n; i++) W.g[i] = g0 ? g0(i, W.type[i]) : 0;
+  receivers(W);
+  return W;
+}
+/* The steepest-downhill neighbour of every cell (by ground height): the paths streams take. */
+function receivers(W){
+  const {nx, ny, z} = W;
+  for (let y = 0; y < ny; y++) for (let x = 0; x < nx; x++) {
+    const i = y * nx + x; let best = -1, bd = 0;
+    for (const [dx, dy, d] of NBS) {
+      const X = x + dx, Y = y + dy; if (X < 0 || Y < 0 || X >= nx || Y >= ny) continue;
+      const s = (z[i] - z[Y * nx + X]) / d; if (s > bd) { bd = s; best = Y * nx + X; }
+    }
+    W.rec[i] = best;
+  }
+}
+/* One hour. inp = {rain: m per hour, sun: true/false}. */
+function step(W, inp){
+  const {nx, ny, z, w, g, type, F, dw, led} = W, n = nx * ny, c = W.cloud;
+  /* 1. rain under the cloud */
+  if (inp.rain > 0 && c.C > 0) {
+    const cells = [];
+    const r2 = c.r * c.r;
+    for (let y = Math.max(0, Math.floor(c.y - c.r)); y <= Math.min(ny - 1, Math.ceil(c.y + c.r)); y++)
+      for (let x = Math.max(0, Math.floor(c.x - c.r)); x <= Math.min(nx - 1, Math.ceil(c.x + c.r)); x++)
+        if ((x - c.x) ** 2 + (y - c.y) ** 2 <= r2) cells.push(y * nx + x);
+    if (cells.length) {
+      const r = Math.min(inp.rain, c.C / cells.length);
+      for (const i of cells) {
+        c.C -= r;
+        if (type[i] === T.SEA) { led.toSea += r; led.rain += r; led.rainOn[T.SEA] += r; continue; }
+        w[i] += r; led.rain += r; led.rainOn[type[i]] += r;
+      }
+      if (c.C < 1e-12) c.C = 0;
+    }
+  }
+  /* 2. soak in, seep out, dry up */
+  for (let i = 0; i < n; i++) {
+    const t = type[i]; if (t === T.SEA) continue;
+    if (w[i] > 0) {
+      const inf = Math.max(0, Math.min(w[i], INF[t], GCAP[t] - g[i]));
+      w[i] -= inf; g[i] += inf; led.soaked += inf; led.soakOn[t] += inf;
+    }
+    if (inp.sun && w[i] > 0) { const e = w[i] * EVAP; w[i] -= e; led.evap += e; }
+  }
+  /* ground water creeps downhill under the soil; where the ground is already full it comes out as a spring */
+  const gin = W.gin;
+  gin.fill(0);
+  for (let i = 0; i < n; i++) {
+    if (type[i] === T.SEA || g[i] <= 0) continue;
+    const r = W.rec[i]; if (r < 0) continue;
+    const s = g[i] * SEEP; g[i] -= s;
+    if (type[r] === T.SEA) led.toSea += s; else gin[r] += s;
+  }
+  for (let i = 0; i < n; i++) {
+    if (type[i] === T.SEA) continue;
+    g[i] += gin[i];
+    const cap = GCAP[type[i]];
+    if (g[i] > cap) { const e = g[i] - cap; g[i] = cap; w[i] += e; led.seeped += e; }
+  }
+  /* 3. flow: each cell's water runs to the neighbour whose water surface is steepest below it */
+  dw.fill(0);
+  const to = W.to;
+  for (let y = 0; y < ny; y++) for (let x = 0; x < nx; x++) {
+    const i = y * nx + x;
+    to[i] = -1;
+    if (type[i] === T.SEA || w[i] <= 1e-12) { F[i] *= 0.9; continue; }
+    const H = z[i] + w[i];
+    let best = -1, bs = 0, bdrop = 0;
+    for (const [dx, dy, d] of NBS) {
+      const X = x + dx, Y = y + dy; if (X < 0 || Y < 0 || X >= nx || Y >= ny) continue;
+      const j = Y * nx + X, drop = H - (type[j] === T.SEA ? 0 : z[j] + w[j]);
+      if (drop / d > bs) { bs = drop / d; best = j; bdrop = drop; }
+    }
+    if (best < 0) { F[i] *= 0.9; continue; }
+    const move = Math.min(w[i], bdrop / 2) * ROUGH[type[i]];
+    dw[best] += move; dw[i] -= move; to[i] = best;
+    F[i] = F[i] * 0.9 + move * 0.1;
+  }
+  for (let i = 0; i < n; i++) {
+    if (type[i] === T.SEA) { if (dw[i] > 0) led.toSea += dw[i]; continue; }
+    w[i] += dw[i]; if (w[i] < 1e-15) w[i] = 0;
+  }
+  /* 4. the Sun lifts sea water into the cloud */
+  if (inp.sun && c.C < CLOUD_MAX) { const e = Math.min(SEA_EVAP, CLOUD_MAX - c.C); c.C += e; led.seaEvap += e; }
+  W.t++;
+}
+/* Every drop is somewhere: on the land, in the ground, in the cloud, in the sea or dried up. */
+function waterBook(W){
+  let sw = 0, sg = 0; for (let i = 0; i < W.w.length; i++) { sw += W.w[i]; sg += W.g[i]; }
+  return {land: sw, ground: sg, cloud: W.cloud.C, sea: W.led.toSea, dried: W.led.evap, fromSea: W.led.seaEvap,
+          total: sw + sg + W.cloud.C + W.led.toSea + W.led.evap - W.led.seaEvap};
+}
+/* Where two or more flowing streams meet. */
+function confluences(W, thr){
+  const out = [];
+  for (let i = 0; i < W.F.length; i++) {
+    if (W.F[i] < thr || W.type[i] === T.SEA) continue;
+    let c = 0; const x = i % W.nx, y = (i / W.nx) | 0;
+    for (const [dx, dy] of NBS) { const X = x + dx, Y = y + dy; if (X < 0 || Y < 0 || X >= W.nx || Y >= W.ny) continue;
+      const j = Y * W.nx + X; if (W.rec[j] === i && W.F[j] >= thr) c++; }
+    if (c >= 2) out.push(i);
+  }
+  return out;
+}
+/* MODEL:end */
+
+/* ============================================================================
+   The land: made up, but shaped like the Godavari's country — high Ghats in the
+   west, a long valley falling east to the sea, side valleys for tributaries.
+   ============================================================================ */
+const NX = 100, NY = 60, CS = 10;
+function makeLand(seed){
+  const rnd = mulberry32(seed);
+  const noise = sc => {
+    const gx = Math.ceil(NX / sc) + 2, gy = Math.ceil(NY / sc) + 2, G = Array.from({length: gx * gy}, () => rnd());
+    const sm = t => t * t * (3 - 2 * t);
+    return (x, y) => { const X = x / sc, Y = y / sc, x0 = Math.floor(X), y0 = Math.floor(Y), fx = sm(X - x0), fy = sm(Y - y0);
+      const v = (a, b) => G[(b) * gx + a];
+      return (v(x0, y0) * (1 - fx) + v(x0 + 1, y0) * fx) * (1 - fy) + (v(x0, y0 + 1) * (1 - fx) + v(x0 + 1, y0 + 1) * fx) * fy; };
+  };
+  const n1 = noise(13), n2 = noise(6), n3 = noise(3), nf = noise(8);
+  const z = new Float64Array(NX * NY), type = new Uint8Array(NX * NY);
+  for (let y = 0; y < NY; y++) for (let x = 0; x < NX; x++) {
+    const i = y * NX + x;
+    const coast = 86 + 3 * Math.sin(y / 7) + 2 * Math.sin(y / 3.1);
+    if (x > coast) { z[i] = 0; type[i] = T.SEA; continue; }
+    const u = x / coast;
+    const mid = 30 + 5 * Math.sin(x / 13);
+    let h = 820 * Math.pow(1 - u, 1.5) + 12;
+    h += 480 * Math.exp(-((Math.max(0, x - 6) / 4.5) ** 2));
+    h += 300 * (Math.abs(y - mid) / 30) * (0.6 + 0.4 * (1 - u));
+    const edge = Math.min(y, NY - 1 - y); if (edge < 4) h += 260 * ((4 - edge) / 4) ** 2;
+    h += (n1(x, y) * 0.55 + n2(x, y) * 0.3 + n3(x, y) * 0.15 - 0.5) * (10 + 130 * (1 - u) * (1 - u));
+    z[i] = Math.max(3, h);
+    type[i] = z[i] > 860 ? T.ROCK : (nf(x, y) > 0.62 && z[i] > 200) ? T.FOREST : T.SOIL;
+  }
+  fillPits(z, type);
+  return {z, type};
+}
+/* Priority-flood: raise every pit just enough that water can always find the sea. */
+function fillPits(z, type){
+  const done = new Uint8Array(NX * NY), heap = [];
+  const push = (i, h) => { heap.push([h, i]); let k = heap.length - 1; while (k) { const p = (k - 1) >> 1; if (heap[p][0] <= heap[k][0]) break; [heap[p], heap[k]] = [heap[k], heap[p]]; k = p; } };
+  const pop = () => { const top = heap[0], last = heap.pop(); if (heap.length) { heap[0] = last; let k = 0; for (;;) { const l = 2 * k + 1, r = l + 1; let m = k;
+    if (l < heap.length && heap[l][0] < heap[m][0]) m = l; if (r < heap.length && heap[r][0] < heap[m][0]) m = r; if (m === k) break; [heap[m], heap[k]] = [heap[k], heap[m]]; k = m; } } return top; };
+  for (let i = 0; i < NX * NY; i++) if (type[i] === T.SEA) { done[i] = 1; push(i, 0); }
+  while (heap.length) {
+    const [h, i] = pop(), x = i % NX, y = (i / NX) | 0;
+    for (const [dx, dy] of NBS) {
+      const X = x + dx, Y = y + dy; if (X < 0 || Y < 0 || X >= NX || Y >= NY) continue;
+      const j = Y * NX + X; if (done[j]) continue; done[j] = 1;
+      if (z[j] <= h + 0.05) z[j] = h + 0.05;
+      push(j, z[j]);
+    }
+  }
+}
+
+/* ---- build the world, find the main river, place the village and the town ---- */
+let LAND, W, PLACES, BASE0;
+function flowAcc(W){
+  const n = NX * NY, acc = new Float64Array(n).fill(1), ord = Array.from({length: n}, (_, i) => i).sort((a, b) => W.z[b] - W.z[a]);
+  for (const i of ord) if (W.rec[i] >= 0 && W.type[i] !== T.SEA) acc[W.rec[i]] += acc[i];
+  return acc;
+}
+function buildWorld(){
+  LAND = makeLand(11);
+  W = newWorld(NX, NY, LAND.z, LAND.type, (i, t) => GCAP[t] * (t === T.ROCK ? 0.6 : 0.3));
+  const acc = flowAcc(W);
+  /* valley floors start with full ground (that is where springs feed the streams); hillsides are drier */
+  for (let i = 0; i < NX * NY; i++) W.g[i] = GCAP[W.type[i]] * Math.min(1, (W.type[i] === T.ROCK ? 0.6 : 0.3) + acc[i] / 25);
+  /* the main river: the cell of biggest catchment near the coast, traced back up */
+  let mouth = -1, ma = 0;
+  for (let i = 0; i < NX * NY; i++) if (W.type[i] !== T.SEA && W.rec[i] >= 0 && W.type[W.rec[i]] === T.SEA && acc[i] > ma) { ma = acc[i]; mouth = i; }
+  const path = [mouth];
+  for (let s = 0; s < 400; s++) {
+    const i = path[path.length - 1], x = i % NX, y = (i / NX) | 0; let up = -1, ua = 0;
+    for (const [dx, dy] of NBS) { const X = x + dx, Y = y + dy; if (X < 0 || Y < 0 || X >= NX || Y >= NY) continue; const j = Y * NX + X; if (W.rec[j] === i && acc[j] > ua) { ua = acc[j]; up = j; } }
+    if (up < 0) break; path.push(up);
+  }
+  path.reverse();
+  const at = frac => path[Math.min(path.length - 1, Math.floor(path.length * frac))];
+  const src = path[0];
+  /* the village: on the river bank about two-thirds of the way down, on low ground */
+  const vr = at(0.66), vx = vr % NX, vy = (vr / NX) | 0;
+  const side = W.z[(vy - 3) * NX + vx] < W.z[(vy + 3) * NX + vx] ? -1 : 1;
+  const village = [];
+  for (let dy = 1; dy <= 3; dy++) for (let dx = -1; dx <= 1; dx++) village.push((vy + side * dy) * NX + vx + dx);
+  const bed = W.z[vr];
+  for (const i of village) { W.z[i] = Math.min(W.z[i], bed + 1.2 + 0.6 * Math.abs(((i / NX) | 0) - vy)); W.type[i] = T.SOIL; }
+  /* the well: at the top of the village, on higher ground, away from the river */
+  let well = (vy + side * 5) * NX + vx, wb = -Infinity;
+  for (let dy = 4; dy <= 8; dy++) for (let dx = -3; dx <= 3; dx++) { const j = (vy + side * dy) * NX + vx + dx; if (W.type[j] === T.SEA) continue; const sc = W.z[j] - 40 * acc[j]; if (sc > wb) { wb = sc; well = j; } }
+  W.type[well] = T.SOIL;
+  /* the town: on the other bank, further up */
+  const tr = at(0.42), tx = tr % NX, ty = (tr / NX) | 0, tside = -side;
+  const town = [];
+  for (let dy = 2; dy <= 6; dy++) for (let dx = -3; dx <= 3; dx++) { const i = (ty + tside * dy) * NX + tx + dx; if (W.type[i] !== T.SEA) { W.type[i] = T.TOWN; town.push(i); } }
+  for (const i of town) W.g[i] = 0;
+  W.g[well] = GCAP[T.SOIL] * 0.3;
+  receivers(W);
+  PLACES = {src, path, village, well, town, vr, side};
+  BASE0 = {z: Float64Array.from(W.z), type: Uint8Array.from(W.type)};
+  /* let the river settle: ground water seeping out keeps it flowing (a perennial river) */
+  for (let s = 0; s < 500; s++) step(W, {rain: 0, sun: false});
+  W.cloud = {x: (src % NX) + 12, y: ((src / NX) | 0) - 8, r: 8, C: 420};
+  W.led = {rain: 0, soaked: 0, seeped: 0, toSea: 0, evap: 0, seaEvap: 0, rainOn: [0, 0, 0, 0, 0], soakOn: [0, 0, 0, 0, 0]};
+  W.t = 0;
+}
+
+/* ---- state: plain data (the world itself is W) ------------------------------ */
+const S = {rain: 0, sun: true, tool: 'none', missions: {}, locked: false, dam: null, firstRainSea: null, wellLow: true,
+           reservoir: 0, flooded: false, lastSay: 0};
+
+const MISSIONS = [
+  {id: 'sea',   text: 'Make it rain on the Western Ghats and follow the water to the sea'},
+  {id: 'soak',  text: 'Rain on the town and on the fields: where does the rain soak in?'},
+  {id: 'well',  text: 'Fill the village well with rain'},
+  {id: 'dam',   text: 'Build a dam across the river and fill its reservoir'},
+  {id: 'flood', text: 'What happens when too much rain falls?'},
+  {id: 'cycle', text: 'Let the Sun lift water from the sea back into the cloud, and rain it again'},
+];
+function renderMissions(){
+  $('missions').innerHTML = MISSIONS.map(m => `<li class="${S.missions[m.id] ? 'done' : ''}" data-m="${m.id}"><i aria-hidden="true">${S.missions[m.id] ? '✓' : ''}</i><span>${esc(m.text)}</span></li>`).join('');
+  $('mcount').textContent = `· ${Object.keys(S.missions).length} of ${MISSIONS.length} done`;
+}
+function tickMission(id){ if (S.missions[id]) return false; S.missions[id] = true; renderMissions(); sound('chime'); track('mission', {id}); return true; }
+function godavari(line, speak = true){ $('voice').innerHTML = line; if (speak) say(line); }
+const cellPt = i => ({x: (i % NX) * CS + CS / 2, y: ((i / NX) | 0) * CS + CS / 2});
+function screenOf(p){ const svg = $('ov'), m = svg.getScreenCTM(); if (!m) return null; const q = svg.createSVGPoint(); q.x = p.x; q.y = p.y; const r = q.matrixTransform(m); return {x: r.x, y: r.y}; }
+
+/* ============================================================================
+   Drawing. The ground is painted once into a base picture (redrawn when the land
+   changes); the water is painted every frame on top of it.
+   ============================================================================ */
+const canvas = $('map'), ctx = canvas.getContext('2d');
+const base = document.createElement('canvas'); base.width = 1000; base.height = 600;
+const small = document.createElement('canvas'); small.width = NX; small.height = NY;
+const wcan = document.createElement('canvas'); wcan.width = NX; wcan.height = NY;
+function hyp(h){
+  const stops = [[0, [150, 204, 120]], [120, [178, 212, 118]], [300, [214, 206, 132]], [550, [206, 172, 112]], [800, [170, 138, 104]], [1100, [150, 144, 140]]];
+  for (let k = 1; k < stops.length; k++) if (h <= stops[k][0]) { const [a, ca] = stops[k - 1], [b, cb] = stops[k], t = (h - a) / (b - a); return ca.map((v, m) => v + (cb[m] - v) * t); }
+  return stops[stops.length - 1][1];
+}
+function paintBase(){
+  /* per-cell colour (height tint, forest, town, sea) and light from the north-west, then
+     blended smoothly pixel by pixel, with 100 m contour lines so the hills read like a map */
+  const col = new Float32Array(NX * NY * 3);
+  for (let y = 0; y < NY; y++) for (let x = 0; x < NX; x++) {
+    const i = y * NX + x, t = W.type[i];
+    let c;
+    if (t === T.SEA) { const d = clamp((x - 84) / 16, 0, 1); c = [78 - 34 * d, 160 - 44 * d, 222 - 24 * d]; }
+    else {
+      const zx = W.z[y * NX + Math.min(NX - 1, x + 1)] - W.z[y * NX + Math.max(0, x - 1)];
+      const zy = W.z[Math.min(NY - 1, y + 1) * NX + x] - W.z[Math.max(0, y - 1) * NX + x];
+      const shade = clamp(1 + (-zx - zy) / 220, 0.7, 1.2);
+      c = hyp(W.z[i]);
+      if (t === T.FOREST) c = [c[0] * 0.62, c[1] * 0.84, c[2] * 0.55];
+      if (t === T.TOWN) c = [200, 198, 204];
+      c = c.map(v => v * shade);
+    }
+    col[i * 3] = c[0]; col[i * 3 + 1] = c[1]; col[i * 3 + 2] = c[2];
+  }
+  const b = base.getContext('2d'), img = b.createImageData(1000, 600), d = img.data;
+  const zAt = (u, v) => { const x0 = clamp(Math.floor(u), 0, NX - 1), y0 = clamp(Math.floor(v), 0, NY - 1), x1 = Math.min(NX - 1, x0 + 1), y1 = Math.min(NY - 1, y0 + 1), fx = clamp(u - x0, 0, 1), fy = clamp(v - y0, 0, 1);
+    return (W.z[y0 * NX + x0] * (1 - fx) + W.z[y0 * NX + x1] * fx) * (1 - fy) + (W.z[y1 * NX + x0] * (1 - fx) + W.z[y1 * NX + x1] * fx) * fy; };
+  const rowZ = new Float32Array(1000);
+  let prevRow = new Float32Array(1000);
+  for (let py = 0; py < 600; py++) {
+    const v = py / CS - 0.5, y0 = clamp(Math.floor(v), 0, NY - 1), y1 = Math.min(NY - 1, y0 + 1), fy = clamp(v - y0, 0, 1);
+    for (let px = 0; px < 1000; px++) {
+      const u = px / CS - 0.5, x0 = clamp(Math.floor(u), 0, NX - 1), x1 = Math.min(NX - 1, x0 + 1), fx = clamp(u - x0, 0, 1);
+      const k = (py * 1000 + px) * 4;
+      const i00 = (y0 * NX + x0) * 3, i10 = (y0 * NX + x1) * 3, i01 = (y1 * NX + x0) * 3, i11 = (y1 * NX + x1) * 3;
+      const grain = 1 + (((px * 73856093) ^ (py * 19349663)) % 7) / 260;
+      for (let m = 0; m < 3; m++) d[k + m] = ((col[i00 + m] * (1 - fx) + col[i10 + m] * fx) * (1 - fy) + (col[i01 + m] * (1 - fx) + col[i11 + m] * fx) * fy) * grain;
+      d[k + 3] = 255;
+      const z = zAt(u, v); rowZ[px] = z;
+      const sea = W.type[Math.round(clamp(v, 0, NY - 1)) * NX + Math.round(clamp(u, 0, NX - 1))] === T.SEA;
+      if (!sea && z > 30 && px > 0 && py > 0 && (Math.floor(z / 100) !== Math.floor(rowZ[px - 1] / 100) || Math.floor(z / 100) !== Math.floor(prevRow[px] / 100)))
+        for (let m = 0; m < 3; m++) d[k + m] *= 0.82;
+    }
+    prevRow = rowZ.slice();
+  }
+  b.putImageData(img, 0, 0);
+  /* trees and houses, drawn over the ground */
+  const rnd = mulberry32(5);
+  for (let i = 0; i < NX * NY; i++) {
+    const t = W.type[i], x = (i % NX) * CS, y = ((i / NX) | 0) * CS;
+    if (t === T.FOREST && ((i * 7919) % 2 === 0)) {
+      const cx = x + 2 + rnd() * 6, cy = y + 2 + rnd() * 6;
+      b.fillStyle = 'rgba(0,0,0,.18)'; b.beginPath(); b.ellipse(cx + 1.5, cy + 3, 4, 2, 0, 0, 7); b.fill();
+      b.fillStyle = '#2f6f35'; b.beginPath(); b.arc(cx, cy, 4, 0, 7); b.fill();
+      b.fillStyle = '#56a457'; b.beginPath(); b.arc(cx - 1, cy - 1.2, 2.3, 0, 7); b.fill();
+    }
+    if (t === T.TOWN) {
+      b.fillStyle = (i % 3) ? '#8a8f9c' : '#b0705c'; b.fillRect(x + 1.5, y + 1.5, 7, 7);
+      b.fillStyle = '#eef0f4'; b.fillRect(x + 3, y + 3, 2, 2);
+    }
+  }
+}
+function paintWater(){
+  /* standing water (puddles, ponds, floods, a reservoir) as a soft layer */
+  const wc = wcan.getContext('2d'), img = wc.createImageData(NX, NY), d = img.data;
+  for (let i = 0; i < NX * NY; i++) {
+    if (W.type[i] === T.SEA) continue;
+    const a = clamp((W.w[i] - 0.03) / 0.4, 0, 1);
+    if (a <= 0) continue;
+    const deep = clamp(W.w[i] / 4, 0, 1);
+    d[i * 4] = 60 - 30 * deep; d[i * 4 + 1] = 150 - 55 * deep; d[i * 4 + 2] = 220 - 20 * deep; d[i * 4 + 3] = 255 * Math.min(0.92, a * 0.95 + 0.1);
+  }
+  wc.putImageData(img, 0, 0);
+  ctx.drawImage(base, 0, 0);
+  ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high';
+  ctx.drawImage(wcan, 0, 0, 1000, 600);
+  /* flowing water: every cell where water keeps moving, joined to where it goes */
+  ctx.lineCap = 'round';
+  for (const pass of [0, 1]) {
+    for (let i = 0; i < NX * NY; i++) {
+      const f = W.F[i]; if (f < 0.0015 || W.type[i] === T.SEA) continue;
+      const r = W.to[i] >= 0 ? W.to[i] : W.rec[i]; if (r < 0) continue;
+      /* a channel carries more than the ground on either side of it; a sheet of rain running
+         down a whole hillside (or a lake) does not, and is shown as standing water instead */
+      const x = i % NX, y = (i / NX) | 0, ddx = (r % NX) - x, ddy = ((r / NX) | 0) - y;
+      const side = (sx, sy) => { const X = x + sx, Y = y + sy; return X < 0 || Y < 0 || X >= NX || Y >= NY ? 0 : W.F[Y * NX + X]; };
+      if (f < 1.6 * (side(-ddy, ddx) + side(ddy, -ddx)) / 2) continue;
+      const wdt = clamp(1.2 + Math.log10(f / 0.0015) * 2.6, 1.2, 9);
+      const x0 = (i % NX) * CS + CS / 2, y0 = ((i / NX) | 0) * CS + CS / 2, x1 = (r % NX) * CS + CS / 2, y1 = ((r / NX) | 0) * CS + CS / 2;
+      ctx.strokeStyle = pass ? '#3d9be0' : 'rgba(20,70,130,.35)'; ctx.lineWidth = pass ? wdt : wdt + 2.5;
+      ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke();
+    }
+  }
+}
+
+/* ---- the overlay: labels, the village, the cloud and rain, the Sun ---------- */
+const ov = $('ov');
+function buildOverlay(){
+  const sp = cellPt(PLACES.src), vp = cellPt(PLACES.village[4]), tp = PLACES.town.map(cellPt);
+  const tcx = tp.reduce((s, p) => s + p.x, 0) / tp.length, tcy = tp.reduce((s, p) => s + p.y, 0) / tp.length;
+  const house = (x, y, c) => `<g transform="translate(${x} ${y})"><rect x="-7" y="-7" width="14" height="11" fill="#fff4dc" stroke="#6b4a2a" stroke-width="1.2"/><path d="M-9 -6 L0 -14 L9 -6Z" fill="${c}"/><rect x="-2" y="-2" width="4" height="6" fill="#6b4a2a"/></g>`;
+  const well = cellPt(PLACES.well);
+  let evap = '';
+  for (let k = 0; k < 5; k++) evap += `<path class="evap" d="M${905 + k * 18} 520 q-6 -14 0 -28 q6 -14 0 -28" stroke="#ffffff" stroke-width="3" fill="none" stroke-linecap="round" opacity=".7"/>`;
+  let drops = '';
+  for (let k = 0; k < 42; k++) drops += `<line class="drop" stroke="#1f63c2" stroke-width="2" stroke-linecap="round" opacity=".7"/>`;
+  ov.innerHTML = `
+    <rect id="paint" x="0" y="0" width="1000" height="600" fill="transparent"/>
+    <g pointer-events="none">
+      <text x="16" y="30" fill="#fff" stroke="#3a2a1a" stroke-width="3.5" paint-order="stroke" font-size="16" font-weight="800">WESTERN GHATS</text><text x="16" y="48" fill="#fff" stroke="#3a2a1a" stroke-width="3" paint-order="stroke" font-size="12" font-weight="700">high hills: rain starts rivers here</text>
+      <g transform="translate(${sp.x + 22} ${sp.y - 26})"><path d="M0 -20 Q15 -3 14 6 Q12 18 0 18 Q-12 18 -14 6 Q-15 -3 0 -20Z" fill="#2d8fd6" stroke="#fff" stroke-width="2"/>
+        <circle cx="-4.5" cy="4" r="2" fill="#0d2a4a"/><circle cx="4.5" cy="4" r="2" fill="#0d2a4a"/><path d="M-4 10 Q0 13 4 10" stroke="#0d2a4a" stroke-width="1.8" fill="none"/></g>
+      <text x="${sp.x + 22}" y="${sp.y - 52}" text-anchor="start" fill="#fff" stroke="#3a2a1a" stroke-width="3" paint-order="stroke" font-size="12" font-weight="700">the river begins here</text>
+      <text x="950" y="300" text-anchor="middle" fill="#fff" font-size="15" font-weight="800" transform="rotate(-90 950 300)" letter-spacing=".12em" opacity=".9">BAY OF BENGAL</text>
+      <text x="${tcx}" y="${tcy + (PLACES.side > 0 ? -44 : 50)}" text-anchor="middle" fill="#fff" stroke="#2a2f3a" stroke-width="3.5" paint-order="stroke" font-size="14" font-weight="800">TOWN</text>
+      <g>${house(vp.x - 16, vp.y - 4, '#d6453d')}${house(vp.x + 10, vp.y + 8, '#f29a1f')}${house(vp.x - 4, vp.y + 22, '#d6453d')}</g>
+      <g transform="translate(${well.x} ${well.y})"><ellipse rx="7" ry="3.5" fill="#1f63c2" stroke="#6b4a2a" stroke-width="2.5"/><path d="M-7 0 V6 H7 V0" fill="none" stroke="#6b4a2a" stroke-width="2.5"/></g>
+      <text x="${vp.x}" y="${vp.y + (PLACES.side > 0 ? 50 : -38)}" text-anchor="middle" fill="#fff" stroke="#3a2a1a" stroke-width="3.5" paint-order="stroke" font-size="14" font-weight="800">VILLAGE</text>
+      <g transform="translate(${well.x + 22} ${well.y - 22})">
+        <rect x="0" y="0" width="16" height="40" rx="4" fill="#fff" stroke="#3a2a1a" stroke-width="1.5"/>
+        <rect id="wellBar" x="2" y="38" width="12" height="0" rx="3" fill="#1f63c2"/>
+        <text x="22" y="16" fill="#fff" stroke="#3a2a1a" stroke-width="3" paint-order="stroke" font-size="12" font-weight="800">well</text>
+        <text id="wellPct" x="22" y="32" fill="#fff" stroke="#3a2a1a" stroke-width="3" paint-order="stroke" font-size="12" font-weight="800"></text>
+      </g>
+      <text id="floodTag" x="${vp.x}" y="${vp.y - 30}" text-anchor="middle" fill="#fff" stroke="#b8321f" stroke-width="4" paint-order="stroke" font-size="16" font-weight="800" opacity="0">FLOOD! Get to higher ground</text>
+      <g id="damG" opacity="0"><rect id="damRect" rx="3" fill="#8a94a6" stroke="#3a4152" stroke-width="2"/></g>
+      <text id="damTag" fill="#fff" stroke="#2a2f3a" stroke-width="3.5" paint-order="stroke" font-size="13" font-weight="800" text-anchor="middle" opacity="0">DAM · reservoir</text>
+      <g id="sunG" transform="translate(955 44)"><circle r="26" fill="#ffd23f"/><circle r="36" fill="#ffd23f" opacity=".25"/></g>
+      <g id="evapG">${evap}</g>
+      <g id="rainG">${drops}</g>
+    </g>
+    <g id="cloudG" pointer-events="none">
+      <g id="cloudBody"><circle cx="-34" cy="6" r="26"/><circle cx="0" cy="-8" r="34"/><circle cx="34" cy="4" r="26"/><rect x="-58" y="4" width="116" height="28" rx="14"/></g>
+      <circle cx="-10" cy="4" r="3" fill="#1b2a3a"/><circle cx="10" cy="4" r="3" fill="#1b2a3a"/><path id="cloudMouth" d="M-7 14 Q0 19 7 14" stroke="#1b2a3a" stroke-width="2.4" fill="none" stroke-linecap="round"/>
+      <text id="cloudTxt" y="-48" text-anchor="middle" fill="#fff" stroke="#2a3a55" stroke-width="3" paint-order="stroke" font-size="12.5" font-weight="800"></text>
+    </g>
+    <circle id="cloudHit" r="52" fill="transparent" tabindex="0" role="slider" aria-label="The rain cloud: drag it over the land"/>`;
+}
+const DROPS = [];
+function paintOverlay(tsec){
+  const c = W.cloud, px = c.x * CS + CS / 2, py = c.y * CS + CS / 2;
+  $('cloudG').setAttribute('transform', `translate(${px.toFixed(1)} ${(py - 30).toFixed(1)}) scale(${(0.72 + 0.4 * Math.sqrt(c.C / CLOUD_MAX)).toFixed(3)})`);
+  $('cloudHit').setAttribute('cx', px.toFixed(1)); $('cloudHit').setAttribute('cy', (py - 30).toFixed(1));
+  const grey = S.rain === 2 ? '#8a97aa' : S.rain === 1 ? '#c9d3e0' : '#f4f7fb';
+  $('cloudBody').setAttribute('fill', c.C < 1 ? '#fbfcfe' : grey);
+  $('cloudMouth').setAttribute('d', c.C < 1 ? 'M-7 17 Q0 12 7 17' : 'M-7 14 Q0 19 7 14');
+  $('cloudTxt').textContent = c.C < 1 ? 'I am empty!' : S.rain ? (S.rain === 2 ? 'heavy rain!' : 'raining') : '';
+  /* rain streaks */
+  const raining = S.rain > 0 && c.C > 0;
+  const ds = document.querySelectorAll('#rainG .drop');
+  const rr = c.r * CS;
+  ds.forEach((el, k) => {
+    if (!raining || k >= (S.rain === 2 ? 42 : 20)) { el.setAttribute('opacity', 0); return; }
+    const a = (k * 2.39996) % (2 * Math.PI), rad = rr * Math.sqrt(((k * 0.618) % 1));
+    const fall = reduced() ? 0.5 : ((tsec * (S.rain === 2 ? 2.2 : 1.4) + k * 0.37) % 1);
+    const x = px + Math.cos(a) * rad, y = py - 10 + fall * 40 + Math.sin(a) * rad * 0.4;
+    el.setAttribute('x1', x.toFixed(1)); el.setAttribute('y1', y.toFixed(1)); el.setAttribute('x2', (x - 3).toFixed(1)); el.setAttribute('y2', (y + (S.rain === 2 ? 14 : 9)).toFixed(1));
+    el.setAttribute('opacity', 0.75);
+  });
+  /* the Sun lifting water from the sea */
+  $('sunG').setAttribute('opacity', S.sun ? 1 : 0.25);
+  document.querySelectorAll('#evapG .evap').forEach((el, k) => {
+    const f = reduced() ? 0.5 : ((tsec * 0.5 + k * 0.2) % 1);
+    el.setAttribute('transform', `translate(0 ${(-f * 60).toFixed(1)})`);
+    el.setAttribute('opacity', S.sun && c.C < CLOUD_MAX ? (0.8 * (1 - f)).toFixed(2) : 0);
+  });
+  /* the well */
+  const pct = wellPct();
+  $('wellBar').setAttribute('height', (36 * pct / 100).toFixed(1)); $('wellBar').setAttribute('y', (38 - 36 * pct / 100).toFixed(1));
+  $('wellPct').textContent = Math.round(pct) + '%';
+  $('floodTag').setAttribute('opacity', villageDepth() > FLOOD_D ? 1 : 0);
+  $('dayOut').textContent = 'Day ' + (1 + Math.floor(W.t / 24));
+}
+const wellPct = () => 100 * W.g[PLACES.well] / GCAP[W.type[PLACES.well]];
+const villageDepth = () => PLACES.village.reduce((s, i) => s + W.w[i], 0) / PLACES.village.length;
+const FLOOD_D = 0.25;
+
+/* ---- the "where did the rain go?" card ------------------------------------- */
+function paintLedger(){
+  /* the model's own totals since the page opened: soaked in, standing on the land now, reached the sea, dried up */
+  const L = W.led, bk = waterBook(W);
+  const parts = [[L.soaked, '#8b5e34'], [bk.land, '#6fc3f2'], [L.toSea, '#1f5fa8'], [L.evap, '#f2b134']];
+  const sum = parts.reduce((s, p) => s + p[0], 0) || 1;
+  $('ledger').innerHTML = L.rain < 0.01 ? '' : parts.map(([v, c]) => `<i style="width:${(100 * v / sum).toFixed(1)}%; background:${c}"></i>`).join('');
+  const rows = [[T.SOIL, 'Fields'], [T.FOREST, 'Forest'], [T.TOWN, 'Town'], [T.ROCK, 'Rock']], sh = shower();
+  $('soaks').innerHTML = `<span style="grid-column:1/-1;font-size:12px;color:var(--ink-3)">This shower, where the cloud is now:</span>` + rows.map(([t, n]) => {
+    const r = sh.rainOn[t];
+    const p = r > 0.05 ? clamp(100 * sh.soakOn[t] / r, 0, 100) : null;
+    return `<span>${n}</span><span class="bar"><i style="width:${p == null ? 0 : p.toFixed(0)}%"></i></span><span>${p == null ? '—' : Math.round(p) + '% soaked in'}</span>`;
+  }).join('');
+}
+
+/* "This shower": rain and soaking counted since the cloud last moved, from the model's own totals */
+function markShower(){ S.mark = {rainOn: W.led.rainOn.slice(), soakOn: W.led.soakOn.slice()}; }
+function shower(){ const m = S.mark || {rainOn: [0, 0, 0, 0, 0], soakOn: [0, 0, 0, 0, 0]}; return {rainOn: W.led.rainOn.map((v, k) => v - m.rainOn[k]), soakOn: W.led.soakOn.map((v, k) => v - m.soakOn[k])}; }
+
+/* ============================================================================
+   Painting the land and building a dam
+   ============================================================================ */
+function paintAt(p){
+  const cx = Math.floor(p.x / CS), cy = Math.floor(p.y / CS);
+  if (S.tool === 'dam') return;
+  const t = {forest: T.FOREST, soil: T.SOIL, town: T.TOWN}[S.tool]; if (t == null) return;
+  let changed = 0;
+  for (let y = cy - 2; y <= cy + 2; y++) for (let x = cx - 2; x <= cx + 2; x++) {
+    if (x < 0 || y < 0 || x >= NX || y >= NY || (x - cx) ** 2 + (y - cy) ** 2 > 5) continue;
+    const i = y * NX + x;
+    if (W.type[i] === T.SEA || W.type[i] === T.ROCK || W.type[i] === t) continue;
+    W.type[i] = t; if (W.g[i] > GCAP[t]) { W.w[i] += W.g[i] - GCAP[t]; W.g[i] = GCAP[t]; } changed++;
+  }
+  if (changed) { paintBase(); S.painted = (S.painted || 0) + changed; }
+}
+function buildDam(p){
+  /* a wall across the valley where the learner taps, at right angles to the water's path */
+  const cx = Math.floor(p.x / CS), cy = Math.floor(p.y / CS);
+  let at = -1, bf = 0;
+  for (let y = cy - 2; y <= cy + 2; y++) for (let x = cx - 2; x <= cx + 2; x++) {
+    if (x < 1 || y < 1 || x >= NX - 1 || y >= NY - 1) continue;
+    const i = y * NX + x; if (W.type[i] === T.SEA) continue;
+    if (W.F[i] > bf) { bf = W.F[i]; at = i; }
+  }
+  if (at < 0 || bf < 0.003) { sound('boing'); godavari('A dam goes across a river. Tap right on the blue river!'); return; }
+  removeDam();
+  const r = W.rec[at]; if (r < 0) return;
+  const dx = (r % NX) - (at % NX), dy = ((r / NX) | 0) - ((at / NX) | 0);
+  const px = -dy, py = dx;                       // across the flow
+  const top = W.z[at] + 38, cells = [], old = [];
+  const x0 = at % NX, y0 = (at / NX) | 0;
+  for (let k = -6; k <= 6; k++) {
+    const x = x0 + px * k, y = y0 + py * k; if (x < 0 || y < 0 || x >= NX || y >= NY) continue;
+    const i = y * NX + x; if (W.type[i] === T.SEA) continue;
+    if (W.z[i] < top) { old.push([i, W.z[i], W.type[i]]); cells.push(i); W.z[i] = top; W.w[i] = 0; W.type[i] = T.ROCK; }
+  }
+  receivers(W);
+  const a = cellPt(cells[0]), b = cellPt(cells[cells.length - 1]);
+  S.dam = {at, old, cells, up: -1, a, b};
+  /* the upstream side: the neighbour the water came from */
+  let upc = -1, ua = 0;
+  for (const [ddx, ddy] of NBS) { const j = (y0 + ddy) * NX + x0 + ddx; if (W.rec[j] === at || (j !== r && W.F[j] > ua && !cells.includes(j))) { if (W.F[j] > ua) { ua = W.F[j]; upc = j; } } }
+  S.dam.up = upc;
+  paintBase();
+  const len = Math.hypot(b.x - a.x, b.y - a.y) + CS, ang = Math.atan2(b.y - a.y, b.x - a.x) * 180 / Math.PI;
+  $('damRect').setAttribute('x', -len / 2); $('damRect').setAttribute('y', -6); $('damRect').setAttribute('width', len); $('damRect').setAttribute('height', 12);
+  $('damG').setAttribute('transform', `translate(${(a.x + b.x) / 2} ${(a.y + b.y) / 2}) rotate(${ang})`); $('damG').setAttribute('opacity', 1);
+  $('damTag').setAttribute('x', (a.x + b.x) / 2); $('damTag').setAttribute('y', Math.min(a.y, b.y) - 14); $('damTag').setAttribute('opacity', 1);
+  sound('snap'); track('dam', {cell: at});
+  godavari('A dam is like a giant wall that blocks my flow and stores water in a large water body called a reservoir. Now let it rain upstream!');
+}
+function removeDam(){
+  if (!S.dam) return;
+  for (const [i, z, t] of S.dam.old) { W.z[i] = z; W.type[i] = t; }
+  S.dam = null; receivers(W); paintBase();
+  $('damG').setAttribute('opacity', 0); $('damTag').setAttribute('opacity', 0);
+}
+/* water held behind the dam: standing water deeper than 0.5 m within reach of the wall, upstream */
+function reservoir(){
+  if (!S.dam) return 0;
+  const {at} = S.dam, x0 = at % NX, y0 = (at / NX) | 0, r = W.rec[at];
+  const fx = (r % NX) - x0, fy = ((r / NX) | 0) - y0;
+  let v = 0;
+  for (let y = y0 - 14; y <= y0 + 14; y++) for (let x = x0 - 14; x <= x0 + 14; x++) {
+    if (x < 0 || y < 0 || x >= NX || y >= NY) continue;
+    if ((x - x0) * fx + (y - y0) * fy >= 0) continue;          // only behind the wall
+    const i = y * NX + x; if (W.w[i] > 0.5) v += W.w[i];
+  }
+  return v;
+}
+
+/* ============================================================================
+   The loop: the model runs; missions tick when it gets there.
+   ============================================================================ */
+let ACC = 0;
+function checks(){
+  const L = W.led;
+  /* the water reaches the sea, streams joining on the way */
+  if (L.rain > 3 && S.firstRainSea == null) S.firstRainSea = L.toSea;
+  if (!S.missions.sea && S.firstRainSea != null && L.toSea - S.firstRainSea > 6 && confluences(W, 0.004).length) {
+    tickMission('sea'); discover('sea', screenOf({x: 880, y: 300}));
+    godavari('Small streams join me — they are my tributaries — and I grow wider and stronger all the way to the Bay of Bengal!');
+  }
+  /* soak: rain on the town and on the fields */
+  const sh = shower(), rs = sh.rainOn, ks = sh.soakOn;
+  if (!S.missions.soak && rs[T.TOWN] > 1 && rs[T.SOIL] > 3) {
+    const pf = 100 * ks[T.SOIL] / rs[T.SOIL], pt = 100 * ks[T.TOWN] / rs[T.TOWN];
+    tickMission('soak'); discover('soak', screenOf(cellPt(PLACES.town[0])));
+    godavari(`The fields drank ${Math.round(Math.min(100, pf))}% of their rain. The town drank ${Math.round(pt)}% — the rain ran off its roofs and roads into me.`);
+    if (POE && POE.locked && !POE.explained) POE.explain(`The model’s own count: the fields soaked up <b>${Math.round(Math.min(100, pf))}%</b> of the rain that fell on them, the town <b>${Math.round(pt)}%</b>. Soil has spaces for water; roofs and roads do not.`, POE.choice === 'field');
+  }
+  /* the well */
+  const wp = wellPct();
+  if (wp < 60) S.wellLow = true;
+  if (S.rain && W.cloud.C > 0) { const wc = cellPt(PLACES.well); if (Math.hypot(W.cloud.x * CS + CS / 2 - wc.x, W.cloud.y * CS + CS / 2 - wc.y) <= W.cloud.r * CS) S.rainOnWell = (S.rainOnWell || 0) + 1; }
+  if (!S.missions.well && S.wellLow && wp >= 85 && (S.rainOnWell || 0) > 10) {
+    tickMission('well'); discover('well', screenOf(cellPt(PLACES.well)));
+    godavari('The rain soaked into the soil and filled the ground. The water in our wells comes from this underground water!');
+  }
+  /* the dam */
+  S.reservoir = reservoir();
+  if (!S.missions.dam && S.dam && S.reservoir > 25) {
+    tickMission('dam'); discover('dam', screenOf(S.dam.a));
+    godavari('The reservoir stores my water so people can use it even in the dry season. But it also floods land that was once home to animals and people.');
+  }
+  /* a flood */
+  if (villageDepth() > FLOOD_D && !S.flooded) {
+    S.flooded = true;
+    if (tickMission('flood')) discover('flood', screenOf(cellPt(PLACES.village[4])));
+    godavari('Too much rain! All the water rushes into me and I overflow my banks. Trees slow down rain water and help the soil soak it up.');
+  }
+  if (villageDepth() < FLOOD_D * 0.5) S.flooded = false;
+  /* the water cycle */
+  if (!S.missions.cycle && L.seaEvap > 200 && L.rain > 420 + 150) {
+    tickMission('cycle'); discover('cycle', screenOf({x: W.cloud.x * CS, y: W.cloud.y * CS}));
+    godavari('The Sun lifted water from the sea into the cloud, the cloud rained on the land, and I carried it back to the sea. Round and round!');
+  }
+}
+function frame(dt, tsec){
+  if (!S.locked && S.rain) S.rain = 0;
+  ACC += dt * 60;
+  let n = Math.min(4, Math.floor(ACC)); ACC -= n; if (ACC > 4) ACC = 0;
+  for (let k = 0; k < n; k++) step(W, {rain: RAIN[S.rain], sun: S.sun});
+  if (n) { paintWater(); checks(); }
+  paintOverlay(tsec);
+  if (n && (W.t % 10 === 0)) paintLedger();
+  if (S.rain && W.cloud.C <= 0 && S.lastEmpty !== true) { S.lastEmpty = true; godavari(S.sun ? 'The cloud is empty! Wait a little: the Sun is lifting water from the sea into it.' : 'The cloud is empty! Turn on the Sun so it can lift water from the sea.'); }
+  if (W.cloud.C > 5) S.lastEmpty = false;
+}
+
+/* ============================================================================
+   Controls
+   ============================================================================ */
+buildWorld(); markShower(); paintBase(); buildOverlay(); paintWater();
+drag($('cloudHit'), ov, {
+  start(){ sound('tick'); },
+  move(p){ W.cloud.x = clamp(p.x / CS - 0.5, 0, NX - 1); W.cloud.y = clamp((p.y + 30) / CS - 0.5, 4, NY - 1); },
+  end(){ markShower(); track('cloud', {x: +W.cloud.x.toFixed(1), y: +W.cloud.y.toFixed(1)}); },
+});
+$('cloudHit').addEventListener('keydown', e => {
+  const k = {ArrowRight: [1, 0], ArrowLeft: [-1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1]}[e.key]; if (!k) return;
+  e.preventDefault(); W.cloud.x = clamp(W.cloud.x + k[0] * 2, 0, NX - 1); W.cloud.y = clamp(W.cloud.y + k[1] * 2, 4, NY - 1);
+});
+drag($('paint'), ov, {
+  start(p){ if (S.tool === 'none') return false; if (S.tool === 'dam') { buildDam(p); return false; } paintAt(p); },
+  move(p){ paintAt(p); },
+  end(){ track('paint', {tool: S.tool}); if (S.tool === 'forest') godavari('Trees slow down rain water and help the soil soak up water.'); if (S.tool === 'town') godavari('Roofs and roads: rain cannot soak in here.'); },
+});
+$('rainBtns').addEventListener('click', e => {
+  const b = e.target.closest('[data-rain]'); if (!b) return;
+  if (!S.locked) { toast('Make your guess first!'); return; }
+  S.rain = +b.dataset.rain; sound(S.rain ? 'whoosh' : 'tick');
+  for (const x of document.querySelectorAll('#rainBtns [data-rain]')) x.setAttribute('aria-pressed', x === b);
+  track('rain', {level: S.rain});
+  if (S.rain === 2) godavari('Heavy rain! Watch the streams grow.');
+});
+$('sunBtn').addEventListener('click', () => {
+  S.sun = !S.sun; sound('tick');
+  $('sunBtn').setAttribute('aria-pressed', S.sun); $('sunBtn').textContent = S.sun ? '☀️ Sun is shining' : '🌥️ Sun is hidden';
+  track('sun', {on: S.sun});
+});
+$('tools').addEventListener('click', e => {
+  const b = e.target.closest('[data-tool]'); if (!b) return;
+  S.tool = b.dataset.tool; sound('tick');
+  for (const x of document.querySelectorAll('#tools [data-tool]')) x.setAttribute('aria-pressed', x === b);
+  $('paint').classList.toggle('brush', S.tool !== 'none');
+  $('toolNote').textContent = {none: 'Drag the cloud over the land. Pick a tool, then drag on the land to paint it.', forest: 'Drag on the land to plant trees.', soil: 'Drag on the land to make fields.',
+    town: 'Drag on the land to build houses and roads.', dam: 'Tap on the river to build a dam across it.'}[S.tool];
+});
+$('resetBtn').addEventListener('click', () => {
+  const keep = S.missions; buildWorld(); markShower(); paintBase(); buildOverlay(); S.dam = null; S.firstRainSea = null; S.flooded = false; S.wellLow = true;
+  S.missions = keep; sound('whoosh'); godavari('A fresh land, and a fresh cloud!'); paintLedger();
+});
+
+findings($('finds'), [
+  {id: 'sea',   icon: '🌊', label: 'Streams join and flow to the sea',   hint: 'Rain on the Ghats',            say: 'Small streams join to make a big river that flows to the sea.'},
+  {id: 'soak',  icon: '🌾', label: 'Soil soaks, roads run off',          hint: 'Rain on the town and fields',   say: 'Rain soaks into soil, but runs off roofs and roads.'},
+  {id: 'well',  icon: '🪣', label: 'Wells hold underground water',       hint: 'Rain near the village',         say: 'The water in our wells comes from underground water.'},
+  {id: 'dam',   icon: '🧱', label: 'A dam makes a reservoir',            hint: 'Build a dam, then rain',        say: 'A dam stores water in a reservoir.'},
+  {id: 'flood', icon: '🏚️', label: 'Too much rain: a flood',             hint: 'Heavy rain upstream',           say: 'Too much rain makes the river overflow its banks.'},
+  {id: 'cycle', icon: '☀️', label: 'Sea → cloud → rain → river → sea',  hint: 'Let the Sun work, keep raining', say: 'Water goes round: from the sea to the cloud, to the land, and back to the sea.'},
+], () => { toast('All six found! Godavari says thank you for listening to her story.', 4200); godavari('Thank you for following my journey! Remember: every drop counts.'); });
+
+const POE = predict($('poe'), {
+  id: 'where-soaks',
+  q: 'The same rain falls on a field and on a town’s roofs and roads. Where does <b>more</b> of it soak into the ground?',
+  options: [
+    {id: 'field', text: '🌾 The field', right: true},
+    {id: 'town', text: '🏙️ The town'},
+    {id: 'same', text: 'The same in both'},
+  ],
+  confidence: false,
+  onLock(){ S.locked = true; $('gate').hidden = true; godavari('Now drag the cloud and press Rain. Try the town and the fields!'); },
+});
+$('gate').hidden = false;
+if (!Play.FF('predict')) { S.locked = true; $('gate').hidden = true; }
+
+renderMissions(); paintLedger();
+shareState(() => ({cloud: {x: +W.cloud.x.toFixed(1), y: +W.cloud.y.toFixed(1)}, sun: S.sun}));
+const shared = sharedState();
+if (shared && shared.cloud) { W.cloud.x = clamp(+shared.cloud.x || W.cloud.x, 0, NX - 1); W.cloud.y = clamp(+shared.cloud.y || W.cloud.y, 4, NY - 1); }
+loop(frame);
+say('I am Godavari! My journey begins high up in the Western Ghats. Make a guess, then make it rain!');
+window.PG_STATE = () => ({rain: S.rain, sun: S.sun, tool: S.tool, missions: Object.assign({}, S.missions), locked: S.locked, dam: S.dam ? {at: S.dam.at, cells: S.dam.cells.length} : null,
+  reservoir: S.reservoir, wellPct: wellPct(), villageDepth: villageDepth(), day: 1 + Math.floor(W.t / 24), t: W.t, cloud: Object.assign({}, W.cloud),
+  led: JSON.parse(JSON.stringify(W.led)), book: waterBook(W), confluences: confluences(W, 0.004).length, painted: S.painted || 0});
+window.PG_VIEW = {NX, NY, CS, places: () => ({src: PLACES.src, well: PLACES.well, village: PLACES.village.slice(), town: PLACES.town.slice(), path: PLACES.path.slice()}),
+  cellPt, riverCell: frac => PLACES.path[Math.floor(PLACES.path.length * frac)], F: i => W.F[i], type: i => W.type[i]};
+window.PG_MODEL = {newWorld, step, waterBook, confluences, receivers, T, INF, GCAP, ROUGH, SEEP, EVAP, SEA_EVAP, RAIN};
+</script>
+</body>
+</html>

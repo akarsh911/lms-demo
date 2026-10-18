@@ -1,0 +1,424 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Thousands Around Us</title>
+<meta name="description" content="Class 4 and 5: pack a langar store's loose sacks into packs, crates and trucks of ten, and help a rounding rabbit find its nearest ten, hundred and thousand.">
+<link rel="icon" href="../../favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600&family=Inter:wght@400;500;600;700&family=Nunito:wght@500;700;800&family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="../../play.css">
+<style>
+.pg-stage{min-height:0}
+#stage{background:#eef8f5}
+.tabs{display:flex; gap:4px; padding:10px 12px 0; border-bottom:1px solid var(--hair); background:var(--card); flex-wrap:wrap}
+.tab{border:1px solid transparent; border-bottom:none; background:none; padding:8px 14px; border-radius:10px 10px 0 0; cursor:pointer;
+  font-family:"Fredoka",var(--font-head); font-size:16px; color:var(--ink-3); margin-bottom:-1px}
+.tab[aria-selected="true"]{background:var(--card); border-color:var(--hair); color:var(--ink); border-bottom:1px solid var(--card)}
+.hit{cursor:pointer} .hit.off{cursor:default}
+svg [tabindex]:focus{outline:none}
+svg [tabindex]:focus-visible{outline:none; stroke:#2f7de1; stroke-width:3; stroke-dasharray:6 5}
+.missions{list-style:none; margin:0; padding:0; display:grid; gap:8px}
+.missions li{display:grid; grid-template-columns:26px 1fr; gap:8px; align-items:center; font-weight:700; font-size:13.5px; line-height:1.3; color:var(--ink-2)}
+.missions li i{width:24px; height:24px; border-radius:50%; border:2.5px dashed var(--hair-2); display:grid; place-items:center; font-style:normal; font-size:13px; color:#fff}
+.missions li.done{color:var(--ink)}
+.missions li.done i{border:none; background:var(--good); animation:tickPop .5s var(--spring)}
+.missions li.done span{text-decoration:line-through; text-decoration-color:var(--good); text-decoration-thickness:2px}
+@keyframes tickPop{0%{transform:scale(.3)}100%{transform:scale(1)}}
+.big{font-family:"Fredoka",var(--font-head); font-size:20px; font-weight:600}
+.note{font-size:12.5px; color:var(--ink-3); margin:6px 0 0}
+.say{font-size:14px; margin:6px 0 0; padding:8px 10px; border-radius:var(--radius-sm); background:var(--sunk)}
+</style>
+</head>
+<body>
+<header class="pg-top"></header>
+
+<div class="pg-intro">
+  <h1>Thousands around us</h1>
+  <p>Jaspreet and Gulnaz keep the langar store tidy: loose sacks, packs of ten, crates of a hundred and trucks of a thousand.
+     Then help a rounding rabbit find its nearest ten, hundred and thousand.</p>
+</div>
+
+<main class="pg-main wide-side">
+  <section class="pg-stage" id="stageWrap">
+    <div class="tabs" role="tablist">
+      <button class="tab" role="tab" id="tabStore" aria-selected="true">The langar store</button>
+      <button class="tab" role="tab" id="tabRabbit" aria-selected="false">The rounding rabbit</button>
+    </div>
+    <svg id="stageStore" viewBox="0 0 1000 620" role="img" aria-label="A four-shelf store: loose sacks, packs of ten, crates of a hundred and trucks of a thousand, with a lift between shelves and a place-value readout."></svg>
+    <svg id="stageRabbit" viewBox="0 0 1000 620" role="img" aria-label="A number line with a rabbit that can be moved to any number, showing its nearest ten, hundred and thousand as measured jumps." hidden></svg>
+  </section>
+
+  <aside class="pg-side">
+    <div id="poeStore"></div>
+    <div id="poeRabbit" hidden></div>
+
+    <div class="card" id="cardStore">
+      <div class="kicker">Missions</div>
+      <ul class="missions" id="missionsStore"></ul>
+      <p class="say" id="saySt"></p>
+      <div class="row" style="margin-top:6px"><button class="btn sm" id="resetStore">Empty the store</button></div>
+    </div>
+
+    <div class="card" id="cardRabbit" hidden>
+      <div class="kicker">Move the rabbit</div>
+      <div class="row" id="rabbitBtns" style="flex-wrap:wrap; gap:6px"></div>
+      <div class="big num" id="rabbitBig"></div>
+      <p class="say" id="sayRb"></p>
+    </div>
+
+    <div class="card"><div class="kicker">Discoveries</div><div id="finds"></div></div>
+  </aside>
+</main>
+
+<script src="../../play.js"></script>
+<script>
+'use strict';
+const {$, $$, esc, clamp, lerp, drag, sound, say, track, toast, tween, predict, findings, discover, found,
+       shareState, sharedState, mount, reduced, ease} = Play;
+mount({thread: 'bignumbers', band: 'explorer'});
+
+/* MODEL:start ==================================================================
+   1. The langar store (Maths Mela Class 4 Ch 4 "Thousands Around Us"). Loose
+      sacks (O), packs of ten (T), crates of a hundred (H) and trucks of a
+      thousand (Th) hold the value N = 1000·Th + 100·H + 10·T + O, COUNTED, not
+      looked up. Packing ten of one shelf into one of the shelf above, or
+      opening one box into ten below, never changes N — the learner sees this
+      by watching the total stay put.
+   2. The rounding rabbit (Maths Mela Class 5 Ch 1 "We the Travellers — I",
+      "Nearest Tens, Hundreds and Thousands"). The nearest multiple of a unit
+      is found the same way the book's rabbit does — by comparing the actual
+      distance to the neighbour below and the neighbour above, ties going up
+      (2,346 is 4 jumps from 2,350 but 6 jumps from 2,340, so 2,350 wins).
+   ============================================================================ */
+const FLOORS = ['Th', 'H', 'T', 'O'];
+const PLACE = {Th: 1000, H: 100, T: 10, O: 1};
+const CAP = {Th: 9, H: 19, T: 19, O: 19};
+const valueOf = s => 1000 * s.Th + 100 * s.H + 10 * s.T + s.O;
+const split = n => ({Th: Math.floor(n / 1000), H: Math.floor(n / 100) % 10, T: Math.floor(n / 10) % 10, O: n % 10});
+const neat = s => FLOORS.every(f => s[f] <= 9);
+const BELOW = {Th: 'H', H: 'T', T: 'O'}, ABOVE = {O: 'T', T: 'H', H: 'Th'};
+function canPack(s, f){ return f !== 'Th' && s[f] >= 10 && s[ABOVE[f]] + 1 <= CAP[ABOVE[f]]; }
+function canOpen(s, f){ return f !== 'O' && s[f] >= 1 && s[BELOW[f]] + 10 <= CAP[BELOW[f]]; }
+function pack(s, f){ if (!canPack(s, f)) return Object.assign({}, s); const r = Object.assign({}, s); r[f] -= 10; r[ABOVE[f]] += 1; return r; }
+function open(s, f){ if (!canOpen(s, f)) return Object.assign({}, s); const r = Object.assign({}, s); r[f] -= 1; r[BELOW[f]] += 10; return r; }
+const fits = s => FLOORS.every(f => s[f] <= CAP[f]) && valueOf(s) <= 9999;
+/* nearest multiple of `unit`, ties rounding up — and the real jump distance to get there. */
+function nearest(n, unit){ return Math.round(n / unit) * unit; }
+const jumpsTo = (n, unit) => Math.abs(n - nearest(n, unit));
+/* MODEL:end */
+
+const NS = 'http://www.w3.org/2000/svg';
+const COL = {Th: '#16a085', H: '#e0785a', T: '#2f7de1', O: '#d68a12'};
+const SOFT = {Th: '#e0f5f0', H: '#fbe7de', T: '#e3eefc', O: '#fdf0d9'};
+const NAME = {Th: 'Trucks of 1,000', H: 'Crates of 100', T: 'Packs of 10', O: 'Loose sacks'};
+
+/* ---- state -------------------------------------------------------------------- */
+const S = {tab: 'store', Th: 0, H: 0, T: 0, O: 0, rabbit: 2346};
+const shared = sharedState();
+if (shared) {
+  const t = {Th: clamp(Math.round(+shared.Th || 0), 0, 9), H: clamp(Math.round(+shared.H || 0), 0, 19), T: clamp(Math.round(+shared.T || 0), 0, 19), O: clamp(Math.round(+shared.O || 0), 0, 19)};
+  if (fits(t)) Object.assign(S, t);
+  if (['store', 'rabbit'].includes(shared.tab)) S.tab = shared.tab;
+  if (Number.isInteger(+shared.rabbit)) S.rabbit = clamp(+shared.rabbit, 0, 9999);
+}
+shareState(() => ({tab: S.tab, Th: S.Th, H: S.H, T: S.T, O: S.O, rabbit: S.rabbit}));
+const floors = () => ({Th: S.Th, H: S.H, T: S.T, O: S.O});
+
+/* ============================================================================
+   Tab 1: the langar store
+   ============================================================================ */
+const svgA = $('stageStore');
+const FL = {Th: {y: 60, h: 120}, H: {y: 190, h: 120}, T: {y: 320, h: 120}, O: {y: 450, h: 120}};
+const f1 = n => (+n).toFixed(1);
+/* Real objects with clear air between them, styled like addition/explorer's crates,
+   boxes and pots: one bold shape per unit, a single seam (never a busy grid that reads
+   as "many little squares" instead of "one crate"). */
+const truckArt = (w = 40) => `<rect x="-${w/2}" y="-${w/2.6}" width="${w*0.62}" height="${w*0.78}" rx="4" fill="#16a085" stroke="#0e6e5a" stroke-width="2.5"/>
+  <rect x="${-w/2+w*0.62}" y="-${w/4}" width="${w*0.38}" height="${w*0.5}" rx="3" fill="#8fd9c8" stroke="#0e6e5a" stroke-width="2.5"/>
+  <circle cx="${-w*0.22}" cy="${w*0.34}" r="${w*0.13}" fill="#2a2015"/><circle cx="${w*0.28}" cy="${w*0.34}" r="${w*0.13}" fill="#2a2015"/>`;
+const crateArt = (w = 34) => `<rect x="-${w/2}" y="-${w/2}" width="${w}" height="${w}" rx="5" fill="#e0785a" stroke="#7a3a22" stroke-width="3"/>
+  <path d="M${-w/2} 0 H${w/2} M0 ${-w/2} V${w/2}" stroke="#7a3a22" stroke-width="2.5"/>`;
+const packArt = () => `<rect x="-9" y="-22" width="18" height="44" rx="5" fill="#2f7de1" stroke="#1d3f8f" stroke-width="2.5"/>
+  <path d="M-9 -8 H9 M-9 8 H9" stroke="#1d3f8f" stroke-width="2"/>`;
+const sackArt = (r = 12) => `<path d="M-${r} ${r*.35} Q-${r*1.05} -${r*.9} 0 -${r*1.05} Q${r*1.05} -${r*.9} ${r} ${r*.35} Q${r} ${r*1.15} 0 ${r*1.2} Q-${r} ${r*1.15} -${r} ${r*.35}Z" fill="#d68a12" stroke="#7a4c08" stroke-width="2.2"/>
+  <path d="M-${r*.45} -${r*.7} Q0 -${r*1.35} ${r*.45} -${r*.7}" fill="none" stroke="#7a4c08" stroke-width="2"/>`;
+const itemArt = f => f === 'Th' ? truckArt() : f === 'H' ? crateArt() : f === 'T' ? packArt() : sackArt();
+/* Ten to a row, with real gaps between them, wrapping to a second row rather than
+   crowding — the same layout addition/explorer uses for its crates, boxes and pots. */
+const PER_ROW = {Th: 9, H: 10, T: 10, O: 10};
+const PITCH = {Th: 52, H: 48, T: 46, O: 44};
+const ROW_H = {Th: 0, H: 52, T: 50, O: 44};
+const itemXY = (f, i) => {
+  const y = FL[f].y, per = PER_ROW[f], pitch = PITCH[f];
+  const col = i % per, row = Math.floor(i / per);
+  if (f === 'Th') return {x: 160 + col * pitch, y: y + 62};
+  return {x: 160 + col * pitch, y: y + 30 + row * ROW_H[f]};
+};
+function button(id, x, y, w, h, label, col, aria){
+  return `<g id="${id}G"><rect id="${id}Bg" x="${x - w / 2}" y="${y - h / 2}" width="${w}" height="${h}" rx="${Math.min(h / 2, 14)}" fill="#fff" stroke="${col}" stroke-width="3"/>
+    <text id="${id}T" x="${x}" y="${y + 6}" text-anchor="middle" font-family="Fredoka, Nunito, sans-serif" font-size="${h > 40 ? 26 : 15}" font-weight="600" fill="${col}">${label}</text></g>
+    <rect id="${id}" class="hit" x="${x - w / 2}" y="${y - h / 2}" width="${w}" height="${h}" rx="${Math.min(h / 2, 14)}" fill="transparent" role="button" tabindex="0" aria-label="${aria}"/>`;
+}
+function buildStore(){
+  let items = '', floorsArt = '', ctrls = '';
+  for (const f of FLOORS) {
+    const {y, h} = FL[f];
+    floorsArt += `
+      <rect x="20" y="${y}" width="620" height="${h}" fill="${SOFT[f]}" stroke="${COL[f]}" stroke-width="3"/>
+      <rect x="20" y="${y}" width="120" height="${h}" fill="${COL[f]}" opacity=".13"/>
+      <text x="80" y="${y + 26}" text-anchor="middle" font-family="Fredoka, Nunito, sans-serif" font-size="15" font-weight="600" fill="${COL[f]}">${NAME[f]}</text>
+      <text id="cnt${f}" x="80" y="${y + h - 20}" text-anchor="middle" font-family="Fredoka, Nunito, sans-serif" font-size="42" font-weight="600" fill="${COL[f]}">0</text>
+      <rect id="warn${f}" x="24" y="${y + 4}" width="612" height="${h - 8}" fill="none" stroke="#ff7a2f" stroke-width="5" stroke-dasharray="12 8" rx="6" opacity="0"/>`;
+    for (let i = 0; i < CAP[f]; i++) {
+      const p = itemXY(f, i);
+      items += `<g id="it${f}${i}" opacity="0" transform="translate(${f1(p.x)} ${f1(p.y)})">${itemArt(f)}</g>`;
+    }
+    ctrls += button('plus' + f, 692, y + h / 2 - 26, 54, 40, '+', COL[f], `Add one ${NAME[f].toLowerCase()}`);
+    ctrls += button('minus' + f, 692, y + h / 2 + 26, 54, 40, '−', COL[f], `Take away one ${NAME[f].toLowerCase()}`);
+  }
+  ctrls += button('packT', 760, FL.T.y + 34, 78, 42, 'Pack ↑', '#2f9e5b', 'Pack ten packs of ten into a crate of a hundred');
+  ctrls += button('openT', 760, FL.T.y + FL.T.h - 30, 78, 42, 'Open ↓', '#c2569b', 'Open a pack of ten and send ten sacks down');
+  ctrls += button('packO', 760, FL.O.y + 34, 78, 42, 'Pack ↑', '#2f9e5b', 'Pack ten loose sacks into a pack of ten');
+  ctrls += button('packH', 760, FL.H.y + 34, 78, 42, 'Pack ↑', '#2f9e5b', 'Pack ten crates of a hundred into a truck of a thousand');
+  ctrls += button('openH', 760, FL.H.y + FL.H.h - 30, 78, 42, 'Open ↓', '#c2569b', 'Open a crate of a hundred and send ten packs down');
+  ctrls += button('openTh', 760, FL.Th.y + FL.Th.h - 30, 78, 42, 'Open ↓', '#c2569b', 'Open a truck of a thousand and send ten crates down');
+
+  svgA.innerHTML = `
+  <rect width="1000" height="620" fill="#f3fbf8"/>
+  <text x="30" y="34" font-size="13" font-weight="700" letter-spacing=".08em" fill="#3a4a44">THE LANGAR STORE</text>
+  ${floorsArt}
+  <g id="items">${items}</g>
+  ${ctrls}
+  <g filter="none"><rect x="860" y="60" width="120" height="510" rx="16" fill="#fff" stroke="#cfe3dc" stroke-width="2"/></g>
+  ${FLOORS.map((f, k) => `<rect x="872" y="${76 + k * 122}" width="96" height="98" rx="10" fill="${SOFT[f]}" stroke="${COL[f]}" stroke-width="2.5"/>
+    <text x="920" y="${96 + k * 122}" text-anchor="middle" font-size="13" font-weight="800" fill="${COL[f]}">${f}</text>
+    <text id="pv${f}" x="920" y="${152 + k * 122}" text-anchor="middle" font-family="Fredoka, Nunito, sans-serif" font-size="42" font-weight="600" fill="${COL[f]}">0</text>`).join('')}
+  <text id="bigNum" x="30" y="596" text-anchor="start" font-family="Fredoka, Nunito, sans-serif" font-size="26" font-weight="600" fill="#1b2a3a"></text>
+  `;
+}
+buildStore();
+function paintStore(){
+  const n = valueOf(S);
+  for (const f of FLOORS) {
+    for (let i = 0; i < CAP[f]; i++) $('it' + f + i).setAttribute('opacity', i < S[f] ? 1 : 0);
+    $('cnt' + f).textContent = S[f];
+    const over = S[f] >= 10 && !(f === 'Th');
+    $('cnt' + f).setAttribute('fill', over ? '#e8590c' : COL[f]);
+    $('warn' + f).setAttribute('opacity', over ? 1 : 0);
+    $('pv' + f).textContent = S[f] > 9 ? '9+' : S[f];
+    $('pv' + f).setAttribute('fill', over ? '#e8590c' : COL[f]);
+  }
+  setBtn('packO', canPack(S, 'O')); setBtn('packT', canPack(S, 'T')); setBtn('packH', canPack(S, 'H'));
+  setBtn('openT', canOpen(S, 'T')); setBtn('openH', canOpen(S, 'H')); setBtn('openTh', canOpen(S, 'Th'));
+  for (const f of FLOORS) { setBtn('plus' + f, S[f] < CAP[f] && n + PLACE[f] <= 9999, true); setBtn('minus' + f, S[f] > 0, true); }
+  $('bigNum').textContent = `${n.toLocaleString('en-IN')} in the store` + (neat(S) ? '' : ' (needs packing)');
+  paintWhyStore();
+}
+function setBtn(id, on, quiet){
+  $(id + 'G').setAttribute('opacity', on ? 1 : (quiet ? 0.35 : 0.25));
+  $(id).classList.toggle('off', !on);
+  $(id).setAttribute('aria-disabled', !on);
+  if (!quiet) $(id + 'Bg').setAttribute('fill', on ? '#fff7cc' : '#fff');
+}
+function plus(f){
+  if (S[f] >= CAP[f] || valueOf(S) + PLACE[f] > 9999) { sound('oops'); chachaSt(`No room for another ${NAME[f].toLowerCase()}! Pack ten to send them up.`); return; }
+  S[f]++; sound('pop'); afterStore();
+}
+function minus(f){ if (S[f] < 1) { sound('boing'); return; } S[f]--; sound('tick'); afterStore(); }
+const SINGULAR = {Th: 'truck of a thousand', H: 'crate of a hundred', T: 'pack of ten'};
+function doPack(f){
+  if (!canPack(S, f)) { sound('boing'); chachaSt(`You need ten ${NAME[f].toLowerCase()} to pack.`); return; }
+  Object.assign(S, pack(S, f)); sound('snap'); setTimeout(() => sound('chime'), 200);
+  S.packs = (S.packs || 0) + 1;
+  if (f === 'H') S.packedThousand = true;
+  afterStore();
+  chachaSt(`Ten ${NAME[f].toLowerCase()} packed into one ${SINGULAR[ABOVE[f]]}. Still ${valueOf(S).toLocaleString('en-IN')}!`);
+}
+function doOpen(f){
+  if (!canOpen(S, f)) { sound('boing'); chachaSt(`Open a ${NAME[f].toLowerCase()} only when there is room below.`); return; }
+  Object.assign(S, open(S, f)); sound('boing'); setTimeout(() => sound('pop'), 180);
+  S.opens = (S.opens || 0) + 1;
+  afterStore();
+  chachaSt(`One ${NAME[f].toLowerCase()} opened. Still ${valueOf(S).toLocaleString('en-IN')}!`);
+}
+function chachaSt(t){ $('saySt').textContent = t; say(t); }
+function afterStore(){
+  const n = valueOf(S);
+  if ((S.packs || 0) >= 1) find('packedOnce');
+  if (S.packedThousand) find('packedThousand');
+  if ((S.opens || 0) >= 1) find('openedOnce');
+  if (n === 1380 && neat(S)) find('build1380');
+  if (n === 9123 && neat(S)) find('build9123');
+  paintStore();
+  paintMissionsSt();
+  track('store', {Th: S.Th, H: S.H, T: S.T, O: S.O, n});
+}
+function find(id){ discover(id); }
+function paintWhyStore(){
+  const n = valueOf(S);
+  $('saySt').textContent = $('saySt').textContent || 'Press + on any shelf to fill the store.';
+}
+$$('#stageStore .hit').forEach(() => {});
+for (const f of FLOORS) {
+  $('plus' + f).addEventListener('click', () => plus(f));
+  $('minus' + f).addEventListener('click', () => minus(f));
+}
+$('packO').addEventListener('click', () => doPack('O'));
+$('packT').addEventListener('click', () => doPack('T'));
+$('packH').addEventListener('click', () => doPack('H'));
+$('openT').addEventListener('click', () => doOpen('T'));
+$('openH').addEventListener('click', () => doOpen('H'));
+$('openTh').addEventListener('click', () => doOpen('Th'));
+$('resetStore').addEventListener('click', () => { Object.assign(S, {Th: 0, H: 0, T: 0, O: 0}); sound('tick'); afterStore(); });
+
+/* ============================================================================
+   Tab 2: the rounding rabbit
+   ============================================================================ */
+const svgB = $('stageRabbit');
+const NL = {x0: 60, x1: 940, y: 420, span: 400};   /* a 400-wide window of the number line, centred on the rabbit's hundred */
+function windowLo(n){ return Math.max(0, Math.floor(n / 100) * 100 - 150); }
+function nx(n, lo){ return NL.x0 + (n - lo) / NL.span * (NL.x1 - NL.x0); }
+function buildRabbit(){
+  svgB.innerHTML = `
+  <rect width="1000" height="620" fill="#fbfaf6"/>
+  <text x="30" y="34" font-size="13" font-weight="700" letter-spacing=".08em" fill="#4a555b">THE ROUNDING RABBIT</text>
+  <path d="M${NL.x0} ${NL.y} H${NL.x1}" stroke="#1b2a3a" stroke-width="3"/>
+  <g id="ticks"></g>
+  <g id="jumps"></g>
+  <g id="markers"></g>
+  <g id="rabbit"></g>
+  <text id="rNum" x="500" y="120" text-anchor="middle" font-family="Fredoka, Nunito, sans-serif" font-size="56" font-weight="600" fill="#1b2a3a"></text>
+  <g id="cardTen"></g><g id="cardHun"></g><g id="cardTho"></g>
+  `;
+  const rb = $('rabbit');
+  rb.innerHTML = `<g transform="translate(0 0)"><ellipse cx="0" cy="0" rx="20" ry="15" fill="#fff" stroke="#8a5a2b" stroke-width="2.5"/>
+    <ellipse cx="-12" cy="-24" rx="5" ry="14" fill="#fff" stroke="#8a5a2b" stroke-width="2"/><ellipse cx="4" cy="-26" rx="5" ry="15" fill="#fff" stroke="#8a5a2b" stroke-width="2"/>
+    <circle cx="10" cy="-4" r="2.4" fill="#2a1d12"/><circle cx="-2" cy="6" r="3" fill="#f2a6c2"/></g>`;
+}
+function paintRabbit(){
+  const n = S.rabbit, lo = windowLo(n);
+  let ticks = '';
+  for (let t = Math.ceil(lo / 10) * 10; t <= lo + NL.span; t += 10) {
+    const big = t % 100 === 0;
+    ticks += `<path d="M${nx(t, lo).toFixed(1)} ${NL.y - (big ? 10 : 6)} v${(big ? 20 : 12)}" stroke="#1b2a3a" stroke-width="${big ? 2 : 1.2}"/>`;
+    if (big) ticks += `<text x="${nx(t, lo).toFixed(1)}" y="${NL.y + 34}" text-anchor="middle" font-size="13" font-weight="700" fill="#44586e">${t.toLocaleString('en-IN')}</text>`;
+  }
+  $('ticks').innerHTML = ticks;
+  const t10 = nearest(n, 10), t100 = nearest(n, 100), t1000 = nearest(n, 1000);
+  const j10 = jumpsTo(n, 10), j100 = jumpsTo(n, 100), j1000 = jumpsTo(n, 1000);
+  let markers = `<circle cx="${nx(n, lo).toFixed(1)}" cy="${NL.y}" r="7" fill="#d6453d"/>`;
+  let jumps = '';
+  /* An arc that rises from the rabbit's spot ON THE LINE, up to `height`, and lands back
+     on the line at the neighbour's spot — like a real hop. If the neighbour is off this
+     window of the line, the arc stops at the edge, dashed, with the real value labelled
+     there instead of being stretched all the way across the canvas. */
+  function edgeOrArc(a, b, height, col){
+    const xa = nx(a, lo), xb = nx(b, lo), onScreen = xb >= NL.x0 - 5 && xb <= NL.x1 + 5;
+    const tx = onScreen ? xb : (xb < NL.x0 ? NL.x0 - 14 : NL.x1 + 14);
+    const ty = onScreen ? NL.y : NL.y - height;
+    let s = `<path d="M${xa.toFixed(1)} ${NL.y} Q${((xa + tx) / 2).toFixed(1)} ${(NL.y - height * 1.7).toFixed(1)} ${tx.toFixed(1)} ${ty.toFixed(1)}" fill="none" stroke="${col}" stroke-width="2.5" ${onScreen ? '' : 'stroke-dasharray="4 5"'} marker-end="url(#arrow)"/>`;
+    if (!onScreen) s += `<text x="${tx.toFixed(1)}" y="${(ty - 8).toFixed(1)}" text-anchor="${xb < NL.x0 ? 'start' : 'end'}" font-size="12" font-weight="700" fill="${col}">${b.toLocaleString('en-IN')}</text>`;
+    return s;
+  }
+  jumps += edgeOrArc(n, t10, 28, '#2f7de1');
+  if (t100 !== t10) jumps += edgeOrArc(n, t100, 62, '#e0785a');
+  if (t1000 !== t100) jumps += edgeOrArc(n, t1000, 106, '#16a085');
+  $('markers').innerHTML = markers;
+  $('jumps').innerHTML = `<defs><marker id="arrow" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#666"/></marker></defs>` + jumps;
+  $('rabbit').setAttribute('transform', `translate(${nx(n, lo).toFixed(1)} ${NL.y - 22})`);
+  $('rNum').textContent = n.toLocaleString('en-IN');
+  const card = (id, y, label, val, j, col) => `<rect x="60" y="${y}" width="270" height="72" rx="12" fill="#fff" stroke="${col}" stroke-width="2.5"/>
+    <text x="76" y="${y + 26}" font-size="13" font-weight="700" fill="${col}">${label}</text>
+    <text x="76" y="${y + 56}" font-family="Fredoka, Nunito, sans-serif" font-size="24" font-weight="600" fill="#1b2a3a">${val.toLocaleString('en-IN')}</text>
+    <text x="330" y="${y + 56}" text-anchor="end" font-size="13.5" font-weight="700" fill="#7c878c">${j} jump${j === 1 ? '' : 's'}</text>`;
+  $('cardTen').innerHTML = card('cardTen', 470, 'NEAREST TEN', t10, j10, '#2f7de1');
+  $('cardHun').innerHTML = card('cardHun', 470, 'NEAREST HUNDRED', t100, j100, '#e0785a').replace('x="60"', 'x="370"').replace('x="76"', 'x="386"').replace('x="76"', 'x="386"').replace('x="330"', 'x="640"');
+  $('cardTho').innerHTML = card('cardTho', 470, 'NEAREST THOUSAND', t1000, j1000, '#16a085').replace('x="60"', 'x="680"').replace('x="76"', 'x="696"').replace('x="76"', 'x="696"').replace('x="330"', 'x="950"');
+  $('sayRb').textContent = `${n.toLocaleString('en-IN')} is ${j10} jump${j10 === 1 ? '' : 's'} from ${t10.toLocaleString('en-IN')}, ${j100} from ${t100.toLocaleString('en-IN')}, and ${j1000} from ${t1000.toLocaleString('en-IN')}.`;
+  if (j10 > 0) find('rabbitTen');
+  if (j100 > 0) find('rabbitHundred');
+  if (j1000 > 0) find('rabbitThousand');
+  if (n === 2346 && t10 === 2350 && j10 === 4) find('bookExample');
+  if (n % 10 === 5) find('halfway');
+  paintMissionsSt();
+}
+function setRabbit(n){ S.rabbit = clamp(Math.round(n), 0, 9999); paintRabbit(); track('rabbit', {n: S.rabbit}); }
+const RSTEPS = [[-100, '−100'], [-10, '−10'], [-1, '−1'], [1, '+1'], [10, '+10'], [100, '+100']];
+function buildRabbitBtns(){
+  $('rabbitBtns').innerHTML = RSTEPS.map(([d, label], i) => `<button class="btn sm" data-i="${i}">${label}</button>`).join('');
+  $$('#rabbitBtns button').forEach(btn => btn.addEventListener('click', () => { sound('tick'); setRabbit(S.rabbit + RSTEPS[+btn.dataset.i][0]); }));
+}
+buildRabbit();
+buildRabbitBtns();
+
+/* ============================================================================
+   Missions
+   ============================================================================ */
+const MISSIONS = [
+  {id: 'build1380',     text: 'Build 1,380 in the store — the chapter’s own example.'},
+  {id: 'build9123',     text: 'Build 9,123 — nine thousands, one hundred, two tens, three ones.'},
+  {id: 'packedOnce',    text: 'Pack ten of something into the shelf above.'},
+  {id: 'packedThousand',text: 'Pack ten crates of a hundred into one truck of a thousand.'},
+  {id: 'openedOnce',    text: 'Open a box and watch the total stay the same.'},
+  {id: 'rabbitTen',     text: 'Move the rabbit and find its nearest ten.'},
+  {id: 'rabbitHundred', text: 'Find the rabbit’s nearest hundred.'},
+  {id: 'rabbitThousand',text: 'Find the rabbit’s nearest thousand.'},
+  {id: 'bookExample',   text: 'Put the rabbit at 2,346 — the book’s own rabbit.'},
+  {id: 'halfway',       text: 'Find a number that sits exactly halfway between two tens.'},
+];
+function paintMissionsSt(){
+  $('missionsStore').innerHTML = MISSIONS.map(m => `<li id="m-${m.id}" class="${found(m.id) ? 'done' : ''}"><i>${found(m.id) ? '✓' : ''}</i><span>${esc(m.text)}</span></li>`).join('');
+}
+
+/* ============================================================================
+   Wiring
+   ============================================================================ */
+function setTab(t){
+  S.tab = t;
+  $('tabStore').setAttribute('aria-selected', t === 'store'); $('tabRabbit').setAttribute('aria-selected', t === 'rabbit');
+  $('stageStore').toggleAttribute('hidden', t !== 'store'); $('stageRabbit').toggleAttribute('hidden', t !== 'rabbit');
+  $('cardStore').hidden = t !== 'store'; $('cardRabbit').hidden = t !== 'rabbit';
+  $('poeStore').hidden = t !== 'store'; $('poeRabbit').hidden = t !== 'rabbit';
+  if (t === 'store') paintStore(); else paintRabbit();
+  track('tab', {tab: t});
+}
+$('tabStore').addEventListener('click', () => { sound('tick'); setTab('store'); });
+$('tabRabbit').addEventListener('click', () => { sound('tick'); setTab('rabbit'); });
+
+findings($('finds'), [
+  {id: 'build1380',      icon: '📦', label: '1,380 = 1 truck + 3 crates + 8 packs', say: 'One thousand three hundred eighty.'},
+  {id: 'build9123',      icon: '📦', label: '9,123, built shelf by shelf', say: 'Nine thousand one hundred twenty three.'},
+  {id: 'packedOnce',     icon: '⬆', label: 'Ten of one shelf make one above', say: 'Ten of one shelf make one of the shelf above.'},
+  {id: 'packedThousand', icon: '🚚', label: 'Ten crates make a truck', say: 'Ten crates of a hundred make one truck of a thousand!'},
+  {id: 'openedOnce',     icon: '⬇', label: 'Opening a box keeps the total', say: 'Opening a box does not change how much is in the store.'},
+  {id: 'rabbitTen',      icon: '🐇', label: 'The rabbit’s nearest ten', say: 'The nearest ten is whichever is fewer jumps away.'},
+  {id: 'rabbitHundred',  icon: '🐇', label: 'The rabbit’s nearest hundred'},
+  {id: 'rabbitThousand', icon: '🐇', label: 'The rabbit’s nearest thousand'},
+  {id: 'bookExample',    icon: '📖', label: '2,346 → 2,350 in 4 jumps', say: 'Two thousand three hundred forty six is four jumps from two thousand three hundred fifty.'},
+  {id: 'halfway',        icon: '⚖', label: 'Exactly halfway rounds up', say: 'A number ending in five sits exactly halfway between two tens — and rounds up.'},
+], () => say('Every discovery here came from real counting, not from a rule typed in.'));
+
+const POE1 = predict($('poeStore'), {
+  id: 'pack-total', confidence: false,
+  q: 'Ten loose sacks are packed into one pack of ten and sent up to the Tens shelf. What happens to the TOTAL number of sacks in the store?',
+  options: [{id: 'up', text: 'It goes up by 10'}, {id: 'down', text: 'It goes down by 1'}, {id: 'same', text: 'It stays exactly the same', right: true}],
+  onLock(){ sound('snap'); },
+});
+const POE2 = predict($('poeRabbit'), {
+  id: 'rabbit-closer', confidence: false,
+  q: 'The rabbit sits at 2,346. Which is it closer to — its nearest hundred, or its nearest thousand?',
+  options: [{id: 'hun', text: 'Its nearest hundred', right: true}, {id: 'tho', text: 'Its nearest thousand'}, {id: 'same', text: 'The same distance'}],
+  onLock(){ sound('snap'); setRabbit(2346); },
+});
+
+setTab(S.tab);
+paintMissionsSt();
+window.applyFeatures = () => setTab(S.tab);
+window.PG_STATE = () => ({tab: S.tab, Th: S.Th, H: S.H, T: S.T, O: S.O, n: valueOf(S), neat: neat(S), rabbit: S.rabbit,
+  nearestTen: nearest(S.rabbit, 10), nearestHundred: nearest(S.rabbit, 100), nearestThousand: nearest(S.rabbit, 1000)});
+window.PG_MODEL = {valueOf, split, neat, pack, open, canPack, canOpen, fits, nearest, jumpsTo, CAP, PLACE};
+</script>
+</body>
+</html>

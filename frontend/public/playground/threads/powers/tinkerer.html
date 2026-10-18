@@ -1,0 +1,636 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Squares, Cubes, Powers</title>
+<meta name="description" content="Class 8: grow squares from odd numbers of tiles, stack cubes from layers, fold a sheet of paper until it passes the Moon, and see why exponents add when powers multiply.">
+<link rel="icon" href="../../favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="../../play.css">
+<style>
+/* Only what this page needs beyond play.css. The stage paints its own paper in light and dark chrome. */
+.pg-stage{background:#fbfaf6}
+html, body{overflow-anchor:none}   /* the side panel grows as you play: never let the page jump under a drag */
+@media (max-width:1180px) and (min-width:981px){ .pg-main.wide-side{grid-template-columns:minmax(0,1fr) 340px} }
+.gate{position:absolute; inset:0; display:grid; place-items:center; pointer-events:none}
+.gate span{background:rgba(15,26,43,.82); color:#fff; padding:10px 16px; border-radius:99px; font-weight:600; font-size:14px}
+.seg{display:grid; grid-template-columns:repeat(4,1fr); background:var(--sunk); border-radius:99px; padding:3px; gap:3px}
+.seg button{border:0; background:transparent; border-radius:99px; padding:7px 4px; font-weight:600; font-size:13.5px; cursor:pointer; color:var(--ink-2)}
+.seg button[aria-pressed="true"]{background:var(--card); color:var(--ink); box-shadow:var(--shadow)}
+.seg button:disabled{cursor:default; opacity:.5}
+.stepper{display:flex; align-items:center; gap:8px; margin:8px 0}
+.stepper label{font-size:13px; font-weight:700; min-width:88px; color:var(--ink-2)}
+.stepper output{font:600 20px/1 "JetBrains Mono",monospace; min-width:34px; text-align:center}
+.stepper .btn{min-height:34px; width:34px; padding:0; font-size:18px}
+.opseg{display:grid; grid-template-columns:repeat(3,1fr); background:var(--sunk); border-radius:10px; padding:3px; gap:3px; margin:10px 0 4px}
+.opseg button{border:0; background:transparent; border-radius:8px; height:34px; font-size:14px; font-weight:700; cursor:pointer; color:var(--ink-2)}
+.opseg button[aria-pressed="true"]{background:var(--card); color:var(--ink); box-shadow:var(--shadow)}
+.opseg button:disabled{opacity:.5; cursor:default}
+.hint{font-size:12.5px; color:var(--ink-3); margin:6px 0 0}
+.why p{font-size:14px; margin:0 0 .55em}
+.why b{color:var(--ink)}
+.hit{cursor:pointer}
+.hit.dragging{cursor:grabbing}
+</style>
+</head>
+<body>
+<header class="pg-top"></header>
+
+<div class="pg-intro">
+  <h1>Squares, cubes and powers</h1>
+  <p>A sheet of paper is about 0.001 cm thick. Fold it, and fold it again: every fold doubles it. Before you touch anything, guess how thick it gets after 46 folds.
+     Then grow squares from tiles, stack cubes from layers, fold the paper yourself, and find out why the exponents add when powers multiply.</p>
+</div>
+
+<main class="pg-main wide-side">
+  <section class="pg-stage" id="stageWrap">
+    <svg id="stage" viewBox="0 0 1000 640" role="img" aria-label="Tiles laid in L-shaped layers to make squares, a cube built from square layers, a folded sheet climbing a scale from a millimetre to the Moon, and rows of factors showing the laws of exponents"></svg>
+    <div class="gate" id="gate"><span>Make your prediction first →</span></div>
+  </section>
+
+  <aside class="pg-side">
+    <div id="poe"></div>
+
+    <div class="card" id="ctlCard">
+      <div class="seg" role="group" aria-label="What to explore">
+        <button id="tabSquares" data-tab="squares" aria-pressed="true">Squares</button>
+        <button id="tabCubes" data-tab="cubes" aria-pressed="false">Cubes</button>
+        <button id="tabFold" data-tab="fold" aria-pressed="false">Fold</button>
+        <button id="tabLaws" data-tab="laws" aria-pressed="false">Laws</button>
+      </div>
+
+      <div id="ctlSquares">
+        <div class="ctl"><label for="tiles">Tiles</label><input type="range" id="tiles" min="1" max="144" step="1" value="9"><output id="tilesOut" class="num">9</output></div>
+        <p class="hint">The tiles are laid in L-shaped layers of 1, 3, 5, 7 … Drag on the grid to make a whole square.</p>
+      </div>
+
+      <div id="ctlCubes" hidden>
+        <div class="stepper"><label>Edge</label><button class="btn" data-ck="n" data-d="-1" aria-label="Smaller cube">−</button><output id="nOut">3</output><button class="btn" data-ck="n" data-d="1" aria-label="Bigger cube">+</button></div>
+        <div class="stepper"><label>Layers built</label><button class="btn" data-ck="L" data-d="-1" aria-label="Take a layer off">−</button><output id="LOut">1</output><button class="btn" data-ck="L" data-d="1" aria-label="Add a layer">+</button></div>
+        <p class="hint">Each layer is an edge × edge square of unit cubes.</p>
+      </div>
+
+      <div id="ctlFold" hidden>
+        <div class="row"><button class="btn" id="btnUnfold">Unfold</button><button class="btn primary" id="btnFold">Fold once more</button></div>
+        <div class="ctl"><label for="folds">Folds</label><input type="range" id="folds" min="0" max="50" step="1" value="0"><output id="foldsOut" class="num">0</output></div>
+        <p class="hint">Say you could fold as often as you like. The sheet starts 0.001 cm thick, as in the book.</p>
+      </div>
+
+      <div id="ctlLaws" hidden>
+        <div class="opseg" role="group" aria-label="Which law">
+          <button id="opMul" data-op="mul" aria-pressed="true">nᵃ × nᵇ</button><button id="opDiv" data-op="div" aria-pressed="false">nᵃ ÷ nᵇ</button><button id="opPow" data-op="pow" aria-pressed="false">(nᵃ)ᵇ</button>
+        </div>
+        <div class="stepper"><label>Base n</label><button class="btn" data-lk="base" data-d="-1" aria-label="Base down">−</button><output id="baseOut">3</output><button class="btn" data-lk="base" data-d="1" aria-label="Base up">+</button></div>
+        <div class="stepper"><label>Exponent a</label><button class="btn" data-lk="a" data-d="-1" aria-label="a down">−</button><output id="aOut">4</output><button class="btn" data-lk="a" data-d="1" aria-label="a up">+</button></div>
+        <div class="stepper"><label>Exponent b</label><button class="btn" data-lk="b" data-d="-1" aria-label="b down">−</button><output id="bOut">3</output><button class="btn" data-lk="b" data-d="1" aria-label="b up">+</button></div>
+      </div>
+    </div>
+
+    <div class="card why" id="whyCard" hidden>
+      <div class="kicker">What is happening</div>
+      <div id="why"></div>
+    </div>
+
+    <div class="card"><div class="kicker">To find</div><div id="finds"></div></div>
+  </aside>
+</main>
+
+<script src="../../play.js"></script>
+<script>
+'use strict';
+const {$, esc, clamp, fmt, drag, sound, say, track, toast, predict, findings, discover, found,
+       shareState, sharedState, mount, reduced} = Play;
+mount({thread: 'powers', band: 'tinkerer'});
+
+/* MODEL:start ==================================================================
+   Squares: N tiles are laid in L-shaped layers of 1, 3, 5, … tiles (the k-th layer
+            has 2k − 1). If they run out exactly at the end of a layer, N is a square
+            and the number of layers is its root: the book's "subtract successive odd
+            numbers" test, done with tiles.
+   Cubes:   an n × n × n cube is n layers of n × n unit cubes.
+   Folding: thickness after f folds = 0.001 cm × 2^f, computed exactly with BigInt
+            (in thousandths of a centimetre it is just 2^f).
+   Laws:    powers are written out as rows of factors and the factors are counted:
+            nᵃ × nᵇ joins the rows (a + b factors); nᵃ ÷ nᵇ cancels n/n pairs;
+            (nᵃ)ᵇ is b groups of a. Both sides are also multiplied out and compared.
+   ============================================================================ */
+function layTiles(N){
+  const chain = [];
+  let rest = N, k = 0;
+  while (rest > 0) {
+    const odd = 2 * k + 1;
+    chain.push({odd, before: rest, after: rest - odd});
+    if (rest - odd < 0) break;
+    rest -= odd; k++;
+  }
+  return {N, k, left: rest, square: rest === 0, chain};                // k complete layers
+}
+/* The cell of tile number i (0-based): layer L = floor(√i), grown from its corner outwards. */
+function tileCell(i){
+  const L = Math.floor(Math.sqrt(i)), j = i - L * L;
+  if (j === 0) return {x: L, y: L, L};
+  const step = Math.ceil(j / 2);
+  return j % 2 ? {x: L, y: L - step, L} : {x: L - step, y: L, L};
+}
+const cubeCount = (n, L) => L * n * n;
+const cubeOdds = n => Array.from({length: n}, (_, i) => n * n - n + 1 + 2 * i);  // n consecutive odd numbers summing to n³
+const THICK0 = 0.001;                                                            // cm, the book's sheet
+const foldThou = f => 2n ** BigInt(f);                                           // thickness in thousandths of a cm
+const foldCm = f => THICK0 * Math.pow(2, f);
+function thouToCmText(t){ const s = t.toString().padStart(4, '0'); return s.slice(0, -3) + '.' + s.slice(-3); }
+function pow(n, e){ return BigInt(n) ** BigInt(e); }
+function lawCheck(op, n, a, b){
+  if (op === 'mul') return {left: pow(n, a) * pow(n, b), exp: a + b, right: pow(n, a + b), factors: a + b};
+  if (op === 'pow') return {left: pow(pow(n, a), b), exp: a * b, right: pow(n, a * b), factors: a * b};
+  /* division: cancel n/n pairs; what is left is n^(a−b) (or 1/n^(b−a)) */
+  const cancel = Math.min(a, b), exp = a - b;
+  return {cancel, exp, num: pow(n, a), den: pow(n, b), top: pow(n, Math.max(0, exp)), bottom: pow(n, Math.max(0, -exp)),
+          holds: pow(n, a) * pow(n, Math.max(0, -exp)) === pow(n, b) * pow(n, Math.max(0, exp))};
+}
+/* MODEL:end */
+
+const SUP = {'0': '⁰', '1': '¹', '2': '²', '3': '³', '4': '⁴', '5': '⁵', '6': '⁶', '7': '⁷', '8': '⁸', '9': '⁹', '-': '⁻'};
+const sup = n => String(n).split('').map(c => SUP[c] || c).join('');
+/* Indian grouping: 12,34,56,789 */
+function inr(x){
+  const s = String(x), [ip, fp] = s.split('.');
+  let head = ip.slice(0, -3), tail = ip.slice(-3);
+  if (head) tail = ',' + tail;
+  head = head.replace(/\B(?=(\d{2})+(?!\d))/g, ',');
+  return head + tail + (fp ? '.' + fp : '');
+}
+function sci(x){ if (x === 0) return '0'; const e = Math.floor(Math.log10(x) + 1e-12), m = x / Math.pow(10, e); return `${m.toFixed(2)} × 10${sup(e)}`; }
+function length(cm){
+  if (cm < 100) return fmt(cm, cm < 1 ? 3 : 2) + ' cm';
+  if (cm < 100000) return fmt(cm / 100, cm < 10000 ? 2 : 1) + ' m';
+  return cm < 10000000 ? fmt(cm / 100000, 1) + ' km' : inr(Math.round(cm / 100000)) + ' km';
+}
+const big = v => { const s = v.toString(); return s.length <= 16 ? inr(s) : `${s[0]}.${s.slice(1, 4)} × 10${sup(s.length - 1)}`; };
+
+/* ---- state: plain data --------------------------------------------------- */
+const S = {tab: 'squares', locked: false, N: 9, n: 3, L: 1, f: 0, op: 'mul', base: 3, a: 4, b: 3, changes: 0};
+const shared = sharedState();
+if (shared) {
+  if (['squares', 'cubes', 'fold', 'laws'].includes(shared.tab)) S.tab = shared.tab;
+  if (shared.N) S.N = clamp(Math.round(+shared.N) || 9, 1, 144);
+  if (shared.n) S.n = clamp(Math.round(+shared.n) || 3, 1, 6);
+  if (shared.L != null) S.L = clamp(Math.round(+shared.L) || 0, 0, S.n);
+  if (shared.f != null) S.f = clamp(Math.round(+shared.f) || 0, 0, 50);
+  if (['mul', 'div', 'pow'].includes(shared.op)) S.op = shared.op;
+  for (const [k, lo, hi] of [['base', 2, 10], ['a', 0, 8], ['b', 0, 8]]) if (shared[k] != null) S[k] = clamp(Math.round(+shared[k]) || 0, lo, hi);
+}
+shareState(() => ({tab: S.tab, N: S.N, n: S.n, L: S.L, f: S.f, op: S.op, base: S.base, a: S.a, b: S.b}));
+
+/* ============================================================================
+   The stage: drawn once, then only patched.
+   ============================================================================ */
+const svg = $('stage');
+const IN = '#5b5bd6', IN_D = '#3b3ba8', IN_L = '#c9c9f3', AM = '#e08a1e', AM_D = '#a85f0a', AM_L = '#f8d9a8', GR = '#2f9e5b';
+const INK = '#1d2327', INK2 = '#4a555b', INK3 = '#6f7a80', PAPER = '#fbfaf6', HAIR = '#e2ded2';
+const SQ = {x: 70, y: 96, c: 36};                        // squares grid
+const LOG = {x: 420, y0: 596, y1: 92, lo: -3, hi: 11};   // fold ruler: 10^lo … 10^hi cm
+const FG = {x: 742, y: 336, w: 222, h: 210};             // fold graph
+const set = (id, attrs) => { const el = typeof id === 'string' ? $(id) : id; for (const k in attrs) el.setAttribute(k, attrs[k]); return el; };
+const T = (x, y, txt, o = '') => `<text x="${x}" y="${y}" ${o}>${txt}</text>`;
+const H = (x, y, txt) => T(x, y, txt, `fill="${INK2}" font-size="13" font-weight="700" letter-spacing=".08em"`);
+const MONO = 'font-family="JetBrains Mono, monospace"';
+const LANDMARKS = [                                       // cm, from the book (Power Play)
+  {cm: 1, name: '1 cm'},
+  {cm: 100, name: '1 m'},
+  {cm: 83000, name: 'Burj Khalifa, 830 m tall'},
+  {cm: 1100000, name: 'Mariana Trench, 11 km deep'},
+  {cm: 38440000000, name: 'the Moon, 3,84,400 km away'},
+];
+
+function build(){
+  let grid = '';
+  for (let i = 0; i <= 12; i++) {
+    grid += `<line x1="${SQ.x + i * SQ.c}" y1="${SQ.y}" x2="${SQ.x + i * SQ.c}" y2="${SQ.y + 12 * SQ.c}" stroke="#ebe6da"/>` +
+            `<line x1="${SQ.x}" y1="${SQ.y + i * SQ.c}" x2="${SQ.x + 12 * SQ.c}" y2="${SQ.y + i * SQ.c}" stroke="#ebe6da"/>`;
+  }
+  let tiles = '';
+  for (let i = 0; i < 144; i++) { const c = tileCell(i);
+    tiles += `<rect id="tl${i}" x="${SQ.x + c.x * SQ.c + 2}" y="${SQ.y + c.y * SQ.c + 2}" width="${SQ.c - 4}" height="${SQ.c - 4}" rx="5"/>`; }
+  let ruler = `<line x1="${LOG.x}" y1="${LOG.y0}" x2="${LOG.x}" y2="${LOG.y1}" stroke="${INK}" stroke-width="2"/>`;
+  const ly = e => LOG.y0 - (e - LOG.lo) / (LOG.hi - LOG.lo) * (LOG.y0 - LOG.y1);
+  for (let e = LOG.lo; e <= LOG.hi; e++) {
+    ruler += `<line x1="${LOG.x - 6}" y1="${ly(e)}" x2="${LOG.x + 6}" y2="${ly(e)}" stroke="${INK}" stroke-width="1.4"/>` +
+             T(LOG.x - 12, ly(e) + 4, `10${sup(e)}`, `fill="${INK3}" font-size="12" text-anchor="end"`);
+  }
+  LANDMARKS.forEach((m, i) => { const y = ly(Math.log10(m.cm));
+    ruler += `<line x1="${LOG.x}" y1="${y.toFixed(1)}" x2="${LOG.x + 70}" y2="${y.toFixed(1)}" stroke="${IN}" stroke-width="1" stroke-dasharray="3 3"/>` +
+             T(LOG.x + 76, y + 4, m.name, `id="lm${i}" fill="${IN_D}" font-size="12.5" font-weight="600"`); });
+
+  svg.innerHTML = `
+  <rect x="0" y="0" width="1000" height="640" fill="${PAPER}"/>
+
+  <!-- ===================== SQUARES ===================== -->
+  <g id="vSquares">
+    ${H(22, 30, 'TILES IN L-SHAPED LAYERS')}
+    <text id="sqSub" x="22" y="48" fill="${INK3}" font-size="12"></text>
+    ${grid}
+    <g id="sqTiles">${tiles}</g>
+    <g id="sqNums" font-size="13" font-weight="700" fill="#fff" text-anchor="middle"></g>
+    <rect id="sqOutline" x="${SQ.x}" y="${SQ.y}" fill="none" stroke="${INK}" stroke-width="2.5"/>
+    <circle id="sqKnob" r="10" fill="${AM}" stroke="#fff" stroke-width="3"/>
+    <rect x="540" y="70" width="440" height="530" rx="14" fill="#fff" stroke="${HAIR}"/>
+    <text id="sqBig" x="562" y="118" fill="${INK}" font-size="34" font-weight="700" font-family="Fredoka, Inter, sans-serif"></text>
+    <text id="sqSum" x="562" y="148" fill="${INK2}" font-size="14"></text>
+    ${T(562, 184, 'TAKE AWAY 1, 3, 5, 7 … IN TURN', `fill="${INK3}" font-size="12" font-weight="700" letter-spacing=".08em"`)}
+    <g id="sqChain"></g>
+    <rect id="sqVerdictBg" x="556" y="536" width="408" height="50" rx="10"/>
+    <text id="sqVerdict" x="760" y="567" font-size="15.5" font-weight="700" text-anchor="middle"></text>
+    <rect id="sqHit" class="hit" x="${SQ.x}" y="${SQ.y}" width="${12 * SQ.c}" height="${12 * SQ.c}" fill="transparent" role="slider" aria-label="The grid: drag to make a whole square"/>
+  </g>
+
+  <!-- ===================== CUBES ===================== -->
+  <g id="vCubes" style="display:none">
+    ${H(22, 30, 'A CUBE FROM SQUARE LAYERS')}
+    <text id="cuSub" x="22" y="48" fill="${INK3}" font-size="12"></text>
+    <ellipse cx="280" cy="560" rx="230" ry="34" fill="#efe9dc"/>
+    <g id="cuCubes"></g>
+    <text id="cuLab" x="280" y="620" fill="${INK2}" font-size="14" font-weight="700" text-anchor="middle"></text>
+    <rect x="560" y="70" width="420" height="530" rx="14" fill="#fff" stroke="${HAIR}"/>
+    <text id="cuBig" x="582" y="118" fill="${INK}" font-size="32" font-weight="700" font-family="Fredoka, Inter, sans-serif"></text>
+    <text id="cuL1" x="582" y="150" fill="${INK2}" font-size="14.5"></text>
+    <text id="cuL2" x="582" y="174" fill="${INK2}" font-size="14.5"></text>
+    ${T(582, 214, 'CUBES OF 1 TO 6', `fill="${INK3}" font-size="12" font-weight="700" letter-spacing=".08em"`)}
+    <g id="cuTable"></g>
+    ${T(582, 470, 'CUBES AND ODD NUMBERS', `fill="${INK3}" font-size="12" font-weight="700" letter-spacing=".08em"`)}
+    <text id="cuOdd" x="582" y="502" fill="${INK}" font-size="14.5" ${MONO}></text>
+    <text id="cuOdd2" x="582" y="528" fill="${INK3}" font-size="13"></text>
+  </g>
+
+  <!-- ===================== FOLD ===================== -->
+  <g id="vFold" style="display:none">
+    ${H(22, 30, 'FOLD THE PAPER')}
+    <text id="fSub" x="22" y="48" fill="${INK3}" font-size="12"></text>
+    <g id="fPaper"></g>
+    <text id="fPaperLab" x="160" y="600" fill="${INK2}" font-size="13" font-weight="700" text-anchor="middle"></text>
+    ${H(LOG.x - 60, 70, 'HOW TALL? (CM)')}
+    ${ruler}
+    <rect id="fBar" x="${LOG.x + 10}" width="22" rx="4" fill="${AM}" opacity=".9"/>
+    <g id="fMark"><path d="M0 0 L-12 -8 L-12 8Z" fill="${AM_D}"/></g>
+    <text id="fMarkLab" fill="${AM_D}" font-size="13.5" font-weight="700"></text>
+    ${H(FG.x - 20, 74, 'THICKNESS AFTER EACH FOLD')}
+    <text id="fGSub" x="${FG.x - 20}" y="92" fill="${INK3}" font-size="11.5"></text>
+    <g id="fGAxes"></g>
+    <path id="fGLine" fill="none" stroke="${AM}" stroke-width="2.6"/>
+    <g id="fGPts"></g>
+    <text id="fNow1" x="${FG.x - 20}" y="404" fill="${INK}" font-size="16" font-weight="700" ${MONO}></text>
+    <text id="fNow2" x="${FG.x - 20}" y="430" fill="${INK2}" font-size="13.5" ${MONO}></text>
+    <text id="fNow3" x="${FG.x - 20}" y="454" fill="${AM_D}" font-size="14" font-weight="700"></text>
+    ${T(FG.x - 20, 494, 'EVERY 10 FOLDS: × 2¹⁰ = × 1024', `fill="${INK3}" font-size="12" font-weight="700" letter-spacing=".04em"`)}
+    <g id="fTen"></g>
+  </g>
+
+  <!-- ===================== LAWS ===================== -->
+  <g id="vLaws" style="display:none">
+    ${H(22, 30, 'COUNT THE FACTORS')}
+    <text id="lwSub" x="22" y="48" fill="${INK3}" font-size="12"></text>
+    <g id="lwRows"></g>
+  </g>
+  `;
+}
+
+/* ============================================================================
+   SQUARES
+   ============================================================================ */
+function paintSquares(){
+  const R = layTiles(S.N);
+  for (let i = 0; i < 144; i++) {
+    const el = $('tl' + i), c = tileCell(i);
+    if (i >= S.N) { el.setAttribute('opacity', 0); continue; }
+    const partial = c.L >= R.k;
+    el.setAttribute('opacity', 1);
+    el.setAttribute('fill', partial ? AM : (c.L % 2 ? '#7b7be0' : IN));
+  }
+  let nums = '';
+  for (let L = 0; L < R.k; L++) nums += T(SQ.x + (L + .5) * SQ.c, SQ.y + (L + .5) * SQ.c + 5, 2 * L + 1);
+  $('sqNums').innerHTML = nums;
+  set('sqOutline', {width: R.k * SQ.c, height: R.k * SQ.c, opacity: R.k ? 1 : 0});
+  set('sqKnob', {cx: SQ.x + R.k * SQ.c, cy: SQ.y + R.k * SQ.c, opacity: R.k ? 1 : 0});
+  $('sqSub').textContent = `${S.N} tile${S.N === 1 ? '' : 's'}. Layer 1 is 1 tile; each new layer wraps round the square: 3, 5, 7 … tiles.`;
+  $('sqBig').textContent = R.square ? `${S.N} = ${R.k}²` : `${S.N} tiles`;
+  $('sqSum').textContent = R.k ? R.chain.slice(0, R.k).map(c => c.odd).join(' + ') + ` = ${R.k * R.k}` + (R.square ? '' : ` , and ${R.left} more`) : '';
+  let ch = '';
+  const lines = R.chain.slice(-12), off = R.chain.length - lines.length;
+  lines.forEach((c, i) => {
+    const over = c.after < 0;
+    ch += T(562, 214 + i * 25, `${c.before} − ${c.odd} = ${c.after}`, `fill="${over ? '#b23c17' : c.after === 0 ? '#1f7a45' : INK}" font-size="15" font-weight="${over || c.after === 0 ? 700 : 500}" ${MONO}`) +
+          T(962, 214 + i * 25, over ? 'too many: stop' : c.after === 0 ? `none left after ${off + i + 1} odd numbers` : `layer ${off + i + 1}`, `fill="${over ? '#b23c17' : INK3}" font-size="12" text-anchor="end"`);
+  });
+  $('sqChain').innerHTML = ch;
+  set('sqVerdictBg', {fill: R.square ? '#e1f5e8' : '#fdeee4'});
+  set('sqVerdict', {fill: R.square ? '#1f7a45' : '#b23c17'}).textContent = R.square ? `${S.N} is a perfect square: √${S.N} = ${R.k}`
+    : `${S.N} is not a square: ${R.k}² = ${R.k * R.k} < ${S.N} < ${(R.k + 1) * (R.k + 1)} = ${R.k + 1}²`;
+  $('tiles').value = S.N; $('tilesOut').textContent = S.N;
+  return R;
+}
+
+/* ============================================================================
+   CUBES (isometric)
+   ============================================================================ */
+function paintCubes(){
+  const n = S.n, L = S.L, s = Math.min(44, 228 / n), cx = 280, cy = 540, c30 = Math.cos(Math.PI / 6), s30 = .5;
+  /* ground point of cell (i, j) at height k: i runs right-down, j left-down; the far corner is at the top */
+  const P = (i, j, k) => ({x: cx + (i - j) * s * c30, y: cy - (2 * n - i - j) * s * s30 - k * s});
+  let g = '';
+  /* outline of the full cube still to build */
+  const o = [P(0, 0, n), P(n, 0, n), P(n, n, n), P(0, n, n), P(n, n, 0), P(n, 0, 0), P(0, n, 0)];
+  g += `<path d="M${o[0].x} ${o[0].y} L${o[1].x} ${o[1].y} L${o[2].x} ${o[2].y} L${o[3].x} ${o[3].y}Z M${o[2].x} ${o[2].y} L${o[4].x} ${o[4].y} M${o[1].x} ${o[1].y} L${o[5].x} ${o[5].y} M${o[3].x} ${o[3].y} L${o[6].x} ${o[6].y}" fill="none" stroke="#b9b3a6" stroke-dasharray="4 4"/>`;
+  for (let k = 0; k < L; k++) {
+    const top = k === L - 1, cT = top ? AM_L : k % 2 ? '#dcdcf8' : '#cfcff5', cL = top ? AM : k % 2 ? '#8585e3' : IN, cR = top ? AM_D : k % 2 ? '#5f5fc2' : IN_D;
+    for (let d = 0; d <= 2 * (n - 1); d++) for (let i = 0; i < n; i++) {
+      const j = d - i; if (j < 0 || j >= n) continue;
+      const a = P(i, j, k + 1), b = P(i + 1, j, k + 1), c = P(i + 1, j + 1, k + 1), e = P(i, j + 1, k + 1), f = P(i + 1, j + 1, k), h = P(i + 1, j, k), m = P(i, j + 1, k);
+      g += `<path d="M${a.x.toFixed(1)} ${a.y.toFixed(1)}L${b.x.toFixed(1)} ${b.y.toFixed(1)}L${c.x.toFixed(1)} ${c.y.toFixed(1)}L${e.x.toFixed(1)} ${e.y.toFixed(1)}Z" fill="${cT}" stroke="#fff" stroke-width="1"/>` +
+           `<path d="M${e.x.toFixed(1)} ${e.y.toFixed(1)}L${c.x.toFixed(1)} ${c.y.toFixed(1)}L${f.x.toFixed(1)} ${f.y.toFixed(1)}L${m.x.toFixed(1)} ${m.y.toFixed(1)}Z" fill="${cL}" stroke="#fff" stroke-width="1"/>` +
+           `<path d="M${c.x.toFixed(1)} ${c.y.toFixed(1)}L${b.x.toFixed(1)} ${b.y.toFixed(1)}L${h.x.toFixed(1)} ${h.y.toFixed(1)}L${f.x.toFixed(1)} ${f.y.toFixed(1)}Z" fill="${cR}" stroke="#fff" stroke-width="1"/>`;
+    }
+  }
+  $('cuCubes').innerHTML = g;
+  const cnt = cubeCount(n, L);
+  $('cuSub').textContent = `An edge of ${n}: each layer is ${n} × ${n} = ${n * n} unit cubes.`;
+  $('cuLab').textContent = `${L} layer${L === 1 ? '' : 's'} × ${n * n} = ${cnt} unit cubes`;
+  $('cuBig').textContent = L === n ? `${n} × ${n} × ${n} = ${n}³ = ${n * n * n}` : `${cnt} of ${n * n * n} cubes`;
+  $('cuL1').textContent = `${n} layers of ${n} × ${n} = ${n * n} make ${n} × ${n * n} = ${n * n * n}.`;
+  $('cuL2').textContent = L === n ? `So ∛${n * n * n} = ${n}: the cube root is the edge.` : `${n - L} more layer${n - L === 1 ? '' : 's'} to go.`;
+  let tb = '';
+  for (let k = 1; k <= 6; k++) {
+    const y = 244 + (k - 1) * 34, on = k === n;
+    tb += (on ? `<rect x="574" y="${y - 22}" width="394" height="30" rx="7" fill="#fdf1e0"/>` : '') +
+          T(590, y, `${k}³ = ${k} × ${k} × ${k}`, `fill="${on ? INK : INK2}" font-size="14.5" font-weight="${on ? 700 : 500}" ${MONO}`) +
+          T(950, y, k * k * k, `fill="${on ? AM_D : INK2}" font-size="15" font-weight="700" text-anchor="end" ${MONO}`);
+  }
+  $('cuTable').innerHTML = tb;
+  const odds = cubeOdds(n);
+  $('cuOdd').textContent = `${odds.join(' + ')} = ${odds.reduce((a, b) => a + b, 0)}`;
+  $('cuOdd2').textContent = `${n} odd number${n === 1 ? '' : 's'} in a row, starting at ${n}² − ${n} + 1 = ${odds[0]}.`;
+  $('nOut').textContent = n; $('LOut').textContent = L;
+  return {n, L, cnt};
+}
+
+/* ============================================================================
+   FOLD
+   ============================================================================ */
+const ly = cm => LOG.y0 - (Math.log10(cm) - LOG.lo) / (LOG.hi - LOG.lo) * (LOG.y0 - LOG.y1);
+function paintFold(){
+  const f = S.f, cm = foldCm(f), thou = foldThou(f), layers = 2 ** f;
+  $('fSub').textContent = f ? `After ${f} fold${f === 1 ? '' : 's'} there are 2${sup(f)} = ${inr(layers)} layers of paper, each 0.001 cm thick.` : 'One sheet, 0.001 cm thick.';
+  /* the sheet, side on: each fold halves its length and doubles its layers */
+  const len = Math.max(26, 260 / Math.pow(2, Math.min(f, 6))), shown = Math.min(layers, 32), lh = Math.min(10, 170 / shown), hgt = f <= 5 ? shown * lh : Math.min(420, 170 + (f - 5) * 7);
+  let p = `<rect x="${160 - len / 2}" y="${570 - hgt}" width="${len}" height="${hgt}" rx="3" fill="#fffdf6" stroke="${INK3}" stroke-width="1.2"/>`;
+  if (f <= 5) for (let i = 1; i < shown; i++) p += `<line x1="${160 - len / 2}" y1="${(570 - i * lh).toFixed(1)}" x2="${160 + len / 2}" y2="${(570 - i * lh).toFixed(1)}" stroke="#c9c2b2" stroke-width=".8"/>`;
+  else for (let y = 570 - 6; y > 570 - hgt; y -= 5) p += `<line x1="${160 - len / 2}" y1="${y}" x2="${160 + len / 2}" y2="${y}" stroke="#ddd6c6" stroke-width=".6"/>`;
+  p += `<line x1="40" y1="570" x2="280" y2="570" stroke="${INK3}" stroke-width="2"/>`;
+  $('fPaper').innerHTML = p;
+  $('fPaperLab').textContent = f <= 5 ? `${inr(layers)} layer${layers === 1 ? '' : 's'}` : `${inr(layers)} layers (not to scale)`;
+  const y = clamp(ly(cm), LOG.y1 - 6, LOG.y0);
+  set('fBar', {y: y.toFixed(1), height: (LOG.y0 - y).toFixed(1)});
+  set('fMark', {transform: `translate(${LOG.x + 8} ${y.toFixed(1)})`});
+  const near = LANDMARKS.map(m => ly(m.cm)).find(yy => Math.abs(yy - y) < 15);
+  const my = near == null ? y + 5 : near <= y ? near + 20 : near - 11;
+  set('fMarkLab', {x: LOG.x + 40, y: my.toFixed(1)}).textContent = S.locked ? length(cm) : '';
+  LANDMARKS.forEach((m, i) => $('lm' + i).setAttribute('font-weight', cm >= m.cm ? 800 : 600));
+  /* the graph: linear axes, rescaled to the fold you are on */
+  const gx = k => FG.x + k / Math.max(f, 1) * FG.w, top = Math.max(cm, 0.002), gy = v => FG.y - v / top * FG.h;
+  let ax = `<line x1="${FG.x}" y1="${FG.y}" x2="${FG.x + FG.w + 6}" y2="${FG.y}" stroke="#9aa3a6"/><line x1="${FG.x}" y1="${FG.y}" x2="${FG.x}" y2="${FG.y - FG.h - 6}" stroke="#9aa3a6"/>`;
+  const every = Math.max(1, Math.ceil(Math.max(f, 1) / 8));
+  for (let k = 0; k <= Math.max(f, 1); k += every) ax += T(gx(k).toFixed(1), FG.y + 16, k, `fill="${INK3}" font-size="11" text-anchor="middle"`);
+  ax += T(FG.x + FG.w, FG.y + 32, 'folds', `fill="${INK3}" font-size="11.5" font-weight="600" text-anchor="end"`);
+  ax += T(FG.x + 6, FG.y - FG.h - 4, '↑ ' + length(top), `fill="${INK3}" font-size="11.5"`) + T(FG.x - 6, FG.y + 4, '0', `fill="${INK3}" font-size="11" text-anchor="end"`);
+  $('fGAxes').innerHTML = ax;
+  let d = '', pts = '';
+  for (let k = 0; k <= f; k++) { const X = gx(k).toFixed(1), Y = gy(foldCm(k)).toFixed(1); d += (k ? 'L' : 'M') + X + ' ' + Y; if (f - k < 12) pts += `<circle cx="${X}" cy="${Y}" r="3.2" fill="${AM}"/>`; }
+  set('fGLine', {d});
+  $('fGPts').innerHTML = pts;
+  $('fGSub').textContent = f >= 3 ? 'Each fold adds as much as the paper already had.' : 'Each fold doubles the thickness.';
+  let ten = '';
+  for (let k = 10; k <= 40; k += 10) {
+    const yy = 520 + (k / 10 - 1) * 26, on = f >= k;
+    ten += T(FG.x - 20, yy, `fold ${k}`, `fill="${on ? INK2 : '#b9b3a6'}" font-size="13.5"`) +
+           T(FG.x + 222, yy, on ? length(foldCm(k)) : '?', `fill="${on ? INK : '#b9b3a6'}" font-size="14" font-weight="700" text-anchor="end" ${MONO}`);
+  }
+  $('fTen').innerHTML = ten;
+  $('fNow1').textContent = `0.001 cm × 2${sup(f)}`;
+  $('fNow2').textContent = `= ${f <= 20 ? inr(thouToCmText(thou)) + ' cm' : sci(cm) + ' cm'}`;
+  $('fNow3').textContent = S.locked ? `≈ ${length(cm)}` : '';
+  $('folds').value = f; $('foldsOut').textContent = f;
+  return {f, cm};
+}
+
+/* ============================================================================
+   LAWS
+   ============================================================================ */
+function chipRow(x, y, count, n, col, colD, gap = 50){
+  let s = '';
+  for (let i = 0; i < count; i++) s += `<circle cx="${x + i * gap}" cy="${y}" r="16" fill="${col}"/>` + T(x + i * gap, y + 6, n, `fill="${colD}" font-size="16" font-weight="700" text-anchor="middle"`) +
+    (i < count - 1 ? T(x + i * gap + gap / 2, y + 5, '×', `fill="${INK3}" font-size="13" text-anchor="middle"`) : '');
+  return s;
+}
+function paintLaws(){
+  const n = S.base, a = S.a, b = S.b, R = lawCheck(S.op, n, a, b);
+  let s = '';
+  const lab = (y, txt, col) => T(40, y + 7, txt, `fill="${col}" font-size="22" font-weight="700" font-family="Fredoka, Inter, sans-serif"`);
+  const one = (x, y) => T(x, y + 7, '1', `fill="${INK3}" font-size="18" font-weight="700"`);
+  if (S.op === 'mul') {
+    $('lwSub').textContent = `${n}${sup(a)} is ${a} ${n}s multiplied together, and ${n}${sup(b)} is ${b} more.`;
+    s += lab(120, `${n}${sup(a)}`, IN_D) + (a ? chipRow(150, 120, a, n, IN_L, IN_D) : one(150, 120));
+    s += lab(190, `${n}${sup(b)}`, AM_D) + (b ? chipRow(150, 190, b, n, AM_L, AM_D) : one(150, 190));
+    s += `<line x1="30" y1="236" x2="970" y2="236" stroke="${HAIR}"/>` + T(40, 272, 'TOGETHER', `fill="${INK3}" font-size="12" font-weight="700" letter-spacing=".08em"`);
+    s += chipRow(60, 314, a, n, IN_L, IN_D) + (a && b ? T(60 + a * 50 - 25, 319, '×', `fill="${INK3}" font-size="13" text-anchor="middle"`) : '') + chipRow(60 + a * 50, 314, b, n, AM_L, AM_D);
+    s += T(40, 384, `${a} + ${b} = ${a + b} factors of ${n}, so ${n}${sup(a)} × ${n}${sup(b)} = ${n}${sup(a + b)}`, `fill="${INK}" font-size="19" font-weight="700"`);
+  } else if (S.op === 'pow') {
+    $('lwSub').textContent = `(${n}${sup(a)})${sup(b)} is ${b} copies of ${n}${sup(a)} multiplied together.`;
+    for (let g = 0; g < b; g++) {
+      const y = 104 + g * 40;
+      s += T(40, y + 6, `${n}${sup(a)}`, `fill="${g % 2 ? AM_D : IN_D}" font-size="17" font-weight="700"`) +
+           (a ? chipRow(110, y, a, n, g % 2 ? AM_L : IN_L, g % 2 ? AM_D : IN_D, 46) : one(110, y));
+    }
+    if (!b) s += T(40, 120, `Zero copies: (${n}${sup(a)})⁰ = 1`, `fill="${INK2}" font-size="17" font-weight="700"`);
+    s += T(40, 452, `${b} groups of ${a} = ${a * b} factors of ${n}, so (${n}${sup(a)})${sup(b)} = ${n}${sup(a * b)}`, `fill="${INK}" font-size="19" font-weight="700"`);
+  } else {
+    $('lwSub').textContent = `Write ${n}${sup(a)} on top and ${n}${sup(b)} below. Each ${n} on top cancels one ${n} below, because ${n} ÷ ${n} = 1.`;
+    const x0 = 150, gap = 50;
+    s += lab(130, `${n}${sup(a)}`, IN_D) + lab(220, `${n}${sup(b)}`, AM_D);
+    s += `<line x1="140" y1="175" x2="${Math.max(260, 150 + Math.max(a, b) * gap)}" y2="175" stroke="${INK}" stroke-width="2.5"/>`;
+    s += (a ? chipRow(x0, 130, a, n, IN_L, IN_D) : one(x0, 130)) + (b ? chipRow(x0, 220, b, n, AM_L, AM_D) : one(x0, 220));
+    for (let i = 0; i < R.cancel; i++) {
+      const x = x0 + i * gap;
+      s += `<line x1="${x - 14}" y1="${144}" x2="${x + 14}" y2="${116}" stroke="#b23c17" stroke-width="2.6"/><line x1="${x - 14}" y1="${234}" x2="${x + 14}" y2="${206}" stroke="#b23c17" stroke-width="2.6"/>`;
+    }
+    s += `<line x1="30" y1="270" x2="970" y2="270" stroke="${HAIR}"/>` + T(40, 304, 'WHAT IS LEFT', `fill="${INK3}" font-size="12" font-weight="700" letter-spacing=".08em"`);
+    if (R.exp > 0) s += chipRow(60, 344, R.exp, n, IN_L, IN_D);
+    else if (R.exp === 0) s += T(60, 352, '1', `fill="${INK}" font-size="28" font-weight="700"`);
+    else { s += T(60, 346, '1', `fill="${INK}" font-size="24" font-weight="700" text-anchor="middle"`) + `<line x1="36" y1="358" x2="${Math.max(84, 60 + (-R.exp - 1) * gap + 24)}" y2="358" stroke="${INK}" stroke-width="2"/>` + chipRow(60, 386, -R.exp, n, AM_L, AM_D); }
+    const res = R.exp > 0 ? `${n}${sup(R.exp)}` : R.exp === 0 ? `1 = ${n}⁰` : `1/${n}${sup(-R.exp)} = ${n}${sup(R.exp)}`;
+    s += T(40, 452, `${a} − ${b} = ${R.exp}, so ${n}${sup(a)} ÷ ${n}${sup(b)} = ${res}`, `fill="${INK}" font-size="19" font-weight="700"`);
+  }
+  /* the numbers, multiplied out, as a check that the rule is not magic */
+  s += `<rect x="30" y="486" width="940" height="120" rx="12" fill="#fff" stroke="${HAIR}"/>` + T(50, 514, 'CHECK BY MULTIPLYING OUT', `fill="${INK3}" font-size="12" font-weight="700" letter-spacing=".08em"`);
+  if (S.op === 'mul') {
+    s += T(50, 546, `${n}${sup(a)} × ${n}${sup(b)} = ${big(pow(n, a))} × ${big(pow(n, b))} = ${big(R.left)}`, `fill="${INK}" font-size="16" ${MONO}`) +
+         T(50, 576, `${n}${sup(a + b)} = ${big(R.right)}   ${R.left === R.right ? '✓ the same' : '✗'}`, `fill="${R.left === R.right ? '#1f7a45' : '#b23c17'}" font-size="16" font-weight="700" ${MONO}`);
+  } else if (S.op === 'pow') {
+    s += T(50, 546, `(${n}${sup(a)})${sup(b)} = ${big(pow(n, a))}${sup(b)} = ${big(R.left)}`, `fill="${INK}" font-size="16" ${MONO}`) +
+         T(50, 576, `${n}${sup(a * b)} = ${big(R.right)}   ${R.left === R.right ? '✓ the same' : '✗'}`, `fill="${R.left === R.right ? '#1f7a45' : '#b23c17'}" font-size="16" font-weight="700" ${MONO}`);
+  } else {
+    s += T(50, 546, `${big(R.num)} ÷ ${big(R.den)} = ${R.exp >= 0 ? big(R.top) : '1/' + big(R.bottom)}`, `fill="${INK}" font-size="16" ${MONO}`) +
+         T(50, 576, `${R.exp >= 0 ? `${n}${sup(R.exp)} = ${big(R.top)}` : `${n}${sup(R.exp)} = 1/${big(R.bottom)}`}   ${R.holds ? '✓ the same' : '✗'}`, `fill="${R.holds ? '#1f7a45' : '#b23c17'}" font-size="16" font-weight="700" ${MONO}`);
+  }
+  $('lwRows').innerHTML = s;
+  for (const k of ['base', 'a', 'b']) $(k + 'Out').textContent = S[k];
+  for (const btn of document.querySelectorAll('[data-op]')) btn.setAttribute('aria-pressed', btn.dataset.op === S.op);
+  return R;
+}
+
+/* ---- paint: everything that depends on the state -------------------------- */
+const VIEWS = {squares: 'vSquares', cubes: 'vCubes', fold: 'vFold', laws: 'vLaws'};
+const CTLS = {squares: 'ctlSquares', cubes: 'ctlCubes', fold: 'ctlFold', laws: 'ctlLaws'};
+function paint(){
+  for (const t in VIEWS) { $(VIEWS[t]).style.display = t === S.tab ? '' : 'none'; $(CTLS[t]).hidden = t !== S.tab; }
+  for (const b of document.querySelectorAll('[data-tab]')) b.setAttribute('aria-pressed', b.dataset.tab === S.tab);
+  const res = S.tab === 'squares' ? paintSquares() : S.tab === 'cubes' ? paintCubes() : S.tab === 'fold' ? paintFold() : paintLaws();
+  paintWhy(res);
+  check(res);
+}
+
+/* A live narrator: it describes what THIS state is doing, in words, from the model. */
+function paintWhy(r){
+  if (!S.locked) return;
+  $('whyCard').hidden = false;
+  let t = '';
+  if (S.tab === 'squares') {
+    t += `<p>${r.k} whole layer${r.k === 1 ? '' : 's'}: ${r.chain.slice(0, r.k).map(c => c.odd).join(' + ') || '0'} = <b>${r.k * r.k}</b> tiles, a ${r.k} × ${r.k} square.</p>`;
+    t += r.square ? `<p>The tiles ran out exactly at the end of a layer, so <b>${S.N} = ${r.k}²</b> is a perfect square. The next layer would need ${2 * r.k + 1} tiles: the next odd number, one row and one column plus the corner.</p>`
+      : `<p>${r.left} tile${r.left === 1 ? '' : 's'} (orange) start layer ${r.k + 1}, which needs ${2 * r.k + 1}. So <b>${S.N} is not a square</b>, and √${S.N} lies between ${r.k} and ${r.k + 1}.</p>`;
+  } else if (S.tab === 'cubes') {
+    t += `<p>One layer is ${r.n} × ${r.n} = <b>${r.n * r.n}</b> unit cubes. ${r.L} layer${r.L === 1 ? '' : 's'} make <b>${r.cnt}</b>.</p>`;
+    t += r.L === r.n ? `<p>With ${r.n} layers the height matches the edge: <b>${r.n}³ = ${r.n * r.n * r.n}</b>. A cube number is a square number of cubes, stacked that many times.</p>` : `<p>Build ${r.n - r.L} more layer${r.n - r.L === 1 ? '' : 's'} to finish the cube.</p>`;
+  } else if (S.tab === 'fold') {
+    const f = r.f;
+    t += `<p>After <b>${f}</b> fold${f === 1 ? '' : 's'} the paper is 0.001 cm × 2${sup(f)} = <b>${length(r.cm)}</b> thick.</p>`;
+    if (f >= 10) t += `<p>Every 10 folds multiply the thickness by 2${sup(10)} = <b>1024</b>: fold 10 is ${length(foldCm(10))}, fold 20 is ${length(foldCm(20))}, fold 30 is ${length(foldCm(30))}.</p>`;
+    if (f >= 46) t += `<p>The Moon is 3,84,400 km away. A ladder with a step every 20 cm would need 3,84,400 km ÷ 20 cm = <b>${inr(384400 * 100000 / 20)}</b> steps. Doubling needs only 46 folds: that is the power of multiplying.</p>`;
+    else if (f < 10) t += `<p>Doubling looks slow at first: keep folding.</p>`;
+  } else {
+    const n = S.base;
+    if (S.op === 'mul') t += `<p>Counting factors: ${S.a} + ${S.b} = <b>${S.a + S.b}</b>. So nᵃ × nᵇ = nᵃ⁺ᵇ: exponents <b>add</b> when powers of the same base multiply.</p>`;
+    else if (S.op === 'pow') t += `<p>${S.b} groups of ${S.a} factors is <b>${S.a * S.b}</b> factors. So (nᵃ)ᵇ = nᵃᵇ: the exponents <b>multiply</b>.</p>`;
+    else {
+      const e = S.a - S.b;
+      t += `<p>${Math.min(S.a, S.b)} pair${Math.min(S.a, S.b) === 1 ? '' : 's'} cancel. ${e > 0 ? `${e} factor${e === 1 ? '' : 's'} of ${n} stay on top: ${n}${sup(e)}.` : e === 0 ? `Nothing is left but 1, so <b>${n}⁰ = 1</b>: that is why any number (except 0) to the power 0 is 1.` : `${-e} stay below, so the answer is 1/${n}${sup(-e)}, written <b>${n}${sup(e)}</b>: a negative exponent means “divide by”.`}</p>`;
+    }
+  }
+  $('why').innerHTML = t;
+}
+
+/* ---- findings: reached by the model, never by a button -------------------- */
+function check(r){
+  if (!S.locked || S.changes < 1) return;
+  if (S.tab === 'squares') { if (r.square && r.k >= 5) discover('odd'); if (!r.square && r.k >= 3) discover('notsquare'); }
+  else if (S.tab === 'cubes') { if (r.L === r.n && r.n >= 3) discover('cube'); }
+  else if (S.tab === 'fold') { if (r.cm >= 83000) discover('burj'); if (r.cm >= 38440000000) discover('moon'); }
+  else { if (S.op === 'mul' && S.a >= 1 && S.b >= 1) discover('add'); if (S.op === 'div' && S.a === S.b && S.a >= 1) discover('zero'); }
+  maybeExplain();
+}
+let EXPLAINED = false;
+function maybeExplain(){
+  if (EXPLAINED || !POE || !found('moon')) return;
+  EXPLAINED = true;
+  const cm = foldCm(46);
+  POE.explain(`After 46 folds the sheet is 0.001 cm × 2⁴⁶ = <b>${inr(thouToCmText(foldThou(46)))} cm</b>, about <b>${length(cm)}</b>. The Moon is 3,84,400 km away, so the paper has gone past it. ` +
+    `Doubling is slow at first (10 folds make only ${length(foldCm(10))}) but every 10 folds multiply by 1024.`);
+}
+
+/* ============================================================================
+   Controls. The stage is built first, so there is something to wire.
+   ============================================================================ */
+build();
+function note(what){ S.changes++; paint(); track('change', {what, tab: S.tab}); }
+document.querySelectorAll('[data-tab]').forEach(b => b.addEventListener('click', () => {
+  if (!S.locked || S.tab === b.dataset.tab) return;
+  S.tab = b.dataset.tab; sound('pop'); note('tab');
+}));
+/* squares */
+$('tiles').addEventListener('input', e => { if (!S.locked) return; S.N = +e.target.value; sound('tick'); note('tiles'); });
+function gridTo(p){
+  const k = clamp(Math.round(Math.max(p.x - SQ.x, p.y - SQ.y) / SQ.c), 1, 12);
+  if (k * k !== S.N) { S.N = k * k; sound('tick'); note('square'); }
+}
+drag($('sqHit'), svg, {start(p){ if (!S.locked) return false; gridTo(p); }, move: gridTo});
+/* cubes */
+document.querySelectorAll('[data-ck]').forEach(b => b.addEventListener('click', () => {
+  if (!S.locked) return;
+  const k = b.dataset.ck, d = +b.dataset.d;
+  if (k === 'n') { const v = clamp(S.n + d, 1, 6); if (v === S.n) return; S.n = v; S.L = Math.min(S.L, v); }
+  else { const v = clamp(S.L + d, 0, S.n); if (v === S.L) return; S.L = v; }
+  sound(k === 'L' && d > 0 ? 'snap' : 'tick'); note('cube' + k);
+}));
+/* fold */
+function setF(v){ v = clamp(v, 0, 50); if (v === S.f) return; S.f = v; Play.tone(220 + Math.min(v, 50) * 18, .1, 'triangle', .08); note('fold'); }
+$('btnFold').addEventListener('click', () => { if (S.locked) setF(S.f + 1); });
+$('btnUnfold').addEventListener('click', () => { if (S.locked) setF(S.f - 1); });
+$('folds').addEventListener('input', e => { if (S.locked) setF(+e.target.value); });
+/* laws */
+document.querySelectorAll('[data-op]').forEach(b => b.addEventListener('click', () => {
+  if (!S.locked || S.op === b.dataset.op) return;
+  S.op = b.dataset.op;
+  if (S.op === 'pow') { S.a = Math.min(S.a, 8); S.b = Math.min(S.b, 8); }
+  sound('pop'); note('op');
+}));
+document.querySelectorAll('[data-lk]').forEach(b => b.addEventListener('click', () => {
+  if (!S.locked) return;
+  const k = b.dataset.lk, lim = {base: [2, 10], a: [0, 8], b: [0, 8]}[k], v = clamp(S[k] + +b.dataset.d, lim[0], lim[1]);
+  if (v === S[k]) return;
+  S[k] = v; sound('tick'); note(k);
+}));
+
+function lockControls(lock){
+  for (const el of document.querySelectorAll('#ctlCard button, #ctlCard input')) el.disabled = lock;
+  $('sqHit').style.pointerEvents = lock ? 'none' : '';
+  $('gate').hidden = !lock;
+}
+
+/* ============================================================================
+   Start
+   ============================================================================ */
+findings($('finds'), [
+  {id: 'odd',       icon: '⌐', label: 'Squares grow by odd numbers',        hint: 'Make a square of 5 × 5 or more'},
+  {id: 'notsquare', icon: '✗', label: 'A number that is not a square',     hint: 'Try a number of tiles that leaves some over'},
+  {id: 'cube',      icon: '▣', label: 'Square layers stack into a cube',   hint: 'Finish a cube with an edge of 3 or more'},
+  {id: 'burj',      icon: '🏢', label: 'Taller than the Burj Khalifa',      hint: 'Keep folding'},
+  {id: 'moon',      icon: '🌕', label: 'Folded paper reaches the Moon',     hint: 'Keep folding a lot'},
+  {id: 'add',       icon: '+', label: 'Multiply powers: add exponents',    hint: 'Try the Laws view'},
+  {id: 'zero',      icon: '⁰', label: 'Anything to the power 0 is 1',      hint: 'Divide a power by itself'},
+], () => toast('All seven found. A power is repeated multiplication, and repeated multiplication grows astonishingly fast.', 4200));
+
+const POE = predict($('poe'), {
+  id: 'fold-46',
+  q: 'A sheet of paper 0.001 cm thick is folded in half 46 times. How thick is it now?',
+  options: [
+    {id: 'book',     text: 'A few centimetres, like a thick book.'},
+    {id: 'building', text: 'About as tall as a tall building.'},
+    {id: 'plane',    text: 'About 10 km, as high as planes fly.'},
+    {id: 'moon',     text: 'Thick enough to reach past the Moon.', right: true},
+  ],
+  onLock(){
+    S.locked = true;
+    lockControls(false);
+    say('Now find out. Fold the paper, one fold at a time.');
+    paint();
+  },
+});
+lockControls(!POE.locked);
+if (!Play.FF('predict')) S.locked = true;
+paint();
+window.applyFeatures = () => paint();
+window.PG_STATE = () => JSON.parse(JSON.stringify(S));
+window.PG_MODEL = {layTiles, tileCell, cubeCount, cubeOdds, foldThou: f => foldThou(f).toString(), foldCm, thouToCmText: f => thouToCmText(foldThou(f)), lawCheck: (op, n, a, b) => JSON.parse(JSON.stringify(lawCheck(op, n, a, b), (k, v) => typeof v === 'bigint' ? v.toString() : v)), inr};
+</script>
+</body>
+</html>

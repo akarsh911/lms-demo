@@ -1,0 +1,555 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Colour From Split D-Orbitals</title>
+<meta name="description" content="Class 12: crystal field splitting computed from the metal ion and the ligand field, high spin or low spin decided by comparing energies, magnetic moment and colour that follow from it, and every geometric and optical isomer of an octahedral complex found by symmetry.">
+<link rel="icon" href="../../favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600&family=Inter:wght@400;500;600;700&family=Nunito:wght@500;700;800&family=Newsreader:opsz,wght@6..72,400;6..72,500&family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="../../play.css">
+<style>
+/* Only what this page needs beyond play.css. */
+.pg-stage{align-self:start; min-height:0}
+.gate{position:absolute; inset:0; display:grid; place-items:center; pointer-events:none}
+.gate span{background:rgba(29,35,39,.86); color:#fff; padding:10px 16px; border-radius:99px; font-weight:600; font-size:14px}
+.seg{display:grid; grid-auto-flow:column; grid-auto-columns:1fr; gap:4px; background:var(--sunk); padding:4px; border-radius:var(--radius-sm); margin-bottom:10px}
+.seg button{border:0; background:transparent; border-radius:7px; min-height:30px; font-weight:600; font-size:12.5px; cursor:pointer; color:var(--ink-2); padding:0 6px}
+.seg button[aria-pressed="true"]{background:var(--card); color:var(--ink); box-shadow:var(--shadow)}
+.chips{display:flex; flex-wrap:wrap; gap:5px; margin:4px 0 8px}
+.chips button{min-height:30px; border-radius:7px; border:1.5px solid var(--hair-2); background:var(--card); cursor:pointer; font-weight:600; font-size:12.5px; color:var(--ink-2); padding:0 8px}
+.chips button[aria-pressed="true"]{border-color:var(--accent); color:var(--ink); box-shadow:0 0 0 2px var(--accent-soft)}
+.nums{display:grid; grid-template-columns:1fr auto; gap:3px 12px; font-size:13px; align-items:baseline}
+.nums span{color:var(--ink-2)}
+.nums b{font-family:var(--font-mono); font-weight:600; font-size:12.5px; font-variant-numeric:tabular-nums; text-align:right}
+.nums .eq{grid-column:1/-1; font-family:var(--font-mono); font-size:11px; color:var(--ink-3); margin:-2px 0 4px}
+.nums .sep{grid-column:1/-1; height:1px; background:var(--hair); margin:3px 0}
+.why p{font-size:13.5px; margin-bottom:.5em}
+.note{font-size:12.5px; color:var(--ink-3); margin:6px 0 0}
+.iso{cursor:pointer}
+</style>
+</head>
+<body>
+<header class="pg-top"></header>
+
+<div class="pg-intro">
+  <h1>Colour from split d-orbitals</h1>
+  <p>Surround a metal ion with six ligands and its five d-orbitals split into two groups. How far apart they split, Δ<sub>o</sub>, is computed
+     here from the metal and the ligand together — the same product rule (Jørgensen's) that reproduces the measured splittings for real complexes.
+     Whether the electrons spread out or pair up falls out of comparing two total energies, not a rule of thumb; the colour comes from the light
+     that gap absorbs; and every distinct way six ligands can sit on the six corners of an octahedron, mirror images included, is found by
+     checking which arrangements a rotation can turn into each other.</p>
+</div>
+
+<main class="pg-main wide-side">
+  <section class="pg-stage" id="stageWrap">
+    <svg id="stage" viewBox="0 0 1000 660" role="img" aria-label="Crystal field splitting, colour, and the isomers of an octahedral complex"></svg>
+    <div class="gate" id="gate"><span>Make your prediction first →</span></div>
+  </section>
+
+  <aside class="pg-side">
+    <div id="poe"></div>
+
+    <div class="card" id="ctlCard">
+      <div class="seg" role="group" aria-label="Model">
+        <button id="tabField" aria-pressed="true">Colour &amp; spin</button>
+        <button id="tabIso" aria-pressed="false">Isomers</button>
+      </div>
+
+      <div id="ctlField">
+        <div class="kicker">Metal ion</div>
+        <div class="chips" id="chipsMetal"></div>
+        <div class="kicker">Ligand (6, octahedral)</div>
+        <div class="chips" id="chipsLig"></div>
+        <p class="note">Δ<sub>o</sub> = f(ligand) × g(metal), Jørgensen's empirical rule — both factors calibrated to real, measured complexes.</p>
+      </div>
+
+      <div id="ctlIso" hidden>
+        <div class="kicker">Formula</div>
+        <div class="chips" id="chipsFormula"></div>
+        <p class="note">Every arrangement of ligands on the six corners is generated, then grouped by the 24 rotations that turn an octahedron into itself. Click an isomer to see it larger.</p>
+      </div>
+    </div>
+
+    <div class="card" id="numCard">
+      <div class="kicker" id="numKick">Measured by the model</div>
+      <div id="nums"></div>
+    </div>
+
+    <div class="card why" id="whyCard" hidden>
+      <div class="kicker">What the model says</div>
+      <div id="why"></div>
+    </div>
+
+    <div class="card"><div class="kicker">To find</div><div id="finds"></div></div>
+  </aside>
+</main>
+
+<script src="../../play.js"></script>
+<script>
+'use strict';
+const {$, esc, clamp, lerp, fmt, drag, loop, sound, say, track, toast, predict, findings, discover, found,
+       shareState, sharedState, mount, reduced} = Play;
+mount({thread: 'complexes', band: 'theorist'});
+
+/* MODEL:start ==================================================================
+   1. CRYSTAL FIELD SPLITTING. Six ligands turn the five degenerate d-orbitals
+      into a lower t2g triplet and a higher eg pair, split by Δo. Jørgensen's
+      empirical rule (real inorganic chemistry, not a lookup table) says
+      Δo ≈ f(ligand) × g(metal) × 1000 cm⁻¹, with f fixed to H2O = 1.00 and g
+      calibrated so the product reproduces measured splittings (e.g.
+      [Ti(H2O)6]3+: 20 300 cm⁻¹; [Co(NH3)6]3+: ≈ 22 900 cm⁻¹).
+   2. HIGH SPIN OR LOW SPIN. For d⁴–d⁷ there are two ways to fill t2g/eg: spread
+      out (high spin) or pack into t2g before touching eg (low spin). The model
+      does not guess — it computes BOTH configurations' total energy,
+      E = (−0.4·t2g + 0.6·eg)·Δo + (electron pairs)·P, P the pairing energy, and
+      keeps whichever is lower. d¹–d³, d⁸, d⁹ have only one sensible filling
+      (nothing to compare), exactly as real complexes show no spin isomerism
+      there.
+   3. COLOUR. The absorbed photon has hc/λ = Δo, so λ(nm) = 1×10⁷ / Δo(cm⁻¹).
+      Only 400–700 nm is visible; too weak a field absorbs in the infrared,
+      too strong absorbs in the ultraviolet, and either way the complex looks
+      colourless. Inside that window, the OBSERVED colour is the standard
+      artist's complement of the absorbed one.
+   4. ISOMERS. Six ligands sit at (±1,0,0), (0,±1,0), (0,0,±1). The 24 rotations
+      that map this octahedron onto itself are generated from three 90°
+      turns; two raw arrangements are the same isomer if a rotation carries
+      one onto the other. An arrangement's mirror image is found by inversion
+      through the centre; if no rotation ever turns an arrangement into its
+      own mirror image, the two are optical isomers.
+   ============================================================================ */
+const F_LIG = {'I⁻': 0.66, 'Cl⁻': 0.78, 'F⁻': 0.90, 'OH⁻': 0.94, 'H₂O': 1.00, 'NH₃': 1.25, 'en': 1.28, 'CN⁻': 1.70};
+const LIGANDS = Object.keys(F_LIG);
+const METALS = [
+  {id: 'Ti3', sym: 'Ti³⁺', n: 1, g: 20.3, p: 0},
+  {id: 'Cr3', sym: 'Cr³⁺', n: 3, g: 17.4, p: 0},
+  {id: 'Mn2', sym: 'Mn²⁺', n: 5, g: 8.0, p: 11000},
+  {id: 'Fe3', sym: 'Fe³⁺', n: 5, g: 14.0, p: 19000},
+  {id: 'Fe2', sym: 'Fe²⁺', n: 6, g: 10.4, p: 14000},
+  {id: 'Co3', sym: 'Co³⁺', n: 6, g: 18.2, p: 21000},
+  {id: 'Co2', sym: 'Co²⁺', n: 7, g: 9.3, p: 20000},
+  {id: 'Ni2', sym: 'Ni²⁺', n: 8, g: 8.7, p: 0},
+  {id: 'Cu2', sym: 'Cu²⁺', n: 9, g: 12.6, p: 0},
+];
+const deltaO = (metal, ligand) => F_LIG[ligand] * metal.g * 1000;   // cm⁻¹
+
+/* the two candidate fillings [t2g electrons, eg electrons] for d^n, n = 1..9 */
+const HS_FILL = {1: [1, 0], 2: [2, 0], 3: [3, 0], 4: [3, 1], 5: [3, 2], 6: [4, 2], 7: [5, 2], 8: [6, 2], 9: [6, 3]};
+const LS_FILL = {1: [1, 0], 2: [2, 0], 3: [3, 0], 4: [4, 0], 5: [5, 0], 6: [6, 0], 7: [6, 1], 8: [6, 2], 9: [6, 3]};
+const hasChoice = n => n >= 4 && n <= 7;
+function pairsOf([t2g, eg]){ return Math.max(0, t2g - 3) + Math.max(0, eg - 2); }
+function unpairedOf([t2g, eg]){ return (t2g <= 3 ? t2g : 6 - t2g) + (eg <= 2 ? eg : 4 - eg); }
+function cfse([t2g, eg]){ return -0.4 * t2g + 0.6 * eg; }           // in units of Δo
+function energyOf(fill, dO, P){ return cfse(fill) * dO + pairsOf(fill) * P; }
+function spinState(metal, dO){
+  const n = metal.n, hs = HS_FILL[n];
+  if (!hasChoice(n)) return {fill: hs, spin: 'only one filling', unpaired: unpairedOf(hs), cfse: cfse(hs)};
+  const ls = LS_FILL[n], eHs = energyOf(hs, dO, metal.p), eLs = energyOf(ls, dO, metal.p);
+  const low = eLs < eHs;
+  return {fill: low ? ls : hs, spin: low ? 'low spin' : 'high spin', unpaired: unpairedOf(low ? ls : hs), cfse: cfse(low ? ls : hs), eHs, eLs};
+}
+const magneticMoment = n => Math.sqrt(n * (n + 2));                 // Bohr magnetons, spin-only
+
+/* absorbed wavelength -> observed (complementary) colour, the standard artist's wheel */
+const WHEEL = [
+  {lo: 400, hi: 430, abs: 'violet', obs: 'yellow-green', hex: '#c7d94a', ahex: '#6a3fc2'},
+  {lo: 430, hi: 490, abs: 'blue', obs: 'orange-yellow', hex: '#f2a33c', ahex: '#3f6fd1'},
+  {lo: 490, hi: 560, abs: 'green', obs: 'red', hex: '#d1453f', ahex: '#3f9e5c'},
+  {lo: 560, hi: 580, abs: 'yellow', obs: 'violet', hex: '#8a4fd1', ahex: '#e3d13c'},
+  {lo: 580, hi: 620, abs: 'orange', obs: 'blue', hex: '#3f6fd1', ahex: '#e08a2f'},
+  {lo: 620, hi: 700, abs: 'red', obs: 'green', hex: '#3f9e5c', ahex: '#c93f38'},
+];
+function colourOf(lambdaNm){
+  if (lambdaNm < 400 || lambdaNm > 700) return null;
+  return WHEEL.find(w => lambdaNm >= w.lo && lambdaNm < w.hi) || WHEEL[WHEEL.length - 1];
+}
+
+/* ---- isomers: the octahedron, its 24 rotations, and inversion ------------- */
+const VERTS = [[1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 0], [0, 0, 1], [0, 0, -1]];
+const ANTIPODE = [1, 0, 3, 2, 5, 4];
+const findVertex = v => VERTS.findIndex(w => Math.round(w[0]) === Math.round(v[0]) && Math.round(w[1]) === Math.round(v[1]) && Math.round(w[2]) === Math.round(v[2]));
+const mapFromMatrix = R => VERTS.map((v, i) => findVertex([R(v)[0], R(v)[1], R(v)[2]]));
+const composeMap = (m1, m2) => m1.map((_, i) => m2[m1[i]]);        // apply m1 then m2
+function rotationGroup(){
+  const gens = [
+    v => [-v[1], v[0], v[2]],   // 90° about z
+    v => [v[0], -v[2], v[1]],   // 90° about x
+    v => [v[2], v[1], -v[0]],   // 90° about y
+  ].map(mapFromMatrix);
+  const seen = new Map(), id = [0, 1, 2, 3, 4, 5];
+  const queue = [id]; seen.set(id.join(','), id);
+  while (queue.length) {
+    const m = queue.shift();
+    for (const g of gens) { const c = composeMap(m, g), key = c.join(','); if (!seen.has(key)) { seen.set(key, c); queue.push(c); } }
+  }
+  return [...seen.values()];
+}
+const ROT = rotationGroup();                                        // 24 proper rotations, as vertex -> vertex maps
+const applyMap = (assign, map) => { const out = new Array(6); assign.forEach((lab, i) => out[map[i]] = lab); return out; };
+const canonicalOf = assign => ROT.map(m => applyMap(assign, m).join(',')).sort()[0];
+const mirrorOf = assign => applyMap(assign, ANTIPODE);
+function isChiral(assign){ return canonicalOf(mirrorOf(assign)) !== canonicalOf(assign); }
+function distinctPerms(labels){
+  const n = labels.length, seen = new Set(), out = [];
+  const used = new Array(n).fill(false), cur = [];
+  const sorted = labels.slice().sort();
+  (function rec(){
+    if (cur.length === n) { const key = cur.join(','); if (!seen.has(key)) { seen.add(key); out.push(cur.slice()); } return; }
+    for (let i = 0; i < n; i++) { if (used[i]) continue; if (i > 0 && sorted[i] === sorted[i - 1] && !used[i - 1]) continue;
+      used[i] = true; cur.push(sorted[i]); rec(); cur.pop(); used[i] = false; }
+  })();
+  return out;
+}
+function describe(assign){
+  const byLabel = {};
+  assign.forEach((l, i) => { (byLabel[l] = byLabel[l] || []).push(i); });
+  const parts = [];
+  for (const [l, idx] of Object.entries(byLabel)) {
+    if (idx.length === 2) parts.push(`${l}: ${ANTIPODE[idx[0]] === idx[1] ? 'trans' : 'cis'}`);
+    else if (idx.length === 3) { const anyTrans = idx.some((a, i) => idx.some((b, j) => i < j && ANTIPODE[a] === b)); parts.push(`${l}: ${anyTrans ? 'mer' : 'fac'}`); }
+  }
+  return parts.join(', ') || 'the only arrangement';
+}
+/* monodentate formulas: labels is a length-6 array like ['A','A','A','A','B','B'] */
+function isomersOf(labels){
+  const raws = distinctPerms(labels), byCanon = new Map();
+  raws.forEach(r => { const c = canonicalOf(r); if (!byCanon.has(c)) byCanon.set(c, r); });
+  const canons = [...byCanon.keys()];
+  const pairSeen = new Set(), out = [];
+  canons.forEach(c => {
+    if (pairSeen.has(c)) return;
+    const rep = byCanon.get(c), chiral = isChiral(rep);
+    if (!chiral) { out.push({rep, desc: describe(rep), chiral: false}); pairSeen.add(c); }
+    else { const mC = canonicalOf(mirrorOf(rep)); pairSeen.add(c); pairSeen.add(mC);
+      out.push({rep, desc: describe(rep) + ' (Δ)', chiral: true}); out.push({rep: byCanon.get(mC) || mirrorOf(rep), desc: describe(rep) + ' (Λ)', chiral: true}); }
+  });
+  return out;
+}
+/* chelate (bidentate AA) formulas: edges of the octahedron only (adjacent pairs), a perfect matching.
+   A ring is a bond, not a label, so two rings on different pairs of vertices are different arrangements
+   even though every ring carries the same "AA" ligand — this is tracked with a PARTNER-INDEX descriptor
+   (desc[i] = the vertex i is chelated to, or a negative code for a monodentate ligand) so that rotating
+   or mirroring the complex correctly relabels which vertex is bonded to which. */
+const EDGES = []; for (let i = 0; i < 6; i++) for (let j = i + 1; j < 6; j++) if (ANTIPODE[i] !== j) EDGES.push([i, j]);
+const CODE_LABELS = [];
+function codeOfLabel(l){ let i = CODE_LABELS.indexOf(l); if (i < 0) { CODE_LABELS.push(l); i = CODE_LABELS.length - 1; } return -1 - i; }
+function applyRotToDesc(desc, map){ const out = new Array(6); desc.forEach((d, i) => { out[map[i]] = d >= 0 ? map[d] : d; }); return out; }
+const canonicalDesc = desc => ROT.map(m => applyRotToDesc(desc, m).join(',')).sort()[0];
+const mirrorDesc = desc => applyRotToDesc(desc, ANTIPODE);
+const isChiralDesc = desc => canonicalDesc(mirrorDesc(desc)) !== canonicalDesc(desc);
+function descToLabels(desc){ return desc.map(d => d >= 0 ? 'R' : CODE_LABELS[-1 - d]); }
+function matchings(nRings, monoLabels){
+  const results = [];
+  (function rec(remaining, chosen){
+    if (chosen.length === nRings) { const used = new Set(chosen.flat()); const rest = [0, 1, 2, 3, 4, 5].filter(v => !used.has(v));
+      const desc = new Array(6); chosen.forEach(([a, b]) => { desc[a] = b; desc[b] = a; }); rest.forEach((v, k) => desc[v] = codeOfLabel(monoLabels[k]));
+      results.push(desc); return; }
+    for (const e of remaining) { const overlap = chosen.some(c => c.includes(e[0]) || c.includes(e[1])); if (overlap) continue;
+      rec(remaining.filter(x => x !== e), chosen.concat([e])); }
+  })(EDGES, []);
+  const byCanon = new Map(); results.forEach(r => { const c = canonicalDesc(r); if (!byCanon.has(c)) byCanon.set(c, r); });
+  return [...byCanon.values()];
+}
+function chelateIsomers(nRings, monoLabels){
+  const raws = matchings(nRings, monoLabels), byCanon = new Map();
+  raws.forEach(r => { const c = canonicalDesc(r); if (!byCanon.has(c)) byCanon.set(c, r); });
+  const seen = new Set(), out = [];
+  [...byCanon.keys()].forEach(c => {
+    if (seen.has(c)) return;
+    const rep = byCanon.get(c), chiral = isChiralDesc(rep), labels = descToLabels(rep);
+    const ringDesc = monoLabels.length ? describe(labels) : 'a tris-chelate';
+    if (!chiral) { out.push({rep: labels, desc: ringDesc, chiral: false}); seen.add(c); }
+    else { const mC = canonicalDesc(mirrorDesc(rep)); seen.add(c); seen.add(mC);
+      const mRep = byCanon.get(mC) || mirrorDesc(rep);
+      out.push({rep: labels, desc: ringDesc + ' (Δ)', chiral: true}); out.push({rep: descToLabels(mRep), desc: ringDesc + ' (Λ)', chiral: true}); }
+  });
+  return out;
+}
+const FORMULAS = {
+  'MA₆': () => isomersOf(['A', 'A', 'A', 'A', 'A', 'A']),
+  'MA₅B': () => isomersOf(['A', 'A', 'A', 'A', 'A', 'B']),
+  'MA₄B₂': () => isomersOf(['A', 'A', 'A', 'A', 'B', 'B']),
+  'MA₃B₃': () => isomersOf(['A', 'A', 'A', 'B', 'B', 'B']),
+  'MA₄BC': () => isomersOf(['A', 'A', 'A', 'A', 'B', 'C']),
+  'MA₃B₂C': () => isomersOf(['A', 'A', 'A', 'B', 'B', 'C']),
+  'MA₂B₂C₂': () => isomersOf(['A', 'A', 'B', 'B', 'C', 'C']),
+  'M(AA)₃': () => chelateIsomers(3, []),
+  'M(AA)₂B₂': () => chelateIsomers(2, ['B', 'B']),
+};
+/* MODEL:end */
+
+/* ---- state ------------------------------------------------------------------ */
+const S = {tab: 'field', metal: 'Ti3', ligand: 'H₂O', formula: 'MA₄B₂', selIso: 0, locked: false, seenMetals: new Set(), seenColour: false};
+const shared = sharedState();
+if (shared) { if (METALS.some(m => m.id === shared.metal)) S.metal = shared.metal; if (LIGANDS.includes(shared.ligand)) S.ligand = shared.ligand; if (FORMULAS[shared.formula]) S.formula = shared.formula; if (['field', 'iso'].includes(shared.tab)) S.tab = shared.tab; }
+shareState(() => ({tab: S.tab, metal: S.metal, ligand: S.ligand, formula: S.formula}));
+const curMetal = () => METALS.find(m => m.id === S.metal);
+
+/* ============================================================================
+   The stage
+   ============================================================================ */
+const svg = $('stage');
+const LADX = 90, LADY0 = 480;                                        // energy-level ladder (free-ion baseline)
+const SWX = 780, SWY = 150, SWR = 78;                                // colour swatches
+const ISO_GRID = {x: 30, y: 84, w: 560, h: 540};
+const ISO_DETAIL = {cx: 810, cy: 300, r: 130};
+
+function build(){
+  svg.innerHTML = `
+  <rect x="0" y="0" width="1000" height="660" fill="#fbfaf6"/>
+
+  <g id="vField">
+    <text x="24" y="32" font-size="18" class="serif" fill="#1d2327">Crystal field splitting</text>
+    <text id="dLab" x="24" y="52" font-size="12.5" fill="#7c878c"></text>
+    <line x1="${LADX - 30}" y1="${LADY0}" x2="${LADX + 130}" y2="${LADY0}" stroke="#c8c2b2"/>
+    <line id="freeLine" x1="${LADX - 30}" x2="${LADX + 130}" stroke="#9aa3a6" stroke-dasharray="4 4"/>
+    <text id="freeLab" x="${LADX + 138}" font-size="11" fill="#7c878c">free ion, 5 orbitals</text>
+    <g id="egLevel"></g><g id="t2gLevel"></g>
+    <g id="egBoxes"></g><g id="t2gBoxes"></g>
+    <path id="gapArrow" fill="none" stroke="#1d2327" stroke-width="1.4" marker-end="url(#arrowhead)"/>
+    <text id="gapLab" font-size="12.5" fill="#1d2327" font-weight="700"></text>
+    <defs><marker id="arrowhead" markerWidth="7" markerHeight="7" refX="5" refY="3" orient="auto"><path d="M0 0L6 3L0 6Z" fill="#1d2327"/></marker></defs>
+
+    <text x="${SWX - 90}" y="32" font-size="16" class="serif" fill="#1d2327">Absorbed</text>
+    <circle id="swAbs" cx="${SWX - 40}" cy="${SWY}" r="${SWR * 0.62}" stroke="#d8d2c2"/>
+    <text id="swAbsLab" x="${SWX - 40}" y="${SWY + SWR * 0.62 + 22}" font-size="12" text-anchor="middle" fill="#4a555b"></text>
+    <text x="${SWX + 120}" y="32" font-size="16" class="serif" fill="#1d2327">Observed</text>
+    <circle id="swObs" cx="${SWX + 170}" cy="${SWY}" r="${SWR}" stroke="#d8d2c2" stroke-width="2"/>
+    <text id="swObsLab" x="${SWX + 170}" y="${SWY + SWR + 22}" font-size="13" text-anchor="middle" fill="#1d2327" font-weight="700"></text>
+    <path id="colArrow" fill="none" stroke="#9aa3a6" stroke-width="1.4" marker-end="url(#arrowhead)"/>
+
+    <text x="${SWX - 90}" y="${SWY + SWR + 70}" font-size="14.5" class="serif" fill="#1d2327">Spectrum</text>
+    <g id="specAxis"></g>
+    <rect id="specBand" y="${SWY + SWR + 92}" height="16" rx="3"/>
+    <line id="specNow" y1="${SWY + SWR + 84}" y2="${SWY + SWR + 116}" stroke="#1d2327" stroke-width="2"/>
+    <text id="specNowLab" y="${SWY + SWR + 132}" font-size="11" text-anchor="middle" fill="#1d2327"></text>
+
+    <text x="24" y="530" font-size="15" class="serif" fill="#1d2327">The spectrochemical series</text>
+    <text x="24" y="548" font-size="11.5" fill="#7c878c">weak field (small Δo) → strong field (large Δo), each ligand at its own f value</text>
+    <g id="seriesG"></g>
+  </g>
+
+  <g id="vIso">
+    <text x="24" y="32" font-size="18" class="serif" fill="#1d2327">Isomers of an octahedral complex</text>
+    <text id="isoLab" x="24" y="52" font-size="12.5" fill="#7c878c"></text>
+    <line x1="620" y1="70" x2="620" y2="640" stroke="#e2ded2"/>
+    <g id="isoGrid"></g>
+    <g id="isoDetail"></g>
+  </g>
+  `;
+}
+
+/* ---------- 1. colour & spin ---------- */
+const yLevel = e => LADY0 - (e + 0.4) / 1.0 * 340;                   // e in units of Δo (t2g at -0.4, eg at +0.6); spread over the tall column
+function paintField(){
+  const metal = curMetal(), dO = deltaO(metal, S.ligand);
+  const st = spinState(metal, dO);
+  $('dLab').textContent = `d${metal.n}, ${metal.sym} with ${S.ligand}: Δo = ${F_LIG[S.ligand].toFixed(2)} × ${metal.g.toFixed(1)} × 1000 = ${dO.toFixed(0)} cm⁻¹`;
+  const yEg = yLevel(0.6), yT2g = yLevel(-0.4), yFree = yLevel(0);
+  $('freeLine').setAttribute('y1', yFree); $('freeLine').setAttribute('y2', yFree); $('freeLab').setAttribute('y', yFree + 4);
+  $('egLevel').innerHTML = `<line x1="${LADX - 30}" y1="${yEg}" x2="${LADX + 20}" y2="${yEg}" stroke="#1d2327" stroke-width="2"/><line x1="${LADX + 40}" y1="${yEg}" x2="${LADX + 90}" y2="${yEg}" stroke="#1d2327" stroke-width="2"/><text x="${LADX + 100}" y="${yEg + 4}" font-size="12" fill="#4a555b">e_g (2)</text>`;
+  $('t2gLevel').innerHTML = `<line x1="${LADX - 30}" y1="${yT2g}" x2="${LADX - 5}" y2="${yT2g}" stroke="#1d2327" stroke-width="2"/><line x1="${LADX + 12}" y1="${yT2g}" x2="${LADX + 37}" y2="${yT2g}" stroke="#1d2327" stroke-width="2"/><line x1="${LADX + 54}" y1="${yT2g}" x2="${LADX + 79}" y2="${yT2g}" stroke="#1d2327" stroke-width="2"/><text x="${LADX + 100}" y="${yT2g + 4}" font-size="12" fill="#4a555b">t_2g (3)</text>`;
+  const [t2g, eg] = st.fill;
+  const boxAt = (cx, y, n, cap) => { let s = ''; for (let k = 0; k < cap; k++) { const has = k < n; s += `<text x="${cx + (k - (cap - 1) / 2) * 3}" y="${y - 8}" font-size="15" text-anchor="middle" fill="#6a3fc2">${has ? '↑' : ''}</text>`; } return s; };
+  /* fill each orbital: up first across all orbitals in the set, then down */
+  function orbitalArrows(centres, y, n){
+    let s = '';
+    const ups = Math.min(n, centres.length), downs = Math.max(0, n - centres.length);
+    centres.forEach((cx, i) => { let g = ''; if (i < ups) g += `<text x="${cx - 4}" y="${y - 6}" font-size="15" fill="#6a3fc2" font-weight="700">↑</text>`;
+      if (i < downs) g += `<text x="${cx + 4}" y="${y - 6}" font-size="15" fill="#c8325a" font-weight="700">↓</text>`; s += g; }); return s;
+  }
+  const egCentres = [LADX - 6, LADX + 66], t2gCentres = [LADX - 18, LADX + 24, LADX + 66];
+  $('egBoxes').innerHTML = orbitalArrows(egCentres, yEg, eg);
+  $('t2gBoxes').innerHTML = orbitalArrows(t2gCentres, yT2g, t2g);
+  $('gapArrow').setAttribute('d', `M${LADX + 110} ${yT2g} L${LADX + 110} ${yEg + 4}`);
+  $('gapLab').setAttribute('x', LADX + 118); $('gapLab').setAttribute('y', (yT2g + yEg) / 2 + 4); $('gapLab').textContent = 'Δo';
+  /* colour */
+  const lambda = 1e7 / dO, col = colourOf(lambda);
+  $('swAbs').setAttribute('fill', col ? col.ahex : '#3a3a3a');
+  $('swAbsLab').textContent = col ? `${col.abs}, ${lambda.toFixed(0)} nm` : lambda < 400 ? `ultraviolet, ${lambda.toFixed(0)} nm` : `infrared, ${lambda.toFixed(0)} nm`;
+  $('swObs').setAttribute('fill', col ? col.hex : '#e9e5da');
+  $('swObsLab').textContent = col ? col.obs : 'colourless';
+  $('colArrow').setAttribute('d', `M${SWX + 10} ${SWY} L${SWX + 70} ${SWY}`);
+  let ax = `<line x1="${SWX - 90}" y1="${SWY + SWR + 88}" x2="${SWX + 260}" y2="${SWY + SWR + 88}" stroke="#1d2327"/>`;
+  [400, 500, 600, 700].forEach(nm => { const x = SWX - 90 + (nm - 350) / 400 * 350; ax += `<line x1="${x}" y1="${SWY + SWR + 88}" x2="${x}" y2="${SWY + SWR + 92}" stroke="#1d2327"/><text x="${x}" y="${SWY + SWR + 146}" font-size="10.5" text-anchor="middle" fill="#7c878c">${nm}</text>`; });
+  ax += `<text x="${SWX + 85}" y="${SWY + SWR + 146}" font-size="10.5" text-anchor="middle" fill="#7c878c">nm</text>`;
+  $('specAxis').innerHTML = ax;
+  const bandStops = WHEEL.map(w => `<stop offset="${((w.lo - 350) / 400).toFixed(3)}" stop-color="${w.ahex}"/><stop offset="${((w.hi - 350) / 400).toFixed(3)}" stop-color="${w.ahex}"/>`).join('');
+  $('specBand').outerHTML = `<rect id="specBand" x="${SWX - 90}" y="${SWY + SWR + 92}" width="350" height="16" rx="3" fill="url(#gSpecBand)"/><defs><linearGradient id="gSpecBand" x1="0" x2="1">${bandStops}</linearGradient></defs>`;
+  const nowX = SWX - 90 + clamp((lambda - 350) / 400, -0.06, 1.06) * 350;
+  $('specNow').setAttribute('x1', nowX); $('specNow').setAttribute('x2', nowX);
+  $('specNowLab').setAttribute('x', nowX); $('specNowLab').textContent = lambda < 400 ? '(UV)' : lambda > 700 ? '(IR)' : '';
+  document.querySelectorAll('#chipsMetal button').forEach(b => b.setAttribute('aria-pressed', b.dataset.id === S.metal));
+  document.querySelectorAll('#chipsLig button').forEach(b => b.setAttribute('aria-pressed', b.dataset.id === S.ligand));
+  const sorted = LIGANDS.slice().sort((a, b) => F_LIG[a] - F_LIG[b]);
+  const sx = f => 60 + (f - 0.6) / (1.8 - 0.6) * 900;
+  let sg = `<line x1="${sx(0.6)}" y1="590" x2="${sx(1.8)}" y2="590" stroke="#c8c2b2"/>`;
+  sorted.forEach(l => { const x = sx(F_LIG[l]), on = l === S.ligand;
+    sg += `<circle cx="${x.toFixed(1)}" cy="590" r="${on ? 8 : 5}" fill="${on ? '#6a3fc2' : '#b9a8e8'}"/>
+      <text x="${x.toFixed(1)}" y="${on ? 614 : 610}" font-size="${on ? 12.5 : 11}" text-anchor="middle" fill="${on ? '#1d2327' : '#7c878c'}" font-weight="${on ? 700 : 400}">${esc(l)}</text>`; });
+  $('seriesG').innerHTML = sg;
+  paintFieldSide(metal, dO, st, lambda, col);
+  if (S.locked) {
+    S.seenMetals.add(metal.n);
+    if (col) discover('coloured'); else discover('colourless');
+    if (hasChoice(metal.n)) discover('spinchoice');
+    if (metal.n === 5 && st.spin === 'low spin') discover('lowspin5');
+    if ([1, 2, 3, 8, 9].includes(metal.n)) discover('nochoice');
+  }
+}
+function paintFieldSide(metal, dO, st, lambda, col){
+  $('numKick').textContent = 'Measured by the model';
+  $('nums').innerHTML = `<div class="nums">
+    <span>metal ion</span><b>${metal.sym} (d${metal.n})</b>
+    <span>ligand</span><b>${S.ligand}</b>
+    <span>Δo</span><b>${dO.toFixed(0)} cm⁻¹</b>
+    <span class="eq">f(${S.ligand}) × g(${metal.sym}) × 1000 = ${F_LIG[S.ligand]} × ${metal.g} × 1000</span>
+    <i class="sep"></i>
+    <span>configuration</span><b>t₂g${st.fill[0]} e_g${st.fill[1]}</b>
+    <span>spin state</span><b>${st.spin}</b>
+    <span>unpaired electrons</span><b>${st.unpaired}</b>
+    <span>magnetic moment μ</span><b>${magneticMoment(st.unpaired).toFixed(2)} BM</b>
+    <span class="eq">μ = √(n(n+2)), n = ${st.unpaired}</span>
+    ${st.eHs != null ? `<span>E(high spin)</span><b>${st.eHs.toFixed(0)} cm⁻¹</b><span>E(low spin)</span><b>${st.eLs.toFixed(0)} cm⁻¹</b>` : ''}
+    <i class="sep"></i>
+    <span>λ absorbed</span><b>${lambda.toFixed(0)} nm</b>
+    <span>colour seen</span><b>${col ? col.obs : 'colourless'}</b>
+  </div>`;
+  $('whyCard').hidden = false;
+  $('why').innerHTML = !hasChoice(metal.n)
+    ? `<p>${metal.sym} (d${metal.n}) has only one sensible way to fill t₂g and e_g — there is nothing to compare, so the field strength can't change its spin.</p>`
+    : `<p>Comparing the two fillings' energies (CFSE plus the cost of pairing) gives ${st.eHs.toFixed(0)} cm⁻¹ for high spin and ${st.eLs.toFixed(0)} cm⁻¹ for low spin — the model picks ${st.spin}, the lower one, by ${Math.abs(st.eHs - st.eLs).toFixed(0)} cm⁻¹.</p>`;
+  if (!col) $('why').innerHTML += `<p>Δo = ${dO.toFixed(0)} cm⁻¹ puts the absorbed light at ${lambda.toFixed(0)} nm — outside 400–700 nm, so this ion looks nearly colourless with this ligand.</p>`;
+}
+
+/* ---------- 2. isomers ---------- */
+function isoProject(v, cx, cy, scale){                                 // simple oblique projection for a small icon
+  return {x: cx + (v[0] - 0.5 * v[2]) * scale, y: cy - (v[1] + 0.35 * v[2]) * scale};
+}
+const LIGCOL = {A: '#3f7fd8', B: '#c8325a', C: '#f29a1f', R: '#2f9e5b'};
+function drawOctahedron(assign, cx, cy, scale, big){
+  let s = '';
+  EDGES_ALL().forEach(([i, j]) => { const a = isoProject(VERTS[i], cx, cy, scale), b = isoProject(VERTS[j], cx, cy, scale);
+    s += `<line x1="${a.x.toFixed(1)}" y1="${a.y.toFixed(1)}" x2="${b.x.toFixed(1)}" y2="${b.y.toFixed(1)}" stroke="#c8c2b2" stroke-width="${big ? 1.4 : 1}"/>`; });
+  assign.forEach((lab, i) => { const p = isoProject(VERTS[i], cx, cy, scale), r = big ? 15 : 10;
+    s += `<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="${r}" fill="${LIGCOL[lab] || '#8a94a6'}" stroke="#fff" stroke-width="1.4"/>`;
+    if (big) s += `<text x="${p.x.toFixed(1)}" y="${(p.y + 4).toFixed(1)}" font-size="11" text-anchor="middle" fill="#fff" font-weight="700">${lab}</text>`;
+  });
+  return s;
+}
+let _edgesAll = null;
+function EDGES_ALL(){ if (_edgesAll) return _edgesAll; const e = []; for (let i = 0; i < 6; i++) for (let j = i + 1; j < 6; j++) e.push([i, j]); return (_edgesAll = e); }
+function paintIso(){
+  const list = FORMULAS[S.formula]();
+  S.selIso = clamp(S.selIso, 0, list.length - 1);
+  $('isoLab').textContent = `${S.formula}: ${list.length} distinct isomer${list.length === 1 ? '' : 's'}${list.some(x => x.chiral) ? ', including a mirror-image (optically active) pair' : ''}`;
+  const cols = list.length <= 1 ? 1 : list.length <= 2 ? 2 : list.length <= 4 ? 2 : 3;
+  const rows = Math.ceil(list.length / cols), cw = ISO_GRID.w / cols, ch = ISO_GRID.h / rows;
+  const scale = clamp(Math.min(cw, ch) * 0.22, 30, 92);
+  let g = '';
+  list.forEach((it, i) => {
+    const col = i % cols, row = Math.floor(i / cols);
+    const cx = ISO_GRID.x + col * cw + cw / 2, cy = ISO_GRID.y + row * ch + ch / 2 - 8, sel = i === S.selIso;
+    const bw = Math.min(cw, 340) - 16, bh = Math.min(ch, 320) - 20;
+    g += `<g class="iso" data-i="${i}">
+      <rect x="${(cx - bw / 2).toFixed(1)}" y="${(cy - bh / 2).toFixed(1)}" width="${bw.toFixed(1)}" height="${bh.toFixed(1)}" rx="10" fill="${sel ? '#f4effd' : '#fff'}" stroke="${sel ? '#6a3fc2' : '#e2ded2'}" stroke-width="${sel ? 2 : 1}"/>
+      ${drawOctahedron(it.rep, cx, cy - bh * 0.12, scale, false)}
+      <text x="${cx.toFixed(1)}" y="${(cy + bh / 2 - 14).toFixed(1)}" font-size="12" text-anchor="middle" fill="#4a555b">${esc(it.desc)}</text>
+    </g>`;
+  });
+  $('isoGrid').innerHTML = g;
+  const dsel = list[S.selIso];
+  $('isoDetail').innerHTML = dsel ? `
+    <text x="${ISO_DETAIL.cx}" y="${ISO_DETAIL.cy - ISO_DETAIL.r - 26}" font-size="14" text-anchor="middle" fill="#7c878c">selected isomer</text>
+    ${drawOctahedron(dsel.rep, ISO_DETAIL.cx, ISO_DETAIL.cy, ISO_DETAIL.r, true)}
+    <text x="${ISO_DETAIL.cx}" y="${ISO_DETAIL.cy + ISO_DETAIL.r + 34}" font-size="15" text-anchor="middle" fill="#1d2327" font-weight="700">${esc(dsel.desc)}</text>
+    <text x="${ISO_DETAIL.cx}" y="${ISO_DETAIL.cy + ISO_DETAIL.r + 54}" font-size="12.5" text-anchor="middle" fill="#7c878c">${dsel.chiral ? 'chiral: no rotation matches its mirror image' : 'achiral: superimposable on its own mirror image'}</text>` : '';
+  document.querySelectorAll('#chipsFormula button').forEach(b => b.setAttribute('aria-pressed', b.dataset.id === S.formula));
+  paintIsoSide(list);
+  if (S.locked) {
+    if (S.formula === 'MA₄B₂' && list.length === 2) discover('geometric');
+    if (S.formula === 'MA₃B₃' && list.length === 2) discover('facmer');
+    if (S.formula === 'M(AA)₃' && list.some(x => x.chiral)) discover('chiral');
+    if (S.formula === 'MA₂B₂C₂') discover('complex6');
+  }
+}
+function paintIsoSide(list){
+  $('numKick').textContent = 'Measured by the model';
+  const chiralPairs = list.filter(x => x.chiral).length / 2;
+  $('nums').innerHTML = `<div class="nums">
+    <span>formula</span><b>${esc(S.formula)}</b>
+    <span>distinct isomers</span><b>${list.length}</b>
+    <span>optical (mirror) pairs</span><b>${chiralPairs}</b>
+    <i class="sep"></i>
+    ${list.map((it, i) => `<span>${i + 1}.</span><b>${esc(it.desc)}</b>`).join('')}
+  </div>`;
+  $('whyCard').hidden = false;
+  $('why').innerHTML = `<p>All 6!/(repeats) raw arrangements were generated, then grouped by the 24 rotations of the octahedron: arrangements a rotation can turn into one another are the same isomer. Where an arrangement's mirror image needs a reflection — never a rotation — to match, the two are separate, optically active isomers.</p>`;
+}
+
+/* ---------- painting dispatch ---------- */
+function paint(){
+  $('vField').toggleAttribute('hidden', S.tab !== 'field'); $('vIso').toggleAttribute('hidden', S.tab !== 'iso');
+  $('ctlField').hidden = S.tab !== 'field'; $('ctlIso').hidden = S.tab !== 'iso';
+  if (S.tab === 'field') paintField(); else paintIso();
+}
+
+build();
+
+/* ---------- controls ---------- */
+function setTab(t){ S.tab = t; $('tabField').setAttribute('aria-pressed', t === 'field'); $('tabIso').setAttribute('aria-pressed', t === 'iso'); sound('tick'); track('tab', {tab: t}); paint(); }
+$('tabField').addEventListener('click', () => setTab('field'));
+$('tabIso').addEventListener('click', () => setTab('iso'));
+
+$('chipsMetal').innerHTML = METALS.map(m => `<button data-id="${m.id}">${m.sym}</button>`).join('');
+$('chipsMetal').addEventListener('click', e => { const b = e.target.closest('button'); if (!b || !S.locked) return; S.metal = b.dataset.id; sound('tick'); paint(); });
+$('chipsLig').innerHTML = LIGANDS.map(l => `<button data-id="${esc(l)}">${esc(l)}</button>`).join('');
+$('chipsLig').addEventListener('click', e => { const b = e.target.closest('button'); if (!b || !S.locked) return; S.ligand = b.dataset.id; sound('tick'); paint(); });
+$('chipsFormula').innerHTML = Object.keys(FORMULAS).map(f => `<button data-id="${esc(f)}">${esc(f)}</button>`).join('');
+$('chipsFormula').addEventListener('click', e => { const b = e.target.closest('button'); if (!b || !S.locked) return; S.formula = b.dataset.id; S.selIso = 0; sound('tick'); paint(); });
+$('isoGrid').addEventListener('click', e => { const g = e.target.closest('.iso'); if (!g || !S.locked) return; S.selIso = +g.dataset.i; sound('tick'); paint(); });
+
+function lockControls(lock){
+  for (const id of ['tabField', 'tabIso']) $(id).disabled = lock;
+  document.querySelectorAll('#chipsMetal, #chipsLig, #chipsFormula, #isoGrid').forEach(c => c.style.pointerEvents = lock ? 'none' : '');
+  $('gate').hidden = !lock;
+}
+
+/* ============================================================================
+   Start
+   ============================================================================ */
+findings($('finds'), [
+  {id: 'coloured', icon: '🎨', label: 'A visible colour', hint: 'Find a metal/ligand pair whose Δo falls between 400 and 700 nm'},
+  {id: 'colourless', icon: '⭘', label: 'Too strong or too weak, and it’s colourless', hint: 'Try the strongest and weakest ligands on the same ion'},
+  {id: 'spinchoice', icon: '⇅', label: 'A metal with a real choice of spin', hint: 'Pick a metal ion from d⁴ to d⁷'},
+  {id: 'lowspin5', icon: '↓', label: 'Even a d⁵ ion can go low spin', hint: 'Pair a d⁵ metal with a strong-field ligand'},
+  {id: 'nochoice', icon: '=', label: 'No choice at all: d¹–d³, d⁸, d⁹', hint: 'Try titanium(III) or nickel(II) with any ligand'},
+  {id: 'geometric', icon: '⬚', label: 'Cis and trans, and nothing else', hint: 'Look at MA₄B₂'},
+  {id: 'facmer', icon: '△', label: 'Facial and meridional', hint: 'Look at MA₃B₃'},
+  {id: 'chiral', icon: 'Δ/Λ', label: 'Mirror images that never match', hint: 'Look at the tris-chelate M(AA)₃'},
+  {id: 'complex6', icon: '6', label: 'Six isomers from one formula', hint: 'Look at MA₂B₂C₂'},
+], () => toast('All nine. One splitting rule fixes the colour and the magnetism; one symmetry search finds every isomer.', 4200));
+
+let POE;
+POE = predict($('poe'), {
+  id: 'fieldstrength',
+  q: 'Keeping the same metal ion, its ligands are swapped for stronger and stronger ones on the spectrochemical series. What happens to the complex’s colour?',
+  options: [
+    {id: 'same', text: 'Nothing — colour only depends on the metal, not the ligand.'},
+    {id: 'darker', text: 'It just gets more intense, same colour.'},
+    {id: 'shift', text: 'The absorbed light shifts across the spectrum — and can leave the visible range at both ends, looking colourless.', right: true},
+    {id: 'always', text: 'It always ends up colourless once the field is strong enough.'},
+  ],
+  onLock(){ S.locked = true; lockControls(false); say('Start with titanium and water — the very complex that first measured Delta oh.'); paint(); },
+});
+lockControls(!POE.locked);
+if (!Play.FF('predict')) S.locked = true;
+paint();
+window.applyFeatures = () => paint();
+window.PG_STATE = () => JSON.parse(JSON.stringify({tab: S.tab, metal: S.metal, ligand: S.ligand, formula: S.formula, selIso: S.selIso, locked: S.locked}));
+window.PG_MODEL = {F_LIG, METALS, deltaO, HS_FILL, LS_FILL, hasChoice, pairsOf, unpairedOf, cfse, energyOf, spinState, magneticMoment, colourOf, WHEEL,
+  VERTS, ANTIPODE, ROT, canonicalOf, mirrorOf, isChiral, distinctPerms, describe, isomersOf, matchings, chelateIsomers, FORMULAS};
+</script>
+</body>
+</html>

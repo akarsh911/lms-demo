@@ -1,0 +1,725 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Atmosphere, Layer by Layer</title>
+<meta name="description" content="Class 9–10: climb through the atmosphere in a weather balloon, with the temperature and pressure graphs moving with you; then build any Indian town's climograph from its latitude, height, distance from the sea and the monsoon winds.">
+<link rel="icon" href="../../favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600&family=Inter:wght@400;500;600;700&family=Nunito:wght@500;700;800&family=Newsreader:opsz,wght@6..72,400;6..72,500&family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="../../play.css">
+<style>
+/* Only what this page needs beyond play.css. */
+.pg-stage{background:#f4f6f8}
+.tabs{display:flex; gap:4px; padding:8px 10px; background:var(--card); border-bottom:1px solid var(--hair)}
+.tabs button{flex:1; border:1px solid transparent; background:var(--sunk); border-radius:8px; padding:7px 10px; font-weight:600; font-size:13.5px; cursor:pointer; color:var(--ink-2)}
+.tabs button[aria-pressed="true"]{background:var(--accent); color:#fff}
+.tabs button:disabled{opacity:.5; cursor:default}
+.gate{position:absolute; left:0; right:0; top:52px; height:40%; display:grid; place-items:center; pointer-events:none}
+.gate span{background:rgba(20,28,45,.86); color:#fff; padding:10px 16px; border-radius:99px; font-weight:600; font-size:14px}
+.seg{display:flex; gap:3px; background:var(--sunk); border-radius:9px; padding:3px; margin:4px 0 8px}
+.seg button{flex:1; border:0; background:transparent; border-radius:7px; padding:6px 6px; font-weight:600; font-size:12.5px; cursor:pointer; color:var(--ink-2)}
+.seg button[aria-pressed="true"]{background:var(--card); color:var(--ink); box-shadow:var(--shadow)}
+.seg button:disabled{opacity:.5; cursor:default}
+.ctl{grid-template-columns:90px 1fr 74px; margin:4px 0}
+.ctl label{font-size:12.5px; line-height:1.2}
+.ctl output{font-size:13px}
+.readout{display:grid; grid-template-columns:1fr auto; gap:3px 12px; font-size:13.5px}
+.readout span{color:var(--ink-2)}
+.readout b{font-family:var(--font-mono); font-weight:600; font-size:13px; font-variant-numeric:tabular-nums; text-align:right}
+.readout .sep{grid-column:1/-1; height:1px; background:var(--hair); margin:3px 0}
+.eq{font-family:var(--font-mono); font-size:12.5px; background:var(--sunk); border-radius:8px; padding:8px 10px; margin-top:8px; line-height:1.55}
+.hint{font-size:12.5px; color:var(--ink-3); margin:6px 0 0}
+.why p{font-size:14px; margin-bottom:.55em}
+.why b{color:var(--ink)}
+.chips{display:flex; flex-wrap:wrap; gap:5px; margin-top:4px}
+.chips button{border:1px solid var(--hair-2); background:var(--card); border-radius:99px; padding:4px 10px; font-size:12.5px; font-weight:600; cursor:pointer; color:var(--ink-2)}
+.chips button[aria-pressed="true"]{background:var(--accent-soft); border-color:var(--accent); color:var(--ink)}
+.chips button:disabled{opacity:.5; cursor:default}
+.tog[aria-pressed="true"]{background:var(--accent-soft); border-color:var(--accent)}
+#balloonHit{cursor:ns-resize} #balloonHit.dragging{cursor:grabbing}
+.gHit{cursor:crosshair}
+#pinHit{cursor:grab} #pinHit.dragging{cursor:grabbing}
+</style>
+</head>
+<body>
+<header class="pg-top"></header>
+
+<div class="pg-intro">
+  <h1>The atmosphere, layer by layer</h1>
+  <p>Ride a weather balloon up from the beach at Mumbai. The temperature and the pressure are worked out from two rules as you climb:
+     the air gets colder at a steady rate in the lowest layer, and every layer of air is pressed down by the weight of all the air above it.
+     Then put those rules to work: build a town's climate from its latitude, its height, its distance from the sea and the monsoon winds, and read it as a climograph.</p>
+</div>
+
+<main class="pg-main wide-side">
+  <section class="pg-stage" id="stageWrap">
+    <div class="tabs" id="tabs">
+      <button data-tab="climb" aria-pressed="true">1 · Climb through the air</button>
+      <button data-tab="place" aria-pressed="false">2 · What makes a climate</button>
+    </div>
+    <svg id="stage" viewBox="0 0 1000 660" role="img" aria-label="A column of the atmosphere with a weather balloon, with graphs of temperature and pressure against height; and a map of India with a climograph"></svg>
+    <div class="gate" id="gate"><span>Make your prediction first →</span></div>
+  </section>
+
+  <aside class="pg-side">
+    <div id="poe"></div>
+
+    <div class="card" id="ctlClimb">
+      <div class="kicker">The air above</div>
+      <div class="seg" id="profSeg">
+        <button data-prof="std" aria-pressed="true">Mid-latitudes</button>
+        <button data-prof="eq" aria-pressed="false">Equator</button>
+        <button data-prof="pole" aria-pressed="false">Poles</button>
+      </div>
+      <div class="seg" id="zoomSeg">
+        <button data-zoom="20" aria-pressed="true">0–20 km</button>
+        <button data-zoom="120" aria-pressed="false">0–120 km</button>
+      </div>
+      <div class="ctl"><label for="h">Balloon height</label><input type="range" id="h" min="0" max="120" step="0.1" value="0"><output id="hOut" class="num">0.0 km</output></div>
+      <p class="hint">Drag the balloon, or drag up and down on either graph.</p>
+      <div class="readout" style="margin-top:8px">
+        <span>Layer</span><b id="rLayer">—</b>
+        <span>Temperature</span><b id="rT">—</b>
+        <span>Pressure</span><b id="rP">—</b>
+        <span>Air density (sea level = 100)</span><b id="rRho">—</b>
+        <i class="sep"></i>
+        <span>Air above you</span><b id="rAbove">—</b>
+        <span>Air below you</span><b id="rBelow">—</b>
+      </div>
+      <div class="eq" id="eqBox">
+        Temperature: T = T₀ − Γ·h, Γ = <span id="eqG">6.5</span> °C/km<br>
+        Pressure: Δp = −ρ·g·Δh → <span id="eqDp">1.2</span> hPa less for every 10 m here
+      </div>
+    </div>
+
+    <div class="card" id="ctlPlace" hidden>
+      <div class="kicker">Choose a place, or drag the pin</div>
+      <div class="chips" id="presets"></div>
+      <div class="ctl" style="margin-top:10px"><label for="alt">Height above sea</label><input type="range" id="alt" min="0" max="4000" step="10" value="14"><output id="altOut" class="num">14 m</output></div>
+      <div class="row" style="justify-content:space-between; margin-top:4px">
+        <button class="btn sm tog" id="btnMonsoon" aria-pressed="true">🌧 Monsoon winds on</button>
+        <span class="hint" style="margin:0">Γ = 6.5 °C per km, from tab 1</span>
+      </div>
+      <div class="readout" style="margin-top:10px">
+        <span>Latitude</span><b id="pLat">—</b>
+        <span>From the Arabian Sea / Bay of Bengal</span><b id="pDist">—</b>
+        <i class="sep"></i>
+        <span>Warmest month (average)</span><b id="pHot">—</b>
+        <span>Coolest month (average)</span><b id="pCold">—</b>
+        <span>Rain in a year</span><b id="pRain">—</b>
+        <span>Wettest month</span><b id="pWet">—</b>
+      </div>
+    </div>
+
+    <div class="card why" id="whyCard" hidden>
+      <div class="kicker">What is happening</div>
+      <div id="why"></div>
+    </div>
+
+    <div class="card"><div class="kicker">To find</div><div id="finds"></div></div>
+  </aside>
+</main>
+
+<script src="../../play.js"></script>
+<script>
+'use strict';
+const {$, $$, esc, clamp, fmt, drag, loop, sound, say, track, toast, predict, findings, discover, found,
+       shareState, sharedState, mount, reduced} = Play;
+mount({thread: 'weather', band: 'modeller'});
+
+/* MODEL:start ==================================================================
+   THE COLUMN. The temperature is set layer by layer (NCERT Class 11, Ch 7 and 9):
+     troposphere   falls steadily from the ground to the tropopause (the lapse rate Γ);
+     stratosphere  steady, then warming to −2.5 °C at 50 km, where ozone absorbs ultraviolet;
+     mesosphere    cooling to −100 °C at 80 km;
+     thermosphere  warming again above 80 km.
+   Three columns: mid-latitudes (the standard atmosphere: 15 °C at the ground, tropopause
+   11 km at −56.5 °C, so Γ = 6.5 °C/km); over the equator (tropopause 18 km at −80 °C, and a
+   ground at 29 °C, so Γ = 1 °C per 165 m, as the book says); over the poles (8 km, −45 °C).
+   The PRESSURE is not typed in anywhere. It comes from the weight of the air: going up by
+   dh, you leave below you a slab of air of weight ρ·g·dh, so
+       dp/dh = −ρ·g,   ρ = p / (R·T)    (R = 287 J/kg·K for air)
+   integrated upwards from 1013.25 hPa at sea level, 50 m at a time (second-order Runge–Kutta).
+   THE CLIMATE OF A PLACE. Temperature as in the tinkerer page (sunshine from latitude and
+   date; land and sea lag it differently; the sea's weight e^(−d/137 km); Γ·height). Rain from
+   the winds: the south-west monsoon arrives (1 June at Kerala, later further north) with two
+   branches, from the Arabian Sea and from the Bay of Bengal, each drying out with distance
+   travelled over land. Hills that face the wind wring more out (the Western Ghats, the Khasi
+   hills); behind them lies a rain shadow; the flat Thar lets the wind pass. From mid-October
+   the north-east monsoon brings the Bay's moisture to the Tamil Nadu coast. Western
+   disturbances bring a little winter rain to the north.
+   ============================================================================ */
+const D2R = Math.PI / 180, RD = 287.05, G0 = 9.80665, P0 = 1013.25;
+const PROFILES = {
+  std:  {name: 'Mid-latitudes', T0: 15, ht: 11, Tt: -56.5},
+  eq:   {name: 'Over the equator', T0: 29, ht: 18, Tt: -80},
+  pole: {name: 'Over the poles', T0: -20, ht: 8, Tt: -45},
+};
+function tempAt(pr, h){
+  const top = Math.max(pr.ht, 20);
+  if (h <= pr.ht) return pr.T0 - (pr.T0 - pr.Tt) / pr.ht * h;
+  if (h <= top) return pr.Tt;
+  if (h <= 50) return pr.Tt + (-2.5 - pr.Tt) * (h - top) / (50 - top);
+  if (h <= 80) return -2.5 + (-100 + 2.5) * (h - 50) / 30;
+  return -100 + 4.7 * (h - 80);
+}
+const lapse = pr => (pr.T0 - pr.Tt) / pr.ht;      // °C per km
+/* Integrate the pressure up the column: returns an array p[i] at h = i·dh km. */
+function column(pr, dh = 0.05, top = 120){
+  const n = Math.round(top / dh), p = new Float64Array(n + 1);
+  p[0] = P0;
+  const f = (h, pp) => -pp * G0 / (RD * (tempAt(pr, h) + 273.15)) * 1000;   // hPa per km
+  for (let i = 0; i < n; i++) {
+    const h = i * dh, k1 = f(h, p[i]), k2 = f(h + dh, p[i] + dh * k1);
+    p[i + 1] = p[i] + dh * (k1 + k2) / 2;
+  }
+  return {pr, dh, p, at(h){ const x = clamp(h / dh, 0, n), a = Math.floor(x), b = Math.min(n, a + 1); return p[a] + (p[b] - p[a]) * (x - a); }};
+}
+const density = (p, T) => p * 100 / (RD * (T + 273.15));                   // kg/m³
+function layerAt(pr, h){
+  if (h < pr.ht - 0.3) return 'Troposphere';
+  if (h <= pr.ht + 0.3) return 'Tropopause';
+  if (h < 50) return 'Stratosphere';
+  if (h < 80) return 'Mesosphere';
+  return 'Thermosphere (ionosphere)';
+}
+
+/* ---- the climate of a place ---------------------------------------------- */
+const CL = {t0: 30.4, tk: 0.207, b: 0.087, tauL: 9, tauS: 104, L: 137, dtrIn: 17.3, dtrSea: 7.5, cloud: 0.4, qm: 0.42, gam: 6.5};
+const MDAYS = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+function insol(lat, d){
+  const dec = 23.44 * Math.sin(2 * Math.PI * (d - 81) / 365) * D2R, phi = lat * D2R;
+  const c = -Math.tan(phi) * Math.tan(dec);
+  const H0 = c >= 1 ? 0 : c <= -1 ? Math.PI : Math.acos(c);
+  return 1361 / Math.PI * (1 + 0.033 * Math.cos(2 * Math.PI * d / 365)) * (H0 * Math.sin(phi) * Math.sin(dec) + Math.cos(phi) * Math.cos(dec) * Math.sin(H0));
+}
+const onsetDay = lat => 152 + 1.2 * Math.max(0, lat - 9);
+const withdrawDay = lat => 290 - 1.3 * Math.max(0, lat - 9);
+const monsoonOn = (lat, d, on) => on !== false && d >= onsetDay(lat) && d <= withdrawDay(lat);
+/* RAIN: mm on day d at a place {lon, lat, alt, dW, dE}, where dW and dE are the distances
+   (km) to the Arabian Sea and Bay of Bengal coasts. */
+const RN = {base: 13, LW: 300, LE: 1500, ghats: 1.3, shadow: 0.35, shadowL: 300, thar: 0.3, khasi: 11, himal: 2.5, blocked: 0.08, ne: 16, neL: 150, wd: 0.02};
+function terrain(pl){
+  const t = {ghats: 1, shadow: 1, thar: 1, khasi: 1, himal: 1, blocked: 1};
+  /* the Western Ghats run along the west coast from about 8° to 21° N */
+  if (pl.lat > 8 && pl.lat < 21.5) {
+    if (pl.dW < 70) t.ghats = pl.lat > 12 ? RN.ghats : 1;              // the windward slope
+    else if (pl.alt < 1000) t.shadow = RN.shadow * Math.exp(-(pl.dW - 70) / RN.shadowL);   // behind the Ghats, below their crest
+  }
+  if (pl.lon < 75.5 && pl.lat > 23.5 && pl.lat < 30.5) t.thar = RN.thar;     // flat desert: nothing lifts the air
+  if (pl.lat > 24.9 && pl.lat < 25.7 && pl.lon > 90.5 && pl.lon < 92.3) t.khasi = RN.khasi;   // the Khasi hills face the Bay
+  /* the first ranges of the Himalaya, facing the monsoon from the south */
+  if (pl.alt > 800 && ((pl.lon < 81 && pl.lat > 29.3 && pl.lat < 32.4) || (pl.lon >= 81 && pl.lon < 89 && pl.lat > 26.6 && pl.lat < 28.5))) t.himal = RN.himal;
+  if (pl.lat > 32.4 && pl.lon > 75.2) t.blocked = RN.blocked;             // Ladakh, behind the Himalaya
+  else if (pl.lat > 33.2) t.blocked = 0.2;                                 // the Kashmir valley, behind the Pir Panjal
+  return t;
+}
+function rainDay(pl, d, monsoon){
+  const t = terrain(pl);
+  let r = 0;
+  if (monsoonOn(pl.lat, d, monsoon)) {
+    const arab = Math.exp(-pl.dW / RN.LW) * t.ghats * t.shadow;
+    const bay = Math.exp(-pl.dE / RN.LE) * (pl.lat > 20 ? 1 : pl.lat > 16 ? (pl.lat - 16) / 4 : 0);
+    r += RN.base * (arab + bay) * t.thar * t.khasi * t.himal * t.blocked;
+  }
+  /* the north-east (winter) monsoon, 15 October to 15 December, on the south-east coast */
+  if (monsoon !== false && d >= 288 && d <= 349 && pl.lat < 16) r += RN.ne * Math.exp(-pl.dE / RN.neL);
+  /* western disturbances, December to March, in the north */
+  if ((d >= 335 || d <= 90) && pl.lat > 24) r += RN.wd * Math.pow(pl.lat - 24, 2) * (pl.lat > 32.4 && pl.lon > 75.2 ? 0.5 : 1);
+  return r;
+}
+function climate(pl, monsoon = true){
+  const w = Math.exp(-pl.dSea / CL.L);
+  let Qm = 0; for (let d = 1; d <= 365; d++) Qm += insol(pl.lat, d) * (1 - (monsoonOn(pl.lat, d, monsoon) ? CL.cloud * CL.qm : 0)) / 365;
+  const Tann = CL.t0 - CL.tk * (pl.lat - 8);
+  let TL = 25, TS = 25; const days = [];
+  for (let y = 0; y < 3; y++) for (let d = 1; d <= 365; d++) {
+    const cl = monsoonOn(pl.lat, d, monsoon) ? CL.cloud : 0;
+    const Teq = Tann + CL.b * (insol(pl.lat, d) * (1 - cl) - Qm);
+    TL += (Teq - TL) / CL.tauL; TS += (Teq - TS) / CL.tauS;
+    if (y === 2) {
+      const Tm = (1 - w) * TL + w * TS - CL.gam * pl.alt / 1000;
+      const dtr = (CL.dtrIn * (1 - w) + CL.dtrSea * w) * (1 - 2 * cl);
+      days.push({Tm, max: Tm + dtr / 2, min: Tm - dtr / 2, rain: rainDay(pl, d, monsoon)});
+    }
+  }
+  const out = []; let k = 0;
+  for (let m = 0; m < 12; m++) { let s = 0, mx = 0, mn = 0, r = 0; for (let i = 0; i < MDAYS[m]; i++, k++) { s += days[k].Tm; mx += days[k].max; mn += days[k].min; r += days[k].rain; }
+    out.push({mean: s / MDAYS[m], max: mx / MDAYS[m], min: mn / MDAYS[m], rain: r}); }
+  const means = out.map(o => o.mean), rains = out.map(o => o.rain);
+  const total = rains.reduce((a, b) => a + b, 0);
+  return {months: out, hot: Math.max(...means), cold: Math.min(...means), range: Math.max(...means) - Math.min(...means),
+          rain: total, wet: rains.indexOf(Math.max(...rains)), hotMonth: means.indexOf(Math.max(...means))};
+}
+
+/* ---- geography (lon, lat): a simplified outline of India and its coasts --- */
+const WEST = [[68.4,23.6],[69.1,22.8],[69.0,22.3],[69.6,21.6],[70.4,20.9],[71.0,20.7],[72.1,21.2],[72.3,21.9],[72.6,22.3],[72.7,21.1],[72.8,20.4],[72.8,19.0],[73.0,18.0],[73.3,17.0],[73.8,15.4],[74.1,14.8],[74.5,13.9],[74.8,12.9],[75.5,11.8],[75.8,11.2],[76.2,9.9],[76.5,9.2],[76.9,8.5],[77.5,8.1]];
+const EAST = [[77.5,8.1],[78.1,8.8],[78.6,9.1],[79.3,9.3],[79.85,10.3],[79.85,10.8],[79.83,11.9],[80.3,13.1],[80.1,14.4],[80.2,15.5],[80.8,15.9],[81.2,16.2],[82.3,16.9],[83.3,17.7],[84.1,18.3],[84.9,19.3],[85.8,19.8],[86.7,20.3],[87.0,21.0],[87.1,21.4],[87.5,21.6],[88.1,21.6],[88.9,21.6]];
+const BORDER = [[89.1,22.2],[88.7,23.3],[88.1,24.5],[88.3,25.2],[88.6,26.3],[89.8,26.0],[89.9,25.3],[92.0,25.1],[92.3,24.3],[91.4,24.1],[91.2,23.3],[91.8,22.9],[92.3,22.4],[92.6,21.95],[93.2,22.3],[93.4,23.6],[94.2,24.0],[94.6,25.4],[95.2,26.6],[96.1,27.2],[97.3,28.1],[96.4,29.2],[95.4,29.1],[94.0,28.9],[93.0,28.2],[92.0,27.8],[91.7,26.8],[89.8,26.7],[88.9,27.3],[88.7,28.1],[88.1,27.9],[88.1,26.4],[87.2,26.4],[85.8,26.6],[84.6,27.3],[83.3,27.4],[82.0,27.9],[81.0,28.4],[80.1,28.9],[80.4,29.7],[81.0,30.2],[79.9,30.9],[78.8,31.3],[78.4,32.5],[79.5,32.6],[78.9,33.4],[79.5,34.3],[80.3,35.4],[77.8,35.8],[75.9,36.8],[74.6,37.0],[73.0,36.2],[73.8,34.8],[73.6,33.8],[74.7,32.5],[74.6,31.9],[74.6,31.1],[73.9,30.4],[73.4,29.9],[72.9,29.0],[71.9,27.9],[70.6,28.0],[69.5,27.1],[70.1,26.6],[70.4,25.7],[71.1,24.6],[70.8,24.2],[69.5,24.3],[68.8,24.3]];
+const INDIA = WEST.concat(EAST.slice(1), BORDER);
+const SRILANKA = [[79.9,9.8],[80.3,9.8],[81.0,8.9],[81.9,7.4],[81.7,6.4],[81.1,6.1],[80.1,6.1],[79.8,7.0],[79.8,8.2]];
+const ARABIAN = [WEST, [[68.4,23.6],[67.4,23.9],[66.7,24.8]]];
+const BAYCOAST = [EAST, [[88.9,21.6],[89.6,21.9],[90.5,22.1],[91.1,22.5],[91.8,22.3],[92.0,21.4],[92.4,20.7],[92.9,20.1],[93.6,19.4],[94.3,18.3]]];
+function inPoly(poly, lon, lat){
+  let c = false;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const [xi, yi] = poly[i], [xj, yj] = poly[j];
+    if ((yi > lat) !== (yj > lat) && lon < (xj - xi) * (lat - yi) / (yj - yi) + xi) c = !c;
+  }
+  return c;
+}
+function distTo(lines, lon, lat){
+  const kx = 111.32 * Math.cos(lat * D2R), ky = 110.6;
+  let best = 1e9;
+  for (const line of lines) for (let i = 0; i < line.length - 1; i++) {
+    const ax = (line[i][0] - lon) * kx, ay = (line[i][1] - lat) * ky, bx = (line[i + 1][0] - lon) * kx, by = (line[i + 1][1] - lat) * ky;
+    const dx = bx - ax, dy = by - ay, L2 = dx * dx + dy * dy;
+    const t = L2 ? clamp(-(ax * dx + ay * dy) / L2, 0, 1) : 0;
+    best = Math.min(best, Math.hypot(ax + t * dx, ay + t * dy));
+  }
+  return best;
+}
+function placeOf(lon, lat, alt){
+  const dW = distTo(ARABIAN, lon, lat), dE = distTo(BAYCOAST, lon, lat);
+  return {lon, lat, alt, dW, dE, dSea: Math.min(dW, dE)};
+}
+/* MODEL:end */
+
+const PLACES = {
+  Mumbai: [72.85, 19.07, 14], Pune: [73.86, 18.52, 560], Nagpur: [79.09, 21.15, 310], Delhi: [77.2, 28.6, 216], Jaisalmer: [70.9, 26.9, 225],
+  Leh: [77.58, 34.15, 3500], Shimla: [77.17, 31.1, 2200], Kolkata: [88.36, 22.57, 9], Mawsynram: [91.58, 25.3, 1400],
+  Chennai: [80.27, 13.08, 7], Thiruvananthapuram: [76.94, 8.52, 10], Ooty: [76.7, 11.41, 2240],
+};
+
+/* ---- state ------------------------------------------------------------------ */
+const S = {tab: 'climb', locked: false, prof: 'std', zoom: 20, h: 0, maxH: 0, seenProf: {std: true},
+  place: {lon: 72.85, lat: 19.07, alt: 14, name: 'Mumbai'}, monsoon: true};
+const shared = sharedState();
+if (shared) {
+  if (['climb', 'place'].includes(shared.tab)) S.tab = shared.tab;
+  if (PROFILES[shared.prof]) S.prof = shared.prof;
+  if ([20, 120].includes(shared.zoom)) S.zoom = shared.zoom;
+  if (shared.h != null) S.h = clamp(+shared.h, 0, 120);
+  if (shared.place && isFinite(shared.place.lon)) S.place = {lon: +shared.place.lon, lat: +shared.place.lat, alt: clamp(+shared.place.alt || 0, 0, 4000), name: String(shared.place.name || 'Your town')};
+}
+shareState(() => ({tab: S.tab, prof: S.prof, zoom: S.zoom, h: S.h, place: S.place}));
+let COL = {std: column(PROFILES.std), eq: column(PROFILES.eq), pole: column(PROFILES.pole)};
+
+/* ============================================================================
+   The stage
+   ============================================================================ */
+const svg = $('stage');
+const CY0 = 40, CY1 = 620;                         // the shared height axis
+const yOf = h => CY1 - h / S.zoom * (CY1 - CY0);
+const hOf = y => clamp((CY1 - y) / (CY1 - CY0) * S.zoom, 0, S.zoom);
+const COLX = {x0: 60, x1: 250};
+const TGR = {x0: 300, x1: 610};
+const PGR = {x0: 660, x1: 970};
+const tRange = () => S.zoom === 20 ? [-90, 40] : [-110, 100];
+const txOf = T => { const [a, b] = tRange(); return TGR.x0 + (T - a) / (b - a) * (TGR.x1 - TGR.x0); };
+const pxOf = p => PGR.x0 + p / 1050 * (PGR.x1 - PGR.x0);
+/* map + climograph */
+const IND = {lon0: 67.3, lat1: 37.6, kx: 14.6, ky: 15.6, ox: 14, oy: 72};
+const indP = (lon, lat) => [IND.ox + (lon - IND.lon0) * IND.kx, IND.oy + (IND.lat1 - lat) * IND.ky];
+const indInv = (x, y) => [(x - IND.ox) / IND.kx + IND.lon0, IND.lat1 - (y - IND.oy) / IND.ky];
+const CG = {x: 540, y: 120, w: 400, h: 360};
+const cgx = m => CG.x + (m + 0.5) / 12 * CG.w;
+const cgyT = t => CG.y + CG.h - (t + 20) / 60 * CG.h;       // −20 … 40 °C
+let RMAX = 800;
+const cgyR = r => CG.y + CG.h - clamp(r, 0, RMAX) / RMAX * CG.h;
+const pts = (arr, P) => arr.map(p => P(p[0], p[1]).map(v => v.toFixed(1)).join(',')).join(' ');
+
+function build(){
+  svg.innerHTML = `
+  <defs>
+    <linearGradient id="gAir" x1="0" y1="1" x2="0" y2="0"><stop id="air0" offset="0" stop-color="#8cc8f0"/><stop id="air1" offset="1" stop-color="#0b1633"/></linearGradient>
+    <linearGradient id="gBal" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ff8a6b"/><stop offset="1" stop-color="#d6453d"/></linearGradient>
+    <clipPath id="clipCol"><rect x="${COLX.x0}" y="${CY0}" width="${COLX.x1 - COLX.x0}" height="${CY1 - CY0}"/></clipPath>
+  </defs>
+  <g id="scClimb">
+    <rect x="0" y="0" width="1000" height="660" fill="#fbfaf6"/>
+    <!-- the column -->
+    <rect x="${COLX.x0}" y="${CY0}" width="${COLX.x1 - COLX.x0}" height="${CY1 - CY0}" fill="url(#gAir)"/>
+    <g clip-path="url(#clipCol)">
+      <g id="layerBands"></g>
+      <g id="mountains"></g>
+      <g id="colMarks" font-size="10.5" font-weight="600"></g>
+      <line id="string" stroke="#e8eef4" stroke-width="1.2"/>
+      <g id="balloon"><ellipse rx="16" ry="19" fill="url(#gBal)" stroke="#fff" stroke-width="1.2"/><path d="M-4 18 L4 18 L2 23 L-2 23Z" fill="#b3372f"/><rect x="-5" y="27" width="10" height="7" rx="1.5" fill="#f2e7c9" stroke="#8a7a52" stroke-width=".8"/></g>
+    </g>
+    <rect x="${COLX.x0}" y="${CY1}" width="${COLX.x1 - COLX.x0}" height="16" fill="#c9a86a"/>
+    <text x="${(COLX.x0 + COLX.x1) / 2}" y="${CY1 + 34}" text-anchor="middle" fill="#5a4320" font-size="11.5" font-weight="600">Mumbai, sea level</text>
+    <g id="hAxis" font-size="11" fill="#7c878c"></g>
+    <text x="${COLX.x0}" y="26" fill="#4a555b" font-size="13" font-weight="700" letter-spacing=".08em">THE COLUMN OF AIR</text>
+    <!-- temperature graph -->
+    <text x="${TGR.x0}" y="26" fill="#4a555b" font-size="13" font-weight="700" letter-spacing=".08em">TEMPERATURE</text>
+    <g id="tAxes"></g>
+    <path id="tCurve" fill="none" stroke="#d6453d" stroke-width="3" stroke-linejoin="round"/>
+    <path id="tGhost" fill="none" stroke="#8a94a6" stroke-width="1.5" stroke-dasharray="5 4"/>
+    <circle id="tDot" r="6" fill="#d6453d" stroke="#fff" stroke-width="2"/>
+    <text id="tLab" fill="#9b2a24" font-size="12.5" font-weight="700"></text>
+    <rect id="tHit" class="gHit" x="${TGR.x0}" y="${CY0}" width="${TGR.x1 - TGR.x0}" height="${CY1 - CY0}" fill="transparent"/>
+    <!-- pressure graph -->
+    <text x="${PGR.x0}" y="26" fill="#4a555b" font-size="13" font-weight="700" letter-spacing=".08em">PRESSURE</text>
+    <g id="pAxes"></g>
+    <path id="pFill" fill="#3057c9" fill-opacity=".09"/>
+    <path id="pCurve" fill="none" stroke="#3057c9" stroke-width="3" stroke-linejoin="round"/>
+    <circle id="pDot" r="6" fill="#3057c9" stroke="#fff" stroke-width="2"/>
+    <text id="pLab" fill="#1f3c8f" font-size="12.5" font-weight="700"></text>
+    <rect id="pHit" class="gHit" x="${PGR.x0}" y="${CY0}" width="${PGR.x1 - PGR.x0}" height="${CY1 - CY0}" fill="transparent"/>
+    <!-- the height, across all three -->
+    <line id="xhair" x1="${COLX.x0}" x2="${PGR.x1}" stroke="#1d2327" stroke-width="1" stroke-dasharray="3 4" opacity=".55" pointer-events="none"/>
+    <circle id="balloonHit" r="26" fill="transparent" role="slider" aria-label="The weather balloon: drag it up and down" tabindex="0"/>
+  </g>
+
+  <g id="scPlace" display="none">
+    <rect x="0" y="0" width="1000" height="660" fill="#dfeef6"/>
+    <rect x="510" y="0" width="490" height="660" fill="#fbfaf6"/>
+    <line x1="510" y1="0" x2="510" y2="660" stroke="#e2ded2"/>
+    <text x="16" y="28" fill="#1f4760" font-size="13" font-weight="700" letter-spacing=".08em">INDIA</text>
+    <text x="16" y="46" fill="#4a6a80" font-size="11.5">Arrows: the south-west monsoon's two branches</text>
+    <polygon points="${pts(INDIA, indP)}" fill="#e9dcb4" stroke="#8a7a52" stroke-width="1.2"/>
+    <polygon points="${pts(SRILANKA, indP)}" fill="#e9dcb4" stroke="#8a7a52" stroke-width="1" opacity=".7"/>
+    <g id="ghatsG" stroke="#8a6a3a" stroke-width="3" stroke-linecap="round" opacity=".55" fill="none"></g>
+    <g id="indGrid" font-size="10.5" fill="#5a7a8f"></g>
+    <g id="monArrows" stroke="#2c8fb0" stroke-width="3.5" fill="none" stroke-linecap="round"></g>
+    <g id="placeDots" font-size="10.5" font-weight="600" fill="#3b2a12"></g>
+    <g id="pinG"><path d="M0 0 C -9 -14 -13 -20 -13 -27 A 13 13 0 1 1 13 -27 C 13 -20 9 -14 0 0Z" fill="#d6453d" stroke="#fff" stroke-width="2"/><circle cy="-27" r="5" fill="#fff"/></g>
+    <circle id="pinHit" r="22" fill="transparent" role="slider" aria-label="The place: drag it round the map"/>
+    <text id="plName" x="${CG.x}" y="42" fill="#1d2327" font-size="20" font-weight="600"></text>
+    <text id="plSub" x="${CG.x}" y="64" fill="#4a555b" font-size="12.5"></text>
+    <text x="${CG.x}" y="98" fill="#4a555b" font-size="13" font-weight="700" letter-spacing=".08em">CLIMOGRAPH</text>
+    <g id="cgAxes"></g>
+    <g id="cgBars"></g>
+    <path id="cgGhostT" fill="none" stroke="#8a94a6" stroke-width="1.6" stroke-dasharray="5 4"/>
+    <path id="cgBand" fill="#d6453d" opacity=".12"/>
+    <path id="cgT" fill="none" stroke="#d6453d" stroke-width="3"/>
+    <g id="cgTdots"></g>
+    <g font-size="12" font-weight="600">
+      <rect x="${CG.x}" y="${CG.y + CG.h + 34}" width="16" height="12" fill="#3f8fb0"/><text x="${CG.x + 22}" y="${CG.y + CG.h + 45}" fill="#1d5f78">Rain, mm in the month</text>
+      <line x1="${CG.x + 180}" y1="${CG.y + CG.h + 40}" x2="${CG.x + 204}" y2="${CG.y + CG.h + 40}" stroke="#d6453d" stroke-width="3"/><text x="${CG.x + 210}" y="${CG.y + CG.h + 45}" fill="#9b2a24">Average temperature</text>
+      <line x1="${CG.x + 180}" y1="${CG.y + CG.h + 62}" x2="${CG.x + 204}" y2="${CG.y + CG.h + 62}" stroke="#8a94a6" stroke-width="1.6" stroke-dasharray="5 4"/><text id="ghostLab" x="${CG.x + 210}" y="${CG.y + CG.h + 67}" fill="#6b7479"></text>
+    </g>
+    <text id="cgNote" x="${CG.x}" y="${CG.y + CG.h + 100}" fill="#4a555b" font-size="12.5"></text>
+  </g>`;
+  buildPlaceStatic();
+}
+function buildPlaceStatic(){
+  let g = '';
+  for (const lat of [10, 20, 30]) { const [, y] = indP(70, lat); g += `<line x1="${IND.ox}" y1="${y.toFixed(1)}" x2="505" y2="${y.toFixed(1)}" stroke="#9fbfd2" stroke-width=".8" stroke-dasharray="3 5"/><text x="${IND.ox + 2}" y="${(y - 3).toFixed(1)}">${lat}° N</text>`; }
+  $('indGrid').innerHTML = g;
+  /* the Western Ghats and the Khasi hills, drawn where the model's terrain rule puts them */
+  const gh = [[73.6, 21.2], [73.7, 19], [73.9, 17], [74.2, 15], [74.9, 13], [76.0, 11.3], [76.8, 9.5], [77.2, 8.6]].map(p => indP(...p));
+  $('ghatsG').innerHTML = `<path d="${gh.map((p, i) => (i ? 'L' : 'M') + p[0].toFixed(1) + ' ' + p[1].toFixed(1)).join('')}"/>` +
+    `<path d="M${indP(90.6, 25.45).join(' ')} L${indP(92.2, 25.45).join(' ')}"/>`;
+  const arr = (a, b) => { const p = indP(...a), q = indP(...b); const ang = Math.atan2(q[1] - p[1], q[0] - p[0]);
+    return `<path d="M${p[0].toFixed(1)} ${p[1].toFixed(1)} L${q[0].toFixed(1)} ${q[1].toFixed(1)} M${(q[0] - 10 * Math.cos(ang - .5)).toFixed(1)} ${(q[1] - 10 * Math.sin(ang - .5)).toFixed(1)} L${q[0].toFixed(1)} ${q[1].toFixed(1)} L${(q[0] - 10 * Math.cos(ang + .5)).toFixed(1)} ${(q[1] - 10 * Math.sin(ang + .5)).toFixed(1)}"/>`; };
+  $('monArrows').innerHTML = arr([66.5, 12], [71.8, 17.5]) + arr([67.5, 9], [73.5, 12.8]) + arr([86, 15.5], [89.5, 21]) + arr([89.2, 22.3], [84.5, 25.4]);
+  $('placeDots').innerHTML = Object.entries(PLACES).map(([n, [lo, la]]) => { const [x, y] = indP(lo, la);
+    const left = ['Mumbai', 'Jaisalmer', 'Pune', 'Thiruvananthapuram', 'Ooty', 'Shimla'].includes(n);
+    return `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="2.6" fill="#3b2a12"/><text x="${(x + (left ? -5 : 5)).toFixed(1)}" y="${(y + (n === 'Pune' ? 12 : 4)).toFixed(1)}" text-anchor="${left ? 'end' : 'start'}">${n === 'Thiruvananthapuram' ? 'T’puram' : n}</text>`; }).join('');
+}
+
+/* ---- tab 1: the column ------------------------------------------------------ */
+function drawColumnStatic(){
+  const pr = PROFILES[S.prof], col = COL[S.prof];
+  /* the height axis */
+  let ax = '', step = S.zoom === 20 ? 2 : 10;
+  for (let h = 0; h <= S.zoom; h += step) ax += `<text x="${COLX.x0 - 8}" y="${(yOf(h) + 4).toFixed(1)}" text-anchor="end">${h} km</text><line x1="${COLX.x0 - 4}" x2="${COLX.x0}" y1="${yOf(h).toFixed(1)}" y2="${yOf(h).toFixed(1)}" stroke="#9aa3a6"/>`;
+  $('hAxis').innerHTML = ax;
+  /* layers: lines at the tropopause, stratopause, mesopause; the ozone layer shaded (10–50 km, NCERT) */
+  let lb = '';
+  const band = (h0, h1, fill, op) => `<rect x="${COLX.x0}" y="${yOf(h1).toFixed(1)}" width="${COLX.x1 - COLX.x0}" height="${Math.max(0, yOf(h0) - yOf(h1)).toFixed(1)}" fill="${fill}" opacity="${op}"/>`;
+  lb += band(10, 50, '#9b6fe0', .16);
+  for (const [h, name] of [[pr.ht, 'tropopause'], [50, 'stratopause'], [80, 'mesopause']]) {
+    if (h > S.zoom) continue;
+    lb += `<line x1="${COLX.x0}" x2="${COLX.x1}" y1="${yOf(h).toFixed(1)}" y2="${yOf(h).toFixed(1)}" stroke="#ffffff" stroke-width="1.2" stroke-dasharray="6 4" opacity=".8"/>` +
+          `<text x="${COLX.x1 - 6}" y="${(yOf(h) - 5).toFixed(1)}" text-anchor="end" fill="#ffffff" font-size="10.5" font-weight="700" opacity=".9">${name}</text>`;
+  }
+  const lab = (h0, h1, t) => { const hm = (Math.max(0, h0) + Math.min(S.zoom, h1)) / 2; if (h0 >= S.zoom) return '';
+    return `<text x="${COLX.x0 + 8}" y="${(yOf(hm) + 4).toFixed(1)}" fill="#ffffff" font-size="12" font-weight="700" letter-spacing=".04em">${t}</text>`; };
+  lb += lab(0, pr.ht, 'TROPOSPHERE') + lab(pr.ht, 50, 'STRATOSPHERE') + lab(50, 80, 'MESOSPHERE') + lab(100, 120, 'THERMOSPHERE');
+  if (S.zoom === 120) lb += `<text x="${COLX.x0 + 8}" y="${(yOf(30) + 18).toFixed(1)}" fill="#e7dcff" font-size="10.5">ozone layer, 10–50 km</text>`;
+  else lb += `<text x="${COLX.x0 + 8}" y="${(yOf(15) + 18).toFixed(1)}" fill="#e7dcff" font-size="10.5">ozone layer begins (10 km)</text>`;
+  $('layerBands').innerHTML = lb;
+  /* mountains and marks, to scale */
+  if (S.zoom === 20) {
+    const pk = (x, h, w) => `M${x - w} ${CY1} L${x} ${yOf(h).toFixed(1)} L${x + w} ${CY1}Z`;
+    $('mountains').innerHTML = `<path d="${pk(215, 8.849, 60)}" fill="#6f7f8f"/><path d="M${215 - 16} ${(yOf(8.849) + 38).toFixed(1)} L215 ${yOf(8.849).toFixed(1)} L${215 + 14} ${(yOf(8.849) + 36).toFixed(1)}Z" fill="#fff"/>` +
+      `<path d="${pk(120, 3.5, 70)}" fill="#8a9a88"/><path d="${pk(80, 2.2, 40)}" fill="#7d9a74"/>`;
+    const marks = [[2.2, 'Shimla 2.2 km'], [3.5, 'Leh 3.5 km'], [8.849, 'Everest 8.8 km'], [10.2, 'airliners ~10 km']];
+    $('colMarks').innerHTML = marks.map(([h, t]) => `<line x1="${COLX.x1 - 4}" x2="${COLX.x1}" y1="${yOf(h).toFixed(1)}" y2="${yOf(h).toFixed(1)}" stroke="#fff"/><text x="${COLX.x1 - 8}" y="${(yOf(h) + 4).toFixed(1)}" text-anchor="end" fill="#ffffff" stroke="#27405c" stroke-width="2.5" paint-order="stroke">${t}</text>`).join('');
+  } else {
+    $('mountains').innerHTML = `<path d="M150 ${CY1} L215 ${yOf(8.849).toFixed(1)} L250 ${CY1}Z" fill="#6f7f8f"/>`;
+    $('colMarks').innerHTML = [[90, 'meteors burn up'], [100, 'edge of space, 100 km']].map(([h, t]) => `<text x="${COLX.x1 - 8}" y="${(yOf(h) + 4).toFixed(1)}" text-anchor="end" fill="#ffffff" stroke="#27405c" stroke-width="2.5" paint-order="stroke">${t}</text>`).join('');
+  }
+  /* sky colour: from the density at each height */
+  $('air0').setAttribute('stop-color', S.prof === 'pole' ? '#b7d6ea' : '#8cc8f0');
+  $('air1').setAttribute('stop-color', S.zoom === 20 ? '#1f4f8a' : '#050b1c');
+  /* temperature axes */
+  const [ta, tb] = tRange();
+  let tx = `<line x1="${TGR.x0}" y1="${CY1}" x2="${TGR.x1}" y2="${CY1}" stroke="#9aa3a6"/>`;
+  for (let T = Math.ceil(ta / 20) * 20; T <= tb; T += 20) tx += `<line x1="${txOf(T).toFixed(1)}" x2="${txOf(T).toFixed(1)}" y1="${CY0}" y2="${CY1}" stroke="${T === 0 ? '#c9cfd2' : '#efece4'}"/><text x="${txOf(T).toFixed(1)}" y="${CY1 + 18}" text-anchor="middle" fill="#7c878c" font-size="11">${T}°</text>`;
+  for (let h = 0; h <= S.zoom; h += step) tx += `<line x1="${TGR.x0}" x2="${TGR.x1}" y1="${yOf(h).toFixed(1)}" y2="${yOf(h).toFixed(1)}" stroke="#f3f1ea"/>`;
+  tx += `<text x="${TGR.x1}" y="${CY1 + 34}" text-anchor="end" fill="#7c878c" font-size="11">°C</text>`;
+  $('tAxes').innerHTML = tx;
+  let pa = `<line x1="${PGR.x0}" y1="${CY1}" x2="${PGR.x1}" y2="${CY1}" stroke="#9aa3a6"/>`;
+  for (let p = 0; p <= 1000; p += 200) pa += `<line x1="${pxOf(p).toFixed(1)}" x2="${pxOf(p).toFixed(1)}" y1="${CY0}" y2="${CY1}" stroke="#efece4"/><text x="${pxOf(p).toFixed(1)}" y="${CY1 + 18}" text-anchor="middle" fill="#7c878c" font-size="11">${p}</text>`;
+  for (let h = 0; h <= S.zoom; h += step) pa += `<line x1="${PGR.x0}" x2="${PGR.x1}" y1="${yOf(h).toFixed(1)}" y2="${yOf(h).toFixed(1)}" stroke="#f3f1ea"/>`;
+  pa += `<text x="${PGR.x1}" y="${CY1 + 34}" text-anchor="end" fill="#7c878c" font-size="11">hPa (millibar)</text>`;
+  $('pAxes').innerHTML = pa;
+  /* curves, from the model */
+  let tc = '', pc = '';
+  const n = 240;
+  for (let i = 0; i <= n; i++) { const h = i / n * S.zoom; tc += (i ? 'L' : 'M') + txOf(tempAt(pr, h)).toFixed(1) + ' ' + yOf(h).toFixed(1); pc += (i ? 'L' : 'M') + pxOf(col.at(h)).toFixed(1) + ' ' + yOf(h).toFixed(1); }
+  $('tCurve').setAttribute('d', tc); $('pCurve').setAttribute('d', pc);
+  $('pFill').setAttribute('d', pc + `L${PGR.x0} ${yOf(S.zoom).toFixed(1)}L${PGR.x0} ${CY1}Z`);
+  /* the standard column as a ghost, when looking at the equator or the poles */
+  let gc = '';
+  if (S.prof !== 'std') for (let i = 0; i <= n; i++) { const h = i / n * S.zoom; gc += (i ? 'L' : 'M') + txOf(tempAt(PROFILES.std, h)).toFixed(1) + ' ' + yOf(h).toFixed(1); }
+  $('tGhost').setAttribute('d', gc);
+  $('eqG').textContent = fmt(lapse(pr), 2);
+}
+function paintClimb(){
+  const pr = PROFILES[S.prof], col = COL[S.prof], h = S.h;
+  const vis = h <= S.zoom;
+  const T = tempAt(pr, h), p = col.at(h), rho = density(p, T), rho0 = density(P0, pr.T0);
+  const y = yOf(Math.min(h, S.zoom));
+  $('balloon').setAttribute('transform', `translate(155 ${(y - 30).toFixed(1)})`);
+  $('balloon').setAttribute('opacity', vis ? 1 : .3);
+  $('string').setAttribute('x1', 155); $('string').setAttribute('x2', 155); $('string').setAttribute('y1', (y - 1).toFixed(1)); $('string').setAttribute('y2', CY1);
+  $('balloonHit').setAttribute('cx', 155); $('balloonHit').setAttribute('cy', (y - 20).toFixed(1));
+  $('balloonHit').style.pointerEvents = S.locked ? '' : 'none';
+  $('xhair').setAttribute('y1', y.toFixed(1)); $('xhair').setAttribute('y2', y.toFixed(1));
+  const show = S.locked;
+  $('tDot').setAttribute('cx', txOf(T).toFixed(1)); $('tDot').setAttribute('cy', y.toFixed(1)); $('tDot').setAttribute('opacity', show && vis ? 1 : 0);
+  $('pDot').setAttribute('cx', pxOf(p).toFixed(1)); $('pDot').setAttribute('cy', y.toFixed(1)); $('pDot').setAttribute('opacity', show && vis ? 1 : 0);
+  const tl = txOf(T) + (txOf(T) > TGR.x1 - 90 ? -12 : 12);
+  $('tLab').setAttribute('x', tl.toFixed(1)); $('tLab').setAttribute('y', (y - 8).toFixed(1)); $('tLab').setAttribute('text-anchor', txOf(T) > TGR.x1 - 90 ? 'end' : 'start');
+  $('tLab').textContent = show ? fmt(T, 1) + ' °C' : '';
+  const pl = pxOf(p) + (pxOf(p) > PGR.x1 - 110 ? -12 : 12);
+  $('pLab').setAttribute('x', pl.toFixed(1)); $('pLab').setAttribute('y', (y - 8).toFixed(1)); $('pLab').setAttribute('text-anchor', pxOf(p) > PGR.x1 - 110 ? 'end' : 'start');
+  $('pLab').textContent = show ? (p >= 10 ? fmt(p, 0) : p >= 0.1 ? fmt(p, 2) : p.toExponential(1)) + ' hPa' : '';
+  /* the curves are part of the answer: hidden until the prediction is in */
+  for (const id of ['tCurve', 'pCurve', 'pFill', 'tGhost']) $(id).setAttribute('opacity', show ? 1 : 0);
+  $('h').value = h; $('hOut').textContent = fmt(h, 1) + ' km';
+  $('rLayer').textContent = show ? layerAt(pr, h) : '—';
+  $('rT').textContent = show ? fmt(T, 1) + ' °C' : '—';
+  $('rP').textContent = show ? (p >= 10 ? fmt(p, 1) : fmt(p, 3)) + ' hPa' : '—';
+  $('rRho').textContent = show ? fmt(100 * rho / rho0, 1) : '—';
+  $('rAbove').textContent = show ? fmt(100 * p / P0, 1) + ' %' : '—';
+  $('rBelow').textContent = show ? fmt(100 * (1 - p / P0), 1) + ' %' : '—';
+  const dpdz = p * G0 / (RD * (T + 273.15)) * 10 / 100;         // hPa per 10 m
+  $('eqDp').textContent = show ? (dpdz >= 0.1 ? fmt(dpdz, 2) : dpdz.toExponential(1)) : '…';
+  for (const b of $('profSeg').children) b.setAttribute('aria-pressed', b.dataset.prof === S.prof);
+  for (const b of $('zoomSeg').children) b.setAttribute('aria-pressed', +b.dataset.zoom === S.zoom);
+  if (S.tab === 'climb') whyClimb(T, p);
+  checkClimb(T, p);
+}
+function whyClimb(T, p){
+  if (!S.locked) return;
+  const pr = PROFILES[S.prof], h = S.h, L = layerAt(pr, h);
+  let t = `<p>At <b>${fmt(h, 1)} km</b> the balloon is in the <b>${L.toLowerCase()}</b>. `;
+  if (L === 'Troposphere') t += `Here the air is warmed from below by the ground, so every kilometre up is <b>${fmt(lapse(pr), 1)} °C colder</b>. The ground is at ${fmt(pr.T0, 0)} °C; here it is ${fmt(T, 1)} °C.</p>`;
+  else if (L === 'Tropopause') t += `The temperature has stopped falling: ${fmt(T, 0)} °C. Above this the weather ends: no more clouds climbing, no more rain.</p>`;
+  else if (L === 'Stratosphere') t += h < Math.max(pr.ht, 20) + 1 ? `It is as cold as the tropopause, ${fmt(T, 0)} °C, and not getting colder.</p>` : `It is getting <b>warmer</b> again: ${fmt(T, 0)} °C. The ozone here absorbs the Sun's ultraviolet light and is heated by it.</p>`;
+  else if (L === 'Mesosphere') t += `Cooling again, towards −100 °C at 80 km. Meteors burn up here.</p>`;
+  else t += `The few molecules here are heated hard by the Sun: ${fmt(T, 0)} °C, though there is almost no air to feel it. Radio waves bounce off this layer.</p>`;
+  t += `<p>Pressure is the weight of the air above you. ${fmt(100 * p / P0, 1)} % of the atmosphere is still above you, so the pressure is ${p >= 10 ? fmt(p, 0) : fmt(p, 2)} hPa. `;
+  t += h < 3 ? `Near the ground each 10 m of height takes about ${fmt(p * G0 / (RD * (T + 273.15)) * 0.1, 1)} hPa off.</p>` : `The higher you go, the less air there is above, so the pressure falls more and more slowly.</p>`;
+  $('why').innerHTML = t; $('whyCard').hidden = false;
+}
+function checkClimb(T, p){
+  if (!S.locked) return;
+  const pr = PROFILES[S.prof], h = S.h;
+  S.maxH = Math.max(S.maxH, h);
+  if (S.prof === 'std' && h >= 4 && h < pr.ht - 0.5) discover('lapse');
+  if (h > pr.ht + 0.5 && h < 20) discover('tropo');
+  if (h >= 25 && h <= 50 && T > tempAt(pr, 20) + 5) { discover('ozone'); maybeExplain(); }
+  if (1 - p / P0 >= 0.99) discover('ninetynine');
+  S.seenProf[S.prof] = true;
+  if (S.seenProf.eq && S.seenProf.pole && h > 9 && h < 17 && S.prof === 'eq') discover('equator');
+}
+let EXPLAINED = false;
+function maybeExplain(){
+  if (EXPLAINED || !POE) return;
+  EXPLAINED = true;
+  const pr = PROFILES[S.prof];
+  POE.explain(`The model's temperature falls by ${fmt(lapse(pr), 1)} °C per km through the troposphere, from ${fmt(pr.T0, 0)} °C at the ground to <b>${fmt(pr.Tt, 1)} °C at ${pr.ht} km</b>. ` +
+    `Then it stops falling, and in the stratosphere it <b>rises again</b>, to ${fmt(tempAt(pr, 50), 1)} °C at 50 km, because the ozone there absorbs ultraviolet sunlight. ` +
+    `The pressure only ever falls: ${fmt(COL[S.prof].at(50), 2)} hPa is left at 50 km.`);
+}
+
+/* ---- tab 2: a place --------------------------------------------------------- */
+let CUR = null, GHOST = null;
+function recomputePlace(keepGhost){
+  if (CUR && !keepGhost) GHOST = CUR;
+  const pl = placeOf(S.place.lon, S.place.lat, S.place.alt);
+  CUR = {pl, c: climate(pl, S.monsoon), name: S.place.name};
+  paintPlace();
+}
+function paintPlace(){
+  const [x, y] = indP(S.place.lon, S.place.lat);
+  $('pinG').setAttribute('transform', `translate(${x.toFixed(1)} ${y.toFixed(1)})`);
+  $('pinHit').setAttribute('cx', x.toFixed(1)); $('pinHit').setAttribute('cy', (y - 22).toFixed(1));
+  $('pinHit').style.pointerEvents = S.locked ? '' : 'none';
+  $('monArrows').setAttribute('opacity', S.monsoon ? .85 : .08);
+  const pl = CUR.pl, c = CUR.c;
+  $('plName').textContent = CUR.name;
+  $('plSub').textContent = `${fmt(pl.lat, 1)}° N · ${pl.dSea < 5 ? 'on the coast' : fmt(pl.dSea, 0) + ' km from the sea'} · ${fmt(pl.alt, 0)} m up`;
+  const maxR = Math.max(...c.months.map(m => m.rain), GHOST ? 0 : 0);
+  RMAX = [200, 400, 600, 800, 1200, 1600, 2400, 3200, 4000].find(v => v >= maxR) || Math.ceil(maxR / 1000) * 1000;
+  let ax = `<line x1="${CG.x}" y1="${CG.y + CG.h}" x2="${CG.x + CG.w}" y2="${CG.y + CG.h}" stroke="#9aa3a6"/>`;
+  for (let t = -20; t <= 40; t += 10) ax += `<line x1="${CG.x}" x2="${CG.x + CG.w}" y1="${cgyT(t).toFixed(1)}" y2="${cgyT(t).toFixed(1)}" stroke="${t === 0 ? '#d5d9db' : '#efece4'}"/><text x="${CG.x - 8}" y="${(cgyT(t) + 4).toFixed(1)}" text-anchor="end" fill="#b5352d" font-size="11">${t}°</text>`;
+  for (let i = 0; i <= 6; i++) { const r = RMAX * i / 6; ax += `<text x="${CG.x + CG.w + 8}" y="${(cgyR(r) + 4).toFixed(1)}" fill="#1d5f78" font-size="11">${fmt(r, 0)}</text>`; }
+  ax += `<text x="${CG.x - 8}" y="${CG.y - 10}" text-anchor="end" fill="#b5352d" font-size="11" font-weight="600">°C</text><text x="${CG.x + CG.w + 8}" y="${CG.y - 10}" fill="#1d5f78" font-size="11" font-weight="600">mm</text>`;
+  ax += MONTHS.map((m, i) => `<text x="${cgx(i).toFixed(1)}" y="${CG.y + CG.h + 16}" text-anchor="middle" fill="#7c878c" font-size="11" font-weight="600">${m}</text>`).join('');
+  $('cgAxes').innerHTML = ax;
+  const bw = CG.w / 12 * 0.66;
+  $('cgBars').innerHTML = c.months.map((m, i) => `<rect x="${(cgx(i) - bw / 2).toFixed(1)}" y="${cgyR(m.rain).toFixed(1)}" width="${bw.toFixed(1)}" height="${(CG.y + CG.h - cgyR(m.rain)).toFixed(1)}" fill="#3f8fb0" opacity=".85" rx="2"/>` +
+    (m.rain > RMAX * 0.08 ? `<text x="${cgx(i).toFixed(1)}" y="${(cgyR(m.rain) - 4).toFixed(1)}" text-anchor="middle" fill="#1d5f78" font-size="9.5">${fmt(m.rain, 0)}</text>` : '')).join('');
+  const line = k => c.months.map((m, i) => (i ? 'L' : 'M') + cgx(i).toFixed(1) + ' ' + cgyT(m[k]).toFixed(1)).join('');
+  $('cgT').setAttribute('d', line('mean'));
+  $('cgBand').setAttribute('d', line('max') + c.months.slice().reverse().map((m, i) => 'L' + cgx(11 - i).toFixed(1) + ' ' + cgyT(m.min).toFixed(1)).join('') + 'Z');
+  $('cgTdots').innerHTML = c.months.map((m, i) => `<circle cx="${cgx(i).toFixed(1)}" cy="${cgyT(m.mean).toFixed(1)}" r="3.2" fill="#d6453d"/>`).join('');
+  if (GHOST) { $('cgGhostT').setAttribute('d', GHOST.c.months.map((m, i) => (i ? 'L' : 'M') + cgx(i).toFixed(1) + ' ' + cgyT(m.mean).toFixed(1)).join('')); $('ghostLab').textContent = GHOST.name + ', average temperature'; }
+  else { $('cgGhostT').setAttribute('d', ''); $('ghostLab').textContent = ''; }
+  $('cgNote').textContent = `${fmt(c.rain, 0)} mm of rain in a year; the wettest month is ${MONTHS[c.wet]}. Temperature range ${fmt(c.range, 1)} °C.`;
+  $('pLat').textContent = fmt(pl.lat, 1) + '° N';
+  $('pDist').textContent = `${fmt(pl.dW, 0)} / ${fmt(pl.dE, 0)} km`;
+  $('pHot').textContent = `${MONTHS[c.hotMonth]} ${fmt(c.hot, 1)} °C`;
+  $('pCold').textContent = fmt(c.cold, 1) + ' °C';
+  $('pRain').textContent = fmt(c.rain, 0) + ' mm';
+  $('pWet').textContent = MONTHS[c.wet];
+  $('alt').value = S.place.alt; $('altOut').textContent = fmt(S.place.alt, 0) + ' m';
+  $('btnMonsoon').setAttribute('aria-pressed', S.monsoon); $('btnMonsoon').textContent = S.monsoon ? '🌧 Monsoon winds on' : '☀ Monsoon winds off';
+  for (const b of $('presets').children) b.setAttribute('aria-pressed', b.dataset.p === S.place.name);
+  whyPlace(); checkPlace();
+}
+function whyPlace(){
+  if (!S.locked || S.tab !== 'place') return;
+  const pl = CUR.pl, c = CUR.c, t = terrain(pl);
+  let s = `<p><b>Latitude ${fmt(pl.lat, 1)}° N.</b> ` + (pl.lat < 15 ? 'The Sun is high all year: warm in every month.' : 'The Sun is higher in summer than in winter, so the months differ.') + `</p>`;
+  s += `<p><b>Height ${fmt(pl.alt, 0)} m.</b> ` + (pl.alt > 300 ? `The same lapse rate as the balloon: ${fmt(6.5 * pl.alt / 1000, 1)} °C cooler than at sea level.` : 'Near sea level.') + `</p>`;
+  s += `<p><b>${pl.dSea < 60 ? 'By the sea' : fmt(pl.dSea, 0) + ' km from the sea'}.</b> ` + (pl.dSea < 60 ? `The sea steadies it: the warmest and coolest months differ by only ${fmt(c.range, 1)} °C.` : `Too far for the sea air to steady it: a range of ${fmt(c.range, 1)} °C.`) + `</p>`;
+  if (!S.monsoon) s += `<p><b>Monsoon winds off.</b> With no wind from the sea in summer, the rain is almost gone, and the summer months stay hotter without the clouds.</p>`;
+  else {
+    s += `<p><b>Winds.</b> The monsoon arrives about ${dateOf(onsetDay(pl.lat))}. `;
+    if (t.khasi > 1) s += 'The Bay of Bengal branch runs straight into the Khasi hills and is forced up: it rains and rains.';
+    else if (t.ghats > 1) s += 'The Arabian Sea branch hits the Western Ghats head on and is forced up: heavy rain on this side.';
+    else if (t.shadow < 0.7) s += `The Arabian Sea branch has dropped most of its water on the Western Ghats: this side is in their rain shadow.`;
+    else if (t.thar < 1) s += 'The flat Thar desert has no hills to lift the moist air, and both branches arrive dried out: very little rain.';
+    else if (t.blocked < 1) s += 'The Himalaya stand between it and the monsoon: little rain reaches it.';
+    else if (t.himal > 1) s += 'The Bay of Bengal branch, travelling up the Ganga plain, is forced up the first ranges of the Himalaya here: more rain than on the plains below.';
+    else s += `Its rain comes from the ${pl.dW < pl.dE ? 'Arabian Sea' : 'Bay of Bengal'} branch.`;
+    if (pl.lat < 16 && pl.dE < 200) s += ' In October–December the north-east monsoon crosses the Bay and brings its <b>biggest</b> rain.';
+    s += '</p>';
+  }
+  if (GHOST) s += `<p style="color:var(--ink-3);font-size:13px">Dashed: ${esc(GHOST.name)}, for comparison.</p>`;
+  $('why').innerHTML = s; $('whyCard').hidden = false;
+}
+function dateOf(d){ d = Math.round(d); let m = 0; while (m < 11 && d > MDAYS[m]) { d -= MDAYS[m]; m++; } return d + ' ' + ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'][m]; }
+function checkPlace(){
+  if (!S.locked) return;
+  const pl = CUR.pl, c = CUR.c;
+  if (pl.alt >= 1500 && c.hot < 22) discover('hill');
+  if (S.monsoon && c.wet >= 9 && c.months[c.wet].rain > 200) discover('twomonsoons');
+}
+
+/* ============================================================================
+   Controls
+   ============================================================================ */
+build();
+function setTab(t){
+  S.tab = t;
+  for (const b of $('tabs').children) b.setAttribute('aria-pressed', b.dataset.tab === t);
+  $('scClimb').setAttribute('display', t === 'climb' ? 'inline' : 'none');
+  $('scPlace').setAttribute('display', t === 'place' ? 'inline' : 'none');
+  $('ctlClimb').hidden = t !== 'climb'; $('ctlPlace').hidden = t !== 'place';
+  $('whyCard').hidden = true;
+  if (t === 'climb') paintClimb(); else paintPlace();
+  track('tab', {tab: t});
+}
+$('tabs').addEventListener('click', e => { const b = e.target.closest('[data-tab]'); if (b && !b.disabled) { sound('tick'); setTab(b.dataset.tab); } });
+$('profSeg').addEventListener('click', e => { const b = e.target.closest('[data-prof]'); if (!b || b.disabled) return; S.prof = b.dataset.prof; sound('pop'); drawColumnStatic(); paintClimb(); track('profile', {prof: S.prof}); });
+$('zoomSeg').addEventListener('click', e => { const b = e.target.closest('[data-zoom]'); if (!b || b.disabled) return; S.zoom = +b.dataset.zoom; sound('tick'); drawColumnStatic(); paintClimb(); });
+$('h').addEventListener('input', e => { S.h = +e.target.value; if (S.h > S.zoom) { S.zoom = 120; drawColumnStatic(); } paintClimb(); });
+$('h').addEventListener('change', () => track('height', {h: S.h}));
+drag($('balloonHit'), svg, {
+  start(){ if (!S.locked) return false; },
+  move(p){ S.h = +hOf(p.y + 20).toFixed(2); paintClimb(); },
+  end(){ track('balloon', {h: S.h}); },
+});
+for (const id of ['tHit', 'pHit']) drag($(id), svg, {
+  start(p){ if (!S.locked) return false; S.h = +hOf(p.y).toFixed(2); paintClimb(); },
+  move(p){ S.h = +hOf(p.y).toFixed(2); paintClimb(); },
+  end(){ track('graphHeight', {h: S.h}); },
+});
+$('balloonHit').addEventListener('keydown', e => {
+  const k = {ArrowUp: 1, ArrowRight: 1, ArrowDown: -1, ArrowLeft: -1}[e.key];
+  if (!k || !S.locked) return; e.preventDefault();
+  S.h = clamp(+(S.h + k * (S.zoom === 20 ? 0.1 : 1)).toFixed(2), 0, S.zoom); paintClimb();
+});
+
+$('presets').innerHTML = Object.keys(PLACES).map(n => `<button data-p="${n}" aria-pressed="false">${n}</button>`).join('');
+$('presets').addEventListener('click', e => { const b = e.target.closest('[data-p]'); if (!b || !S.locked) return;
+  const [lon, lat, alt] = PLACES[b.dataset.p]; S.place = {lon, lat, alt, name: b.dataset.p}; sound('pop'); recomputePlace(); track('place', {name: b.dataset.p}); });
+$('alt').addEventListener('input', e => { S.place.alt = +e.target.value; recomputePlace(true); });
+$('alt').addEventListener('change', () => track('altitude', {alt: S.place.alt}));
+$('btnMonsoon').addEventListener('click', () => { S.monsoon = !S.monsoon; sound('pop'); recomputePlace(true); track('monsoon', {on: S.monsoon}); });
+let PRE = null;
+drag($('pinHit'), svg, {
+  start(){ if (!S.locked) return false; PRE = CUR; },
+  move(p){ const [lon, lat] = indInv(p.x, p.y + 22); if (!inPoly(INDIA, lon, lat)) return; S.place.lon = lon; S.place.lat = lat; S.place.name = 'Your town'; recomputePlace(true); },
+  end(){ if (PRE && PRE.name !== 'Your town') GHOST = PRE; paintPlace(); track('dragPlace', {lat: +S.place.lat.toFixed(2)}); },
+});
+
+function lockControls(lock){
+  for (const id of ['h', 'alt', 'btnMonsoon']) $(id).disabled = lock;
+  for (const b of $$('#profSeg button, #zoomSeg button, #presets button')) b.disabled = lock;
+  $('gate').hidden = !lock;
+}
+
+
+/* ============================================================================
+   Start
+   ============================================================================ */
+findings($('finds'), [
+  {id: 'lapse',       icon: '↓', label: '6.5 °C colder for every kilometre',   hint: 'Climb a few kilometres'},
+  {id: 'tropo',       icon: '━', label: 'The tropopause: it stops getting colder', hint: 'Go above the airliners'},
+  {id: 'ozone',       icon: '☀', label: 'Warmer again in the ozone layer',      hint: 'Keep climbing'},
+  {id: 'ninetynine',  icon: '99', label: '99 % of the air lies below 32 km',     hint: 'How much air is above you?'},
+  {id: 'equator',     icon: '⇕', label: 'The troposphere is thickest over the equator', hint: 'Compare the equator with the poles'},
+  {id: 'hill',        icon: '▲', label: 'A hill station stays cool',             hint: 'Take a place up high'},
+  {id: 'twomonsoons', icon: '↺', label: 'Chennai’s rain comes in winter',        hint: 'Whose wettest month is not July?'},
+], () => toast('All seven found. You have read the atmosphere from the ground to space.', 4200));
+
+const POE = predict($('poe'), {
+  id: 'climb-temperature',
+  q: 'A weather balloon rises from the beach at Mumbai, up to 50 km. What happens to the temperature on the way up?',
+  options: [
+    {id: 'falls',  text: 'It falls all the way up.'},
+    {id: 'turns',  text: 'It falls for a while, stops falling, and then rises again.', right: true},
+    {id: 'rises',  text: 'It rises: the balloon gets closer to the Sun.'},
+    {id: 'same',   text: 'It stays about the same.'},
+  ],
+  onLock(){
+    S.locked = true;
+    lockControls(false);
+    say('Now climb. Drag the balloon up, and watch both graphs.');
+    paintClimb(); recomputePlace(true);
+  },
+});
+lockControls(!POE.locked);
+if (!Play.FF('predict')) S.locked = true;
+drawColumnStatic();
+recomputePlace(true);
+setTab(S.tab);
+window.PG_STATE = () => JSON.parse(JSON.stringify(Object.assign({}, S, {cur: CUR && {rain: CUR.c.rain, wet: CUR.c.wet, hot: CUR.c.hot, cold: CUR.c.cold, range: CUR.c.range, dW: CUR.pl.dW, dE: CUR.pl.dE}})));
+window.PG_MODEL = {PROFILES, tempAt, lapse, column, density, layerAt, climate, placeOf, rainDay, terrain, onsetDay, PLACES, P0, G0, RD};
+</script>
+</body>
+</html>

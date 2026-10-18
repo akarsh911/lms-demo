@@ -1,0 +1,540 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Circles and Tangents</title>
+<meta name="description" content="Class 10: slide or turn a line across a circle until its two crossing points merge into a tangent; measure the tangent at right angles to the radius; and find that the two tangents from an outside point are equal.">
+<link rel="icon" href="../../favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600&family=Inter:wght@400;500;600;700&family=Nunito:wght@500;700;800&family=Newsreader:opsz,wght@6..72,400;6..72,500&family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="../../play.css">
+<style>
+/* Only what this page needs beyond play.css. */
+.pg-stage{align-self:start; min-height:0}
+svg text.m{font-family:var(--font-mono)}
+.tabs{display:flex; gap:4px; padding:10px 12px 0; border-bottom:1px solid var(--hair); background:var(--card)}
+.tab{border:1px solid transparent; border-bottom:none; background:none; padding:8px 16px; border-radius:8px 8px 0 0; cursor:pointer;
+  font-weight:600; font-size:15px; color:var(--ink-3); margin-bottom:-1px}
+.tab[aria-selected="true"]{background:var(--card); border-color:var(--hair); color:var(--ink); border-bottom:1px solid var(--card)}
+.gate{position:absolute; left:0; right:0; top:48px; bottom:0; display:grid; place-items:center; pointer-events:none}
+.gate span{background:rgba(29,35,39,.85); color:#fff; padding:10px 16px; border-radius:99px; font-weight:600; font-size:14px}
+.note{font-size:12.5px; color:var(--ink-3); margin:6px 0 0}
+.why p{font-size:14px; margin-bottom:.55em}
+.ctl output{min-width:64px; font-family:var(--font-mono)}
+select{width:100%}
+.hit{cursor:grab}
+.hit.dragging{cursor:grabbing}
+@media (max-width:1180px) and (min-width:981px){ .pg-main.wide-side{grid-template-columns:minmax(0,1fr) 330px} }
+</style>
+</head>
+<body>
+<header class="pg-top"></header>
+
+<div class="pg-intro">
+  <h1>Circles and tangents</h1>
+  <p>NCERT Class 10, Chapter 10. A line can cut a circle twice, touch it once, or miss it. Slide a line across a circle, or turn it about a point,
+     and watch its two crossing points close in and merge into a tangent. Measure the angle the tangent makes with the radius.
+     Then draw the tangents from a point outside the circle and compare their lengths.</p>
+</div>
+
+<main class="pg-main wide-side">
+  <section class="pg-stage">
+    <div class="tabs" role="tablist">
+      <button class="tab" role="tab" id="tabA" aria-selected="true">Secant to tangent</button>
+      <button class="tab" role="tab" id="tabB" aria-selected="false">Tangents from a point</button>
+    </div>
+    <svg id="stageA" viewBox="0 0 1000 600" role="img" aria-label="A circle and a line that can be slid and turned, with the chord it cuts and a graph of chord length against distance from the centre"></svg>
+    <svg id="stageB" viewBox="0 0 1000 600" role="img" aria-label="A circle, a point P and the tangents from P, with their lengths and angles measured" hidden></svg>
+    <div class="gate" id="gate"><span>Make your prediction first →</span></div>
+  </section>
+
+  <aside class="pg-side">
+    <div id="poeA"></div>
+    <div id="poeB" hidden></div>
+
+    <div class="card" id="cardA">
+      <div class="kicker">The line</div>
+      <div class="ctl"><label for="ang">Turn</label><input type="range" id="ang" min="0" max="179" step="1" value="0"><output id="angOut">0°</output></div>
+      <p class="note">Drag the orange point P to slide the line (Activity 2). Drop P on the circle, then drag the white handle to turn the line about P (Activity 1). You can also drag the dot on the small graph.</p>
+    </div>
+
+    <div class="card" id="cardB" hidden>
+      <div class="kicker">The circle and the point</div>
+      <select id="preset" aria-label="A question from the book"></select>
+      <div class="ctl"><label for="rad">Radius</label><input type="range" id="rad" min="1" max="8" step="0.5" value="5"><output id="radOut">5 cm</output></div>
+      <p class="note">Drag P inside, onto, or outside the circle. The model turns a line about P and keeps every position where it touches the circle just once.</p>
+    </div>
+
+    <div class="card why" id="whyCard" hidden>
+      <div class="kicker">What is happening</div>
+      <div id="why"></div>
+    </div>
+
+    <div class="card"><div class="kicker">To find</div><div id="finds"></div></div>
+  </aside>
+</main>
+
+<script src="../../play.js"></script>
+<script>
+'use strict';
+const {$, esc, clamp, drag, sound, say, track, toast, predict, findings, discover, found,
+       shareState, sharedState, mount} = Play;
+mount({thread: 'polygons', band: 'modeller'});
+
+/* MODEL:start ==================================================================
+   Lengths in cm, the centre O at the origin, radius r.
+   A line is a point P and a direction θ (u = (cos θ, sin θ)). Its common points with
+   the circle solve |P + t·u|² = r², i.e. t² + 2(P·u)t + |P|² − r² = 0: the sign of
+   the discriminant says two points (a secant), one (a tangent) or none. The
+   distance from O to the line is d = |P × u|, and the chord is the gap between the
+   two solutions.
+   Tangents from a point P: the model turns a line about P through every direction
+   (0 to 180°, 720 steps) and measures f(θ) = d(θ) − r. Each change of sign is a
+   direction where the line just touches; bisection pins it down. If the largest f is
+   0 (P on the circle) there is one such line; if f < 0 everywhere (P inside), none.
+   The point of contact is the foot of the perpendicular from O to that line.
+   ============================================================================ */
+const dot = (a, b) => a.x * b.x + a.y * b.y, cross = (a, b) => a.x * b.y - a.y * b.x;
+const dir = th => ({x: Math.cos(th), y: Math.sin(th)});
+function intersect(P, th, r){
+  const u = dir(th), B = dot(P, u), C = dot(P, P) - r * r, disc = B * B - C, d = Math.abs(cross(P, u));
+  const tol = 1e-9 * Math.max(1, r * r);
+  if (Math.abs(disc) <= tol) { const t = -B; return {kind: 'one', d, chord: 0, pts: [{x: P.x + t * u.x, y: P.y + t * u.y}]}; }
+  if (disc < 0) return {kind: 'none', d, chord: 0, pts: []};
+  const s = Math.sqrt(disc);
+  return {kind: 'two', d, chord: 2 * s, pts: [-B - s, -B + s].map(t => ({x: P.x + t * u.x, y: P.y + t * u.y}))};
+}
+/* The angle ABC in degrees. */
+function angle(A, Bp, C){
+  const p = {x: A.x - Bp.x, y: A.y - Bp.y}, q = {x: C.x - Bp.x, y: C.y - Bp.y};
+  return Math.acos(clamp(dot(p, q) / Math.hypot(p.x, p.y) / Math.hypot(q.x, q.y), -1, 1)) * 180 / Math.PI;
+}
+function tangentsFrom(P, r){
+  const f = th => Math.abs(cross(P, dir(th))) - r, N = 720, out = [];
+  /* the largest f: sampled, then refined by ternary search */
+  let bi = 0, bv = -Infinity;
+  for (let i = 0; i < N; i++) { const v = f(Math.PI * i / N); if (v > bv) { bv = v; bi = i; } }
+  let lo = Math.PI * (bi - 1) / N, hi = Math.PI * (bi + 1) / N;
+  for (let k = 0; k < 100; k++) { const m1 = lo + (hi - lo) / 3, m2 = hi - (hi - lo) / 3; if (f(m1) < f(m2)) lo = m1; else hi = m2; }
+  const thMax = (lo + hi) / 2, fmax = f(thMax);
+  const foot = th => { const u = dir(th), t = -dot(P, u); return {x: P.x + t * u.x, y: P.y + t * u.y}; };
+  if (Math.abs(fmax) < 1e-7) return {kind: 'on', dirs: [thMax], T: [foot(thMax)], len: [0]};
+  if (fmax < 0) return {kind: 'inside', dirs: [], T: [], len: []};
+  let a = 0, fa = f(0);
+  for (let i = 1; i <= N; i++) {
+    const b = Math.PI * i / N, fb = f(b);
+    if (fb === 0) out.push(b);
+    else if (fa * fb < 0) { let p = a, q = b, fp = fa; for (let k = 0; k < 80; k++) { const m = (p + q) / 2, fm = f(m); if (fp * fm <= 0) q = m; else { p = m; fp = fm; } } out.push((p + q) / 2); }
+    a = b; fa = fb;
+  }
+  const T = out.map(foot);
+  return {kind: 'outside', dirs: out, T, len: T.map(t => Math.hypot(P.x - t.x, P.y - t.y))};
+}
+/* MODEL:end */
+
+const O = {x: 0, y: 0};
+const f1 = v => (Math.abs(v) < 5e-3 ? 0 : v).toFixed(2).replace('-', '−');
+const fa = v => (Math.abs(v - Math.round(v)) < 0.05 ? Math.round(v).toFixed(1) : v.toFixed(1)) + '°';
+const niceLen = v => { for (let d = 1; d <= 6; d++) { const n = Math.round(v * d); if (Math.abs(n / d - v) < 1e-6) return d === 1 ? String(n) : `${n}/${d}`; }
+  const sq = Math.round(v * v); if (Math.abs(v * v - sq) < 1e-6) return `√${sq} ≈ ${v.toFixed(2)}`; return v.toFixed(2); };
+const TEAL = '#1f8a8a', LINE = '#d9822b', RED = '#c2362f', INK = '#1d2327';
+
+/* ---- state: plain data --------------------------------------------------- */
+const S = {tab: 'A', r: 5, P: {x: 0, y: 2}, th: 0, lastAct: '', tangents: [], lockedA: false, lockedB: false, touchedA: false,
+           B: {r: 5, P: {x: 9, y: 3}, pre: '', dragged: false, touched: false, seen: []}};
+const shared = sharedState();
+if (shared) {
+  if (['A', 'B'].includes(shared.tab)) S.tab = shared.tab;
+  if (shared.P && Number.isFinite(shared.P.x) && Number.isFinite(shared.P.y)) S.P = {x: clamp(shared.P.x, -7, 7), y: clamp(shared.P.y, -6, 6)};
+  if (Number.isFinite(shared.th)) S.th = clamp(shared.th, 0, Math.PI);
+  if (shared.B && Number.isFinite(shared.B.r) && shared.B.P && Number.isFinite(shared.B.P.x)) { S.B.r = clamp(shared.B.r, 1, 8); S.B.P = {x: +shared.B.P.x, y: +shared.B.P.y}; }
+}
+shareState(() => ({tab: S.tab, P: S.P, th: S.th, B: {r: S.B.r, P: S.B.P}}));
+
+/* ============================================================================
+   Tab A: secant to tangent
+   ============================================================================ */
+const sA = $('stageA'), KA = 44, OA = {x: 320, y: 300};
+const ax = x => OA.x + x * KA, ay = y => OA.y - y * KA, aux = px => (px - OA.x) / KA, auy = py => (OA.y - py) / KA;
+/* the chord graph: signed distance d (−7…7 cm) against chord length (0…10 cm) */
+const GR = {x: 668, y: 380, w: 300, h: 170};
+const grx = d => GR.x + (d + 7) / 14 * GR.w, gry = c => GR.y + GR.h - c / 10.5 * GR.h, grux = px => (px - GR.x) / GR.w * 14 - 7;
+function buildA(){
+  let grid = '';
+  for (let x = -7; x <= 7; x++) grid += `<line x1="${ax(x)}" y1="20" x2="${ax(x)}" y2="580" stroke="#eeebe2"/>`;
+  for (let y = -6; y <= 6; y++) grid += `<line x1="20" y1="${ay(y)}" x2="620" y2="${ay(y)}" stroke="#eeebe2"/>`;
+  sA.innerHTML = `
+  <defs><clipPath id="clipA"><rect x="20" y="20" width="600" height="560"/></clipPath></defs>
+  <rect x="0" y="0" width="1000" height="600" fill="#fbfaf6"/>
+  <rect x="20" y="20" width="600" height="560" fill="#fff"/>
+  ${grid}
+  <circle cx="${OA.x}" cy="${OA.y}" r="${5 * KA}" fill="#e4f3f3" stroke="${TEAL}" stroke-width="3.5"/>
+  <circle cx="${OA.x}" cy="${OA.y}" r="4" fill="${INK}"/><text x="${OA.x - 8}" y="${OA.y + 18}" font-size="15" font-weight="700" fill="${INK}" text-anchor="end">O</text>
+  <g clip-path="url(#clipA)">
+    <line id="aNorm" stroke="#6a3fc2" stroke-width="1.6" stroke-dasharray="5 5"/>
+    <line id="aChord" stroke="${RED}" stroke-width="6" stroke-linecap="round" opacity=".35"/>
+    <line id="aLine" stroke="${LINE}" stroke-width="3"/>
+    <line id="aRad" stroke="${INK}" stroke-width="2"/>
+    <path id="aRight" fill="none" stroke="${INK}" stroke-width="1.6"/>
+  </g>
+  <g id="aPts"></g>
+  <circle class="hit" id="hRot" r="10" fill="#fff" stroke="${LINE}" stroke-width="3.5"/>
+  <circle class="hit" id="hPiv" r="11" fill="${LINE}" stroke="#fff" stroke-width="3"/>
+  <text id="aPlab" font-size="15" font-weight="700" fill="${LINE}" pointer-events="none">P</text>
+  <g id="panelA"></g>
+  <rect x="${GR.x - 30}" y="${GR.y - 34}" width="${GR.w + 42}" height="${GR.h + 62}" rx="10" fill="#f4f2ea"/>
+  <text x="${GR.x - 18}" y="${GR.y - 14}" font-size="12.5" font-weight="700" fill="#4a555b" letter-spacing=".08em">CHORD LENGTH AGAINST DISTANCE d</text>
+  <rect x="${GR.x}" y="${GR.y}" width="${GR.w}" height="${GR.h}" fill="#fff"/>
+  <g id="grAxes"></g>
+  <path id="grCurve" fill="none" stroke="${TEAL}" stroke-width="2.5"/>
+  <line id="grV" stroke="${LINE}" stroke-width="1.4" stroke-dasharray="4 4"/>
+  <circle class="hit" id="hD" r="8" fill="${LINE}" stroke="#fff" stroke-width="2.5"/>`;
+  let g = '';
+  for (const d of [-5, 0, 5]) g += `<line x1="${grx(d)}" y1="${GR.y}" x2="${grx(d)}" y2="${GR.y + GR.h}" stroke="${d ? '#e3dfd3' : '#b9b4a6'}" stroke-dasharray="${d ? '3 3' : ''}"/>` +
+    `<text x="${grx(d)}" y="${GR.y + GR.h + 15}" font-size="11" text-anchor="middle" fill="#7c878c" class="m">${d ? (d < 0 ? '−r' : 'r') : '0'}</text>`;
+  g += `<line x1="${GR.x}" y1="${GR.y + GR.h}" x2="${GR.x + GR.w}" y2="${GR.y + GR.h}" stroke="${INK}"/>` +
+    `<text x="${GR.x - 6}" y="${gry(10) + 4}" font-size="11" text-anchor="end" fill="#7c878c" class="m">10</text><text x="${GR.x - 6}" y="${gry(0)}" font-size="11" text-anchor="end" fill="#7c878c" class="m">0</text>` +
+    `<text x="${GR.x + GR.w}" y="${GR.y + GR.h + 15}" font-size="11" text-anchor="end" fill="#7c878c">d, cm</text>`;
+  $('grAxes').innerHTML = g;
+}
+buildA();
+const normalOf = th => ({x: -Math.sin(th), y: Math.cos(th)});
+function paintA(){
+  const r = S.r, P = S.P, u = dir(S.th), n = normalOf(S.th), I = intersect(P, S.th, r), ds = dot(P, n);
+  const L = 30, x1 = P.x - L * u.x, y1 = P.y - L * u.y, x2 = P.x + L * u.x, y2 = P.y + L * u.y;
+  const set = (id, o) => { const el = $(id); for (const k in o) el.setAttribute(k, o[k]); };
+  set('aLine', {x1: ax(x1), y1: ay(y1), x2: ax(x2), y2: ay(y2)});
+  const F = {x: ds * n.x, y: ds * n.y};                         // the foot of the perpendicular from O
+  set('aNorm', {x1: ax(0), y1: ay(0), x2: ax(F.x), y2: ay(F.y), opacity: S.lockedA ? 1 : 0});
+  set('aChord', {x1: I.pts.length === 2 ? ax(I.pts[0].x) : 0, y1: I.pts.length === 2 ? ay(I.pts[0].y) : 0, x2: I.pts.length === 2 ? ax(I.pts[1].x) : 0, y2: I.pts.length === 2 ? ay(I.pts[1].y) : 0, opacity: I.kind === 'two' ? .35 : 0});
+  /* the radius to a common point, and the angle it makes with the line */
+  const Q = I.pts.length ? I.pts[I.pts.length - 1] : null;
+  set('aRad', {x1: ax(0), y1: ay(0), x2: Q ? ax(Q.x) : ax(0), y2: Q ? ay(Q.y) : ay(0), opacity: Q && S.lockedA ? 1 : 0});
+  if (Q && I.kind === 'one') {
+    const s = 0.4, qa = {x: Q.x - s * Q.x / r, y: Q.y - s * Q.y / r}, qb = {x: Q.x + s * u.x, y: Q.y + s * u.y}, qc = {x: qa.x + s * u.x, y: qa.y + s * u.y};
+    set('aRight', {d: `M${ax(qa.x)} ${ay(qa.y)} L${ax(qc.x)} ${ay(qc.y)} L${ax(qb.x)} ${ay(qb.y)}`, opacity: S.lockedA ? 1 : 0});
+  } else set('aRight', {d: '', opacity: 0});
+  const lab = ['A', 'B'];
+  $('aPts').innerHTML = I.pts.map((p, i) => `<circle cx="${ax(p.x)}" cy="${ay(p.y)}" r="${I.kind === 'one' ? 8 : 6.5}" fill="${RED}" stroke="#fff" stroke-width="2.5"/>` +
+    `<text x="${ax(p.x) + 1.35 * (p.x) / r * 14}" y="${ay(p.y) - 1.35 * p.y / r * 14 + 5}" font-size="14" font-weight="700" fill="${RED}" text-anchor="middle">${I.kind === 'one' ? 'T' : lab[i]}</text>`).join('');
+  set('hPiv', {cx: ax(P.x), cy: ay(P.y)});
+  set('aPlab', {x: ax(P.x) + 13 * n.x + 8, y: ay(P.y) - 13 * n.y - 8});
+  let R = rotHandle();
+  set('hRot', {cx: ax(R.x), cy: ay(R.y)});
+  /* the chord graph, from the model: slide the line through every d and measure */
+  let d = '';
+  for (let i = 0; i <= 140; i++) { const dd = -7 + 14 * i / 140, Pp = {x: dd * n.x, y: dd * n.y}, J = intersect(Pp, S.th, r); d += (i ? 'L' : 'M') + grx(dd).toFixed(1) + ' ' + gry(J.chord).toFixed(1); }
+  $('grCurve').setAttribute('d', d);
+  set('grV', {x1: grx(clamp(ds, -7, 7)), x2: grx(clamp(ds, -7, 7)), y1: GR.y, y2: GR.y + GR.h});
+  set('hD', {cx: grx(clamp(ds, -7, 7)), cy: gry(I.chord)});
+  paintPanelA(I, Q, u);
+}
+function rotHandle(){
+  const u = dir(S.th); let R = {x: S.P.x + 3 * u.x, y: S.P.y + 3 * u.y};
+  if (Math.abs(R.x) > 6.6 || Math.abs(R.y) > 6) R = {x: S.P.x - 3 * u.x, y: S.P.y - 3 * u.y};
+  return R;
+}
+function paintPanelA(I, Q, u){
+  const X0 = 648, r = S.r;
+  const h = (y, t) => `<text x="${X0}" y="${y}" font-size="12.5" font-weight="700" fill="#4a555b" letter-spacing=".08em">${t}</text>`;
+  const t = (y, s, o = {}) => `<text x="${X0}" y="${y}" font-size="${o.fs || 16}" fill="${o.fill || INK}"${o.m === false ? '' : ' class="m"'}${o.w ? ` font-weight="${o.w}"` : ''}>${s}</text>`;
+  let s = h(46, 'THE LINE AND THE CIRCLE') + t(76, `radius r = ${r} cm`, {fs: 15});
+  if (!S.lockedA) { $('panelA').innerHTML = s + t(118, 'The measurements appear once', {fs: 14, fill: '#7c878c', m: false}) + t(138, 'you have made a prediction.', {fs: 14, fill: '#7c878c', m: false}); return; }
+  const col = {two: '#2f7d4f', one: RED, none: '#6a3fc2'}[I.kind];
+  s += t(102, `distance from O, d = ${f1(I.d)} cm`, {fs: 15});
+  s += t(136, I.kind === 'two' ? 'd < r: a SECANT' : I.kind === 'one' ? 'd = r: a TANGENT' : 'd > r: it misses the circle', {fs: 19, w: 700, fill: col});
+  s += t(160, I.kind === 'two' ? 'two common points, A and B' : I.kind === 'one' ? 'one common point: the point of contact T' : 'no common point: non-intersecting', {fs: 14.5, fill: col, m: false});
+  if (I.kind === 'two') s += t(196, `chord AB = ${f1(I.chord)} cm`, {fs: 15});
+  if (Q) {
+    const ang = angle(O, Q, {x: Q.x + u.x, y: Q.y + u.y}), a = Math.min(ang, 180 - ang);
+    s += t(I.kind === 'two' ? 222 : 196, `angle between radius and line: ${fa(a)}`, {fs: 15, fill: I.kind === 'one' ? RED : INK, w: I.kind === 'one' ? 700 : null});
+  }
+  const piv = Math.abs(Math.hypot(S.P.x, S.P.y) - r) < 1e-9;
+  s += t(262, piv ? 'P is on the circle: turn the line about P.' : 'Drag P onto the circle to pin it there.', {fs: 13.5, fill: '#4a555b', m: false});
+  s += t(290, `tangents parallel to this line found: ${S.tangents.filter(g => Math.abs(g.a - angKey(S.th)) < 1e-9).length} of 2`, {fs: 13.5, fill: '#4a555b', m: false});
+  $('panelA').innerHTML = s;
+}
+const angKey = th => Math.round(((th % Math.PI) + Math.PI) % Math.PI * 180 / Math.PI) % 180;
+
+/* ---- tab A controls ------------------------------------------------------ */
+const onCircle = P => Math.abs(Math.hypot(P.x, P.y) - S.r) < 1e-9;
+/* Slide: the line keeps its direction. Snap P onto the circle, or the line onto a tangent, when close. */
+function slideTo(P){
+  let p = {x: clamp(Math.round(P.x * 10) / 10, -6.6, 6.6), y: clamp(Math.round(P.y * 10) / 10, -6, 6)};
+  const m = Math.hypot(p.x, p.y);
+  if (m > 0 && Math.abs(m - S.r) < 0.25) p = {x: p.x * S.r / m, y: p.y * S.r / m};
+  const n = normalOf(S.th), ds = dot(p, n);
+  if (Math.abs(Math.abs(ds) - S.r) < 0.15) { const k = Math.sign(ds) * S.r - ds; p = {x: p.x + k * n.x, y: p.y + k * n.y}; }
+  S.P = p; S.lastAct = 'slide'; S.touchedA = true;
+}
+/* Turn about P. Snap onto a touching direction (d = r) when within 2°. */
+function turnTo(th){
+  th = ((Math.round(th * 180 / Math.PI) % 180) + 180) % 180 * Math.PI / 180;
+  const m = Math.hypot(S.P.x, S.P.y);
+  if (m >= S.r - 1e-9) {
+    const phi = Math.atan2(-S.P.y, -S.P.x), a = Math.asin(clamp(S.r / m, -1, 1));
+    for (const c of [phi + a, phi - a]) {
+      const cc = ((c % Math.PI) + Math.PI) % Math.PI, diff = Math.abs(cc - th);
+      if (Math.min(diff, Math.PI - diff) < 2.01 * Math.PI / 180) { th = cc; break; }
+    }
+  }
+  S.th = th; S.lastAct = 'turn'; S.touchedA = true;
+}
+drag($('hPiv'), sA, {
+  start(){ if (!S.lockedA) return false; },
+  move(p){ slideTo({x: aux(p.x), y: auy(p.y)}); paint(); },
+  end(){ track('slide', {P: S.P, th: S.th}); },
+});
+drag($('hRot'), sA, {
+  start(){ if (!S.lockedA) return false; },
+  move(p){ const x = aux(p.x) - S.P.x, y = auy(p.y) - S.P.y; if (Math.hypot(x, y) < 0.3) return; turnTo(Math.atan2(y, x)); paint(); },
+  end(){ track('turn', {th: S.th}); },
+});
+drag($('hD'), sA, {
+  start(){ if (!S.lockedA) return false; },
+  move(p){ const n = normalOf(S.th), ds = dot(S.P, n), k = clamp(grux(p.x), -6.5, 6.5) - ds; slideTo({x: S.P.x + k * n.x, y: S.P.y + k * n.y}); paint(); },
+  end(){ track('slideGraph', {P: S.P}); },
+});
+$('ang').addEventListener('input', e => { turnTo(+e.target.value * Math.PI / 180); paint(); });
+
+/* ============================================================================
+   Tab B: tangents from a point
+   ============================================================================ */
+const sB = $('stageB');
+let KB = 25, OB = {x: 185, y: 300};
+const bx = x => OB.x + x * KB, by = y => OB.y - y * KB, bux = px => (px - OB.x) / KB, buy = py => (OB.y - py) / KB;
+function fitB(){
+  const r = S.B.r, P = S.B.P, far = Math.max(r, Math.abs(P.x) + 3);
+  KB = Math.min(44, 520 / (far + r + 1.2), 250 / (Math.max(r, Math.abs(P.y) + 2) + 1));
+  OB = {x: 40 + (P.x < -r ? far : r + 0.6) * KB, y: 300};
+}
+function buildB(){
+  sB.innerHTML = `
+  <defs><clipPath id="clipB"><rect x="20" y="20" width="600" height="560"/></clipPath></defs>
+  <rect x="0" y="0" width="1000" height="600" fill="#fbfaf6"/>
+  <rect x="20" y="20" width="600" height="560" fill="#fff"/>
+  <g id="bGrid"></g>
+  <circle id="bCirc" fill="#e4f3f3" stroke="${TEAL}" stroke-width="3.5"/>
+  <g clip-path="url(#clipB)"><g id="bLines"></g></g>
+  <g id="bMarks"></g>
+  <circle id="bO" r="4" fill="${INK}"/><text id="bOl" font-size="15" font-weight="700" fill="${INK}" text-anchor="end">O</text>
+  <circle class="hit" id="hP" r="11" fill="${LINE}" stroke="#fff" stroke-width="3"/>
+  <text id="bPl" font-size="15" font-weight="700" fill="${LINE}" pointer-events="none">P</text>
+  <g id="panelB"></g>`;
+}
+buildB();
+function paintB(){
+  const r = S.B.r, P = S.B.P, T = tangentsFrom(P, r);
+  const step = KB > 30 ? 1 : KB > 12 ? 2 : 5;
+  let g = '';
+  for (let x = Math.ceil(bux(20) / step) * step; bx(x) <= 620; x += step) g += `<line x1="${bx(x)}" y1="20" x2="${bx(x)}" y2="580" stroke="#eeebe2"/>`;
+  for (let y = Math.ceil(buy(580) / step) * step; by(y) >= 20; y += step) g += `<line x1="20" y1="${by(y)}" x2="620" y2="${by(y)}" stroke="#eeebe2"/>`;
+  $('bGrid').innerHTML = g + `<text x="604" y="570" font-size="11" text-anchor="end" fill="#7c878c">grid: ${step} cm</text>`;
+  const set = (id, o) => { const el = $(id); for (const k in o) el.setAttribute(k, o[k]); };
+  set('bCirc', {cx: OB.x, cy: OB.y, r: r * KB}); set('bO', {cx: OB.x, cy: OB.y}); set('bOl', {x: OB.x - 8, y: OB.y + 18});
+  set('hP', {cx: bx(P.x), cy: by(P.y)}); set('bPl', {x: bx(P.x) + 12, y: by(P.y) - 12});
+  let L = '', M = '';
+  if (S.lockedB) {
+    L += `<line x1="${OB.x}" y1="${OB.y}" x2="${bx(P.x)}" y2="${by(P.y)}" stroke="#7c878c" stroke-width="1.6" stroke-dasharray="6 5"/>`;
+    T.T.forEach((t, i) => {
+      const u = {x: t.x - P.x, y: t.y - P.y}, m = Math.hypot(u.x, u.y) || 1, ext = T.kind === 'on' ? dir(T.dirs[0]) : {x: u.x / m, y: u.y / m};
+      const e1 = T.kind === 'on' ? {x: P.x - 30 * ext.x, y: P.y - 30 * ext.y} : P, e2 = {x: t.x + (T.kind === 'on' ? 30 : 3) * ext.x, y: t.y + (T.kind === 'on' ? 30 : 3) * ext.y};
+      L += `<line x1="${bx(e1.x)}" y1="${by(e1.y)}" x2="${bx(e2.x)}" y2="${by(e2.y)}" stroke="${LINE}" stroke-width="3"/>` +
+        `<line x1="${OB.x}" y1="${OB.y}" x2="${bx(t.x)}" y2="${by(t.y)}" stroke="${INK}" stroke-width="2"/>`;
+      /* the right-angle mark at T */
+      const s = Math.min(0.45, r * 0.12), ro = {x: -t.x / r, y: -t.y / r}, tp = T.kind === 'on' ? ext : {x: -ext.x, y: -ext.y};
+      const qa = {x: t.x + s * ro.x, y: t.y + s * ro.y}, qb = {x: t.x + s * tp.x, y: t.y + s * tp.y}, qc = {x: qa.x + s * tp.x, y: qa.y + s * tp.y};
+      M += `<path d="M${bx(qa.x)} ${by(qa.y)} L${bx(qc.x)} ${by(qc.y)} L${bx(qb.x)} ${by(qb.y)}" fill="none" stroke="${INK}" stroke-width="1.5"/>` +
+        `<circle cx="${bx(t.x)}" cy="${by(t.y)}" r="6.5" fill="${RED}" stroke="#fff" stroke-width="2.5"/>` +
+        `<text x="${bx(t.x) + t.x / r * 16}" y="${by(t.y) - t.y / r * 16 + 5}" font-size="15" font-weight="700" fill="${RED}" text-anchor="middle">${T.kind === 'on' ? 'T' : ['T', 'T′'][i]}</text>`;
+      if (T.kind === 'outside') {
+        const mid = {x: (P.x + t.x) / 2, y: (P.y + t.y) / 2};
+        M += `<text x="${bx(mid.x) + (i ? 1 : -1) * 0}" y="${by(mid.y) + (t.y > P.y ? -10 : 20)}" font-size="13.5" font-weight="700" fill="${LINE}" text-anchor="middle" class="m" paint-order="stroke" stroke="#fff" stroke-width="4">${T.len[i].toFixed(2)}</text>`;
+      }
+    });
+  }
+  $('bLines').innerHTML = L; $('bMarks').innerHTML = M;
+  paintPanelB(T);
+  return T;
+}
+function paintPanelB(T){
+  const X0 = 648, r = S.B.r, P = S.B.P, OP = Math.hypot(P.x, P.y);
+  const h = (y, t) => `<text x="${X0}" y="${y}" font-size="12.5" font-weight="700" fill="#4a555b" letter-spacing=".08em">${t}</text>`;
+  const t = (y, s, o = {}) => `<text x="${X0 + (o.dx || 0)}" y="${y}" font-size="${o.fs || 16}" fill="${o.fill || INK}"${o.m === false ? '' : ' class="m"'}${o.w ? ` font-weight="${o.w}"` : ''}>${s}</text>`;
+  let s = h(46, 'THE CIRCLE AND THE POINT') + t(76, `r = ${r} cm    OP = ${niceLen(OP)} cm`, {fs: 15});
+  if (!S.lockedB) { $('panelB').innerHTML = s + t(118, 'The tangents appear once', {fs: 14, fill: '#7c878c', m: false}) + t(138, 'you have made a prediction.', {fs: 14, fill: '#7c878c', m: false}); return; }
+  const n = T.T.length, col = [ '#6a3fc2', RED, '#2f7d4f'][n];
+  s += t(110, n === 0 ? 'P is INSIDE: no tangent' : n === 1 ? 'P is ON the circle: one tangent' : 'P is OUTSIDE: two tangents', {fs: 18, w: 700, fill: col});
+  s += t(132, n === 0 ? 'every line through P cuts the circle twice' : n === 1 ? 'the only line through P touching just once' : 'the model turned a line about P: it touched twice', {fs: 13.5, fill: '#4a555b', m: false});
+  if (n === 2) {
+    const [a, b] = T.len, W = 300, mx = Math.max(a, b, 1e-9);
+    s += h(172, 'LENGTHS OF THE TANGENTS');
+    [['PT', a], ['PT′', b]].forEach(([nm, v], i) => s += t(200 + i * 28, nm, {fs: 15, w: 700, fill: LINE}) +
+      `<rect x="${X0 + 44}" y="${186 + i * 28}" width="${(v / mx * (W - 130)).toFixed(1)}" height="18" rx="4" fill="${LINE}" opacity=".75"/>` +
+      t(200 + i * 28, niceLen(v) + ' cm', {fs: 14, dx: W - 76}));
+    const eqOk = Math.abs(a - b) < 1e-6;
+    s += t(266, eqOk ? 'PT = PT′  (Theorem 10.2)' : 'PT ≠ PT′', {fs: 15, w: 700, fill: eqOk ? '#2f7d4f' : RED});
+    const a1 = angle(O, T.T[0], P), a2 = angle(O, T.T[1], P), tpt = angle(T.T[0], P, T.T[1]), tot = angle(T.T[0], O, T.T[1]);
+    s += h(306, 'ANGLES, MEASURED') +
+      t(332, `∠OTP = ${fa(a1)}   ∠OT′P = ${fa(a2)}`, {fs: 14.5}) +
+      t(356, `∠OPT = ${fa(angle(O, P, T.T[0]))}   ∠OPT′ = ${fa(angle(O, P, T.T[1]))}`, {fs: 14.5}) +
+      t(380, `∠TPT′ + ∠TOT′ = ${fa(tpt)} + ${fa(tot)} = ${fa(tpt + tot)}`, {fs: 14.5});
+    s += h(420, 'PYTHAGORAS IN ΔOTP') +
+      t(446, `PT² = OP² − OT²`, {fs: 14.5}) +
+      t(470, `${(a * a).toFixed(2)} = ${(OP * OP).toFixed(2)} − ${(r * r).toFixed(2)}`, {fs: 14.5}) +
+      t(500, `chord TT′ = ${niceLen(Math.hypot(T.T[0].x - T.T[1].x, T.T[0].y - T.T[1].y))} cm`, {fs: 14, fill: '#4a555b'});
+  }
+  if (n === 1) s += t(172, `∠OTP-line = ${fa(angle(O, T.T[0], {x: T.T[0].x + dir(T.dirs[0]).x, y: T.T[0].y + dir(T.dirs[0]).y}))}`, {fs: 15});
+  $('panelB').innerHTML = s;
+}
+const PRE = [
+  {id: 'q31',  name: 'Exercise 10.1 Q3: r = 5 cm, OQ = 12 cm',                   r: 5, P: {x: 12, y: 0}},
+  {id: 'q1',   name: 'Exercise 10.2 Q1: OQ = 25 cm, tangent 24 cm',              r: 7, P: {x: 25, y: 0}},
+  {id: 'q6',   name: 'Exercise 10.2 Q6: OA = 5 cm, tangent 4 cm',                r: 3, P: {x: 5, y: 0}},
+  {id: 'ex3',  name: 'Example 3: chord PQ = 8 cm in a circle of radius 5 cm',     r: 5, P: {x: 25 / 3, y: 0}},
+  {id: 'q2',   name: 'Exercise 10.2 Q2: ∠POQ = 110°',                            r: 5, P: {x: 5 / Math.cos(55 * Math.PI / 180), y: 0}},
+  {id: 'q3',   name: 'Exercise 10.2 Q3: tangents at 80° to each other',          r: 5, P: {x: 5 / Math.sin(40 * Math.PI / 180), y: 0}},
+];
+/* ---- tab B controls ------------------------------------------------------ */
+drag($('hP'), sB, {
+  start(){ if (!S.lockedB) return false; },
+  move(p){
+    let q = {x: Math.round(clamp(bux(p.x), bux(34), bux(606)) * 2) / 2, y: Math.round(clamp(buy(p.y), buy(566), buy(34)) * 2) / 2};
+    const m = Math.hypot(q.x, q.y);
+    if (m > 0 && Math.abs(m - S.B.r) < 0.3) q = {x: q.x * S.B.r / m, y: q.y * S.B.r / m};
+    S.B.P = q; S.B.pre = ''; S.B.dragged = true; S.B.touched = true; paint();
+  },
+  end(){ fitB(); paint(); track('moveP', {P: S.B.P, r: S.B.r}); },
+});
+$('rad').addEventListener('input', e => { S.B.r = +e.target.value; S.B.pre = ''; S.B.touched = true; paint(); });
+$('rad').addEventListener('change', () => { fitB(); paint(); });
+$('preset').addEventListener('change', e => {
+  const p = PRE.find(q => q.id === e.target.value); if (!p) return;
+  S.B.r = p.r; S.B.P = {...p.P}; S.B.pre = p.id; S.B.touched = true; fitB(); sound('pop'); paint(); track('preset', {id: p.id});
+});
+
+/* ============================================================================
+   Narrator, findings, explanations
+   ============================================================================ */
+function paintWhy(){
+  const locked = S.tab === 'A' ? S.lockedA : S.lockedB;
+  $('whyCard').hidden = !locked;
+  if (!locked) return;
+  let t = '';
+  if (S.tab === 'A') {
+    const I = intersect(S.P, S.th, S.r);
+    t = I.kind === 'two' ? `<p>The line is ${f1(I.d)} cm from O, less than the radius, so it cuts the circle at two points A and B, and the chord AB is ${f1(I.chord)} cm long. Move it further from O and the chord shrinks: on the graph, the dot slides down the curve.</p>`
+      : I.kind === 'one' ? `<p>The line is exactly r = ${S.r} cm from O. The two points A and B have closed in and <b>merged into one point T</b>: the chord has length 0 and the line is a tangent. The radius OT meets it at <b>90°</b>, because OT is the shortest distance from O to the line.</p>`
+      : `<p>The line is ${f1(I.d)} cm from O, more than the radius: every point of it is outside the circle. There is no common point.</p>`;
+    t += `<p>The graph is the chord length for every distance d, found by sliding this line: it is 2r at d = 0 and falls to 0 at d = ±r, and nowhere else.</p>`;
+  } else {
+    const T = tangentsFrom(S.B.P, S.B.r);
+    t = T.kind === 'inside' ? `<p>P is inside the circle. Every line through P has points of the circle on both sides of P, so it cuts the circle twice: <b>no tangent</b> passes through P.</p>`
+      : T.kind === 'on' ? `<p>P is on the circle. Exactly one line through P touches the circle only at P: the one at right angles to OP.</p>`
+      : `<p>ΔOTP and ΔOT′P are right-angled at T and T′ (radius ⟂ tangent), share the hypotenuse OP, and have OT = OT′ = r. By RHS they are congruent, so <b>PT = PT′</b>, and OP bisects the angle TPT′.</p>`;
+  }
+  $('why').innerHTML = t;
+}
+const EXPL = {A: false, B: false};
+function checkA(){
+  if (!S.lockedA || !S.touchedA) return;
+  const I = intersect(S.P, S.th, S.r);
+  if (I.kind === 'two') discover('secant');
+  if (I.kind === 'none') discover('miss');
+  if (I.kind === 'one') {
+    const key = {a: angKey(S.th), side: Math.sign(dot(S.P, normalOf(S.th)))};
+    if (!S.tangents.some(g => g.a === key.a && g.side === key.side)) S.tangents.push(key);
+    if (S.tangents.some(g => g.a === key.a && g.side === -key.side)) discover('twoPar');
+    if (S.lastAct === 'turn' && onCircle(S.P)) discover('perp');
+    else discover('tangent');
+    if (!EXPL.A) {
+      EXPL.A = true;
+      POEA.explain(`As the line moved, the model’s chord shrank to 0: the two crossing points closed in and <b>merged into one point</b> when the distance from O reached r = ${S.r} cm. ` +
+        `Past that there is no common point at all. So a secant becomes a tangent at exactly one position on each side, and the radius to the point of contact measures ${fa(90)}.`);
+    }
+  }
+}
+function checkB(T){
+  if (!S.lockedB || !S.B.touched) return;
+  if (T.kind === 'inside') discover('inside');
+  if (T.kind === 'on') discover('onc');
+  if (T.kind === 'outside') {
+    const OP = Math.hypot(S.B.P.x, S.B.P.y), key = OP.toFixed(2) + '/' + S.B.r;
+    if (!S.B.seen.includes(key)) S.B.seen.push(key);
+    if (Math.abs(T.len[0] - T.len[1]) < 1e-6) {
+      discover('equal');
+      if (!EXPL.B) {
+        EXPL.B = true;
+        POEB.explain(`The model turned a line about P and found it touching the circle in exactly two positions, at T and T′. It measured <b>PT = ${T.len[0].toFixed(3)} cm and PT′ = ${T.len[1].toFixed(3)} cm</b>: equal. ` +
+          `Move P anywhere outside and they stay equal, because both are √(OP² − r²) = √(${(OP * OP).toFixed(2)} − ${S.B.r * S.B.r}).`);
+      }
+    }
+    const L = T.len[0];
+    if (S.B.dragged && Number.isInteger(S.B.r) && Math.abs(OP - Math.round(OP)) < 1e-9 && Math.abs(L - Math.round(L)) < 1e-9) discover('triple');
+  }
+}
+
+/* ============================================================================
+   Paint and start
+   ============================================================================ */
+function paint(){
+  const a = S.tab === 'A';
+  $('tabA').setAttribute('aria-selected', a); $('tabB').setAttribute('aria-selected', !a);
+  $('stageA').toggleAttribute('hidden', !a); $('stageB').toggleAttribute('hidden', a);
+  $('cardA').hidden = !a; $('cardB').hidden = a; $('poeA').hidden = !a; $('poeB').hidden = a;
+  $('gate').hidden = a ? S.lockedA : S.lockedB;
+  if (a) { paintA(); $('ang').value = angKey(S.th); $('angOut').textContent = angKey(S.th) + '°'; checkA(); }
+  else { const T = paintB(); $('rad').value = S.B.r; $('radOut').textContent = S.B.r + ' cm'; $('preset').value = S.B.pre; checkB(T); }
+  paintWhy();
+}
+$('tabA').addEventListener('click', () => { S.tab = 'A'; sound('tick'); paint(); track('tab', {tab: 'secant'}); });
+$('tabB').addEventListener('click', () => { S.tab = 'B'; sound('tick'); paint(); track('tab', {tab: 'from-a-point'}); });
+function lockA(on){ $('ang').disabled = on; for (const id of ['hPiv', 'hRot', 'hD']) $(id).style.pointerEvents = on ? 'none' : ''; }
+function lockB(on){ $('rad').disabled = on; $('preset').disabled = on; $('hP').style.pointerEvents = on ? 'none' : ''; }
+
+$('preset').innerHTML = `<option value="">Your own circle and point</option>` + PRE.map(p => `<option value="${p.id}">${esc(p.name)}</option>`).join('');
+findings($('finds'), [
+  {id: 'secant',  icon: '⌒', label: 'A secant: two common points', hint: 'Slide the line'},
+  {id: 'tangent', icon: '•', label: 'The two points merge: a tangent', hint: 'Slide it until the chord vanishes'},
+  {id: 'miss',    icon: '∅', label: 'A line that misses the circle', hint: 'Slide it further out'},
+  {id: 'twoPar',  icon: '∥', label: 'Two tangents parallel to one line', hint: 'Find a tangent on each side'},
+  {id: 'perp',    icon: '⊥', label: 'Turn about a point on the circle: tangent ⟂ radius', hint: 'Pin P on the circle, then turn'},
+  {id: 'inside',  icon: '○', label: 'No tangent from a point inside', hint: 'Drag P inside'},
+  {id: 'onc',     icon: '◦', label: 'One tangent from a point on the circle', hint: 'Drop P on the circle'},
+  {id: 'equal',   icon: '=', label: 'The two tangents from outside are equal', hint: 'Drag P outside'},
+  {id: 'triple',  icon: '▲', label: 'A whole-number tangent', hint: 'Whole-number r and OP, whole-number PT'},
+], () => toast('All nine: secants, tangents, and the right angle that makes the tangents equal.', 4200));
+
+const POEA = predict($('poeA'), {
+  id: 'slide-secant',
+  q: 'A line cuts a circle at two points. Slide the line away from the centre, keeping it parallel to itself. What happens to the two points?',
+  options: [
+    {id: 'jump',  text: 'They stay apart, then suddenly both vanish.'},
+    {id: 'merge', text: 'They close in, merge into one point, then vanish.', right: true},
+    {id: 'never', text: 'They never meet: there are always two, or none.'},
+    {id: 'more',  text: 'A third point appears.'},
+  ],
+  onLock(){ S.lockedA = true; lockA(false); say('Now slide the line.'); paint(); },
+});
+const POEB = predict($('poeB'), {
+  id: 'two-tangents',
+  q: 'From a point P outside a circle you draw both tangents, PT and PT′. How do their lengths compare?',
+  options: [
+    {id: 'eq',     text: 'Always equal.', right: true},
+    {id: 'near',   text: 'The one on the side P leans towards is shorter.'},
+    {id: 'axis',   text: 'Equal only when P is straight out along a diameter.'},
+    {id: 'never',  text: 'They are never exactly equal.'},
+  ],
+  onLock(){ S.lockedB = true; lockB(false); paint(); },
+});
+lockA(!POEA.locked); lockB(!POEB.locked);
+if (!Play.FF('predict')) S.lockedA = S.lockedB = true;
+fitB();
+paint();
+window.applyFeatures = () => paint();
+window.PG_STATE = () => JSON.parse(JSON.stringify(Object.assign({}, S, {view: {KA, OA, KB, OB}})));
+window.PG_MODEL = {intersect, tangentsFrom, angle};
+</script>
+</body>
+</html>

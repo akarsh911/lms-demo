@@ -1,0 +1,449 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Playing with constructions</title>
+<meta name="description" content="Class 6: a virtual compass and ruler. Build a rectangle from a side and a diagonal, then build a house out of nothing but arcs, and watch the diagonals as the shape stretches.">
+<link rel="icon" href="../../favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600&family=Inter:wght@400;500;600;700&family=Nunito:wght@500;700;800&family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="../../play.css">
+<style>
+.pg-stage{min-height:0}
+.tabs{display:flex; gap:4px; padding:10px 12px 0; border-bottom:1px solid var(--hair); background:var(--card); flex-wrap:wrap}
+.tab{border:1px solid transparent; border-bottom:none; background:none; padding:8px 14px; border-radius:10px 10px 0 0; cursor:pointer;
+  font-family:"Fredoka",var(--font-head); font-size:16px; color:var(--ink-3); margin-bottom:-1px}
+.tab[aria-selected="true"]{background:var(--card); border-color:var(--hair); color:var(--ink); border-bottom:1px solid var(--card)}
+.gate{position:absolute; left:0; right:0; top:50px; bottom:0; display:grid; place-items:center; pointer-events:none}
+.gate span{background:rgba(29,35,39,.85); color:#fff; padding:10px 16px; border-radius:99px; font-weight:600; font-size:14px}
+.big{font-family:"Fredoka",var(--font-head); font-size:17px; font-weight:600; line-height:1.3}
+.note{font-size:12.5px; color:var(--ink-3); margin:6px 0 0}
+.why p{font-size:14px; margin-bottom:.55em}
+.why b{color:var(--ink)}
+.msg{font-size:13px; font-weight:600; margin:6px 0 0; padding:6px 10px; border-radius:8px}
+.msg.bad{background:#f7dbd0; color:#8a3010}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]) .msg.bad{background:#4a2416; color:#ffb69a} }
+svg text{pointer-events:none; font-family:"Inter",sans-serif}
+</style>
+</head>
+<body>
+<header class="pg-top"></header>
+
+<div class="pg-intro">
+  <h1>Playing with constructions</h1>
+  <p>A compass only ever does one thing: it finds every point at a fixed distance from where its tip is planted. A ruler
+     draws straight lines and, here, perpendiculars. Everything below — a rectangle built from a side and a diagonal,
+     and a little house built from nothing but arcs — is put together with those two tools, and only those two tools.</p>
+</div>
+
+<main class="pg-main wide-side">
+  <section class="pg-stage" id="stageWrap">
+    <div class="tabs" role="tablist">
+      <button class="tab" role="tab" id="tabDiag" aria-selected="true">Rectangle from a diagonal</button>
+      <button class="tab" role="tab" id="tabHouse" aria-selected="false">Build a house</button>
+    </div>
+    <svg id="stageDiag" viewBox="0 0 1000 560" role="img" aria-label="A rectangle being constructed from a base and a diagonal, with the compass arc and the perpendicular ruler line that locate its fourth corner."></svg>
+    <svg id="stageHouse" viewBox="0 0 1000 560" role="img" aria-label="A five-sided house being built by raising a square and finding its roof peak where two compass arcs cross." hidden></svg>
+    <div class="gate" id="gate"><span>Make your prediction first →</span></div>
+  </section>
+
+  <aside class="pg-side">
+    <div id="poeA"></div>
+    <div id="poeB" hidden></div>
+
+    <div class="card" id="cardA">
+      <div class="kicker">Side and diagonal</div>
+      <div class="row">
+        <label for="sideS" style="font-size:13px;font-weight:600;color:var(--ink-2)">Side DC</label>
+        <input type="range" id="sideS" min="3" max="8" step="0.5" value="5" style="flex:1">
+        <output id="sideSOut" class="num">5.0 cm</output>
+      </div>
+      <div class="row">
+        <label for="diagD" style="font-size:13px;font-weight:600;color:var(--ink-2)">Diagonal DB</label>
+        <input type="range" id="diagD" min="3" max="9.5" step="0.5" value="7" style="flex:1">
+        <output id="diagDOut" class="num">7.0 cm</output>
+      </div>
+      <div class="big" id="aBig"></div>
+      <p class="note">Each click performs one step with the compass and ruler; the sliders can be moved at any time.</p>
+      <div class="row" style="margin-top:6px"><button class="btn sm primary" id="aStep"></button><button class="btn sm" id="aReset">Start again</button></div>
+    </div>
+
+    <div class="card" id="cardB" hidden>
+      <div class="kicker">The side of the house</div>
+      <div class="row">
+        <label for="sideS2" style="font-size:13px;font-weight:600;color:var(--ink-2)">Side</label>
+        <input type="range" id="sideS2" min="4" max="8" step="0.5" value="5" style="flex:1">
+        <output id="sideS2Out" class="num">5.0 cm</output>
+      </div>
+      <div class="big" id="bBig"></div>
+      <p class="note">Every one of the five outer edges is drawn with the compass opened to this same length.</p>
+      <div class="row" style="margin-top:6px"><button class="btn sm primary" id="bStep"></button><button class="btn sm" id="bReset">Start again</button></div>
+    </div>
+
+    <div class="card why" id="whyCard">
+      <div class="kicker">What is happening</div>
+      <div id="why"></div>
+    </div>
+
+    <div class="card"><div class="kicker">To find</div><div id="finds"></div></div>
+  </aside>
+</main>
+
+<script src="../../play.js"></script>
+<script>
+'use strict';
+const {$, $$, esc, clamp, fmt, sound, say, track, toast, predict, findings, discover, found,
+       shareState, sharedState, mount, reduced} = Play;
+mount({thread: 'constructions', band: 'tinkerer'});
+
+/* MODEL:start ==================================================================
+   Ganita Prakash 6, Ch 8 "Playing with Constructions".
+
+   1. §8.4/8.5 A rectangle from a side and a diagonal (the chapter's worked example,
+      p.208-210): draw base DC; draw a perpendicular line l to DC at C; open the
+      compass to the DIAGONAL length and, centred at D, swing an arc; the point
+      where that arc meets l is B, at the genuine intersection of a circle and a
+      line (solved with the real formula, never a fixed rotation or a stored
+      answer). A is then the fourth corner, directly above D. Both diagonals (DB,
+      by construction, and CA, measured afterwards) are computed from the actual
+      corner coordinates every time the sliders move, so "the diagonals stay
+      equal as the rectangle stretches" is verified fresh at every size, not
+      shown once and remembered.
+   2. §8.6 "Points equidistant from two given points" (the House, p.211-214): the
+      walls are raised the same way — a compass opened to the side length, swung
+      from each base corner along its own perpendicular. The roof peak A is the
+      point exactly one side-length from BOTH top corners: the two circles of
+      that radius, centred there, meet at exactly two points (the true
+      circle-circle intersection), and the one above the walls is chosen. All
+      five outer edges of the finished house come out equal only because every
+      one of them was drawn with the compass opened to the same width.
+
+   All work is in a plane with y pointing UP (as on paper); the page flips y only
+   when it converts a point to on-screen pixels.
+   ============================================================================ */
+function circleLineIntersect(c, r, x){
+  /* the vertical line X = x meets the circle of radius r centred at c */
+  const dx = x - c.x;
+  if (Math.abs(dx) > r) return null;
+  const dy = Math.sqrt(Math.max(0, r * r - dx * dx));
+  return [{x, y: c.y + dy}, {x, y: c.y - dy}];
+}
+function circleIntersect(c1, r1, c2, r2){
+  const dx = c2.x - c1.x, dy = c2.y - c1.y, d = Math.hypot(dx, dy);
+  if (d < 1e-9 || d > r1 + r2 + 1e-9 || d < Math.abs(r1 - r2) - 1e-9) return null;
+  const a = (r1 * r1 - r2 * r2 + d * d) / (2 * d);
+  const h = Math.sqrt(Math.max(0, r1 * r1 - a * a));
+  const xm = c1.x + a * dx / d, ym = c1.y + a * dy / d;
+  const rx = -dy * (h / d), ry = dx * (h / d);
+  return [{x: xm + rx, y: ym + ry}, {x: xm - rx, y: ym - ry}];
+}
+const dist = (p, q) => Math.hypot(p.x - q.x, p.y - q.y);
+const higher = pts => pts[0].y >= pts[1].y ? pts[0] : pts[1];
+
+function rectFromSideDiagonal(s, d){
+  const D = {x: 0, y: 0}, C = {x: s, y: 0};
+  if (!(d > s)) return {D, C, valid: false};
+  const ix = circleLineIntersect(D, d, s);
+  const B = higher(ix);
+  const A = {x: 0, y: B.y};
+  const theta = Math.atan2(B.y, s) * 180 / Math.PI;    /* angle BDC, at D, between DB and DC */
+  return {D, C, B, A, valid: true, diag: d, otherDiag: dist(C, A), theta,
+          angleADB: 90 - theta, angleBDC: theta, angleABD: theta, angleDBC: 90 - theta};
+}
+function house(s){
+  const B = {x: 0, y: 0}, C = {x: s, y: 0};
+  const D = higher(circleLineIntersect(B, s, 0));
+  const E = higher(circleLineIntersect(C, s, s));
+  const A = higher(circleIntersect(D, s, E, s));
+  return {B, C, D, E, A, edges: {BC: dist(B, C), CE: dist(C, E), EA: dist(E, A), AD: dist(A, D), DB: dist(D, B)}};
+}
+/* MODEL:end */
+
+const INK = '#1d2327', BLUE = '#2464a8', ORANGE = '#d68a12', RUST = '#c0392b', GREEN2 = '#2f9e5b',
+      GOOD = '#1f8a55', BAD = '#b5541f', SAND = '#fbfaf6';
+
+/* ---- state -------------------------------------------------------------------- */
+const S = {tab: 'diag', s: 5, d: 7, step1: 0, s2: 5, step2: 0, lockedA: false, lockedB: false, sawStretch: false, sawSquare: false};
+const shared = sharedState();
+if (shared) {
+  if (['diag', 'house'].includes(shared.tab)) S.tab = shared.tab;
+  if (typeof shared.s === 'number') S.s = clamp(shared.s, 3, 8);
+  if (typeof shared.d === 'number') S.d = clamp(shared.d, 3, 9.5);
+  if (typeof shared.s2 === 'number') S.s2 = clamp(shared.s2, 4, 8);
+}
+shareState(() => ({tab: S.tab, s: S.s, d: S.d, s2: S.s2}));
+
+/* ============================================================================
+   Tab 1: rectangle from a side and a diagonal
+   ============================================================================ */
+const svgA = $('stageDiag');
+const O1 = {x: 200, y: 480}, SC1 = 46;
+const toS1 = p => ({x: O1.x + p.x * SC1, y: O1.y - p.y * SC1});
+const STEP1 = ['Draw the base, DC', 'Draw the perpendicular to DC at C', 'Swing the compass — radius = the diagonal, centred at D', 'Mark point B — complete the rectangle'];
+
+function buildA(){
+  svgA.innerHTML = `
+  <defs><pattern id="dotsA" width="26" height="26" patternUnits="userSpaceOnUse"><circle cx="2" cy="2" r="1.6" fill="#ded7c2"/></pattern></defs>
+  <rect x="0" y="0" width="1000" height="560" fill="${SAND}"/>
+  <rect x="0" y="0" width="1000" height="560" fill="url(#dotsA)"/>
+  <text x="30" y="40" font-size="13" font-weight="700" letter-spacing=".08em" fill="#4a555b">A SIDE, A DIAGONAL, AND A COMPASS — ON DOT PAPER</text>
+  <g id="aLine"></g><g id="aCircle"></g><g id="aRect"></g><g id="aPts"></g><g id="aAngles"></g>
+  <text id="aInfo" x="30" y="515" font-size="15" font-weight="600" fill="${INK}"></text>
+  <text id="aInfo2" x="30" y="539" font-size="15" font-weight="600"></text>
+  `;
+}
+function angleArc(vS, dxA, dyA, dxB, dyB, r, col){
+  const a1 = Math.atan2(-dyA, dxA) * 180 / Math.PI, a2 = Math.atan2(-dyB, dxB) * 180 / Math.PI;
+  let diff = ((a2 - a1 + 540) % 360) - 180;
+  const pts = []; const n = 14;
+  for (let i = 0; i <= n; i++) { const a = (a1 + diff * i / n) * Math.PI / 180; pts.push(`${(vS.x + r * Math.cos(a)).toFixed(1)},${(vS.y + r * Math.sin(a)).toFixed(1)}`); }
+  return `<polyline points="${pts.join(' ')}" fill="none" stroke="${col}" stroke-width="2.5"/>`;
+}
+function paintA(){
+  const R = rectFromSideDiagonal(S.s, S.d);
+  const Ds = toS1(R.D), Cs = toS1(R.C);
+  let lineHtml = '', circleHtml = '', rectHtml = '', ptsHtml = '', angHtml = '';
+  if (S.step1 >= 1) {
+    rectHtml += `<line x1="${Ds.x}" y1="${Ds.y}" x2="${Cs.x}" y2="${Cs.y}" stroke="${BLUE}" stroke-width="4"/>`;
+    ptsHtml += `<circle cx="${Ds.x}" cy="${Ds.y}" r="6" fill="${INK}"/><text x="${Ds.x - 20}" y="${Ds.y + 6}" font-size="16" font-weight="700" fill="${INK}">D</text>`;
+    ptsHtml += `<circle cx="${Cs.x}" cy="${Cs.y}" r="6" fill="${INK}"/><text x="${Cs.x + 10}" y="${Cs.y + 6}" font-size="16" font-weight="700" fill="${INK}">C</text>`;
+  }
+  if (S.step1 >= 2) {
+    const top = toS1({x: R.C.x, y: 11});
+    lineHtml = `<line x1="${Cs.x}" y1="${Cs.y}" x2="${top.x}" y2="${top.y}" stroke="${GREEN2}" stroke-width="2" stroke-dasharray="6 5"/>`;
+  }
+  if (S.step1 >= 3) {
+    circleHtml = `<circle cx="${Ds.x}" cy="${Ds.y}" r="${(S.d * SC1).toFixed(1)}" fill="none" stroke="${ORANGE}" stroke-width="2" stroke-dasharray="5 4"/>`;
+  }
+  let info = '', info2 = '', valid = R.valid;
+  if (S.step1 >= 4 && valid) {
+    const Bs = toS1(R.B), As = toS1(R.A);
+    rectHtml += `<line x1="${Cs.x}" y1="${Cs.y}" x2="${Bs.x}" y2="${Bs.y}" stroke="${BLUE}" stroke-width="4"/>`;
+    rectHtml += `<line x1="${Bs.x}" y1="${Bs.y}" x2="${As.x}" y2="${As.y}" stroke="${BLUE}" stroke-width="4"/>`;
+    rectHtml += `<line x1="${As.x}" y1="${As.y}" x2="${Ds.x}" y2="${Ds.y}" stroke="${BLUE}" stroke-width="4"/>`;
+    rectHtml += `<line x1="${Ds.x}" y1="${Ds.y}" x2="${Bs.x}" y2="${Bs.y}" stroke="${ORANGE}" stroke-width="3.5"/>`;
+    rectHtml += `<line x1="${Cs.x}" y1="${Cs.y}" x2="${As.x}" y2="${As.y}" stroke="${RUST}" stroke-width="3.5" stroke-dasharray="1 0"/>`;
+    ptsHtml += `<circle cx="${Bs.x}" cy="${Bs.y}" r="6" fill="${INK}"/><text x="${Bs.x + 10}" y="${Bs.y + 6}" font-size="16" font-weight="700" fill="${INK}">B</text>`;
+    ptsHtml += `<circle cx="${As.x}" cy="${As.y}" r="6" fill="${INK}"/><text x="${As.x - 20}" y="${As.y + 6}" font-size="16" font-weight="700" fill="${INK}">A</text>`;
+    angHtml += angleArc(Ds, 0, R.A.y, R.B.x, R.B.y, 26, ORANGE);
+    angHtml += angleArc(Ds, R.B.x, R.B.y, R.C.x - R.D.x, 0, 30, RUST);
+    info = `DB (given) = ${fmt(R.diag, 1)} cm — the other diagonal, CA, measured on this drawing = ${fmt(R.otherDiag, 2)} cm.`;
+    info2 = `At D: angle ADB = ${fmt(R.angleADB, 1)}°, angle BDC = ${fmt(R.angleBDC, 1)}° (they add to the right angle, 90°).`;
+  } else if (S.step1 >= 3 && !valid) {
+    info = `The compass (radius ${fmt(S.d, 1)} cm) can't reach a line that is already ${fmt(S.s, 1)} cm away in the other direction.`;
+    info2 = 'Open the compass wider than the side — increase the diagonal, or shorten the side.';
+    discover('tooShort');
+  } else if (S.step1 === 2) {
+    info = 'Line l is perpendicular to DC at C. Point B must lie somewhere on it.';
+  } else if (S.step1 === 1) {
+    info = `DC = ${fmt(S.s, 1)} cm.`;
+  } else info = 'Press the button to begin.';
+  $('aLine').innerHTML = lineHtml; $('aCircle').innerHTML = circleHtml; $('aRect').innerHTML = rectHtml; $('aPts').innerHTML = ptsHtml; $('aAngles').innerHTML = angHtml;
+  $('aInfo').textContent = info; $('aInfo2').textContent = info2; $('aInfo2').setAttribute('fill', S.step1 >= 4 && valid ? GOOD : BAD);
+  $('aBig').textContent = S.step1 >= 4 ? (valid ? 'Rectangle DCBA complete!' : 'Not a rectangle yet — this diagonal is too short.') : `Step ${S.step1 + 1} of 4`;
+  $('aStep').textContent = S.step1 >= 4 ? 'Complete' : STEP1[S.step1];
+  $('aStep').disabled = !S.lockedA || S.step1 >= 4;
+  $$('#cardA input[type=range]').forEach(el => el.disabled = !S.lockedA);
+  paintWhy();
+  return R;
+}
+function sliderChangedA(){
+  const wasComplete = S.step1 >= 4;
+  paintA();
+  if (wasComplete) {
+    const R = rectFromSideDiagonal(S.s, S.d);
+    if (R.valid) {
+      if (!S.sawStretch) { S.sawStretch = true; discover('stretchConfirms'); }
+      if (Math.abs(R.theta - 45) < 0.25 && !S.sawSquare) { S.sawSquare = true; discover('squareAngles'); }
+    }
+  }
+}
+function stepA(){
+  if (!S.lockedA || S.step1 >= 4) return;
+  if (S.step1 === 3) {
+    const R = rectFromSideDiagonal(S.s, S.d);
+    if (!R.valid) { sound('oops'); discover('tooShort'); paintA(); return; }
+  }
+  S.step1++; sound(S.step1 === 4 ? 'chime' : 'tick');
+  const R = paintA();
+  track('constructStep', {tab: 'diag', step: S.step1});
+  if (S.step1 === 4 && R.valid) discover('firstRect');
+}
+buildA();
+$('sideS').addEventListener('input', e => { S.s = +e.target.value; $('sideSOut').textContent = fmt(S.s, 1) + ' cm'; sliderChangedA(); });
+$('diagD').addEventListener('input', e => { S.d = +e.target.value; $('diagDOut').textContent = fmt(S.d, 1) + ' cm'; sliderChangedA(); });
+$('aStep').addEventListener('click', stepA);
+$('aReset').addEventListener('click', () => { S.step1 = 0; sound('tick'); paintA(); });
+
+/* ============================================================================
+   Tab 2: build a house
+   ============================================================================ */
+const svgB = $('stageHouse');
+const O2 = {x: 430, y: 480}, SC2 = 28;
+const toS2 = p => ({x: O2.x + p.x * SC2, y: O2.y - p.y * SC2});
+const STEP2 = ['Draw the base, BC', 'Raise the walls — compass swings at B and C', 'Swing the roof arcs — radius = the side, from D and E', 'Find the peak — complete the house'];
+
+function buildB(){
+  svgB.innerHTML = `
+  <defs><pattern id="dotsB" width="26" height="26" patternUnits="userSpaceOnUse"><circle cx="2" cy="2" r="1.6" fill="#ded7c2"/></pattern></defs>
+  <rect x="0" y="0" width="1000" height="560" fill="${SAND}"/>
+  <rect x="0" y="0" width="1000" height="560" fill="url(#dotsB)"/>
+  <text x="30" y="40" font-size="13" font-weight="700" letter-spacing=".08em" fill="#4a555b">A HOUSE FROM FIVE EQUAL ARCS AND LINES</text>
+  <g id="bGuides"></g><g id="bCircles"></g><g id="bWalls"></g><g id="bRoof"></g><g id="bPts"></g>
+  <text id="bInfo" x="30" y="515" font-size="15" font-weight="600" fill="${INK}"></text>
+  <text id="bInfo2" x="30" y="539" font-size="14" font-weight="600" fill="${GOOD}"></text>
+  `;
+}
+function paintB(){
+  const H = house(S.s2);
+  const Bs = toS2(H.B), Cs = toS2(H.C), Ds = toS2(H.D), Es = toS2(H.E), As = toS2(H.A);
+  let guides = '', circles = '', walls = '', roof = '', pts = '';
+  if (S.step2 >= 1) {
+    walls += `<line x1="${Bs.x}" y1="${Bs.y}" x2="${Cs.x}" y2="${Cs.y}" stroke="${BLUE}" stroke-width="4"/>`;
+    pts += `<circle cx="${Bs.x}" cy="${Bs.y}" r="6" fill="${INK}"/><text x="${Bs.x - 20}" y="${Bs.y + 6}" font-size="16" font-weight="700" fill="${INK}">B</text>`;
+    pts += `<circle cx="${Cs.x}" cy="${Cs.y}" r="6" fill="${INK}"/><text x="${Cs.x + 10}" y="${Cs.y + 6}" font-size="16" font-weight="700" fill="${INK}">C</text>`;
+  }
+  if (S.step2 >= 2) {
+    const topB = toS2({x: H.B.x, y: H.D.y + 1.4}), topC = toS2({x: H.C.x, y: H.E.y + 1.4});
+    guides += `<line x1="${Bs.x}" y1="${Bs.y}" x2="${topB.x}" y2="${topB.y}" stroke="${GREEN2}" stroke-width="2" stroke-dasharray="6 5"/>`;
+    guides += `<line x1="${Cs.x}" y1="${Cs.y}" x2="${topC.x}" y2="${topC.y}" stroke="${GREEN2}" stroke-width="2" stroke-dasharray="6 5"/>`;
+    circles += `<circle cx="${Bs.x}" cy="${Bs.y}" r="${(S.s2 * SC2).toFixed(1)}" fill="none" stroke="${ORANGE}" stroke-width="1.6" stroke-dasharray="5 4"/>`;
+    circles += `<circle cx="${Cs.x}" cy="${Cs.y}" r="${(S.s2 * SC2).toFixed(1)}" fill="none" stroke="${ORANGE}" stroke-width="1.6" stroke-dasharray="5 4"/>`;
+    walls += `<line x1="${Bs.x}" y1="${Bs.y}" x2="${Ds.x}" y2="${Ds.y}" stroke="${BLUE}" stroke-width="4"/>`;
+    walls += `<line x1="${Cs.x}" y1="${Cs.y}" x2="${Es.x}" y2="${Es.y}" stroke="${BLUE}" stroke-width="4"/>`;
+    walls += `<line x1="${Ds.x}" y1="${Ds.y}" x2="${Es.x}" y2="${Es.y}" stroke="${INK}" stroke-width="1.5" stroke-dasharray="4 4"/>`;
+    pts += `<circle cx="${Ds.x}" cy="${Ds.y}" r="6" fill="${INK}"/><text x="${Ds.x - 20}" y="${Ds.y - 6}" font-size="16" font-weight="700" fill="${INK}">D</text>`;
+    pts += `<circle cx="${Es.x}" cy="${Es.y}" r="6" fill="${INK}"/><text x="${Es.x + 10}" y="${Es.y - 6}" font-size="16" font-weight="700" fill="${INK}">E</text>`;
+  }
+  if (S.step2 >= 3) {
+    circles += `<circle cx="${Ds.x}" cy="${Ds.y}" r="${(S.s2 * SC2).toFixed(1)}" fill="none" stroke="${RUST}" stroke-width="1.6" stroke-dasharray="5 4"/>`;
+    circles += `<circle cx="${Es.x}" cy="${Es.y}" r="${(S.s2 * SC2).toFixed(1)}" fill="none" stroke="${RUST}" stroke-width="1.6" stroke-dasharray="5 4"/>`;
+  }
+  let info = '', info2 = '';
+  if (S.step2 >= 4) {
+    roof += `<polygon points="${Bs.x},${Bs.y} ${Ds.x},${Ds.y} ${As.x},${As.y} ${Es.x},${Es.y} ${Cs.x},${Cs.y}" fill="${BLUE}" opacity=".08"/>`;
+    roof += `<line x1="${Ds.x}" y1="${Ds.y}" x2="${As.x}" y2="${As.y}" stroke="${RUST}" stroke-width="4"/>`;
+    roof += `<line x1="${Es.x}" y1="${Es.y}" x2="${As.x}" y2="${As.y}" stroke="${RUST}" stroke-width="4"/>`;
+    pts += `<circle cx="${As.x}" cy="${As.y}" r="6" fill="${INK}"/><text x="${As.x - 4}" y="${As.y - 12}" font-size="16" font-weight="700" fill="${INK}" text-anchor="middle">A</text>`;
+    const e = H.edges;
+    info = `BC ${fmt(e.BC, 2)} · CE ${fmt(e.CE, 2)} · EA ${fmt(e.EA, 2)} · AD ${fmt(e.AD, 2)} · DB ${fmt(e.DB, 2)} cm.`;
+    info2 = 'All five outer edges came out equal — every one of them was one compass-width.';
+  } else if (S.step2 === 2) {
+    info = `Walls raised: BD = CE = ${fmt(S.s2, 1)} cm, the same compass width as the base.`;
+  } else if (S.step2 === 1) {
+    info = `BC = ${fmt(S.s2, 1)} cm.`;
+  } else info = 'Press the button to begin.';
+  $('bGuides').innerHTML = guides; $('bCircles').innerHTML = circles; $('bWalls').innerHTML = walls; $('bRoof').innerHTML = roof; $('bPts').innerHTML = pts;
+  $('bInfo').textContent = info; $('bInfo2').textContent = info2;
+  $('bBig').textContent = S.step2 >= 4 ? 'The house is finished!' : `Step ${S.step2 + 1} of 4`;
+  $('bStep').textContent = S.step2 >= 4 ? 'Complete' : STEP2[S.step2];
+  $('bStep').disabled = !S.lockedB || S.step2 >= 4;
+  $('sideS2').disabled = !S.lockedB;
+  paintWhy();
+  return H;
+}
+function stepB(){
+  if (!S.lockedB || S.step2 >= 4) return;
+  S.step2++; sound(S.step2 === 4 ? 'chime' : 'tick');
+  paintB();
+  track('constructStep', {tab: 'house', step: S.step2});
+  if (S.step2 === 2) discover('wallsRaised');
+  if (S.step2 === 4) {
+    discover('roofFound');
+    const H = house(S.s2), e = H.edges, vals = [e.BC, e.CE, e.EA, e.AD, e.DB];
+    if (vals.every(v => Math.abs(v - S.s2) < 0.01)) discover('allSidesEqual');
+    if (S.s2 >= 6.9) discover('biggerHouse');
+  }
+}
+buildB();
+$('sideS2').addEventListener('input', e => { S.s2 = +e.target.value; $('sideS2Out').textContent = fmt(S.s2, 1) + ' cm'; paintB();
+  if (S.step2 >= 4 && S.s2 >= 6.9) discover('biggerHouse'); });
+$('bStep').addEventListener('click', stepB);
+$('bReset').addEventListener('click', () => { S.step2 = 0; sound('tick'); paintB(); });
+
+/* ============================================================================
+   "What is happening"
+   ============================================================================ */
+function paintWhy(){
+  let h = '';
+  if (S.tab === 'diag') {
+    if (!S.lockedA) h = '<p>Predict first, then draw the base, the perpendicular, and swing the compass.</p>';
+    else if (S.step1 === 0) h = '<p>DC will be the base of the rectangle. Its length is set by the slider above.</p>';
+    else if (S.step1 === 1) h = '<p>Every point on line l is 90° from DC at C. The fourth corner, B, has to be somewhere on this line — but where?</p>';
+    else if (S.step1 === 2) h = '<p>Every point on this circle is exactly one diagonal-length from D. B must be on the circle <b>and</b> on line l — so it is wherever they cross.</p>';
+    else { const R = rectFromSideDiagonal(S.s, S.d);
+      h = R.valid ? `<p>The circle meets line l at B, exactly ${fmt(R.diag, 1)} cm from D — by construction. Completing the rectangle and measuring the <b>other</b> diagonal, CA, gives ${fmt(R.otherDiag, 2)} cm: the same length, worked out completely independently.</p>`
+        : `<p>A circle of radius ${fmt(S.d, 1)} cm around D never reaches a line that is already ${fmt(S.s, 1)} cm away — there is no rectangle to complete until the diagonal is longer than the side.</p>`; }
+  } else {
+    if (!S.lockedB) h = '<p>Predict first, then raise the walls and swing the roof arcs.</p>';
+    else if (S.step2 === 0) h = '<p>BC will be the base of the house — and the width of every arc that follows.</p>';
+    else if (S.step2 <= 2) h = '<p>D and E are found the same way B was in the other tab: a compass, opened to the side length, swung from the base corner along its own perpendicular.</p>';
+    else { const H = house(S.s2);
+      h = S.step2 >= 4
+        ? `<p>Two circles of radius ${fmt(S.s2, 1)} cm, centred at D and E, cross at exactly two points; the one above the walls is the roof peak, A. Triangle D-E-A has all three sides equal to ${fmt(S.s2, 1)} cm, so the roof is an equilateral triangle sitting on the square.</p>`
+        : '<p>Every point on the orange circle is one side-length from D; every point on the red circle is one side-length from E. The roof peak must be on both.</p>'; }
+  }
+  $('why').innerHTML = h;
+}
+
+/* ============================================================================
+   Wiring
+   ============================================================================ */
+function setTab(t){
+  S.tab = t;
+  $('tabDiag').setAttribute('aria-selected', t === 'diag'); $('tabHouse').setAttribute('aria-selected', t === 'house');
+  $('stageDiag').toggleAttribute('hidden', t !== 'diag'); $('stageHouse').toggleAttribute('hidden', t !== 'house');
+  $('cardA').hidden = t !== 'diag'; $('cardB').hidden = t !== 'house';
+  $('poeA').hidden = t !== 'diag'; $('poeB').hidden = t !== 'house';
+  $('gate').hidden = t === 'diag' ? S.lockedA : S.lockedB;
+  if (t === 'diag') paintA(); else paintB();
+  track('tab', {tab: t});
+}
+$('tabDiag').addEventListener('click', () => { sound('tick'); setTab('diag'); });
+$('tabHouse').addEventListener('click', () => { sound('tick'); setTab('house'); });
+
+/* ============================================================================
+   Start
+   ============================================================================ */
+findings($('finds'), [
+  {id: 'firstRect',       icon: '▭', label: 'A rectangle from one side and one diagonal', hint: 'Finish the four steps'},
+  {id: 'tooShort',        icon: '◵', label: 'A compass too narrow to reach', hint: 'Try a diagonal shorter than the side'},
+  {id: 'stretchConfirms', icon: '⇔', label: 'Both diagonals still match at a new size', hint: 'Change a slider after finishing the rectangle'},
+  {id: 'squareAngles',    icon: '◇', label: 'A diagonal that splits the corner exactly in half', hint: 'Make the two angles at D equal (try side 6, diagonal 8.5)'},
+  {id: 'wallsRaised',     icon: '⬒', label: 'Walls raised with the same compass width', hint: 'Raise the walls of the house'},
+  {id: 'roofFound',       icon: '△', label: 'A roof peak found by two crossing arcs', hint: 'Swing the roof arcs and find the peak'},
+  {id: 'allSidesEqual',   icon: '⬠', label: 'All five outer edges exactly equal', hint: 'Finish the house'},
+  {id: 'biggerHouse',     icon: '🏠', label: 'A bigger house, 7 cm to a side', hint: 'Build the house with side 7'},
+], () => say('Every corner here was placed by a real compass arc or a real perpendicular — nothing was drawn to look right.'));
+
+const POEA = predict($('poeA'), {
+  id: 'other-diagonal',
+  q: 'A rectangle is built from side DC = 5 cm and diagonal DB = 7 cm, using the compass-and-ruler method. What will the OTHER diagonal, CA, turn out to be?',
+  options: [
+    {id: 'less', text: 'Shorter than 7 cm'},
+    {id: 'same', text: 'Exactly 7 cm, the same as DB', right: true},
+    {id: 'more', text: 'Longer than 7 cm'},
+    {id: 'depend', text: 'It depends on the height, which is not yet known'},
+  ],
+  onLock(){ S.lockedA = true; $('gate').hidden = S.tab === 'diag' ? true : S.lockedB; say('Draw the base, then the perpendicular, then swing the compass.'); paintA(); },
+});
+const POEB = predict($('poeB'), {
+  id: 'roof-peak',
+  q: 'The roof peak must be exactly one side-length from BOTH top corners of the walls, D and E. How many points satisfy that?',
+  options: [
+    {id: 'none', text: 'None — a roof cannot be built this way'},
+    {id: 'one', text: 'Exactly one'},
+    {id: 'two', text: 'Exactly two, and the one above the walls is chosen', right: true},
+    {id: 'inf', text: 'Infinitely many'},
+  ],
+  onLock(){ S.lockedB = true; if (S.tab === 'house') $('gate').hidden = true; say('Raise the walls, then swing the roof arcs.'); paintB(); },
+});
+if (!Play.FF('predict')) { S.lockedA = S.lockedB = true; }
+setTab(S.tab);
+window.applyFeatures = () => setTab(S.tab);
+window.PG_STATE = () => JSON.parse(JSON.stringify(S));
+window.PG_MODEL = {circleLineIntersect, circleIntersect, dist, rectFromSideDiagonal, house};
+</script>
+</body>
+</html>

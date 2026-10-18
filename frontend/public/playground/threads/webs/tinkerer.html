@@ -1,0 +1,1075 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pull One Thread</title>
+<meta name="description" content="Class 8: a rice field at the forest's edge whose food web is a live population model. Predict what killing the snakes does to the rice, then remove, add and change things and watch one change lead to another.">
+<link rel="icon" href="../../favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600&family=Inter:wght@400;500;600;700&family=Nunito:wght@500;700;800&family=Newsreader:opsz,wght@6..72,400;6..72,500&family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="../../play.css">
+<style>
+/* Only what this page needs beyond play.css. */
+.pg-stage{background:#fbf7ec}
+@media (max-width:1180px) and (min-width:981px){ .pg-main.wide-side{grid-template-columns:minmax(0,1fr) 350px} }
+.gate{position:absolute; inset:0 0 auto 0; height:40%; display:grid; place-items:center; pointer-events:none}
+.gate span{background:rgba(24,34,20,.84); color:#fff; padding:10px 16px; border-radius:99px; font-weight:600; font-size:14px}
+.hit{cursor:pointer}
+.hit:focus{outline:none}
+.hit:focus-visible{stroke:#1f8a70; stroke-width:2.5}
+.seg{display:flex; background:var(--sunk); border-radius:99px; padding:3px; gap:3px}
+.seg button{flex:1; border:0; background:transparent; border-radius:99px; padding:7px 10px; font-weight:600; font-size:13.5px; cursor:pointer; color:var(--ink-2)}
+.seg button[aria-pressed="true"]{background:var(--card); color:var(--ink); box-shadow:var(--shadow)}
+.seg button:disabled{cursor:default; opacity:.5}
+.who{display:grid; grid-template-columns:52px 1fr; gap:4px 12px; align-items:center; margin:12px 0 4px; padding:10px 12px; border-radius:var(--radius-sm); background:var(--sunk)}
+.who svg{width:52px; height:52px; grid-row:span 2; border-radius:50%}
+.who b{font-family:"Fredoka",var(--font-head); font-size:19px; font-weight:600; line-height:1.1}
+.who small{font-size:12.5px; color:var(--ink-2); font-variant-numeric:tabular-nums}
+.who .row{grid-column:1/-1; margin-top:6px}
+.hint{font-size:12.5px; color:var(--ink-3); margin:4px 0 0}
+.tog[aria-pressed="true"]{background:var(--accent-soft); border-color:var(--accent)}
+.clock{font-family:"Fredoka",var(--font-head); font-size:22px; font-weight:600; line-height:1; font-variant-numeric:tabular-nums}
+.play{width:40px; min-width:40px; padding:0}
+.why p{font-size:14px; margin-bottom:.55em}
+.why b{color:var(--ink)}
+.why .mv{display:grid; grid-template-columns:12px 1fr; gap:8px; align-items:start; font-size:13.5px; margin:5px 0}
+.why .mv i{width:12px; height:12px; border-radius:3px; margin-top:4px}
+.why .book{font-size:12.5px; color:var(--ink-3); border-left:3px solid var(--hair-2); padding-left:8px; margin-top:8px}
+.sep{height:1px; background:var(--hair); margin:12px 0}
+</style>
+</head>
+<body>
+<header class="pg-top"></header>
+
+<div class="pg-intro">
+  <h1>Pull one thread of the web</h1>
+  <p>A rice field at the edge of a forest, where every population, from the rice to the hawk and the fungi in the soil, is worked out
+     month by month from who eats whom. Predict first. Then take something away, dim the Sun or spray the crop, and watch one change lead to another.</p>
+</div>
+
+<main class="pg-main wide-side">
+  <section class="pg-stage" id="stageWrap">
+    <svg id="stage" viewBox="0 0 1000 900" role="img" aria-label="A rice field at the forest's edge, its food web with circles sized by population, and a graph of every population over time"></svg>
+    <div class="gate" id="gate"><span>Make your prediction first →</span></div>
+  </section>
+
+  <aside class="pg-side">
+    <div id="poe"></div>
+
+    <div class="card" id="ctlCard">
+      <div class="seg" role="group" aria-label="Which ecosystem">
+        <button id="modeWeb" aria-pressed="true">The food web</button>
+        <button id="modeChain" aria-pressed="false">Just one food chain</button>
+      </div>
+      <div class="who" id="who">
+        <svg viewBox="-30 -30 60 60" aria-hidden="true"><circle r="29" id="whoDisc" fill="#eee"/><use id="whoIcon" href="#sym-snake" transform="scale(1.7)"/></svg>
+        <b id="whoName">Snake</b>
+        <small id="whoCount">12 snakes</small>
+        <div class="row">
+          <button class="btn sm" id="btnRemove">Remove all snakes</button>
+          <button class="btn sm" id="btnBack" disabled>Bring snakes back</button>
+        </div>
+      </div>
+      <p class="hint" id="whoHint">Click any living thing in the web, or a name in the graph's key, to choose it.</p>
+      <div class="sep"></div>
+      <div class="ctl"><label for="sun">Sunlight</label><input type="range" id="sun" min="20" max="120" step="5" value="100"><output id="sunOut" class="num">100%</output></div>
+      <div class="row">
+        <button class="btn sm tog" id="btnSpray" aria-pressed="false">Spray pesticide</button>
+        <button class="btn sm tog" id="btnCorridor" aria-pressed="false">Cut the elephant corridor</button>
+      </div>
+      <div class="sep"></div>
+      <div class="row" style="justify-content:space-between">
+        <div><div class="kicker">Time in the field</div><div class="clock" id="clock">Year 0 · month 0</div></div>
+        <div class="row">
+          <button class="btn play" id="btnPlay" aria-label="Pause" title="Pause">❚❚</button>
+          <button class="btn sm tog" id="btnFast" aria-pressed="false" title="A year every second">Fast ⏩</button>
+        </div>
+      </div>
+      <div class="row" style="margin-top:8px"><button class="btn sm" id="btnReset">Start again from the balance</button></div>
+    </div>
+
+    <div class="card why" id="whyCard">
+      <div class="kicker">What is happening</div>
+      <div id="why"></div>
+    </div>
+
+    <div class="card"><div class="kicker">To find</div><div id="finds"></div></div>
+  </aside>
+</main>
+
+<script src="../../play.js"></script>
+<script>
+'use strict';
+const {$, esc, clamp, fmt, loop, sound, say, track, toast, predict, findings, discover, found,
+       shareState, sharedState, mount, reduced} = Play;
+mount({thread: 'webs', band: 'tinkerer'});
+
+/* MODEL:start ==================================================================
+   A rice field and its edges as a food web of populations (NCERT Curiosity 8, Ch 12).
+
+   Every population is stored as how much living matter it holds, x, in units of the
+   nutrients locked up in it. Each month:
+     plants   grow from sunlight and soil nutrients, crowd each other for space, die, and are eaten;
+     animals  gain what they eat (only part of it becomes their body; the rest is droppings),
+              die of age and of crowding (competition), and are eaten;
+     decomposers (fungi and bacteria) break dead matter down and return its nutrients to the soil.
+   Eating is a Lotka–Volterra link: the amount eaten = a × (prey) × (eater). Nothing is created
+   or destroyed: nutrients go round the loop soil → plants → animals → dead matter → soil, so the
+   total never changes. Integrated with RK4, a step of 0.05 month.
+
+   The field is BUILT balanced: we choose how many of each live there and how much flows along
+   each link, and the death rates follow, so that births equal deaths for everyone. Nothing that
+   happens after a change is written down anywhere; it comes out of the equations.
+   ============================================================================ */
+const SPECIES = [
+  /* x = balanced amount; mass = amount per individual, so the count is x / mass (per hectare
+     of field and edges). self = the share of an animal's deaths that come from crowding. */
+  {id: 'rice',   name: 'Rice',        plural: 'rice plants',  kind: 'producer',   level: 1, x: 100,  mass: 0.0005,  K: 260, m: 0.03},
+  {id: 'grass',  name: 'Grasses',     plural: 'grass clumps', kind: 'producer',   level: 1, x: 40,   mass: 0.001,   K: 110, m: 0.04},
+  {id: 'hopper', name: 'Grasshopper', plural: 'grasshoppers', kind: 'herbivore',  level: 2, x: 8,    mass: 0.00008, self: 0.4},
+  {id: 'mouse',  name: 'Mouse',       plural: 'mice',         kind: 'omnivore',   level: 2, x: 3,    mass: 0.03,    self: 0.4},
+  {id: 'bird',   name: 'Bird',        plural: 'birds',        kind: 'omnivore',   level: 3, x: 1,    mass: 0.02,    self: 0.5},
+  {id: 'frog',   name: 'Frog',        plural: 'frogs',        kind: 'carnivore',  level: 3, x: 2,    mass: 0.005,   self: 0.4},
+  {id: 'snake',  name: 'Snake',       plural: 'snakes',       kind: 'carnivore',  level: 4, x: 0.6,  mass: 0.05,    self: 0.7},
+  {id: 'hawk',   name: 'Hawk',        plural: 'hawks',        kind: 'carnivore',  level: 5, x: 0.15, mass: 0.03,    self: 0.85},
+  {id: 'decomp', name: 'Fungi and bacteria', plural: 'fungi and bacteria', kind: 'decomposer', level: 0, x: 4, mass: 0, self: 0.35},
+];
+const IX = {}; SPECIES.forEach((s, i) => IX[s.id] = i);
+const NS = SPECIES.length, iD = NS, iN = NS + 1;      // two more pools: dead matter, soil nutrients
+const D0 = 60, N0 = 20, KN = 10;                        // balanced dead matter and nutrients; half-saturation of uptake
+/* Who eats whom (the arrow points from the eaten to the eater), and how much flows along the
+   link each month in the balanced field. `chain` marks the one food chain of the book,
+   grass → grasshopper → frog → snake → eagle; here the grass is the rice (rice is a grass). */
+const LINKS = [
+  {prey: 'rice',   pred: 'hopper', flow: 4.0,  chain: true},
+  {prey: 'grass',  pred: 'hopper', flow: 2.5,  chain: false},
+  {prey: 'rice',   pred: 'mouse',  flow: 3.0,  chain: false},
+  {prey: 'grass',  pred: 'mouse',  flow: 0.3,  chain: false},
+  {prey: 'hopper', pred: 'mouse',  flow: 0.2,  chain: false},
+  {prey: 'hopper', pred: 'bird',   flow: 0.25, chain: false},
+  {prey: 'rice',   pred: 'bird',   flow: 0.1,  chain: false},
+  {prey: 'hopper', pred: 'frog',   flow: 0.6,  chain: true},
+  {prey: 'frog',   pred: 'snake',  flow: 0.08, chain: true},
+  {prey: 'mouse',  pred: 'snake',  flow: 0.4,  chain: false},
+  {prey: 'snake',  pred: 'hawk',   flow: 0.08, chain: true},
+  {prey: 'mouse',  pred: 'hawk',   flow: 0.06, chain: false},
+  {prey: 'bird',   pred: 'hawk',   flow: 0.02, chain: false},
+];
+const CHAIN_SET = new Set(['rice', 'hopper', 'frog', 'snake', 'hawk', 'decomp']);
+const E_PLANT = 0.3, E_MEAT = 0.6, E_DECOMP = 0.3;      // share of food that becomes body
+const SPRAY = {hopper: 0.06, frog: 0.3, bird: 0.1, decomp: 0.05};   // extra deaths per month while spraying
+const ELEPHANT = 0.008;                                  // share of the rice eaten per month by elephants off their corridor
+
+/* Choose death rates so that the chosen field is exactly balanced. */
+function calibrate(){
+  for (const l of LINKS) {
+    l.i = IX[l.prey]; l.j = IX[l.pred];
+    l.a = l.flow / (SPECIES[l.i].x * SPECIES[l.j].x);
+    l.e = SPECIES[l.i].kind === 'producer' ? E_PLANT : E_MEAT;
+  }
+  let intoDead = 0;
+  for (let k = 0; k < NS; k++) {
+    const s = SPECIES[k]; if (s.kind === 'decomposer') continue;
+    const eaten = LINKS.filter(l => l.i === k).reduce((a, l) => a + l.flow, 0);
+    if (s.kind === 'producer') {
+      s.r = (eaten + s.m * s.x) / (s.x * (N0 / (N0 + KN)) * (1 - s.x / s.K));
+      intoDead += s.m * s.x;
+    } else {
+      const gain = LINKS.filter(l => l.j === k).reduce((a, l) => a + l.e * l.flow, 0);
+      const deaths = gain - eaten;
+      s.c = s.self * deaths / (s.x * s.x);
+      s.m = (1 - s.self) * deaths / s.x;
+      intoDead += deaths;
+    }
+  }
+  for (const l of LINKS) intoDead += (1 - l.e) * l.flow;         // droppings
+  const X = SPECIES[IX.decomp];
+  X.d = intoDead / ((1 - E_DECOMP) * D0 * X.x);
+  const g = E_DECOMP * X.d * D0;
+  X.m = (1 - X.self) * g; X.c = X.self * g / X.x;
+}
+calibrate();
+
+/* env = {sun: 1 is normal, present: [bool], chain: bool, spray: bool, corridor: bool (open)} */
+const linkOn = (l, env) => env.present[l.i] && env.present[l.j] && (!env.chain || l.chain);
+/* A hunter whose usual food has gone spends its time hunting what is left: its effort is
+   shared among the prey still there, so it hunts each of them harder (at most twice as hard). */
+function switching(env){
+  const w = new Array(NS).fill(1);
+  for (let j = 0; j < NS; j++) {
+    let all = 0, on = 0;
+    for (const l of LINKS) if (l.j === j) { all += l.flow; if (linkOn(l, env)) on += l.flow; }
+    if (all > 0 && on > 0) w[j] = Math.min(2, Math.sqrt(all / on));
+  }
+  return w;
+}
+/* Every flow in the field right now, per month. */
+function flows(x, env){
+  const fN = x[iN] / (x[iN] + KN), sw = switching(env);
+  const F = {grow: new Array(NS).fill(0), eat: LINKS.map(() => 0), die: new Array(NS).fill(0), extra: new Array(NS).fill(0), decomposed: 0, elephant: 0};
+  for (let k = 0; k < NS; k++) {
+    const s = SPECIES[k];
+    if (!env.present[k] || x[k] <= 0) continue;
+    if (s.kind === 'producer') {
+      F.grow[k] = s.r * env.sun * fN * Math.max(0, 1 - x[k] / s.K) * x[k];
+      F.die[k] = s.m * x[k];
+    } else {
+      F.die[k] = s.m * x[k] + s.c * x[k] * x[k];
+      if (env.spray) F.extra[k] = (SPRAY[s.id] || 0) * x[k];
+      if (s.kind === 'decomposer') F.decomposed = s.d * x[iD] * x[k];
+    }
+  }
+  LINKS.forEach((l, n) => { if (linkOn(l, env)) F.eat[n] = l.a * sw[l.j] * x[l.i] * x[l.j]; });
+  if (env.corridor === false && env.present[IX.rice]) F.elephant = ELEPHANT * x[IX.rice];
+  return F;
+}
+function deriv(x, env, out){
+  const F = flows(x, env);
+  for (let k = 0; k < NS + 2; k++) out[k] = 0;
+  for (let k = 0; k < NS; k++) {
+    out[k] += F.grow[k] - F.die[k] - F.extra[k];
+    out[iN] -= F.grow[k];
+    out[iD] += F.die[k] + F.extra[k];
+  }
+  const dc = IX.decomp;
+  out[dc] += E_DECOMP * F.decomposed; out[iD] -= F.decomposed; out[iN] += (1 - E_DECOMP) * F.decomposed;
+  LINKS.forEach((l, n) => { const f = F.eat[n]; out[l.i] -= f; out[l.j] += l.e * f; out[iD] += (1 - l.e) * f; });
+  /* Elephants eat the crop; half comes back as dung, the herd carries the rest back to the forest. */
+  out[IX.rice] -= F.elephant; out[iD] += 0.5 * F.elephant;
+  return out;
+}
+function initial(){ const x = SPECIES.map(s => s.x); x.push(D0, N0); return x; }
+const _k = [0, 1, 2, 3].map(() => new Float64Array(NS + 2)), _t = new Float64Array(NS + 2);
+function step(x, env, h){
+  const n = NS + 2;
+  deriv(x, env, _k[0]);
+  for (let i = 0; i < n; i++) _t[i] = x[i] + h / 2 * _k[0][i]; deriv(_t, env, _k[1]);
+  for (let i = 0; i < n; i++) _t[i] = x[i] + h / 2 * _k[1][i]; deriv(_t, env, _k[2]);
+  for (let i = 0; i < n; i++) _t[i] = x[i] + h * _k[2][i];     deriv(_t, env, _k[3]);
+  for (let i = 0; i < n; i++) { x[i] += h / 6 * (_k[0][i] + 2 * _k[1][i] + 2 * _k[2][i] + _k[3][i]); if (x[i] < 0) x[i] = 0; }
+  /* Fewer than half an animal is none at all: the last one has died, and its body joins the dead matter. */
+  for (let k = 0; k < NS; k++) {
+    const s = SPECIES[k];
+    if (!env.present[k] || (s.mass && x[k] > 0 && x[k] / s.mass < 0.5)) { x[iD] += x[k]; x[k] = 0; }
+  }
+  return x;
+}
+const H = 0.05;
+function run(x, env, months){ const n = Math.round(months / H); for (let i = 0; i < n; i++) step(x, env, H); return x; }
+const total = x => x.reduce((a, b) => a + b, 0);
+function envFor(o = {}){
+  const rem = o.removed || {};
+  return {sun: o.sun == null ? 1 : o.sun, chain: !!o.chain, spray: !!o.spray, corridor: o.corridor !== false,
+          present: SPECIES.map(s => !rem[s.id] && (!o.chain || CHAIN_SET.has(s.id)))};
+}
+/* The balanced state of each ecosystem: the web is built balanced; the single chain finds its own
+   balance by running the same equations for a hundred years. */
+const BAL = {web: initial(), chain: run(initial(), envFor({chain: true}), 1200)};
+const count = (k, x) => SPECIES[k].mass ? x[k] / SPECIES[k].mass : null;
+/* MODEL:end */
+
+/* ---- looks ------------------------------------------------------------------ */
+const COL = {rice: '#d39a14', grass: '#4e9a3a', hopper: '#8fb22a', mouse: '#6f7d91', bird: '#e0702a', frog: '#1a9c8c',
+             snake: '#7b5cd6', hawk: '#b23a48', decomp: '#a8653a', N: '#3f7fd8', D: '#8a6a45'};
+const PALE = {rice: '#fbefcf', grass: '#e1f1da', hopper: '#eef5d6', mouse: '#e7eaef', bird: '#fde5d6', frog: '#d6f1ed',
+              snake: '#ebe5fa', hawk: '#f6dfe2', decomp: '#f3e4d7'};
+const nf = n => Math.round(n).toLocaleString('en-IN');
+const pct = v => Math.round(v * 100) + '%';
+const cap = s => s.charAt(0).toUpperCase() + s.slice(1);
+const SPEED = {slow: 3, fast: 12};    // months per second
+
+/* ---- state: plain data --------------------------------------------------- */
+const S = {mode: 'web', t: 0, x: BAL.web.slice(), removed: {}, sun: 1, spray: false, corridor: true,
+  sel: 'snake', playing: true, fast: false, locked: false,
+  ref: null,          // the last removal: {id, t, x}
+  sprayRef: null,     // the field when spraying began: {t, x}
+  flags: {chainLost: false, webHeld: false}, events: [], explained: false};
+let HIST = [];        // {t, v: [x / balance], n: nutrients / balance}
+const env = () => envFor({removed: S.removed, sun: S.sun, chain: S.mode === 'chain', spray: S.spray, corridor: S.corridor});
+const bal = () => BAL[S.mode];
+const norm = k => SPECIES[k].x;              // the web's balance: the landscape draws against it in both modes
+const inPlay = k => S.mode === 'web' || CHAIN_SET.has(SPECIES[k].id);
+
+const shared = sharedState();
+if (shared && BAL[shared.mode]) {
+  S.mode = shared.mode; S.removed = shared.removed || {}; S.sun = clamp(+shared.sun || 1, 0.2, 1.2);
+  S.spray = !!shared.spray; S.corridor = shared.corridor !== false; S.t = +shared.t || 0;
+  if (Array.isArray(shared.x) && shared.x.length === NS + 2) S.x = shared.x.map(v => Math.max(0, +v || 0));
+  else S.x = bal().slice();
+  if (SPECIES[IX[shared.sel]]) S.sel = shared.sel;
+}
+shareState(() => ({mode: S.mode, removed: S.removed, sun: S.sun, spray: S.spray, corridor: S.corridor, t: Math.round(S.t),
+  sel: S.sel, x: S.x.map(v => +v.toFixed(4))}));
+
+/* ============================================================================
+   The stage: drawn once, then only patched.
+   ============================================================================ */
+const svg = $('stage');
+const NS_SVG = 'http://www.w3.org/2000/svg';
+/* the food web's layout: producers at the bottom, the hawk at the top */
+const NODE = {hawk: [235, 492], snake: [130, 567], frog: [62, 647], bird: [262, 647], hopper: [100, 727], mouse: [262, 727],
+              rice: [118, 807], grass: [272, 807], decomp: [452, 640]};
+const DEADBOX = {x: 404, y: 700, w: 96, h: 40}, SOILBOX = {x: 404, y: 790, w: 96, h: 40}, SUNP = [196, 870];
+const GR = {x: 572, y: 478, w: 400, h: 330}, GX0 = 536;
+const RMAX = 30, RBASE = 21;
+const BASE = {hopper: 12, mouse: 5, bird: 4, frog: 7, snake: 2, hawk: 2};
+const CAPN = k => BASE[k] * 3;
+
+function symbols(){
+  return `
+  <g id="sym-rice"><path d="M0 11 C-1 3 -6 -4 -10 -8 M0 11 C0 2 -2 -6 -3 -12 M0 11 C1 2 3 -7 6 -11 M0 11 C2 4 7 -1 11 -4 M0 11 C-2 5 -5 1 -9 0" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+     <path d="M-3 -12 C-1 -15 3 -15 5 -13 M6 -11 C9 -12 11 -9 11 -6" fill="none" stroke="#e8b83a" stroke-width="2.4" stroke-linecap="round"/></g>
+  <g id="sym-grass"><path d="M0 10 C-2 3 -7 -2 -11 -4 M0 10 C-1 1 -3 -6 -2 -11 M0 10 C1 2 5 -5 9 -8 M0 10 C2 5 8 2 12 1" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></g>
+  <g id="sym-hopper"><path d="M-9 2 L-3 -5 L1 3 M-2 2 L-7 8 M4 2 L7 8" fill="none" stroke="#5f7d12" stroke-width="1.4" stroke-linecap="round"/>
+     <ellipse cx="0" cy="0" rx="10" ry="3.6" fill="#9cc22c"/><circle cx="8.5" cy="-1" r="2.6" fill="#86ab1e"/><circle cx="9.3" cy="-1.6" r=".8" fill="#243"/>
+     <path d="M9 -3 C11 -8 13 -9 15 -9" fill="none" stroke="#5f7d12" stroke-width=".9"/></g>
+  <g id="sym-mouse"><path d="M-8 2 C-13 3 -15 0 -17 -3" fill="none" stroke="#8d6f63" stroke-width="1.3" stroke-linecap="round"/>
+     <ellipse cx="0" cy="0" rx="9" ry="6" fill="#8a8f99"/><ellipse cx="7" cy="-1" rx="5" ry="4" fill="#9ca1ab"/><circle cx="5" cy="-5.5" r="3" fill="#b9a2a2"/>
+     <circle cx="9" cy="-2" r=".9" fill="#222"/><circle cx="12" cy="-.5" r=".9" fill="#e59aa2"/></g>
+  <g id="sym-bird"><path d="M-10 1 L-15 -2 L-14 3 Z" fill="#4a3525"/><ellipse cx="-1" cy="0" rx="9" ry="6" fill="#6b4a2f"/>
+     <path d="M-5 -1 C-1 -6 4 -5 6 -1 Z" fill="#3a2718"/><circle cx="7" cy="-3" r="4.5" fill="#1f1a18"/>
+     <path d="M11 -3.5 L15 -2 L11 -1 Z" fill="#f2c230"/><circle cx="8" cy="-3.5" r="1.3" fill="#f2c230"/><path d="M-2 6 L-2 9 M2 6 L2 9" stroke="#f2c230" stroke-width="1.2"/></g>
+  <g id="sym-frog"><path d="M-9 5 C-14 6 -14 9 -10 9 M9 5 C14 6 14 9 10 9" fill="none" stroke="#1f7a5a" stroke-width="2.2" stroke-linecap="round"/>
+     <ellipse cx="0" cy="2" rx="10" ry="7" fill="#3aa36b"/><circle cx="-5" cy="-4" r="3.4" fill="#3aa36b"/><circle cx="5" cy="-4" r="3.4" fill="#3aa36b"/>
+     <circle cx="-5" cy="-4.4" r="1.5" fill="#1b2a22"/><circle cx="5" cy="-4.4" r="1.5" fill="#1b2a22"/><ellipse cx="0" cy="4" rx="6" ry="3.2" fill="#b6dd8f"/>
+     <path d="M-4 0.5 Q0 2.5 4 0.5" fill="none" stroke="#1b2a22" stroke-width=".8"/></g>
+  <g id="sym-snake"><path d="M-14 4 C-9 -5 -4 -5 0 2 C4 9 9 8 12 -1" fill="none" stroke="#5b6a1e" stroke-width="5.2" stroke-linecap="round"/>
+     <path d="M-14 4 C-9 -5 -4 -5 0 2 C4 9 9 8 12 -1" fill="none" stroke="#c9b24a" stroke-width="2" stroke-linecap="round" stroke-dasharray="2 3"/>
+     <ellipse cx="13" cy="-3" rx="4" ry="3" fill="#5b6a1e"/><circle cx="14" cy="-4" r=".9" fill="#111"/><path d="M17 -3 L19 -2.5" stroke="#d6453d" stroke-width=".9"/></g>
+  <g id="sym-hawk"><path d="M0 -2 C-6 -8 -12 -9 -17 -6 C-12 -4 -8 -1 -4 2 Z M0 -2 C6 -8 12 -9 17 -6 C12 -4 8 -1 4 2 Z" fill="#7a4a2a"/>
+     <path d="M-15 -6.5 L-12 -4 M15 -6.5 L12 -4" stroke="#3b2414" stroke-width="1.2"/>
+     <ellipse cx="0" cy="1" rx="3.6" ry="7" fill="#a7744a"/><circle cx="0" cy="-5" r="3" fill="#8d5a33"/><path d="M-1 -3 L0 -1 L1 -3 Z" fill="#f2c230"/>
+     <path d="M-3 7 L0 11 L3 7 Z" fill="#7a4a2a"/></g>
+  <g id="sym-decomp"><path d="M-11 4 C-11 -4 -3 -8 0 -8 C3 -8 11 -4 11 4 Z" fill="#c9793d"/><rect x="-3" y="3" width="6" height="9" rx="2.5" fill="#f3e2c6"/>
+     <circle cx="-5" cy="-2" r="1.6" fill="#f6dfb8"/><circle cx="3" cy="-4" r="1.3" fill="#f6dfb8"/><circle cx="6" cy="0" r="1.1" fill="#f6dfb8"/>
+     <path d="M-12 12 C-8 9 -5 13 0 11 C5 9 8 13 12 11" fill="none" stroke="#e6d2ae" stroke-width="1" stroke-dasharray="1.5 2"/></g>
+  <g id="sym-elephant"><path d="M-16 6 C-18 -4 -12 -12 -2 -12 C8 -12 13 -7 13 0 L13 6 Z" fill="#8c8f96"/>
+     <rect x="-15" y="4" width="5" height="10" rx="2" fill="#7d8087"/><rect x="-6" y="4" width="5" height="10" rx="2" fill="#7d8087"/><rect x="3" y="4" width="5" height="10" rx="2" fill="#7d8087"/>
+     <circle cx="15" cy="-5" r="7" fill="#8c8f96"/><path d="M20 -3 C24 2 22 9 25 12" fill="none" stroke="#8c8f96" stroke-width="3.4" stroke-linecap="round"/>
+     <path d="M9 -9 C5 -4 7 3 12 3 C13 -2 13 -6 9 -9 Z" fill="#a3a6ad"/><circle cx="17" cy="-7" r=".9" fill="#222"/><path d="M19 -1 L22 1" stroke="#f4f0e2" stroke-width="1.4" stroke-linecap="round"/></g>
+  <g id="sym-sun"><circle r="10" fill="#ffc53d"/><g stroke="#f29a1f" stroke-width="2" stroke-linecap="round">
+     <path d="M0 -13 V-17 M0 13 V17 M-13 0 H-17 M13 0 H17 M-9 -9 L-12 -12 M9 9 L12 12 M-9 9 L-12 12 M9 -9 L12 -12"/></g></g>`;
+}
+
+function build(){
+  const rnd = Play.mulberry32(20260918);
+  /* ---- the landscape, y 0–400 ---- */
+  let rice = '', grassT = '', bunds = '', treesL = '', treesR = '', corr = '', soilN = '', dead = '', mush = '';
+  /* paddies: three bands, drawn in perspective (smaller and paler towards the hills) */
+  const bandsY = [[178, 214, .58], [218, 262, .78], [266, 330, 1]];
+  const RICE = [];
+  bandsY.forEach(([y0, y1, sc], b) => {
+    const rows = b === 0 ? 2 : 3;
+    for (let r = 0; r < rows; r++) {
+      const y = y0 + 8 + (y1 - y0 - 14) * (r + .5) / rows;
+      const step = 34 * sc;
+      for (let x = 20 + (r % 2) * step / 2; x < 990; x += step) RICE.push({x: x + (rnd() - .5) * 6, y: y + (rnd() - .5) * 3, s: sc * (0.9 + rnd() * 0.25), o: rnd()});
+    }
+  });
+  RICE.sort((a, b) => a.o - b.o);        // the order in which tufts disappear as the rice thins: scattered, not row by row
+  RICE.forEach((p, i) => { p.i = i; });
+  RICE.sort((a, b) => a.y - b.y);
+  rice = RICE.map(p => `<use href="#sym-rice" data-i="${p.i}" transform="translate(${p.x.toFixed(1)} ${p.y.toFixed(1)}) scale(${p.s.toFixed(2)})"/>`).join('');
+  NRICE = RICE.length;
+  for (const [yb, h] of [[214, 4], [262, 5], [330, 7]]) {
+    bunds += `<path d="M0 ${yb} C250 ${yb - 2} 750 ${yb + 2} 1000 ${yb} L1000 ${yb + h} C750 ${yb + h + 2} 250 ${yb + h - 2} 0 ${yb + h}Z" fill="#b08654"/>`;
+    for (let x = 6; x < 1000; x += 26 + rnd() * 14) grassT += `<use href="#sym-grass" data-o="${rnd().toFixed(3)}" transform="translate(${x.toFixed(1)} ${yb - 3}) scale(${(h / 7 * .8 + .25).toFixed(2)})"/>`;
+  }
+  for (let i = 0; i < 26; i++) treesL += `<circle cx="${(10 + rnd() * 330).toFixed(0)}" cy="${(128 + rnd() * 34 - (i % 5) * 3).toFixed(0)}" r="${(10 + rnd() * 10).toFixed(0)}" fill="${['#2f6b35', '#3c7d3c', '#46863f'][i % 3]}"/>`;
+  for (let i = 0; i < 26; i++) treesR += `<circle cx="${(660 + rnd() * 340).toFixed(0)}" cy="${(126 + rnd() * 34 - (i % 5) * 3).toFixed(0)}" r="${(10 + rnd() * 10).toFixed(0)}" fill="${['#2f6b35', '#3c7d3c', '#46863f'][i % 3]}"/>`;
+  for (let i = 0; i < 16; i++) corr += `<circle cx="${(330 + i * 22 + rnd() * 8).toFixed(0)}" cy="${(146 + rnd() * 10).toFixed(0)}" r="${(8 + rnd() * 6).toFixed(0)}" fill="${['#3c7d3c', '#46863f'][i % 2]}"/>`;
+  for (let i = 0; i < 90; i++) soilN += `<circle cx="${(8 + rnd() * 984).toFixed(0)}" cy="${(352 + rnd() * 42).toFixed(0)}" r="${(1.6 + rnd() * 1.6).toFixed(1)}" fill="#f4d56a" opacity=".9" data-o="${rnd().toFixed(3)}"/>`;
+  for (let i = 0; i < 70; i++) { const x = 8 + rnd() * 984, y = 340 + rnd() * 9, a = rnd() * 180;
+    dead += `<ellipse cx="${x.toFixed(0)}" cy="${y.toFixed(0)}" rx="5" ry="2.2" transform="rotate(${a.toFixed(0)} ${x.toFixed(0)} ${y.toFixed(0)})" fill="${['#8a5a2b', '#a0703a', '#6e4a28'][i % 3]}" data-o="${rnd().toFixed(3)}"/>`; }
+  for (let i = 0; i < 12; i++) mush += `<use href="#sym-decomp" data-o="${(i / 12 + rnd() * .04).toFixed(3)}" transform="translate(${(40 + i * 80 + rnd() * 30).toFixed(0)} ${(332 + rnd() * 4).toFixed(0)}) scale(.62)"/>`;
+
+  /* animal sprites: a pool per species, shown in proportion to the population */
+  const zone = {
+    hopper: () => [30 + rnd() * 940, 196 + rnd() * 128], mouse: () => [30 + rnd() * 940, [211, 259, 327][Math.floor(rnd() * 3)]],
+    bird: () => [80 + rnd() * 860, 60 + rnd() * 100], frog: () => [30 + rnd() * 940, 226 + rnd() * 96],
+    snake: () => [60 + rnd() * 880, [258, 326][Math.floor(rnd() * 2)]], hawk: () => [200 + rnd() * 600, 38 + rnd() * 40]};
+  let sprites = '';
+  for (const id of Object.keys(BASE)) {
+    SPR[id] = [];
+    for (let i = 0; i < CAPN(id); i++) {
+      const [x, y] = zone[id](), ph = rnd() * 6.28;
+      const sc = id === 'hawk' ? 1.2 : id === 'snake' ? .95 : id === 'bird' ? .85 : id === 'hopper' ? .62 : .8;
+      SPR[id].push({x, y, ph, sc, flip: rnd() < .5});
+      sprites += `<g id="sp-${id}-${i}" style="display:none"><use href="#sym-${id}"/></g>`;
+    }
+  }
+
+  svg.innerHTML = `
+  <defs>
+    ${symbols()}
+    <linearGradient id="gSky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#7fc3ee"/><stop offset=".75" stop-color="#cfe9f3"/><stop offset="1" stop-color="#fbe3b3"/></linearGradient>
+    <radialGradient id="gSunGlow"><stop offset="0" stop-color="#ffe08a" stop-opacity=".85"/><stop offset="1" stop-color="#ffe08a" stop-opacity="0"/></radialGradient>
+    <linearGradient id="gWater" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#9cc7b4"/><stop offset="1" stop-color="#6faa8e"/></linearGradient>
+    <linearGradient id="gSoil" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#6d4a2c"/><stop offset="1" stop-color="#4a3120"/></linearGradient>
+    <clipPath id="clipLand"><rect x="0" y="0" width="1000" height="400"/></clipPath>
+    ${Object.keys(COL).map(k => `<marker id="ar-${k}" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 Z" fill="${COL[k]}"/></marker>`).join('')}
+    <marker id="ar-sun" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" markerUnits="userSpaceOnUse" orient="auto"><path d="M0 0 L10 5 L0 10 Z" fill="#f2a01f"/></marker>
+  </defs>
+  <g clip-path="url(#clipLand)">
+    <rect x="0" y="0" width="1000" height="400" fill="url(#gSky)"/>
+    <circle id="sunGlow" cx="96" cy="66" r="80" fill="url(#gSunGlow)"/>
+    <circle id="sunDisc" cx="96" cy="66" r="30" fill="#ffc53d"/>
+    <path d="M0 150 C120 102 250 112 360 136 C470 158 560 110 700 112 C820 114 910 128 1000 118 L1000 180 L0 180Z" fill="#9dbd84"/>
+    <g>${treesL}</g><g>${treesR}</g>
+    <g id="corridor">${corr}</g>
+    <g id="road" style="display:none"><path d="M455 105 L520 105 L560 182 L420 182 Z" fill="#8f8b84"/><path d="M488 108 L490 180" stroke="#f4f0e2" stroke-width="2" stroke-dasharray="7 7"/>
+      <rect x="470" y="140" width="22" height="12" rx="2" fill="#d6453d"/><rect x="486" y="143" width="9" height="9" rx="1" fill="#f4c542"/></g>
+    <rect x="0" y="176" width="1000" height="160" fill="url(#gWater)"/>
+    <path d="M0 180 C300 176 700 184 1000 178" stroke="#d8efe4" stroke-width="1.4" fill="none" opacity=".6"/>
+    <path d="M0 240 C300 236 700 244 1000 238" stroke="#d8efe4" stroke-width="1.4" fill="none" opacity=".5"/>
+    <path d="M0 300 C300 296 700 304 1000 298" stroke="#d8efe4" stroke-width="1.4" fill="none" opacity=".5"/>
+    <g>${bunds}</g>
+    <g id="grassL" style="color:${COL.grass}">${grassT}</g>
+    <g id="riceL" style="color:#4f9c34">${rice}</g>
+    <g id="herd"><use href="#sym-elephant" id="el0"/><use href="#sym-elephant" id="el1"/><use href="#sym-elephant" id="el2"/></g>
+    <text id="herdLab" font-size="11.5" font-weight="700" fill="#2c4a22" text-anchor="middle" stroke="#f4f6ea" stroke-width="3" paint-order="stroke" stroke-linejoin="round"></text>
+    <g id="sprayer" style="display:none">
+      <g id="mist">${Array.from({length: 40}, (_, i) => `<circle cx="${(700 + (i * 37) % 260).toFixed(0)}" cy="${(196 + (i * 53) % 120).toFixed(0)}" r="${(3 + (i % 4) * 2)}" fill="#e9f2f7" opacity=".55"/>`).join('')}</g>
+      <g transform="translate(676 250)"><circle cx="0" cy="-26" r="6" fill="#7a4a2a"/><path d="M-6 -32 L6 -32 L3 -36 L-3 -36Z" fill="#e8d8a8"/>
+        <rect x="-6" y="-20" width="12" height="18" rx="4" fill="#e4e0d2"/><rect x="-11" y="-19" width="7" height="14" rx="2" fill="#d6453d"/>
+        <path d="M-3 -2 L-5 14 M3 -2 L5 14" stroke="#2e4a6b" stroke-width="3.5" stroke-linecap="round"/>
+        <path d="M5 -14 L22 -20" stroke="#555" stroke-width="2"/></g>
+      <text x="690" y="342" font-size="11.5" font-weight="700" fill="#f4f0e2" text-anchor="middle">spraying</text>
+    </g>
+    <rect x="0" y="336" width="1000" height="64" fill="url(#gSoil)"/>
+    <g id="soilN">${soilN}</g>
+    <g id="deadL">${dead}</g>
+    <g id="mushL">${mush}</g>
+    <g id="sprites">${sprites}</g>
+    <rect id="clouds0" x="0" y="0" width="1000" height="400" fill="#5d6b78" opacity="0" pointer-events="none"/>
+    <g id="clouds" opacity="0">
+      <g fill="#dfe5ea"><ellipse cx="110" cy="70" rx="80" ry="26"/><ellipse cx="160" cy="54" rx="50" ry="26"/><ellipse cx="70" cy="58" rx="40" ry="20"/>
+      <ellipse cx="520" cy="54" rx="90" ry="24"/><ellipse cx="570" cy="40" rx="50" ry="22"/><ellipse cx="840" cy="72" rx="100" ry="26"/><ellipse cx="880" cy="56" rx="50" ry="22"/></g>
+    </g>
+    <g font-size="11" font-weight="700" letter-spacing=".04em">
+      <rect x="12" y="354" width="118" height="20" rx="10" fill="rgba(0,0,0,.35)"/><text x="71" y="368" text-anchor="middle" fill="#f4d56a">SOIL NUTRIENTS</text>
+      <rect x="138" y="354" width="104" height="20" rx="10" fill="rgba(0,0,0,.35)"/><text x="190" y="368" text-anchor="middle" fill="#e6c79a">DEAD MATTER</text>
+    </g>
+    <g><rect x="648" y="12" width="338" height="44" rx="12" fill="rgba(255,255,255,.8)"/>
+      <text x="664" y="31" font-size="11" font-weight="700" letter-spacing=".07em" fill="#3b5b2c" id="landTitle">A RICE FIELD AT THE FOREST'S EDGE</text>
+      <text x="664" y="48" font-size="12" font-weight="600" fill="#4a555b" id="landSub">Every creature here is counted by the model.</text></g>
+  </g>
+
+  <!-- the lower half: the web and the graph -->
+  <rect x="0" y="400" width="1000" height="500" fill="#fbf7ec"/>
+  <line x1="0" y1="400" x2="1000" y2="400" stroke="#e2d9c2"/>
+  <line x1="520" y1="416" x2="520" y2="888" stroke="#ebe3cf"/>
+  <text x="18" y="428" fill="#4a555b" font-size="13" font-weight="700" letter-spacing=".08em">WHO EATS WHOM</text>
+  <text x="18" y="445" fill="#7c878c" font-size="11.5">Arrows go from the eaten to the eater, as thick as the food flowing now.</text>
+  <text x="18" y="460" fill="#7c878c" font-size="11.5">Each circle is as big as its population.</text>
+  <g id="webLinks"></g>
+  <g id="webEco"></g>
+  <g id="webNodes"></g>
+  <text x="${GX0}" y="428" fill="#4a555b" font-size="13" font-weight="700" letter-spacing=".08em">POPULATIONS OVER TIME</text>
+  <text x="${GX0}" y="445" fill="#7c878c" font-size="11.5" id="grSub">Each line is a population, as a share of the balanced field.</text>
+  <g id="grAxes"></g>
+  <g id="grEvents"></g>
+  <g id="grLines"></g>
+  <g id="grKey"></g>
+  <!-- hit targets: a layer of its own that never moves -->
+  <g id="hits"></g>
+  `;
+  buildWeb(); buildGraph();
+}
+let NRICE = 0;
+const SPR = {};
+
+/* ---- the web diagram ------------------------------------------------------- */
+const FEEDERS = SPECIES.filter(s => s.kind !== 'decomposer').map(s => s.id);
+function buildWeb(){
+  let links = '';
+  LINKS.forEach((l, n) => { links += `<path id="lk-${n}" fill="none" stroke="${COL[l.prey]}" stroke-linecap="round" marker-end="url(#ar-${l.prey})"/>`; });
+  /* sunlight into the plants, and the recycling loop through the soil */
+  links += `<path id="lkSun0" fill="none" stroke="#f2a01f" stroke-linecap="round" marker-end="url(#ar-sun)"/>
+            <path id="lkSun1" fill="none" stroke="#f2a01f" stroke-linecap="round" marker-end="url(#ar-sun)"/>`;
+  $('webLinks').innerHTML = links;
+  const [sx, sy] = SUNP;
+  $('webEco').innerHTML = `
+    <g transform="translate(${sx} ${sy})"><use href="#sym-sun" id="webSun"/></g>
+    <text x="${sx - 24}" y="${sy + 8}" font-size="11.5" font-weight="700" fill="#b5620a" text-anchor="end">Sun</text>
+    <path d="M388 480 L388 ${DEADBOX.y + DEADBOX.h / 2} L${DEADBOX.x - 2} ${DEADBOX.y + DEADBOX.h / 2}" fill="none" stroke="${COL.D}" stroke-width="1.6" stroke-dasharray="4 4" marker-end="url(#ar-D)"/>
+    <text transform="translate(382 ${(480 + DEADBOX.y) / 2}) rotate(-90)" font-size="10.5" fill="${COL.D}" text-anchor="middle">every living thing dies and leaves droppings</text>
+    <rect x="${DEADBOX.x}" y="${DEADBOX.y}" width="${DEADBOX.w}" height="${DEADBOX.h}" rx="10" fill="#efe1cc" stroke="${COL.D}" id="deadBox"/>
+    <text x="${DEADBOX.x + DEADBOX.w / 2}" y="${DEADBOX.y + 16}" font-size="11" font-weight="700" fill="#6e4a28" text-anchor="middle">Dead matter</text>
+    <text x="${DEADBOX.x + DEADBOX.w / 2}" y="${DEADBOX.y + 31}" font-size="11" fill="#6e4a28" text-anchor="middle" id="deadVal" class="m"></text>
+    <path id="lkDecay" d="M${NODE.decomp[0]} ${DEADBOX.y - 2} L${NODE.decomp[0]} ${NODE.decomp[1] + 33}" fill="none" stroke="${COL.D}" stroke-width="2" marker-end="url(#ar-D)"/>
+    <path id="lkMineral" d="M${NODE.decomp[0] + 40} ${NODE.decomp[1]} C${NODE.decomp[0] + 60} ${NODE.decomp[1] + 60} ${NODE.decomp[0] + 60} ${SOILBOX.y} ${SOILBOX.x + SOILBOX.w - 2} ${SOILBOX.y + 12}" fill="none" stroke="${COL.decomp}" stroke-width="2" marker-end="url(#ar-decomp)"/>
+    <rect x="${SOILBOX.x}" y="${SOILBOX.y}" width="${SOILBOX.w}" height="${SOILBOX.h}" rx="10" fill="#fbf1c9" stroke="#c9a227" id="soilBox"/>
+    <text x="${SOILBOX.x + SOILBOX.w / 2}" y="${SOILBOX.y + 16}" font-size="11" font-weight="700" fill="#8a6a10" text-anchor="middle">Soil nutrients</text>
+    <text x="${SOILBOX.x + SOILBOX.w / 2}" y="${SOILBOX.y + 31}" font-size="11" fill="#8a6a10" text-anchor="middle" id="soilVal" class="m"></text>
+    <path id="lkUptake" d="M${SOILBOX.x + 20} ${SOILBOX.y + SOILBOX.h + 2} C${SOILBOX.x} ${SOILBOX.y + 80} ${NODE.grass[0] + 20} ${NODE.grass[1] + 60} ${NODE.grass[0] + 12} ${NODE.grass[1] + 30}" fill="none" stroke="#c9a227" stroke-width="2" marker-end="url(#ar-rice)"/>
+    <path id="lkUptake2" d="M${SOILBOX.x + 10} ${SOILBOX.y + SOILBOX.h + 2} C${SOILBOX.x - 30} ${SOILBOX.y + 96} ${NODE.rice[0] + 40} ${NODE.rice[1] + 80} ${NODE.rice[0] + 22} ${NODE.rice[1] + 26}" fill="none" stroke="#c9a227" stroke-width="2" marker-end="url(#ar-rice)"/>
+    <text x="${NODE.decomp[0] + 50}" y="${(DEADBOX.y + DEADBOX.h + SOILBOX.y) / 2 + 4}" font-size="10.5" fill="${COL.decomp}" text-anchor="end"></text>`;
+  let nodes = '', hits = '';
+  for (const s of SPECIES) {
+    const [x, y] = NODE[s.id];
+    const below = s.id !== 'decomp';
+    nodes += `<g id="nd-${s.id}">
+      <circle id="ndSel-${s.id}" cx="${x}" cy="${y}" r="${RMAX + 5}" fill="none" stroke="#1f8a70" stroke-width="2.5" stroke-dasharray="4 3" opacity="0"/>
+      <circle id="ndC-${s.id}" cx="${x}" cy="${y}" r="${RBASE}" fill="${PALE[s.id]}" stroke="${COL[s.id]}" stroke-width="2.2"/>
+      <g transform="translate(${x} ${y})" style="color:${s.id === 'rice' ? '#4f9c34' : COL[s.id]}"><use id="ndI-${s.id}" href="#sym-${s.id}"/></g>
+      <text id="ndX-${s.id}" x="${x}" y="${y + 5}" font-size="22" font-weight="700" fill="#d6453d" text-anchor="middle" opacity="0">✕</text>
+      <text x="${below ? x + RMAX + 9 : x}" y="${below ? y - 2 : y - RMAX - 20}" font-size="11.5" font-weight="700" fill="#33403a" stroke="#fbf7ec" stroke-width="3.5" paint-order="stroke" stroke-linejoin="round" text-anchor="${below ? 'start' : 'middle'}">${esc(s.id === 'decomp' ? 'Fungi & bacteria' : s.name)}</text>
+      <text id="ndN-${s.id}" x="${below ? x + RMAX + 9 : x}" y="${below ? y + 12 : y - RMAX - 7}" font-size="11" fill="#5d6a70" stroke="#fbf7ec" stroke-width="3.5" paint-order="stroke" stroke-linejoin="round" text-anchor="${below ? 'start' : 'middle'}" class="m"></text>
+    </g>`;
+    hits += `<circle class="hit" id="hit-${s.id}" data-k="${s.id}" cx="${x}" cy="${y}" r="${RMAX + 2}" fill="transparent" tabindex="0" role="button" aria-label="Choose ${esc(s.name)}"/>`;
+  }
+  $('webNodes').innerHTML = nodes;
+  $('hits').innerHTML = hits;
+}
+/* An arrow from the edge of one circle to the edge of another. */
+function arrowPath(a, ra, b, rb, bend = 0){
+  const dx = b[0] - a[0], dy = b[1] - a[1], L = Math.hypot(dx, dy) || 1, ux = dx / L, uy = dy / L;
+  const x1 = a[0] + ux * (ra + 2), y1 = a[1] + uy * (ra + 2), x2 = b[0] - ux * (rb + 4), y2 = b[1] - uy * (rb + 4);
+  const mx = (x1 + x2) / 2 - uy * bend, my = (y1 + y2) / 2 + ux * bend;
+  return `M${x1.toFixed(1)} ${y1.toFixed(1)} Q${mx.toFixed(1)} ${my.toFixed(1)} ${x2.toFixed(1)} ${y2.toFixed(1)}`;
+}
+const BEND = {'rice>mouse': 14, 'grass>hopper': -10, 'hopper>bird': 0, 'rice>bird': -40, 'mouse>hawk': -30, 'mouse>snake': 0, 'frog>snake': 0};
+const radius = k => S.x[k] <= 0 ? 0 : clamp(RBASE * Math.sqrt(S.x[k] / norm(k)), 5, RMAX);
+
+/* ---- the graph --------------------------------------------------------------- */
+const WIN = 120;           // ten years on screen
+let YMAX = 2;
+const KEY = [...SPECIES.map(s => s.id), 'N'];
+function buildGraph(){
+  let lines = '';
+  lines += `<path id="gl-N" fill="none" stroke="${COL.N}" stroke-width="1.6" stroke-dasharray="5 4" opacity=".8"/>`;
+  for (const s of SPECIES) lines += `<path id="gl-${s.id}" fill="none" stroke="${COL[s.id]}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"/>`;
+  $('grLines').innerHTML = lines;
+  /* the key: two rows; clicking a name chooses that species */
+  let key = '', hits = '';
+  const rows = [['rice', 'grass', 'hopper', 'mouse', 'bird'], ['frog', 'snake', 'hawk', 'decomp', 'N']];
+  const w = [[43, 65, 91, 55, 43], [44, 52, 49, 107, 95]];
+  rows.forEach((row, r) => {
+    let x = GX0;
+    row.forEach((id, c) => {
+      const y = 846 + r * 24;
+      const lab = id === 'N' ? 'Soil nutrients' : id === 'decomp' ? 'Fungi & bacteria' : SPECIES[IX[id]].name;
+      key += `<g id="key-${id}"><line x1="${x}" y1="${y}" x2="${x + 14}" y2="${y}" stroke="${COL[id]}" stroke-width="3" ${id === 'N' ? 'stroke-dasharray="4 3"' : ''} stroke-linecap="round"/>
+        <text x="${x + 19}" y="${y + 4}" font-size="11.5" font-weight="600" fill="#4a555b" id="keyT-${id}">${lab}</text></g>`;
+      if (id !== 'N') hits += `<rect class="hit" id="keyHit-${id}" data-k="${id}" x="${x - 4}" y="${y - 10}" width="${w[r][c] + 4}" height="20" rx="6" fill="transparent" tabindex="0" role="button" aria-label="Choose ${esc(lab)}"/>`;
+      x += w[r][c] + 14;
+    });
+  });
+  $('grKey').innerHTML = key;
+  $('hits').insertAdjacentHTML('beforeend', hits);
+}
+const gx = (t, t0) => GR.x + (t - t0) / WIN * GR.w;
+const gy = v => GR.y + GR.h - clamp(v, 0, YMAX) / YMAX * GR.h;
+function drawGraph(){
+  const tEnd = Math.max(WIN, S.t), t0 = tEnd - WIN;
+  let mx = 1.2;
+  for (const h of HIST) if (h.t >= t0) for (let k = 0; k < NS; k++) if (h.v[k] > mx) mx = h.v[k];
+  const want = mx > 2.9 ? 4 : mx > 1.9 ? 3 : 2;
+  if (want !== YMAX) YMAX = want;
+  let ax = '';
+  for (let v = 0; v <= YMAX + 1e-9; v += 0.5) {
+    ax += `<line x1="${GR.x}" y1="${gy(v).toFixed(1)}" x2="${GR.x + GR.w}" y2="${gy(v).toFixed(1)}" stroke="${v === 1 ? '#c9bfa6' : '#efe8d6'}" ${v === 1 ? 'stroke-dasharray="6 4"' : ''}/>`;
+    if (YMAX <= 2 || Math.abs(v - Math.round(v)) < 1e-9) ax += `<text x="${GR.x - 7}" y="${(gy(v) + 4).toFixed(1)}" font-size="11" fill="#7c878c" text-anchor="end" class="m">${Math.round(v * 100)}%</text>`;
+  }
+  ax += `<text x="${GR.x + GR.w}" y="${(gy(1) - 5).toFixed(1)}" font-size="10.5" fill="#9a8f76" text-anchor="end">balance</text>`;
+  const y0 = Math.ceil(t0 / 12) * 12;
+  for (let t = y0; t <= tEnd + 1e-9; t += 12) {
+    const x = gx(t, t0);
+    ax += `<line x1="${x.toFixed(1)}" y1="${GR.y + GR.h}" x2="${x.toFixed(1)}" y2="${GR.y + GR.h + 5}" stroke="#9aa3a6"/>` +
+          `<text x="${x.toFixed(1)}" y="${GR.y + GR.h + 18}" font-size="11" fill="#7c878c" text-anchor="middle">${t / 12}</text>`;
+  }
+  ax += `<line x1="${GR.x}" y1="${GR.y + GR.h}" x2="${GR.x + GR.w}" y2="${GR.y + GR.h}" stroke="#9aa3a6"/>`;
+  ax += `<text x="${GR.x + GR.w}" y="${GR.y + GR.h + 32}" font-size="11" fill="#7c878c" text-anchor="end">years</text>`;
+  $('grAxes').innerHTML = ax;
+  /* events: removals, returns, spraying */
+  let ev = '';
+  for (const e of S.events) {
+    if (e.t < t0) continue;
+    const x = gx(e.t, t0);
+    ev += `<line x1="${x.toFixed(1)}" y1="${GR.y}" x2="${x.toFixed(1)}" y2="${GR.y + GR.h}" stroke="#8a94a6" stroke-dasharray="3 3"/>` +
+          `<text x="${(x + 4).toFixed(1)}" y="${GR.y + 12 + (e.row || 0) * 13}" font-size="10.5" font-weight="600" fill="#5d6a70">${esc(e.label)}</text>`;
+  }
+  $('grEvents').innerHTML = ev;
+  /* the lines */
+  const sel = IX[S.sel];
+  for (let k = 0; k < NS; k++) {
+    let d = '';
+    let pen = false;
+    for (const h of HIST) {
+      if (h.t < t0 - 1) continue;
+      const v = h.v[k];
+      if (v == null) { pen = false; continue; }
+      d += (pen ? 'L' : 'M') + gx(h.t, t0).toFixed(1) + ' ' + gy(v).toFixed(1);
+      pen = true;
+    }
+    const el = $('gl-' + SPECIES[k].id);
+    el.setAttribute('d', d);
+    const strong = k === sel || SPECIES[k].id === 'rice';
+    el.setAttribute('stroke-width', k === sel ? 3.6 : strong ? 3 : 1.7);
+    el.setAttribute('opacity', strong ? 1 : .7);
+  }
+  let dn = '';
+  for (const h of HIST) if (h.t >= t0 - 1) dn += (dn ? 'L' : 'M') + gx(h.t, t0).toFixed(1) + ' ' + gy(h.n).toFixed(1);
+  $('gl-N').setAttribute('d', dn);
+  /* bring the chosen line to the front */
+  const sl = $('gl-' + S.sel); if (sl && sl.nextSibling) $('grLines').appendChild(sl);
+  for (const id of KEY) {
+    const t = $('keyT-' + id); if (!t) continue;
+    const off = id !== 'N' && !inPlay(IX[id]);
+    t.setAttribute('font-weight', id === S.sel ? 800 : 600);
+    t.setAttribute('fill', off ? '#b5bbbd' : id === S.sel ? '#1d2327' : '#4a555b');
+  }
+}
+
+/* ============================================================================
+   Paint: everything that depends on the state
+   ============================================================================ */
+let CLOCK = 0;
+function paintLand(){
+  const x = S.x, E = env();
+  const L = k => x[k] / norm(k);
+  /* Sun, clouds */
+  $('sunDisc').setAttribute('r', (18 + 14 * S.sun).toFixed(1));
+  $('sunGlow').setAttribute('opacity', clamp(S.sun, 0, 1.2).toFixed(2));
+  $('clouds').setAttribute('opacity', clamp((1 - S.sun) * 1.4, 0, .95).toFixed(2));
+  $('clouds0').setAttribute('opacity', clamp((1 - S.sun) * .35, 0, .3).toFixed(2));
+  /* rice: tufts thin out and yellow when the soil runs short */
+  const lr = E.present[IX.rice] ? L(IX.rice) : 0;
+  const nR = Math.round(NRICE * clamp(lr / 1.35, 0, 1));
+  for (const u of $('riceL').children) u.style.display = +u.dataset.i < nR ? '' : 'none';
+  const fN = x[iN] / (x[iN] + KN), fN0 = N0 / (N0 + KN);
+  const stress = clamp(1 - fN / fN0, 0, 1);
+  $('riceL').style.color = mix('#4f9c34', '#c9b857', stress);
+  const lg = E.present[IX.grass] ? L(IX.grass) : 0;
+  for (const u of $('grassL').children) u.style.display = +u.dataset.o < clamp(lg / 1.6, 0, 1) ? '' : 'none';
+  $('grassL').style.color = mix(COL.grass, '#b9b35a', stress);
+  /* soil: nutrient grains, dead leaves, mushrooms */
+  const nN = x[iN] / N0, nD = x[iD] / D0, nX = x[IX.decomp] / norm(IX.decomp);
+  for (const c of $('soilN').children) c.style.display = +c.dataset.o < clamp(nN / 3, 0, 1) ? '' : 'none';
+  for (const c of $('deadL').children) c.style.display = +c.dataset.o < clamp(nD / 4, 0, 1) ? '' : 'none';
+  for (const c of $('mushL').children) c.style.display = +c.dataset.o < clamp(nX / 2, 0, 1) ? '' : 'none';
+  /* animals */
+  const still = reduced();
+  for (const id of Object.keys(BASE)) {
+    const k = IX[id];
+    const n = E.present[k] ? Math.min(CAPN(id), Math.round(BASE[id] * L(k))) : 0;
+    const shown = x[k] > 0 && n === 0 ? 1 : n;          // while any are left, you can find at least one
+    SPR[id].forEach((p, i) => {
+      const g = $(`sp-${id}-${i}`);
+      if (i >= shown) { g.style.display = 'none'; return; }
+      g.style.display = '';
+      let px = p.x, py = p.y, rot = 0;
+      if (!still) {
+        const t = CLOCK + p.ph;
+        if (id === 'hopper') py -= Math.max(0, Math.sin(t * 2.2)) * 7;
+        if (id === 'mouse') px += Math.sin(t * .5) * 30;
+        if (id === 'bird') { px += Math.sin(t * .3) * 60; py += Math.sin(t * 1.3) * 6; }
+        if (id === 'frog') py -= Math.max(0, Math.sin(t * 1.1) - .85) * 40;
+        if (id === 'snake') px += Math.sin(t * .25) * 40;
+        if (id === 'hawk') { px += Math.cos(t * .35) * 70; py += Math.sin(t * .35) * 16; rot = Math.cos(t * .35) * 8; }
+      }
+      const f = (id === 'mouse' || id === 'snake' || id === 'bird') && !still ? (Math.cos((CLOCK + p.ph) * (id === 'bird' ? .3 : id === 'snake' ? .25 : .5)) < 0 ? -1 : 1) : (p.flip ? -1 : 1);
+      g.setAttribute('transform', `translate(${px.toFixed(1)} ${py.toFixed(1)}) rotate(${rot.toFixed(1)}) scale(${(p.sc * f).toFixed(2)} ${p.sc})`);
+    });
+  }
+  /* the elephants: along their corridor, or in the field when it is cut */
+  $('corridor').style.display = S.corridor ? '' : 'none';
+  $('road').style.display = S.corridor ? 'none' : '';
+  const walk = still ? 0 : (CLOCK * 6) % 260;
+  [0, 1, 2].forEach(i => {
+    const el = $('el' + i);
+    if (S.corridor) el.setAttribute('transform', `translate(${(360 + walk + i * 26).toFixed(1)} ${140 - i}) scale(${i === 1 ? .55 : .7})`);
+    else el.setAttribute('transform', `translate(${860 + i * 38} ${(214 + i * 9).toFixed(1)}) scale(${-(1.05 + i * .12)} ${1.05 + i * .12})`);
+  });
+  $('herdLab').setAttribute('x', S.corridor ? 470 : 880); $('herdLab').setAttribute('y', S.corridor ? 120 : 186);
+  $('herdLab').textContent = S.corridor ? 'elephant corridor' : 'no corridor: the herd eats the crop';
+  $('herdLab').setAttribute('fill', S.corridor ? '#2c4a22' : '#7a1f18');
+  $('sprayer').style.display = S.spray ? '' : 'none';
+  $('landTitle').textContent = S.mode === 'web' ? 'A RICE FIELD AT THE FOREST’S EDGE' : 'THE SAME FIELD, ONE FOOD CHAIN';
+  $('landSub').textContent = S.mode === 'web' ? 'Every creature here is counted by the model.' : 'Rice → grasshopper → frog → snake → hawk';
+}
+function mix(a, b, t){
+  const pa = [1, 3, 5].map(i => parseInt(a.slice(i, i + 2), 16)), pb = [1, 3, 5].map(i => parseInt(b.slice(i, i + 2), 16));
+  return '#' + pa.map((v, i) => Math.round(v + (pb[i] - v) * t).toString(16).padStart(2, '0')).join('');
+}
+function paintWeb(){
+  const E = env(), F = flows(S.x, E);
+  const F0 = flows(bal(), envFor({chain: S.mode === 'chain'}));
+  const R = SPECIES.map((s, k) => radius(k));
+  LINKS.forEach((l, n) => {
+    const el = $('lk-' + n);
+    const on = linkOn(l, E), inMode = S.mode === 'web' || l.chain;
+    if (!inMode) { el.setAttribute('d', ''); return; }
+    el.setAttribute('d', arrowPath(NODE[l.prey], Math.max(R[l.i], 6), NODE[l.pred], Math.max(R[l.j], 6), BEND[l.prey + '>' + l.pred] || 0));
+    const w = on ? 1 + 3.2 * Math.sqrt(F.eat[n] / Math.max(1e-9, l.flow)) : 1.2;
+    el.setAttribute('stroke-width', clamp(w, 0.6, 7).toFixed(2));
+    el.setAttribute('stroke-dasharray', on && F.eat[n] > 1e-6 ? '' : '3 4');
+    el.setAttribute('opacity', on && F.eat[n] > 1e-6 ? .8 : .3);
+  });
+  ['rice', 'grass'].forEach((id, i) => {
+    const k = IX[id], el = $('lkSun' + i);
+    if (!inPlay(k)) { el.setAttribute('d', ''); return; }
+    el.setAttribute('d', arrowPath(SUNP, 16, NODE[id], Math.max(R[k], 6), i ? -10 : 10));
+    const g0 = F0.grow[k] || SPECIES[k].x * 0.1;
+    el.setAttribute('stroke-width', clamp(1 + 3 * Math.sqrt(F.grow[k] / g0), .6, 7).toFixed(2));
+    el.setAttribute('opacity', F.grow[k] > 1e-6 ? .9 : .25);
+  });
+  $('webSun').setAttribute('transform', `scale(${(0.7 + 0.5 * S.sun).toFixed(2)})`);
+  const dW = 0.8 + 2.4 * Math.sqrt(F.decomposed / Math.max(1e-9, F0.decomposed));
+  $('lkDecay').setAttribute('stroke-width', clamp(dW, .6, 7).toFixed(2)); $('lkDecay').setAttribute('opacity', F.decomposed > 1e-6 ? .85 : .25);
+  $('lkMineral').setAttribute('stroke-width', clamp(dW, .6, 7).toFixed(2)); $('lkMineral').setAttribute('opacity', F.decomposed > 1e-6 ? .85 : .25);
+  const up = F.grow.reduce((a, b) => a + b, 0), up0 = F0.grow.reduce((a, b) => a + b, 0);
+  for (const id of ['lkUptake', 'lkUptake2']) $(id).setAttribute('stroke-width', clamp(0.8 + 2.4 * Math.sqrt(up / up0), .6, 7).toFixed(2));
+  $('lkUptake').style.display = inPlay(IX.grass) ? '' : 'none';
+  $('deadVal').textContent = pct(S.x[iD] / D0) + ' of usual';
+  $('soilVal').textContent = pct(S.x[iN] / N0) + ' of usual';
+  SPECIES.forEach((s, k) => {
+    const inM = inPlay(k), gone = S.removed[s.id] || (inM && S.x[k] <= 0);
+    $('ndC-' + s.id).setAttribute('r', (gone || !inM ? RBASE * .8 : R[k]).toFixed(1));
+    $('ndC-' + s.id).setAttribute('fill', gone || !inM ? '#f1ede3' : PALE[s.id]);
+    $('ndC-' + s.id).setAttribute('stroke', gone || !inM ? '#b9b3a3' : COL[s.id]);
+    $('ndC-' + s.id).setAttribute('stroke-dasharray', gone || !inM ? '4 3' : '');
+    const sc = gone || !inM ? .8 : clamp(R[k] / RBASE, .45, 1.35);
+    $('ndI-' + s.id).setAttribute('transform', `scale(${sc.toFixed(2)})`);
+    $('ndI-' + s.id).setAttribute('opacity', gone || !inM ? .28 : 1);
+    $('ndX-' + s.id).setAttribute('opacity', S.removed[s.id] && inM ? .9 : 0);
+    $('ndSel-' + s.id).setAttribute('opacity', s.id === S.sel ? 1 : 0);
+    const c = count(k, S.x);
+    $('ndN-' + s.id).textContent = !inM ? 'not in chain' : S.removed[s.id] ? 'removed' : S.x[k] <= 0 ? 'died out' :
+      c == null ? pct(S.x[k] / norm(k)) : nf(c);
+    $('ndN-' + s.id).setAttribute('fill', !inM || S.removed[s.id] || S.x[k] <= 0 ? '#b0413e' : '#5d6a70');
+  });
+  $('deadBox').setAttribute('stroke-width', S.x[iD] > 1.5 * D0 ? 2.5 : 1);
+}
+function paintSide(){
+  const k = IX[S.sel], s = SPECIES[k], inM = inPlay(k);
+  $('whoIcon').setAttribute('href', '#sym-' + s.id);
+  $('whoIcon').style.color = s.id === 'rice' ? '#4f9c34' : COL[s.id];
+  $('whoDisc').setAttribute('fill', PALE[s.id]);
+  $('whoName').textContent = s.id === 'decomp' ? 'Fungi and bacteria' : s.name;
+  const c = count(k, S.x);
+  const lvl = s.kind === 'producer' ? 'producer' : s.kind === 'decomposer' ? 'decomposer' : s.kind;
+  $('whoCount').textContent = !inM ? 'Not part of this food chain' :
+    (S.removed[s.id] ? 'Removed from the field' : S.x[k] <= 0 ? 'Died out here' :
+      (c == null ? '' : nf(c) + ' ' + s.plural + ' · ') + pct(S.x[k] / norm(k)) + ' of the balanced field') + ` · ${lvl}`;
+  $('btnRemove').textContent = 'Remove all ' + s.plural;
+  $('btnBack').textContent = 'Bring ' + s.plural + ' back';
+  $('btnRemove').disabled = !S.locked || !inM || !!S.removed[s.id] || S.x[k] <= 0;
+  $('btnBack').disabled = !S.locked || !inM || !(S.removed[s.id] || S.x[k] <= 0);
+  $('sun').value = Math.round(S.sun * 100); $('sunOut').textContent = Math.round(S.sun * 100) + '%';
+  $('btnSpray').setAttribute('aria-pressed', S.spray); $('btnSpray').textContent = S.spray ? 'Stop spraying' : 'Spray pesticide';
+  $('btnCorridor').setAttribute('aria-pressed', !S.corridor); $('btnCorridor').textContent = S.corridor ? 'Cut the elephant corridor' : 'Reopen the corridor';
+  $('modeWeb').setAttribute('aria-pressed', S.mode === 'web'); $('modeChain').setAttribute('aria-pressed', S.mode === 'chain');
+  const y = Math.floor(S.t / 12), m = Math.floor(S.t - y * 12);
+  $('clock').textContent = `Year ${y} · month ${m}`;
+}
+
+/* ---- "What is happening": words from the model ------------------------------ */
+/* Per head, now and in the balance: how much food each one gets, and how often it dies of being eaten,
+   of the spray, or of crowding. The biggest difference is the reason it is changing. */
+function perHead(k, x, E){
+  /* for a population that has died out, ask what one newcomer would face */
+  if (x[k] <= 0 && E.present[k]) { x = x.slice(); x[k] = 1e-6 * SPECIES[k].x; }
+  const F = flows(x, E), s = SPECIES[k];
+  const xk = Math.max(x[k], 1e-9);
+  let food = 0, eaten = 0; const byPred = {}, byPrey = {};
+  LINKS.forEach((l, n) => {
+    if (l.j === k) { food += l.e * F.eat[n] / xk; byPrey[l.prey] = (byPrey[l.prey] || 0) + l.e * F.eat[n] / xk; }
+    if (l.i === k) { eaten += F.eat[n] / xk; byPred[l.pred] = (byPred[l.pred] || 0) + F.eat[n] / xk; }
+  });
+  if (s.kind === 'producer') food = F.grow[k] / xk;
+  if (s.kind === 'decomposer') food = E_DECOMP * F.decomposed / xk;
+  if (k === IX.rice && F.elephant > 0) { eaten += F.elephant / xk; byPred.elephant = F.elephant / xk; }
+  return {food, eaten, crowd: s.kind === 'producer' ? 0 : (s.c || 0) * x[k], spray: F.extra[k] / xk, byPred, byPrey,
+          fN: x[iN] / (x[iN] + KN)};
+}
+const plu = id => SPECIES[IX[id]].plural;
+function reason(k){
+  const E = env(), s = SPECIES[k];
+  const E0 = envFor({chain: S.mode === 'chain'});
+  const now = perHead(k, S.x, E), was = perHead(k, bal(), E0);
+  const up = S.x[k] > bal()[k];
+  const dFood = now.food - was.food, dEat = now.eaten - was.eaten, dSpray = now.spray;
+  if (s.kind === 'producer') {
+    if (up) return dEat < 0 ? `less of it is being eaten${biggest(was.byPred, now.byPred, -1)}` : 'it is growing faster';
+    if (dEat > 0 && dEat >= -dFood) return `more of it is being eaten${biggest(was.byPred, now.byPred, 1)}`;
+    if (S.sun < 0.95 && now.fN >= was.fN - 0.02) return 'there is less sunlight to make food with';
+    return 'the soil has fewer nutrients to grow with';
+  }
+  if (s.kind === 'decomposer') return up ? 'there is more dead matter to feed on' : (dSpray > 0 ? 'the spray is killing them too' : 'there is less dead matter to feed on');
+  if (up) {
+    if (-dEat >= dFood) return `fewer of them are being eaten${biggest(was.byPred, now.byPred, -1)}`;
+    return `each one finds more food${biggest(was.byPrey, now.byPrey, 1)}`;
+  }
+  if (dSpray > 0 && dSpray >= Math.max(dEat, -dFood)) return 'the spray is killing them';
+  if (dEat > 0 && dEat >= -dFood) return `more of them are being eaten${biggest(was.byPred, now.byPred, 1)}`;
+  return `each one finds less food${biggest(was.byPrey, now.byPrey, -1)}`;
+}
+/* Which partner made the biggest difference, in the direction asked for. */
+function biggest(was, now, sign){
+  let best = null, bv = 0;
+  for (const id of new Set([...Object.keys(was), ...Object.keys(now)])) {
+    const d = ((now[id] || 0) - (was[id] || 0)) * sign;
+    if (d > bv) { bv = d; best = id; }
+  }
+  if (!best) return '';
+  if (best === 'elephant') return ' (elephants, cut off from their forest, are eating the crop)';
+  const k = IX[best], gone = S.removed[best] || S.x[k] <= 0;
+  const more = S.x[k] > bal()[k];
+  return gone ? ` (the ${plu(best)} are gone)` : ` (${more ? 'more' : 'fewer'} ${plu(best)})`;
+}
+function paintWhy(){
+  const E = env(), b = bal();
+  const moves = [];
+  for (let k = 0; k < NS; k++) {
+    if (!inPlay(k)) continue;
+    if (S.removed[SPECIES[k].id]) continue;
+    const r = S.x[k] / b[k];
+    if (S.x[k] <= 0) { moves.push({k, r: 0, score: 9}); continue; }
+    moves.push({k, r, score: Math.abs(Math.log(r))});
+  }
+  moves.sort((a, c) => c.score - a.score);
+  let html = '';
+  const quiet = moves.every(m => m.score < 0.03) && S.x[iD] / b[iD] < 1.05 && S.x[iN] / b[iN] > 0.95 && S.x[iN] / b[iN] < 1.05;
+  const changes = [];
+  const rem = Object.keys(S.removed).filter(id => S.removed[id]);
+  if (rem.length) changes.push(`the ${rem.map(plu).join(' and the ')} ${rem.length > 1 ? 'have' : 'have'} been removed`);
+  if (S.sun < 0.97) changes.push(`sunlight is down to ${pct(S.sun)}`);
+  if (S.sun > 1.03) changes.push(`sunlight is up to ${pct(S.sun)}`);
+  if (S.spray) changes.push('the crop is being sprayed');
+  if (!S.corridor) changes.push('the elephants’ corridor is cut');
+  if (quiet && !changes.length) {
+    html += `<p><b>The field is in balance.</b> Every month the rice and grasses grow as much as is eaten or dies, and each animal population has as many births as deaths. The numbers stay put, but nothing is standing still: food is flowing up every arrow.</p>`;
+    html += `<p class="book">“An ecosystem stays in balance when interactions among organisms and their environment keep populations and resources stable. This balance is dynamic, not fixed.” (Curiosity 8, Ch 12)</p>`;
+    if (S.locked && !S.ref) html += `<p>Now pull a thread: choose the snake in the web and remove all of them.</p>`;
+    $('why').innerHTML = html; return;
+  }
+  if (changes.length) html += `<p><b>What changed:</b> ${cap(changes.join('; '))}.</p>`;
+  const top = moves.filter(m => m.score > 0.04).slice(0, 4);
+  if (!top.length) html += `<p>So far the populations have hardly moved. Give it time: a change travels one link at a time.</p>`;
+  for (const m of top) {
+    const s = SPECIES[m.k], c = count(m.k, S.x);
+    const name = s.id === 'decomp' ? 'Fungi and bacteria' : cap(s.plural);
+    const trend = deriv(S.x, E, new Float64Array(NS + 2))[m.k] / Math.max(S.x[m.k], 1e-9);
+    const arrow = S.x[m.k] <= 0 ? '' : Math.abs(trend) < 0.004 ? ', settling' : trend > 0 ? ', still rising' : ', still falling';
+    const what = S.x[m.k] <= 0 ? `have died out here, because ${reason(m.k)}` :
+      `${m.r > 1 ? 'up' : 'down'} to ${pct(m.r)}${c != null ? ' (' + nf(c) + ')' : ''}${arrow}: ${reason(m.k)}`;
+    html += `<div class="mv"><i style="background:${COL[s.id]}"></i><span><b>${esc(name)}</b> ${what}.</span></div>`;
+  }
+  const dr = S.x[iD] / b[iD], nr = S.x[iN] / b[iN];
+  if (dr > 1.25) html += `<div class="mv"><i style="background:${COL.D}"></i><span><b>Dead matter</b> is piling up (${pct(dr)})${S.removed.decomp ? ': nothing is breaking it down' : ''}.</span></div>`;
+  if (nr < 0.75) html += `<div class="mv"><i style="background:${COL.N}"></i><span><b>Soil nutrients</b> are running out (${pct(nr)}): the plants take them up and nothing is putting them back.</span></div>`;
+  if (S.flags.chainLost && !S.flags.webHeld) html += `<p>In the single chain, losing the frogs starved the snakes. Now switch to the food web and remove the frogs there.</p>`;
+  if (S.flags.webHeld && !S.flags.chainLost) html += `<p>In the web, the snakes lived on without frogs. Now try the same in just one food chain.</p>`;
+  $('why').innerHTML = html;
+}
+
+/* ============================================================================
+   Findings: reached by the model, never by a button
+   ============================================================================ */
+function check(){
+  if (!S.locked) return;
+  const x = S.x, b = bal(), E = env();
+  const nRemoved = Object.values(S.removed).filter(Boolean).length;
+  /* the Sun's energy reaches the top: dim it and the hawk goes hungry */
+  if (S.sun <= 0.7 && !nRemoved && !S.spray && S.corridor && x[IX.rice] < 0.9 * b[IX.rice] && x[IX.hawk] > 0 && x[IX.hawk] < 0.8 * b[IX.hawk]) discover('energy');
+  if (S.ref) {
+    const r = S.ref, kr = IX[r.id], dt = S.t - r.t;
+    const prey = LINKS.filter(l => l.pred === r.id && (S.mode === 'web' || l.chain)).map(l => l.i);
+    if (prey.some(i => r.x[i] > 0 && x[i] >= 1.4 * r.x[i])) discover('predator');
+    /* two or more links away: not eaten by it, not eating it */
+    const near = new Set([kr]);
+    LINKS.forEach(l => { if (l.i === kr) near.add(l.j); if (l.j === kr) near.add(l.i); });
+    if (r.id !== 'decomp' && dt > 6) for (let k = 0; k < NS; k++) {
+      if (near.has(k) || SPECIES[k].kind === 'decomposer' || !E.present[k] || r.x[k] <= 0) continue;
+      if (Math.abs(x[k] / r.x[k] - 1) >= 0.12) { discover('cascade'); break; }
+    }
+    if (r.id === 'decomp' && S.removed.decomp && x[iN] < 0.25 * b[iN] && x[IX.rice] < 0.5 * b[IX.rice]) discover('decomp');
+    if (r.id === 'frog' && S.removed.frog) {
+      if (S.mode === 'chain' && x[IX.snake] <= 0) S.flags.chainLost = true;
+      if (S.mode === 'web' && dt >= 36 && x[IX.snake] > 0.4 * b[IX.snake]) S.flags.webHeld = true;
+    }
+    if (S.flags.chainLost && S.flags.webHeld) discover('sturdy');
+    maybeExplain();
+  }
+  if (S.spray && S.sprayRef && S.t - S.sprayRef.t >= 12) {
+    const r = S.sprayRef.x;
+    if (x[IX.hopper] >= 1.1 * r[IX.hopper] && x[IX.frog] <= 0.5 * r[IX.frog]) discover('farm');
+  }
+}
+function maybeExplain(){
+  if (S.explained || !POE || !POE.locked || !S.ref || S.ref.id !== 'snake' || S.mode !== 'web' || !S.removed.snake) return;
+  const r = S.ref.x, x = S.x, dt = S.t - S.ref.t;
+  const iR = IX.rice, iM = IX.mouse, iF = IX.frog, iH = IX.hopper;
+  if (dt < 18 || x[iM] < 1.4 * r[iM] || x[iR] > 0.93 * r[iR]) return;
+  S.explained = true;
+  const yrs = Math.round(dt / 12);
+  POE.explain(`In ${yrs} year${yrs === 1 ? '' : 's'} without snakes the mice went from <b>${nf(count(iM, r))}</b> to <b>${nf(count(iM, x))}</b>, ` +
+    `because nothing ate as many of them. Mice eat rice, so the rice fell by <b>${Math.round((1 - x[iR] / r[iR]) * 100)}%</b>. ` +
+    `Snakes also ate frogs, so the frogs ${x[iF] > r[iF] ? 'rose' : 'changed'} and the grasshoppers ${x[iH] < r[iH] ? 'fell' : 'rose'}, but the extra mice won. ` +
+    `The snake never touches the rice, yet it protects it: one change leads to another.`);
+  sound('chime');
+}
+
+/* ============================================================================
+   Controls. The stage is built first, so there is something to wire.
+   ============================================================================ */
+build();
+function record(){
+  const b = bal();
+  HIST.push({t: S.t, v: SPECIES.map((s, k) => inPlay(k) ? S.x[k] / b[k] : null), n: S.x[iN] / b[iN]});
+  if (HIST.length > 2000) HIST = HIST.filter(h => h.t >= S.t - WIN - 2);
+}
+let lastRec = -1, whyT = 0;
+function paint(full){
+  paintLand(); paintWeb(); drawGraph(); paintSide();
+  if (full || performance.now() - whyT > 300) { whyT = performance.now(); paintWhy(); }
+}
+function advance(months){
+  const E = env();
+  let left = months;
+  while (left > 1e-9) {
+    const h = Math.min(H, left);
+    step(S.x, E, h); S.t += h; left -= h;
+    if (S.t - lastRec >= 0.25) { record(); lastRec = S.t; }
+    check();
+  }
+}
+function resetTo(mode, why){
+  S.mode = mode; S.t = 0; S.x = bal().slice(); S.removed = {}; S.sun = 1; S.spray = false; S.corridor = true;
+  S.ref = null; S.sprayRef = null; S.events = []; HIST = []; lastRec = -1; record();
+  if (!inPlay(IX[S.sel])) S.sel = 'snake';
+  track('reset', {mode, why});
+  paint(true);
+}
+function addEvent(label){
+  const recent = S.events.filter(e => S.t - e.t < 14).length;
+  S.events.push({t: S.t, label, row: recent % 3});
+}
+function choose(id){
+  if (!SPECIES[IX[id]]) return;
+  S.sel = id; sound('tick'); paint(true);
+}
+$('hits').addEventListener('click', e => {
+  const h = e.target.closest('[data-k]'); if (!h || !S.locked) return;
+  choose(h.dataset.k);
+});
+$('hits').addEventListener('keydown', e => {
+  if (e.key !== 'Enter' && e.key !== ' ') return;
+  const h = e.target.closest('[data-k]'); if (!h || !S.locked) return;
+  e.preventDefault(); choose(h.dataset.k);
+});
+$('btnRemove').addEventListener('click', () => {
+  const id = S.sel, k = IX[id];
+  if (!inPlay(k) || S.removed[id]) return;
+  S.ref = {id, t: S.t, x: S.x.slice()};
+  S.removed[id] = true;
+  S.x[iD] += S.x[k]; S.x[k] = 0;                 // their bodies join the dead matter: nothing is lost
+  addEvent(`${plu(id)} removed`);
+  sound('whoosh'); track('remove', {species: id, mode: S.mode, t: Math.round(S.t)});
+  if (!S.playing) setPlaying(true);
+  paint(true);
+});
+$('btnBack').addEventListener('click', () => {
+  const id = S.sel, k = IX[id], s = SPECIES[k];
+  if (!inPlay(k)) return;
+  S.removed[id] = false;
+  /* a few arrive from the neighbouring fields: a tenth of the usual number, at least one */
+  const add = Math.max(0.1 * s.x, s.mass ? 1.2 * s.mass : 0);
+  const take = Math.min(add, S.x[iN] * 0.5);
+  S.x[k] += take; S.x[iN] -= take;
+  S.ref = {id, t: S.t, x: S.x.slice(), back: true};
+  addEvent(`${plu(id)} return`);
+  sound('pop'); track('addBack', {species: id, mode: S.mode, t: Math.round(S.t)});
+  paint(true);
+});
+$('sun').addEventListener('input', e => { S.sun = +e.target.value / 100; paint(); });
+$('sun').addEventListener('change', () => {
+  /* one marker for one decision: a slider nudged several times in a row keeps a single label */
+  const last = S.events[S.events.length - 1];
+  if (last && last.sun && S.t - last.t < 6) last.label = `sunlight ${pct(S.sun)}`;
+  else { addEvent(`sunlight ${pct(S.sun)}`); S.events[S.events.length - 1].sun = true; }
+  track('sun', {sun: S.sun});
+});
+$('btnSpray').addEventListener('click', () => {
+  S.spray = !S.spray;
+  if (S.spray) S.sprayRef = {t: S.t, x: S.x.slice()};
+  addEvent(S.spray ? 'spraying begins' : 'spraying stops');
+  sound(S.spray ? 'whoosh' : 'tick'); track('spray', {on: S.spray}); paint(true);
+});
+$('btnCorridor').addEventListener('click', () => {
+  S.corridor = !S.corridor;
+  addEvent(S.corridor ? 'corridor reopened' : 'corridor cut');
+  sound('boing'); track('corridor', {open: S.corridor}); paint(true);
+});
+$('modeWeb').addEventListener('click', () => { if (S.mode !== 'web') { resetTo('web', 'mode'); sound('snap'); } });
+$('modeChain').addEventListener('click', () => { if (S.mode !== 'chain') { resetTo('chain', 'mode'); sound('snap'); } });
+$('btnReset').addEventListener('click', () => { resetTo(S.mode, 'reset'); sound('pop'); });
+function setPlaying(on){
+  S.playing = on;
+  $('btnPlay').textContent = on ? '❚❚' : '▶';
+  $('btnPlay').setAttribute('aria-label', on ? 'Pause' : 'Play');
+  $('btnPlay').title = on ? 'Pause' : 'Play';
+}
+$('btnPlay').addEventListener('click', () => { setPlaying(!S.playing); sound('tick'); track('play', {on: S.playing}); });
+$('btnFast').addEventListener('click', () => {
+  S.fast = !S.fast; $('btnFast').setAttribute('aria-pressed', S.fast); sound('tick'); track('fast', {on: S.fast});
+});
+function lockControls(lock){
+  for (const id of ['btnRemove', 'btnBack', 'sun', 'btnSpray', 'btnCorridor', 'modeWeb', 'modeChain', 'btnReset']) $(id).disabled = lock;
+  $('hits').style.pointerEvents = lock ? 'none' : '';
+  $('gate').hidden = !lock;
+}
+
+/* ============================================================================
+   Start
+   ============================================================================ */
+findings($('finds'), [
+  {id: 'energy',   icon: '☀', label: 'Energy flows from the Sun up the chain',   hint: 'Dim the Sun, and watch the top of the web'},
+  {id: 'predator', icon: '↑', label: 'Remove a predator, the prey explode',      hint: 'Take a hunter away'},
+  {id: 'cascade',  icon: '⤳', label: 'One change leads to another',              hint: 'Watch a species two links away'},
+  {id: 'decomp',   icon: '🍄', label: 'Without decomposers the soil starves',     hint: 'What if nothing broke down the dead?'},
+  {id: 'sturdy',   icon: '✳', label: 'A web is sturdier than a chain',           hint: 'Remove the frogs from a chain, then from the web'},
+  {id: 'farm',     icon: '🌾', label: 'Farms are ecosystems too',                 hint: 'Spray the crop, and wait'},
+], () => toast('All six found. You have pulled every thread of this web.', 4200));
+
+const POE = predict($('poe'), {
+  id: 'snakes-rice',
+  q: 'Farmers kill all the snakes in a rice field. What happens to the rice harvest over the next few years?',
+  options: [
+    {id: 'more', text: 'More rice: there are fewer animals in the field.'},
+    {id: 'less', text: 'Less rice: the mice that snakes used to eat multiply and eat more of it.', right: true},
+    {id: 'same', text: 'No change: snakes do not eat rice.'},
+    {id: 'dies', text: 'The rice dies at once.'},
+  ],
+  onLock(){
+    S.locked = true;
+    lockControls(false);
+    say('Now find out. Choose the snake and remove all of them, then watch the rice.');
+    paint(true);
+  },
+});
+lockControls(!POE.locked);
+if (!Play.FF('predict')) S.locked = true;
+record();
+paint(true);
+loop((dt, now) => {
+  CLOCK = now;
+  if (S.playing) advance(dt * (S.fast ? SPEED.fast : SPEED.slow));
+  paint();
+});
+window.applyFeatures = () => paint(true);
+window.PG_STATE = () => {
+  const o = JSON.parse(JSON.stringify(Object.assign({}, S, {x: undefined})));
+  o.x = S.x.slice();
+  o.pop = {}; o.rel = {}; o.count = {};
+  SPECIES.forEach((s, k) => { o.pop[s.id] = S.x[k]; o.rel[s.id] = S.x[k] / bal()[k]; o.count[s.id] = count(k, S.x); });
+  o.dead = S.x[iD]; o.nutrients = S.x[iN]; o.relDead = S.x[iD] / bal()[iD]; o.relNutrients = S.x[iN] / bal()[iN];
+  return o;
+};
+window.PG_MODEL = {SPECIES, LINKS, IX, NS, iD, iN, D0, N0, BAL, CHAIN_SET, deriv, step, run, flows, initial, total, envFor, count, switching};
+</script>
+</body>
+</html>

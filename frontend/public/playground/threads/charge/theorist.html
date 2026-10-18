@@ -1,0 +1,755 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fields And Potential</title>
+<meta name="description" content="Class 11–12: drop point charges on a sheet and watch the field lines and equipotentials computed by superposition; measure the flux through a Gaussian surface; change the exponent of Coulomb’s law and see Gauss’s law break; slide a dielectric into a capacitor.">
+<link rel="icon" href="../../favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600&family=Inter:wght@400;500;600;700&family=Nunito:wght@500;700;800&family=Newsreader:opsz,wght@6..72,400;6..72,500&family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="../../play.css">
+<style>
+/* Only what this page needs beyond play.css. */
+.pg-stage{background:#fbfaf6}
+.tabs{display:flex; gap:4px; padding:8px; background:var(--sunk); border-bottom:1px solid var(--hair)}
+.tabs button{flex:1; border:0; background:transparent; border-radius:8px; padding:8px 10px; font-weight:600; font-size:14px; cursor:pointer; color:var(--ink-2)}
+.tabs button[aria-selected="true"]{background:var(--card); color:var(--ink); box-shadow:var(--shadow)}
+.gate{position:absolute; inset:52px 0 0 0; display:grid; place-items:center; pointer-events:none}
+.gate span{background:rgba(29,35,39,.86); color:#fff; padding:10px 16px; border-radius:99px; font-weight:600; font-size:14px}
+.seg{display:flex; flex-wrap:wrap; background:var(--sunk); border-radius:9px; padding:3px; gap:3px; margin:6px 0}
+.seg button{flex:1 1 auto; border:0; background:transparent; border-radius:7px; padding:5px 8px; font-weight:600; font-size:12.5px; cursor:pointer; color:var(--ink-2)}
+.seg button[aria-pressed="true"]{background:var(--card); color:var(--ink); box-shadow:var(--shadow)}
+.seg button:disabled{cursor:default; opacity:.5}
+.ctl{grid-template-columns:112px 1fr 76px; margin:2px 0}
+.ctl label{font-size:12.5px; line-height:1.2}
+.ctl output{font-family:var(--font-mono); font-size:12.5px; font-weight:600; min-width:0}
+.readout{display:grid; grid-template-columns:1fr auto; gap:2px 12px; font-size:13px; align-items:baseline}
+.readout span{color:var(--ink-2)}
+.readout b{font-family:var(--font-mono); font-weight:600; font-size:12.5px; font-variant-numeric:tabular-nums; text-align:right}
+.readout .sep{grid-column:1/-1; height:1px; background:var(--hair); margin:4px 0}
+.why p{font-size:13.5px; margin-bottom:.5em}
+.why b{color:var(--ink)}
+.hint{font-size:12.5px; color:var(--ink-3); margin:6px 0 0}
+.btn[aria-pressed="true"]{background:var(--accent-soft); border-color:var(--accent)}
+.chg{cursor:grab} .chg.dragging{cursor:grabbing}
+#probeHit, #gCentre, #gRim, #slabHit{cursor:grab}
+#probeHit.dragging, #gCentre.dragging, #gRim.dragging, #slabHit.dragging{cursor:grabbing}
+svg text.m{font-family:var(--font-mono)}
+svg text.serif{font-family:"Newsreader",Georgia,serif}
+@media (max-width:1180px) and (min-width:981px){ .pg-main.wide-side{grid-template-columns:minmax(0,1fr) 350px} }
+</style>
+</head>
+<body>
+<header class="pg-top"></header>
+
+<div class="pg-intro">
+  <h1>Fields and potential</h1>
+  <p>Place point charges on a sheet. The field at every point is the vector sum of Coulomb’s law for each charge, and the potential is the sum of kq/r;
+     the field lines and equipotentials you see are traced from those sums, not drawn. Wrap a Gaussian surface round the charges and the page integrates the flux.
+     Then change the exponent in Coulomb’s law and find out which results were really about the inverse square.</p>
+</div>
+
+<main class="pg-main wide-side">
+  <section class="pg-stage" id="stageWrap">
+    <div class="tabs" role="tablist" aria-label="Two experiments">
+      <button role="tab" id="tabField" data-tab="field" aria-selected="true">Charges, field and flux</button>
+      <button role="tab" id="tabCap" data-tab="cap" aria-selected="false">The parallel-plate capacitor</button>
+    </div>
+    <svg id="fieldStage" viewBox="0 0 1000 660" role="img" aria-label="A sheet with point charges, their field lines and equipotentials, a test charge, a Gaussian surface, and a log-log plot of the field against distance"></svg>
+    <svg id="capStage" viewBox="0 0 1000 660" role="img" aria-label="A parallel-plate capacitor with a dielectric slab, a battery and switch, and graphs of capacitance and stored energy against how far the slab is in" hidden></svg>
+    <div class="gate" id="gate"><span>Make your prediction first →</span></div>
+  </section>
+
+  <aside class="pg-side">
+    <div id="poe"></div>
+
+    <div class="card" id="ctlField">
+      <div class="kicker">Add a charge</div>
+      <div class="row">
+        <button class="btn sm" data-add="1">+1</button><button class="btn sm" data-add="2">+2</button>
+        <button class="btn sm" data-add="-1">−1</button><button class="btn sm" data-add="-2">−2</button>
+        <button class="btn sm" id="btnClear">Clear</button>
+      </div>
+      <p class="hint" style="margin-top:4px">One unit of charge is 10 nC, that is 10⁻⁸ C.</p>
+      <div class="kicker" style="margin-top:8px">From the book</div>
+      <div class="seg" id="presetSeg">
+        <button data-preset="ex18">Ex. 1.8 dipole</button>
+        <button data-preset="ex22">Ex. 2.2 pair</button>
+        <button data-preset="like">Two like charges</button>
+      </div>
+      <div class="kicker" style="margin-top:8px">Show</div>
+      <div class="row">
+        <button class="btn sm" id="btnLines" aria-pressed="true">Field lines</button>
+        <button class="btn sm" id="btnEquip" aria-pressed="true">Equipotentials</button>
+        <button class="btn sm" id="btnShade" aria-pressed="true">Potential shading</button>
+      </div>
+      <div class="ctl" style="margin-top:8px"><label for="expo">Force law E ∝ 1/rⁿ, n =</label><input type="range" id="expo" min="1.6" max="3" step="0.05" value="2"><output id="expoOut">2.00</output></div>
+      <p class="hint">Drag charges; drop one on the bin to remove it. Drag the probe, the Gaussian surface’s centre, and the handle on its rim.</p>
+    </div>
+
+    <div class="card" id="ctlCap" hidden>
+      <div class="ctl"><label for="gap">Plate gap d</label><input type="range" id="gap" min="1" max="6" step="0.1" value="3"><output id="gapOut">3.0 mm</output></div>
+      <div class="ctl"><label for="kd">Dielectric K</label><input type="range" id="kd" min="1" max="10" step="0.5" value="6"><output id="kdOut">6.0</output></div>
+      <div class="ctl"><label for="thick">Slab thickness t</label><input type="range" id="thick" min="0.25" max="1" step="0.05" value="1"><output id="thickOut">1.00 d</output></div>
+      <div class="row" style="margin-top:6px">
+        <button class="btn sm" id="btnBattery" aria-pressed="true">Battery connected</button>
+        <button class="btn sm" id="btnMica">Mica sheet, Ex. 2.9</button>
+      </div>
+      <p class="hint">Plates 6 × 10⁻³ m², battery 100 V, as in Exercise 2.8. Drag the slab in and out between the plates.</p>
+    </div>
+
+    <div class="card" id="measureCard">
+      <div class="kicker" id="measureKick">Measured</div>
+      <div id="meters"></div>
+    </div>
+
+    <div class="card why" id="whyCard" hidden>
+      <div class="kicker">What the model is doing</div>
+      <div id="why"></div>
+    </div>
+
+    <div class="card"><div class="kicker">To find</div><div id="finds"></div></div>
+  </aside>
+</main>
+
+<script src="../../play.js"></script>
+<script>
+'use strict';
+const {$, esc, clamp, fmt, drag, loop, sound, say, track, toast, predict, findings, discover, found,
+       shareState, sharedState, mount, reduced} = Play;
+mount({thread: 'charge', band: 'theorist'});
+const $$ = s => Array.from(document.querySelectorAll(s));
+
+/* MODEL:start ==================================================================
+   Point charges q_i (coulombs) at points r_i on a sheet (metres). The field at r is
+   the SUPERPOSITION of each charge's field, with a force law whose exponent n the
+   learner can change (n = 2 is Coulomb's law; r0 = 10 cm keeps the strength at 10 cm
+   the same for every n):
+       E(r) = Σ k q_i (r0/|r − r_i|)^(n−2) (r − r_i)/|r − r_i|³
+       V(r) = Σ k q_i r0^(n−2) / ((n − 1) |r − r_i|^(n−1))        (V = kq/r when n = 2)
+   Field lines are traced through E with RK4. Equipotentials are contours of V
+   (marching squares). The flux through a Gaussian SPHERE (the circle you draw is
+   where it cuts the sheet) is integrated numerically over the sphere, and is
+   compared with q_enclosed / ε0.
+
+   The capacitor: plates of area A, gap d, a slab of constant K and thickness t
+   pushed in a fraction f of the way. The filled part is air (d − t) in series with
+   the slab; the empty part is air. Both parts are in parallel:
+       C = ε0 A [ (1 − f)/d + f/(d − t + t/K) ]
+   With the battery connected V stays 100 V; with it disconnected Q stays fixed.
+   ============================================================================ */
+const EPS0 = 8.854e-12, K_E = 1 / (4 * Math.PI * EPS0), R0 = 0.10, UNIT = 1e-8;
+
+function fieldAt(charges, x, y, n = 2, z = 0){
+  let Ex = 0, Ey = 0, Ez = 0;
+  for (const c of charges) {
+    const dx = x - c.x, dy = y - c.y, dz = z, r2 = dx * dx + dy * dy + dz * dz, r = Math.sqrt(r2);
+    if (r < 1e-6) continue;
+    const f = K_E * c.q * Math.pow(R0 / r, n - 2) / (r2 * r);
+    Ex += f * dx; Ey += f * dy; Ez += f * dz;
+  }
+  return {x: Ex, y: Ey, z: Ez, mag: Math.hypot(Ex, Ey, Ez)};
+}
+function potentialAt(charges, x, y, n = 2){
+  let V = 0;
+  for (const c of charges) { const r = Math.max(1e-6, Math.hypot(x - c.x, y - c.y)); V += K_E * c.q * Math.pow(R0, n - 2) / ((n - 1) * Math.pow(r, n - 1)); }
+  return V;
+}
+/* Flux of E out of a sphere (centre cx, cy on the sheet, radius R), by the midpoint rule over θ and φ. */
+function gaussFlux(charges, cx, cy, R, n = 2, NT = 90){
+  const NP = 2 * NT, dT = Math.PI / NT, dP = 2 * Math.PI / NP;
+  let out = 0, inn = 0;
+  for (let i = 0; i < NT; i++) {
+    const th = (i + 0.5) * dT, st = Math.sin(th), ct = Math.cos(th), dA = R * R * st * dT * dP;
+    for (let j = 0; j < NP; j++) {
+      const ph = (j + 0.5) * dP, nx = st * Math.cos(ph), ny = st * Math.sin(ph), nz = ct;
+      const E = fieldAt(charges, cx + R * nx, cy + R * ny, n, R * nz);
+      const f = (E.x * nx + E.y * ny + E.z * nz) * dA;
+      if (f > 0) out += f; else inn -= f;
+    }
+  }
+  const qin = charges.filter(c => Math.hypot(c.x - cx, c.y - cy) < R).reduce((s, c) => s + c.q, 0);
+  return {net: out - inn, out, in: inn, qin, expect: qin / EPS0};
+}
+/* |E| along a ray from (ox, oy) in direction (ux, uy): the least-squares slope of log|E| against log r. */
+function fieldSlope(charges, ox, oy, ux, uy, ra, rb, n = 2, N = 24){
+  let sx = 0, sy = 0, sxx = 0, sxy = 0;
+  for (let i = 0; i < N; i++) {
+    const r = ra * Math.pow(rb / ra, i / (N - 1)), E = fieldAt(charges, ox + ux * r, oy + uy * r, n).mag;
+    const X = Math.log10(r), Y = Math.log10(E); sx += X; sy += Y; sxx += X * X; sxy += X * Y;
+  }
+  return (N * sxy - sx * sy) / (N * sxx - sx * sx);
+}
+/* The capacitor. */
+const CAP = {A: 6e-3, V0: 100};
+function capacitance(d, K, t, f){
+  const tt = Math.min(t, d);
+  return EPS0 * CAP.A * ((1 - f) / d + f / (d - tt + tt / K));
+}
+const energy = (C, V) => 0.5 * C * V * V;
+function capState(d, K, t, f, battery, Q0){
+  const C = capacitance(d, K, t, f), V = battery ? CAP.V0 : Q0 / C, Q = C * V, tt = Math.min(t, d);
+  const Eempty = V / d, Eair = V / (d - tt + tt / K), Eslab = Eair / K;
+  return {C, V, Q, U: energy(C, V), Eempty, Eair, Eslab};
+}
+/* MODEL:end */
+
+/* ---- state: plain data --------------------------------------------------- */
+const PX = 2000;                                        // px per metre: 20 px per cm
+const SHEET = {w: 640, h: 660};
+const toPx = m => m * PX, toM = px => px / PX;
+const S = {tab: 'field', locked: false, n: 2, lines: true, equip: true, shade: true,
+  charges: [], probe: {x: 0.20, y: 0.07}, gauss: {x: 0.25, y: 0.27, R: 0.04},
+  d: 3e-3, K: 6, tf: 1, f: 0, battery: true, Q0: 0, isoIn: false, fIso0: null};
+let NEXT_ID = 1;
+function setPreset(p){
+  const mk = (q, x, y) => ({id: NEXT_ID++, q: q * UNIT, x, y});
+  if (p === 'ex18') S.charges = [mk(1, 0.11, 0.18), mk(-1, 0.21, 0.18)];
+  if (p === 'ex22') S.charges = [mk(3, 0.06, 0.18), mk(-2, 0.21, 0.18)];
+  if (p === 'like') S.charges = [mk(1, 0.10, 0.18), mk(1, 0.22, 0.18)];
+}
+setPreset('ex22');
+const shared = sharedState();
+if (shared) {
+  if (Array.isArray(shared.c)) S.charges = shared.c.slice(0, 8).map(c => ({id: NEXT_ID++, q: clamp(+c[0], -3, 3) * UNIT, x: clamp(+c[1], 0.01, 0.31), y: clamp(+c[2], 0.01, 0.32)}));
+  S.n = clamp(+shared.n || 2, 1.6, 3);
+  if (shared.tab === 'cap') S.tab = 'cap';
+}
+shareState(() => ({tab: S.tab, n: S.n, c: S.charges.map(c => [Math.round(c.q / UNIT), +c.x.toFixed(4), +c.y.toFixed(4)])}));
+
+/* ============================================================================
+   Stage 1: the sheet. Built once; layers patched.
+   ============================================================================ */
+const fs = $('fieldStage');
+const GRID = {nx: 161, ny: 166, step: 4};               // potential sampled every 4 px (2 mm)
+const shadeCanvas = document.createElement('canvas'); shadeCanvas.width = GRID.nx; shadeCanvas.height = GRID.ny;
+const shadeCtx = shadeCanvas.getContext('2d'), shadeImg = shadeCtx.createImageData(GRID.nx, GRID.ny);
+const LP = {x0: 700, x1: 975, y0: 60, y1: 330};          // log-log plot
+const BIN = {x: 662, y: 560, w: 320, h: 80};
+function buildField(){
+  let grid = '';
+  for (let x = 0; x <= SHEET.w; x += 20) grid += `<line x1="${x}" y1="0" x2="${x}" y2="${SHEET.h}" stroke="${x % 100 ? '#efece4' : '#e2ddd0'}"/>`;
+  for (let y = 0; y <= SHEET.h; y += 20) grid += `<line x1="0" y1="${y}" x2="${SHEET.w}" y2="${y}" stroke="${y % 100 ? '#efece4' : '#e2ddd0'}"/>`;
+  fs.innerHTML = `
+  <defs>
+    <marker id="ahF" markerWidth="7" markerHeight="7" refX="3.5" refY="3.5" orient="auto"><path d="M0 0 L7 3.5 L0 7Z" fill="#1d2327"/></marker>
+    <clipPath id="clipSheet"><rect width="${SHEET.w}" height="${SHEET.h}"/></clipPath>
+  </defs>
+  <rect width="1000" height="660" fill="#fbfaf6"/>
+  <g clip-path="url(#clipSheet)">
+    <rect width="${SHEET.w}" height="${SHEET.h}" fill="#fffdf7"/>
+    <g>${grid}</g>
+    <image id="shadeImg" width="${SHEET.w}" height="${SHEET.h}" preserveAspectRatio="none"/>
+    <path id="equipPath" fill="none" stroke="#6a3fc2" stroke-width="1" opacity=".55"/>
+    <path id="zeroPath" fill="none" stroke="#6a3fc2" stroke-width="2.2" stroke-dasharray="6 4"/>
+    <path id="linePath" fill="none" stroke="#1d2327" stroke-width="1.15" opacity=".8"/>
+    <path id="arrowPath" fill="#1d2327" opacity=".85"/>
+    <circle id="gCircle" fill="none" stroke="#b8328a" stroke-width="2.2" stroke-dasharray="8 5"/>
+    <text id="gLabel" fill="#b8328a" font-size="12" font-weight="700" class="m"></text>
+    <line id="probeArrow" stroke="#0f7a5c" stroke-width="2.6" marker-end="url(#ahF)"/>
+  </g>
+  <line x1="${SHEET.w}" y1="0" x2="${SHEET.w}" y2="${SHEET.h}" stroke="#d8d3c4"/>
+  <g font-size="11" fill="#8a8f93" class="m"><text x="${SHEET.w - 6}" y="${SHEET.h - 8}" text-anchor="end">grid: 1 cm</text></g>
+  <g id="chargeLayer"></g>
+  <!-- the surface's handles sit above the charges (a charge is bigger, so it can still be grabbed round the edge) -->
+  <circle id="gCentre" r="7" fill="#b8328a" stroke="#fff" stroke-width="2" tabindex="0" aria-label="Gaussian surface: centre"/>
+  <rect id="gRim" width="14" height="14" rx="2" fill="#fff" stroke="#b8328a" stroke-width="2.4" tabindex="0" aria-label="Gaussian surface: radius"/>
+  <g id="probeG"><circle id="probeDot" r="7" fill="#fff" stroke="#0f7a5c" stroke-width="2.6"/><text id="probeTag" font-size="10" font-weight="700" fill="#0f7a5c" text-anchor="middle">q₀</text></g>
+  <circle id="probeHit" r="16" fill="transparent" tabindex="0" aria-label="Test charge: drag it to measure the field"/>
+  <!-- measure panel -->
+  <text x="662" y="30" class="serif" font-size="18" fill="#1d2327">Measure: |E| against r</text>
+  <text x="662" y="48" font-size="12" fill="#6a767c">along the line from the charges’ centre through the probe</text>
+  <rect x="${LP.x0}" y="${LP.y0}" width="${LP.x1 - LP.x0}" height="${LP.y1 - LP.y0}" fill="#fff" stroke="#e2ded2"/>
+  <g id="lpAxes"></g>
+  <rect id="lpWin" y="${LP.y0}" height="${LP.y1 - LP.y0}" fill="#6a3fc2" opacity=".07"/>
+  <path id="lpCurve" fill="none" stroke="#6a3fc2" stroke-width="2.2"/>
+  <path id="lpFit" fill="none" stroke="#e0452a" stroke-width="1.4" stroke-dasharray="5 4"/>
+  <circle id="lpDot" r="5" fill="#0f7a5c" stroke="#fff" stroke-width="2"/>
+  <text id="lpSlope" x="${LP.x1}" y="${LP.y1 + 44}" text-anchor="end" class="m" font-size="14" font-weight="600" fill="#e0452a"></text>
+  <text x="662" y="${LP.y1 + 76}" class="serif" font-size="16" fill="#1d2327">Flux through the Gaussian sphere</text>
+  <g id="fluxBars"></g>
+  <rect id="binRect" x="${BIN.x}" y="${BIN.y}" width="${BIN.w}" height="${BIN.h}" rx="10" fill="#f3efe6" stroke="#d8d3c4" stroke-dasharray="6 5"/>
+  <text x="${BIN.x + BIN.w / 2}" y="${BIN.y + BIN.h / 2 + 5}" text-anchor="middle" font-size="13" fill="#8a8f93">🗑 drop a charge here to remove it</text>
+  <rect id="fieldVeil" x="${SHEET.w + 1}" y="0" width="${1000 - SHEET.w - 1}" height="${BIN.y - 10}" fill="#fbfaf6" opacity=".95"/>
+  <text id="fieldVeilT" x="${(SHEET.w + 1000) / 2}" y="300" text-anchor="middle" fill="#7c878c" font-size="14" font-weight="600">Measurements appear once you have predicted.</text>
+  `;
+}
+/* the charges: one group per charge, created once per charge and then only moved */
+function syncCharges(){
+  const layer = $('chargeLayer');
+  const ids = new Set(S.charges.map(c => 'ch' + c.id));
+  [...layer.children].forEach(g => { if (!ids.has(g.id)) g.remove(); });
+  for (const c of S.charges) {
+    let g = $('ch' + c.id);
+    if (!g) {
+      g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+      g.id = 'ch' + c.id; g.setAttribute('class', 'chg'); g.setAttribute('tabindex', '0');
+      const pos = c.q > 0, u = Math.round(Math.abs(c.q) / UNIT);
+      g.innerHTML = `<circle r="${11 + 2 * u}" fill="${pos ? '#d6453d' : '#2f6fd0'}" stroke="#fff" stroke-width="2"/><text y="4.5" text-anchor="middle" fill="#fff" font-size="13" font-weight="700">${pos ? '+' : '−'}${u}</text>`;
+      g.setAttribute('aria-label', `${pos ? 'Positive' : 'Negative'} charge of ${u * 10} nC`);
+      layer.appendChild(g);
+      wireCharge(g, c.id);
+    }
+    g.setAttribute('transform', `translate(${toPx(c.x).toFixed(1)} ${toPx(c.y).toFixed(1)})`);
+  }
+}
+function wireCharge(g, id){
+  drag(g, fs, {
+    start(){ if (!S.locked) return false; },
+    move(p){ const c = S.charges.find(k => k.id === id); if (!c) return;
+      const inBin = p.x >= BIN.x && p.x <= BIN.x + BIN.w && p.y >= BIN.y && p.y <= BIN.y + BIN.h;
+      c.x = inBin ? toM(p.x) : clamp(toM(p.x), 0.005, toM(SHEET.w) - 0.005); c.y = inBin ? toM(p.y) : clamp(toM(p.y), 0.005, toM(SHEET.h) - 0.005);
+      c.binned = inBin; $('binRect').setAttribute('fill', inBin ? '#fde6e3' : '#f3efe6');
+      requestPaint(true); },
+    end(){ const c = S.charges.find(k => k.id === id); $('binRect').setAttribute('fill', '#f3efe6');
+      if (c && c.binned) { S.charges = S.charges.filter(k => k.id !== id); sound('pop'); track('removeCharge'); requestPaint(true); }   // removed after the drag, so the capture is not lost mid-drag
+      else track('moveCharge', {id}); },
+  });
+}
+/* ---- field lines --------------------------------------------------------- */
+function traceLines(){
+  const ch = S.charges; if (!ch.length) return {d: '', arrows: ''};
+  const pos = ch.filter(c => c.q > 0), sources = pos.length ? pos : ch.filter(c => c.q < 0), dir = pos.length ? 1 : -1;
+  let d = '', arrows = '';
+  const hStep = 0.0016;                                   // 1.6 mm
+  const unit = (x, y) => { const E = fieldAt(ch, x, y, S.n); return E.mag > 0 ? {x: dir * E.x / E.mag, y: dir * E.y / E.mag} : {x: 0, y: 0}; };
+  for (const s of sources) {
+    const nL = 10 * Math.round(Math.abs(s.q) / UNIT), r0 = 0.007;
+    for (let k = 0; k < nL; k++) {
+      const a = (k + 0.5) / nL * 2 * Math.PI;
+      let x = s.x + r0 * Math.cos(a), y = s.y + r0 * Math.sin(a);
+      let pts = [[x, y]];
+      for (let i = 0; i < 700; i++) {
+        const k1 = unit(x, y), k2 = unit(x + k1.x * hStep / 2, y + k1.y * hStep / 2), k3 = unit(x + k2.x * hStep / 2, y + k2.y * hStep / 2), k4 = unit(x + k3.x * hStep, y + k3.y * hStep);
+        x += hStep * (k1.x + 2 * k2.x + 2 * k3.x + k4.x) / 6; y += hStep * (k1.y + 2 * k2.y + 2 * k3.y + k4.y) / 6;
+        pts.push([x, y]);
+        if (x < -0.02 || y < -0.02 || x > toM(SHEET.w) + 0.02 || y > toM(SHEET.h) + 0.02) break;
+        if (ch.some(c => c !== s && Math.hypot(c.x - x, c.y - y) < 0.006)) break;
+      }
+      d += 'M' + pts.map(p => toPx(p[0]).toFixed(1) + ' ' + toPx(p[1]).toFixed(1)).join('L');
+      /* an arrowhead part-way along, pointing the way E points */
+      const m = Math.min(pts.length - 2, Math.max(1, Math.floor(pts.length * 0.35)));
+      if (pts.length > 6) {
+        const [ax, ay] = pts[m], [bx, by] = pts[m + 1], L = Math.hypot(bx - ax, by - ay) || 1;
+        let ux = (bx - ax) / L * dir, uy = (by - ay) / L * dir;
+        const X = toPx(ax), Y = toPx(ay), s1 = 6;
+        arrows += `M${(X + ux * s1).toFixed(1)} ${(Y + uy * s1).toFixed(1)}L${(X - ux * s1 - uy * s1 * .6).toFixed(1)} ${(Y - uy * s1 + ux * s1 * .6).toFixed(1)}L${(X - ux * s1 + uy * s1 * .6).toFixed(1)} ${(Y - uy * s1 - ux * s1 * .6).toFixed(1)}Z`;
+      }
+    }
+  }
+  return {d, arrows};
+}
+/* ---- potential: shading and contours ------------------------------------- */
+const LEVELS = [100, 200, 400, 700, 1000, 1500, 2500, 4000, 7000, 12000];
+function potentialGrid(){
+  const {nx, ny, step} = GRID, V = new Float64Array(nx * ny);
+  for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) V[j * nx + i] = potentialAt(S.charges, toM(i * step), toM(j * step), S.n);
+  return V;
+}
+function contours(V, level){
+  const {nx, ny, step} = GRID; let d = '';
+  const lerpP = (a, b, va, vb) => a + (level - va) / (vb - va) * (b - a);
+  for (let j = 0; j < ny - 1; j++) for (let i = 0; i < nx - 1; i++) {
+    const a = V[j * nx + i], b = V[j * nx + i + 1], c = V[(j + 1) * nx + i + 1], e = V[(j + 1) * nx + i];
+    const x = i * step, y = j * step, pts = [];
+    if ((a > level) !== (b > level)) pts.push([lerpP(x, x + step, a, b), y]);
+    if ((b > level) !== (c > level)) pts.push([x + step, lerpP(y, y + step, b, c)]);
+    if ((e > level) !== (c > level)) pts.push([lerpP(x, x + step, e, c), y + step]);
+    if ((a > level) !== (e > level)) pts.push([x, lerpP(y, y + step, a, e)]);
+    if (pts.length >= 2) d += `M${pts[0][0].toFixed(1)} ${pts[0][1].toFixed(1)}L${pts[1][0].toFixed(1)} ${pts[1][1].toFixed(1)}`;
+    if (pts.length === 4) d += `M${pts[2][0].toFixed(1)} ${pts[2][1].toFixed(1)}L${pts[3][0].toFixed(1)} ${pts[3][1].toFixed(1)}`;
+  }
+  return d;
+}
+let FLUX = null, SLOPE = null;
+function paintField(full){
+  syncCharges();
+  if (full) {
+    const V = potentialGrid();
+    if (S.shade) {
+      const {nx, ny} = GRID, dd = shadeImg.data;
+      for (let k = 0; k < nx * ny; k++) {
+        const v = V[k], s = Math.tanh(Math.abs(v) / 3000) * .55, o = k * 4;
+        const col = v >= 0 ? [224, 69, 42] : [47, 111, 208];
+        dd[o] = 255 + (col[0] - 255) * s; dd[o + 1] = 253 + (col[1] - 253) * s; dd[o + 2] = 247 + (col[2] - 247) * s; dd[o + 3] = 255;
+      }
+      shadeCtx.putImageData(shadeImg, 0, 0);
+      $('shadeImg').setAttribute('href', shadeCanvas.toDataURL());
+    }
+    $('shadeImg').setAttribute('opacity', S.shade ? 1 : 0);
+    let eq = '';
+    if (S.equip) for (const L of LEVELS) eq += contours(V, L) + contours(V, -L);
+    $('equipPath').setAttribute('d', eq);
+    const hasBoth = S.charges.some(c => c.q > 0) && S.charges.some(c => c.q < 0);
+    $('zeroPath').setAttribute('d', S.equip && hasBoth ? contours(V, 0) : '');
+    const fl = S.lines ? traceLines() : {d: '', arrows: ''};
+    $('linePath').setAttribute('d', fl.d); $('arrowPath').setAttribute('d', fl.arrows);
+    FLUX = S.locked ? gaussFlux(S.charges, S.gauss.x, S.gauss.y, S.gauss.R, S.n, 72) : null;
+  }
+  /* the Gaussian circle */
+  const gx = toPx(S.gauss.x), gy = toPx(S.gauss.y), gr = toPx(S.gauss.R);
+  for (const el of ['gCircle']) { $(el).setAttribute('cx', gx); $(el).setAttribute('cy', gy); $(el).setAttribute('r', gr); }
+  $('gCentre').setAttribute('cx', gx); $('gCentre').setAttribute('cy', gy);
+  $('gRim').setAttribute('x', gx + gr - 7); $('gRim').setAttribute('y', gy - 7);
+  $('gLabel').setAttribute('x', gx - gr * 0.7); $('gLabel').setAttribute('y', gy - gr * 0.72 - 6);
+  $('gLabel').textContent = S.locked && FLUX ? `ε₀Φ = ${fmt(FLUX.net * EPS0 / UNIT, 3)} units` : 'Gaussian surface';
+  /* the probe */
+  const px = toPx(S.probe.x), py = toPx(S.probe.y), E = fieldAt(S.charges, S.probe.x, S.probe.y, S.n);
+  $('probeG').setAttribute('transform', `translate(${px.toFixed(1)} ${py.toFixed(1)})`);
+  $('probeHit').setAttribute('cx', px.toFixed(1)); $('probeHit').setAttribute('cy', py.toFixed(1));
+  const L = E.mag > 0 ? clamp(16 * Math.log10(E.mag / 50), 8, 70) : 0;
+  $('probeArrow').setAttribute('x1', px); $('probeArrow').setAttribute('y1', py);
+  $('probeArrow').setAttribute('x2', E.mag ? (px + E.x / E.mag * (L + 8)).toFixed(1) : px); $('probeArrow').setAttribute('y2', E.mag ? (py + E.y / E.mag * (L + 8)).toFixed(1) : py);
+  $('probeArrow').setAttribute('opacity', S.locked && E.mag > 0 ? 1 : 0);
+  if (S.locked) paintMeasure(); else SLOPE = null;
+  $$('#btnLines, #btnEquip, #btnShade').forEach(b => b.setAttribute('aria-pressed', {btnLines: S.lines, btnEquip: S.equip, btnShade: S.shade}[b.id]));
+  $('expo').value = S.n; $('expoOut').textContent = fmt(S.n, 2);
+}
+function centreOfCharge(){
+  const ch = S.charges; if (!ch.length) return {x: 0.16, y: 0.16, spread: 0};
+  const w = ch.reduce((s, c) => s + Math.abs(c.q), 0);
+  const x = ch.reduce((s, c) => s + Math.abs(c.q) * c.x, 0) / w, y = ch.reduce((s, c) => s + Math.abs(c.q) * c.y, 0) / w;
+  return {x, y, spread: Math.max(...ch.map(c => Math.hypot(c.x - x, c.y - y)))};
+}
+const lpX = r => LP.x0 + (Math.log10(r) - Math.log10(0.01)) / (Math.log10(1) - Math.log10(0.01)) * (LP.x1 - LP.x0);
+let LPY = {lo: 1, hi: 6};
+const lpY = E => LP.y1 - (Math.log10(E) - LPY.lo) / (LPY.hi - LPY.lo) * (LP.y1 - LP.y0);
+function paintMeasure(){
+  const ch = S.charges, cc = centreOfCharge();
+  if (!ch.length) { $('lpCurve').setAttribute('d', ''); $('lpFit').setAttribute('d', ''); $('lpSlope').textContent = ''; $('lpWin').setAttribute('width', 0); SLOPE = null; paintFlux(); return; }
+  let ux = S.probe.x - cc.x, uy = S.probe.y - cc.y; const rp = Math.hypot(ux, uy);
+  if (rp < 1e-4) { ux = 1; uy = 0; } else { ux /= rp; uy /= rp; }
+  const pts = [];
+  for (let i = 0; i <= 60; i++) { const r = 0.01 * Math.pow(100, i / 60), E = fieldAt(ch, cc.x + ux * r, cc.y + uy * r, S.n).mag; if (E > 0) pts.push([r, E]); }
+  const logs = pts.map(p => Math.log10(p[1]));
+  LPY = {lo: Math.floor(Math.min(...logs)) , hi: Math.ceil(Math.max(...logs))};
+  if (LPY.hi - LPY.lo < 2) LPY.hi = LPY.lo + 2;
+  $('lpCurve').setAttribute('d', pts.map((p, i) => (i ? 'L' : 'M') + lpX(p[0]).toFixed(1) + ' ' + lpY(p[1]).toFixed(1)).join(''));
+  const ra = Math.max(0.03, 3 * cc.spread), rb = 1;
+  SLOPE = ra < rb / 2 ? fieldSlope(ch, cc.x, cc.y, ux, uy, ra, rb, S.n) : null;
+  $('lpWin').setAttribute('x', lpX(ra)); $('lpWin').setAttribute('width', Math.max(0, lpX(rb) - lpX(ra)));
+  if (SLOPE != null) {
+    const Ea = fieldAt(ch, cc.x + ux * ra, cc.y + uy * ra, S.n).mag;
+    $('lpFit').setAttribute('d', `M${lpX(ra).toFixed(1)} ${lpY(Ea).toFixed(1)}L${lpX(rb).toFixed(1)} ${lpY(Ea * Math.pow(rb / ra, SLOPE)).toFixed(1)}`);
+    $('lpSlope').textContent = `fitted slope = ${fmt(SLOPE, 2)}`;
+  } else { $('lpFit').setAttribute('d', ''); $('lpSlope').textContent = 'move the charges closer to fit a slope'; }
+  const Ep = fieldAt(ch, S.probe.x, S.probe.y, S.n).mag;
+  $('lpDot').setAttribute('cx', lpX(clamp(rp, 0.01, 1)).toFixed(1)); $('lpDot').setAttribute('cy', lpY(Math.max(Ep, 1e-9)).toFixed(1));
+  $('lpDot').setAttribute('opacity', rp >= 0.01 && Ep > 0 ? 1 : 0);
+  let ax = '';
+  for (const r of [0.01, 0.03, 0.1, 0.3, 1]) ax += `<line x1="${lpX(r)}" y1="${LP.y0}" x2="${lpX(r)}" y2="${LP.y1}" stroke="#efece4"/><text x="${lpX(r)}" y="${LP.y1 + 16}" text-anchor="middle" font-size="12" class="m" fill="#6a767c">${r * 100} cm</text>`;
+  for (let e = LPY.lo; e <= LPY.hi; e++) ax += `<line x1="${LP.x0}" y1="${lpY(Math.pow(10, e))}" x2="${LP.x1}" y2="${lpY(Math.pow(10, e))}" stroke="#efece4"/><text x="${LP.x0 - 6}" y="${lpY(Math.pow(10, e)) + 4}" text-anchor="end" font-size="12" class="m" fill="#6a767c">10${sup(e)}</text>`;
+  ax += `<text x="${LP.x0 + 6}" y="${LP.y0 + 14}" font-size="12" fill="#6a767c">|E| in N/C</text>`;
+  $('lpAxes').innerHTML = ax;
+  paintFlux();
+}
+const sup = e => String(e).split('').map(ch => '⁰¹²³⁴⁵⁶⁷⁸⁹'['0123456789'.indexOf(ch)] || (ch === '-' ? '⁻' : ch)).join('');
+function paintFlux(){
+  if (!FLUX) { $('fluxBars').innerHTML = ''; return; }
+  const y0 = LP.y1 + 96, W = 300, sc = W / Math.max(1, Math.abs(FLUX.expect * EPS0 / UNIT), FLUX.out * EPS0 / UNIT, FLUX.in * EPS0 / UNIT) / 1.15;
+  const bar = (i, lab, v, col) => `<text x="662" y="${y0 + i * 26 + 13}" font-size="13" fill="#4a555b">${lab}</text>
+    <rect x="770" y="${y0 + i * 26}" width="${Math.max(1, Math.abs(v) * sc * 0.62).toFixed(1)}" height="16" rx="3" fill="${col}"/>
+    <text x="${(774 + Math.abs(v) * sc * 0.62).toFixed(1)}" y="${y0 + i * 26 + 13}" font-size="13" class="m" fill="#1d2327">${fmt(v, 3)}</text>`;
+  $('fluxBars').innerHTML = bar(0, 'ε₀ × flux out', FLUX.out * EPS0 / UNIT, '#e0452a') + bar(1, 'ε₀ × flux in', FLUX.in * EPS0 / UNIT, '#2f6fd0') +
+    bar(2, 'ε₀ × net flux', FLUX.net * EPS0 / UNIT, '#6a3fc2') + bar(3, 'q enclosed', FLUX.qin / UNIT, '#1d2327') +
+    `<text x="662" y="${y0 + 4 * 26 + 8}" font-size="11" fill="#6a767c">in units of 10 nC</text>`;
+}
+
+/* ============================================================================
+   Stage 2: the capacitor.
+   ============================================================================ */
+const cs = $('capStage');
+const CP = {x0: 150, x1: 510, yMid: 300, pxmm: 36};      // plates 360 px wide; gap drawn 36 px per mm
+const CG1 = {x0: 640, x1: 970, y0: 70, y1: 280}, CG2 = {x0: 640, x1: 970, y0: 370, y1: 580};
+function buildCap(){
+  let arrows = '';
+  for (let i = 0; i < 12; i++) arrows += `<line id="ea${i}" stroke="#0f7a5c" stroke-width="2" marker-end="url(#ahC2)"/>`;
+  cs.innerHTML = `
+  <defs><marker id="ahC2" markerWidth="7" markerHeight="7" refX="3.5" refY="3.5" orient="auto"><path d="M0 0 L7 3.5 L0 7Z" fill="#0f7a5c"/></marker>
+    <pattern id="hatch" width="8" height="8" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="8" height="8" fill="#e9dcf7"/><line x1="0" y1="0" x2="0" y2="8" stroke="#c9b3ea" stroke-width="3"/></pattern></defs>
+  <rect width="1000" height="660" fill="#fbfaf6"/>
+  <text x="24" y="34" class="serif" font-size="19" fill="#1d2327">A parallel-plate capacitor, seen edge-on</text>
+  <text x="24" y="54" font-size="12" fill="#6a767c">The gap is drawn 36 times bigger than the plates, so you can see inside.</text>
+  <!-- battery and switch -->
+  <g id="battG">
+    <line x1="60" y1="200" x2="60" y2="400" stroke="#4a555b" stroke-width="2"/>
+    <rect x="44" y="282" width="32" height="36" fill="#fbfaf6"/>
+    <line x1="40" y1="290" x2="80" y2="290" stroke="#1d2327" stroke-width="3"/><line x1="50" y1="304" x2="70" y2="304" stroke="#1d2327" stroke-width="5"/>
+    <text x="86" y="301" class="m" font-size="12" fill="#1d2327">100 V</text>
+    <line id="wTop" x1="60" y1="200" stroke="#4a555b" stroke-width="2"/>
+    <line id="wBot" x1="60" y1="400" stroke="#4a555b" stroke-width="2"/>
+    <line id="sw" x1="92" y1="200" stroke="#1d2327" stroke-width="3" stroke-linecap="round"/>
+    <circle cx="92" cy="200" r="3.5" fill="#1d2327"/>
+    <text id="swLab" x="60" y="150" font-size="12" fill="#4a555b"></text>
+  </g>
+  <line id="plTopLead" x1="${(CP.x0 + CP.x1) / 2}" stroke="#4a555b" stroke-width="2"/>
+  <line id="plBotLead" x1="${(CP.x0 + CP.x1) / 2}" stroke="#4a555b" stroke-width="2"/>
+  <rect id="gapAir" x="${CP.x0}" width="${CP.x1 - CP.x0}" fill="#ffffff"/>
+  <rect id="slab" fill="url(#hatch)" stroke="#8a64c9" stroke-width="1.6"/>
+  <g>${arrows}</g>
+  <rect id="slabLabBg" width="64" height="20" rx="6" fill="#fff" stroke="#8a64c9"/>
+  <text id="slabLab" font-size="12" font-weight="700" fill="#5b3aa8" text-anchor="middle"></text>
+  <rect id="plTop" x="${CP.x0}" width="${CP.x1 - CP.x0}" height="10" fill="#d6453d"/>
+  <rect id="plBot" x="${CP.x0}" width="${CP.x1 - CP.x0}" height="10" fill="#2f6fd0"/>
+  <text id="qTop" x="${CP.x1 + 12}" class="m" font-size="12.5" fill="#b8321c"></text>
+  <text id="qBot" x="${CP.x1 + 12}" class="m" font-size="12.5" fill="#1f5fb0"></text>
+  <rect id="slabHit" fill="transparent" tabindex="0" role="slider" aria-label="The dielectric slab: drag it in and out"/>
+  <text id="slabTag" font-size="11.5" font-weight="700" fill="#5b3aa8" text-anchor="middle">↔ drag the slab</text>
+  <text id="eLab0" x="24" y="480" class="m" font-size="12.5" fill="#0f7a5c"></text><text id="eLab1" x="24" y="500" class="m" font-size="12.5" fill="#0f7a5c"></text><text id="eLab2" x="24" y="520" class="m" font-size="12.5" fill="#0f7a5c"></text>
+  <!-- graphs -->
+  <text x="${CG1.x0}" y="${CG1.y0 - 16}" class="serif" font-size="16" fill="#1d2327">Capacitance as the slab goes in</text>
+  <text x="${CG2.x0}" y="${CG2.y0 - 16}" class="serif" font-size="16" fill="#1d2327">Energy stored as the slab goes in</text>
+  <rect x="${CG1.x0}" y="${CG1.y0}" width="${CG1.x1 - CG1.x0}" height="${CG1.y1 - CG1.y0}" fill="#fff" stroke="#e2ded2"/>
+  <rect x="${CG2.x0}" y="${CG2.y0}" width="${CG2.x1 - CG2.x0}" height="${CG2.y1 - CG2.y0}" fill="#fff" stroke="#e2ded2"/>
+  <g id="cgAxes"></g>
+  <path id="cCurve" fill="none" stroke="#6a3fc2" stroke-width="2.4"/>
+  <path id="uConn" fill="none" stroke="#e0452a" stroke-width="2.2"/>
+  <path id="uIso" fill="none" stroke="#2f6fd0" stroke-width="2.2"/>
+  <circle id="cDot" r="5.5" fill="#6a3fc2" stroke="#fff" stroke-width="2"/>
+  <circle id="uDot" r="5.5" fill="#1d2327" stroke="#fff" stroke-width="2"/>
+  <g font-size="11.5" font-weight="600"><line x1="${CG2.x0}" y1="${CG2.y1 + 38}" x2="${CG2.x0 + 22}" y2="${CG2.y1 + 38}" stroke="#e0452a" stroke-width="2.2"/><text x="${CG2.x0 + 28}" y="${CG2.y1 + 42}" fill="#b8321c">battery connected (V fixed)</text>
+    <line x1="${CG2.x0}" y1="${CG2.y1 + 56}" x2="${CG2.x0 + 22}" y2="${CG2.y1 + 56}" stroke="#2f6fd0" stroke-width="2.2"/><text x="${CG2.x0 + 28}" y="${CG2.y1 + 60}" fill="#1f5fb0">disconnected (Q fixed)</text></g>
+  <rect id="capVeil" x="600" y="0" width="400" height="660" fill="#fbfaf6" opacity=".95"/>
+  <text id="capVeilT" x="800" y="330" text-anchor="middle" fill="#7c878c" font-size="14" font-weight="600">Graphs appear once you have predicted.</text>
+  `;
+}
+const gapPx = () => S.d * 1000 * CP.pxmm;
+const cgx = (G, f) => G.x0 + f * (G.x1 - G.x0);
+function paintCap(){
+  const st = capState(S.d, S.K, S.tf * S.d, S.f, S.battery, S.Q0), g = gapPx(), yT = CP.yMid - g / 2, yB = CP.yMid + g / 2;
+  $('plTop').setAttribute('y', yT - 10); $('plBot').setAttribute('y', yB);
+  $('gapAir').setAttribute('y', yT); $('gapAir').setAttribute('height', g);
+  const W = CP.x1 - CP.x0, sw = W, sx = CP.x1 - S.f * W, th = S.tf * g;
+  $('slab').setAttribute('x', sx); $('slab').setAttribute('y', yB - th); $('slab').setAttribute('width', sw); $('slab').setAttribute('height', th);
+  $('slabHit').setAttribute('x', sx); $('slabHit').setAttribute('y', yB - th); $('slabHit').setAttribute('width', sw); $('slabHit').setAttribute('height', Math.max(th, 24));
+  $('slabLab').setAttribute('x', sx + sw / 2); $('slabLab').setAttribute('y', yB - th / 2 + 4); $('slabLabBg').setAttribute('x', sx + sw / 2 - 32); $('slabLabBg').setAttribute('y', yB - th / 2 - 10); $('slabLab').textContent = `K = ${fmt(S.K, 1)}`;
+  $('slabTag').setAttribute('x', Math.min(sx + sw / 2, 900)); $('slabTag').setAttribute('y', yB + 34); $('slabTag').setAttribute('opacity', S.locked ? 1 : 0);
+  /* wires: to the plates' centres */
+  const cx = (CP.x0 + CP.x1) / 2;
+  $('plTopLead').setAttribute('y1', yT - 10); $('plTopLead').setAttribute('y2', 200); $('plBotLead').setAttribute('y1', yB + 10); $('plBotLead').setAttribute('y2', 400);
+  $('wTop').setAttribute('x2', 92); $('wTop').setAttribute('y2', 200);
+  $('wBot').setAttribute('x2', cx); $('wBot').setAttribute('y2', 400);
+  $('sw').setAttribute('x2', S.battery ? cx : 130); $('sw').setAttribute('y2', S.battery ? 200 : 170);
+  $('swLab').textContent = S.battery ? 'switch closed' : 'switch open: the charge is trapped';
+  $('plTopLead').setAttribute('x1', cx); $('plTopLead').setAttribute('x2', cx);
+  $('plBotLead').setAttribute('x1', cx); $('plBotLead').setAttribute('x2', cx);
+  $('qTop').setAttribute('y', yT - 1); $('qBot').setAttribute('y', yB + 11);
+  $('qTop').textContent = S.locked ? `+${fmt(st.Q * 1e9, 2)} nC` : '+Q'; $('qBot').textContent = S.locked ? `−${fmt(st.Q * 1e9, 2)} nC` : '−Q';
+  /* field arrows: length ∝ E, across the gap, in the empty part and over / in the slab */
+  const Emax = Math.max(st.Eempty, st.Eair, 1);
+  for (let i = 0; i < 12; i++) {
+    const x = CP.x0 + (i + 0.5) * W / 12, el = $('ea' + i), inSlab = x >= sx;
+    const E = inSlab ? (S.tf >= 0.999 ? st.Eslab : st.Eair) : st.Eempty;
+    const L = Math.max(4, (g - 12) * E / Emax), ym = inSlab && S.tf < 0.999 ? (yT + (yB - th)) / 2 : CP.yMid;
+    el.setAttribute('x1', x); el.setAttribute('x2', x); el.setAttribute('y1', (ym - L / 2).toFixed(1)); el.setAttribute('y2', (ym + L / 2).toFixed(1));
+    el.setAttribute('opacity', S.locked ? .9 : .35);
+  }
+  $('eLab0').textContent = S.locked && S.f < 0.999 ? `E where there is no slab:   ${fmtSI(st.Eempty, 'V/m')}` : '';
+  $('eLab1').textContent = S.locked && S.tf < 0.999 ? `E in the air above the slab: ${fmtSI(st.Eair, 'V/m')}` : '';
+  $('eLab2').textContent = S.locked && S.f > 0.001 ? `E inside the slab:           ${fmtSI(st.Eslab, 'V/m')}  (K times weaker)` : '';
+  /* graphs */
+  if (S.locked) {
+    const fs_ = Array.from({length: 51}, (_, i) => i / 50);
+    const Cs = fs_.map(f => capacitance(S.d, S.K, S.tf * S.d, f)), Cmax = Math.max(...Cs) * 1.1;
+    const Qiso = S.battery ? capacitance(S.d, S.K, S.tf * S.d, 0) * CAP.V0 : S.Q0;
+    const Uc = Cs.map(C => energy(C, CAP.V0)), Ui = Cs.map(C => Qiso * Qiso / (2 * C)), Umax = Math.max(...Uc, ...Ui) * 1.1;
+    const yC = C => CG1.y1 - C / Cmax * (CG1.y1 - CG1.y0), yU = U => CG2.y1 - U / Umax * (CG2.y1 - CG2.y0);
+    $('cCurve').setAttribute('d', fs_.map((f, i) => (i ? 'L' : 'M') + cgx(CG1, f).toFixed(1) + ' ' + yC(Cs[i]).toFixed(1)).join(''));
+    $('uConn').setAttribute('d', fs_.map((f, i) => (i ? 'L' : 'M') + cgx(CG2, f).toFixed(1) + ' ' + yU(Uc[i]).toFixed(1)).join(''));
+    $('uIso').setAttribute('d', fs_.map((f, i) => (i ? 'L' : 'M') + cgx(CG2, f).toFixed(1) + ' ' + yU(Ui[i]).toFixed(1)).join(''));
+    $('uConn').setAttribute('opacity', S.battery ? 1 : .3); $('uIso').setAttribute('opacity', S.battery ? .3 : 1);
+    $('cDot').setAttribute('cx', cgx(CG1, S.f)); $('cDot').setAttribute('cy', yC(st.C));
+    $('uDot').setAttribute('cx', cgx(CG2, S.f)); $('uDot').setAttribute('cy', yU(st.U));
+    let ax = '';
+    for (const G of [CG1, CG2]) for (let f = 0; f <= 1.001; f += 0.25) ax += `<line x1="${cgx(G, f)}" y1="${G.y1}" x2="${cgx(G, f)}" y2="${G.y1 + 4}" stroke="#9aa3a6"/><text x="${cgx(G, f)}" y="${G.y1 + 17}" text-anchor="middle" font-size="10.5" class="m" fill="#6a767c">${f === 0 ? 'out' : f === 1 ? 'all in' : Math.round(f * 100) + '%'}</text>`;
+    for (let k = 0; k <= 4; k++) { const C = Cmax * k / 4, U = Umax * k / 4;
+      ax += `<text x="${CG1.x0 - 6}" y="${yC(C) + 4}" text-anchor="end" font-size="10.5" class="m" fill="#6a767c">${fmt(C * 1e12, 0)}</text><text x="${CG2.x0 - 6}" y="${yU(U) + 4}" text-anchor="end" font-size="10.5" class="m" fill="#6a767c">${fmt(U * 1e6, 2)}</text>`; }
+    ax += `<text x="${CG1.x0 + 6}" y="${CG1.y0 + 16}" font-size="12" fill="#6a767c">C in pF</text><text x="${CG2.x0 + 6}" y="${CG2.y0 + 16}" font-size="12" fill="#6a767c">U in µJ</text>`;
+    $('cgAxes').innerHTML = ax;
+  }
+  $('gap').value = S.d * 1000; $('gapOut').textContent = fmt(S.d * 1000, 1) + ' mm';
+  $('kd').value = S.K; $('kdOut').textContent = fmt(S.K, 1);
+  $('thick').value = S.tf; $('thickOut').textContent = fmt(S.tf, 2) + ' d';
+  $('btnBattery').setAttribute('aria-pressed', S.battery); $('btnBattery').textContent = S.battery ? 'Battery connected' : 'Battery disconnected';
+  return st;
+}
+function fmtSI(v, u){ const a = Math.abs(v); return a >= 1e6 ? fmt(v / 1e6, 2) + ' M' + u : a >= 1e3 ? fmt(v / 1e3, 1) + ' k' + u : fmt(v, 1) + ' ' + u; }
+
+/* ============================================================================
+   Side panel.
+   ============================================================================ */
+function paintSide(){
+  if (!S.locked) { $('meters').innerHTML = '<p class="hint" style="margin:0">The measurements appear once you have made a prediction.</p>'; return; }
+  $('whyCard').hidden = false;
+  const row = (a, b) => `<span>${a}</span><b>${b}</b>`, sep = '<i class="sep"></i>';
+  if (S.tab === 'field') {
+    const E = fieldAt(S.charges, S.probe.x, S.probe.y, S.n), V = potentialAt(S.charges, S.probe.x, S.probe.y, S.n);
+    const ang = Math.atan2(-E.y, E.x) * 180 / Math.PI;
+    $('measureKick').textContent = 'At the probe';
+    $('meters').innerHTML = `<div class="readout">` +
+      row('|E|', fmtE(E.mag) + ' N/C') + row('direction of E', E.mag ? fmt(((ang % 360) + 360) % 360, 1) + '°' : '—') + row('V', fmt(V, 1) + ' V') +
+      row('force on q₀ = 1 nC', fmtE(E.mag * 1e-9) + ' N') + sep +
+      row('Gaussian sphere radius', fmt(S.gauss.R * 100, 1) + ' cm') +
+      (FLUX ? row('flux Φ', fmt(FLUX.net, 1) + ' N m²/C') + row('q_enclosed / ε₀', fmt(FLUX.expect, 1) + ' N m²/C') : '') + sep +
+      row('fitted slope of log|E| vs log r', SLOPE == null ? '—' : fmt(SLOPE, 3)) + row('force-law exponent n', fmt(S.n, 2)) + `</div>`;
+    const qnet = S.charges.reduce((s, c) => s + c.q, 0) / UNIT;
+    let t = `<p>Each charge contributes kq/r² at the probe; the page adds the ${S.charges.length} vectors. The field line through any point runs along that sum, and the equipotentials cross it at right angles.</p>`;
+    if (FLUX) t += Math.abs(FLUX.qin) < 1e-15
+      ? `<p>No charge is inside the sphere. Field lines enter (${fmt(FLUX.in * EPS0 / UNIT, 3)}) and leave (${fmt(FLUX.out * EPS0 / UNIT, 3)}); the net flux is <b>${fmt(FLUX.net * EPS0 / UNIT, 3)}</b> units.</p>`
+      : `<p>The sphere holds <b>${fmt(FLUX.qin / UNIT, 0)}</b> units of charge. ε₀Φ comes to <b>${fmt(FLUX.net * EPS0 / UNIT, 3)}</b>${Math.abs(S.n - 2) < 0.01 ? ', as Gauss’s law says' : ` — with n = ${fmt(S.n, 2)} it is not the enclosed charge, and it changes with the radius`}.</p>`;
+    if (SLOPE != null) t += `<p>Far from the charges |E| falls as r<sup>${fmt(SLOPE, 2)}</sup>. ${Math.abs(qnet) < 1e-9 ? 'The net charge is zero, so the far field is a dipole’s: one power faster than a single charge.' : `The net charge is ${fmt(qnet, 0)} units, so from far away it looks like one charge.`}</p>`;
+    $('why').innerHTML = t;
+  } else {
+    const st = capState(S.d, S.K, S.tf * S.d, S.f, S.battery, S.Q0), C0 = capacitance(S.d, 1, 0, 0);
+    $('measureKick').textContent = 'The capacitor';
+    $('meters').innerHTML = `<div class="readout">` + row('C (air)', fmt(C0 * 1e12, 2) + ' pF') + row('C now', fmt(st.C * 1e12, 2) + ' pF') + row('C / C(air)', fmt(st.C / C0, 3)) + sep +
+      row('V across the plates', fmt(st.V, 2) + ' V') + row('Q on each plate', fmt(st.Q * 1e9, 3) + ' nC') + row('energy stored ½CV²', fmt(st.U * 1e6, 3) + ' µJ') + `</div>`;
+    let t = `<p>The part of the plates over the slab is air (${fmt((1 - S.tf) * S.d * 1000, 2)} mm) in series with the slab (${fmt(S.tf * S.d * 1000, 2)} mm); inside the slab the field is K times weaker. That part sits in parallel with the empty part.</p>`;
+    t += S.battery ? `<p>The battery holds V at 100 V, so pushing the slab in draws more charge on to the plates and the stored energy <b>rises</b>.</p>`
+                   : `<p>The switch is open, so Q is fixed at ${fmt(S.Q0 * 1e9, 3)} nC. As C rises, V = Q/C falls and the energy Q²/2C <b>falls</b>: the field does work pulling the slab in.</p>`;
+    $('why').innerHTML = t;
+  }
+}
+const fmtE = v => { if (!isFinite(v)) return '—'; const a = Math.abs(v); if (a === 0) return '0'; const e = Math.floor(Math.log10(a)); return e >= -2 && e < 5 ? fmt(v, e >= 3 ? 0 : 2) : (v / Math.pow(10, e)).toFixed(2) + ' × 10' + sup(e); };
+
+/* ---- findings: reached by the model, never by a button -------------------- */
+function checkField(){
+  if (!S.locked) return;
+  const E = fieldAt(S.charges, S.probe.x, S.probe.y, S.n), V = potentialAt(S.charges, S.probe.x, S.probe.y, S.n);
+  const scale = S.charges.reduce((s, c) => s + K_E * Math.abs(c.q) / Math.max(0.01, Math.hypot(c.x - S.probe.x, c.y - S.probe.y)), 0);   // the size of V from each charge alone
+  const eScale = S.charges.reduce((s, c) => s + K_E * Math.abs(c.q) / Math.max(1e-4, Math.pow(Math.hypot(c.x - S.probe.x, c.y - S.probe.y), 2)), 0);
+  if (S.charges.length >= 2 && Math.abs(V) < 0.03 * scale && E.mag > 0.2 * eScale) discover('zeroV');
+  if (S.charges.length >= 2 && E.mag < 0.02 * eScale) discover('null');
+  if (FLUX && Math.abs(S.n - 2) < 0.01 && Math.abs(FLUX.qin) > 1e-15 && Math.abs(FLUX.net / FLUX.expect - 1) < 0.02) discover('gauss');
+  if (FLUX && Math.abs(S.n - 2) < 0.01 && Math.abs(FLUX.qin) < 1e-15 && FLUX.out * EPS0 / UNIT > 0.05) {
+    discover('outside');
+    if (POE && !POE.explained) POE.explain(`With no charge inside, the model finds ε₀ × flux out = <b>${fmt(FLUX.out * EPS0 / UNIT, 3)}</b> and ε₀ × flux in = <b>${fmt(FLUX.in * EPS0 / UNIT, 3)}</b> (units of 10 nC): every line of the outside charge that enters the sphere leaves it again. The net is ${fmt(FLUX.net * EPS0 / UNIT, 3)}, zero to the accuracy of the integration.`);
+  }
+  if (FLUX && Math.abs(S.n - 2) > 0.2 && Math.abs(FLUX.qin) > 1e-15 && Math.abs(FLUX.net / FLUX.expect - 1) > 0.05) discover('break');
+  const qnet = S.charges.reduce((s, c) => s + c.q, 0);
+  if (SLOPE != null && S.charges.length >= 2 && Math.abs(qnet) < 1e-15 && Math.abs(S.n - 2) < 0.01 && Math.abs(SLOPE + 3) < 0.2) discover('dipole');
+}
+function checkCap(st){
+  if (!S.locked) return;
+  const C0 = capacitance(S.d, 1, 0, 0);
+  if (S.f >= 0.99 && S.tf >= 0.99 && S.K >= 2 && Math.abs(st.C / C0 - S.K) < 0.01 * S.K) discover('kfull');
+  if (!S.battery && S.K >= 2 && S.isoIn && S.f >= 0.8) {
+    const U0 = S.Q0 * S.Q0 / (2 * capacitance(S.d, S.K, S.tf * S.d, S.fIso0));
+    if (st.U < 0.9 * U0) discover('pulled');
+  }
+}
+
+/* ============================================================================
+   Controls.
+   ============================================================================ */
+buildField(); buildCap();
+let pending = false, pendingFull = false;
+function requestPaint(full){ pendingFull = pendingFull || full; if (pending) return; pending = true; requestAnimationFrame(() => { pending = false; const f = pendingFull; pendingFull = false; paintAll(f); }); }
+function paintAll(full = true){
+  if (S.tab === 'field') { paintField(full); checkField(); }
+  else { const st = paintCap(); checkCap(st); }
+  paintSide();
+}
+$$('[data-add]').forEach(b => b.addEventListener('click', () => {
+  if (S.charges.length >= 8) { toast('Eight charges is the most this sheet takes.'); return; }
+  const q = +b.dataset.add, rnd = Play.mulberry32(NEXT_ID * 7919);
+  S.charges.push({id: NEXT_ID++, q: q * UNIT, x: 0.04 + rnd() * 0.24, y: 0.04 + rnd() * 0.25});
+  sound('pop'); track('addCharge', {q}); paintAll(true);
+}));
+$('btnClear').addEventListener('click', () => { S.charges = []; sound('tick'); paintAll(true); });
+$('presetSeg').addEventListener('click', e => { const b = e.target.closest('[data-preset]'); if (!b || b.disabled) return; setPreset(b.dataset.preset); sound('pop'); track('preset', {p: b.dataset.preset}); paintAll(true); });
+$('btnLines').addEventListener('click', () => { S.lines = !S.lines; paintAll(true); });
+$('btnEquip').addEventListener('click', () => { S.equip = !S.equip; paintAll(true); });
+$('btnShade').addEventListener('click', () => { S.shade = !S.shade; paintAll(true); });
+$('expo').addEventListener('input', e => { S.n = +e.target.value; requestPaint(true); });
+$('expo').addEventListener('change', () => track('exponent', {n: S.n}));
+drag($('probeHit'), fs, {
+  start(){ if (!S.locked) return false; },
+  move(p){ S.probe.x = clamp(toM(p.x), 0.002, toM(SHEET.w) - 0.002); S.probe.y = clamp(toM(p.y), 0.002, toM(SHEET.h) - 0.002); requestPaint(false); },
+  end(){ track('probe', {x: +S.probe.x.toFixed(3), y: +S.probe.y.toFixed(3)}); },
+});
+drag($('gCentre'), fs, {
+  start(){ if (!S.locked) return false; },
+  move(p){ S.gauss.x = clamp(toM(p.x), 0, toM(SHEET.w)); S.gauss.y = clamp(toM(p.y), 0, toM(SHEET.h)); requestPaint(true); },
+  end(){ track('gauss', {x: +S.gauss.x.toFixed(3), y: +S.gauss.y.toFixed(3), R: +S.gauss.R.toFixed(3)}); },
+});
+drag($('gRim'), fs, {
+  start(){ if (!S.locked) return false; },
+  move(p){ S.gauss.R = clamp(Math.hypot(toM(p.x) - S.gauss.x, toM(p.y) - S.gauss.y), 0.01, 0.2); requestPaint(true); },
+  end(){ track('gauss', {R: +S.gauss.R.toFixed(3)}); },
+});
+
+$('gap').addEventListener('input', e => { S.d = +e.target.value / 1000; afterCapChange(); });
+$('kd').addEventListener('input', e => { S.K = +e.target.value; afterCapChange(); });
+$('thick').addEventListener('input', e => { S.tf = +e.target.value; afterCapChange(); });
+function afterCapChange(){
+  /* with the battery off, the charge stays what it was */
+  paintAll();
+}
+$('btnBattery').addEventListener('click', () => {
+  const st = capState(S.d, S.K, S.tf * S.d, S.f, S.battery, S.Q0);
+  S.battery = !S.battery;
+  if (!S.battery) { S.Q0 = st.Q; S.fIso0 = S.f; S.isoIn = false; }
+  sound('snap'); track('battery', {on: S.battery}); paintAll();
+});
+$('btnMica').addEventListener('click', () => { S.K = 6; S.tf = 1; S.d = 3e-3; sound('pop'); paintAll(); });
+let slabGrab = 0;
+drag($('slabHit'), cs, {
+  start(p){ if (!S.locked) return false; slabGrab = p.x - (CP.x1 - S.f * (CP.x1 - CP.x0)); },
+  move(p){ const sx = p.x - slabGrab; S.f = clamp((CP.x1 - sx) / (CP.x1 - CP.x0), 0, 1);
+    if (!S.battery && S.f > S.fIso0 + 0.3) S.isoIn = true; paintAll(); },
+  end(){ track('slab', {f: +S.f.toFixed(2), battery: S.battery}); },
+});
+$('slabHit').addEventListener('keydown', e => { const k = {ArrowLeft: 1, ArrowRight: -1}[e.key]; if (!k || !S.locked) return; e.preventDefault(); S.f = clamp(S.f + k * 0.05, 0, 1); if (!S.battery && S.f > S.fIso0 + 0.3) S.isoIn = true; paintAll(); });
+
+function showTab(tab){
+  S.tab = tab;
+  $('fieldStage').toggleAttribute('hidden', tab !== 'field'); $('capStage').toggleAttribute('hidden', tab !== 'cap');   // SVG has no .hidden property
+  $$('.tabs button').forEach(b => b.setAttribute('aria-selected', b.dataset.tab === tab));
+  $('ctlField').hidden = tab !== 'field'; $('ctlCap').hidden = tab !== 'cap';
+  paintAll(true);
+}
+$$('.tabs button').forEach(b => b.addEventListener('click', () => { sound('tick'); showTab(b.dataset.tab); track('tab', {tab: b.dataset.tab}); }));
+function lockControls(lock){
+  $$('[data-add], #btnClear, #presetSeg button, #btnLines, #btnEquip, #btnShade, #expo, #gap, #kd, #thick, #btnBattery, #btnMica').forEach(b => b.disabled = lock);
+  $('gate').hidden = !lock;
+}
+
+findings($('finds'), [
+  {id: 'gauss',   icon: '∯', label: 'Flux = q enclosed / ε₀',                hint: 'Wrap the surface round a charge'},
+  {id: 'outside', icon: '⇄', label: 'An outside charge adds no net flux',    hint: 'Leave a charge just outside'},
+  {id: 'break',   icon: '✂', label: 'Gauss’s law needs the inverse square',   hint: 'Change the exponent n'},
+  {id: 'dipole',  icon: '±', label: 'A dipole’s field falls as 1/r³',          hint: 'Measure the slope for a ± pair'},
+  {id: 'zeroV',   icon: '0', label: 'Zero potential, but not zero field',      hint: 'Find where V = 0 (Example 2.2)'},
+  {id: 'null',    icon: '·', label: 'A point where the field vanishes',        hint: 'Try two like charges'},
+  {id: 'kfull',   icon: 'K', label: 'A full slab multiplies C by K',            hint: 'Fill the gap with the dielectric'},
+  {id: 'pulled',  icon: '⇤', label: 'Cut off, the energy falls: the slab is pulled in', hint: 'Disconnect the battery first'},
+], () => toast('All eight found. You have measured the two chapters’ central laws, and broken one of them.', 4200));
+
+const POE = predict($('poe'), {
+  id: 'outside-charge-flux',
+  q: 'A charge sits just outside a closed Gaussian surface, and plenty of its field passes through the surface. What does it do to the total (net) flux through the surface?',
+  options: [
+    {id: 'adds',    text: 'It adds to the flux, because its field passes through the surface.'},
+    {id: 'nothing', text: 'Nothing: every field line of it that goes in comes out again.', right: true},
+    {id: 'reduces', text: 'It reduces the flux.'},
+    {id: 'depends', text: 'It depends on how close to the surface it is.'},
+  ],
+  onLock(){
+    S.locked = true;
+    lockControls(false);
+    for (const id of ['fieldVeil', 'fieldVeilT', 'capVeil', 'capVeilT']) $(id).remove();
+    paintAll(true);
+  },
+});
+lockControls(!POE.locked);
+if (!Play.FF('predict')) S.locked = true;
+showTab(S.tab);
+window.PG_STATE = () => ({tab: S.tab, locked: S.locked, n: S.n, charges: S.charges.map(c => ({q: c.q / UNIT, x: c.x, y: c.y})), probe: {...S.probe}, gauss: {...S.gauss},
+  flux: FLUX ? {net: FLUX.net, expect: FLUX.expect, qin: FLUX.qin / UNIT} : null, slope: SLOPE,
+  cap: {d: S.d, K: S.K, tf: S.tf, f: S.f, battery: S.battery, ...capState(S.d, S.K, S.tf * S.d, S.f, S.battery, S.Q0)}});
+window.PG_MODEL = {EPS0, K_E, UNIT, fieldAt, potentialAt, gaussFlux, fieldSlope, capacitance, capState, energy, CAP};
+</script>
+</body>
+</html>

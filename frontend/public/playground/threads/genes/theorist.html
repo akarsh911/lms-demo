@@ -1,0 +1,1205 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Breeding Lab</title>
+<meta name="description" content="Class 11–12: breed fruit flies whose eggs form by simulated crossing over, measure recombination and recover Morgan's map distances; incomplete dominance, ABO blood groups, polygenic bell curves, and an X-linked pedigree you build.">
+<link rel="icon" href="../../favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600&family=Inter:wght@400;500;600;700&family=Nunito:wght@500;700;800&family=Newsreader:opsz,wght@6..72,400;6..72,500&family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="../../play.css">
+<style>
+/* Only what this page needs beyond play.css. */
+.pg-stage{align-self:start; min-height:0}
+.gate{position:absolute; left:0; right:0; top:0; height:54%; display:grid; place-items:center; pointer-events:none}
+.gate span{background:rgba(29,27,40,.86); color:#fff; padding:10px 16px; border-radius:99px; font-weight:600; font-size:14px}
+.seg{display:grid; grid-template-columns:1fr 1fr 1fr; gap:4px; background:var(--sunk); padding:4px; border-radius:var(--radius-sm); margin-bottom:10px}
+.seg button{border:0; background:transparent; border-radius:7px; min-height:32px; font-weight:600; font-size:13px; cursor:pointer; color:var(--ink-2)}
+.seg button[aria-pressed="true"]{background:var(--card); color:var(--ink); box-shadow:var(--shadow)}
+.seg button:disabled{opacity:.5; cursor:default}
+.pick{display:grid; grid-template-columns:96px 1fr; gap:6px 10px; align-items:center; margin:6px 0}
+.pick label{font-size:13px; font-weight:600; color:var(--ink-2)}
+.pick select{width:100%}
+.readout{display:grid; grid-template-columns:1fr auto; gap:3px 12px; font-size:13px; align-items:baseline}
+.readout span{color:var(--ink-2)}
+.readout b{font-family:var(--font-mono); font-weight:600; font-size:12.5px; font-variant-numeric:tabular-nums; text-align:right}
+.readout .sep{grid-column:1/-1; height:1px; background:var(--hair); margin:4px 0}
+.why p{font-size:13.5px; margin-bottom:.55em}
+.note{font-size:12.5px; color:var(--ink-3); margin:6px 0 0}
+.veil{font-size:13px; color:var(--ink-3)}
+.law{font-family:"Newsreader",Georgia,serif; font-size:19px; line-height:1.2}
+.hitP, .hitG, .hitF{cursor:pointer}
+svg text.m{font-family:var(--font-mono)}
+svg text.serif{font-family:"Newsreader",Georgia,serif}
+</style>
+</head>
+<body>
+<header class="pg-top"></header>
+
+<div class="pg-intro">
+  <h1>The breeding lab</h1>
+  <div class="syl">CBSE Class 12 · Ch 4 Principles of Inheritance and Variation (Unit VII, 20 marks) · ISC Biology: genetics</div>
+  <p>Mendel’s rules hold only when their assumptions do. Here the assumptions are sliders. Put two genes on one chromosome and let
+     crossing over, simulated chromatid by chromatid, decide what goes into each egg; then measure recombination the way Morgan did.
+     Change how dominance works, add genes until a bell curve appears, and build a family tree for an X-linked disorder.</p>
+</div>
+
+<main class="pg-main wide-side">
+  <section class="pg-stage" id="stageWrap">
+    <svg id="stage" viewBox="0 0 1000 760" role="img" aria-label="A genetics bench: meiosis with crossing over and test-cross fruit flies; dominance and a Punnett square; a pedigree for an X-linked trait"></svg>
+    <div class="gate" id="gate"><span>Make your prediction first →</span></div>
+  </section>
+
+  <aside class="pg-side">
+    <div id="poe"></div>
+
+    <div class="card" id="ctlCard">
+      <div class="seg">
+        <button id="tabLink" aria-pressed="true">Linkage</button>
+        <button id="tabDom" aria-pressed="false">Dominance</button>
+        <button id="tabPed" aria-pressed="false">Pedigree</button>
+      </div>
+
+      <div id="ctlLink">
+        <div class="pick"><label for="pair">Genes</label>
+          <select id="pair"><option value="yw">yellow body · white eye</option><option value="wm">white eye · miniature wing</option></select></div>
+        <div class="ctl"><label for="dist">Distance</label><input type="range" id="dist" min="0" max="50" step="0.1" value="1.3"><output id="distOut" class="num mono">1.3 cM</output></div>
+        <div class="pick"><label for="xo">Crossovers</label>
+          <select id="xo"><option value="one">at most one in the stretch</option><option value="many">fall at random (several possible)</option></select></div>
+        <div class="pick"><label for="where">The genes are</label>
+          <select id="where"><option value="same">on the same chromosome</option><option value="diff">on different chromosomes</option></select></div>
+        <div class="ctl"><label for="nL">Offspring</label><input type="range" id="nL" min="0" max="9" step="1" value="9"><output id="nLOut" class="num">1000</output></div>
+        <div class="row">
+          <button class="btn primary" id="btnBreedL">Breed 1000</button>
+          <button class="btn sm" id="btnOneL">One meiosis</button>
+          <button class="btn sm" id="btnClearL">Clear</button>
+        </div>
+        <div class="row" style="margin-top:8px"><button class="btn sm" id="btnRecord" disabled>Record this point</button><button class="btn sm" id="btnClearRec">Clear points</button></div>
+        <p class="note">The F1 female carries both mutant alleles on one X (from her father) and both normal alleles on the other. She is test-crossed to a mutant male, so every offspring shows which X-chromatid her egg received.</p>
+      </div>
+
+      <div id="ctlDom" hidden>
+        <div class="pick"><label for="dom">Inheritance</label>
+          <select id="dom">
+            <option value="complete">complete dominance (pea flower)</option>
+            <option value="incomplete">incomplete dominance (snapdragon)</option>
+            <option value="abo">codominance, multiple alleles (ABO)</option>
+            <option value="poly">polygenic (skin colour)</option>
+          </select></div>
+        <div class="ctl" id="genesRow" hidden><label for="nGenes">Genes</label><input type="range" id="nGenes" min="1" max="6" step="1" value="3"><output id="nGenesOut" class="num mono">3</output></div>
+        <div class="pick"><label for="d1">♀ parent</label><select id="d1"></select></div>
+        <div class="pick"><label for="d2">♂ parent</label><select id="d2"></select></div>
+        <div class="ctl"><label for="nD">Offspring</label><input type="range" id="nD" min="0" max="9" step="1" value="6"><output id="nDOut" class="num">100</output></div>
+        <div class="row">
+          <button class="btn primary" id="btnBreedD">Breed 100</button>
+          <button class="btn sm" id="btnClearD">Clear</button>
+        </div>
+      </div>
+
+      <div id="ctlPed" hidden>
+        <div class="pick"><label for="xtrait">Trait</label>
+          <select id="xtrait"><option value="haem">haemophilia (X-linked recessive)</option><option value="cb">red–green colour blindness</option></select></div>
+        <div class="kicker" style="margin-top:8px">Selected: <span id="pedSel">—</span></div>
+        <div class="row">
+          <button class="btn sm" id="btnDau">+ Daughter</button>
+          <button class="btn sm" id="btnSon">+ Son</button>
+          <button class="btn sm" id="btnPartner">+ Partner</button>
+          <button class="btn sm" id="btnStatus">Change status</button>
+        </div>
+        <div class="row" style="margin-top:8px">
+          <button class="btn sm primary" id="btnRoll">Roll this child</button>
+          <button class="btn sm" id="btnRollAll">Roll all</button>
+          <button class="btn sm" id="btnPedReset">Start again</button>
+        </div>
+        <p class="note">Click a person to select them. A founder’s status is yours to set; everyone else’s is inherited. “Roll” lets chance decide an unborn child, from the probabilities shown.</p>
+      </div>
+    </div>
+
+    <div class="card" id="measCard">
+      <div class="kicker" id="measKick">Measured</div>
+      <div id="measVeil" class="veil">The measurements appear once you have made a prediction.</div>
+      <div id="meas" hidden></div>
+    </div>
+
+    <div class="card why" id="whyCard" hidden>
+      <div class="kicker">What the model says</div>
+      <div id="why"></div>
+    </div>
+
+    <div class="card"><div class="kicker">To find</div><div id="finds"></div></div>
+  </aside>
+</main>
+
+<script src="../../play.js"></script>
+<script>
+'use strict';
+const {$, esc, clamp, fmt, sound, say, track, toast, predict, findings, discover, found,
+       shareState, sharedState, mount, reduced, loop, mulberry32, tween} = Play;
+mount({thread: 'genes', band: 'theorist'});
+
+/* MODEL:start ==================================================================
+   Three benches, one rule: offspring come only from gametes the model builds.
+
+   LINKAGE. The F1 female has two X chromosomes: one carries both mutant alleles
+   (from her father), the other both wild-type alleles. In meiosis each X is two
+   sister chromatids, four in all. A chiasma joins one chromatid of each homologue
+   and swaps everything beyond it. The egg receives ONE of the four chromatids.
+     • "At most one crossover in the stretch" (complete interference, the textbook
+       assumption): a chiasma falls between the genes with probability 2·d, so
+       half of those eggs, d in all, are recombinant. Recombination frequency =
+       map distance, which is how Sturtevant built the first map.
+     • "Crossovers fall at random": the number of chiasmata in the stretch is
+       Poisson with mean 2·d, each involving a random pair of non-sister
+       chromatids. Double crossovers restore the parental combination, so the
+       measured frequency falls below d: (1 − e^(−2d))/2. The law breaks.
+   Morgan's values as NCERT cites them: yellow–white 1.3 %, white–miniature 37.2 %.
+
+   DOMINANCE. Genotypes are pairs of alleles, one pair per gene; gametes take one
+   of each pair by chance. The phenotype rule is the only thing that changes:
+   complete (W_ violet), incomplete (RR red, Rr pink, rr white), codominant with
+   three alleles (Iᴬ, Iᴮ, i), and additive over n genes (skin colour).
+
+   PEDIGREE. X-linked recessive. A woman is XX (0, 1 or 2 mutant copies), a man
+   XY (0 or 1). A founder's genotype is set by the learner; everyone else's is
+   inferred exactly by enumerating every genotype assignment consistent with the
+   phenotypes seen, weighted by Mendel's transmission probabilities (Bayes).
+   ============================================================================ */
+const PAIRS = {
+  yw: {name: 'yellow body — white eye', d: 1.3,
+       A: {g: 'y', trait: 'body', mutP: 'yellow body', wildP: 'grey-brown body'},
+       B: {g: 'w', trait: 'eyes', mutP: 'white eyes', wildP: 'red eyes'}},
+  wm: {name: 'white eye — miniature wing', d: 37.2,
+       A: {g: 'w', trait: 'eyes', mutP: 'white eyes', wildP: 'red eyes'},
+       B: {g: 'm', trait: 'wings', mutP: 'miniature wings', wildP: 'long wings'}},
+};
+function poisson(lambda, rng){ const L = Math.exp(-lambda); let k = 0, p = 1; do { k++; p *= rng(); } while (p > L); return k - 1; }
+/* One meiosis. Chromatids 0 and 1: the mutant homologue (origin 0); 2 and 3: the wild-type one (origin 1).
+   Gene A sits at 0, gene B at d (map units). Returns the chiasmata, the chromatid the egg received,
+   and the origin of its allele at A and at B. */
+function meiosis(d, mode, rng, linked = true){
+  if (!linked) {
+    const a = rng() < .5 ? 0 : 1, b = rng() < .5 ? 0 : 1;
+    return {linked: false, ex: [], c: -1, a, b, rec: a !== b};
+  }
+  const r = d / 100, ex = [];
+  if (mode === 'one') { if (rng() < Math.min(1, 2 * r)) ex.push({pos: rng() * d, i: rng() < .5 ? 0 : 1, j: rng() < .5 ? 2 : 3}); }
+  else { const k = poisson(2 * r, rng); for (let n = 0; n < k; n++) ex.push({pos: rng() * d, i: rng() < .5 ? 0 : 1, j: rng() < .5 ? 2 : 3}); }
+  ex.sort((p, q) => p.pos - q.pos);
+  const c = Math.floor(rng() * 4);
+  const o = [0, 0, 1, 1];
+  const a = o[c];
+  for (const e of ex) [o[e.i], o[e.j]] = [o[e.j], o[e.i]];
+  return {linked: true, ex, c, a, b: o[c], rec: a !== o[c], origins: o.slice()};
+}
+/* A test cross: the egg's alleles show in every offspring (the father gives only mutant alleles or a Y).
+   Classes: 0 both mutant (parental), 1 both wild (parental), 2 mutant A + wild B, 3 wild A + mutant B. */
+function testCross(d, mode, n, rng, linked = true){
+  const cnt = [0, 0, 0, 0];
+  for (let i = 0; i < n; i++) { const m = meiosis(d, mode, rng, linked); cnt[m.a === 0 && m.b === 0 ? 0 : m.a === 1 && m.b === 1 ? 1 : m.a === 0 ? 2 : 3]++; }
+  return cnt;
+}
+const rfOf = cnt => { const N = cnt.reduce((a, b) => a + b, 0); return N ? (cnt[2] + cnt[3]) / N : 0; };
+const rfTheory = (d, mode) => mode === 'one' ? Math.min(.5, d / 100) : (1 - Math.exp(-2 * d / 100)) / 2;
+
+/* ---- dominance ---- */
+const DOM = {
+  complete:   {genes: 1, al: ['W', 'w'], classes: ['violet', 'white'],
+               cls: g => g[0].includes('W') ? 0 : 1},
+  incomplete: {genes: 1, al: ['R', 'r'], classes: ['red', 'pink', 'white'],
+               cls: g => 2 - g[0].filter(a => a === 'R').length},
+  abo:        {genes: 1, al: ['A', 'B', 'O'], classes: ['A', 'B', 'AB', 'O'],
+               cls: g => { const A = g[0].includes('A'), B = g[0].includes('B'); return A && B ? 2 : A ? 0 : B ? 1 : 3; }},
+  poly:       {al: ['U', 'u'], cls: g => g.reduce((s, p) => s + p.filter(a => a === a.toUpperCase()).length, 0)},
+};
+const POLY_L = ['A', 'B', 'C', 'D', 'E', 'F'];
+/* 'Rr' → [['R','r']]; for ABO 'AO' → [['A','O']]; for polygenic 'AaBbCc' → three pairs */
+function gtype(str){ const g = []; for (let i = 0; i + 1 < str.length; i += 2) g.push([str[i], str[i + 1]]); return g; }
+function dGamete(g, rng){ const pick = g.map(() => rng() < .5 ? 0 : 1); return {pick, al: g.map((p, i) => p[pick[i]])}; }
+function dBreed(g1, g2, n, rng){
+  const out = [];
+  for (let i = 0; i < n; i++) { const e = dGamete(g1, rng), s = dGamete(g2, rng); out.push({g: e.al.map((a, k) => [a, s.al[k]]), e: e.pick, s: s.pick}); }
+  return out;
+}
+function dClass(type, g){ return DOM[type].cls(g); }
+function dClasses(type, nGenes){ return type === 'poly' ? Array.from({length: 2 * nGenes + 1}, (_, i) => String(i)) : DOM[type].classes; }
+/* the Punnett square: every egg × every sperm; counted to give the expected distribution */
+function dPunnett(g1, g2){
+  const k = g1.length, n = 1 << k;
+  const gam = (g, bits) => g.map((p, i) => p[(bits >> (k - 1 - i)) & 1]);
+  const cols = Array.from({length: n}, (_, c) => gam(g1, c)), rows = Array.from({length: n}, (_, r) => gam(g2, r));
+  return {n, cols, rows, cells: rows.map(r => cols.map(c => c.map((a, i) => [a, r[i]])))};
+}
+function dExpected(type, g1, g2, nGenes){
+  const P = dPunnett(g1, g2), cnt = new Array(dClasses(type, nGenes).length).fill(0);
+  for (const row of P.cells) for (const g of row) cnt[dClass(type, g)]++;
+  return cnt.map(v => v / (P.n * P.n));
+}
+function dCount(type, kids, nGenes){ const c = new Array(dClasses(type, nGenes).length).fill(0); for (const k of kids) c[dClass(type, k.g)]++; return c; }
+function chiSquare(obs, frac){
+  const N = obs.reduce((a, b) => a + b, 0); let x = 0, df = -1;
+  obs.forEach((o, i) => { const e = frac[i] * N; if (e > 0) { x += (o - e) * (o - e) / e; df++; } });
+  df = Math.max(df, 0); return {x, df, p: df ? chiP(x, df) : 1};
+}
+function gammaln(z){
+  const c = [76.18009172947146, -86.50532032941677, 24.01409824083091, -1.231739572450155, 0.1208650973866179e-2, -0.5395239384953e-5];
+  let y = z, t = z + 5.5; t -= (z + 0.5) * Math.log(t); let s = 1.000000000190015;
+  for (const ci of c) s += ci / ++y;
+  return -t + Math.log(2.5066282746310005 * s / z);
+}
+function gammaQ(a, x){
+  if (x <= 0) return 1;
+  const lead = Math.exp(-x + a * Math.log(x) - gammaln(a));
+  if (x < a + 1) { let ap = a, del = 1 / a, sum = del; for (let n = 0; n < 300; n++) { ap++; del *= x / ap; sum += del; if (Math.abs(del) < Math.abs(sum) * 1e-14) break; } return 1 - sum * lead; }
+  let b = x + 1 - a, c = 1e300, d = 1 / b, h = d;
+  for (let i = 1; i < 300; i++) { const an = -i * (i - a); b += 2; d = an * d + b; if (Math.abs(d) < 1e-300) d = 1e-300; c = b + an / c; if (Math.abs(c) < 1e-300) c = 1e-300; d = 1 / d; const del = d * c; h *= del; if (Math.abs(del - 1) < 1e-14) break; }
+  return lead * h;
+}
+const chiP = (x, df) => gammaQ(df / 2, x / 2);
+/* mean and standard deviation of a histogram over classes 0..m−1 */
+function histStats(cnt){ const N = cnt.reduce((a, b) => a + b, 0); if (!N) return {N, mean: 0, sd: 0};
+  const mean = cnt.reduce((s, c, i) => s + c * i, 0) / N; const v = cnt.reduce((s, c, i) => s + c * (i - mean) ** 2, 0) / N; return {N, mean, sd: Math.sqrt(v)}; }
+
+/* ---- pedigree ---- */
+/* A child's genotype distribution given its parents: women [0, 1, 2 mutant X], men [0, 1]. */
+function childDist(sex, gf, gm){
+  const pm = gm / 2;
+  if (sex === 'M') return [1 - pm, pm];
+  return gf ? [0, 1 - pm, pm] : [1 - pm, pm, 0];
+}
+const phenoOf = (sex, g) => (sex === 'M' ? g === 1 : g === 2) ? 'aff' : 'unaff';
+/* Exact inference: enumerate genotypes of every born non-founder, parents before children, keeping only
+   assignments that agree with what is seen; unborn children are predicted from each assignment. */
+function infer(people){
+  const G = {}, acc = {};
+  people.forEach(p => { acc[p.id] = [0, 0, 0]; if (p.founder) G[p.id] = p.g; });
+  const born = people.filter(p => !p.founder && p.obs !== 'unborn').sort((a, b) => a.gen - b.gen);
+  const unborn = people.filter(p => !p.founder && p.obs === 'unborn');
+  let Z = 0, leaves = 0;
+  (function rec(k, w){
+    if (k === born.length) {
+      Z += w; leaves++;
+      for (const id in G) acc[id][G[id]] += w;
+      for (const u of unborn) childDist(u.sex, G[u.father], G[u.mother]).forEach((v, g) => { acc[u.id][g] += w * v; });
+      return;
+    }
+    const p = born[k], d = childDist(p.sex, G[p.father], G[p.mother]);
+    d.forEach((v, g) => { if (v > 0 && phenoOf(p.sex, g) === p.obs) { G[p.id] = g; rec(k + 1, w * v); } });
+    delete G[p.id];
+  })(0, 1);
+  const probs = {};
+  for (const id in acc) probs[id] = acc[id].map(v => Z ? v / Z : 0);
+  return {probs, Z, leaves};
+}
+/* A readable fraction for a probability (the model's numbers are exact rationals with small denominators). */
+function frac(p){
+  if (p < 1e-12) return '0'; if (p > 1 - 1e-12) return '1';
+  for (let d = 2; d <= 128; d++) { const n = Math.round(p * d); if (Math.abs(n / d - p) < 1e-9) return n + '/' + d; }
+  for (let d = 256; d <= 16384; d *= 2) { const n = Math.round(p * d); if (Math.abs(n / d - p) < 1e-12) return n + '/' + d; }
+  return fmt(p, 3);
+}
+/* MODEL:end */
+
+/* ---- state: plain data --------------------------------------------------- */
+const LIST = [1, 2, 5, 10, 20, 50, 100, 200, 500, 1000];
+const S = {tab: 'link', locked: false,
+  link: {pair: 'yw', d: 1.3, mode: 'one', linked: true, nIdx: 9, cnt: [0, 0, 0, 0], last: null, recent: [], records: [], usedMany: false},
+  dom: {type: 'incomplete', nGenes: 3, p1: 'Rr', p2: 'Rr', nIdx: 6, kids: [], seen: {}},
+  ped: {trait: 'haem', sel: 'p2', people: [], next: 1}};
+const RNG = {link: mulberry32(4242), dom: mulberry32(1717), ped: mulberry32(2929)};
+const shared = sharedState();
+if (shared && ['link', 'dom', 'ped'].includes(shared.tab)) S.tab = shared.tab;
+if (shared && PAIRS[shared.pair]) { S.link.pair = shared.pair; S.link.d = clamp(+shared.d || PAIRS[shared.pair].d, 0, 50); }
+if (shared && DOM[shared.type]) S.dom.type = shared.type;
+shareState(() => ({tab: S.tab, pair: S.link.pair, d: S.link.d, type: S.dom.type}));
+
+/* ============================================================================
+   The stage: drawn once, then only patched.
+   ============================================================================ */
+const svg = $('stage');
+const PLUM = '#8a4fb8', TEAL = '#2a9d8f', INK = '#1d2327', MUTED = '#6b7479';
+const BV = {x0: 46, xA: 150, xB: 440, x1: 560, rows: [150, 170, 206, 226]};
+const LP = {x: 560, y: 470, w: 400, h: 220};           // RF vs distance plot
+const LB = {x: 60, y: 490, w: 400, h: 150};            // four-class bars
+const DH = {x: 90, y: 470, w: 860, h: 210};            // dominance histogram
+
+/* ---- art ----------------------------------------------------------------- */
+function flySVG(o){
+  const b = o.yellow ? ['#f1d46a', '#c9a430', '#b08a1c'] : ['#caa06a', '#8a6038', '#4a3220'];
+  const eye = o.white ? '#f6f4ee' : '#c0262d', eyeS = o.white ? '#b9b3a6' : '#7d1419';
+  const wl = o.mini ? 11 : 27;
+  const legs = [-6, -2, 2].map((y, i) => `<path d="M-6 ${y}l-12 ${-6 + i * 7}l-5 ${i * 4 - 2}M6 ${y}l12 ${-6 + i * 7}l5 ${i * 4 - 2}" stroke="${b[2]}" stroke-width="1.1" fill="none" stroke-linecap="round"/>`).join('');
+  const abd = o.male
+    ? `<ellipse cx="0" cy="12" rx="8.6" ry="11.5" fill="${b[0]}" stroke="${b[1]}" stroke-width=".8"/><path d="M-8 9q8 3 16 0M-7.5 14q7.5 3 15 0" stroke="${b[2]}" stroke-width="2" fill="none"/><path d="M-6.5 17q6.5 9 13 0z" fill="${b[2]}"/>`
+    : `<ellipse cx="0" cy="14" rx="9.4" ry="15" fill="${b[0]}" stroke="${b[1]}" stroke-width=".8"/><path d="M-9 8q9 3 18 0M-9 13q9 3 18 0M-8.5 18q8.5 3 17 0M-7 23q7 2.5 14 0" stroke="${b[2]}" stroke-width="1.8" fill="none"/>`;
+  const wing = s => `<g transform="scale(${s} 1) rotate(-16 0 -6)"><path d="M1 -6C8 -6 13 ${-2 + wl * .25} 12 ${wl - 6}C11 ${wl} 5 ${wl + 1} 2 ${wl - 3}C0 ${wl * .5} 0 0 1 -6Z" fill="#e3ecf5" fill-opacity=".62" stroke="#8fa3b6" stroke-width=".7"/>
+    <path d="M2 -4Q7 ${wl * .3} 6 ${wl - 3}M2 -4Q10 ${wl * .25} 10 ${wl - 7}" stroke="#9fb0c0" stroke-width=".5" fill="none"/></g>`;
+  return `<g>${legs}${abd}<ellipse cx="0" cy="-7" rx="8" ry="9" fill="${b[0]}" stroke="${b[1]}" stroke-width=".8"/>
+    <path d="M-4 -12h8M-5 -8h10" stroke="${b[2]}" stroke-width=".6" opacity=".6"/>
+    ${wing(1)}${wing(-1)}
+    <ellipse cx="0" cy="-20" rx="7.5" ry="5.8" fill="${b[0]}" stroke="${b[1]}" stroke-width=".8"/>
+    <ellipse cx="-6" cy="-20.5" rx="4.2" ry="5" fill="${eye}" stroke="${eyeS}" stroke-width=".8"/><ellipse cx="6" cy="-20.5" rx="4.2" ry="5" fill="${eye}" stroke="${eyeS}" stroke-width=".8"/>
+    <circle cx="-7" cy="-22.5" r="1.1" fill="#fff" opacity=".7"/><circle cx="5" cy="-22.5" r="1.1" fill="#fff" opacity=".7"/>
+    <path d="M-2 -25l-3 -5M2 -25l3 -5" stroke="${b[2]}" stroke-width=".9" stroke-linecap="round"/></g>`;
+}
+const flyLook = (pair, a, b) => { const P = PAIRS[pair], o = {yellow: false, white: false, mini: false};
+  const set = (G, mut) => { if (!mut) return; if (G.g === 'y') o.yellow = true; if (G.g === 'w') o.white = true; if (G.g === 'm') o.mini = true; };
+  set(P.A, a === 0); set(P.B, b === 0); return o; };
+function peaFlowerSVG(violet, s = 1){
+  const st = violet ? ['#8e5cc4', '#6a3f9c', '#b58ae0'] : ['#fdfaff', '#c6addf', '#eadff8'];
+  return `<g transform="scale(${s})"><path d="M0 22V6" stroke="#5d9a45" stroke-width="2"/><path d="M0 14q-9 -2 -12 4q7 2 12 -2z" fill="#7cbf5f"/>
+    <path d="M-14 2q-2 -22 14 -23q16 1 14 23q-14 -7 -28 0z" fill="${st[0]}" stroke="${st[1]}" stroke-width="1"/>
+    <path d="M-4 -16q4 6 4 14M4 -16q-4 6 -4 14" stroke="${st[1]}" stroke-width=".8" fill="none" opacity=".6"/>
+    <ellipse cx="-6" cy="5" rx="7.5" ry="5" fill="${st[2]}" stroke="${st[1]}" stroke-width=".7"/><ellipse cx="6" cy="5" rx="7.5" ry="5" fill="${st[2]}" stroke="${st[1]}" stroke-width=".7"/>
+    <path d="M-10 10q10 4 20 0l-4 -5h-12z" fill="#8fc56d"/></g>`;
+}
+const SNAP = {red: ['#d6334a', '#9e1f33', '#f06c7c'], pink: ['#f39ab2', '#c9607f', '#fbc6d4'], white: ['#fbf6f1', '#cbbfb4', '#fffdfb']};
+function snapHead(col, x, y, s){
+  const [f, e, h] = SNAP[col];
+  return `<g transform="translate(${x} ${y}) scale(${s})"><path d="M-9 -2q-3 -13 9 -14q12 1 9 14q-9 -4 -18 0z" fill="${f}" stroke="${e}" stroke-width=".8"/>
+    <path d="M-11 0q-2 10 11 12q13 -2 11 -12q-11 3 -22 0z" fill="${f}" stroke="${e}" stroke-width=".8"/>
+    <path d="M-4 4q4 3 8 0" stroke="#f6d36b" stroke-width="2.2" fill="none" stroke-linecap="round"/>
+    <ellipse cx="-3" cy="-9" rx="3" ry="1.8" fill="${h}" opacity=".7"/></g>`;
+}
+function snapSVG(col, s = 1){
+  return `<g transform="scale(${s})"><path d="M0 40V-38" stroke="#4f8f3a" stroke-width="2.4"/>
+    <path d="M0 30q-14 -4 -16 -14q10 0 16 8zM0 22q14 -4 16 -14q-10 0 -16 8z" fill="#6fb454"/>
+    ${snapHead(col, -8, 8, 1)}${snapHead(col, 9, -6, .95)}${snapHead(col, -6, -20, .85)}
+    <ellipse cx="3" cy="-36" rx="3.5" ry="5" fill="${SNAP[col][2]}" stroke="${SNAP[col][1]}" stroke-width=".6"/></g>`;
+}
+function rbcSVG(group, s = 1){
+  let ag = '';
+  const A = group === 'A' || group === 'AB', B = group === 'B' || group === 'AB';
+  for (let i = 0; i < 12; i++) {
+    const a = i / 12 * 2 * Math.PI, x = Math.cos(a) * 24, y = Math.sin(a) * 24;
+    const useA = A && (!B || i % 2 === 0), useB = B && (!A || i % 2 === 1);
+    const rot = a * 180 / Math.PI + 90;
+    if (useA) ag += `<path d="M${x} ${y}m0 -1l3.4 -6h-6.8z" transform="rotate(${rot} ${x} ${y})" fill="#2f6fd0"/>`;
+    if (useB) ag += `<circle cx="${(Math.cos(a) * 27.5).toFixed(2)}" cy="${(Math.sin(a) * 27.5).toFixed(2)}" r="3" fill="#e8a317"/>`;
+  }
+  return `<g transform="scale(${s})"><circle r="24" fill="url(#gRbc)" stroke="#a51d28" stroke-width="1"/><ellipse cx="0" cy="1" rx="12" ry="11" fill="#e46a70" opacity=".55"/>${ag}
+    <text y="44" text-anchor="middle" font-size="13" font-weight="700" fill="${INK}" class="m">${group}</text></g>`;
+}
+function skinTone(dose, max){
+  const a = [246, 222, 198], b = [74, 44, 26], t = max ? dose / max : 0;
+  return 'rgb(' + a.map((v, i) => Math.round(v + (b[i] - v) * t)).join(',') + ')';
+}
+function faceSVG(dose, max, s = 1){
+  return `<g transform="scale(${s})"><circle r="22" fill="${skinTone(dose, max)}" stroke="#00000022"/>
+    <path d="M-21 -4q0 -21 21 -21q21 0 21 21q-6 -11 -21 -11q-15 0 -21 11z" fill="#2b1d16"/>
+    <circle cx="-7.5" cy="1" r="2.2" fill="#1d1410"/><circle cx="7.5" cy="1" r="2.2" fill="#1d1410"/>
+    <path d="M-7 10q7 5 14 0" stroke="#5a2f22" stroke-width="1.6" fill="none" stroke-linecap="round"/></g>`;
+}
+function domIcon(type, g, nGenes, s = 1){
+  const c = dClass(type, g);
+  if (type === 'complete') return peaFlowerSVG(c === 0, s);
+  if (type === 'incomplete') return snapSVG(['red', 'pink', 'white'][c], s);
+  if (type === 'abo') return rbcSVG(DOM.abo.classes[c], s);
+  return faceSVG(c, 2 * nGenes, s);
+}
+const CLASS_COL = {complete: ['#8e5cc4', '#cbb8e6'], incomplete: ['#d6334a', '#f39ab2', '#d9cfc6'], abo: ['#2f6fd0', '#e8a317', '#6b8f3a', '#a7a2a0']};
+
+function build(){
+  let pedHits = '', galHits = '', flyHits = '';
+  for (let i = 0; i < 32; i++) pedHits += `<rect id="ph${i}" class="hitP" width="56" height="56" rx="8" fill="transparent" display="none" role="button" aria-label="A person in the pedigree"/>`;
+  svg.innerHTML = `
+  <defs>
+    <radialGradient id="gRbc" cx="45%" cy="40%"><stop offset="0" stop-color="#e2555c"/><stop offset="1" stop-color="#c02630"/></radialGradient>
+    <linearGradient id="gRecBar" x1="0" y1="0" x2="1" y2="0"><stop offset=".5" stop-color="${PLUM}"/><stop offset=".5" stop-color="${TEAL}"/></linearGradient>
+    <linearGradient id="gRecBar2" x1="0" y1="0" x2="1" y2="0"><stop offset=".5" stop-color="${TEAL}"/><stop offset=".5" stop-color="${PLUM}"/></linearGradient>
+    <filter id="fGlow" x="-10%" y="-60%" width="120%" height="220%"><feGaussianBlur stdDeviation="3"/></filter>
+    <marker id="aK" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0L10 5L0 10z" fill="${MUTED}"/></marker>
+  </defs>
+  <rect x="0" y="0" width="1000" height="760" fill="#fbfaf7"/>
+
+  <!-- ===================== linkage ===================== -->
+  <g id="vLink">
+    <text x="22" y="30" fill="#4a4458" font-size="12.5" font-weight="700" letter-spacing=".08em">MEIOSIS IN THE F1 FEMALE</text>
+    <text id="lkCross" x="22" y="50" fill="${MUTED}" font-size="12"></text>
+    <g id="lkMap"></g>
+    <g id="lkBiv"></g>
+    <g id="lkEgg"></g>
+    <text id="lkNote" x="22" y="392" fill="#4a4458" font-size="12.5"></text>
+    <line x1="622" y1="14" x2="622" y2="404" stroke="#ebe7de"/>
+    <text x="640" y="30" fill="#4a4458" font-size="12.5" font-weight="700" letter-spacing=".08em">TEST-CROSS OFFSPRING</text>
+    <text x="640" y="48" fill="${MUTED}" font-size="11.5">the newest, and the eleven before it</text>
+    <g id="lkBig" transform="translate(720 140)"></g>
+    <text id="lkBigT" x="790" y="118" fill="${INK}" font-size="13" font-weight="600"></text>
+    <text id="lkBigT2" x="790" y="136" fill="${MUTED}" font-size="12"></text>
+    <text id="lkBigT3" x="790" y="160" font-size="12.5" font-weight="700"></text>
+    <g id="lkGrid"></g>
+    <line x1="0" y1="412" x2="1000" y2="412" stroke="#ebe7de"/>
+    <text x="22" y="440" fill="#4a4458" font-size="12.5" font-weight="700" letter-spacing=".08em">THE FOUR KINDS OF OFFSPRING</text>
+    <g id="lkBars"></g>
+    <text id="lkRF" x="22" y="728" fill="${INK}" font-size="15" font-weight="600" class="m"></text>
+    <text x="540" y="440" fill="#4a4458" font-size="12.5" font-weight="700" letter-spacing=".08em">RECOMBINATION AGAINST MAP DISTANCE</text>
+    <g id="lkPlotAx"></g>
+    <g id="lkPlot"></g>
+  </g>
+
+  <!-- ===================== dominance ===================== -->
+  <g id="vDom" display="none">
+    <text x="22" y="30" fill="#4a4458" font-size="12.5" font-weight="700" letter-spacing=".08em">THE PARENTS</text>
+    <text id="dmRule" x="22" y="50" fill="${MUTED}" font-size="12"></text>
+    <g id="dmParents"></g>
+    <line x1="292" y1="70" x2="292" y2="396" stroke="#ebe7de"/>
+    <text x="308" y="84" fill="#4a4458" font-size="12.5" font-weight="700" letter-spacing=".08em">THE NEWEST OFFSPRING</text>
+    <g id="dmGal"></g>
+    <line x1="598" y1="14" x2="598" y2="404" stroke="#ebe7de"/>
+    <text x="616" y="30" fill="#4a4458" font-size="12.5" font-weight="700" letter-spacing=".08em">PUNNETT SQUARE</text>
+    <text id="dmPqSub" x="616" y="48" fill="${MUTED}" font-size="11.5">eggs across · sperm or pollen down</text>
+    <g id="dmPq"></g>
+    <line x1="0" y1="412" x2="1000" y2="412" stroke="#ebe7de"/>
+    <text x="22" y="440" fill="#4a4458" font-size="12.5" font-weight="700" letter-spacing=".08em" id="dmHistT">OFFSPRING BY PHENOTYPE</text>
+    <g id="dmHist"></g>
+    <text id="dmStat" x="22" y="744" fill="${INK}" font-size="13" class="m"></text>
+  </g>
+
+  <!-- ===================== pedigree ===================== -->
+  <g id="vPed" display="none">
+    <text x="22" y="30" fill="#4a4458" font-size="12.5" font-weight="700" letter-spacing=".08em">THE FAMILY</text>
+    <text id="pdSub" x="22" y="48" fill="${MUTED}" font-size="11.5"></text>
+    <g id="pdKey"></g>
+    <g id="pdTree"></g>
+    <rect id="pdRing" width="60" height="60" rx="10" fill="none" stroke="#6a3fc2" stroke-width="2.2" stroke-dasharray="5 4" display="none"/>
+    <line x1="0" y1="540" x2="1000" y2="540" stroke="#ebe7de"/>
+    <text x="22" y="568" fill="#4a4458" font-size="12.5" font-weight="700" letter-spacing=".08em" id="pdDetT">THE CROSS THAT MADE THEM</text>
+    <g id="pdDet"></g>
+  </g>
+
+  <g id="hits">${pedHits}</g>`;
+}
+
+/* ============================================================================
+   LINKAGE bench
+   ============================================================================ */
+const alleleLab = (G, mut) => mut ? G.g : G.g + '⁺';
+function linkNames(){ const P = PAIRS[S.link.pair]; return [
+  `${P.A.g} ${P.B.g}`, `${P.A.g}⁺ ${P.B.g}⁺`, `${P.A.g} ${P.B.g}⁺`, `${P.A.g}⁺ ${P.B.g}`]; }
+function paintLinkStatic(){
+  const L = S.link, P = PAIRS[L.pair];
+  $('lkCross').textContent = `Test cross:  ♀ ${P.A.g} ${P.B.g} / ${P.A.g}⁺ ${P.B.g}⁺   ×   ♂ ${P.A.g} ${P.B.g} / Y   (Drosophila, genes on the X chromosome)`;
+  /* the genetic map, to scale */
+  const x0 = 46, x1 = 586, span = 60, mx = v => x0 + v / span * (x1 - x0), a = 4, b = 4 + L.d;
+  let m = `<line x1="${x0}" y1="84" x2="${x1}" y2="84" stroke="#b8b2a6" stroke-width="5" stroke-linecap="round"/>`;
+  for (let v = 0; v <= span; v += 10) m += `<line x1="${mx(v)}" y1="90" x2="${mx(v)}" y2="95" stroke="#b8b2a6"/><text x="${mx(v)}" y="106" font-size="9.5" text-anchor="middle" fill="#9a948a" class="m">${v}</text>`;
+  if (L.linked) {
+    m += `<line x1="${mx(a)}" y1="76" x2="${mx(a)}" y2="92" stroke="${INK}" stroke-width="2"/><line x1="${mx(b)}" y1="76" x2="${mx(b)}" y2="92" stroke="${INK}" stroke-width="2"/>
+      <path d="M${mx(a)} 70H${mx(b)}" stroke="#6a3fc2" stroke-width="1.4"/>`;
+    const lab = `${P.A.g} ↔ ${P.B.g}: ${fmt(L.d, 1)} map units`;
+    m += `<text x="${Math.min(mx(b) + 8, x1 - 150)}" y="${mx(b) + 8 > x1 - 150 ? 64 : 74}" font-size="11.5" fill="#6a3fc2" font-weight="600">${lab}</text>`;
+    m += `<text x="${mx(a)}" y="66" font-size="11" text-anchor="middle" fill="${INK}" font-style="italic" font-weight="700">${L.d < 6 ? '' : P.A.g}</text>`;
+  } else m += `<text x="${(x0 + x1) / 2}" y="74" font-size="11.5" text-anchor="middle" fill="#6a3fc2" font-weight="600">Two different chromosomes: no map distance between the genes</text>`;
+  m += `<text x="${x1}" y="120" font-size="9.5" text-anchor="end" fill="#9a948a">map units (cM) along the chromosome, to scale</text>`;
+  $('lkMap').innerHTML = m;
+  paintLinkPlotAxes();
+}
+/* the bivalent: four chromatids, schematic (genes A and B always at the same place on screen; the
+   ruler above shows the true distance) */
+function paintMeiosis(){
+  const L = S.link, P = PAIRS[L.pair], M = L.last;
+  const Y = BV.rows;
+  let h = '';
+  const segs = [[], [], [], []];
+  const xOf = pos => BV.xA + (L.d > 0 ? pos / L.d : 0.5) * (BV.xB - BV.xA);
+  if (!L.linked) {
+    /* two small bivalents, one per chromosome */
+    const draw = (x0, x1, lab, G, k) => {
+      let s = '';
+      Y.forEach((y, c) => { const col = c < 2 ? PLUM : TEAL; s += `<line x1="${x0}" y1="${y}" x2="${x1}" y2="${y}" stroke="${col}" stroke-width="11" stroke-linecap="round" opacity="${M && M.c === -1 && ((k === 0 ? M.a : M.b) === (c < 2 ? 0 : 1)) && (c === 0 || c === 2) ? 1 : .85}"/>`;
+        const xm = (x0 + x1) / 2; s += `<rect x="${xm - 11}" y="${y - 7}" width="22" height="14" rx="4" fill="#fff" opacity=".92"/><text x="${xm}" y="${y + 4}" font-size="10.5" text-anchor="middle" font-weight="700" fill="${INK}" font-style="italic">${alleleLab(G, c < 2)}</text>`; });
+      return s + `<text x="${(x0 + x1) / 2}" y="${Y[3] + 30}" text-anchor="middle" font-size="11.5" fill="${MUTED}">${lab}</text>`;
+    };
+    h += draw(60, 270, `the chromosome with ${P.A.g}`, P.A, 0) + draw(330, 540, `the chromosome with ${P.B.g}`, P.B, 1);
+    $('lkBiv').innerHTML = h;
+    paintEgg(); return;
+  }
+  /* the chromatids' origins along their length: swap at each chiasma */
+  const o = [0, 0, 1, 1], cuts = [{x: BV.x0, o: o.slice()}];
+  const ex = M ? M.ex : [];
+  for (const e of ex) { [o[e.i], o[e.j]] = [o[e.j], o[e.i]]; cuts.push({x: xOf(e.pos), o: o.slice()}); }
+  /* an arm chiasma beyond B, drawn for honesty: most arms have one, and it cannot change the A–B combination */
+  const arm = M && M.arm;
+  if (arm) { [o[arm.i], o[arm.j]] = [o[arm.j], o[arm.i]]; cuts.push({x: arm.x, o: o.slice()}); }
+  cuts.push({x: BV.x1, o: o.slice()});
+  if (M && M.c >= 0) h += `<line x1="${BV.x0}" y1="${Y[M.c]}" x2="${BV.x1}" y2="${Y[M.c]}" stroke="#ffd166" stroke-width="20" stroke-linecap="round" filter="url(#fGlow)" opacity=".95"/>`;
+  for (let c = 0; c < 4; c++) {
+    for (let k = 0; k + 1 < cuts.length; k++) {
+      const col = cuts[k].o[c] === 0 ? PLUM : TEAL, xa = cuts[k].x, xb = cuts[k + 1].x;
+      h += `<line x1="${xa.toFixed(1)}" y1="${Y[c]}" x2="${xb.toFixed(1)}" y2="${Y[c]}" stroke="${col}" stroke-width="11" stroke-linecap="${k === 0 || k + 2 === cuts.length ? 'round' : 'butt'}"/>`;
+    }
+  }
+  /* centromeres: the sisters of each homologue joined at the left (the X is acrocentric) */
+  h += `<circle cx="${BV.x0 + 2}" cy="${(Y[0] + Y[1]) / 2}" r="8" fill="#4a3a5a"/><circle cx="${BV.x0 + 2}" cy="${(Y[2] + Y[3]) / 2}" r="8" fill="#1f5f57"/>`;
+  /* chiasmata */
+  for (const e of ex.concat(arm ? [{x: arm.x, i: arm.i, j: arm.j, arm: true}] : [])) {
+    const x = e.arm ? e.x : xOf(e.pos), yi = Y[e.i], yj = Y[e.j];
+    h += `<path d="M${x - 9} ${yi}L${x + 9} ${yj}M${x - 9} ${yj}L${x + 9} ${yi}" stroke="#fff" stroke-width="5"/>
+      <path d="M${x - 9} ${yi}L${x + 9} ${yj}" stroke="${PLUM}" stroke-width="3"/><path d="M${x - 9} ${yj}L${x + 9} ${yi}" stroke="${TEAL}" stroke-width="3"/>
+      <circle cx="${x}" cy="${(yi + yj) / 2}" r="3" fill="#fff" stroke="${INK}" stroke-width="1"/>`;
+  }
+  /* the gene loci on every chromatid */
+  for (let c = 0; c < 4; c++) {
+    const oa = c < 2 ? 0 : 1;
+    let ob = oa; for (const e of ex) if (e.i === c || e.j === c) ob = 1 - ob;
+    for (const [x, G, org] of [[BV.xA, P.A, oa], [BV.xB, P.B, ob]]) {
+      h += `<rect x="${x - 12}" y="${Y[c] - 7.5}" width="24" height="15" rx="4" fill="#fff" stroke="${org === 0 ? PLUM : TEAL}" stroke-width="1.2"/>
+        <text x="${x}" y="${Y[c] + 4}" font-size="10.5" text-anchor="middle" font-weight="700" fill="${INK}" font-style="italic">${alleleLab(G, org === 0)}</text>`;
+    }
+    h += `<text x="${BV.x1 + 18}" y="${Y[c] + 4}" font-size="10.5" fill="${MUTED}">${c + 1}</text>`;
+  }
+  h += `<text x="${BV.xA}" y="${Y[0] - 16}" font-size="11" text-anchor="middle" fill="${MUTED}">gene ${P.A.g}</text><text x="${BV.xB}" y="${Y[0] - 16}" font-size="11" text-anchor="middle" fill="${MUTED}">gene ${P.B.g}</text>`;
+  h += `<text x="${(BV.xA + BV.xB) / 2}" y="${Y[3] + 26}" font-size="11" text-anchor="middle" fill="${MUTED}">the stretch between the genes, stretched to fit (${fmt(L.d, 1)} map units)</text>`;
+  $('lkBiv').innerHTML = h;
+  paintEgg();
+}
+function paintEgg(){
+  const L = S.link, P = PAIRS[L.pair], M = L.last;
+  let h = '';
+  if (M) {
+    const x = 96, y = 318;
+    h += `<circle cx="${x}" cy="${y}" r="30" fill="#fde8ef" stroke="#e0567a" stroke-width="1.5"/><circle cx="${x}" cy="${y}" r="16" fill="#f9cfdc" opacity=".8"/>
+      <line x1="${x - 12}" y1="${y}" x2="${x + 12}" y2="${y}" stroke="${M.a === 0 ? PLUM : TEAL}" stroke-width="6" stroke-linecap="round"/>
+      <line x1="${x}" y1="${y}" x2="${x + 12}" y2="${y}" stroke="${M.b === 0 ? PLUM : TEAL}" stroke-width="6" stroke-linecap="round"/>
+      <text x="${x}" y="${y + 50}" font-size="11" text-anchor="middle" fill="${MUTED}">the egg</text>`;
+    if (M.c >= 0) h += `<path d="M${BV.x0 + 30} ${BV.rows[M.c] + 12}C${BV.x0 + 40} 270 ${x + 40} 262 ${x + 26} ${y - 22}" stroke="${MUTED}" stroke-width="1.3" fill="none" stroke-dasharray="4 3" marker-end="url(#aK)"/>`;
+    const nX = M.ex.length, inStretch = nX === 0 ? 'no crossover between the genes' : nX === 1 ? 'one crossover between the genes' : `${nX} crossovers between the genes`;
+    h += `<text x="150" y="298" font-size="13" fill="${INK}">${M.c >= 0 ? `This meiosis: ${inStretch}.` : 'The two chromosomes lined up independently.'}</text>
+      <text x="150" y="318" font-size="13" fill="${INK}">${M.c >= 0 ? `The egg received chromatid ${M.c + 1}, carrying` : 'The egg received'} <tspan font-style="italic" font-weight="700">${alleleLab(P.A, M.a === 0)} ${alleleLab(P.B, M.b === 0)}</tspan>:</text>
+      <text x="150" y="338" font-size="13" font-weight="700" fill="${M.rec ? '#b0305a' : '#2f6f4a'}">${M.rec ? 'a recombinant (a new combination).' : 'a parental combination.'}</text>
+      <text x="150" y="362" font-size="12" fill="${MUTED}">Its partner is a sperm with ${P.A.g} ${P.B.g} or a Y, so the offspring</text>
+      <text x="150" y="378" font-size="12" fill="${MUTED}">shows exactly what the egg carried.</text>`;
+  } else h += `<text x="22" y="318" font-size="13" fill="${MUTED}">Breed some offspring: each one comes from a meiosis like the one drawn above.</text>`;
+  $('lkEgg').innerHTML = h;
+  $('lkNote').textContent = '';
+}
+function paintFlies(){
+  const L = S.link, P = PAIRS[L.pair], rec = L.recent;
+  const big = rec[rec.length - 1];
+  if (big) {
+    const o = Object.assign(flyLook(L.pair, big.a, big.b), {male: big.male});
+    $('lkBig').innerHTML = `<g id="bigFly" transform="scale(2.1)">${flySVG(o)}</g>`;
+    $('lkBigT').textContent = `${big.male ? 'A son' : 'A daughter'}`;
+    $('lkBigT2').textContent = `${o.yellow ? 'yellow body' : P.A.g === 'y' ? 'grey-brown body' : ''}${P.A.g === 'y' ? ', ' : ''}${o.white ? 'white eyes' : 'red eyes'}${P.B.g === 'm' ? (o.mini ? ', miniature wings' : ', long wings') : ''}`;
+    $('lkBigT3').textContent = big.rec ? 'recombinant' : 'parental';
+    $('lkBigT3').setAttribute('fill', big.rec ? '#b0305a' : '#2f6f4a');
+  } else { $('lkBig').innerHTML = ''; ['lkBigT', 'lkBigT2', 'lkBigT3'].forEach(id => $(id).textContent = ''); }
+  let g = '';
+  const prev = rec.slice(Math.max(0, rec.length - 12), rec.length - 1).reverse();
+  prev.forEach((f, i) => {
+    const x = 664 + (i % 6) * 56, y = 262 + Math.floor(i / 6) * 76;
+    const o = Object.assign(flyLook(L.pair, f.a, f.b), {male: f.male});
+    g += `<g transform="translate(${x} ${y}) scale(.78)">${flySVG(o)}</g><text x="${x}" y="${y + 40}" font-size="10" text-anchor="middle" font-weight="700" fill="${f.rec ? '#b0305a' : '#7c878c'}">${f.rec ? 'R' : 'P'}</text>`;
+  });
+  if (rec.length > 1) g += `<text x="640" y="394" font-size="10.5" fill="${MUTED}">P parental · R recombinant (newest first)</text>`;
+  $('lkGrid').innerHTML = g;
+}
+function paintLinkBars(){
+  const L = S.link, names = linkNames(), c = L.cnt, N = c.reduce((a, b) => a + b, 0);
+  const mx = Math.max(1, ...c), bw = LB.w / 4;
+  let h = '';
+  const fills = [PLUM, TEAL, 'url(#gRecBar)', 'url(#gRecBar2)'];
+  for (let k = 0; k < 4; k++) {
+    const x = LB.x + k * bw + bw * .18, w = bw * .64, hh = c[k] / mx * LB.h;
+    h += `<rect x="${x.toFixed(1)}" y="${(LB.y + LB.h - hh).toFixed(1)}" width="${w.toFixed(1)}" height="${hh.toFixed(1)}" rx="3" fill="${fills[k]}"/>`;
+    h += `<text x="${(x + w / 2).toFixed(1)}" y="${(LB.y + LB.h - hh - 6).toFixed(1)}" font-size="11" text-anchor="middle" fill="${INK}" class="m">${c[k]}${N ? ' (' + fmt(100 * c[k] / N, 1) + '%)' : ''}</text>`;
+    h += `<text x="${(x + w / 2).toFixed(1)}" y="${LB.y + LB.h + 16}" font-size="12" text-anchor="middle" fill="${INK}" font-style="italic" font-weight="700">${names[k]}</text>`;
+    h += `<text x="${(x + w / 2).toFixed(1)}" y="${LB.y + LB.h + 31}" font-size="10.5" text-anchor="middle" fill="${k < 2 ? '#2f6f4a' : '#b0305a'}">${k < 2 ? 'parental' : 'recombinant'}</text>`;
+  }
+  h += `<line x1="${LB.x}" y1="${LB.y + LB.h}" x2="${LB.x + LB.w}" y2="${LB.y + LB.h}" stroke="#9aa3a6"/>`;
+  $('lkBars').innerHTML = h;
+  const rf = rfOf(c), se = N ? Math.sqrt(rf * (1 - rf) / N) : 0;
+  $('lkRF').textContent = N ? `RF = ${c[2] + c[3]} / ${N} = ${fmt(100 * rf, 2)} % ± ${fmt(100 * se, 2)} %` : 'RF = recombinants / total: breed some offspring';
+}
+const lpx = d => LP.x + d / 50 * LP.w, lpy = r => LP.y + LP.h - r / .5 * LP.h;
+function paintLinkPlotAxes(){
+  let a = `<rect x="${LP.x}" y="${LP.y}" width="${LP.w}" height="${LP.h}" fill="#fff" stroke="#ebe7de"/>`;
+  for (let v = 0; v <= 50; v += 10) a += `<line x1="${lpx(v)}" y1="${LP.y}" x2="${lpx(v)}" y2="${LP.y + LP.h}" stroke="#f1eee7"/><text x="${lpx(v)}" y="${LP.y + LP.h + 15}" font-size="10.5" text-anchor="middle" fill="${MUTED}" class="m">${v}</text>`;
+  for (let v = 0; v <= .5; v += .1) a += `<line x1="${LP.x}" y1="${lpy(v)}" x2="${LP.x + LP.w}" y2="${lpy(v)}" stroke="#f1eee7"/><text x="${LP.x - 6}" y="${lpy(v) + 4}" font-size="10.5" text-anchor="end" fill="${MUTED}" class="m">${Math.round(v * 100)}%</text>`;
+  a += `<text x="${LP.x + LP.w}" y="${LP.y + LP.h + 31}" font-size="10.5" text-anchor="end" fill="${MUTED}">map distance you set (cM)</text>`;
+  a += `<text x="${LP.x - 6}" y="${LP.y - 10}" font-size="10.5" text-anchor="start" fill="${MUTED}">measured recombination frequency</text>`;
+  a += `<line x1="${lpx(0)}" y1="${lpy(0)}" x2="${lpx(50)}" y2="${lpy(.5)}" stroke="#6a3fc2" stroke-width="1.3" stroke-dasharray="6 4"/>`;
+  a += `<text x="${lpx(14)}" y="${lpy(.14) - 8}" font-size="10.5" fill="#6a3fc2" transform="rotate(-28.8 ${lpx(14)} ${lpy(.14) - 8})">RF = distance</text>`;
+  if (S.link.usedMany) {
+    let c = ''; for (let d = 0; d <= 50; d += 1) c += (d ? 'L' : 'M') + lpx(d).toFixed(1) + ' ' + lpy(rfTheory(d, 'many')).toFixed(1);
+    a += `<path d="${c}" fill="none" stroke="#d68a12" stroke-width="1.4" stroke-dasharray="2 3"/><text x="${lpx(49)}" y="${lpy(.12)}" font-size="10.5" text-anchor="end" fill="#b56a00">(1 − e^(−2d))/2: crossovers at random</text>`;
+  }
+  $('lkPlotAx').innerHTML = a;
+}
+function paintLinkPlot(){
+  const L = S.link, N = L.cnt.reduce((a, b) => a + b, 0), rf = rfOf(L.cnt), se = N ? Math.sqrt(rf * (1 - rf) / N) : 0;
+  let h = '';
+  const pt = (d, r, s, col, fill) => `<line x1="${lpx(d)}" y1="${lpy(clamp(r - 2 * s, 0, .5))}" x2="${lpx(d)}" y2="${lpy(clamp(r + 2 * s, 0, .5))}" stroke="${col}" stroke-width="1.4"/><circle cx="${lpx(d)}" cy="${lpy(r)}" r="4.5" fill="${fill}" stroke="${col}" stroke-width="1.6"/>`;
+  for (const p of L.records) h += pt(p.d, p.rf, p.se, p.mode === 'one' ? '#6a3fc2' : '#d68a12', p.mode === 'one' ? '#6a3fc2' : '#d68a12');
+  if (N && L.linked) h += pt(L.d, rf, se, INK, '#fff');
+  if (N && !L.linked) h += `<text x="${LP.x + 10}" y="${LP.y + 18}" font-size="11" fill="${INK}">different chromosomes: RF = ${fmt(100 * rf, 1)} % (independent assortment gives 50 %)</text>`;
+  if (L.records.length) h += `<text x="${LP.x + 10}" y="${LP.y + 34}" font-size="10.5" fill="${MUTED}">filled: your recorded points, ±2 standard errors</text>`;
+  $('lkPlot').innerHTML = h;
+}
+function paintLinkMeas(){
+  const L = S.link, P = PAIRS[L.pair], N = L.cnt.reduce((a, b) => a + b, 0), rf = rfOf(L.cnt), se = N ? Math.sqrt(rf * (1 - rf) / N) : 0;
+  const par = N ? (L.cnt[0] + L.cnt[1]) / N : 0;
+  $('meas').innerHTML = `<div class="readout">
+    <span>Offspring counted</span><b>${N}</b>
+    <span>Parental</span><b>${L.cnt[0] + L.cnt[1]}${N ? ' · ' + fmt(100 * par, 1) + '%' : ''}</b>
+    <span>Recombinant</span><b>${L.cnt[2] + L.cnt[3]}${N ? ' · ' + fmt(100 * rf, 1) + '%' : ''}</b>
+    <i class="sep"></i>
+    <span>RF ± s.e.</span><b>${N ? fmt(100 * rf, 2) + ' ± ' + fmt(100 * se, 2) + ' %' : '—'}</b>
+    <span>Map distance set</span><b>${L.linked ? fmt(L.d, 1) + ' cM' : 'unlinked'}</b>
+    <span>Morgan’s value (NCERT)</span><b>${fmt(P.d, 1)} %</b>
+  </div>`;
+  $('btnRecord').disabled = !(N >= 200 && L.linked);
+}
+function paintLinkWhy(){
+  const L = S.link, P = PAIRS[L.pair], N = L.cnt.reduce((a, b) => a + b, 0), rf = rfOf(L.cnt);
+  let t;
+  if (!L.linked) t = `<p>On different chromosomes the two genes are sorted by two independent coin tosses at metaphase I. All four combinations are equally likely, so recombinants make up <b>half</b> the offspring: Mendel’s independent assortment, 1 : 1 : 1 : 1.</p>`;
+  else if (L.mode === 'one') t = `<p>A chiasma falls between <i>${P.A.g}</i> and <i>${P.B.g}</i> in <b>${fmt(Math.min(100, 2 * L.d), 1)}%</b> of meioses. It joins only two of the four chromatids, so half the eggs from those meioses are recombinant: <b>${fmt(L.d, 1)}%</b> in all. That is why recombination frequency can be read as distance.</p>`;
+  else t = `<p>Chiasmata now fall at random, <b>${fmt(2 * L.d / 100, 2)}</b> per meiosis on average in this stretch, sometimes two or three. Two crossovers on one chromatid put the original combination back, and those eggs look parental. So the measured frequency falls short of the distance: at ${fmt(L.d, 1)} cM it tends to <b>${fmt(100 * rfTheory(L.d, 'many'), 1)}%</b>, and it can never pass 50%.</p>`;
+  if (N) t += `<p>Your count: <b>${L.cnt[2] + L.cnt[3]}</b> recombinants in <b>${N}</b>, ${fmt(100 * rf, 2)}%. ` + (L.linked ? `Chance alone moves that by about ±${fmt(100 * Math.sqrt(Math.max(rf, .001) * (1 - rf) / N), 2)}% at this N.` : '') + `</p>`;
+  $('why').innerHTML = t;
+}
+
+function breedLink(n, oneSlow){
+  const L = S.link, rng = RNG.link;
+  let last = null;
+  for (let i = 0; i < n; i++) {
+    const m = meiosis(L.d, L.mode, rng, L.linked);
+    m.male = rng() < .5;
+    if (m.linked && rng() < .45) m.arm = {x: BV.xB + 30 + rng() * (BV.x1 - BV.xB - 50), i: rng() < .5 ? 0 : 1, j: rng() < .5 ? 2 : 3};
+    L.cnt[m.a === 0 && m.b === 0 ? 0 : m.a === 1 && m.b === 1 ? 1 : m.a === 0 ? 2 : 3]++;
+    L.recent.push({a: m.a, b: m.b, rec: m.rec, male: m.male});
+    last = m;
+  }
+  if (L.recent.length > 12) L.recent = L.recent.slice(-12);
+  L.last = last;
+  if (L.mode === 'many' && L.linked) L.usedMany = true;
+  sound(n > 50 ? 'whoosh' : 'pop');
+  track('breed', {bench: 'link', n, d: L.d, mode: L.mode, linked: L.linked});
+  paintLink();
+  if (!reduced()) { const f = $('bigFly'); if (f) { f.dataset.tw = '1'; tween(0.3, 2.1, 380, v => f.setAttribute('transform', `scale(${v.toFixed(3)})`), Play.ease.back).then(() => { delete f.dataset.tw; }); } }
+}
+function paintLink(){
+  paintLinkStatic(); paintMeiosis(); paintFlies(); paintLinkBars(); paintLinkPlot();
+  if (S.locked) { paintLinkMeas(); paintLinkWhy(); }
+  checkLink();
+}
+function clearLink(){ const L = S.link; L.cnt = [0, 0, 0, 0]; L.last = null; L.recent = []; paintLink(); }
+function checkLink(){
+  if (!S.locked) return;
+  const L = S.link, N = L.cnt.reduce((a, b) => a + b, 0); if (!N) return;
+  const rf = rfOf(L.cnt), se = Math.sqrt(rf * (1 - rf) / N);
+  if (L.linked && L.d <= 5 && N >= 200 && 1 - rf >= .9) discover('linked');
+  if (L.linked && L.mode === 'one' && L.d >= 10 && N >= 1000 && Math.abs(rf - L.d / 100) <= Math.max(.02, 2 * se)) discover('distance');
+  if (!EXPLAINED && POE && L.linked && L.d <= 5 && N >= 200) {
+    EXPLAINED = true;
+    const P = PAIRS[L.pair];
+    POE.explain(`With the genes ${fmt(L.d, 1)} map units apart, a crossover lands between them in only ${fmt(Math.min(100, 2 * L.d), 1)}% of meioses. ` +
+      `Your test cross gave <b>${L.cnt[0] + L.cnt[1]}</b> parental offspring (<i>${P.A.g} ${P.B.g}</i> and <i>${P.A.g}⁺ ${P.B.g}⁺</i>) and only <b>${L.cnt[2] + L.cnt[3]}</b> recombinants out of ${N}: ` +
+      `<b>${fmt(100 * (1 - rf), 1)}% parental</b>. Linked genes travel together; 1 : 1 : 1 : 1 would need them on different chromosomes (or 50 cM apart).`);
+  }
+}
+
+/* ============================================================================
+   DOMINANCE bench
+   ============================================================================ */
+function domOptions(){
+  const D = S.dom;
+  if (D.type === 'complete') return [['WW', 'WW: violet'], ['Ww', 'Ww: violet'], ['ww', 'ww: white']];
+  if (D.type === 'incomplete') return [['RR', 'RR: red'], ['Rr', 'Rr: pink'], ['rr', 'rr: white']];
+  if (D.type === 'abo') return [['AA', 'IᴬIᴬ: group A'], ['AO', 'Iᴬi: group A'], ['BB', 'IᴮIᴮ: group B'], ['BO', 'Iᴮi: group B'], ['AB', 'IᴬIᴮ: group AB'], ['OO', 'ii: group O']];
+  const n = D.nGenes, L = POLY_L.slice(0, n);
+  return [[L.map(c => c + c.toLowerCase()).join(''), `${L.map(c => c + c.toLowerCase()).join('')}: middle (F1)`],
+          [L.map(c => c + c).join(''), `${L.map(c => c + c).join('')}: darkest`],
+          [L.map(c => c.toLowerCase() + c.toLowerCase()).join(''), `${L.map(c => c.toLowerCase() + c.toLowerCase()).join('')}: lightest`]];
+}
+const aboShow = a => a === 'A' ? 'Iᴬ' : a === 'B' ? 'Iᴮ' : 'i';
+function gShow(type, g){ return type === 'abo' ? g.map(p => { const s = p.slice().sort((x, y) => 'ABO'.indexOf(x) - 'ABO'.indexOf(y)); return aboShow(s[0]) + aboShow(s[1]); }).join('') :
+  g.map(p => (p[0] === p[0].toUpperCase() ? p[0] + p[1] : p[1] + p[0])).join(''); }
+const gamShow = (type, al) => type === 'abo' ? al.map(aboShow).join('') : al.join('');
+function domClassCol(type, k, nGenes){ return type === 'poly' ? skinTone(k, 2 * nGenes) : CLASS_COL[type][k]; }
+function paintDom(){
+  const D = S.dom, g1 = gtype(D.p1), g2 = gtype(D.p2), classes = dClasses(D.type, D.nGenes);
+  $('dmRule').textContent = {complete: 'Complete dominance: one W is enough for violet.', incomplete: 'Incomplete dominance: each R adds red, so Rr is pink.',
+    abo: 'Codominance: Iᴬ and Iᴮ both show; i shows only when alone.', poly: `Polygenic: ${D.nGenes} gene${D.nGenes > 1 ? 's' : ''}, each capital allele adds the same amount of pigment.`}[D.type];
+  /* parents */
+  let h = '';
+  [g1, g2].forEach((g, i) => {
+    const x = 78 + i * 120, y = 190;
+    h += `<g transform="translate(${x} ${y})">${domIcon(D.type, g, D.nGenes, D.type === 'poly' ? 1.6 : D.type === 'abo' ? 1.5 : 1.8)}</g>
+      <text x="${x}" y="${y + 104}" text-anchor="middle" font-size="12" fill="${MUTED}">${i ? '♂ parent' : '♀ parent'}</text>
+      <text x="${x}" y="${y + 124}" text-anchor="middle" font-size="${D.type === 'poly' && D.nGenes > 3 ? 11 : 14}" font-weight="600" fill="${INK}" class="m">${gShow(D.type, g)}</text>
+      <text x="${x}" y="${y + 142}" text-anchor="middle" font-size="12" fill="${INK}">${esc(D.type === 'abo' ? 'group ' + classes[dClass(D.type, g)] : D.type === 'poly' ? dClass(D.type, g) + ' dark alleles' : classes[dClass(D.type, g)])}</text>`;
+  });
+  h += `<text x="138" y="196" text-anchor="middle" font-size="24" fill="${MUTED}">×</text>`;
+  $('dmParents').innerHTML = h;
+  /* gallery */
+  let gal = '';
+  const kids = D.kids.slice(-24);
+  kids.forEach((k, i) => {
+    const x = 334 + (i % 6) * 46, y = 130 + Math.floor(i / 6) * 70;
+    const sc = D.type === 'incomplete' ? .48 : D.type === 'complete' ? .72 : D.type === 'abo' ? .62 : .72;
+    gal += `<g transform="translate(${x} ${y})">${domIcon(D.type, k.g, D.nGenes, sc)}</g>`;
+    if (D.type !== 'abo') gal += `<text x="${x}" y="${y + 36}" text-anchor="middle" font-size="9.5" fill="${MUTED}" class="m">${D.type === 'poly' && D.nGenes > 3 ? dClass(D.type, k.g) + ' dark' : gShow(D.type, k.g)}</text>`;
+  });
+  if (!kids.length) gal = `<text x="444" y="240" text-anchor="middle" font-size="13" fill="${MUTED}">No offspring yet.</text>`;
+  $('dmGal').innerHTML = gal;
+  paintDomPunnett(g1, g2);
+  paintDomHist(g1, g2);
+  if (S.locked) { paintDomMeas(g1, g2); paintDomWhy(g1, g2); }
+  checkDom(g1, g2);
+}
+function paintDomPunnett(g1, g2){
+  const D = S.dom;
+  if (D.type === 'poly' && D.nGenes > 3) {
+    const n = 1 << D.nGenes;
+    $('dmPq').innerHTML = `<text x="800" y="170" text-anchor="middle" font-size="14" fill="${INK}" class="serif">${n} × ${n} = ${n * n} squares</text>
+      <text x="800" y="196" text-anchor="middle" font-size="12" fill="${MUTED}">too many to draw here; the model still counts them all,</text>
+      <text x="800" y="214" text-anchor="middle" font-size="12" fill="${MUTED}">and the histogram below shows what they say.</text>`;
+    return;
+  }
+  const P = dPunnett(g1, g2), n = P.n;
+  const cs = n === 2 ? 118 : n === 4 ? 70 : 38, hs = n === 8 ? 44 : 50, x0 = 606 + (390 - hs - n * cs) / 2, y0 = 60;
+  const cnt = Array.from({length: n}, () => new Array(n).fill(0));
+  for (const k of D.kids) { let c = 0, r = 0; k.e.forEach(b => c = c * 2 + b); k.s.forEach(b => r = r * 2 + b); cnt[r][c]++; }
+  let h = '';
+  for (let c = 0; c < n; c++) h += `<text x="${x0 + hs + c * cs + cs / 2}" y="${y0 + hs / 2 + 5}" text-anchor="middle" font-size="${n === 8 ? 9 : 12.5}" font-weight="700" fill="#8a2a4c" class="m">${gamShow(D.type, P.cols[c])}</text>`;
+  for (let r = 0; r < n; r++) h += `<text x="${x0 + hs / 2}" y="${y0 + hs + r * cs + cs / 2 + 4}" text-anchor="middle" font-size="${n === 8 ? 9 : 12.5}" font-weight="700" fill="#1f4f94" class="m">${gamShow(D.type, P.rows[r])}</text>`;
+  for (let r = 0; r < n; r++) for (let c = 0; c < n; c++) {
+    const g = P.cells[r][c], k = dClass(D.type, g), x = x0 + hs + c * cs, y = y0 + hs + r * cs;
+    const col = domClassCol(D.type, k, D.nGenes);
+    const dark = D.type === 'poly' && k > D.nGenes;
+    h += `<rect x="${x + 1.5}" y="${y + 1.5}" width="${cs - 3}" height="${cs - 3}" rx="${n === 8 ? 3 : 6}" fill="${col}" fill-opacity="${D.type === 'poly' ? 1 : .22}" stroke="#e2dccb"/>`;
+    if (n === 2) h += `<text x="${x + cs / 2}" y="${y + 28}" text-anchor="middle" font-size="17" font-weight="600" fill="${INK}" class="m">${gShow(D.type, g)}</text>
+      <g transform="translate(${x + cs / 2} ${y + 66})">${domIcon(D.type, g, D.nGenes, D.type === 'incomplete' ? .5 : D.type === 'abo' ? .62 : .8)}</g>
+      <text x="${x + cs / 2}" y="${y + cs - 10}" text-anchor="middle" font-size="11" fill="${MUTED}" class="m">${D.kids.length ? cnt[r][c] : ''}</text>`;
+    else if (n === 4) h += `<text x="${x + cs / 2}" y="${y + 30}" text-anchor="middle" font-size="12" font-weight="600" fill="${dark ? '#fff' : INK}" class="m">${gShow(D.type, g)}</text>
+      <text x="${x + cs / 2}" y="${y + 50}" text-anchor="middle" font-size="11" fill="${dark ? '#f1e6dc' : MUTED}" class="m">${D.type === 'poly' ? k + ' dark' : ''}</text>`;
+    else h += `<text x="${x + cs / 2}" y="${y + cs / 2 + 4}" text-anchor="middle" font-size="11" font-weight="600" fill="${dark ? '#fff' : INK}" class="m">${k}</text>`;
+  }
+  $('dmPq').innerHTML = h;
+  $('dmPqSub').textContent = n === 8 ? 'each square: the number of dark alleles (0–6)' : 'eggs across · sperm or pollen down';
+}
+function paintDomHist(g1, g2){
+  const D = S.dom, classes = dClasses(D.type, D.nGenes), obs = dCount(D.type, D.kids, D.nGenes), N = D.kids.length;
+  const exp = S.locked ? dExpected(D.type, g1, g2, D.nGenes) : null;
+  const m = classes.length, bw = DH.w / m, mx = Math.max(1, ...obs, ...(exp ? exp.map(v => v * N) : [0])) * DH.h / (DH.h - 20);
+  let h = '';
+  for (let k = 0; k < m; k++) {
+    const x = DH.x + k * bw + bw * .16, w = bw * .68, hh = obs[k] / mx * DH.h, eh = exp ? exp[k] * N / mx * DH.h : 0;
+    h += `<rect x="${x.toFixed(1)}" y="${(DH.y + DH.h - hh).toFixed(1)}" width="${w.toFixed(1)}" height="${hh.toFixed(1)}" rx="3" fill="${domClassCol(D.type, k, D.nGenes)}" stroke="#00000018"/>`;
+    if (exp && N) h += `<rect x="${(x - 3).toFixed(1)}" y="${(DH.y + DH.h - eh).toFixed(1)}" width="${(w + 6).toFixed(1)}" height="${eh.toFixed(1)}" rx="3" fill="none" stroke="${INK}" stroke-width="1.1" stroke-dasharray="4 3"/>`;
+    if (N) h += `<text x="${(x + w / 2).toFixed(1)}" y="${(DH.y + DH.h - Math.max(hh, eh) - 6).toFixed(1)}" font-size="11" text-anchor="middle" fill="${INK}" class="m">${obs[k]}</text>`;
+    h += `<text x="${(x + w / 2).toFixed(1)}" y="${DH.y + DH.h + 17}" font-size="12" text-anchor="middle" fill="${INK}" font-weight="600">${esc(D.type === 'abo' ? 'group ' + classes[k] : classes[k])}</text>`;
+  }
+  if (D.type === 'poly') h += `<text x="${DH.x + DH.w}" y="${DH.y + DH.h + 34}" font-size="11" text-anchor="end" fill="${MUTED}">number of dark (capital) alleles</text>`;
+  /* the bell: a normal curve FITTED to the learner's own data (its mean and s.d.), for polygenic */
+  if (D.type === 'poly' && N >= 20) {
+    const st = histStats(obs);
+    if (st.sd > 0) {
+      let c = '';
+      for (let t = -0.5; t <= m - .5; t += .05) { const y = N * Math.exp(-((t - st.mean) ** 2) / (2 * st.sd * st.sd)) / (st.sd * Math.sqrt(2 * Math.PI));
+        c += (c ? 'L' : 'M') + (DH.x + (t + .5) * bw).toFixed(1) + ' ' + (DH.y + DH.h - y / mx * DH.h).toFixed(1); }
+      h += `<path d="${c}" fill="none" stroke="#6a3fc2" stroke-width="2"/>`;
+      h += `<text x="${DH.x + DH.w}" y="${DH.y - 14}" font-size="11.5" text-anchor="end" fill="#6a3fc2">— normal curve fitted to your data: mean ${fmt(st.mean, 2)}, s.d. ${fmt(st.sd, 2)}</text>`;
+    }
+  }
+  if (exp && N) h += `<text x="${DH.x}" y="${DH.y - 14}" font-size="11" fill="${MUTED}">dashed outline: what the Punnett square expects</text>`;
+  h += `<line x1="${DH.x}" y1="${DH.y + DH.h}" x2="${DH.x + DH.w}" y2="${DH.y + DH.h}" stroke="#9aa3a6"/>`;
+  $('dmHist').innerHTML = h;
+  let chi = exp && N >= 5 ? chiSquare(obs, exp) : null;
+  if (chi && !chi.df) chi = null;
+  $('dmStat').textContent = N ? `N = ${N}` + (chi ? `   χ² = ${fmt(chi.x, 2)} (df ${chi.df}), p = ${fmt(chi.p, 2)}` : '') : '';
+}
+function paintDomMeas(g1, g2){
+  const D = S.dom, classes = dClasses(D.type, D.nGenes), obs = dCount(D.type, D.kids, D.nGenes), N = D.kids.length, exp = dExpected(D.type, g1, g2, D.nGenes);
+  let r = `<div class="readout">`;
+  classes.forEach((c, k) => { if (D.type === 'poly' && D.nGenes > 3 && k % 2 && k !== D.nGenes) return;
+    r += `<span>${esc(D.type === 'abo' ? 'group ' + c : D.type === 'poly' ? c + ' dark alleles' : c)}</span><b>${obs[k]}${N ? ' · ' + fmt(100 * obs[k] / N, 1) + '%' : ''} (${frac(exp[k])})</b>`; });
+  r += `<i class="sep"></i><span>Offspring</span><b>${N}</b>`;
+  if (D.type === 'poly' && N) { const st = histStats(obs); r += `<span>Mean, s.d. (dark alleles)</span><b>${fmt(st.mean, 2)}, ${fmt(st.sd, 2)}</b>`; }
+  if (N >= 5 && chiSquare(obs, exp).df) { const chi = chiSquare(obs, exp); r += `<span>χ² against the square</span><b>${fmt(chi.x, 2)} (p ${fmt(chi.p, 2)})</b>`; }
+  $('meas').innerHTML = r + `</div><p class="note">In brackets: the fraction of Punnett squares.</p>`;
+}
+function paintDomWhy(g1, g2){
+  const D = S.dom;
+  const t = {
+    complete: `<p>One W allele makes enough pigment for a violet flower, so <b class="mono">WW</b> and <b class="mono">Ww</b> look alike. That is why a Ww × Ww cross gives 3 violet : 1 white, and the 1 : 2 : 1 of genotypes hides inside it.</p>`,
+    incomplete: `<p>In the snapdragon each R allele adds red pigment, so <b class="mono">Rr</b> is halfway: pink. Nothing is blended away. The alleles stay separate in the gametes, so two pink plants give red, pink and white back again, 1 : 2 : 1, and here the phenotypes show the genotypes directly.</p>`,
+    abo: `<p>The Iᴬ allele puts A antigens (triangles) on the red cell’s surface, and Iᴮ puts B antigens (circles). An Iᴬ Iᴮ person makes <b>both</b>: codominance, group AB. The allele i makes neither, so it shows only in <b class="mono">ii</b>, group O. Three alleles, six genotypes, four groups.</p>`,
+    poly: `<p>Each of the ${D.nGenes} gene${D.nGenes > 1 ? 's' : ''} adds the same small amount of pigment per capital allele, and they sort independently. The phenotype is just the count of dark alleles, from 0 to ${2 * D.nGenes}. The middle counts can be made in many more ways than the extremes, so the offspring pile up in the middle: ${D.nGenes >= 3 ? 'a bell curve.' : 'add more genes and watch the shape round into a bell.'}</p>`,
+  }[D.type];
+  $('why').innerHTML = t;
+}
+function breedDom(n){
+  const D = S.dom;
+  D.kids = D.kids.concat(dBreed(gtype(D.p1), gtype(D.p2), n, RNG.dom));
+  if (D.kids.length > 5000) D.kids = D.kids.slice(-5000);
+  sound(n > 50 ? 'whoosh' : 'pop');
+  track('breed', {bench: 'dom', type: D.type, n});
+  paintDom();
+}
+function checkDom(g1, g2){
+  if (!S.locked) return;
+  const D = S.dom, obs = dCount(D.type, D.kids, D.nGenes), N = D.kids.length;
+  if (D.type === 'incomplete' && D.p1 === 'Rr' && D.p2 === 'Rr' && obs[0] > 0 && obs[2] > 0) discover('noblend');
+  if (D.type === 'abo' && obs[2] > 0) discover('ab');
+  if (D.type === 'poly' && D.nGenes >= 3 && N >= 500 && g1.every(p => p[0] !== p[1]) && g2.every(p => p[0] !== p[1])) {
+    const mode = obs.indexOf(Math.max(...obs)), n = D.nGenes;
+    const rising = obs.slice(0, n + 1).every((v, i, a) => i === 0 || v >= a[i - 1] * .8), falling = obs.slice(n).every((v, i, a) => i === 0 || v <= a[i - 1] * 1.25);
+    if (Math.abs(mode - n) <= 0 + (n >= 5 ? 1 : 0) && rising && falling && obs[0] + obs[2 * n] < obs[n]) discover('bell');
+  }
+}
+
+/* ============================================================================
+   PEDIGREE bench
+   ============================================================================ */
+const TRAITS = {haem: {name: 'haemophilia', H: 'H', h: 'h', aff: 'has haemophilia', col: '#6a3fc2'},
+                cb:   {name: 'colour blindness', H: 'C', h: 'c', aff: 'is colour blind', col: '#6a3fc2'}};
+function pedDefault(){
+  const Pd = S.ped;
+  Pd.people = [
+    {id: 'p1', sex: 'M', founder: true, g: 0, gen: 0, partner: 'p2'},
+    {id: 'p2', sex: 'F', founder: true, g: 1, gen: 0, partner: 'p1'},
+    {id: 'p3', sex: 'M', founder: false, obs: 'unborn', gen: 1, father: 'p1', mother: 'p2'},
+    {id: 'p4', sex: 'F', founder: false, obs: 'unborn', gen: 1, father: 'p1', mother: 'p2'},
+  ];
+  Pd.next = 5; Pd.sel = 'p2';
+}
+const person = id => S.ped.people.find(p => p.id === id);
+const childrenOf = (a, b) => S.ped.people.filter(p => !p.founder && ((p.father === a && p.mother === b) || (p.father === b && p.mother === a)));
+/* layout: each couple centred over its children; partners side by side */
+let PLAY = {};
+function pedLayout(){
+  const U = 88, pos = {};
+  const root = S.ped.people[0];
+  function width(p){ const kids = p.partner ? childrenOf(p.id, p.partner) : []; const own = p.partner ? 2 * U : U;
+    return Math.max(own, kids.reduce((s, k) => s + width(k), 0)); }
+  function place(p, x0){
+    const w = width(p), kids = p.partner ? childrenOf(p.id, p.partner) : [];
+    let cx = x0 + w / 2;
+    if (p.partner) { pos[p.id] = {x: cx - U / 2, gen: p.gen}; pos[p.partner] = {x: cx + U / 2, gen: p.gen}; }
+    else pos[p.id] = {x: cx, gen: p.gen};
+    let x = x0 + (w - kids.reduce((s, k) => s + width(k), 0)) / 2;
+    for (const k of kids) { place(k, x); x += width(k); }
+  }
+  const W = width(root), scale = Math.min(1.3, 940 / W);
+  place(root, 0);
+  for (const id in pos) pos[id] = {x: 30 + (1000 - 60 - W * scale) / 2 + pos[id].x * scale, y: 112 + pos[id].gen * 118, gen: pos[id].gen};
+  PLAY = {pos, scale};
+  return pos;
+}
+const ROMAN = ['I', 'II', 'III', 'IV', 'V'];
+function xg(sex, g){ const T = TRAITS[S.ped.trait];
+  return sex === 'M' ? `X<tspan baseline-shift="super" font-size="70%">${g ? T.h : T.H}</tspan>Y` :
+    `X<tspan baseline-shift="super" font-size="70%">${g === 2 ? T.h : T.H}</tspan>X<tspan baseline-shift="super" font-size="70%">${g >= 1 ? T.h : T.H}</tspan>`; }
+function xgText(sex, g){ const T = TRAITS[S.ped.trait]; return sex === 'M' ? `X<sup>${g ? T.h : T.H}</sup>Y` : `X<sup>${g === 2 ? T.h : T.H}</sup>X<sup>${g >= 1 ? T.h : T.H}</sup>`; }
+function paintPed(){
+  const Pd = S.ped, T = TRAITS[Pd.trait], pos = pedLayout(), inf = infer(Pd.people), pr = inf.probs;
+  PED_INF = inf; PED_COMBOS = inf.leaves;
+  $('pdSub').textContent = `X-linked recessive: ${T.name}. Squares are men, circles women. Filled: affected. A dot: a carrier woman.`;
+  /* numbering within each generation, left to right */
+  const byGen = {};
+  for (const p of Pd.people) (byGen[p.gen] = byGen[p.gen] || []).push(p);
+  const label = {};
+  for (const g in byGen) byGen[g].sort((a, b) => pos[a.id].x - pos[b.id].x).forEach((p, i) => label[p.id] = ROMAN[g] + '-' + (i + 1));
+  PED_LABEL = label;
+  const R = 19 * clamp(PLAY.scale, .8, 1.25);
+  let lines = '', syms = '';
+  /* couple lines and sibships */
+  for (const p of Pd.people) {
+    if (!p.partner || pos[p.id].x > pos[p.partner].x) continue;
+    const a = pos[p.id], b = pos[p.partner];
+    lines += `<line x1="${a.x + R}" y1="${a.y}" x2="${b.x - R}" y2="${b.y}" stroke="${INK}" stroke-width="1.6"/>`;
+    const kids = childrenOf(p.id, p.partner);
+    if (kids.length) {
+      const mx = (a.x + b.x) / 2, yk = pos[kids[0].id].y, ys = yk - R - 22;
+      const xs = kids.map(k => pos[k.id].x);
+      lines += `<line x1="${mx}" y1="${a.y}" x2="${mx}" y2="${ys}" stroke="${INK}" stroke-width="1.6"/>
+        <line x1="${Math.min(mx, ...xs)}" y1="${ys}" x2="${Math.max(mx, ...xs)}" y2="${ys}" stroke="${INK}" stroke-width="1.6"/>`;
+      for (const x of xs) lines += `<line x1="${x}" y1="${ys}" x2="${x}" y2="${yk - R}" stroke="${INK}" stroke-width="1.6"/>`;
+    }
+  }
+  for (const p of Pd.people) {
+    const q = pos[p.id], P = pr[p.id], unborn = !p.founder && p.obs === 'unborn';
+    const aff = p.founder ? phenoOf(p.sex, p.g) === 'aff' : p.obs === 'aff';
+    const pAff = p.sex === 'M' ? P[1] : P[2], pCar = p.sex === 'F' ? P[1] : 0;
+    const shape = (fill, stroke, dash) => p.sex === 'M'
+      ? `<rect x="${q.x - R}" y="${q.y - R}" width="${2 * R}" height="${2 * R}" rx="2" fill="${fill}" stroke="${stroke}" stroke-width="2" ${dash ? 'stroke-dasharray="4 3"' : ''}/>`
+      : `<circle cx="${q.x}" cy="${q.y}" r="${R}" fill="${fill}" stroke="${stroke}" stroke-width="2" ${dash ? 'stroke-dasharray="4 3"' : ''}/>`;
+    if (unborn) {
+      syms += shape('#fff', '#9a93a8', true);
+      /* the probability of being affected, as a filling wedge */
+      if (pAff > 1e-9) { const a = pAff * 2 * Math.PI, r = R - 4;
+        syms += pAff > .999 ? `<circle cx="${q.x}" cy="${q.y}" r="${r}" fill="${T.col}" opacity=".45"/>` :
+          `<path d="M${q.x} ${q.y}V${q.y - r}A${r} ${r} 0 ${a > Math.PI ? 1 : 0} 1 ${(q.x + r * Math.sin(a)).toFixed(2)} ${(q.y - r * Math.cos(a)).toFixed(2)}Z" fill="${T.col}" opacity=".45"/>`; }
+      syms += `<text x="${q.x}" y="${q.y + 5}" text-anchor="middle" font-size="14" font-weight="700" fill="#5a5368">?</text>`;
+    } else {
+      syms += shape(aff ? T.col : '#fff', INK, false);
+      if (p.sex === 'F' && !aff && pCar > 1e-9) syms += `<circle cx="${q.x}" cy="${q.y}" r="${pCar > .999 ? 5.5 : 5.5}" fill="${T.col}" opacity="${pCar > .999 ? 1 : .25 + .5 * pCar}"/>` +
+        (pCar < .999 ? `<circle cx="${q.x}" cy="${q.y}" r="5.5" fill="none" stroke="${T.col}" stroke-width="1" stroke-dasharray="2 2"/>` : '');
+    }
+    const lab = label[p.id];
+    syms += `<text x="${q.x - R - 12}" y="${q.y - R + 6}" text-anchor="end" font-size="10.5" fill="${MUTED}" class="m">${lab}</text>`;
+    /* what the model knows: a certain genotype, or the probabilities */
+    const certain = P.filter(v => v > 1e-9).length === 1;
+    const g = P.indexOf(Math.max(...P));
+    if (certain && !unborn) syms += `<text x="${q.x}" y="${q.y + R + 21}" text-anchor="middle" font-size="12" fill="${INK}" class="m">${xg(p.sex, g)}</text>`;
+    else if (unborn) syms += `<text x="${q.x}" y="${q.y + R + 20}" text-anchor="middle" font-size="10.5" fill="${T.col}" font-weight="700" class="m">P(aff) ${frac(pAff)}</text>` +
+      (p.sex === 'F' ? `<text x="${q.x}" y="${q.y + R + 33}" text-anchor="middle" font-size="10.5" fill="${MUTED}" class="m">P(carrier) ${frac(pCar)}</text>` : '');
+    else syms += `<text x="${q.x}" y="${q.y + R + 20}" text-anchor="middle" font-size="10.5" fill="${MUTED}" class="m">P(carrier) ${frac(pCar)}</text>`;
+  }
+  /* generation numerals */
+  let gens = '';
+  for (const g in byGen) gens += `<text x="16" y="${112 + g * 118 + 5}" font-size="14" fill="${MUTED}" class="serif">${ROMAN[g]}</text>`;
+  $('pdTree').innerHTML = gens + lines + syms;
+  /* hit targets */
+  Pd.people.forEach((p, i) => { const h = $('ph' + i), q = pos[p.id]; h.setAttribute('x', q.x - 28); h.setAttribute('y', q.y - 28); h.setAttribute('display', S.tab === 'ped' ? '' : 'none'); h.dataset.id = p.id; });
+  for (let i = Pd.people.length; i < 32; i++) $('ph' + i).setAttribute('display', 'none');
+  const sel = person(Pd.sel), ring = $('pdRing');
+  if (sel) { ring.setAttribute('x', pos[sel.id].x - R - 8); ring.setAttribute('y', pos[sel.id].y - R - 8); ring.setAttribute('width', 2 * R + 16); ring.setAttribute('height', 2 * R + 16); ring.setAttribute('display', ''); } else ring.setAttribute('display', 'none');
+  $('pedSel').textContent = sel ? `${label[sel.id]} (${sel.sex === 'M' ? 'man' : 'woman'}${sel.founder ? ', founder' : ''})` : '—';
+  paintPedDetail(inf);
+  paintPedButtons();
+  if (S.locked) { paintPedMeas(inf); paintPedWhy(inf); }
+  checkPed(inf);
+}
+let PED_INF = null, PED_LABEL = {};
+function eggMut(id, inf){ const p = person(id), P = inf.probs[id]; return p.sex === 'F' ? P[1] / 2 + P[2] : P[1]; }
+function paintPedDetail(inf){
+  const Pd = S.ped, T = TRAITS[Pd.trait], p = person(Pd.sel);
+  let h = '';
+  if (!p) { $('pdDet').innerHTML = ''; return; }
+  if (p.founder) {
+    $('pdDetT').textContent = `${PED_LABEL[p.id]}: A FOUNDER`;
+    h += `<text x="22" y="598" font-size="13" fill="${INK}">${PED_LABEL[p.id]} married into (or started) the family, so the model takes their genotype from you: <tspan class="m" font-weight="700">${xg(p.sex, p.g)}</tspan>.</text>
+      <text x="22" y="620" font-size="12.5" fill="${MUTED}">Press “Change status” to make them ${p.sex === 'F' ? 'normal, a carrier or affected' : 'normal or affected'}. Select a child to see the cross that made them.</text>`;
+    $('pdDet').innerHTML = h; return;
+  }
+  $('pdDetT').textContent = `THE CROSS THAT MADE ${PED_LABEL[p.id]}`;
+  const m = person(p.mother), f = person(p.father), qm = eggMut(m.id, inf), qf = eggMut(f.id, inf);
+  const sup = a => a === 'Y' ? 'Y' : `X<tspan baseline-shift="super" font-size="72%">${a}</tspan>`;
+  /* eggs and sperm, with the probabilities the model has for them */
+  const x0 = 250, y0 = 612, cw = 140, ch = 44;
+  const eggs = [[T.H, 1 - qm], [T.h, qm]], sperm = p.sex === 'M' ? [['Y', 1]] : [[T.H, 1 - qf], [T.h, qf]];
+  h += `<text x="${x0 + cw}" y="${y0 - 18}" text-anchor="middle" font-size="11.5" fill="#8a2a4c" font-weight="700">eggs from ${PED_LABEL[m.id]}</text>`;
+  eggs.forEach(([a, pr], c) => { h += `<text x="${x0 + c * cw + cw / 2}" y="${y0 + 2}" text-anchor="middle" font-size="12.5" fill="#8a2a4c" class="m">${sup(a)} · ${frac(pr)}</text>`; });
+  h += `<text x="${x0 - 14}" y="${y0 + 2}" text-anchor="end" font-size="11.5" fill="#1f4f94" font-weight="700">${p.sex === 'M' ? 'sperm from ' + PED_LABEL[f.id] + ' (a son)' : 'sperm from ' + PED_LABEL[f.id] + ' (a daughter)'}</text>`;
+  sperm.forEach(([sa, sp], r) => {
+    h += `<text x="${x0 - 14}" y="${y0 + 36 + r * ch}" text-anchor="end" font-size="12.5" fill="#1f4f94" class="m">${sup(sa)} · ${frac(sp)}</text>`;
+    eggs.forEach(([ea, ep], c) => {
+      const x = x0 + c * cw, y = y0 + 14 + r * ch, pr = ep * sp;
+      const affected = p.sex === 'M' ? ea === T.h : ea === T.h && sa === T.h, carrier = p.sex === 'F' && !affected && (ea === T.h || sa === T.h);
+      h += `<rect x="${x + 2}" y="${y + 2}" width="${cw - 4}" height="${ch - 4}" rx="5" fill="${affected ? '#e6dcf7' : carrier ? '#f1ecfa' : '#f6f4ef'}" stroke="#e2dccb" opacity="${pr > 1e-9 ? 1 : .4}"/>
+        <text x="${x + 12}" y="${y + 27}" font-size="12.5" fill="${INK}" class="m">${sup(ea)}${sup(sa)}</text>
+        <text x="${x + cw - 12}" y="${y + 27}" text-anchor="end" font-size="12" fill="${affected ? T.col : MUTED}" font-weight="${affected ? 700 : 400}" class="m">${frac(pr)}${affected ? ' aff.' : carrier ? ' carr.' : ''}</text>`;
+    });
+  });
+  /* the words */
+  const P = inf.probs[p.id], unborn = p.obs === 'unborn';
+  const pAff = p.sex === 'M' ? P[1] : P[2];
+  const tx = 560, line = (y, t, fill = INK, size = 12.5, weight = 400) => `<text x="${tx}" y="${y}" font-size="${size}" fill="${fill}" font-weight="${weight}">${t}</text>`;
+  const mTxt = m.founder ? `${PED_LABEL[m.id]} is ${m.g === 0 ? 'not a carrier' : m.g === 1 ? 'a carrier' : 'affected'} (set by you),`
+    : `${PED_LABEL[m.id]} is a carrier with probability ${frac(inf.probs[m.id][1])}${inf.probs[m.id][2] > 0 ? `, affected ${frac(inf.probs[m.id][2])}` : ''},`;
+  h += line(596, esc(mTxt)) + line(614, `so each egg carries ${sup(T.h)} with probability <tspan font-weight="700">${frac(qm)}</tspan>.`);
+  h += p.sex === 'M' ? line(640, 'A son’s only X comes from his mother,') + line(658, `so P(affected) = <tspan font-weight="700">${frac(qm)}</tspan> before he is born.`)
+                     : line(640, 'A daughter also gets her father’s X,') + line(658, `which carries ${sup(T.h)} with probability <tspan font-weight="700">${frac(qf)}</tspan>.`);
+  if (unborn) h += line(684, `Not yet born: P(affected) = ${frac(pAff)}${p.sex === 'F' ? `, P(carrier) = ${frac(P[1])}` : ''}.`, T.col, 12.5, 700);
+  else h += line(684, `Born ${p.obs === 'aff' ? 'affected' : 'unaffected'}${p.sex === 'F' && p.obs === 'unaff' ? `; given the whole family, P(carrier) = ${frac(P[1])}` : ''}.`, INK, 12.5, 700);
+  if (p.sex === 'F' && !unborn && p.obs === 'unaff' && Pd.people.some(c => c.mother === p.id && c.obs !== 'unborn')) h += line(704, 'Her own children moved that number: the model re-weighs (Bayes).', MUTED, 11.5);
+  $('pdDet').innerHTML = h;
+}
+function paintPedButtons(){
+  const Pd = S.ped, p = person(Pd.sel), on = S.locked;
+  const born = p && (p.founder || p.obs !== 'unborn');
+  $('btnDau').disabled = !on || !p || !p.partner || Pd.people.length >= 30 || p.gen >= 3;
+  $('btnSon').disabled = $('btnDau').disabled;
+  $('btnPartner').disabled = !on || !p || !!p.partner || !born || Pd.people.length >= 30 || p.gen >= 3;
+  $('btnStatus').disabled = !on || !p || !p.founder;
+  $('btnRoll').disabled = !on || !p || p.founder || p.obs !== 'unborn';
+  $('btnRollAll').disabled = !on || !Pd.people.some(q => !q.founder && q.obs === 'unborn');
+  $('btnPedReset').disabled = !on;
+}
+function paintPedMeas(inf){
+  const Pd = S.ped, p = person(Pd.sel);
+  let r = `<div class="readout">`;
+  if (p) {
+    const P = inf.probs[p.id];
+    r += `<span>Selected</span><b>${PED_LABEL[p.id]}</b>`;
+    if (p.sex === 'F') r += `<span>P(${xgText('F', 0)}) not a carrier</span><b>${frac(P[0])}</b><span>P(${xgText('F', 1)}) carrier</span><b>${frac(P[1])}</b><span>P(${xgText('F', 2)}) affected</span><b>${frac(P[2])}</b>`;
+    else r += `<span>P(${xgText('M', 0)}) unaffected</span><b>${frac(P[0])}</b><span>P(${xgText('M', 1)}) affected</span><b>${frac(P[1])}</b>`;
+  }
+  r += `<i class="sep"></i><span>People</span><b>${Pd.people.length}</b><span>Genotype combinations weighed</span><b>${PED_COMBOS}</b></div>`;
+  $('meas').innerHTML = r;
+}
+let PED_COMBOS = 0;
+function paintPedWhy(inf){
+  const T = TRAITS[S.ped.trait];
+  $('why').innerHTML = `<p>The gene for ${T.name} is on the X chromosome, and the harmful allele is recessive. A man has one X, so one copy shows. A woman needs two; with one she is a <b>carrier</b> and usually healthy.</p>
+    <p>A son gets his X from his mother only, so a carrier mother passes it to each son with probability 1/2. An affected father passes his X to <b>every</b> daughter (all carriers) and to no son.</p>`;
+}
+function checkPed(inf){
+  if (!S.locked) return;
+  for (const p of S.ped.people) {
+    if (p.founder || p.sex !== 'M' || p.obs !== 'aff') continue;
+    const m = person(p.mother), mAff = m.founder ? m.g === 2 : m.obs === 'aff';
+    if (!mAff) discover('carrier');
+  }
+}
+function pedAdd(kind){
+  const Pd = S.ped, p = person(Pd.sel); if (!p) return;
+  if (kind === 'partner') {
+    const id = 'p' + Pd.next++;
+    Pd.people.push({id, sex: p.sex === 'M' ? 'F' : 'M', founder: true, g: 0, gen: p.gen, partner: p.id});
+    p.partner = id; Pd.sel = id;
+  } else {
+    const other = person(p.partner), id = 'p' + Pd.next++;
+    const father = p.sex === 'M' ? p : other, mother = p.sex === 'F' ? p : other;
+    Pd.people.push({id, sex: kind === 'son' ? 'M' : 'F', founder: false, obs: 'unborn', gen: p.gen + 1, father: father.id, mother: mother.id});
+    Pd.sel = id;
+  }
+  sound('pop'); track('pedigree', {add: kind}); paintPed();
+}
+function pedRoll(id){
+  const p = person(id); if (!p || p.founder || p.obs !== 'unborn') return;
+  const P = infer(S.ped.people).probs[id], r = RNG.ped();
+  let g = 0, acc = 0; for (let k = 0; k < P.length; k++) { acc += P[k]; if (r < acc) { g = k; break; } g = k; }
+  p.obs = phenoOf(p.sex, g);
+  track('roll', {id, obs: p.obs});
+}
+
+/* ============================================================================
+   Tabs, controls, start.
+   ============================================================================ */
+build();
+function paintVis(){
+  for (const [t, v, c, b] of [['link', 'vLink', 'ctlLink', 'tabLink'], ['dom', 'vDom', 'ctlDom', 'tabDom'], ['ped', 'vPed', 'ctlPed', 'tabPed']]) {
+    $(v).setAttribute('display', S.tab === t ? '' : 'none'); $(c).hidden = S.tab !== t; $(b).setAttribute('aria-pressed', S.tab === t);
+  }
+  $('measKick').textContent = {link: 'Measured, this cross', dom: 'Counted, this cross', ped: 'What the model infers'}[S.tab];
+  $('measVeil').hidden = S.locked; $('meas').hidden = !S.locked; $('whyCard').hidden = !S.locked;
+}
+function paintAll(){
+  paintVis();
+  if (S.tab === 'link') paintLink(); else if (S.tab === 'dom') paintDom(); else paintPed();
+  for (let i = 0; i < 32; i++) if (S.tab !== 'ped') $('ph' + i).setAttribute('display', 'none');
+}
+function setTab(t){ if (S.tab === t) return; S.tab = t; sound('tick'); paintAll(); track('tab', {tab: t}); }
+$('tabLink').addEventListener('click', () => setTab('link'));
+$('tabDom').addEventListener('click', () => setTab('dom'));
+$('tabPed').addEventListener('click', () => setTab('ped'));
+
+/* linkage controls */
+const distOut = () => { $('distOut').textContent = fmt(S.link.d, 1) + ' cM'; $('dist').value = S.link.d; };
+$('pair').addEventListener('change', e => { S.link.pair = e.target.value; S.link.d = PAIRS[S.link.pair].d; distOut(); clearLink(); sound('pop'); track('pair', {pair: S.link.pair}); });
+$('dist').addEventListener('input', e => { S.link.d = +e.target.value; distOut(); clearLink(); });
+$('xo').addEventListener('change', e => { S.link.mode = e.target.value; clearLink(); track('crossovers', {mode: S.link.mode}); });
+$('where').addEventListener('change', e => { S.link.linked = e.target.value === 'same'; $('dist').disabled = !S.link.linked || !S.locked; clearLink(); });
+const nLab = (idx, out, btn) => { const n = LIST[idx]; $(out).textContent = n; $(btn).textContent = `Breed ${n}`; };
+$('nL').addEventListener('input', e => { S.link.nIdx = +e.target.value; nLab(S.link.nIdx, 'nLOut', 'btnBreedL'); });
+$('btnBreedL').addEventListener('click', () => breedLink(LIST[S.link.nIdx]));
+$('btnOneL').addEventListener('click', () => breedLink(1));
+$('btnClearL').addEventListener('click', () => { clearLink(); sound('pop'); });
+$('btnRecord').addEventListener('click', () => {
+  const L = S.link, N = L.cnt.reduce((a, b) => a + b, 0), rf = rfOf(L.cnt);
+  L.records.push({d: L.d, rf, se: Math.sqrt(rf * (1 - rf) / N), mode: L.mode, N});
+  sound('snap'); track('record', {d: L.d, rf, mode: L.mode}); paintLinkPlot();
+});
+$('btnClearRec').addEventListener('click', () => { S.link.records = []; paintLinkPlot(); });
+
+/* dominance controls */
+function fillDom(){
+  const D = S.dom, o = domOptions();
+  $('d1').innerHTML = o.map(([v, t]) => `<option value="${v}">${esc(t)}</option>`).join('');
+  $('d2').innerHTML = $('d1').innerHTML;
+  if (!o.some(x => x[0] === D.p1)) D.p1 = o[D.type === 'abo' ? 1 : D.type === 'poly' ? 0 : 1][0];
+  if (!o.some(x => x[0] === D.p2)) D.p2 = o[D.type === 'abo' ? 3 : D.type === 'poly' ? 0 : 1][0];
+  $('d1').value = D.p1; $('d2').value = D.p2; $('dom').value = D.type;
+  $('genesRow').hidden = D.type !== 'poly';
+}
+$('dom').addEventListener('change', e => { S.dom.type = e.target.value; S.dom.kids = []; fillDom(); paintDom(); sound('pop'); track('dominance', {type: S.dom.type}); });
+$('nGenes').addEventListener('input', e => { S.dom.nGenes = +e.target.value; $('nGenesOut').textContent = S.dom.nGenes; S.dom.kids = []; S.dom.p1 = S.dom.p2 = ''; fillDom(); paintDom(); });
+$('d1').addEventListener('change', e => { S.dom.p1 = e.target.value; S.dom.kids = []; paintDom(); sound('pop'); });
+$('d2').addEventListener('change', e => { S.dom.p2 = e.target.value; S.dom.kids = []; paintDom(); sound('pop'); });
+$('nD').addEventListener('input', e => { S.dom.nIdx = +e.target.value; nLab(S.dom.nIdx, 'nDOut', 'btnBreedD'); });
+$('btnBreedD').addEventListener('click', () => breedDom(LIST[S.dom.nIdx]));
+$('btnClearD').addEventListener('click', () => { S.dom.kids = []; paintDom(); sound('pop'); });
+
+/* pedigree controls */
+for (let i = 0; i < 32; i++) $('ph' + i).addEventListener('click', e => { if (!S.locked) return; S.ped.sel = e.currentTarget.dataset.id; sound('tick'); paintPed(); });
+$('btnDau').addEventListener('click', () => pedAdd('daughter'));
+$('btnSon').addEventListener('click', () => pedAdd('son'));
+$('btnPartner').addEventListener('click', () => pedAdd('partner'));
+$('btnStatus').addEventListener('click', () => { const p = person(S.ped.sel); if (!p || !p.founder) return;
+  p.g = p.sex === 'F' ? (p.g + 1) % 3 : 1 - p.g; sound('tick'); track('status', {id: p.id, g: p.g});
+  /* a founder's new status can make what was seen impossible: the family's rolled children are unborn again */
+  if (!infer(S.ped.people).Z) S.ped.people.forEach(q => { if (!q.founder) q.obs = 'unborn'; });
+  paintPed(); });
+$('btnRoll').addEventListener('click', () => { pedRoll(S.ped.sel); sound('boing'); paintPed(); });
+$('btnRollAll').addEventListener('click', () => { const ids = S.ped.people.filter(q => !q.founder && q.obs === 'unborn').sort((a, b) => a.gen - b.gen).map(q => q.id);
+  for (const id of ids) pedRoll(id); sound('boing'); paintPed(); });
+$('btnPedReset').addEventListener('click', () => { pedDefault(); sound('pop'); paintPed(); });
+$('xtrait').addEventListener('change', e => { S.ped.trait = e.target.value; paintPed(); });
+
+function lockControls(lock){
+  for (const id of ['tabLink', 'tabDom', 'tabPed', 'pair', 'dist', 'xo', 'where', 'nL', 'btnBreedL', 'btnOneL', 'btnClearL', 'btnClearRec',
+                    'dom', 'nGenes', 'd1', 'd2', 'nD', 'btnBreedD', 'btnClearD', 'xtrait']) $(id).disabled = lock;
+  if (lock) ['btnRecord', 'btnDau', 'btnSon', 'btnPartner', 'btnStatus', 'btnRoll', 'btnRollAll', 'btnPedReset'].forEach(id => $(id).disabled = true);
+  $('hits').style.pointerEvents = lock ? 'none' : '';
+  $('gate').hidden = !lock;
+}
+
+/* idle life: the newest fly grooms its wings now and then */
+loop((dt, t) => {
+  if (reduced() || S.tab !== 'link') return;
+  const f = $('bigFly'); if (!f || f.dataset.tw) return;
+  f.setAttribute('transform', `scale(2.1) rotate(${(Math.sin(t * .8) * 2.5).toFixed(2)})`);
+});
+
+findings($('finds'), [
+  {id: 'noblend',  icon: '✿', label: 'No blending: pink gives red and white back', hint: 'Cross two pink snapdragons'},
+  {id: 'ab',       icon: 'AB', label: 'Both show at once (AB)',                     hint: 'Find a child with both antigens'},
+  {id: 'linked',   icon: '⛓', label: 'Linked genes stick together',                hint: 'Breed genes a few map units apart'},
+  {id: 'distance', icon: '📏', label: 'Recombination measures distance',            hint: 'Measure RF for a distance of 10 cM or more'},
+  {id: 'carrier',  icon: '◉', label: 'A carrier mother',                           hint: 'An affected son of an unaffected woman'},
+  {id: 'bell',     icon: '∩', label: 'Many genes, a bell curve',                   hint: 'Three or more genes, and many offspring'},
+], () => toast('All six. Mendel’s laws, and the places where chromosomes bend them.', 4200));
+
+const POE = predict($('poe'), {
+  id: 'linked-testcross',
+  q: 'Two genes sit very close together on one chromosome. In a dihybrid test cross, what do you expect?',
+  options: [
+    {id: 'even',     text: '1 : 1 : 1 : 1, like genes on different chromosomes.'},
+    {id: 'parental', text: 'Mostly the parental types.', right: true},
+    {id: 'new',      text: 'Mostly new combinations.'},
+    {id: 'nine',     text: '9 : 3 : 3 : 1.'},
+  ],
+  onLock(){
+    S.locked = true; lockControls(false);
+    $('dist').disabled = !S.link.linked;
+    say('Now breed. Start with yellow body and white eye.');
+    paintAll();
+  },
+});
+let EXPLAINED = false;
+pedDefault(); fillDom(); distOut();
+nLab(S.link.nIdx, 'nLOut', 'btnBreedL'); nLab(S.dom.nIdx, 'nDOut', 'btnBreedD');
+$('pair').value = S.link.pair;
+lockControls(!POE.locked);
+if (!Play.FF('predict')) S.locked = true;
+paintAll();
+window.applyFeatures = () => paintAll();
+window.PG_STATE = () => {
+  const L = S.link, N = L.cnt.reduce((a, b) => a + b, 0);
+  return JSON.parse(JSON.stringify({tab: S.tab, locked: S.locked,
+    link: {pair: L.pair, d: L.d, mode: L.mode, linked: L.linked, cnt: L.cnt, N, rf: rfOf(L.cnt), records: L.records, last: L.last && {c: L.last.c, a: L.last.a, b: L.last.b, rec: L.last.rec, ex: L.last.ex.length}},
+    dom: {type: S.dom.type, nGenes: S.dom.nGenes, p1: S.dom.p1, p2: S.dom.p2, N: S.dom.kids.length, obs: dCount(S.dom.type, S.dom.kids, S.dom.nGenes)},
+    ped: {sel: S.ped.sel, labels: PED_LABEL, people: S.ped.people, probs: PED_INF ? PED_INF.probs : null}}));
+};
+window.PG_MODEL = {PAIRS, meiosis, testCross, rfOf, rfTheory, poisson, DOM, gtype, dGamete, dBreed, dClass, dClasses, dPunnett, dExpected, dCount,
+  chiSquare, chiP, histStats, childDist, phenoOf, infer, frac, mulberry32,
+  runTest: (d, mode, n, seed, linked = true) => testCross(d, mode, n, mulberry32(seed), linked),
+  runDom: (type, p1, p2, n, seed, nGenes = 3) => dCount(type, dBreed(gtype(p1), gtype(p2), n, mulberry32(seed)), nGenes)};
+</script>
+</body>
+</html>

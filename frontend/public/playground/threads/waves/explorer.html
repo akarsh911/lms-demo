@@ -1,0 +1,432 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>A Rubber-Band Guitar</title>
+<meta name="description" content="Class 5: stretch rubber bands over a cardboard box and pluck them — tighter and shorter bands sing higher. Then blow up a balloon rocket and warm a cup of water in the Sun.">
+<link rel="icon" href="../../favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600&family=Nunito:wght@500;700;800&display=swap">
+<link rel="stylesheet" href="../../play.css">
+<style>
+/* Only what this page needs beyond play.css. */
+html{scrollbar-gutter:stable}
+.tabs{display:flex; gap:8px; padding:10px 12px; background:var(--sunk); border-bottom:1px solid var(--hair)}
+.tab{flex:1; min-height:48px; border-radius:var(--radius-sm); border:2px solid transparent; background:var(--card); cursor:pointer;
+  font-family:var(--font-head); font-size:17px; font-weight:600; color:var(--ink-2); display:flex; align-items:center; justify-content:center; gap:8px}
+.tab[aria-selected="true"]{border-color:var(--accent); color:var(--ink); box-shadow:0 2px 0 var(--accent)}
+.tab:hover{border-color:var(--hair-2)}
+#stageWrap{align-self:start; min-height:0}
+.pegHit, #bridgeHit, #blowBtn{cursor:pointer}
+.missions{list-style:none; margin:0; padding:0; display:grid; gap:7px}
+.missions li{display:grid; grid-template-columns:30px 1fr; gap:8px; align-items:center; font-weight:700; font-size:15px; line-height:1.3; color:var(--ink-2)}
+.missions li i{width:28px; height:28px; border-radius:50%; border:2.5px dashed var(--hair-2); display:grid; place-items:center; font-style:normal; font-size:15px; color:#fff}
+.missions li.done{color:var(--ink)}
+.missions li.done i{border:none; background:var(--good); animation:tickPop .5s var(--spring)}
+.missions li.done span{text-decoration:line-through; text-decoration-color:var(--good); text-decoration-thickness:2px}
+@keyframes tickPop{0%{transform:scale(.3)}100%{transform:scale(1)}}
+.note{font-size:13px; color:var(--ink-3); margin:6px 0 0}
+.tight{display:grid; grid-template-columns:56px 1fr; gap:8px; align-items:center; margin:6px 0}
+.tight label{font-size:13px; font-weight:700; color:var(--ink-2)}
+.bandBtn{min-height:40px; border-radius:var(--radius-sm); border:2px solid var(--hair-2); background:var(--card); cursor:pointer; font-weight:700; font-size:14px; width:100%}
+.bandBtn:hover{border-color:var(--accent)}
+</style>
+</head>
+<body>
+<header class="pg-top"></header>
+
+<div class="pg-intro">
+  <h1>A rubber-band guitar</h1>
+  <p>Stretch rubber bands across a cardboard box and pluck them. Then blow up a balloon rocket, and warm a cup of water in the Sun.</p>
+</div>
+
+<main class="pg-main">
+  <section class="pg-stage" id="stageWrap">
+    <div class="tabs" role="tablist">
+      <button class="tab" id="tabGuitar" role="tab" aria-selected="true">🎸 The rubber-band guitar</button>
+      <button class="tab" id="tabHouse" role="tab" aria-selected="false">⚡ Energy around us</button>
+    </div>
+    <svg id="guitarStage" viewBox="0 0 1000 580" role="img" aria-label="A cardboard box with four rubber bands stretched over a hole. Click a band to pluck it, and drag the pencil to change how much of it can vibrate."></svg>
+    <svg id="houseStage" viewBox="0 0 1000 580" role="img" aria-label="A balloon rocket on a string, and two cups of water, one in the Sun and one in the shade" hidden></svg>
+  </section>
+
+  <aside class="pg-side">
+    <div id="sideGuitar" class="pg-side" style="gap:12px">
+      <div class="card">
+        <div class="kicker">Missions</div>
+        <ul class="missions" id="missionsGuitar"></ul>
+      </div>
+      <div class="card">
+        <div class="kicker">How tight is each band?</div>
+        <div class="tight"><label>Band 1</label><input type="range" id="t0" min="0" max="100" value="30"></div>
+        <div class="tight"><label>Band 2</label><input type="range" id="t1" min="0" max="100" value="30"></div>
+        <div class="tight"><label>Band 3</label><input type="range" id="t2" min="0" max="100" value="30"></div>
+        <div class="tight"><label>Band 4</label><input type="range" id="t3" min="0" max="100" value="30"></div>
+        <p class="note">Click a band to pluck it. Drag the pencil under the bands to change how much of each one can vibrate.</p>
+      </div>
+    </div>
+
+    <div id="sideHouse" class="pg-side" style="gap:12px" hidden>
+      <div class="card">
+        <div class="kicker">Missions</div>
+        <ul class="missions" id="missionsHouse"></ul>
+      </div>
+      <div class="card">
+        <div class="kicker">Balloon rocket</div>
+        <button class="bandBtn" id="blowBtn">🎈 Hold to blow up the balloon</button>
+        <p class="note" id="balloonNote">Fill it up, then let go of this button to release it!</p>
+      </div>
+      <div class="card">
+        <div class="kicker">Sun-powered water warmer</div>
+        <button class="bandBtn" id="waitBtn">🕐 Wait 5 minutes</button>
+        <p class="note" id="cupNote">Which cup do you think will get warmer?</p>
+      </div>
+    </div>
+
+    <div class="card"><div class="kicker">Discoveries</div><div id="finds"></div></div>
+  </aside>
+</main>
+
+<script src="../../play.js"></script>
+<script>
+'use strict';
+const {$, esc, clamp, fmt, drag, loop, sound, tone, say, track, toast, tween, findings, discover, found,
+       shareState, sharedState, mount, reduced} = Play;
+mount({thread: 'waves', band: 'explorer'});
+
+/* MODEL:start ==================================================================
+   THE GUITAR. Each rubber band is a string under tension: its note comes from
+   f = sqrt(T / mu) / (2L) — tighter (bigger T) or shorter (smaller L) always
+   makes a HIGHER note; a thicker band (bigger mu, its mass per metre) makes a
+   LOWER note for the same tension and length. T comes from the "how tight"
+   slider (2 N to 20 N); L comes from where the pencil sits under the bands
+   (6 cm to 22 cm of band left free to vibrate); mu is fixed per band, thinnest
+   to thickest. Nothing about the note is looked up — it is computed fresh
+   every time a band is plucked.
+
+   THE BALLOON ROCKET. While held, air fills the balloon (a pressure P0 that
+   grows towards a full balloon). Once let go, the balloon is pushed by that
+   pressure and slowed by drag: v' = k*P(t) - c*v, where the air escapes as
+   P(t) = P0 * exp(-t/tau) — stepped forward in small increments of time from
+   the moment of release, not looked up from how full it was.
+
+   THE SUN-POWERED WATER WARMER. Each cup's temperature moves toward its own
+   final temperature over time, T(t) = T_end + (T_start - T_end)*exp(-t/tau):
+   the sunlit cup's T_end is warm, the shaded cup's T_end is room temperature.
+   ============================================================================ */
+const MU = [0.0010, 0.0022, 0.0038, 0.0060];             // kg/m, thinnest to thickest band
+const TMIN = 2, TMAX = 20;                                // N
+const LMIN = 0.06, LMAX = 0.22;                           // m
+const tensionOf = tightPct => TMIN + (TMAX - TMIN) * clamp(tightPct, 0, 100) / 100;
+const lengthOf = bridgeFrac => LMIN + (LMAX - LMIN) * clamp(bridgeFrac, 0, 1);
+const bandFreq = (tightPct, bridgeFrac, bandIdx) => Math.sqrt(tensionOf(tightPct) / MU[bandIdx]) / (2 * lengthOf(bridgeFrac));
+
+/* the balloon rocket, stepped forward from release until it (almost) stops */
+function balloonRun(fill, dt = 0.01, tMax = 6){
+  const P0 = 3 * clamp(fill, 0, 1), tau = 0.9, k = 26, c = 3.2;
+  let v = 0, x = 0, t = 0;
+  while (t < tMax && (t < 0.05 || v > 0.02)) {
+    const P = P0 * Math.exp(-t / tau);
+    v += (k * P - c * v) * dt;
+    x += v * dt;
+    t += dt;
+  }
+  return {distance: x, time: t};
+}
+/* a cup's temperature after t minutes: sunlit warms towards 45C, shaded stays near room temperature */
+const AMBIENT = 25;
+function cupTemp(tMin, inSun){
+  const end = inSun ? 45 : 26, tau = inSun ? 8 : 20;
+  return end + (AMBIENT - end) * Math.exp(-tMin / tau);
+}
+/* MODEL:end */
+
+/* ---- state: plain data --------------------------------------------------- */
+const S = {scene: 'guitar', tight: [30, 30, 30, 30], bridge: 0.62,
+           plucks: [], blowing: false, fill: 0, balloon: null,
+           cupMin: 0, missions: {}};
+const shared = sharedState();
+if (shared) { if (shared.scene === 'house') S.scene = shared.scene; }
+shareState(() => ({scene: S.scene}));
+
+/* ---- missions -------------------------------------------------------------- */
+const MISSIONS = [
+  {id: 'first-sound',    scene: 'guitar', text: 'Pluck a band and hear it sing'},
+  {id: 'tighter-higher', scene: 'guitar', text: 'Make the same band tighter: does it go higher?'},
+  {id: 'shorter-higher', scene: 'guitar', text: 'Move the pencil to shorten a band, and pluck it again'},
+  {id: 'thin-thick',     scene: 'guitar', text: 'Pluck the thinnest band and the thickest band'},
+  {id: 'balloon-flies',  scene: 'house',  text: 'Blow up the balloon fully and let it fly'},
+  {id: 'sun-cup-warm',   scene: 'house',  text: 'Wait, and see which cup gets warmer'},
+];
+function renderMissions(){
+  for (const sc of ['guitar', 'house']) {
+    $(sc === 'guitar' ? 'missionsGuitar' : 'missionsHouse').innerHTML = MISSIONS.filter(m => m.scene === sc).map(m => {
+      const done = S.missions[m.id];
+      return `<li class="${done ? 'done' : ''}"><i aria-hidden="true">${done ? '✓' : ''}</i><span>${esc(m.text)}</span></li>`;
+    }).join('');
+  }
+}
+function tickMission(id, line, at){
+  if (S.missions[id]) return;
+  S.missions[id] = true;
+  renderMissions();
+  sound('chime');
+  track('mission', {id});
+  if (line && !found(id)) say(line);
+  discover(id, at);      // the mission checklist and the discoveries tray share ids on this page
+}
+
+/* ============================================================================
+   Scene 1: the guitar. Built once, then patched.
+   ============================================================================ */
+const gSvg = $('guitarStage');
+const BOX = {x: 150, y: 190, w: 700, h: 280};
+const HOLE = {x: 250, y: 236, w: 500, h: 190};
+const BY = [270, 322, 374, 426];                  // the four bands' y positions
+const RX0 = 260, RX1 = 740;                       // fixed peg x's (left, right)
+const THICK = [2.5, 4, 5.5, 7.5];
+const BANDCOL = ['#e0a24a', '#d98a3a', '#c96f2c', '#a8531f'];
+
+function buildGuitar(){
+  let bands = '', pegs = '';
+  for (let i = 0; i < 4; i++) {
+    bands += `<path id="band${i}" class="band" d="M${RX0} ${BY[i]} L${RX1} ${BY[i]}" fill="none" stroke="${BANDCOL[i]}" stroke-width="${THICK[i]}" stroke-linecap="round"/>`;
+    pegs += `<circle cx="${RX0 - 14}" cy="${BY[i]}" r="7" fill="#8a5a2b"/><circle cx="${RX1 + 14}" cy="${BY[i]}" r="7" fill="#8a5a2b"/>`;
+    bands += `<rect class="pegHit" data-b="${i}" x="${RX0}" y="${BY[i] - 22}" width="${RX1 - RX0}" height="44" fill="transparent" role="button" aria-label="Pluck band ${i + 1}"/>`;
+  }
+  gSvg.innerHTML = `
+  <defs>
+    <linearGradient id="gCard" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#c99a63"/><stop offset="1" stop-color="#a9793f"/></linearGradient>
+  </defs>
+  <rect width="1000" height="580" fill="#fbf3df"/>
+  <text x="500" y="40" text-anchor="middle" font-size="18" font-weight="800" fill="#5a4326" style="font-family:Fredoka,Nunito,sans-serif">Pluck a band!</text>
+  <rect x="${BOX.x}" y="${BOX.y}" width="${BOX.w}" height="${BOX.h}" rx="10" fill="url(#gCard)" stroke="#7a5a2e" stroke-width="4"/>
+  <rect x="${HOLE.x}" y="${HOLE.y}" width="${HOLE.w}" height="${HOLE.h}" rx="8" fill="#3d2c18"/>
+  ${pegs}
+  ${bands}
+  <g id="bridgeG">
+    <rect id="bridgeBar" y="${HOLE.y - 10}" width="14" height="${HOLE.h + 20}" rx="4" fill="#f2c675" stroke="#a9793f" stroke-width="2"/>
+    <circle id="bridgeTip" r="6" fill="#3d2c18"/>
+  </g>
+  <rect id="bridgeHit" y="${HOLE.y - 24}" width="40" height="${HOLE.h + 48}" fill="transparent" role="slider" aria-label="Drag the pencil left or right"/>
+  <text id="bridgeLab" y="${HOLE.y - 30}" text-anchor="middle" font-size="12.5" font-weight="700" fill="#5a4326">pencil</text>
+  <text x="500" y="${BOX.y + BOX.h + 40}" text-anchor="middle" font-size="14" font-weight="700" fill="#5a4326" id="guitarNote"></text>
+  `;
+  document.querySelectorAll('.pegHit').forEach(el => el.addEventListener('click', () => pluck(+el.dataset.b)));
+}
+function bridgeX(){ return RX0 + 20 + S.bridge * (RX1 - RX0 - 40); }
+function paintGuitar(){
+  const bx = bridgeX();
+  $('bridgeG').setAttribute('transform', `translate(${bx.toFixed(1)} 0)`);
+  $('bridgeTip').setAttribute('cy', HOLE.y - 4);
+  $('bridgeHit').setAttribute('x', bx - 20);
+  $('bridgeLab').setAttribute('x', bx);
+  for (let i = 0; i < 4; i++) {
+    const el = $('band' + i), amp = bandAmp(i);
+    el.setAttribute('d', bandPath(i, bx, amp));
+  }
+}
+/* a plucked band's shape: still to the left of the pencil, a decaying ripple to the right of it */
+function bandPath(i, bx, amp){
+  const y = BY[i];
+  if (amp < 0.3) return `M${RX0} ${y} L${RX1} ${y}`;
+  const n = 24, pts = [`M${RX0} ${y}`, `L${bx.toFixed(1)} ${y}`];
+  for (let k = 0; k <= n; k++) {
+    const x = bx + (RX1 - bx) * k / n;
+    const yy = y + amp * Math.sin(Math.PI * k / n) * Math.sin(PLUCK[i].phase);
+    pts.push(`${k === 0 ? 'L' : 'L'}${x.toFixed(1)} ${yy.toFixed(1)}`);
+  }
+  return pts.join(' ');
+}
+const PLUCK = [{amp: 0, t: -9, phase: 0}, {amp: 0, t: -9, phase: 0}, {amp: 0, t: -9, phase: 0}, {amp: 0, t: -9, phase: 0}];
+function bandAmp(i){ return PLUCK[i].amp; }
+function pluck(i){
+  const freq = bandFreq(S.tight[i], S.bridge, i);
+  tone(clamp(freq, 60, 1400), 0.6, 'triangle', 0.16, 0, clamp(freq, 60, 1400) * 0.92);
+  PLUCK[i] = {amp: 14, t: 0, phase: Math.PI / 2, freq, tight: S.tight[i], bridge: S.bridge};
+  S.plucks.push({band: i, freq, tight: S.tight[i], bridge: S.bridge});
+  $('guitarNote').textContent = `Band ${i + 1}: ${freq < 150 ? 'a low hum' : freq < 400 ? 'a middle note' : 'a high note'} (${Math.round(freq)} Hz)`;
+  track('pluck', {band: i, freq: Math.round(freq)});
+  checkGuitar(i);
+}
+function checkGuitar(i){
+  tickMission('first-sound', 'You made a sound! Plucking makes the band vibrate.');
+  const mine = S.plucks.filter(p => p.band === i);
+  const loose = mine.filter(p => p.tight <= 45), tightP = mine.filter(p => p.tight >= 70);
+  if (loose.length && tightP.length && Math.max(...tightP.map(p => p.freq)) > Math.max(...loose.map(p => p.freq)) * 1.15)
+    tickMission('tighter-higher', 'Tighter really is higher!');
+  const long = mine.filter(p => p.bridge >= 0.65), short = mine.filter(p => p.bridge <= 0.35);
+  if (long.length && short.length && Math.max(...short.map(p => p.freq)) > Math.max(...long.map(p => p.freq)) * 1.2)
+    tickMission('shorter-higher', 'Shorter really is higher!');
+  const gotThin = S.plucks.some(p => p.band === 0), gotThick = S.plucks.some(p => p.band === 3);
+  if (gotThin && gotThick) tickMission('thin-thick', 'The thin band sounds higher than the thick one!');
+}
+
+/* ============================================================================
+   Scene 2: the house. Built once, then patched.
+   ============================================================================ */
+const hSvg = $('houseStage');
+const STRING = {x0: 120, x1: 880, y: 130};
+function buildHouse(){
+  hSvg.innerHTML = `
+  <defs>
+    <radialGradient id="gSun2" cx="40%" cy="35%"><stop offset="0" stop-color="#fff6c8"/><stop offset=".6" stop-color="#ffc53d"/><stop offset="1" stop-color="#f28a12"/></radialGradient>
+  </defs>
+  <rect width="1000" height="580" fill="#eaf6ff"/>
+  <rect x="0" y="380" width="1000" height="200" fill="#bfe3a0"/>
+  <text x="500" y="40" text-anchor="middle" font-size="18" font-weight="800" fill="#2b3a4a" style="font-family:Fredoka,Nunito,sans-serif">Energy makes things move, and makes things warm</text>
+
+  <!-- balloon rocket -->
+  <text x="500" y="72" text-anchor="middle" font-size="13" font-weight="700" fill="#4a5a6a">THE BALLOON ROCKET</text>
+  <line x1="${STRING.x0}" y1="${STRING.y}" x2="${STRING.x1}" y2="${STRING.y}" stroke="#8a94a6" stroke-width="3"/>
+  <circle cx="${STRING.x0}" cy="${STRING.y}" r="6" fill="#5a6a7a"/><circle cx="${STRING.x1}" cy="${STRING.y}" r="6" fill="#5a6a7a"/>
+  <g id="balloonG">
+    <ellipse id="balloonBody" cx="0" cy="0" rx="20" ry="26" fill="#e0567a"/>
+    <path d="M0 26 l-6 8 l12 0 z" fill="#e0567a"/>
+    <rect x="-2" y="-6" width="46" height="4" fill="#cbd3da"/>
+  </g>
+  <text id="balloonPct" text-anchor="middle" font-size="13" font-weight="800" fill="#2b3a4a"></text>
+
+  <!-- two cups -->
+  <text x="500" y="230" text-anchor="middle" font-size="13" font-weight="700" fill="#4a5a6a">SUN-POWERED WATER WARMER</text>
+  <g transform="translate(340 340)">
+    <circle cx="0" cy="-90" r="34" fill="url(#gSun2)"/>
+    <g id="sunRays2">${Array.from({length: 10}, (_, i) => { const a = i * 36 * Math.PI / 180; return `<path d="M${(Math.cos(a)*40).toFixed(1)} ${(Math.sin(a)*40).toFixed(1)-90} L${(Math.cos(a)*54).toFixed(1)} ${(Math.sin(a)*54).toFixed(1)-90}" stroke="#ffc53d" stroke-width="4" stroke-linecap="round"/>`; }).join('')}</g>
+    <rect x="-30" y="0" width="60" height="60" rx="8" fill="#cfe0ee" stroke="#8fa6bc" stroke-width="3"/>
+    <rect id="sunWater" x="-25" y="20" width="50" height="35" fill="#5fb4e0"/>
+    <text y="86" text-anchor="middle" font-size="13" font-weight="800" fill="#2b3a4a">Cup in the Sun</text>
+    <text id="sunTemp" y="106" text-anchor="middle" font-size="15" font-weight="800" fill="#c9432f"></text>
+  </g>
+  <g transform="translate(660 340)">
+    <rect x="-52" y="-24" width="8" height="94" fill="#8a94a6"/>
+    <rect x="44" y="-24" width="8" height="94" fill="#8a94a6"/>
+    <path d="M-46 -70 L46 -70 L60 -34 L-60 -34 Z" fill="#6b7c8f"/>
+    <rect x="-40" y="-34" width="80" height="10" fill="#4a5a6a"/>
+    <rect x="-30" y="0" width="60" height="60" rx="8" fill="#cfe0ee" stroke="#8fa6bc" stroke-width="3"/>
+    <rect id="shadeWater" x="-25" y="20" width="50" height="35" fill="#5fb4e0"/>
+    <text y="86" text-anchor="middle" font-size="13" font-weight="800" fill="#2b3a4a">Cup in the shade</text>
+    <text id="shadeTemp" y="106" text-anchor="middle" font-size="15" font-weight="800" fill="#2f6fd0"/>
+  </g>
+  `;
+}
+function paintBalloon(){
+  const fill = S.balloon ? 0 : S.fill;
+  const x = STRING.x0 + 30 + (S.balloon ? clamp(S.balloon.x / 22, 0, 1) : 0) * (STRING.x1 - STRING.x0 - 60);
+  const scale = S.balloon ? Math.max(0.35, 1 - S.balloon.x / 7) : 0.5 + 0.5 * fill;
+  $('balloonG').setAttribute('transform', `translate(${x.toFixed(1)} ${STRING.y - 30}) scale(${scale.toFixed(2)})`);
+  $('balloonPct').setAttribute('x', x); $('balloonPct').setAttribute('y', STRING.y - 66);
+  $('balloonPct').textContent = S.balloon ? '' : Math.round(fill * 100) + '% full';
+  $('balloonBody').setAttribute('fill', fill > 0.85 || S.balloon ? '#e0567a' : mix('#f3b6c8', '#e0567a', fill));
+}
+function mix(a, b, t){
+  const pa = [1, 3, 5].map(i => parseInt(a.slice(i, i + 2), 16)), pb = [1, 3, 5].map(i => parseInt(b.slice(i, i + 2), 16));
+  return '#' + pa.map((v, i) => Math.round(v + (pb[i] - v) * t).toString(16).padStart(2, '0')).join('');
+}
+function tempColour(t){ return mix('#5fb4e0', '#e05a3a', clamp((t - 25) / 20, 0, 1)); }
+function paintCups(){
+  const st = cupTemp(S.cupMin, true), ct = cupTemp(S.cupMin, false);
+  $('sunWater').setAttribute('fill', tempColour(st));
+  $('shadeWater').setAttribute('fill', tempColour(ct));
+  $('sunTemp').textContent = Math.round(st) + ' °C';
+  $('shadeTemp').textContent = Math.round(ct) + ' °C';
+  $('cupNote').textContent = S.cupMin === 0 ? 'Which cup do you think will get warmer?' : `${S.cupMin} minutes have passed.`;
+  if (S.cupMin >= 15 && st - ct >= 8) tickMission('sun-cup-warm', 'The sunlit cup is much warmer! Sunlight gives us heat energy.');
+}
+
+/* ============================================================================
+   Controls
+   ============================================================================ */
+buildGuitar(); buildHouse();
+function showScene(sc){
+  S.scene = sc;
+  $('tabGuitar').setAttribute('aria-selected', sc === 'guitar'); $('tabHouse').setAttribute('aria-selected', sc === 'house');
+  $('guitarStage').toggleAttribute('hidden', sc !== 'guitar'); $('houseStage').toggleAttribute('hidden', sc !== 'house');
+  $('sideGuitar').hidden = sc !== 'guitar'; $('sideHouse').hidden = sc !== 'house';
+  if (sc === 'guitar') { paintGuitar(); say('Pluck a band, and try making it tighter or shorter.'); }
+  else { paintBalloon(); paintCups(); say('Blow up the balloon, then let it go!'); }
+}
+$('tabGuitar').addEventListener('click', () => { sound('tick'); showScene('guitar'); track('scene', {scene: 'guitar'}); });
+$('tabHouse').addEventListener('click', () => { sound('tick'); showScene('house'); track('scene', {scene: 'house'}); });
+
+for (let i = 0; i < 4; i++) $('t' + i).addEventListener('input', e => { S.tight[i] = +e.target.value; track('tightness', {band: i, v: S.tight[i]}); });
+
+drag($('bridgeHit'), gSvg, {
+  start(){ sound('tick'); },
+  move(p){ S.bridge = clamp((p.x - RX0 - 20) / (RX1 - RX0 - 40), 0, 1); paintGuitar(); },
+  end(){ track('bridge', {bridge: +S.bridge.toFixed(2)}); },
+});
+$('bridgeHit').addEventListener('keydown', e => {
+  const k = {ArrowRight: 1, ArrowUp: 1, ArrowLeft: -1, ArrowDown: -1}[e.key]; if (!k) return;
+  e.preventDefault(); S.bridge = clamp(S.bridge + k * 0.05, 0, 1); paintGuitar();
+});
+
+/* the balloon: hold to fill, release to fly */
+let blowing = null;
+function startBlow(){
+  if (S.balloon) return;
+  S.blowing = true; sound('tick');
+  blowing = loop(dt => { if (!S.blowing) return; S.fill = clamp(S.fill + dt * 0.55, 0, 1); paintBalloon(); });
+}
+function releaseBlow(){
+  if (!S.blowing) return;
+  S.blowing = false; if (blowing) { blowing.stop(); blowing = null; }
+  const fill = S.fill;
+  if (fill < 0.15) { S.fill = 0; paintBalloon(); return; }
+  const run = balloonRun(fill);
+  S.balloon = {x: 0, t: 0, run, fill};
+  $('balloonNote').textContent = fill > 0.85 ? 'A full balloon flies far!' : 'Try filling it all the way for the best flight.';
+  sound('whoosh');
+  track('release', {fill: +fill.toFixed(2), distance: +run.distance.toFixed(2)});
+  if (reduced()) { S.balloon.x = run.distance; S.fill = 0; paintBalloon(); finishBalloon(fill, run); }
+}
+function finishBalloon(fill, run){
+  if (fill >= 0.85 && run.distance >= 15) tickMission('balloon-flies', 'The escaping air pushed the balloon all the way along the string!');
+  setTimeout(() => { S.balloon = null; S.fill = 0; paintBalloon(); }, 900);
+}
+$('blowBtn').addEventListener('pointerdown', startBlow);
+$('blowBtn').addEventListener('pointerup', releaseBlow);
+$('blowBtn').addEventListener('pointerleave', () => { if (S.blowing) releaseBlow(); });
+loop(dt => {
+  if (!S.balloon || reduced()) return;
+  S.balloon.t += dt;
+  const run = S.balloon.run, frac = clamp(S.balloon.t / run.time, 0, 1);
+  S.balloon.x = run.distance * (1 - Math.pow(1 - frac, 1.6));
+  paintBalloon();
+  if (frac >= 1) { finishBalloon(S.balloon.fill, run); S.balloon = null; }
+});
+
+$('waitBtn').addEventListener('click', () => {
+  S.cupMin = Math.min(20, S.cupMin + 5); sound('tick'); paintCups(); track('wait', {min: S.cupMin});
+});
+
+/* the plucked bands settle over time; skipped entirely under reduced motion */
+if (!reduced()) loop(dt => {
+  let any = false;
+  for (const p of PLUCK) { if (p.amp > 0.05) { p.t += dt; p.amp *= Math.exp(-dt * 3.2); p.phase += dt * (p.freq || 220) * 0.25; any = true; } }
+  if (any && S.scene === 'guitar') paintGuitar();
+});
+
+/* ============================================================================
+   Start
+   ============================================================================ */
+findings($('finds'), [
+  {id: 'first-sound',    icon: '🎵', label: 'Your first pluck', hint: 'Click a rubber band', say: 'Plucking makes the band vibrate — that is sound energy.'},
+  {id: 'tighter-higher', icon: '⬆️', label: 'Tighter is higher', hint: 'Pluck one band loose, then tight', say: 'A tighter band sings a higher note.'},
+  {id: 'shorter-higher', icon: '✏️', label: 'Shorter is higher', hint: 'Move the pencil, then pluck again', say: 'A shorter band sings a higher note.'},
+  {id: 'thin-thick',     icon: '🎸', label: 'Thin and thick sound different', hint: 'Pluck band 1 and band 4', say: 'The thin band sounds higher than the thick one.'},
+  {id: 'balloon-flies',  icon: '🎈', label: 'Air pushes the balloon', hint: 'Fill the balloon all the way and let go', say: 'The escaping air pushed the balloon along the string.'},
+  {id: 'sun-cup-warm',   icon: '☀️', label: 'The Sun warms the water', hint: 'Wait a few minutes and compare the cups', say: 'The sunlit cup is warmer: sunlight gives us heat energy.'},
+], () => toast('You found all six! Energy makes things move, sound and warm up.', 4200));
+
+renderMissions();
+showScene(S.scene);
+say('Welcome! Pluck a rubber band, then try the balloon rocket and the sunny cup.');
+
+window.PG_STATE = () => JSON.parse(JSON.stringify({scene: S.scene, tight: S.tight, bridge: S.bridge, plucks: S.plucks, fill: S.fill,
+  balloon: S.balloon, cupMin: S.cupMin, missions: S.missions}));
+window.PG_MODEL = {bandFreq, tensionOf, lengthOf, MU, balloonRun, cupTemp, AMBIENT};
+</script>
+</body>
+</html>

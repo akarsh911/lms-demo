@@ -1,0 +1,999 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Time, Projections, Contours</title>
+<meta name="description" content="Class 11 practical geography: local time from longitude and the choice of a standard meridian; map projections measured with Tissot's circles; contours drawn from a terrain you shape, with a cross-section.">
+<link rel="icon" href="../../favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600&family=Inter:wght@400;500;600;700&family=Nunito:wght@500;700;800&family=Newsreader:opsz,wght@6..72,400;6..72,500&family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="../../play.css">
+<style>
+/* Only what this page needs beyond play.css. */
+.pg-stage{min-height:0}
+.gate{position:absolute; inset:0; display:grid; place-items:center; pointer-events:none}
+.gate span{background:rgba(29,35,39,.86); color:#fff; padding:10px 16px; border-radius:99px; font-weight:600; font-size:14px}
+.seg{display:grid; grid-auto-flow:column; grid-auto-columns:1fr; gap:4px; background:var(--sunk); padding:4px; border-radius:var(--radius-sm); margin:4px 0 8px}
+.seg button{border:0; background:transparent; border-radius:6px; min-height:30px; font-weight:600; font-size:12.5px; cursor:pointer; color:var(--ink-2); padding:0 4px}
+.seg button[aria-pressed="true"]{background:var(--card); color:var(--ink); box-shadow:var(--shadow)}
+.seg button:disabled{opacity:.5; cursor:default}
+.seg.wrap{grid-auto-flow:row; grid-template-columns:repeat(3,1fr)}
+.ctl{grid-template-columns:112px 1fr 64px; margin:2px 0}
+.ctl label{font-size:12.5px; line-height:1.2}
+.ctl output{font-family:var(--font-mono); font-size:12.5px; font-weight:600; min-width:0}
+.sub{font-size:11px; letter-spacing:.07em; text-transform:uppercase; font-weight:700; color:var(--ink-3); margin:10px 0 2px}
+.note{font-size:12.5px; color:var(--ink-3); margin:6px 0 0}
+.why p{font-size:13.5px; margin-bottom:.55em}
+.drag{cursor:grab} .drag.dragging{cursor:grabbing}
+svg text.m{font-family:var(--font-mono)}
+svg text.serif{font-family:"Newsreader",Georgia,serif}
+@media (max-width:1200px) and (min-width:981px){ .pg-main.wide-side{grid-template-columns:minmax(0,1fr) 330px} }
+</style>
+</head>
+<body>
+<header class="pg-top"></header>
+
+<div class="pg-intro">
+  <h1>Time zones, projections and contours</h1>
+  <p>Three practical tools from the NCERT <i>Practical Work in Geography</i>: the Earth turning 1° every 4 minutes, and the standard
+     meridian a country chooses; the graticule transferred from a globe to a cylinder, a cone or a plane, with its distortion measured;
+     and a terrain you shape yourself, read through its contours and a cross-section.</p>
+</div>
+
+<main class="pg-main wide-side">
+  <section class="pg-stage" id="stageWrap">
+    <svg id="stage" viewBox="0 0 1000 660" role="img" aria-label="Geography practical tools: a polar view of longitude and time, map projections with distortion circles, and a contour map with a cross-section"></svg>
+    <div class="gate" id="gate"><span>Make your prediction first →</span></div>
+  </section>
+
+  <aside class="pg-side">
+    <div id="poe"></div>
+
+    <div class="card" id="ctlCard">
+      <div class="seg"><button id="tabTime" aria-pressed="false">Longitude and time</button><button id="tabProj" aria-pressed="true">Projections</button><button id="tabCont" aria-pressed="false">Contours</button></div>
+
+      <div id="ctlTime" hidden>
+        <div class="ctl"><label for="gmt">Time at Greenwich</label><input type="range" id="gmt" min="0" max="1436" step="4" value="720"><output id="gmtOut">12:00</output></div>
+        <div class="ctl"><label for="stdm">Standard meridian</label><input type="range" id="stdm" min="66" max="100" step="0.25" value="77"><output id="stdmOut">77°E</output></div>
+        <p class="note">Drag the marker <b>P</b> round the dial to any longitude. Try several standard meridians for India and watch the worst mismatch.</p>
+      </div>
+
+      <div id="ctlProj">
+        <div class="seg wrap" id="projSeg">
+          <button data-proj="simple" aria-pressed="false">Simple cylindrical</button>
+          <button data-proj="equal" aria-pressed="true">Cylindrical equal area</button>
+          <button data-proj="mercator" aria-pressed="false">Mercator</button>
+          <button data-proj="conic" aria-pressed="false">Conical, one parallel</button>
+          <button data-proj="zenithal" aria-pressed="false">Zenithal (polar)</button>
+        </div>
+        <div class="ctl" id="rowStd" hidden><label for="phi0">Standard parallel</label><input type="range" id="phi0" min="10" max="80" step="1" value="40"><output id="phi0Out">40°N</output></div>
+        <div class="ctl" id="rowLight" hidden><label for="light">Light source</label><input type="range" id="light" min="0" max="100" step="1" value="0"><output id="lightOut">centre</output></div>
+        <p class="note">Drag the probe circle on the map: it is a small circle on the globe, and its shape on the map is the distortion there.</p>
+      </div>
+
+      <div id="ctlCont" hidden>
+        <div class="sub">Contour interval (VI)</div>
+        <div class="seg" id="viSeg"><button data-vi="10" aria-pressed="false">10 m</button><button data-vi="20" aria-pressed="false">20 m</button><button data-vi="50" aria-pressed="true">50 m</button><button data-vi="100" aria-pressed="false">100 m</button></div>
+        <div class="sub">Shape the land</div>
+        <div class="seg" id="hillSeg"><button data-hill="0" aria-pressed="true">Hill 1</button><button data-hill="1" aria-pressed="false">Hill 2</button><button data-hill="2" aria-pressed="false">Hill 3</button></div>
+        <div class="ctl"><label for="hH">Height</label><input type="range" id="hH" min="0" max="900" step="10" value="600"><output id="hHOut">600 m</output></div>
+        <div class="ctl"><label for="hW">Spread</label><input type="range" id="hW" min="0.3" max="2" step="0.05" value="1.1"><output id="hWOut">1.10 km</output></div>
+        <div class="ctl"><label for="hP">Profile</label><input type="range" id="hP" min="0.5" max="4" step="0.1" value="1"><output id="hPOut">1.0</output></div>
+        <p class="note">Profile 0.5 makes a cone, 1 a rounded hill, 3 or more a flat-topped plateau. Drag the hills’ centres and the ends A and B of the section on the map.</p>
+      </div>
+    </div>
+
+    <div class="card why" id="whyCard" hidden>
+      <div class="kicker">What the model says</div>
+      <div id="why"></div>
+    </div>
+
+    <div class="card"><div class="kicker">To find</div><div id="finds"></div></div>
+  </aside>
+</main>
+
+<script src="../../play.js"></script>
+<script>
+'use strict';
+const {$, esc, clamp, fmt, drag, sound, say, track, toast, predict, findings, discover, found,
+       shareState, sharedState, mount} = Play;
+mount({thread: 'maps', band: 'theorist'});
+const D2R = Math.PI / 180, R2D = 180 / Math.PI;
+const wrap180 = l => ((l + 180) % 360 + 360) % 360 - 180;
+
+/* MODEL:start ==================================================================
+   THREE PRACTICAL TOOLS (NCERT Practical Work in Geography, Class 11, Ch 3–5).
+
+   1. LONGITUDE AND TIME. The Earth turns 360° in 24 hours: 15° an hour, 1° in
+      4 minutes, eastward. At GMT t (minutes) the local time at longitude λ is
+      t + 4λ. A country's standard time is the local time of its standard
+      meridian; India spans 68°7′ E to 97°25′ E, so the worst mismatch between
+      sun time and standard time anywhere in it is 4·max(λs − 68.12, 97.42 − λs).
+
+   2. MAP PROJECTIONS, on a globe of radius 1 (φ latitude, λ longitude from the
+      central meridian, radians):
+        simple cylindrical     x = λ,  y = φ
+        cylindrical equal area x = λ,  y = sin φ              (parallel rays, Lambert)
+        Mercator               x = λ,  y = ln tan(45° + φ/2)  (mathematical)
+        conical, one standard parallel φ0: parallels are arcs of radius
+                               ρ = cot φ0 + (φ0 − φ), meridians turn by n·λ, n = sin φ0
+        zenithal (polar), a light on the axis at distance h beyond the centre,
+                               opposite the tangent plane:  r = (1 + h) sin c / (cos c + h),
+                               c = 90° − φ; h = 0 gnomonic, h = 1 stereographic, h → ∞ orthographic.
+      Distortion is MEASURED, not looked up: the Jacobian of each projection is
+      taken by finite differences, and a small circle on the globe maps to the
+      ellipse it defines (Tissot's indicatrix): h along the meridian, k along the
+      parallel, area factor |det J| / cos φ, angular distortion 2·asin((a − b)/(a + b)).
+      A region's true area is its area on the equal-area projection.
+
+   3. CONTOURS. The land is a height field z(x, y) = base + Σ H·exp(−(d/w)^(2p)):
+      p = ½ a cone, 1 a rounded hill, 3+ a plateau. Contours are traced from a
+      grid by marching squares at the chosen vertical interval. A cross-section
+      AB is drawn two ways: sampled from the surface itself, and by the book's
+      method (mark where AB cuts each contour, and join the points).
+   ============================================================================ */
+/* ---- 1. time ---- */
+const INDIA_W = 68 + 7 / 60, INDIA_E = 97 + 25 / 60;
+const localMin = (t, lon) => t + 4 * lon;                                   // may run past a day
+const norm = m => ((m % 1440) + 1440) % 1440;
+const worstMismatch = std => 4 * Math.max(std - INDIA_W, INDIA_E - std);    // minutes
+const halfHourly = std => Math.abs(std / 7.5 - Math.round(std / 7.5)) < 1e-9;
+/* ---- 2. projections ---- */
+function project(kind, lat, lon, P){
+  const f = lat * D2R, l = lon * D2R;
+  switch (kind) {
+    case 'simple':   return {x: l, y: f};
+    case 'equal':    return {x: l, y: Math.sin(f)};
+    case 'mercator': return Math.abs(lat) >= 89.5 ? null : {x: l, y: Math.log(Math.tan(Math.PI / 4 + f / 2))};
+    case 'conic': {
+      const f0 = P.phi0 * D2R, n = Math.sin(f0), r0 = 1 / Math.tan(f0), r = r0 + (f0 - f);
+      return {x: r * Math.sin(n * l), y: r0 - r * Math.cos(n * l)};
+    }
+    case 'zenithal': {
+      const c = Math.PI / 2 - f, h = P.h, den = Math.cos(c) + h;
+      if (!isFinite(h)) return {x: Math.sin(c) * Math.sin(l), y: -Math.sin(c) * Math.cos(l)};
+      if (den <= 0.02) return null;
+      const r = (1 + h) * Math.sin(c) / den;
+      return {x: r * Math.sin(l), y: -r * Math.cos(l)};
+    }
+  }
+  return null;
+}
+function unproject(kind, x, y, P){
+  switch (kind) {
+    case 'simple':   return {lat: y * R2D, lon: x * R2D};
+    case 'equal':    return {lat: Math.asin(clamp(y, -1, 1)) * R2D, lon: x * R2D};
+    case 'mercator': return {lat: (2 * Math.atan(Math.exp(y)) - Math.PI / 2) * R2D, lon: x * R2D};
+    case 'conic': {
+      const f0 = P.phi0 * D2R, n = Math.sin(f0), r0 = 1 / Math.tan(f0);
+      const r = Math.hypot(x, r0 - y), th = Math.atan2(x, r0 - y);
+      return {lat: (f0 + r0 - r) * R2D, lon: th / n * R2D};
+    }
+    case 'zenithal': {
+      const r = Math.hypot(x, y), lon = Math.atan2(x, -y) * R2D;
+      const rOf = c => !isFinite(P.h) ? Math.sin(c) : (1 + P.h) * Math.sin(c) / (Math.cos(c) + P.h);
+      let lo = 0, hi = !isFinite(P.h) ? Math.PI / 2 : Math.min(Math.PI - 1e-3, Math.acos(-Math.min(P.h, 1)) - 1e-3);
+      if (!isFinite(P.h)) hi = Math.PI / 2;
+      for (let i = 0; i < 60; i++) { const m = (lo + hi) / 2; if (rOf(m) < r) lo = m; else hi = m; }
+      return {lat: 90 - lo * R2D, lon};
+    }
+  }
+}
+/* Tissot: the image of a small circle at (lat, lon), from the Jacobian by central differences. */
+function tissot(kind, lat, lon, P){
+  const e = 1e-4 * R2D, p0 = project(kind, lat, lon, P);
+  const pa = project(kind, lat + e, lon, P), pb = project(kind, lat - e, lon, P);
+  const pc = project(kind, lat, lon + e, P), pd = project(kind, lat, lon - e, P);
+  if (!p0 || !pa || !pb || !pc || !pd) return null;
+  const de = 2 * e * D2R, cf = Math.cos(lat * D2R);
+  const eF = {x: (pa.x - pb.x) / de, y: (pa.y - pb.y) / de};                  // along the meridian
+  const eL = {x: (pc.x - pd.x) / de / cf, y: (pc.y - pd.y) / de / cf};        // along the parallel
+  const h = Math.hypot(eF.x, eF.y), k = Math.hypot(eL.x, eL.y);
+  const det = Math.abs(eL.x * eF.y - eL.y * eF.x);
+  const S1 = eL.x * eL.x + eL.y * eL.y + eF.x * eF.x + eF.y * eF.y;
+  const disc = Math.sqrt(Math.max(0, S1 * S1 - 4 * det * det));
+  const a = Math.sqrt((S1 + disc) / 2), b = Math.sqrt(Math.max(0, (S1 - disc) / 2));
+  return {p: p0, eF, eL, h, k, area: det, a, b, omega: 2 * Math.asin((a - b) / (a + b)) * R2D};
+}
+/* Area of an outline (lon, lat pairs) as the projection draws it, in units of R². */
+function projArea(kind, arr, P, lonC = 0){
+  let s = 0, prev = null, first = null;
+  for (let i = 0; i < arr.length; i += 2) {
+    const q = project(kind, arr[i + 1], wrap180(arr[i] - lonC), P); if (!q) return NaN;
+    if (!first) first = q; if (prev) s += prev.x * q.y - q.x * prev.y; prev = q;
+  }
+  s += prev.x * first.y - first.x * prev.y;
+  return Math.abs(s) / 2;
+}
+/* ---- 3. contours ---- */
+const TW = 6, TH = 4;                                                         // the map: 6 km × 4 km
+function heightAt(hills, x, y){
+  let z = 120 + 40 * x / TW;                                                  // a plain rising gently to the east
+  for (const h of hills) {
+    if (h.H <= 0) continue;
+    const d = Math.hypot(x - h.x, y - h.y) / h.w;
+    z += h.H * Math.exp(-Math.pow(d, 2 * h.p));
+  }
+  return z;
+}
+function grid(hills, nx, ny){
+  const g = new Float64Array((nx + 1) * (ny + 1));
+  for (let j = 0; j <= ny; j++) for (let i = 0; i <= nx; i++) g[j * (nx + 1) + i] = heightAt(hills, i / nx * TW, j / ny * TH);
+  return g;
+}
+/* Marching squares: segments of the contour at level L, in grid units. */
+function contour(g, nx, ny, L){
+  const segs = [], W = nx + 1;
+  const lerp = (a, b) => (L - a) / (b - a);
+  for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) {
+    const a = g[j * W + i], b = g[j * W + i + 1], c = g[(j + 1) * W + i + 1], d = g[(j + 1) * W + i];
+    const code = (a >= L ? 8 : 0) | (b >= L ? 4 : 0) | (c >= L ? 2 : 0) | (d >= L ? 1 : 0);
+    if (code === 0 || code === 15) continue;
+    const T = () => [i + lerp(a, b), j], Rr = () => [i + 1, j + lerp(b, c)], Bm = () => [i + lerp(d, c), j + 1], Lf = () => [i, j + lerp(a, d)];
+    switch (code) {
+      case 1: case 14: segs.push([Lf(), Bm()]); break;
+      case 2: case 13: segs.push([Bm(), Rr()]); break;
+      case 3: case 12: segs.push([Lf(), Rr()]); break;
+      case 4: case 11: segs.push([T(), Rr()]); break;
+      case 6: case 9:  segs.push([T(), Bm()]); break;
+      case 7: case 8:  segs.push([Lf(), T()]); break;
+      case 5: segs.push([Lf(), T()], [Bm(), Rr()]); break;
+      case 10: segs.push([T(), Rr()], [Lf(), Bm()]); break;
+    }
+  }
+  return segs;
+}
+/* The section AB, both ways. Returns the surface profile, the contour crossings, the profile the
+   book's method draws from them, its RMS error, and the steepest slope with its horizontal equivalent. */
+function section(hills, A, B, vi, n = 240){
+  const len = Math.hypot(B.x - A.x, B.y - A.y), prof = [];
+  for (let i = 0; i <= n; i++) { const t = i / n; prof.push({s: t * len, z: heightAt(hills, A.x + (B.x - A.x) * t, A.y + (B.y - A.y) * t)}); }
+  const cross = [];
+  for (let i = 1; i <= n; i++) {
+    const z0 = prof[i - 1].z, z1 = prof[i].z;
+    const lo = Math.min(z0, z1), hi = Math.max(z0, z1);
+    for (let L = Math.ceil(lo / vi) * vi; L <= hi; L += vi) {
+      if (L === lo) continue;
+      const f = (L - z0) / (z1 - z0);
+      cross.push({s: prof[i - 1].s + f * (prof[i].s - prof[i - 1].s), z: L});
+    }
+  }
+  const book = s => {
+    if (!cross.length) return NaN;
+    if (s <= cross[0].s) return cross[0].z;
+    if (s >= cross[cross.length - 1].s) return cross[cross.length - 1].z;
+    let k = 1; while (k < cross.length && cross[k].s < s) k++;
+    const p = cross[k - 1], q = cross[k];
+    return q.s - p.s < 1e-12 ? p.z : p.z + (q.z - p.z) * (s - p.s) / (q.s - p.s);
+  };
+  let se = 0, cnt = 0, steep = 0, at = 0;
+  for (let i = 0; i <= n; i++) {
+    const b = book(prof[i].s); if (isFinite(b)) { se += (prof[i].z - b) ** 2; cnt++; }
+    if (i) { const g = Math.abs(prof[i].z - prof[i - 1].z) / ((prof[i].s - prof[i - 1].s) * 1000); if (g > steep) { steep = g; at = prof[i].s; } }
+  }
+  const slope = Math.atan(steep) * R2D;
+  return {len, prof, cross, book, rms: cnt ? Math.sqrt(se / cnt) : NaN, slope, at, he: steep > 0 ? vi / steep : Infinity};
+}
+/* MODEL:end */
+
+/* ---- outlines (lon, lat), simplified; India and Greenland drawn a little more carefully ---- */
+const LAND = [
+  [-5.6,36,-8.9,37,-9.5,38.7,-8.9,42,-9.3,43,-7.7,43.8,-1.8,43.4,-1.2,46,-4.7,48.4,-1.6,48.8,1.6,50.9,4,51.9,7,53.4,8.6,53.9,8.2,56.8,10.6,57.7,10.5,55,12.5,54.4,14.3,53.9,18.6,54.6,21.1,55.7,21,57,24.1,57,23.5,58.3,28,59.5,30.2,59.9,28,60.5,22.3,60.4,21.5,63,25.4,65,22.1,65.6,17.9,62.5,18,59.3,16,56.2,12.9,55.6,11.9,57.7,10.5,59.4,7,58,5.3,60.4,5,62,7.5,63,13,67,18.9,69.6,25.8,71.1,31,70.3,33.1,69,41,67,40.5,64.5,44,66,53,68.3,60,69,68,68.5,72.8,72.5,80,73.5,88,75.5,104,77.7,113,73.8,128,72.5,140,72.5,160,70,170,70,180,69,190.3,66,180,65,177,62.5,170,60,163,58,163,56,160,54,156.7,51,156,57,152,59,143,59.3,135,54.7,140,53,141,48,135,43.5,131.9,43.1,129.5,40.8,127.5,39.3,129.4,36,129,35.1,126.5,34.5,126.6,37.5,125,37.8,124.4,40,121.5,39,121.6,40.9,117.8,39,119,37.5,122.5,37,120.3,36,121.5,31.2,122,29.9,119.3,26.1,114.2,22.3,110.4,21.2,108.3,21.5,106.7,20.7,105.8,18.7,108.2,16.1,109.2,12.2,106.7,10.4,104.8,8.6,105,10.4,103,11,100.9,12.7,100.5,13.6,99.9,12,100.3,8.4,101.3,6.9,103.4,4,103.9,1.4,101.3,2.8,100.3,5.4,98.3,8,98.6,10,97.6,16.5,96.2,16.8,94.4,16,94.3,18.8,92.4,20.7,91.8,22.3,90.5,22.1,89,21.8,88.1,21.6,87.2,21.5,86.7,20.3,85.1,19.3,83.3,17.7,82.3,17,81.2,16.3,80.1,15.5,80.3,13.1,79.8,11.9,79.3,10.3,78.1,8.8,77.5,8.1,76.3,9.9,75.8,11.3,74.8,12.9,74.1,14.8,73.4,16.5,72.8,19,72.9,20,72.6,21.3,70.4,20.9,69.8,22.4,68.2,23.7,67,24.8,66.5,25.4,61.6,25.2,57.3,25.8,56.3,27.2,52,27.8,50.3,29.5,48,30,48,29.3,50.1,26.3,51.5,25.3,54.4,24.4,56.4,26.3,58.6,23.6,59.8,22.4,57.8,19,55,17,52,15.8,45,12.8,43.3,12.7,42.7,15.5,39.2,21.5,36.5,26,35,29.5,34.2,31.3,35,32.8,35.9,35.5,36.2,36.6,34.6,36.8,30.7,36.9,27.3,37,26.2,39.5,26.6,40.6,22.9,40.6,23.7,38,22.4,36.4,21.1,37.8,19.4,41.3,18.5,42.4,15.9,43.5,13.7,45.6,12.3,45.4,12.6,44,14.2,42.4,16.9,41.1,18.5,40.1,16.5,38.5,15.6,38,16,39.5,14.2,40.8,12.5,41.7,10.3,43.5,8.9,44.4,7.3,43.7,4.8,43.4,3.1,43,3.2,41.9,2.2,41.4,-0.4,39.5,-0.5,38.3,-2,36.8,-4.4,36.7],
+  [-17.1,14.7,-16.9,21.3,-13.2,27.6,-9.8,29.9,-6,35.8,3,36.8,10.2,37.2,11,33,15.3,32.3,20.1,32.1,25,31.6,32.3,31.2,34.9,29.5,37.3,19,39,15.5,43.3,11.9,51.3,11.8,49,6,42.5,-0.4,39.7,-4,39.3,-6.8,40.6,-10.8,40.5,-15,35.3,-23.9,32.9,-26,31,-29.9,25.6,-34,20,-34.8,18.4,-34,15,-27,14.5,-22.9,11.8,-17.2,13.2,-8.8,12.3,-6,9.4,0.4,9.7,4,6.5,4.3,3.4,6.4,-1,5,-4,5.3,-7.5,4.4,-10.8,6.3,-13.2,8.5,-15.2,11],
+  [49.3,-12,50.4,-15.5,47.1,-24.9,44,-25,43.3,-22,44.3,-16.2,47.5,-14],
+  [-5.7,50.1,1.4,51.2,1.7,52.6,0.1,53.5,-1.4,55,-2,57.1,-3.4,58.6,-5,58.6,-6.2,56.5,-4.9,55,-3.1,53.9,-4.6,53.3,-4.2,52.3,-5.2,51.7,-3.2,51.4],
+  [-6,52.2,-6.1,54.6,-7.3,55.3,-10,54.2,-9.9,52,-8.5,51.6],
+  [130.9,31.4,129.8,33.2,131,34.4,133,35.5,136,36.9,139,38.2,140,40.5,141.5,41.4,142,39.5,141,37.5,140.8,35.7,139.8,35,137,34.6,135.2,33.7,132.3,33],
+  [140,41.5,141.5,45.4,145.5,43.3,143.2,42],
+  [79.9,9.8,81.3,8.6,81.9,7.3,81.2,6.2,80.1,6,79.8,7.5],
+  [95.3,5.6,98.7,3.8,103.4,-1,106,-5.9,104.5,-5.9,101,-2.5,98.5,1],
+  [109,1.5,111,-3,116,-4,117.9,1,119,5,116.7,7,113.9,4.5,111,2],
+  [105.2,-6.8,114.4,-8.3,114.6,-7.7,106,-5.9],
+  [131,-1,141,-2.6,147,-6,150,-10.5,146,-8.5,141,-9.2,138,-8.4,135,-4.5,132,-2.8],
+  [113.5,-22,114.1,-21.8,116.8,-20.6,122.2,-18,125,-14.5,129,-15,130.8,-12.4,132.6,-11.5,135.9,-12.2,136,-15,140,-17.5,141.6,-12.6,142.5,-10.7,145.4,-14.9,146.8,-19.3,150,-22.5,153.1,-26,153.6,-28.6,151.2,-33.9,150,-37.5,146.3,-39.1,144.9,-37.8,140.8,-38,138.5,-35,135.9,-34.8,134.2,-32.7,131.2,-31.5,126,-32.3,123.6,-33.9,117.9,-35,115,-34.3,115.7,-31.9,114,-26.5],
+  [144.6,-40.7,148.3,-41,147.8,-43.2,146,-43.6],
+  [172.7,-34.4,175,-37,178.5,-37.7,177,-39.3,174.8,-41.3,174.6,-39],
+  [172.7,-40.5,174.3,-41.7,172.8,-43.6,171.2,-44.4,169,-46.6,166.5,-46,168,-44,171,-42],
+  [-168,65.6,-164,67,-156.8,71.3,-141,69.6,-133,69.5,-124,69.5,-115,68,-108,68,-96,68,-94,69.5,-85,69.5,-78,62.3,-72,61.8,-69.5,59,-65,60.4,-61,56,-55.7,52.2,-60,50.2,-66,50.2,-64.8,47.5,-61,45.5,-66,43.8,-70.2,43.6,-70,41.7,-74,40.6,-75.5,38.5,-76,36.9,-75.5,35.2,-78,33.9,-81.1,32,-81.4,30.3,-80.1,26.7,-80.4,25.2,-81.8,26.5,-82.7,28,-84.3,30,-89,30.3,-89.4,29,-94,29.6,-97.2,27.8,-97.5,25,-97.8,22,-96.1,19.2,-94.5,18.2,-91,18.6,-90.4,21,-87,21.5,-87.7,18.5,-88.3,16,-84,15.9,-83.3,15,-83.8,11,-81.5,8.8,-79.5,9.3,-77.4,8.6,-78,7.5,-80,7.3,-83,8.3,-85.7,10.8,-87.5,13.2,-91,13.9,-94,16,-96.5,15.7,-99.9,16.8,-104.3,19.1,-105.7,20.6,-105.4,23.2,-108.9,25.8,-111,27.9,-114.7,31.6,-112.8,29,-110.3,24.1,-109.9,22.9,-112.1,24.8,-114.1,27.7,-116.6,31.8,-117.2,32.7,-118.5,34,-120.6,34.6,-122.4,37.8,-124.2,40.4,-124.1,43.4,-124,46.2,-124.7,48.4,-123,49,-126,50.5,-128,52.5,-130.5,54.3,-133,57,-136.5,58.3,-139.7,59.6,-146,60.8,-151.4,59.2,-154,57.5,-158,56,-163,55,-159,58.5,-162,58.6,-165,60.5,-164.8,63,-161,64.4,-165.4,64.5],
+  [-80,73.5,-72,71,-66,68,-62,66.5,-65,63,-71,62.8,-78,64.5,-80,66.5,-86,70,-90,72.5],
+  [-84.9,21.9,-80,23.2,-74.1,20.2,-77.7,19.9,-81.5,22.2],
+  [-77.4,8.6,-75.5,10.4,-71.6,12.4,-68,10.5,-64,10.6,-61.9,10.7,-60,8.5,-57.2,6,-52.3,4.9,-50,1.8,-48.5,-1.4,-44.3,-2.5,-38.5,-3.7,-35.2,-5.8,-34.9,-8,-38.5,-13,-39,-17.7,-40.3,-20.3,-43.2,-22.9,-46.3,-24,-48.6,-27.6,-51.2,-30.8,-53.4,-33.7,-56.2,-34.9,-58.4,-34.6,-57.5,-36.5,-57.5,-38,-62.3,-38.8,-65,-41,-64.5,-42.5,-65.3,-45,-67.5,-46.4,-69.2,-51.6,-68.3,-52.4,-68.6,-54.8,-71,-54,-74.5,-52,-75.5,-48,-74,-44,-73.9,-41.5,-73.5,-37,-71.6,-33,-71.3,-29.9,-70.4,-23.6,-70.3,-18.5,-76.2,-13.7,-77.1,-12,-79,-8.1,-81.3,-4.7,-80.5,-2.2,-80.9,-1,-80,0.8,-78.9,1.8,-77.3,3.9,-77.4,6.6],
+];
+const GREENLAND = [-73,78,-60,82,-30,83.5,-12,81.5,-18,76.5,-22,70.3,-32,68.2,-40,65,-43.5,60,-50,62.5,-53,66,-54.5,70.5,-58,75.5,-66,76.5];
+const INDIA = [68.2,23.7,69.8,22.4,70.4,20.9,72.6,21.3,72.9,20,72.8,19,73.4,16.5,74.1,14.8,74.8,12.9,75.8,11.3,76.3,9.9,77.5,8.1,78.1,8.8,79.3,10.3,79.8,11.9,80.3,13.1,80.1,15.5,81.2,16.3,82.3,17,83.3,17.7,85.1,19.3,86.7,20.3,87.2,21.5,88.1,21.6,89,21.8,88.9,23,88.6,24.3,88.1,24.6,89.1,25.9,89.8,26.2,90.4,25.3,92,25.2,92.4,24.3,91.9,23.6,92.6,22,93.2,23,93.4,24,94.6,25.6,95.2,26.8,96.9,27.6,97.4,28.2,95.4,29.2,93.9,28,91.9,27.8,89.8,26.8,88.7,27.9,88.1,27,88.2,26.4,85,26.8,83,27.4,80.1,28.8,81,30.2,79,31,78.8,32.5,79.5,32.8,79,34.3,78,35.5,76.8,35.8,74.8,37.1,73.8,36,73.5,34.6,74,33.2,74.6,32.5,74.6,31,73.9,30.2,73.3,29,72.2,28,70.7,27.8,69.6,27,70.2,26.1,70.8,25.4,69.4,24.3,68.8,24.2];
+const LABEL_OFF = {London: [-6, 12], Delhi: [5, 12], Thimphu: [5, -6], Paris: [5, -5]};
+const TIME_CITIES = [
+  {name: 'Delhi', lat: 28.61, lon: 77.21}, {name: 'London', lat: 51.51, lon: -0.13}, {name: 'Tokyo', lat: 35.68, lon: 139.69},
+  {name: 'Paris', lat: 48.86, lon: 2.35}, {name: 'Cairo', lat: 30.04, lon: 31.24}, {name: 'Moscow', lat: 55.76, lon: 37.62},
+  {name: 'Thimphu', lat: 27.47, lon: 89.64}, {name: 'New Orleans', lat: 29.95, lon: -90.07},
+];
+
+/* ---- state: plain data --------------------------------------------------------- */
+const S = {tab: 'proj', locked: false,
+  t: 720, std: 77, P: 45, stdTried: [],
+  proj: 'equal', phi0: 40, light: 0, probe: {lat: 20, lon: 20},
+  vi: 50, hill: 0, hills: [{x: 2.1, y: 2.0, H: 600, w: 1.1, p: 1}, {x: 4.4, y: 2.3, H: 260, w: 0.9, p: 2}, {x: 4.9, y: 0.8, H: 0, w: 0.6, p: 0.5}],
+  A: {x: 0.5, y: 2.3}, B: {x: 5.6, y: 2.0}, viTried: [], sectKey: ''};
+const shared = sharedState();
+if (shared) {
+  if (['time', 'proj', 'cont'].includes(shared.tab)) S.tab = shared.tab;
+  if (['simple', 'equal', 'mercator', 'conic', 'zenithal'].includes(shared.proj)) S.proj = shared.proj;
+  S.phi0 = clamp(+shared.phi0 || 40, 10, 80); S.light = clamp(+shared.light || 0, 0, 100);
+  S.t = norm(+shared.t || 720); S.std = clamp(+shared.std || 77, 66, 100);
+  if ([10, 20, 50, 100].includes(+shared.vi)) S.vi = +shared.vi;
+  if (Array.isArray(shared.hills) && shared.hills.length === 3) S.hills = shared.hills.map(h => ({x: clamp(+h.x, 0, TW), y: clamp(+h.y, 0, TH), H: clamp(+h.H, 0, 900), w: clamp(+h.w, 0.3, 2), p: clamp(+h.p, 0.5, 4)}));
+}
+shareState(() => ({tab: S.tab, proj: S.proj, phi0: S.phi0, light: S.light, t: S.t, std: S.std, vi: S.vi, hills: S.hills}));
+const lightH = u => u <= 50 ? u / 50 : u >= 100 ? Infinity : 50 / (100 - u);
+const PP = () => ({phi0: S.phi0, h: lightH(S.light)});
+const PROJ_NAME = {simple: 'Simple cylindrical', equal: 'Cylindrical equal area', mercator: 'Mercator', conic: 'Conical with one standard parallel', zenithal: 'Zenithal (polar)'};
+const clockTxt = m => { m = Math.round(norm(m)); const h = Math.floor(m / 60), mm = m % 60; return ((h + 11) % 12 + 1) + ':' + String(mm).padStart(2, '0') + (h < 12 ? ' am' : ' pm'); };
+const hm = m => { const s = m < 0 ? '−' : '+'; m = Math.round(Math.abs(m)); return s + Math.floor(m / 60) + ':' + String(m % 60).padStart(2, '0'); };
+const lonTxt = l => fmt(Math.abs(l), Math.abs(l) % 1 ? 2 : 0) + '°' + (l > 0 ? 'E' : l < 0 ? 'W' : '');
+const dms = l => { const d = Math.floor(Math.abs(l) + 1e-9), m = Math.round((Math.abs(l) - d) * 60); return d + '°' + (m ? String(m).padStart(2, '0') + '′' : '') + (l >= 0 ? ' E' : ' W'); };
+const lightName = u => u === 0 ? 'centre' : u === 50 ? 'far side' : u === 100 ? 'infinity' : u < 50 ? fmt(u / 50, 2) + ' R' : fmt(lightH(u), 1) + ' R';
+
+/* ============================================================================
+   The stage: three views, each built once and then patched.
+   ============================================================================ */
+const svg = $('stage');
+const DIAL = {x: 250, y: 350, R: 188};
+const MAP = {x0: 20, y0: 56, x1: 690, y1: 624};
+const TISSOT_R = 5 * D2R;             // the probe and the grid circles are 5° circles on the globe
+const CM = {x0: 20, y0: 58, x1: 470, y1: 358};              // the contour map (6 km × 4 km)
+const NX = 72, NY = 48;
+const CS = {x0: 70, y0: 430, x1: 960, y1: 610};             // the cross-section
+const cmx = x => CM.x0 + x / TW * (CM.x1 - CM.x0), cmy = y => CM.y0 + y / TH * (CM.y1 - CM.y0);
+
+function build(){
+  svg.innerHTML = `
+  <defs>
+    <clipPath id="clipMap"><rect x="${MAP.x0}" y="${MAP.y0}" width="${MAP.x1 - MAP.x0}" height="${MAP.y1 - MAP.y0}"/></clipPath>
+    <clipPath id="clipCM"><rect x="${CM.x0}" y="${CM.y0}" width="${CM.x1 - CM.x0}" height="${CM.y1 - CM.y0}"/></clipPath>
+    <radialGradient id="gSun" cx="45%" cy="40%"><stop offset="0" stop-color="#fff4c2"/><stop offset=".55" stop-color="#ffc53d"/><stop offset="1" stop-color="#f28a12"/></radialGradient>
+    <marker id="mArr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#6a3fc2"/></marker>
+  </defs>
+  <rect x="0" y="0" width="1000" height="660" fill="#fbfaf6"/>
+
+  <!-- ===================== LONGITUDE AND TIME ===================== -->
+  <g id="vTime">
+    <text x="20" y="30" font-size="12" font-weight="700" letter-spacing=".08em" fill="#4a555b">SEEN FROM ABOVE THE NORTH POLE · the Earth turns anticlockwise</text>
+    <text x="20" y="50" font-size="12" fill="#7c878c">Longitude grows eastward, anticlockwise round the pole, as in the book’s Figs. 3.4–3.5.</text>
+    <path id="tNight" fill="#1b2a44" opacity=".16"/>
+    <g id="tRing"></g>
+    <circle cx="${DIAL.x}" cy="${DIAL.y}" r="${DIAL.R}" fill="#e7f0f7" stroke="#6b8aa6" stroke-width="1.4"/>
+    <path id="tNightIn" fill="#1b2a44" opacity=".22"/>
+    <g id="tGrid"></g>
+    <g id="tLand"></g>
+    <g id="tCities"></g>
+    <line id="tSunRay" stroke="#e8890c" stroke-width="2" stroke-dasharray="5 4"/>
+    <circle cx="${DIAL.x + DIAL.R + 62}" cy="${DIAL.y}" r="15" fill="url(#gSun)"/>
+    <text x="${DIAL.x + DIAL.R + 62}" y="${DIAL.y + 32}" text-anchor="middle" font-size="11" fill="#8a4d00" font-weight="600">Sun</text>
+    <g id="tP"><line id="tPl" stroke="#6a3fc2" stroke-width="2.2"/><circle id="tPc" r="11" fill="#6a3fc2" stroke="#fff" stroke-width="2"/><text id="tPt" font-size="11" font-weight="700" fill="#fff" text-anchor="middle">P</text><text id="tPlab" font-size="12.5" font-weight="700" fill="#4b2a8c" class="m"></text></g>
+    <circle id="tPhit" class="drag" r="18" fill="transparent" aria-label="Marker P: drag it round the dial to a longitude"/>
+
+    <text x="545" y="80" font-size="12" font-weight="700" letter-spacing=".08em" fill="#4a555b">LOCAL TIME = GMT + 4 min × LONGITUDE</text>
+    <g id="tTable" font-size="12.5"></g>
+    <text x="545" y="352" font-size="12" font-weight="700" letter-spacing=".08em" fill="#4a555b">A STANDARD MERIDIAN FOR INDIA</text>
+    <g id="tStd"></g>
+    <g id="tGraph"></g>
+  </g>
+
+  <!-- ===================== PROJECTIONS ===================== -->
+  <g id="vProj">
+    <text id="pTitle" x="20" y="30" font-size="12" font-weight="700" letter-spacing=".08em" fill="#4a555b"></text>
+    <text id="pSub" x="20" y="48" font-size="12" fill="#7c878c"></text>
+    <rect x="${MAP.x0}" y="${MAP.y0}" width="${MAP.x1 - MAP.x0}" height="${MAP.y1 - MAP.y0}" fill="#eaf2f8" stroke="#c9d6e0"/>
+    <g clip-path="url(#clipMap)">
+      <path id="pLand" fill="#d9e6c3" stroke="#6f8a52" stroke-width=".8" stroke-linejoin="round"/>
+      <path id="pGreen" fill="#b7d7ea" stroke="#3f7fa8" stroke-width="1.1"/>
+      <path id="pIndia" fill="#f0c96b" stroke="#9a6b12" stroke-width="1.1"/>
+      <path id="pGrid" fill="none" stroke="#7d93ad" stroke-width=".7" opacity=".7"/>
+      <path id="pStdPar" fill="none" stroke="#6a3fc2" stroke-width="2"/>
+      <g id="pTissot"></g>
+      <path id="pProbe" fill="#6a3fc2" fill-opacity=".28" stroke="#6a3fc2" stroke-width="2"/>
+      <circle id="pProbeC" r="3" fill="#6a3fc2"/>
+    </g>
+    <circle id="pProbeHit" class="drag" r="20" fill="transparent" aria-label="The probe circle: drag it over the map"/>
+    <text id="pArea" x="${MAP.x0 + 10}" y="${MAP.y1 - 10}" font-size="12.5" font-weight="600" fill="#1d2327"></text>
+    <!-- the developable surface, seen side-on -->
+    <text x="712" y="30" font-size="12" font-weight="700" letter-spacing=".08em" fill="#4a555b">GLOBE → SURFACE</text>
+    <g id="pSide"></g>
+    <text x="712" y="286" font-size="12" font-weight="700" letter-spacing=".08em" fill="#4a555b">THE PROBE MEASURES</text>
+    <g id="pRead" font-size="12.5"></g>
+    <text x="712" y="438" font-size="12" font-weight="700" letter-spacing=".08em" fill="#4a555b">SCALE ALONG THE CENTRAL MERIDIAN</text>
+    <g id="pGraph"></g>
+  </g>
+
+  <!-- ===================== CONTOURS ===================== -->
+  <g id="vCont">
+    <text x="20" y="30" font-size="12" font-weight="700" letter-spacing=".08em" fill="#4a555b">CONTOUR MAP · 6 km × 4 km</text>
+    <text id="cSub" x="20" y="48" font-size="12" fill="#7c878c"></text>
+    <rect x="${CM.x0}" y="${CM.y0}" width="${CM.x1 - CM.x0}" height="${CM.y1 - CM.y0}" fill="#f6f1e1" stroke="#cdbf95"/>
+    <g clip-path="url(#clipCM)">
+      <g id="cTint"></g>
+      <path id="cLines" fill="none" stroke="#a0643a" stroke-width=".9"/>
+      <path id="cIndex" fill="none" stroke="#7a4420" stroke-width="1.8"/>
+    </g>
+    <line id="cAB" stroke="#c8323c" stroke-width="2"/>
+    <g id="cHills"></g>
+    <g id="cEnds"></g>
+    <text x="500" y="30" font-size="12" font-weight="700" letter-spacing=".08em" fill="#4a555b">THE SAME LAND IN 3-D</text>
+    <text x="500" y="48" font-size="12" fill="#7c878c">Heights exaggerated × 2; seen from the south-west.</text>
+    <g id="c3d"></g>
+    <text x="20" y="400" font-size="12" font-weight="700" letter-spacing=".08em" fill="#4a555b">CROSS-SECTION A → B</text>
+    <text id="cRead" x="330" y="400" font-size="12.5" fill="#1d2327"></text>
+    <g id="cSect"></g>
+  </g>
+
+  <rect id="veil" x="0" y="0" width="1000" height="660" fill="#fbfaf6" opacity=".9"/>
+  <text id="veilT" x="500" y="330" text-anchor="middle" fill="#7c878c" font-size="15" font-weight="600">The tools unlock once you have made a prediction.</text>`;
+  buildTimeStatic();
+  buildContStatic();
+}
+
+/* ---------------- 1. longitude and time ---------------- */
+const dialAng = (lon) => (lon - subsolar()) * D2R;        // screen angle, anticlockwise from the Sun's side
+const subsolar = () => wrap180(180 - S.t / 4);
+const dialXY = (lat, lon, rr) => { const a = dialAng(lon), r = rr != null ? rr : DIAL.R * (90 - lat) / 90; return [DIAL.x + r * Math.cos(a), DIAL.y - r * Math.sin(a)]; };
+function buildTimeStatic(){
+  /* the time ring is fixed: noon faces the Sun, midnight faces away */
+  let r = '';
+  for (let hh = 0; hh < 24; hh++) {
+    const a = (hh - 12) * 15 * D2R, x1 = DIAL.x + (DIAL.R + 4) * Math.cos(a), y1 = DIAL.y - (DIAL.R + 4) * Math.sin(a);
+    const x2 = DIAL.x + (DIAL.R + (hh % 6 ? 10 : 16)) * Math.cos(a), y2 = DIAL.y - (DIAL.R + (hh % 6 ? 10 : 16)) * Math.sin(a);
+    r += `<line x1="${x1.toFixed(1)}" y1="${y1.toFixed(1)}" x2="${x2.toFixed(1)}" y2="${y2.toFixed(1)}" stroke="#7c878c" stroke-width="${hh % 6 ? 1 : 2}"/>`;
+    if (hh % 3 === 0) {
+      const tx = DIAL.x + (DIAL.R + 30) * Math.cos(a), ty = DIAL.y - (DIAL.R + 30) * Math.sin(a) + 4;
+      const lab = hh === 12 ? 'noon' : hh === 0 ? 'midnight' : ((hh + 11) % 12 + 1) + (hh < 12 ? ' am' : ' pm');
+      r += `<text x="${tx.toFixed(1)}" y="${ty.toFixed(1)}" text-anchor="middle" font-size="11" fill="#4a555b" font-weight="600">${lab}</text>`;
+    }
+  }
+  $('tRing').innerHTML = r;
+  const R2 = DIAL.R + 44;
+  $('tNight').setAttribute('d', `M${DIAL.x} ${DIAL.y - R2}A${R2} ${R2} 0 0 0 ${DIAL.x} ${DIAL.y + R2}Z`);
+  $('tNightIn').setAttribute('d', `M${DIAL.x} ${DIAL.y - DIAL.R}A${DIAL.R} ${DIAL.R} 0 0 0 ${DIAL.x} ${DIAL.y + DIAL.R}Z`);
+  $('tSunRay').setAttribute('x1', DIAL.x); $('tSunRay').setAttribute('y1', DIAL.y);
+  $('tSunRay').setAttribute('x2', DIAL.x + DIAL.R + 46); $('tSunRay').setAttribute('y2', DIAL.y);
+}
+function paintTime(){
+  let g = '';
+  for (let lat = 15; lat < 90; lat += 15) g += `<circle cx="${DIAL.x}" cy="${DIAL.y}" r="${(DIAL.R * (90 - lat) / 90).toFixed(1)}" fill="none" stroke="#9fb3c8" stroke-width=".7"/>`;
+  for (let lon = -165; lon <= 180; lon += 15) {
+    const [x, y] = dialXY(0, lon), strong = lon === 0 || lon === 180;
+    g += `<line x1="${DIAL.x}" y1="${DIAL.y}" x2="${x.toFixed(1)}" y2="${y.toFixed(1)}" stroke="${lon === 0 ? '#c8323c' : lon === 180 ? '#3057c9' : '#9fb3c8'}" stroke-width="${strong ? 1.8 : .7}"/>`;
+    if (lon % 30 === 0) { const [lx, ly] = dialXY(0, lon, DIAL.R - 14); g += `<text x="${lx.toFixed(1)}" y="${(ly + 4).toFixed(1)}" text-anchor="middle" font-size="10" fill="${lon === 0 ? '#c8323c' : lon === 180 ? '#3057c9' : '#4a6a86'}" font-weight="600">${lon === 0 ? '0°' : lon === 180 ? '180°' : Math.abs(lon) + '°' + (lon > 0 ? 'E' : 'W')}</text>`; }
+  }
+  $('tGrid').innerHTML = g;
+  /* the lands north of the Equator, as a polar map */
+  let d = '';
+  for (const arr of LAND.concat([GREENLAND])) {
+    let seg = '', pen = false;
+    for (let i = 0; i < arr.length; i += 2) {
+      if (arr[i + 1] < 0) { pen = false; continue; }
+      const [x, y] = dialXY(arr[i + 1], arr[i]); seg += (pen ? 'L' : 'M') + x.toFixed(1) + ' ' + y.toFixed(1); pen = true;
+    }
+    d += seg;
+  }
+  $('tLand').innerHTML = `<path d="${d}" fill="none" stroke="#6f8a52" stroke-width="1"/>`;
+  let c = '';
+  for (const k of TIME_CITIES) {
+    const [x, y] = dialXY(k.lat, k.lon);
+    const o = LABEL_OFF[k.name] || [5, -4];
+    c += `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="3.4" fill="#1d2327"/><text x="${(x + o[0]).toFixed(1)}" y="${(y + o[1]).toFixed(1)}" font-size="10.5" fill="#1d2327" font-weight="600" text-anchor="${o[0] < 0 ? 'end' : 'start'}">${k.name}</text>`;
+  }
+  $('tCities').innerHTML = c;
+  /* marker P on the Equator */
+  const [px, py] = dialXY(0, S.P), [qx, qy] = dialXY(0, S.P, DIAL.R - 30);
+  $('tPl').setAttribute('x1', qx.toFixed(1)); $('tPl').setAttribute('y1', qy.toFixed(1)); $('tPl').setAttribute('x2', px.toFixed(1)); $('tPl').setAttribute('y2', py.toFixed(1));
+  $('tPc').setAttribute('cx', px.toFixed(1)); $('tPc').setAttribute('cy', py.toFixed(1));
+  $('tPt').setAttribute('x', px.toFixed(1)); $('tPt').setAttribute('y', (py + 4).toFixed(1));
+  $('tPhit').setAttribute('cx', px.toFixed(1)); $('tPhit').setAttribute('cy', py.toFixed(1));
+  const a = dialAng(S.P), lx = DIAL.x + (DIAL.R - 58) * Math.cos(a), ly = DIAL.y - (DIAL.R - 58) * Math.sin(a);
+  $('tPlab').setAttribute('x', lx.toFixed(1)); $('tPlab').setAttribute('y', (ly + 4).toFixed(1));
+  $('tPlab').setAttribute('text-anchor', Math.cos(a) > 0.3 ? 'end' : Math.cos(a) < -0.3 ? 'start' : 'middle');
+  $('tPlab').textContent = '';
+  /* the table: the book's worked examples and activity cities */
+  const rows = [{name: 'P (marker)', lon: S.P}].concat(TIME_CITIES);
+  let tb = `<text x="545" y="104" fill="#7c878c" font-size="11.5" font-weight="700">PLACE</text><text x="690" y="104" fill="#7c878c" font-size="11.5" font-weight="700" text-anchor="end">LONGITUDE</text>
+    <text x="820" y="104" fill="#7c878c" font-size="11.5" font-weight="700" text-anchor="end">± 4 min × °</text><text x="975" y="104" fill="#7c878c" font-size="11.5" font-weight="700" text-anchor="end">LOCAL TIME</text>`;
+  rows.forEach((r, i) => {
+    const y = 128 + i * 23, m = localMin(S.t, r.lon), day = Math.floor(m / 1440);
+    tb += `<text x="545" y="${y}" fill="${i ? '#1d2327' : '#4b2a8c'}" font-weight="${i ? 500 : 700}">${r.name}</text>
+      <text x="690" y="${y}" text-anchor="end" class="m" fill="#4a555b">${dms(r.lon)}</text>
+      <text x="820" y="${y}" text-anchor="end" class="m" fill="#4a555b">${hm(4 * r.lon)}</text>
+      <text x="975" y="${y}" text-anchor="end" class="m" fill="#1d2327" font-weight="600">${clockTxt(m)}${day ? (day > 0 ? ' +1d' : ' −1d') : ''}</text>`;
+  });
+  $('tTable').innerHTML = tb;
+  /* the standard meridian across India */
+  const X0 = 560, X1 = 960, lx0 = 66, lx1 = 100, sx = l => X0 + (l - lx0) / (lx1 - lx0) * (X1 - X0);
+  const wm = worstMismatch(S.std), off = 4 * S.std;
+  let st = `<rect x="${sx(INDIA_W).toFixed(1)}" y="384" width="${(sx(INDIA_E) - sx(INDIA_W)).toFixed(1)}" height="14" rx="3" fill="#f0c96b" stroke="#9a6b12"/>
+    <text x="${sx(INDIA_W).toFixed(1)}" y="412" font-size="10.5" fill="#9a6b12" text-anchor="middle">68°07′</text><text x="${sx(INDIA_E).toFixed(1)}" y="412" font-size="10.5" fill="#9a6b12" text-anchor="middle">97°25′</text>
+    <line x1="${sx(S.std).toFixed(1)}" y1="378" x2="${sx(S.std).toFixed(1)}" y2="404" stroke="#6a3fc2" stroke-width="2.4"/>
+    <text x="${sx(S.std).toFixed(1)}" y="374" text-anchor="middle" font-size="11.5" fill="#4b2a8c" font-weight="700">${dms(S.std)}</text>`;
+  st += `<text x="545" y="434" font-size="12.5" fill="#1d2327">Standard time = GMT ${hm(off)}${halfHourly(S.std) ? ' — a whole or half hour' : ' — not a whole or half hour'}.</text>`;
+  st += `<text x="545" y="454" font-size="12.5" fill="#1d2327">West end ${fmt(4 * (S.std - INDIA_W), 0)} min behind by the Sun, east end ${fmt(4 * (INDIA_E - S.std), 0)} min ahead: worst <tspan font-weight="700">${fmt(wm, 1)} min</tspan>.</text>`;
+  $('tStd').innerHTML = st;
+  /* measured points: worst mismatch against the meridian chosen */
+  const GY0 = 628, GY1 = 490, gy = v => GY0 - v / 140 * (GY0 - GY1);
+  let gr = `<line x1="${X0}" y1="${GY0}" x2="${X1}" y2="${GY0}" stroke="#9aa3a6"/><line x1="${X0}" y1="${GY0}" x2="${X0}" y2="${GY1}" stroke="#9aa3a6"/>`;
+  for (let l = 70; l <= 100; l += 7.5) gr += `<line x1="${sx(l).toFixed(1)}" y1="${GY0}" x2="${sx(l).toFixed(1)}" y2="${GY0 + 4}" stroke="#9aa3a6"/><text x="${sx(l).toFixed(1)}" y="${GY0 + 16}" text-anchor="middle" font-size="10" fill="#7c878c">${dms(l).replace(' E', '')}</text>`;
+  for (const v of [0, 60, 120]) gr += `<text x="${X0 - 6}" y="${(gy(v) + 4).toFixed(1)}" text-anchor="end" font-size="10" fill="#7c878c">${v}</text>`;
+  gr += `<text x="${X0 + 4}" y="${GY1 - 6}" font-size="10.5" fill="#7c878c">worst mismatch in India, minutes</text>`;
+  if (S.stdTried.length >= 3) {
+    let d2 = ''; for (let l = 66; l <= 100; l += 0.5) d2 += (l === 66 ? 'M' : 'L') + sx(l).toFixed(1) + ' ' + gy(worstMismatch(l)).toFixed(1);
+    gr += `<path d="${d2}" fill="none" stroke="#6a3fc2" stroke-width="1.4" opacity=".45"/>`;
+  }
+  if (!S.stdTried.length) gr += `<text x="${(X0 + X1) / 2}" y="${(GY0 + GY1) / 2}" text-anchor="middle" font-size="12" fill="#9aa3a6">Each standard meridian you try is plotted here.</text>`;
+  for (const l of S.stdTried) gr += `<circle cx="${sx(l).toFixed(1)}" cy="${gy(worstMismatch(l)).toFixed(1)}" r="4" fill="${halfHourly(l) ? '#6a3fc2' : '#fff'}" stroke="#6a3fc2" stroke-width="1.6"/>`;
+  $('tGraph').innerHTML = gr;
+}
+
+/* ---------------- 2. projections ---------------- */
+let FIT = null;                         // {s, ox, oy}: unit-globe coordinates to the map
+const lonC = () => S.proj === 'conic' ? 70 : S.proj === 'zenithal' ? 75 : 0;
+function domain(){
+  if (S.proj === 'conic') return {lat0: 10, lat1: 70, lon0: 10, lon1: 130};       // the book's worked example
+  if (S.proj === 'zenithal') { const h = lightH(S.light); return {lat0: h < 1 ? Math.max(0, Math.ceil((90 - 0.82 * Math.acos(-h) * R2D) / 5) * 5) : 0, lat1: 90, lon0: -180, lon1: 180}; }
+  if (S.proj === 'mercator') return {lat0: -80, lat1: 84, lon0: -180, lon1: 180};
+  return {lat0: -85, lat1: 85, lon0: -180, lon1: 180};
+}
+function fit(){
+  const D = domain(), P = PP(); let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9;
+  for (let lat = D.lat0; lat <= D.lat1; lat += 2.5) for (let lon = D.lon0; lon <= D.lon1; lon += 5) {
+    const q = project(S.proj, lat, wrap180(lon - lonC()) , P); if (!q) continue;
+    x0 = Math.min(x0, q.x); x1 = Math.max(x1, q.x); y0 = Math.min(y0, q.y); y1 = Math.max(y1, q.y);
+  }
+  const W = MAP.x1 - MAP.x0 - 30, H = MAP.y1 - MAP.y0 - 50;
+  const s = Math.min(W / (x1 - x0), H / (y1 - y0));
+  FIT = {s, ox: (MAP.x0 + MAP.x1) / 2 - s * (x0 + x1) / 2, oy: (MAP.y0 + MAP.y1 - 24) / 2 + s * (y0 + y1) / 2, D};
+}
+const mxy = q => [FIT.ox + FIT.s * q.x, FIT.oy - FIT.s * q.y];
+function outline(arr, withFill){
+  /* unwrap the longitudes along the outline, so an outline crossing the seam stays in one piece */
+  const P = PP(), D = FIT.D; let d = '', pen = false, prev = null, whole = true;
+  for (let i = 0; i < arr.length; i += 2) {
+    let l = arr[i] - lonC();
+    if (prev == null) l = wrap180(l); else { while (l - prev > 180) l -= 360; while (l - prev < -180) l += 360; }
+    prev = l;
+    const lat = arr[i + 1];
+    const ok = lat >= D.lat0 - 1e-9 && lat <= D.lat1 && (S.proj !== 'conic' || (l >= D.lon0 - lonC() - 25 && l <= D.lon1 - lonC() + 25));
+    const q = ok ? project(S.proj, lat, l, P) : null;
+    if (!q) { pen = false; whole = false; continue; }
+    const [x, y] = mxy(q); d += (pen ? 'L' : 'M') + x.toFixed(1) + ' ' + y.toFixed(1); pen = true;
+  }
+  return withFill && whole ? d + 'Z' : d;
+}
+function paintProj(){
+  fit();
+  const P = PP(), D = FIT.D, lc = lonC();
+  $('pTitle').textContent = PROJ_NAME[S.proj].toUpperCase() + (S.proj === 'conic' ? ` · standard parallel ${S.phi0}°N` : S.proj === 'zenithal' ? ` · light at ${lightName(S.light)}` : '');
+  $('pSub').textContent = {simple: 'Parallels equally spaced: true scale along every meridian.',
+    equal: 'Parallel rays onto a cylinder touching the Equator: y = sin φ.',
+    mercator: 'y = ln tan(45° + φ/2): the parallels spread out towards the poles.',
+    conic: 'The book’s example: 10°N–70°N, 10°E–130°E, central meridian 70°E.',
+    zenithal: 'A plane touching the North Pole; the light sits on the axis.'}[S.proj];
+  /* land: every outline, with fills where the whole outline is on the map */
+  const land = LAND.map(a => outline(a, S.proj !== 'conic' && S.proj !== 'zenithal')).join('');
+  $('pLand').setAttribute('d', land);
+  $('pLand').setAttribute('fill', S.proj === 'conic' || S.proj === 'zenithal' ? 'none' : '#d9e6c3');
+  $('pGreen').setAttribute('d', outline(GREENLAND, true));
+  $('pIndia').setAttribute('d', outline(INDIA, true));
+  /* graticule every 15° (10° for the cone) */
+  const st = S.proj === 'conic' ? 10 : 15;
+  let g = '';
+  for (let lat = Math.ceil(D.lat0 / st) * st; lat <= D.lat1; lat += st) {
+    let pen = false;
+    for (let lon = D.lon0; lon <= D.lon1; lon += 2) { const q = project(S.proj, lat, lon - (S.proj === 'conic' ? lc : 0) - (S.proj === 'conic' ? 0 : 0), P); if (!q) { pen = false; continue; } const [x, y] = mxy(q); g += (pen ? 'L' : 'M') + x.toFixed(1) + ' ' + y.toFixed(1); pen = true; }
+  }
+  for (let lon = D.lon0; lon <= D.lon1; lon += st) {
+    let pen = false;
+    for (let lat = D.lat0; lat <= Math.min(D.lat1, S.proj === 'mercator' ? 84 : 90); lat += 1) { const q = project(S.proj, lat, S.proj === 'conic' ? lon - lc : lon, P); if (!q) { pen = false; continue; } const [x, y] = mxy(q); g += (pen ? 'L' : 'M') + x.toFixed(1) + ' ' + y.toFixed(1); pen = true; }
+  }
+  $('pGrid').setAttribute('d', g);
+  let sp = '';
+  if (S.proj === 'conic') for (let lon = D.lon0; lon <= D.lon1; lon += 2) { const [x, y] = mxy(project('conic', S.phi0, lon - lc, P)); sp += (lon === D.lon0 ? 'M' : 'L') + x.toFixed(1) + ' ' + y.toFixed(1); }
+  $('pStdPar').setAttribute('d', sp);
+  /* Tissot circles over the grid */
+  const lats = S.proj === 'conic' ? [20, 40, 60] : S.proj === 'zenithal' ? [80, 60, 40, 20].filter(l => l >= D.lat0 + 3) : [-60, -30, 0, 30, 60];
+  const lons = S.proj === 'conic' ? [-40, -20, 0, 20, 40] : S.proj === 'zenithal' ? [-150, -90, -30, 30, 90, 150] : [-150, -90, -30, 30, 90, 150];
+  let ts = '';
+  for (const la of lats) for (const lo of lons) { const e = ellipsePath(la, lo); if (e) ts += e; }
+  $('pTissot').innerHTML = `<path d="${ts}" fill="#c8323c" fill-opacity=".16" stroke="#c8323c" stroke-width="1"/>`;
+  /* the probe */
+  const T = tissot(S.proj, S.probe.lat, S.probe.lon, P);
+  const pe = T ? ellipsePath(S.probe.lat, S.probe.lon, T) : '';
+  $('pProbe').setAttribute('d', pe);
+  if (T) { const [x, y] = mxy(T.p); $('pProbeC').setAttribute('cx', x.toFixed(1)); $('pProbeC').setAttribute('cy', y.toFixed(1)); $('pProbeHit').setAttribute('cx', x.toFixed(1)); $('pProbeHit').setAttribute('cy', y.toFixed(1)); }
+  /* Greenland against India: measured on this map, against the truth (the equal-area map) */
+  const gT = projArea('equal', GREENLAND, P), iT = projArea('equal', INDIA, P);
+  const gM = projArea(S.proj, GREENLAND, P, lc), iM = projArea(S.proj, INDIA, P, lc);
+  const ratioTrue = gT / iT, ratioMap = gM / iM;
+  $('pArea').textContent = isFinite(ratioMap) ? `On this map Greenland is ${fmt(ratioMap, 2)}× India’s area. On the globe it is ${fmt(ratioTrue, 2)}×.` : 'Greenland or India is off this map.';
+  S.meas = {T: T ? {h: T.h, k: T.k, area: T.area, omega: T.omega} : null, ratioMap, ratioTrue, maxOmega: maxOmega()};
+  paintSide(T);
+  paintScaleGraph();
+}
+function ellipsePath(lat, lon, T){
+  T = T || tissot(S.proj, lat, lon, PP());
+  if (!T) return '';
+  let d = '';
+  for (let i = 0; i <= 28; i++) {
+    const a = i / 28 * 2 * Math.PI, c = Math.cos(a) * TISSOT_R, s = Math.sin(a) * TISSOT_R;
+    const [x, y] = mxy({x: T.p.x + T.eL.x * c + T.eF.x * s, y: T.p.y + T.eL.y * c + T.eF.y * s});
+    d += (i ? 'L' : 'M') + x.toFixed(1) + ' ' + y.toFixed(1);
+  }
+  return d + 'Z';
+}
+function maxOmega(){
+  const D = FIT.D, P = PP(); let m = 0;
+  for (let lat = Math.max(D.lat0 + 5, -75); lat <= Math.min(D.lat1 - 5, 80); lat += 10) for (const lo of [-20, 0, 20]) {
+    const T = tissot(S.proj, lat, lo, P); if (T) m = Math.max(m, T.omega);
+  }
+  return m;
+}
+function paintSide(T){
+  /* a side view of the globe and its developable surface, drawn from the same numbers */
+  const cx = 850, cy = 158, r = 72, P = PP();
+  let d = `<circle cx="${cx}" cy="${cy}" r="${r}" fill="#dfeaf3" stroke="#6b8aa6" stroke-width="1.4"/><line x1="${cx}" y1="${cy - r - 20}" x2="${cx}" y2="${cy + r + 20}" stroke="#9aa3a6" stroke-dasharray="3 3"/>`;
+  const rays = [];
+  if (S.proj === 'simple' || S.proj === 'equal' || S.proj === 'mercator') {
+    d += `<line x1="${cx + r}" y1="${cy - r - 36}" x2="${cx + r}" y2="${cy + r + 36}" stroke="#6a3fc2" stroke-width="3"/>`;
+    for (const la of [15, 30, 45, 60, 75]) {
+      const y = project(S.proj, la, 0, P).y;
+      const gx = cx + r * Math.cos(la * D2R), gy = cy - r * Math.sin(la * D2R), sy = cy - r * y;
+      if (sy < cy - r - 36) continue;
+      if (S.proj === 'equal') rays.push([gx, gy, cx + r, gy]);
+      else rays.push([cx, cy, gx, gy, cx + r, sy]);
+      d += `<circle cx="${cx + r}" cy="${sy.toFixed(1)}" r="2.6" fill="#6a3fc2"/>`;
+    }
+    d += `<text x="${cx + r + 8}" y="${cy - r - 22}" font-size="11" fill="#4b2a8c">cylinder</text>`;
+    d += `<text x="716" y="262" font-size="11.5" fill="#4a555b">${S.proj === 'equal' ? 'Parallel rays: each parallel moves straight across.' : S.proj === 'mercator' ? 'Not a shadow: y is computed so shapes stay true.' : 'Parallels spaced by their true distance on the globe.'}</text>`;
+  } else if (S.proj === 'conic') {
+    const f0 = S.phi0 * D2R, tx = cx + r * Math.cos(f0), ty = cy - r * Math.sin(f0), apexY = cy - r / Math.sin(f0);
+    d += `<line x1="${cx}" y1="${Math.max(apexY, 40).toFixed(1)}" x2="${(cx + (tx - cx) * 1.9).toFixed(1)}" y2="${(apexY + (ty - apexY) * 1.9).toFixed(1)}" stroke="#6a3fc2" stroke-width="3"/>`;
+    d += `<circle cx="${tx.toFixed(1)}" cy="${ty.toFixed(1)}" r="4" fill="#6a3fc2"/><text x="${(tx + 10).toFixed(1)}" y="${(ty + 4).toFixed(1)}" font-size="11" fill="#4b2a8c">touches at ${S.phi0}°</text>`;
+    d += `<text x="716" y="262" font-size="11.5" fill="#4a555b">The cone touches the globe along the standard parallel.</text>`;
+  } else {
+    const h = lightH(S.light), ly = cy + r * (isFinite(h) ? Math.min(h, 1.2) : 1.2);
+    d += `<line x1="${cx - r - 40}" y1="${cy - r}" x2="${cx + r + 40}" y2="${cy - r}" stroke="#6a3fc2" stroke-width="3"/>`;
+    for (const la of [75, 60, 45, 30]) {
+      const c = (90 - la) * D2R, gx = cx + r * Math.sin(c), gy = cy - r * Math.cos(c);
+      const q = project('zenithal', la, 90, P); if (!q) continue;
+      const px = cx + r * q.x; if (px > cx + r + 40) continue;
+      if (isFinite(h)) rays.push([cx, ly, gx, gy, px, cy - r]); else rays.push([gx, ly, gx, gy, px, cy - r]);
+      d += `<circle cx="${px.toFixed(1)}" cy="${cy - r}" r="2.6" fill="#6a3fc2"/>`;
+    }
+    d += isFinite(h) ? `<circle cx="${cx}" cy="${ly.toFixed(1)}" r="6" fill="#ffc53d" stroke="#b56a00"/>` : `<text x="${cx}" y="${(ly + 4).toFixed(1)}" text-anchor="middle" font-size="12" fill="#b56a00">↑ ↑ ↑</text>`;
+    d += `<text x="712" y="${(ly + 4).toFixed(1)}" font-size="11" fill="#8a4d00">${h === 0 ? 'gnomonic' : Math.abs(h - 1) < 1e-9 ? 'stereographic' : !isFinite(h) ? 'orthographic' : 'light at ' + fmt(h, 2) + ' R'}</text>`;
+    d += `<text x="716" y="268" font-size="11.5" fill="#4a555b">A plane touching the pole; rays from the light.</text>`;
+  }
+  let rs = '';
+  for (const q of rays) rs += q.length === 4 ? `<line x1="${q[0].toFixed(1)}" y1="${q[1].toFixed(1)}" x2="${q[2].toFixed(1)}" y2="${q[3].toFixed(1)}"/>` : `<polyline points="${q.map(v => v.toFixed(1)).join(' ')}"/>`;
+  $('pSide').innerHTML = d + `<g stroke="#e8890c" stroke-width="1.1" fill="none" opacity=".85">${rs}</g>`;
+  /* readouts */
+  let t = '';
+  if (T) {
+    const rows = [['Probe at', `${fmt(Math.abs(S.probe.lat), 1)}°${S.probe.lat >= 0 ? 'N' : 'S'}, ${fmt(Math.abs(S.probe.lon + lonC()), 0)}°${wrap180(S.probe.lon + lonC()) >= 0 ? 'E' : 'W'}`],
+      ['h, scale along the meridian', fmt(T.h, 3)], ['k, scale along the parallel', fmt(T.k, 3)],
+      ['area factor', fmt(T.area, 3) + '×'], ['shape: angles bent by up to', fmt(T.omega, 1) + '°']];
+    rows.forEach((r, i) => { t += `<text x="712" y="${312 + i * 22}" fill="#4a555b">${r[0]}</text><text x="985" y="${312 + i * 22}" text-anchor="end" class="m" fill="#1d2327" font-weight="600">${r[1]}</text>`; });
+  } else t = `<text x="712" y="312" fill="#7c878c">The probe is off this projection.</text>`;
+  $('pRead').innerHTML = t;
+}
+function paintScaleGraph(){
+  const X0 = 740, X1 = 975, Y0 = 626, Y1 = 456, P = PP();
+  const lat0 = S.proj === 'zenithal' ? Math.max(FIT.D.lat0, 0) : 0, lat1 = S.proj === 'conic' ? 70 : S.proj === 'zenithal' ? 90 : 80;
+  const lo = S.proj === 'zenithal' ? 90 : 0, hi = S.proj === 'zenithal' ? lat0 : lat1;
+  const gx = la => X0 + (la - Math.min(lo, hi)) / Math.abs(hi - lo) * (X1 - X0);
+  const L = v => Math.log2(clamp(v, 0.25, 16)), gy = v => Y0 - (L(v) + 2) / 6 * (Y0 - Y1);
+  let g = `<rect x="${X0}" y="${Y1}" width="${X1 - X0}" height="${Y0 - Y1}" fill="#fff" stroke="#e2ded2"/>`;
+  for (const v of [0.5, 1, 2, 4, 8]) g += `<line x1="${X0}" y1="${gy(v).toFixed(1)}" x2="${X1}" y2="${gy(v).toFixed(1)}" stroke="${v === 1 ? '#9aa3a6' : '#eceae4'}"/><text x="${X0 - 5}" y="${(gy(v) + 4).toFixed(1)}" text-anchor="end" font-size="10" fill="#7c878c">${v}</text>`;
+  const series = [['h', '#3057c9'], ['k', '#2f9e5b'], ['area', '#c8323c']];
+  for (const [key, col] of series) {
+    let d = '', pen = false;
+    for (let la = Math.min(lo, hi); la <= Math.max(lo, hi); la += 1) {
+      const T = tissot(S.proj, clamp(la, -89, 89.5), 0, P); if (!T || !isFinite(T[key])) { pen = false; continue; }
+      d += (pen ? 'L' : 'M') + gx(la).toFixed(1) + ' ' + gy(T[key]).toFixed(1); pen = true;
+    }
+    g += `<path d="${d}" fill="none" stroke="${col}" stroke-width="${key === 'area' ? 2.2 : 1.6}"/>`;
+  }
+  const marks = S.proj === 'zenithal' ? [90, 60, 30, 0].filter(v => v >= lat0) : [0, 20, 40, 60, 80].filter(v => v <= lat1);
+  for (const la of marks) g += `<text x="${gx(la).toFixed(1)}" y="${Y0 + 13}" text-anchor="middle" font-size="10" fill="#7c878c">${la}°</text>`;
+  g += `<text x="${X0}" y="${Y0 + 26}" font-size="10" fill="#7c878c">latitude →</text>`;
+  g += `<g font-size="10.5" font-weight="700"><text x="${X1 - 96}" y="${Y1 + 14}" fill="#3057c9">h</text><text x="${X1 - 80}" y="${Y1 + 14}" fill="#2f9e5b">k</text><text x="${X1 - 64}" y="${Y1 + 14}" fill="#c8323c">area</text></g>`;
+  if (Math.abs(S.probe.lon) < 25) { const x = gx(clamp(S.probe.lat, Math.min(lo, hi), Math.max(lo, hi))); g += `<line x1="${x.toFixed(1)}" y1="${Y1}" x2="${x.toFixed(1)}" y2="${Y0}" stroke="#6a3fc2" stroke-dasharray="3 3"/>`; }
+  $('pGraph').innerHTML = g;
+}
+
+/* ---------------- 3. contours ---------------- */
+function buildContStatic(){
+  let e = '';
+  for (const k of ['A', 'B']) e += `<g><circle id="end${k}" r="9" fill="#c8323c" stroke="#fff" stroke-width="2"/><text id="endT${k}" font-size="11" font-weight="700" fill="#fff" text-anchor="middle">${k}</text></g><circle id="endHit${k}" class="drag" r="16" fill="transparent" aria-label="End ${k} of the cross-section"/>`;
+  $('cEnds').innerHTML = e;
+  let h = '';
+  for (let i = 0; i < 3; i++) h += `<g id="hill${i}"><circle id="hillC${i}" r="8" fill="#fff" stroke="#4b2a8c" stroke-width="2"/><text id="hillT${i}" font-size="10" font-weight="700" fill="#4b2a8c" text-anchor="middle">${i + 1}</text></g><circle id="hillHit${i}" class="drag" r="14" fill="transparent" aria-label="Hill ${i + 1}: drag to move it"/>`;
+  $('cHills').innerHTML = h;
+}
+const HYPS = [[0, '#e6efd2'], [200, '#d7e5b8'], [350, '#ecdca6'], [500, '#e2c38b'], [650, '#d3a877'], [800, '#c29a74'], [1000, '#b8a08e']];
+const tint = z => { let c = HYPS[0][1]; for (const [z0, col] of HYPS) if (z >= z0) c = col; return c; };
+let GRID = null;
+function paintCont(){
+  const hills = S.hills, g = grid(hills, NX, NY); GRID = g;
+  let zmax = -1e9, zmin = 1e9; for (const v of g) { zmax = Math.max(zmax, v); zmin = Math.min(zmin, v); }
+  /* layer tints under the contours (coarse cells) */
+  let tn = '';
+  const cw = (CM.x1 - CM.x0) / NX, ch = (CM.y1 - CM.y0) / NY;
+  for (let j = 0; j < NY; j += 2) for (let i = 0; i < NX; i += 2) {
+    const z = g[(j + 1) * (NX + 1) + i + 1];
+    tn += `<rect x="${(CM.x0 + i * cw).toFixed(1)}" y="${(CM.y0 + j * ch).toFixed(1)}" width="${(2 * cw + .6).toFixed(1)}" height="${(2 * ch + .6).toFixed(1)}" fill="${tint(z)}"/>`;
+  }
+  $('cTint').innerHTML = tn;
+  let dl = '', di = '';
+  for (let L = Math.ceil(zmin / S.vi) * S.vi; L <= zmax; L += S.vi) {
+    const idx = L % (S.vi * 5) === 0;
+    let d = '';
+    for (const [p, q] of contour(g, NX, NY, L)) d += `M${(CM.x0 + p[0] * cw).toFixed(1)} ${(CM.y0 + p[1] * ch).toFixed(1)}L${(CM.x0 + q[0] * cw).toFixed(1)} ${(CM.y0 + q[1] * ch).toFixed(1)}`;
+    if (idx) di += d; else dl += d;
+  }
+  $('cLines').setAttribute('d', dl); $('cIndex').setAttribute('d', di);
+  $('cSub').textContent = `Contour interval ${S.vi} m; thick lines every ${5 * S.vi} m. Highest point ${fmt(zmax, 0)} m.`;
+  /* hills and the section's ends */
+  hills.forEach((h, i) => {
+    const x = cmx(h.x), y = cmy(h.y);
+    $('hillC' + i).setAttribute('cx', x.toFixed(1)); $('hillC' + i).setAttribute('cy', y.toFixed(1));
+    $('hillT' + i).setAttribute('x', x.toFixed(1)); $('hillT' + i).setAttribute('y', (y + 3.5).toFixed(1));
+    $('hillHit' + i).setAttribute('cx', x.toFixed(1)); $('hillHit' + i).setAttribute('cy', y.toFixed(1));
+    $('hillC' + i).setAttribute('fill', i === S.hill ? '#e6dcfa' : '#fff');
+    $('hill' + i).setAttribute('opacity', h.H > 0 || i === S.hill ? 1 : 0.45);
+  });
+  for (const k of ['A', 'B']) {
+    const x = cmx(S[k].x), y = cmy(S[k].y);
+    $('end' + k).setAttribute('cx', x.toFixed(1)); $('end' + k).setAttribute('cy', y.toFixed(1));
+    $('endT' + k).setAttribute('x', x.toFixed(1)); $('endT' + k).setAttribute('y', (y + 4).toFixed(1));
+    $('endHit' + k).setAttribute('cx', x.toFixed(1)); $('endHit' + k).setAttribute('cy', y.toFixed(1));
+  }
+  $('cAB').setAttribute('x1', cmx(S.A.x)); $('cAB').setAttribute('y1', cmy(S.A.y)); $('cAB').setAttribute('x2', cmx(S.B.x)); $('cAB').setAttribute('y2', cmy(S.B.y));
+  paint3d(g, zmax);
+  paintSection();
+}
+function paint3d(g, zmax){
+  /* oblique view from the south-west: rows from the back (north) to the front, painted over each other */
+  const X0 = 520, Y0 = 122, sx = 4.6, sk = 2.1, sy = 4.4, vz = 0.155;
+  const P = (i, j, z) => [X0 + i * sx + (NY - j) * sk * 0 + j * sk, Y0 + j * sy - z * vz];
+  let d = '';
+  for (let j = 0; j <= NY; j += 2) {
+    let top = '', base = '';
+    for (let i = 0; i <= NX; i++) { const [x, y] = P(i, j, g[j * (NX + 1) + i]); top += (i ? 'L' : 'M') + x.toFixed(1) + ' ' + y.toFixed(1); }
+    const [xr, yr] = P(NX, j, 0), [xl, yl] = P(0, j, 0);
+    base = `L${xr.toFixed(1)} ${(yr + 16).toFixed(1)}L${xl.toFixed(1)} ${(yl + 16).toFixed(1)}Z`;
+    const zr = g[j * (NX + 1) + NX / 2];
+    d += `<path d="${top}${base}" fill="${tint(zr)}" stroke="#7a5a3a" stroke-width=".7"/>`;
+  }
+  /* the section line on the land */
+  let s = '';
+  for (let t = 0; t <= 1.0001; t += 0.02) {
+    const x = S.A.x + (S.B.x - S.A.x) * t, y = S.A.y + (S.B.y - S.A.y) * t;
+    const [px, py] = P(x / TW * NX, y / TH * NY, heightAt(S.hills, x, y)); s += (t ? 'L' : 'M') + px.toFixed(1) + ' ' + py.toFixed(1);
+  }
+  $('c3d').innerHTML = d + `<path d="${s}" fill="none" stroke="#c8323c" stroke-width="2.2"/>` +
+    `<text x="${P(0, NY, 0)[0] - 4}" y="${P(0, NY, 0)[1] + 30}" font-size="10.5" fill="#7c878c">S-W corner</text>`;
+}
+function paintSection(){
+  const sec = section(S.hills, S.A, S.B, S.vi);
+  S.sec = {len: sec.len, rms: sec.rms, slope: sec.slope, he: sec.he, crossings: sec.cross.length};
+  let zmin = 1e9, zmax = -1e9; for (const p of sec.prof) { zmin = Math.min(zmin, p.z); zmax = Math.max(zmax, p.z); }
+  zmin = Math.floor(zmin / 100) * 100; zmax = Math.max(zmin + 200, Math.ceil(zmax / 100) * 100);
+  const gx = s => CS.x0 + s / sec.len * (CS.x1 - CS.x0), gy = z => CS.y1 - (z - zmin) / (zmax - zmin) * (CS.y1 - CS.y0);
+  let g = `<rect x="${CS.x0}" y="${CS.y0}" width="${CS.x1 - CS.x0}" height="${CS.y1 - CS.y0}" fill="#fff" stroke="#e2ded2"/>`;
+  for (let z = zmin; z <= zmax; z += 100) g += `<line x1="${CS.x0}" y1="${gy(z).toFixed(1)}" x2="${CS.x1}" y2="${gy(z).toFixed(1)}" stroke="#eceae4"/><text x="${CS.x0 - 6}" y="${(gy(z) + 4).toFixed(1)}" text-anchor="end" font-size="10" fill="#7c878c">${z}</text>`;
+  g += `<text x="${CS.x0 - 6}" y="${CS.y0 - 6}" text-anchor="end" font-size="10" fill="#7c878c">m</text>`;
+  for (let s = 0; s <= sec.len; s += 1) g += `<text x="${gx(s).toFixed(1)}" y="${CS.y1 + 14}" text-anchor="middle" font-size="10" fill="#7c878c">${s} km</text>`;
+  let tp = '', fill = '';
+  sec.prof.forEach((p, i) => { tp += (i ? 'L' : 'M') + gx(p.s).toFixed(1) + ' ' + gy(p.z).toFixed(1); });
+  fill = tp + `L${CS.x1} ${CS.y1}L${CS.x0} ${CS.y1}Z`;
+  g += `<path d="${fill}" fill="#e2c38b" opacity=".35"/><path d="${tp}" fill="none" stroke="#7a4420" stroke-width="2"/>`;
+  let bp = '';
+  sec.cross.forEach((c, i) => { bp += (i ? 'L' : 'M') + gx(c.s).toFixed(1) + ' ' + gy(c.z).toFixed(1); });
+  g += `<path d="${bp}" fill="none" stroke="#c8323c" stroke-width="1.6" stroke-dasharray="5 3"/>`;
+  for (const c of sec.cross) g += `<line x1="${gx(c.s).toFixed(1)}" y1="${CS.y1}" x2="${gx(c.s).toFixed(1)}" y2="${gy(c.z).toFixed(1)}" stroke="#c8323c" stroke-width=".5" opacity=".35"/><circle cx="${gx(c.s).toFixed(1)}" cy="${gy(c.z).toFixed(1)}" r="2.4" fill="#c8323c"/>`;
+  if (sec.slope > 0.5) g += `<line x1="${gx(sec.at).toFixed(1)}" y1="${CS.y0}" x2="${gx(sec.at).toFixed(1)}" y2="${CS.y1}" stroke="#6a3fc2" stroke-dasharray="3 3"/><text x="${(gx(sec.at) + 5).toFixed(1)}" y="${CS.y0 + 13}" font-size="10.5" fill="#4b2a8c" font-weight="700">steepest ${fmt(sec.slope, 0)}°</text>`;
+  g += `<g font-size="10.5" font-weight="600"><line x1="${CS.x1 - 250}" y1="${CS.y0 - 12}" x2="${CS.x1 - 228}" y2="${CS.y0 - 12}" stroke="#7a4420" stroke-width="2"/><text x="${CS.x1 - 224}" y="${CS.y0 - 8}" fill="#7a4420">the land itself</text>
+    <line x1="${CS.x1 - 140}" y1="${CS.y0 - 12}" x2="${CS.x1 - 118}" y2="${CS.y0 - 12}" stroke="#c8323c" stroke-width="1.6" stroke-dasharray="5 3"/><text x="${CS.x1 - 114}" y="${CS.y0 - 8}" fill="#c8323c">from the contours</text></g>`;
+  $('cSect').innerHTML = g;
+  $('cRead').textContent = `${sec.cross.length} contours crossed · book’s section off by ${fmt(sec.rms, 1)} m (RMS) · steepest ${fmt(sec.slope, 0)}°, HE ${isFinite(sec.he) ? fmt(sec.he, 0) + ' m' : '—'}`;
+  /* measurements of the section's error against the contour interval: kept while the land and AB stay put */
+  const key = JSON.stringify([S.hills, S.A, S.B]);
+  if (key !== S.sectKey) { S.sectKey = key; S.viTried = []; }
+  const at = S.viTried.find(v => v.vi === S.vi);
+  if (at) at.rms = sec.rms; else S.viTried.push({vi: S.vi, rms: sec.rms});
+}
+
+/* ---- the narrator ------------------------------------------------------------ */
+function paintWhy(){
+  if (!S.locked) return;
+  $('whyCard').hidden = false;
+  let t = '';
+  if (S.tab === 'time') {
+    const pm = localMin(S.t, S.P);
+    t = `<p>P is ${lonTxt(S.P)}: ${fmt(Math.abs(S.P), 2)}° × 4 min = <b>${Math.round(Math.abs(4 * S.P))} min</b> ${S.P >= 0 ? 'ahead of' : 'behind'} Greenwich, so it is <b>${clockTxt(pm)}</b> there when it is ${clockTxt(S.t)} at Greenwich.</p>`;
+    t += `<p>With the standard meridian at ${dms(S.std)}, standard time is GMT ${hm(4 * S.std)}. The Sun is ${fmt(4 * (INDIA_E - S.std), 0)} minutes ahead of the clocks at India’s eastern end and ${fmt(4 * (S.std - INDIA_W), 0)} minutes behind them at its western end.${halfHourly(S.std) ? '' : ' This meridian is not a multiple of 7°30′, so the offset from GMT is not a whole or half hour.'}</p>`;
+  } else if (S.tab === 'proj') {
+    const m = S.meas;
+    if (m && m.T) t = `<p>At the probe a circle on the globe becomes an ellipse stretched <b>${fmt(m.T.h, 2)}×</b> along the meridian and <b>${fmt(m.T.k, 2)}×</b> along the parallel, so its area is multiplied by <b>${fmt(m.T.area, 2)}</b>${m.T.omega < 0.5 ? ' and its shape is kept' : ` and angles are bent by up to ${fmt(m.T.omega, 1)}°`}.</p>`;
+    t += `<p>${S.proj === 'mercator' ? 'Mercator makes h = k everywhere, which keeps small shapes true; the price is that both grow as 1 / cos φ, so areas grow as 1 / cos² φ.' :
+      S.proj === 'equal' ? 'Here h × k = 1 everywhere: areas are true, but shapes are squashed north–south as they are stretched east–west.' :
+      S.proj === 'simple' ? 'Here h = 1 everywhere: distances along the meridians are true, and parallels are stretched by 1 / cos φ.' :
+      S.proj === 'conic' ? `Along the standard parallel ${S.phi0}°N the scale is true (k = 1); along every meridian it is true too (h = 1). Away from ${S.phi0}° the parallels are stretched.` :
+      'The light’s position decides the projection: at the centre it is gnomonic (great circles are straight lines), on the far side of the globe stereographic (shapes kept), at infinity orthographic (a photograph from far away).'}</p>`;
+  } else {
+    const s = S.sec;
+    t = `<p>The section crosses <b>${s.crossings}</b> contours. Joined up, they give a profile that differs from the land by <b>${fmt(s.rms, 1)} m</b> on average (RMS): the tops of hills and the floors of hollows fall between contours and are lost.</p>`;
+    t += `<p>The steepest part of AB slopes at <b>${fmt(s.slope, 0)}°</b>; there, successive contours ${S.vi} m apart in height are only <b>${isFinite(s.he) ? fmt(s.he, 0) : '—'} m</b> apart on the ground (the horizontal equivalent). Close contours, steep slope.</p>`;
+    if (S.viTried.length > 1) t += `<p class="mono">${S.viTried.slice().sort((a, b) => a.vi - b.vi).map(v => `VI ${v.vi} m → ${fmt(v.rms, 1)} m`).join(' · ')}</p>`;
+  }
+  $('why').innerHTML = t;
+}
+
+/* ---- findings: reached by the model ------------------------------------------- */
+function check(){
+  if (!S.locked) return;
+  if (S.tab === 'time') {
+    if (S.t === 720 && Math.abs(Math.abs(S.P) - 90) < 0.26) discover('fourmin');
+    if (S.stdTried.length >= 3 && S.std === 82.5) discover('ist');
+  }
+  if (S.tab === 'proj' && S.meas) {
+    const T = S.meas.T;
+    if (S.proj === 'mercator' && T && Math.abs(Math.abs(S.probe.lat) - 60) < 1.01) { discover('mercator'); maybeExplain(T); }
+    if (S.meas.ratioMap > 1) discover('greenland');
+    if (S.proj === 'zenithal' && S.light === 50 && S.meas.maxOmega < 0.05) discover('stereo');
+  }
+  if (S.tab === 'cont' && S.sec) {
+    if (S.sec.slope >= 30 && S.sec.crossings >= 3) discover('steep');
+    const v = S.viTried.slice().sort((a, b) => a.vi - b.vi);
+    if (v.length >= 3 && v.every((x, i) => !i || x.rms > v[i - 1].rms) && v[v.length - 1].rms > 2 * v[0].rms) discover('vi');
+  }
+}
+let EXPLAINED = false;
+function maybeExplain(T){
+  if (EXPLAINED || !POE) return;
+  EXPLAINED = true;
+  const e = tissot('mercator', 0, 0, PP());
+  POE.explain(`At 60° the probe measures h = <b>${fmt(T.h, 3)}</b> and k = <b>${fmt(T.k, 3)}</b>, so a small country there is drawn
+    <b>${fmt(T.area, 2)} times</b> its area at the Equator (${fmt(e.area, 2)}×). Mercator keeps shapes by stretching north–south exactly as much as the
+    parallels are stretched east–west, 1 / cos 60° = 2 each way; 2 × 2 = 4. At 80° it is ${fmt(tissot('mercator', 80, 0, PP()).area, 0)}×, and at the pole it has no limit.`);
+}
+
+/* ---- paint ------------------------------------------------------------------------ */
+function paint(){
+  for (const [id, k] of [['vTime', 'time'], ['vProj', 'proj'], ['vCont', 'cont']]) $(id).style.display = S.tab === k ? '' : 'none';
+  for (const [id, k] of [['ctlTime', 'time'], ['ctlProj', 'proj'], ['ctlCont', 'cont']]) $(id).hidden = S.tab !== k;
+  for (const [id, k] of [['tabTime', 'time'], ['tabProj', 'proj'], ['tabCont', 'cont']]) $(id).setAttribute('aria-pressed', S.tab === k);
+  if (S.tab === 'time') paintTime();
+  if (S.tab === 'proj') paintProj();
+  if (S.tab === 'cont') paintCont();
+  $('gmtOut').textContent = String(Math.floor(S.t / 60)).padStart(2, '0') + ':' + String(S.t % 60).padStart(2, '0');
+  $('stdmOut').textContent = dms(S.std).replace(' E', '');
+  $('rowStd').hidden = S.proj !== 'conic'; $('rowLight').hidden = S.proj !== 'zenithal';
+  $('phi0Out').textContent = S.phi0 + '°N'; $('lightOut').textContent = lightName(S.light);
+  for (const b of $('projSeg').querySelectorAll('button')) b.setAttribute('aria-pressed', b.dataset.proj === S.proj);
+  for (const b of $('viSeg').querySelectorAll('button')) b.setAttribute('aria-pressed', +b.dataset.vi === S.vi);
+  for (const b of $('hillSeg').querySelectorAll('button')) b.setAttribute('aria-pressed', +b.dataset.hill === S.hill);
+  const h = S.hills[S.hill];
+  $('hH').value = h.H; $('hW').value = h.w; $('hP').value = h.p;
+  $('hHOut').textContent = h.H + ' m'; $('hWOut').textContent = fmt(h.w, 2) + ' km'; $('hPOut').textContent = fmt(h.p, 1);
+  paintWhy();
+  check();
+}
+
+/* ============================================================================
+   Controls
+   ============================================================================ */
+build();
+const setTab = k => { S.tab = k; sound('tick'); track('tab', {tab: k}); paint(); };
+$('tabTime').addEventListener('click', () => setTab('time'));
+$('tabProj').addEventListener('click', () => setTab('proj'));
+$('tabCont').addEventListener('click', () => setTab('cont'));
+$('gmt').addEventListener('input', e => { S.t = +e.target.value; paint(); });
+$('stdm').addEventListener('input', e => { S.std = +e.target.value; paint(); });
+/* A meridian counts as TRIED once the learner lets go of it (keyboard steps each fire 'change', so wait for a pause). */
+let STD_T = 0;
+$('stdm').addEventListener('change', () => {
+  clearTimeout(STD_T);
+  STD_T = setTimeout(() => { if (!S.stdTried.includes(S.std)) S.stdTried.push(S.std); track('standardMeridian', {std: S.std, worst: worstMismatch(S.std)}); paint(); }, 450);
+});
+$('projSeg').addEventListener('click', e => { const b = e.target.closest('[data-proj]'); if (!b) return; S.proj = b.dataset.proj; clampProbe(); sound('tick'); track('projection', {proj: S.proj}); paint(); });
+$('phi0').addEventListener('input', e => { S.phi0 = +e.target.value; clampProbe(); paint(); });
+$('light').addEventListener('input', e => { S.light = +e.target.value; clampProbe(); paint(); });
+$('light').addEventListener('change', () => track('light', {u: S.light, h: lightH(S.light)}));
+$('viSeg').addEventListener('click', e => { const b = e.target.closest('[data-vi]'); if (!b) return; S.vi = +b.dataset.vi; sound('tick'); track('vi', {vi: S.vi}); paint(); });
+$('hillSeg').addEventListener('click', e => { const b = e.target.closest('[data-hill]'); if (!b) return; S.hill = +b.dataset.hill; sound('tick'); paint(); });
+$('hH').addEventListener('input', e => { S.hills[S.hill].H = +e.target.value; paint(); });
+$('hW').addEventListener('input', e => { S.hills[S.hill].w = +e.target.value; paint(); });
+$('hP').addEventListener('input', e => { S.hills[S.hill].p = +e.target.value; paint(); });
+for (const id of ['hH', 'hW', 'hP']) $(id).addEventListener('change', () => track('hill', Object.assign({i: S.hill}, S.hills[S.hill])));
+function clampProbe(){
+  const D = domain();
+  S.probe.lat = clamp(S.probe.lat, D.lat0 + 3, Math.min(D.lat1 - 3, 80));
+  if (S.proj === 'conic') S.probe.lon = clamp(S.probe.lon, D.lon0 - lonC() + 5, D.lon1 - lonC() - 5);
+}
+/* drags */
+drag($('tPhit'), svg, {
+  start(){ if (!S.locked) return false; },
+  move(p){
+    const a = Math.atan2(-(p.y - DIAL.y), p.x - DIAL.x) * R2D;
+    S.P = Math.round(wrap180(subsolar() + a) * 4) / 4;
+    paint();
+  },
+  end(){ track('marker', {lon: S.P}); },
+});
+drag($('pProbeHit'), svg, {
+  start(){ if (!S.locked) return false; },
+  move(p){
+    const q = unproject(S.proj, (p.x - FIT.ox) / FIT.s, (FIT.oy - p.y) / FIT.s, PP());
+    if (!q || !isFinite(q.lat)) return;
+    S.probe = {lat: q.lat, lon: q.lon}; clampProbe();
+    if (S.proj !== 'conic') S.probe.lon = wrap180(S.probe.lon);
+    paint();
+  },
+  end(){ track('probe', {proj: S.proj, lat: +S.probe.lat.toFixed(2), area: S.meas && S.meas.T ? +S.meas.T.area.toFixed(3) : null}); },
+});
+const toLand = p => ({x: clamp((p.x - CM.x0) / (CM.x1 - CM.x0) * TW, 0, TW), y: clamp((p.y - CM.y0) / (CM.y1 - CM.y0) * TH, 0, TH)});
+for (const k of ['A', 'B']) drag($('endHit' + k), svg, {
+  start(){ if (!S.locked) return false; },
+  move(p){ S[k] = toLand(p); paint(); },
+  end(){ track('sectionEnd', {end: k, x: +S[k].x.toFixed(2), y: +S[k].y.toFixed(2)}); },
+});
+for (let i = 0; i < 3; i++) drag($('hillHit' + i), svg, {
+  start(){ if (!S.locked) return false; S.hill = i; },
+  move(p){ const q = toLand(p); S.hills[i].x = q.x; S.hills[i].y = q.y; paint(); },
+  end(){ paint(); track('moveHill', {i}); },
+});
+function lockControls(lock){
+  for (const id of ['gmt', 'stdm', 'phi0', 'light', 'hH', 'hW', 'hP']) $(id).disabled = lock;
+  for (const b of document.querySelectorAll('#ctlCard button')) b.disabled = lock;
+  $('gate').hidden = !lock;
+}
+
+/* ============================================================================
+   Start
+   ============================================================================ */
+findings($('finds'), [
+  {id: 'mercator',  icon: '▦', label: 'Mercator: area × 4 at 60°',              hint: 'Measure a Mercator map at 60°'},
+  {id: 'greenland', icon: '❄', label: 'Greenland outgrows India',              hint: 'Which projections enlarge Greenland?'},
+  {id: 'stereo',    icon: '◎', label: 'Light on the far side keeps shapes',     hint: 'Move the light of a zenithal projection'},
+  {id: 'fourmin',   icon: '🕓', label: '90° is six hours',                       hint: 'The book’s Thimphu and New Orleans, at noon GMT'},
+  {id: 'ist',       icon: '🇮🇳', label: '82°30′ E: the fairest half hour',       hint: 'Try several standard meridians for India'},
+  {id: 'steep',     icon: '⛰', label: 'Close contours, steep slope',           hint: 'Make the section cross a steep side'},
+  {id: 'vi',        icon: '≋', label: 'A finer interval, a truer section',      hint: 'Measure the same section at three intervals'},
+], () => toast('All seven. Time, projection and relief — each one measured, not memorised.', 4200));
+
+const POE = predict($('poe'), {
+  id: 'mercator-area',
+  q: 'Mercator’s projection keeps the shapes of small areas correct. Compared with the same small country on the Equator, how much bigger is its area drawn at 60° N?',
+  options: [
+    {id: 'same', text: 'Not bigger: if the shape is kept, the size is kept too.'},
+    {id: 'two',  text: 'About 2 times.'},
+    {id: 'four', text: 'About 4 times.', right: true},
+    {id: 'inf',  text: 'Without limit: 60° cannot be drawn.'},
+  ],
+  onLock(){
+    S.locked = true;
+    lockControls(false);
+    $('veil').remove(); $('veilT').remove();
+    say('Now measure it. Drag the probe circle to sixty degrees north.');
+    paint();
+  },
+});
+lockControls(!POE.locked);
+if (!Play.FF('predict')) S.locked = true;
+paint();
+window.applyFeatures = () => paint();
+window.PG_STATE = () => JSON.parse(JSON.stringify(S));
+window.PG_MODEL = {localMin, worstMismatch, halfHourly, project, unproject, tissot, projArea, heightAt, grid, contour, section,
+  lightH, GREENLAND, INDIA, INDIA_W, INDIA_E, MAP, CM, DIAL, fitNow: () => FIT, lonC};
+</script>
+</body>
+</html>

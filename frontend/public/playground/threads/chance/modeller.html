@@ -1,0 +1,497 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Mathematics of Maybe</title>
+<meta name="description" content="Class 9: toss coins, roll dice and spin spinners thousands of times; watch the experimental probability wander and then settle on the theoretical value, build events from a sample space, and test whether a coin remembers.">
+<link rel="icon" href="../../favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600&family=Inter:wght@400;500;600;700&family=Nunito:wght@500;700;800&family=Newsreader:opsz,wght@6..72,400;6..72,500&family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="../../play.css">
+<style>
+/* Only what this page needs beyond play.css. */
+.pg-stage{align-self:start; min-height:0}
+svg text.m{font-family:var(--font-mono)}
+.gate{position:absolute; inset:0; display:grid; place-items:center; pointer-events:none}
+.gate span{background:rgba(29,35,39,.85); color:#fff; padding:10px 16px; border-radius:99px; font-weight:600; font-size:14px}
+.seg{display:grid; grid-template-columns:repeat(4, 1fr); gap:4px; background:var(--sunk); padding:4px; border-radius:var(--radius-sm); margin-bottom:10px}
+.seg button{border:0; background:transparent; border-radius:7px; min-height:32px; font-weight:600; font-size:13px; cursor:pointer; color:var(--ink-2)}
+.seg button[aria-pressed="true"]{background:var(--card); color:var(--ink); box-shadow:var(--shadow)}
+.seg button:disabled{opacity:.5; cursor:default}
+.runs{display:grid; grid-template-columns:repeat(5, 1fr); gap:5px}
+.runs .btn{padding:0 4px; font-family:var(--font-mono); font-size:13px}
+.lab{font-size:11.5px; font-weight:700; color:var(--ink-3); letter-spacing:.06em; text-transform:uppercase; margin:12px 0 5px}
+.chips{display:flex; flex-wrap:wrap; gap:5px; margin-top:6px}
+.chip{min-width:36px; border:1.5px solid var(--hair-2); background:var(--card); border-radius:8px; padding:4px 9px; font-size:13px; cursor:pointer; font-weight:700; color:var(--ink-2); font-family:var(--font-mono)}
+.chip[aria-pressed="true"]{background:#2f9e5b; border-color:#2f9e5b; color:#fff}
+.chip:disabled{opacity:.45; cursor:default}
+.readout{display:grid; grid-template-columns:auto 1fr; gap:4px 12px; font-size:13px; align-items:baseline; margin-top:10px}
+.readout span{color:var(--ink-2)}
+.readout b{font-family:var(--font-mono); font-weight:600; font-size:12.5px; font-variant-numeric:tabular-nums; text-align:right; overflow-wrap:anywhere}
+.note{font-size:12.5px; color:var(--ink-3); margin:6px 0 0}
+.why p{font-size:14px; margin-bottom:.55em}
+select{width:100%}
+.hit{cursor:grab}
+.hit.dragging{cursor:grabbing}
+@media (max-width:1180px) and (min-width:981px){ .pg-main.wide-side{grid-template-columns:minmax(0,1fr) 340px} }
+</style>
+</head>
+<body>
+<header class="pg-top"></header>
+
+<div class="pg-intro">
+  <h1>The mathematics of maybe</h1>
+  <p>Toss a coin, roll a die, toss two coins or spin a spinner — once, or ten thousand times. Choose an event from the sample space and watch its experimental probability
+     wander at first and then settle on the theoretical value, n(E) ÷ n(S). Then ask the question gamblers get wrong: after six heads in a row, is tails due?</p>
+</div>
+
+<main class="pg-main wide-side">
+  <section class="pg-stage" id="stageWrap">
+    <svg id="stage" viewBox="0 0 1000 640" role="img" aria-label="The coin, die or spinner with its last result, a bar chart of how often each outcome came up, and the running experimental probability of the event against the number of trials"></svg>
+    <div class="gate" id="gate"><span>Make your prediction first →</span></div>
+  </section>
+
+  <aside class="pg-side">
+    <div id="poe"></div>
+
+    <div class="card" id="cardX">
+      <div class="kicker">The experiment</div>
+      <div class="seg" id="expSeg">
+        <button data-x="coin" aria-pressed="true">Coin</button>
+        <button data-x="die" aria-pressed="false">Die</button>
+        <button data-x="two" aria-pressed="false">Two coins</button>
+        <button data-x="spin" aria-pressed="false">Spinner</button>
+      </div>
+      <div class="runs" id="runs">
+        <button class="btn sm primary" data-n="1">×1</button>
+        <button class="btn sm" data-n="10">×10</button>
+        <button class="btn sm" data-n="100">×100</button>
+        <button class="btn sm" data-n="1000">×1000</button>
+        <button class="btn sm" data-n="10000">×10k</button>
+      </div>
+      <div class="lab">The event E</div>
+      <select id="preset" aria-label="An event from the book"></select>
+      <div class="chips" id="chips"></div>
+      <div class="readout" id="readout"></div>
+      <div class="row" style="margin-top:10px"><button class="btn sm" id="reset">Start again</button><span class="note" id="spinNote" style="margin:0"></span></div>
+    </div>
+
+    <div class="card why" id="whyCard" hidden>
+      <div class="kicker">What is happening</div>
+      <div id="why"></div>
+    </div>
+
+    <div class="card"><div class="kicker">To find</div><div id="finds"></div></div>
+  </aside>
+</main>
+
+<script src="../../play.js"></script>
+<script>
+'use strict';
+const {$, esc, clamp, fmt, drag, sound, say, track, toast, predict, findings, discover, found,
+       shareState, sharedState, mount, reduced, mulberry32, tween, sleep} = Play;
+mount({thread: 'chance', band: 'modeller'});
+
+/* MODEL:start ==================================================================
+   Each experiment is a sample space S of outcomes and a way to produce ONE outcome from a
+   seeded random number generator (mulberry32), exactly as a real trial would:
+     coin      — one draw: H if r < ½, else T
+     die       — one draw: face ⌊6r⌋ + 1
+     two coins — two separate coin draws, recorded as HH, HT, TH or TT
+     spinner   — the needle stops at the angle 360r; the outcome is the sector that angle falls in,
+                 so a wider sector is hit more often because it covers more of the circle.
+   Every outcome is stored, so the experimental probability of ANY event E (a subset of S),
+   chosen before or after the trials, is counted from the record:
+     experimental P(E) = (number of trials whose outcome is in E) / (number of trials)
+   and the theoretical probability is n(E)/n(S) for equally likely outcomes — for the spinner,
+   the total angle of E's sectors ÷ 360°. The coin's memory is tested on the record too: every
+   time six heads came in a row, what came next?
+   ============================================================================ */
+const EXP = {
+  coin: {name: 'Coin', S: ['H', 'T'], draws: 1},
+  die:  {name: 'Die', S: ['1', '2', '3', '4', '5', '6'], draws: 1},
+  two:  {name: 'Two coins', S: ['HH', 'HT', 'TH', 'TT'], draws: 2},
+  spin: {name: 'Spinner', S: ['1', '2', '3', '4', '5', '6', '7', '8'], draws: 1},
+};
+const EQUAL8 = [0, 45, 90, 135, 180, 225, 270, 315];
+/* The probability of each outcome, in theory. */
+function probs(x, cuts = EQUAL8){
+  if (x === 'spin') return cuts.map((c, i) => ((i < 7 ? cuts[i + 1] : cuts[0] + 360) - c) / 360);
+  const n = EXP[x].S.length; return EXP[x].S.map(() => 1 / n);
+}
+const pOf = (x, E, cuts) => probs(x, cuts).reduce((s, p, i) => s + (E.includes(i) ? p : 0), 0);
+/* One trial: returns {outcome index, extra detail for drawing}. */
+function trial(x, rng, cuts = EQUAL8){
+  if (x === 'coin') return {i: rng() < 0.5 ? 0 : 1};
+  if (x === 'die') return {i: Math.floor(rng() * 6)};
+  if (x === 'two') { const a = rng() < 0.5 ? 0 : 1, b = rng() < 0.5 ? 0 : 1; return {i: a * 2 + b}; }
+  const ang = rng() * 360;
+  let k = 7;
+  for (let j = 0; j < 8; j++) {
+    const lo = cuts[j], hi = j < 7 ? cuts[j + 1] : cuts[0] + 360;
+    if ([ang - 360, ang, ang + 360].some(a => a >= lo && a < hi)) { k = j; break; }
+  }
+  return {i: k, ang};
+}
+/* Many trials from a seed, as counts — used by the tests, and the same function the page uses. */
+function simulate(x, n, seed, cuts = EQUAL8){
+  const rng = mulberry32(seed), counts = new Array(EXP[x].S.length).fill(0);
+  for (let k = 0; k < n; k++) counts[trial(x, rng, cuts).i]++;
+  return counts;
+}
+/* After every run of `len` heads (0 = H) in the record, what came next? */
+function afterRuns(seq, n, len = 6){
+  let run = 0, k = 0, tails = 0;
+  for (let t = 0; t < n; t++) {
+    if (run >= len) { k++; if (seq[t] === 1) tails++; }
+    run = seq[t] === 0 ? run + 1 : 0;
+  }
+  return {k, tails};
+}
+/* The running experimental probability of E, sampled at log-spaced N. */
+function running(seq, n, E){
+  const inE = new Uint8Array(16); for (const i of E) inE[i] = 1;
+  const pts = []; let hits = 0, next = 1;
+  for (let t = 0; t < n; t++) {
+    hits += inE[seq[t]];
+    if (t + 1 >= next || t === n - 1) { pts.push([t + 1, hits / (t + 1)]); next = Math.max(t + 2, Math.ceil((t + 1) * 1.02)); }
+  }
+  return {pts, hits};
+}
+/* MODEL:end */
+
+/* ---- state: plain data --------------------------------------------------- */
+const MAXN = 200000;
+const PRESETS = {
+  coin: [{id: 'h', name: 'Heads', E: [0]}, {id: 't', name: 'Tails', E: [1]}],
+  die:  [{id: 'four', name: 'Rolling a 4 (Example 3)', E: [3]}, {id: 'even', name: 'An even number (Exercise 7.2, Q5)', E: [1, 3, 5]},
+         {id: 'gt4', name: 'Greater than 4: E = {5, 6}', E: [4, 5]}, {id: 'three', name: 'Rolling a 3 (Exercise 7.2, Q6)', E: [2]}, {id: 'gt6', name: 'Greater than 6 (impossible)', E: []}],
+  two:  [{id: 'mixed', name: 'One head and one tail', E: [1, 2]}, {id: 'atleast', name: 'At least one head: {HH, HT, TH}', E: [0, 1, 2]}, {id: 'hh', name: 'Heads twice: HH (Example 7)', E: [0]}],
+  spin: [{id: 'odd', name: 'An odd number (Q9 ii)', E: [0, 2, 4, 6]}, {id: 'eight', name: 'An 8 (Q9 i)', E: [7]}, {id: 'gt2', name: 'Greater than 2 (Q9 iii)', E: [2, 3, 4, 5, 6, 7]},
+         {id: 'lt9', name: 'Less than 9 (Q9 iv)', E: [0, 1, 2, 3, 4, 5, 6, 7]}, {id: 'm3', name: 'A multiple of 3 (Q9 v)', E: [2, 5]}],
+};
+const blank = x => ({seq: new Uint8Array(MAXN), n: 0, seed: 1000 + Object.keys(EXP).indexOf(x) * 17, rng: null, E: PRESETS[x][0].E.slice(), preset: PRESETS[x][0].id, last: null, lastAng: 0, touchedE: false});
+const S = {x: 'coin', locked: false, cuts: EQUAL8.slice(), cutsTouched: false, needle: 0, flip: null,
+           runs: {coin: blank('coin'), die: blank('die'), two: blank('two'), spin: blank('spin')}};
+const shared = sharedState();
+if (shared) {
+  if (EXP[shared.x]) S.x = shared.x;
+  if (Array.isArray(shared.cuts) && shared.cuts.length === 8 && shared.cuts.every((c, i) => Number.isFinite(c) && (i === 0 || c > shared.cuts[i - 1])) && shared.cuts[7] - shared.cuts[0] < 360) { S.cuts = shared.cuts.map(Number); S.cutsTouched = true; }
+  if (shared.E && EXP[S.x] && Array.isArray(shared.E)) { S.runs[S.x].E = shared.E.filter(i => Number.isInteger(i) && i >= 0 && i < EXP[S.x].S.length); S.runs[S.x].preset = ''; }
+}
+for (const k in S.runs) S.runs[k].rng = mulberry32(S.runs[k].seed);
+shareState(() => ({x: S.x, cuts: S.cuts, E: R().E}));
+const R = () => S.runs[S.x];
+
+/* ============================================================================
+   The stage
+   ============================================================================ */
+const sv = $('stage');
+const INK = '#1d2327', FAINT = '#7c878c', GREEN = '#2f9e5b', GREY = '#b9b4a8', GOLD = '#e8b33a';
+const AP = {x: 20, y: 18, w: 370, h: 290}, BR = {x: 420, y: 18, w: 560, h: 290};
+const CV = {x: 110, y: 360, w: 850, h: 220};
+const SP = {x: 205, y: 168, r: 106};
+const cvx = n => CV.x + Math.log10(n) / Math.log10(MAXN) * CV.w, cvy = p => CV.y + CV.h - p * CV.h;
+function build(){
+  let axis = '';
+  for (const n of [1, 10, 100, 1000, 10000, 100000]) axis += `<line x1="${cvx(n)}" y1="${CV.y}" x2="${cvx(n)}" y2="${CV.y + CV.h}" stroke="#eeebe2"/><text x="${cvx(n)}" y="${CV.y + CV.h + 17}" font-size="11.5" text-anchor="middle" fill="${FAINT}" class="m">${n.toLocaleString('en-IN')}</text>`;
+  const scale = [[0, 'impossible'], [0.25, 'less likely'], [0.5, 'even chance'], [0.75, 'more likely'], [1, 'certain']];
+  for (const [p, w] of scale) axis += `<line x1="${CV.x}" y1="${cvy(p)}" x2="${CV.x + CV.w}" y2="${cvy(p)}" stroke="${p === 0 ? INK : '#eeebe2'}"/>` +
+    `<text x="${CV.x - 8}" y="${cvy(p) - 1}" font-size="11.5" text-anchor="end" fill="${INK}" class="m">${p}</text><text x="${CV.x - 8}" y="${cvy(p) + 11}" font-size="9.5" text-anchor="end" fill="${FAINT}">${w}</text>`;
+  sv.innerHTML = `
+  <rect x="0" y="0" width="1000" height="640" fill="#fbfaf6"/>
+  <rect x="${AP.x}" y="${AP.y}" width="${AP.w}" height="${AP.h}" rx="10" fill="#fff" stroke="#e8e4d8"/>
+  <rect x="${BR.x}" y="${BR.y}" width="${BR.w}" height="${BR.h}" rx="10" fill="#fff" stroke="#e8e4d8"/>
+  <g id="app"></g>
+  <g id="spinG">
+    <g id="sectors"></g>
+    <circle cx="${SP.x}" cy="${SP.y}" r="${SP.r}" fill="none" stroke="${INK}" stroke-width="2"/>
+    <g id="needle"><line x1="${SP.x}" y1="${SP.y + 16}" x2="${SP.x}" y2="${SP.y - SP.r + 12}" stroke="${INK}" stroke-width="4" stroke-linecap="round"/><polygon points="${SP.x - 8},${SP.y - SP.r + 24} ${SP.x + 8},${SP.y - SP.r + 24} ${SP.x},${SP.y - SP.r + 6}" fill="${INK}"/></g>
+    <circle cx="${SP.x}" cy="${SP.y}" r="8" fill="${INK}"/>
+    <g id="cutHandles"></g>
+    <text x="${AP.x + AP.w / 2}" y="${AP.y + AP.h - 10}" font-size="11.5" text-anchor="middle" fill="${FAINT}">Drag a white dot to resize the sectors.</text>
+  </g>
+  <text id="appT" x="${AP.x + 16}" y="${AP.y + 26}" font-size="12.5" font-weight="700" fill="#4a555b" letter-spacing=".08em"></text>
+  <text id="lastT" x="${AP.x + AP.w - 16}" y="${AP.y + 26}" font-size="13" text-anchor="end" fill="${INK}" class="m"></text>
+  <text x="${BR.x + 16}" y="${BR.y + 26}" font-size="12.5" font-weight="700" fill="#4a555b" letter-spacing=".08em">HOW OFTEN EACH OUTCOME CAME UP</text>
+  <g id="bars"></g>
+  <text x="${CV.x - 90}" y="${CV.y - 18}" font-size="12.5" font-weight="700" fill="#4a555b" letter-spacing=".08em">THE EXPERIMENTAL PROBABILITY OF E AS THE TRIALS PILE UP</text>
+  ${axis}
+  <text x="${CV.x + CV.w}" y="${CV.y + CV.h + 36}" font-size="12" text-anchor="end" fill="${FAINT}">number of trials (each step is 10 times as many)</text>
+  <line id="thLine" x1="${CV.x}" x2="${CV.x + CV.w}" stroke="${GREEN}" stroke-width="1.6" stroke-dasharray="7 5"/>
+  <text id="thT" x="${CV.x + CV.w - 4}" font-size="12.5" font-weight="700" text-anchor="end" fill="${GREEN}" class="m"></text>
+  <path id="curve" fill="none" stroke="${INK}" stroke-width="2"/>
+  <circle id="curDot" r="5" fill="${INK}"/>
+  <text id="curT" font-size="13" font-weight="700" fill="${INK}" class="m"></text>`;
+}
+function sectorPath(a0, a1, r){
+  const p = a => [SP.x + r * Math.sin(a * Math.PI / 180), SP.y - r * Math.cos(a * Math.PI / 180)];
+  const [x0, y0] = p(a0), [x1, y1] = p(a1);
+  return `M${SP.x} ${SP.y} L${x0.toFixed(1)} ${y0.toFixed(1)} A${r} ${r} 0 ${a1 - a0 > 180 ? 1 : 0} 1 ${x1.toFixed(1)} ${y1.toFixed(1)} Z`;
+}
+const SECT = ['#f6d6d2', '#d9e6fa', '#fbe7b6', '#d7f0de', '#eadcf7', '#fde0c2', '#d2eef0', '#f3d6e8'];
+function paintSpinner(){
+  const E = R().E;
+  let s = '', h = '';
+  for (let i = 0; i < 8; i++) {
+    const a0 = S.cuts[i], a1 = i < 7 ? S.cuts[i + 1] : S.cuts[0] + 360, am = (a0 + a1) / 2;
+    const inE = E.includes(i);
+    s += `<path d="${sectorPath(a0, a1, SP.r)}" fill="${SECT[i]}" stroke="${inE ? GREEN : '#fff'}" stroke-width="${inE ? 3 : 1.5}"/>` +
+      `<text x="${SP.x + 0.7 * SP.r * Math.sin(am * Math.PI / 180)}" y="${SP.y - 0.7 * SP.r * Math.cos(am * Math.PI / 180) + 6}" font-size="17" font-weight="800" text-anchor="middle" fill="${inE ? GREEN : INK}">${i + 1}</text>`;
+  }
+  $('sectors').innerHTML = s;
+  /* boundary handles are patched, never rebuilt, so a drag keeps its pointer */
+  for (let i = 0; i < 8; i++) {
+    const el = $('cut' + i), a = S.cuts[i] * Math.PI / 180;
+    el.setAttribute('cx', (SP.x + SP.r * Math.sin(a)).toFixed(1)); el.setAttribute('cy', (SP.y - SP.r * Math.cos(a)).toFixed(1));
+  }
+  $('needle').setAttribute('transform', `rotate(${S.needle} ${SP.x} ${SP.y})`);
+}
+function coinArt(cx, cy, r, face, squash = 1){
+  const heads = face === 'H';
+  return `<g transform="translate(${cx} ${cy}) scale(1 ${squash.toFixed(3)})">
+    <circle r="${r}" fill="${heads ? GOLD : '#d9d4c6'}" stroke="${heads ? '#a8781a' : '#8f8878'}" stroke-width="3"/>
+    <circle r="${r * 0.8}" fill="none" stroke="${heads ? '#c9952a' : '#aaa393'}" stroke-width="1.5" stroke-dasharray="3 3"/>
+    <text y="${r * 0.3}" font-size="${r * 0.9}" font-weight="800" text-anchor="middle" fill="${heads ? '#7a5510' : '#5d584c'}">${face}</text></g>`;
+}
+function dieArt(cx, cy, s, face, tilt = 0){
+  const pip = {1: [[0, 0]], 2: [[-1, -1], [1, 1]], 3: [[-1, -1], [0, 0], [1, 1]], 4: [[-1, -1], [1, -1], [-1, 1], [1, 1]],
+               5: [[-1, -1], [1, -1], [0, 0], [-1, 1], [1, 1]], 6: [[-1, -1], [1, -1], [-1, 0], [1, 0], [-1, 1], [1, 1]]}[face] || [];
+  return `<g transform="translate(${cx} ${cy}) rotate(${tilt})"><rect x="${-s / 2}" y="${-s / 2}" width="${s}" height="${s}" rx="${s * 0.16}" fill="#fff" stroke="${INK}" stroke-width="3"/>
+    ${pip.map(([a, b]) => `<circle cx="${a * s * 0.27}" cy="${b * s * 0.27}" r="${s * 0.085}" fill="${INK}"/>`).join('')}</g>`;
+}
+/* The apparatus panel: the last result, and for two coins the tree (Fig. 7.6) with its counts. */
+function paintApp(anim){
+  const r = R(), x = S.x, last = r.last;
+  $('spinG').style.display = x === 'spin' ? '' : 'none';
+  $('appT').textContent = {coin: 'TOSS A COIN', die: 'ROLL A DIE', two: 'TOSS TWO COINS: THE TREE', spin: 'SPIN THE SPINNER'}[x];
+  $('lastT').textContent = r.n ? `trial ${r.n.toLocaleString('en-IN')}: ${EXP[x].S[last]}` : 'no trials yet';
+  let g = '';
+  const A = anim || {};
+  if (x === 'coin') {
+    g = coinArt(AP.x + AP.w / 2, AP.y + 160, 78, A.face || (last == null ? 'H' : EXP.coin.S[last]), A.squash == null ? 1 : A.squash);
+  } else if (x === 'die') {
+    g = dieArt(AP.x + AP.w / 2, AP.y + 160, 124, A.face || (last == null ? 6 : last + 1), A.tilt || 0);
+  } else if (x === 'two') {
+    const lastS = last == null ? null : EXP.two.S[last];
+    const f1 = A.f1 || (lastS ? lastS[0] : 'H'), f2 = A.f2 || (lastS ? lastS[1] : 'H');
+    g = coinArt(AP.x + 52, AP.y + 76, 26, f1, A.squash == null ? 1 : A.squash) + coinArt(AP.x + 52, AP.y + 140, 26, f2, A.squash == null ? 1 : A.squash);
+    /* the tree: root, first toss, second toss, with the counts the model recorded */
+    const cnt = counts(), n = r.n, root = {x: AP.x + 116, y: AP.y + 158};
+    const l1 = [{x: AP.x + 200, y: AP.y + 98, f: 'H'}, {x: AP.x + 200, y: AP.y + 218, f: 'T'}];
+    const l2 = [[AP.x + 300, AP.y + 66], [AP.x + 300, AP.y + 130], [AP.x + 300, AP.y + 186], [AP.x + 300, AP.y + 250]];
+    const E = r.E;
+    l1.forEach((p, i) => { const c = cnt[i * 2] + cnt[i * 2 + 1];
+      g += `<line x1="${root.x}" y1="${root.y}" x2="${p.x - 14}" y2="${p.y}" stroke="#8a94a6" stroke-width="2"/><text x="${(root.x + p.x) / 2 - 10}" y="${(root.y + p.y) / 2 + (i ? 16 : -6)}" font-size="11" fill="${FAINT}" class="m">${n ? (c / n).toFixed(2) : '½'}</text>` +
+        `<circle cx="${p.x}" cy="${p.y}" r="14" fill="${p.f === 'H' ? GOLD : '#d9d4c6'}"/><text x="${p.x}" y="${p.y + 5}" font-size="13" font-weight="800" text-anchor="middle">${p.f}</text>`; });
+    l2.forEach(([X, Y], j) => { const p = l1[j >> 1], inE = E.includes(j), o = EXP.two.S[j];
+      g += `<line x1="${p.x + 14}" y1="${p.y}" x2="${X - 18}" y2="${Y}" stroke="${inE ? GREEN : '#8a94a6'}" stroke-width="${inE ? 3 : 2}"/>` +
+        `<text x="${X}" y="${Y + 5}" font-size="14" font-weight="800" fill="${inE ? GREEN : INK}" class="m">${o}</text><text x="${X + 30}" y="${Y + 5}" font-size="12" fill="${FAINT}" class="m">${cnt[j].toLocaleString('en-IN')}</text>`; });
+    g += `<circle cx="${root.x}" cy="${root.y}" r="5" fill="${INK}"/>`;
+  }
+  $('app').innerHTML = g;
+  if (x === 'spin') paintSpinner();
+}
+function counts(){ const r = R(), c = new Array(EXP[S.x].S.length).fill(0); for (let t = 0; t < r.n; t++) c[r.seq[t]]++; return c; }
+function paintBars(){
+  const r = R(), x = S.x, O = EXP[x].S, P = probs(x, S.cuts), c = counts(), n = r.n;
+  const fr = c.map(k => n ? k / n : 0);
+  const top = Math.min(1, Math.ceil(Math.max(...P, ...fr) * 1.35 * 10) / 10);
+  const base = BR.y + 238, H = 176, gap = BR.w / O.length, bw = Math.min(52, gap * 0.55);
+  let g = `<line x1="${BR.x + 16}" y1="${base}" x2="${BR.x + BR.w - 16}" y2="${base}" stroke="${INK}"/>` +
+    `<text x="${BR.x + BR.w - 16}" y="${BR.y + 26}" font-size="11.5" text-anchor="end" fill="${FAINT}">bar: experimental · line: theoretical</text>`;
+  O.forEach((o, i) => {
+    const cx = BR.x + gap * (i + 0.5), h = S.locked ? fr[i] / top * H : 0, th = P[i] / top * H, inE = r.E.includes(i);
+    g += `<rect x="${cx - bw / 2}" y="${base - h}" width="${bw}" height="${h}" rx="3" fill="${inE ? GREEN : GREY}"/>` +
+      `<line x1="${cx - bw / 2 - 6}" x2="${cx + bw / 2 + 6}" y1="${base - th}" y2="${base - th}" stroke="${INK}" stroke-width="2"/>` +
+      `<text x="${cx}" y="${base + 18}" font-size="14" font-weight="800" text-anchor="middle" fill="${inE ? GREEN : INK}" class="m">${o}</text>` +
+      (S.locked ? `<text x="${cx}" y="${base + 34}" font-size="11" text-anchor="middle" fill="${FAINT}" class="m">${c[i].toLocaleString('en-IN')}</text>` +
+        `<text x="${cx}" y="${base - Math.max(h, th) - 6}" font-size="11.5" text-anchor="middle" fill="${INK}" class="m">${n ? fr[i].toFixed(3) : ''}</text>` : '');
+  });
+  $('bars').innerHTML = g;
+}
+function paintCurve(){
+  const r = R(), th = pOf(S.x, r.E, S.cuts);
+  $('thLine').setAttribute('y1', cvy(th)); $('thLine').setAttribute('y2', cvy(th));
+  $('thT').setAttribute('y', cvy(th) + (th > 0.9 ? 16 : -7)); $('thT').textContent = `theoretical P(E) = ${th.toFixed(3)}`;
+  if (!S.locked || !r.n) { $('curve').setAttribute('d', ''); $('curDot').style.display = 'none'; $('curT').textContent = ''; return; }
+  const {pts} = running(r.seq, r.n, r.E);
+  $('curve').setAttribute('d', pts.map((p, i) => (i ? 'L' : 'M') + cvx(p[0]).toFixed(1) + ' ' + cvy(p[1]).toFixed(1)).join(''));
+  const [N, p] = pts[pts.length - 1];
+  $('curDot').style.display = ''; $('curDot').setAttribute('cx', cvx(N)); $('curDot').setAttribute('cy', cvy(p));
+  const right = cvx(N) > CV.x + CV.w - 170;
+  $('curT').setAttribute('x', cvx(N) + (right ? -10 : 10)); const nearLine = Math.abs(cvy(p) - cvy(th)) < 22;
+  $('curT').setAttribute('y', nearLine ? cvy(th) + (th > 0.9 ? -8 : 20) : clamp(cvy(p) + (p > th ? -10 : 18), CV.y + 16, CV.y + CV.h - 6)); $('curT').setAttribute('text-anchor', right ? 'end' : 'start');
+  $('curT').textContent = `${p.toFixed(3)} after ${N.toLocaleString('en-IN')}`;
+}
+function paintSide(){
+  const r = R(), x = S.x, O = EXP[x].S, E = r.E, th = pOf(x, E, S.cuts), {hits} = running(r.seq, r.n, E);
+  const setT = a => '{' + a.join(', ') + '}';
+  $('chips').innerHTML = O.map((o, i) => `<button class="chip" data-o="${i}" aria-pressed="${E.includes(i)}" ${S.locked ? '' : 'disabled'}>${o}</button>`).join('');
+  $('preset').innerHTML = `<option value="">Your own event</option>` + PRESETS[x].map(p => `<option value="${p.id}">${esc(p.name)}</option>`).join('');
+  $('preset').value = r.preset;
+  const eq = x !== 'spin' || !S.cutsTouched;
+  const exp = r.n ? hits / r.n : null;
+  let h = `<span>sample space S</span><b>${setT(O)}</b><span>n(S)</span><b>${O.length}</b>` +
+    `<span>event E</span><b>${E.length ? setT(E.map(i => O[i])) : '{ } (empty)'}</b><span>n(E)</span><b>${E.length}</b>` +
+    `<span>theoretical P(E)</span><b>${eq ? `${E.length}/${O.length} = ` : 'angles ÷ 360° = '}${th.toFixed(3)}</b>`;
+  if (S.locked) h += `<span>experimental P(E)</span><b>${r.n ? `${hits.toLocaleString('en-IN')}/${r.n.toLocaleString('en-IN')} = ${exp.toFixed(3)}` : '—'}</b>` +
+    `<span>P(not E)</span><b>${(1 - th).toFixed(3)} · exp. ${r.n ? (1 - exp).toFixed(3) : '—'}</b>`;
+  if (S.locked && x === 'coin') { const a = afterRuns(r.seq, r.n); h += `<span>after 6 heads in a row</span><b>${a.k ? `${a.tails} tails in ${a.k} = ${(a.tails / a.k).toFixed(3)}` : 'not seen yet'}</b>`; }
+  $('readout').innerHTML = h;
+  $('spinNote').textContent = x === 'spin' ? (S.cutsTouched ? 'Sectors resized: outcomes are no longer equally likely.' : 'Equal sectors: Fig. 7.7.') : '';
+  for (const b of document.querySelectorAll('#expSeg button')) b.setAttribute('aria-pressed', b.dataset.x === x);
+  for (const b of document.querySelectorAll('#runs button')) b.disabled = !S.locked || busy || r.n >= MAXN;
+}
+function paintWhy(){
+  $('whyCard').hidden = !S.locked;
+  if (!S.locked) return;
+  const r = R(), x = S.x, th = pOf(x, r.E, S.cuts), {hits} = running(r.seq, r.n, r.E), exp = r.n ? hits / r.n : 0;
+  let t;
+  if (!r.n) t = `<p>No trials yet. Before you start: P(E) = ${th.toFixed(3)} is what should happen <b>in the long run</b>. It cannot tell you what the next trial will be.</p>`;
+  else t = `<p>After ${r.n.toLocaleString('en-IN')} trial${r.n === 1 ? '' : 's'}, E happened ${hits.toLocaleString('en-IN')} time${hits === 1 ? '' : 's'}: experimental probability ${exp.toFixed(3)}, ${Math.abs(exp - th) < 0.005 ? 'almost exactly' : Math.abs(exp - th) < 0.02 ? 'close to' : 'still some way from'} the theoretical ${th.toFixed(3)} (a gap of ${Math.abs(exp - th).toFixed(3)}).</p>` +
+    `<p>${r.n < 100 ? 'With so few trials the fraction jumps about a lot — each new trial moves it by as much as 1/' + r.n + '.' : 'Each new trial now moves the fraction by at most 1/' + r.n.toLocaleString('en-IN') + ', so it has settled: the Law of Large Numbers.'}</p>`;
+  if (x === 'spin') t += `<p>The needle is equally likely to stop at any angle, so a sector’s chance is its share of the 360°.</p>`;
+  $('why').innerHTML = t;
+}
+function paint(anim){
+  $('gate').hidden = S.locked;
+  paintApp(anim); paintBars(); paintCurve(); paintSide(); paintWhy();
+}
+
+/* ============================================================================
+   Running trials
+   ============================================================================ */
+let busy = false;
+function runN(n){
+  const r = R();
+  n = Math.min(n, MAXN - r.n);
+  for (let k = 0; k < n; k++) { const t = trial(S.x, r.rng, S.cuts); r.seq[r.n++] = t.i; r.last = t.i; if (t.ang != null) r.lastAng = t.ang; }
+  return n;
+}
+async function animateOne(){
+  const r = R(), x = S.x, prevNeedle = S.needle;
+  runN(1);
+  const O = EXP[x].S, res = O[r.last];
+  if (reduced()) { if (x === 'spin') S.needle = r.lastAng; return; }
+  busy = true; paintSide();
+  if (x === 'coin' || x === 'two') {
+    sound('whoosh');
+    await tween(0, 1, 520, k => { const sq = Math.cos(k * Math.PI * 7), f = sq >= 0 ? 'H' : 'T';
+      paint({face: k < 1 ? f : res, f1: k < 1 ? f : res[0], f2: k < 1 ? (sq >= 0 ? 'T' : 'H') : res[1], squash: k < 1 ? Math.max(0.08, Math.abs(sq)) : 1}); });
+  } else if (x === 'die') {
+    sound('whoosh');
+    await tween(0, 1, 520, k => paint({face: k < 1 ? 1 + Math.floor((k * 97) % 6) : r.last + 1, tilt: (1 - k) * 200}));
+  } else {
+    sound('whoosh');
+    const end = prevNeedle + 3 * 360 + (((r.lastAng - prevNeedle) % 360) + 360) % 360;
+    await tween(prevNeedle, end, 900, v => { S.needle = v; paintSpinner(); }, Play.ease.out);
+    S.needle = r.lastAng;
+  }
+  sound('tick');
+  busy = false;
+}
+$('runs').addEventListener('click', async e => {
+  const b = e.target.closest('[data-n]'); if (!b || b.disabled || busy || !S.locked) return;
+  const n = +b.dataset.n;
+  if (n === 1) await animateOne();
+  else { runN(n); if (S.x === 'spin') S.needle = R().lastAng; sound('pop'); }
+  paint(); check(); track('trials', {x: S.x, n, total: R().n});
+});
+$('expSeg').addEventListener('click', e => {
+  const b = e.target.closest('[data-x]'); if (!b || b.disabled || busy) return;
+  S.x = b.dataset.x; sound('tick'); paint(); check(); track('experiment', {x: S.x});
+});
+$('chips').addEventListener('click', e => {
+  const b = e.target.closest('[data-o]'); if (!b || b.disabled) return;
+  const r = R(), i = +b.dataset.o;
+  r.E = r.E.includes(i) ? r.E.filter(k => k !== i) : [...r.E, i].sort((p, q) => p - q);
+  r.preset = ''; r.touchedE = true; sound('tick'); paint(); check(); track('event', {x: S.x, E: r.E});
+});
+$('preset').addEventListener('change', e => {
+  const P = PRESETS[S.x].find(p => p.id === e.target.value); if (!P) return;
+  const r = R(); r.E = P.E.slice(); r.preset = P.id; r.touchedE = true; sound('pop'); paint(); check(); track('preset', {id: P.id});
+});
+$('reset').addEventListener('click', () => {
+  if (busy) return;
+  const r = R(); r.n = 0; r.last = null; r.seed += 101; r.rng = mulberry32(r.seed); sound('tick'); paint(); track('reset', {x: S.x});
+});
+/* resizing the spinner's sectors by their boundary dots */
+function wireCuts(){
+  let h = '';
+  for (let i = 0; i < 8; i++) h += `<circle class="hit" id="cut${i}" r="8" fill="#fff" stroke="${INK}" stroke-width="2.5"/>`;
+  $('cutHandles').innerHTML = h;
+  for (let i = 0; i < 8; i++) drag($('cut' + i), sv, {
+    start(){ if (!S.locked || busy) return false; },
+    move(p){
+      let a = Math.atan2(p.x - SP.x, SP.y - p.y) * 180 / Math.PI;
+      const lo = i ? S.cuts[i - 1] + 5 : S.cuts[7] - 360 + 5, hi = i < 7 ? S.cuts[i + 1] - 5 : S.cuts[0] + 360 - 5;
+      /* bring a into the window around the old cut */
+      while (a < S.cuts[i] - 180) a += 360; while (a > S.cuts[i] + 180) a -= 360;
+      a = clamp(Math.round(a), lo, hi);
+      if (a !== S.cuts[i]) { S.cuts[i] = a; S.cutsTouched = true; paintSpinner(); paintBars(); paintCurve(); paintSide(); }
+    },
+    end(){ paint(); check(); track('cuts', {cuts: S.cuts}); },
+  });
+}
+
+/* ============================================================================
+   Findings and the explanation
+   ============================================================================ */
+function check(){
+  if (!S.locked) return;
+  const r = R(), x = S.x, E = r.E, th = pOf(x, E, S.cuts), {hits} = running(r.seq, r.n, E), exp = r.n ? hits / r.n : 0;
+  if (r.n >= 10000 && th > 0 && th < 1 && Math.abs(exp - th) < 0.01) discover('settle');
+  if (x === 'die' && r.n >= 6000 && counts().every(k => Math.abs(k / r.n - 1 / 6) < 0.015)) discover('fair');
+  if (r.touchedE && r.n >= 100 && E.length > 0 && E.length < EXP[x].S.length) discover('complement');
+  if (r.n >= 1 && (E.length === 0 || E.length === EXP[x].S.length)) discover('extremes');
+  if (x === 'two' && r.n >= 1000) { const c = counts(), ratio = (c[1] + c[2]) / Math.max(1, c[0]); if (ratio > 1.7 && ratio < 2.3) discover('tree'); }
+  if (x === 'spin' && S.cutsTouched && r.n >= 1000 && Math.abs(th - E.length / 8) > 0.02 && Math.abs(exp - th) < 0.03) discover('slice');
+  if (x === 'coin') {
+    const a = afterRuns(r.seq, r.n);
+    if (a.k >= 30) {
+      if (Math.abs(a.tails / a.k - 0.5) < 0.15) discover('memory');
+      if (!EXPL) {
+        EXPL = true;
+        POE.explain(`In your ${r.n.toLocaleString('en-IN')} tosses, six heads in a row happened <b>${a.k}</b> times. The toss straight after was tails <b>${a.tails}</b> times — ${(a.tails / a.k).toFixed(3)} of them, near ½, and heads the rest. ` +
+          `Nothing was ‘due’: the coin has no memory, so each toss is ½ and ½ however the last six went. That belief is the <b>Gambler’s Fallacy</b>.`);
+      }
+    }
+  }
+}
+let EXPL = false;
+
+/* ============================================================================
+   Start
+   ============================================================================ */
+build(); wireCuts();
+findings($('finds'), [
+  {id: 'settle',     icon: '〰', label: 'The fraction settles: the Law of Large Numbers', hint: 'Run 10 000 trials'},
+  {id: 'fair',       icon: '⚅', label: 'Every face of a fair die about 1/6', hint: 'Roll the die thousands of times'},
+  {id: 'complement', icon: '∁', label: 'An event and its complement add to 1', hint: 'Choose your own event'},
+  {id: 'extremes',   icon: '0', label: 'Impossible is 0, certain is 1', hint: 'Choose no outcomes, or all of them'},
+  {id: 'tree',       icon: '🌳', label: 'One of each is twice as likely as two heads', hint: 'Toss two coins a thousand times'},
+  {id: 'slice',      icon: '◔', label: 'A bigger slice, a bigger chance', hint: 'Resize the spinner and spin'},
+  {id: 'memory',     icon: '🪙', label: 'The coin has no memory', hint: 'Look at what follows six heads'},
+], () => toast('All seven: probability measured, and why it only speaks about the long run.', 4200));
+const POE = predict($('poe'), {
+  id: 'gamblers-fallacy',
+  q: 'A fair coin has just come up heads six times in a row. On the next toss, tails is…',
+  options: [
+    {id: 'due',  text: 'More likely than heads — it is due.'},
+    {id: 'less', text: 'Less likely — the coin is on a heads streak.'},
+    {id: 'half', text: 'Exactly as likely as heads: ½.', right: true},
+    {id: 'cant', text: 'Impossible to say anything about.'},
+  ],
+  onLock(){ S.locked = true; say('Now run the trials.'); paint(); },
+});
+if (!Play.FF('predict')) S.locked = true;
+paint();
+window.applyFeatures = () => paint();
+window.PG_STATE = () => { const o = {x: S.x, locked: S.locked, cuts: S.cuts.slice(), cutsTouched: S.cutsTouched, runs: {}};
+  for (const k in S.runs) { const r = S.runs[k]; o.runs[k] = {n: r.n, E: r.E.slice(), last: r.last, seed: r.seed}; } return o; };
+window.PG_MODEL = {EXP, probs, pOf, trial, simulate, afterRuns, running, mulberry32};
+</script>
+</body>
+</html>

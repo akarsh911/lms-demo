@@ -1,0 +1,533 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>How Banks Create Money</title>
+<meta name="description" content="Class 12: Leela's ₹100 is lent and re-deposited round by round until reserves meet the CRR; measure the money multiplier, then use the RBI's tools (CRR, open market operations, the repo rate) and break the multiplier with cash in pockets.">
+<link rel="icon" href="../../favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600&family=Inter:wght@400;500;600;700&family=Nunito:wght@500;700;800&family=Newsreader:opsz,wght@6..72,400;6..72,500&family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="../../play.css">
+<style>
+/* Only what this page needs beyond play.css. */
+.pg-stage{align-self:start; min-height:0}
+.gate{position:absolute; inset:0; display:grid; place-items:center; pointer-events:none}
+.gate span{background:rgba(29,35,39,.86); color:#fff; padding:10px 16px; border-radius:99px; font-weight:600; font-size:14px}
+.law{font-family:"Newsreader",Georgia,serif; font-size:19px; line-height:1.3}
+.ctl{grid-template-columns:118px 1fr 64px; margin:0}
+.ctl label{font-size:12.5px; line-height:1.2}
+.ctl output{font-family:var(--font-mono); font-size:12.5px; font-weight:600; min-width:0}
+.readout{display:grid; grid-template-columns:1fr auto; gap:2px 12px; font-size:13px; align-items:baseline}
+.readout span{color:var(--ink-2)}
+.readout b{font-family:var(--font-mono); font-weight:600; font-size:12.5px; font-variant-numeric:tabular-nums; text-align:right}
+.readout .sep{grid-column:1/-1; height:1px; background:var(--hair); margin:4px 0}
+.why p{font-size:13.5px; margin-bottom:.55em}
+.note{font-size:12.5px; color:var(--ink-3); margin:6px 0 0}
+.sub{font-size:11px; letter-spacing:.07em; text-transform:uppercase; font-weight:700; color:var(--ink-3); margin:10px 0 2px}
+svg text.m{font-family:var(--font-mono)}
+svg text.serif{font-family:"Newsreader",Georgia,serif}
+</style>
+</head>
+<body>
+<header class="pg-top"></header>
+
+<div class="pg-intro">
+  <h1>How banks create money</h1>
+  <p>Like Lala the goldsmith, a bank lends out money it is holding for others. Leela deposits ₹100 in the only bank in the country.
+     The bank keeps the cash reserve the RBI requires and lends the rest; the loan is spent and comes back as a new deposit, and
+     the bank lends again. Run the rounds, measure the money multiplier, then pull the RBI’s levers, and break the multiplier.
+     The numbers follow NCERT <i>Introductory Macroeconomics</i>, Chapter 3 (Tables 3.1–3.3).</p>
+</div>
+
+<main class="pg-main wide-side">
+  <section class="pg-stage" id="stageWrap">
+    <svg id="stage" viewBox="0 0 1000 660" role="img" aria-label="The RBI, a commercial bank's balance sheet, the rounds of lending and re-depositing, Table 3.2 and the measured money multiplier"></svg>
+    <div class="gate" id="gate"><span>Make your prediction first →</span></div>
+  </section>
+
+  <aside class="pg-side">
+    <div id="poe"></div>
+
+    <div class="card" id="ctlCard">
+      <div class="kicker">The rule every round</div>
+      <div class="law" id="lawTxt">lend = reserves − CRR × deposits</div>
+      <div class="sub">Rounds of lending</div>
+      <div class="row"><button class="btn sm primary" id="btnRun">▶ Run the rounds</button><button class="btn sm" id="btnRound">+1 round</button><button class="btn sm" id="btnReset">Start again: Leela’s ₹100</button></div>
+      <div class="sub">The RBI’s tools</div>
+      <div class="ctl"><label for="crr">Cash reserve ratio</label><input type="range" id="crr" min="5" max="100" step="1" value="20"><output id="crrOut">20%</output></div>
+      <div class="row" style="margin:4px 0 6px"><button class="btn sm" id="btnBuy">RBI buys ₹10 of bonds</button><button class="btn sm" id="btnSell">RBI sells ₹10 of bonds</button></div>
+      <div class="ctl"><label for="repo">Repo rate</label><input type="range" id="repo" min="4" max="8" step="0.25" value="8"><output id="repoOut">8.00%</output></div>
+      <p class="note">Repo: in this model banks borrow ₹5 of reserves from the RBI for every percentage point the repo rate is below 8%.</p>
+      <div class="sub">Break it</div>
+      <div class="ctl"><label for="cash">Cash kept from each loan</label><input type="range" id="cash" min="0" max="50" step="5" value="0"><output id="cashOut">0%</output></div>
+      <p class="note">The book assumes every loan comes back as a deposit. Here the public can keep part of each new loan as cash.</p>
+    </div>
+
+    <div class="card" id="measCard">
+      <div class="kicker" id="measKick">Measured</div>
+      <div id="measVeil" class="note" style="margin:0">The measurements appear once you have made a prediction.</div>
+      <div id="meas" class="readout" hidden></div>
+    </div>
+
+    <div class="card why" id="whyCard" hidden>
+      <div class="kicker">What the model says</div>
+      <div id="why"></div>
+    </div>
+
+    <div class="card"><div class="kicker">To find</div><div id="finds"></div></div>
+  </aside>
+</main>
+
+<script src="../../play.js"></script>
+<script>
+'use strict';
+const {$, esc, clamp, fmt, loop, sound, say, track, toast, predict, findings, discover, found,
+       shareState, sharedState, mount, reduced} = Play;
+mount({thread: 'banking', band: 'theorist'});
+
+/* MODEL:start ==================================================================
+   ONE BANK, ROUND BY ROUND (NCERT Introductory Macroeconomics, Ch 3, 3.3).
+
+   The bank holds reserves R (cash and deposits with the RBI), has made loans L,
+   owes deposits D and may owe the RBI B (repo borrowing). The public holds
+   currency CU. Each round:
+       excess reserves  E = R − CRR × D
+       E > 0: the bank lends E. The borrower spends it; the seller keeps a
+              share c as cash (CU += cE, R −= cE) and deposits the rest
+              (D += (1 − c)E). L += E.
+       E < 0: the bank calls back −E of loans; borrowers repay out of their
+              deposits (L += E, D += E).
+   Nothing else. Every total comes from stepping this rule; the formulas
+   D* = R/CRR and m = 1/CRR are only printed beside the result.
+   Book, CRR 20%, Leela's ₹100: round 1 deposits 100, reserve 20, loan 80;
+   round 2: 180, 36, 64; last: 500, 100, 400 (Tables 3.2 and 3.3).
+
+   Balance sheet: assets R + L = liabilities D + B (net worth 0).
+   Money supply M1 = CU + D. Monetary base H = R + CU (it does not change
+   during the rounds: lending moves money, it does not print it).
+
+   RBI tools:
+     CRR: changes the rule above (25% → loans can only be ₹300: some are called back).
+     Open market purchase of ₹x: the RBI pays the bond seller, who deposits the
+       cheque: D += x, R += x. A sale does the opposite.
+     Repo: banks borrow reserves B = ₹5 × (8 − repo%) from the RBI (an
+       illustrative rule; the book says only that a dearer rate means fewer
+       reserves). R and B change together.
+   ============================================================================ */
+const REPO_REF = 8, REPO_PER_PT = 5;
+const borrowAt = repo => REPO_PER_PT * Math.max(0, REPO_REF - repo);
+function start(H = 100){ return {R: H, L: 0, D: H, B: 0, CU: 0}; }        /* Leela deposits ₹H of cash */
+function excess(s, crr){ return s.R - crr * s.D; }
+function round(s, crr, c){
+  const E = excess(s, crr), row = {D: s.D, req: crr * s.D, E};
+  if (E > 0) { s.L += E; s.CU += c * E; s.R -= c * E; s.D += (1 - c) * E; }
+  else if (E < 0) { const back = Math.min(-E, s.L); s.L -= back; s.D -= back; row.E = -back; }
+  return row;
+}
+function runRounds(s, crr, c, tol = 1e-6, max = 5000){
+  const rows = [];
+  for (let k = 0; k < max; k++) { if (Math.abs(excess(s, crr)) < tol) break; rows.push(round(s, crr, c)); }
+  return rows;
+}
+const money = s => s.CU + s.D;
+const base = s => s.R + s.CU;
+const assets = s => s.R + s.L, liabilities = s => s.D + s.B;
+function openMarket(s, x){ s.D += x; s.R += x; }                          /* x > 0 buys, x < 0 sells */
+function setRepo(s, repo){ const B = borrowAt(repo), d = B - s.B; s.B = B; s.R += d; return d; }
+/* MODEL:end */
+
+const inr = (v, dp = 2) => (v < -0.004 ? '−' : '') + '₹' + Math.abs(v).toLocaleString('en-IN', {minimumFractionDigits: dp, maximumFractionDigits: dp});
+const pct = v => fmt(v * 100, Math.abs(v * 100 - Math.round(v * 100)) < 1e-9 ? 0 : 1) + '%';
+const BORROWERS = ['Jaspal Kaur', 'Junaid'];                               /* the book's two borrowers */
+
+/* ---- state ------------------------------------------------------------------ */
+const S = {locked: false, crr: 0.20, c: 0, repo: 8, sys: start(100), running: false, ep: null, pts: [], rounds: 0, buys: 0};
+function settled(){ return Math.abs(excess(S.sys, S.crr)) < 1e-4; }
+function newEpisode(cause, extra = {}){
+  S.ep = Object.assign({cause, eqBefore: S.ep ? S.ep.settledNow : true, from: snap(), rows: [], crr: S.crr, c: S.c, settledNow: settled()}, extra);
+}
+function snap(){ const s = S.sys; return {R: s.R, L: s.L, D: s.D, B: s.B, CU: s.CU, M: money(s), H: base(s)}; }
+const shared = sharedState();
+if (shared) {
+  if (shared.crr) S.crr = clamp(Math.round(+shared.crr * 100) / 100, 0.05, 1);
+  if (shared.c != null) S.c = clamp(Math.round(+shared.c * 20) / 20, 0, 0.5);
+}
+shareState(() => ({crr: S.crr, c: S.c}));
+newEpisode('start');
+S.ep.eqBefore = false;
+
+/* ============================================================================
+   The stage
+   ============================================================================ */
+const svg = $('stage');
+const CH = {x0: 70, x1: 560, y0: 612, y1: 372};     /* rounds chart */
+const MM = {x0: 640, x1: 975, y0: 612, y1: 440};    /* measured multiplier vs CRR */
+const GOLD = '#b8862e', GOLD_D = '#8a5a1c', GREEN = '#2f855a', PURPLE = '#6a3fc2', INK = '#1d2327', INK2 = '#4a555b', INK3 = '#7c878c', ORANGE = '#d0762c';
+const r2 = v => fmt(v, 2);
+
+function build(){
+  svg.innerHTML = `
+  <defs>
+    <marker id="mArr" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="${GOLD}"/></marker>
+    <marker id="mArrG" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="${GREEN}"/></marker>
+    <clipPath id="clipC"><rect x="${CH.x0}" y="${CH.y1 - 6}" width="${CH.x1 - CH.x0 + 4}" height="${CH.y0 - CH.y1 + 6}"/></clipPath>
+  </defs>
+  <rect x="0" y="0" width="1000" height="660" fill="#fbfaf6"/>
+  <text x="20" y="30" font-size="12" font-weight="700" letter-spacing=".08em" fill="${INK2}">THE BANKING SYSTEM · ₹</text>
+  <text id="tRound" x="20" y="52" font-size="17" fill="${INK}" class="serif"></text>
+
+  <!-- the RBI -->
+  <rect x="20" y="72" width="170" height="118" rx="10" fill="#fff" stroke="${GREEN}" stroke-width="1.6"/>
+  <text x="105" y="94" text-anchor="middle" font-size="13.5" font-weight="700" fill="${INK}" class="serif">Reserve Bank of India</text>
+  <text id="rbiCrr" x="105" y="116" text-anchor="middle" font-size="12" fill="${INK2}" class="m"></text>
+  <text id="rbiRepo" x="105" y="134" text-anchor="middle" font-size="12" fill="${INK2}" class="m"></text>
+  <text id="rbiLent" x="105" y="152" text-anchor="middle" font-size="12" fill="${INK2}" class="m"></text>
+  <text id="rbiBonds" x="105" y="170" text-anchor="middle" font-size="12" fill="${INK2}" class="m"></text>
+  <path id="aRBI" d="M190 131 L226 131" fill="none" stroke="${GREEN}" stroke-width="2" marker-end="url(#mArrG)"/>
+
+  <!-- the bank's balance sheet -->
+  <rect x="232" y="72" width="336" height="176" rx="10" fill="#fff" stroke="${GOLD}" stroke-width="1.6"/>
+  <text x="400" y="94" text-anchor="middle" font-size="14" font-weight="700" fill="${INK}" class="serif">The bank’s balance sheet</text>
+  <line x1="400" y1="104" x2="400" y2="238" stroke="#e2ded2"/><line x1="244" y1="122" x2="556" y2="122" stroke="#e2ded2"/>
+  <text x="248" y="117" font-size="11" font-weight="700" letter-spacing=".05em" fill="${INK3}">ASSETS</text>
+  <text x="412" y="117" font-size="11" font-weight="700" letter-spacing=".05em" fill="${INK3}">LIABILITIES</text>
+  <g id="bs" font-size="12.5"></g>
+
+  <!-- the round: lend, spend, deposit again -->
+  <g id="flow">
+    <rect x="232" y="262" width="100" height="44" rx="8" fill="#f3ecfb" stroke="${PURPLE}"/>
+    <text x="282" y="279" text-anchor="middle" font-size="11" font-weight="700" fill="#3b2a70">BORROWER</text>
+    <text id="fBorrower" x="282" y="296" text-anchor="middle" font-size="11.5" fill="#3b2a70"></text>
+    <rect x="360" y="262" width="100" height="44" rx="8" fill="#f6eed8" stroke="${GOLD}"/>
+    <text x="410" y="279" text-anchor="middle" font-size="11" font-weight="700" fill="#4a3a1a">SELLER</text>
+    <text id="fSeller" x="410" y="296" text-anchor="middle" font-size="11.5" fill="#4a3a1a" class="m"></text>
+    <rect x="488" y="262" width="80" height="44" rx="8" fill="#eef2f3" stroke="#9aa3a6"/>
+    <text x="528" y="279" text-anchor="middle" font-size="10.5" font-weight="700" fill="${INK2}">CASH IN</text>
+    <text x="528" y="292" text-anchor="middle" font-size="10.5" font-weight="700" fill="${INK2}">POCKETS</text>
+    <text id="fCU" x="528" y="322" text-anchor="middle" font-size="11" fill="${INK2}" class="m"></text>
+    <path d="M282 248 L282 260" stroke="${PURPLE}" stroke-width="1.8" marker-end="url(#mArr)"/>
+    <path d="M332 284 L356 284" stroke="${GOLD}" stroke-width="1.8" marker-end="url(#mArr)"/>
+    <path id="aBack" d="M410 262 L410 250" stroke="${GOLD}" stroke-width="1.8" marker-end="url(#mArr)"/>
+    <path id="aCash" d="M460 284 L484 284" stroke="#9aa3a6" stroke-width="1.8" stroke-dasharray="4 3" marker-end="url(#mArr)"/>
+    <text id="fLoan" x="290" y="258" font-size="11" fill="#3b2a70" class="m"></text>
+    <text id="fDep" x="418" y="258" font-size="11" fill="${GOLD_D}" class="m"></text>
+    <circle id="dot" r="5" fill="#e0a526" stroke="${GOLD_D}" opacity="0"/>
+  </g>
+  <path id="loop" d="M282 250 L282 284 L410 284 L410 250" fill="none"/>
+  <text x="20" y="226" font-size="11.5" fill="${INK3}">Each round the bank lends</text>
+  <text x="20" y="242" font-size="11.5" fill="${INK3}">its excess reserves; the</text>
+  <text x="20" y="258" font-size="11.5" fill="${INK3}">loan is spent and comes</text>
+  <text x="20" y="274" font-size="11.5" fill="${INK3}">back as a new deposit.</text>
+
+  <!-- rounds chart -->
+  <text x="20" y="352" font-size="12" font-weight="700" letter-spacing=".08em" fill="${INK2}">ROUND BY ROUND</text>
+  <g id="chAxes"></g>
+  <g clip-path="url(#clipC)">
+    <line id="chTarget" stroke="${INK3}" stroke-width="1.3" stroke-dasharray="6 4"/>
+    <path id="chD" fill="none" stroke="${GOLD}" stroke-width="2.4"/>
+    <path id="chM" fill="none" stroke="${INK}" stroke-width="1.4" stroke-dasharray="2 3"/>
+    <path id="chL" fill="none" stroke="${PURPLE}" stroke-width="2"/>
+    <path id="chR" fill="none" stroke="${GREEN}" stroke-width="2"/>
+  </g>
+  <text id="chTargetL" font-size="11" fill="${INK2}" class="m"></text>
+  <g font-size="11.5" font-weight="600">
+    <line x1="70" y1="648" x2="92" y2="648" stroke="${GOLD}" stroke-width="2.4"/><text x="97" y="652" fill="${GOLD_D}">deposits D</text>
+    <line x1="182" y1="648" x2="204" y2="648" stroke="${PURPLE}" stroke-width="2"/><text x="209" y="652" fill="#4a2f94">loans L</text>
+    <line x1="274" y1="648" x2="296" y2="648" stroke="${GREEN}" stroke-width="2"/><text x="301" y="652" fill="#1f5c3d">reserves R</text>
+    <line x1="382" y1="648" x2="404" y2="648" stroke="${INK}" stroke-width="1.4" stroke-dasharray="2 3"/><text x="409" y="652" fill="${INK}">money M1 = CU + D</text>
+  </g>
+
+  <line x1="600" y1="14" x2="600" y2="646" stroke="#e2ded2"/>
+  <!-- Table 3.2 -->
+  <text x="620" y="30" font-size="12" font-weight="700" letter-spacing=".08em" fill="${INK2}">TABLE 3.2 · THE MONEY MULTIPLIER PROCESS</text>
+  <g font-size="11" font-weight="700" fill="${INK3}">
+    <text x="636" y="56" text-anchor="middle">Round</text><text x="740" y="56" text-anchor="end">Deposits</text>
+    <text x="850" y="56" text-anchor="end">Required reserve</text><text x="970" y="56" text-anchor="end">Loan made</text></g>
+  <line x1="616" y1="64" x2="976" y2="64" stroke="#cfc9b8"/>
+  <g id="tab"></g>
+  <text id="tabNote" x="620" y="384" font-size="11.5" fill="${INK3}"></text>
+
+  <!-- measured multiplier -->
+  <text x="620" y="418" font-size="12" font-weight="700" letter-spacing=".08em" fill="${INK2}">MEASURED MULTIPLIER M1 ÷ H AGAINST CRR</text>
+  <g id="mmAxes"></g>
+  <path id="mmTheory" fill="none" stroke="#9aa3a6" stroke-width="1.3" stroke-dasharray="5 4"/>
+  <g id="mmPts"></g>
+  <rect id="veil" x="601" y="0" width="399" height="660" fill="#fbfaf6" opacity=".95"/>
+  <text id="veilT" x="800" y="330" text-anchor="middle" fill="${INK3}" font-size="14" font-weight="600">The table fills after your prediction</text>`;
+}
+
+/* ---- paint ------------------------------------------------------------------ */
+function paintTop(){
+  const s = S.sys, ep = S.ep;
+  const nr = ep.rows.length;
+  $('tRound').textContent = settled() ? `Settled after ${nr} round${nr === 1 ? '' : 's'} of this run · M1 = ${inr(money(s))}` : `Round ${nr} of this run · excess reserves ${inr(excess(s, S.crr))}`;
+  $('rbiCrr').textContent = `CRR ${pct(S.crr)}`;
+  $('rbiRepo').textContent = `repo rate ${fmt(S.repo, 2)}%`;
+  $('rbiLent').textContent = `lent to banks ${inr(s.B, 0)}`;
+  $('rbiBonds').textContent = S.buys ? `bonds bought ${S.buys > 0 ? '' : '−'}${inr(Math.abs(S.buys) * 10, 0)}` : 'no bonds traded';
+  $('aRBI').setAttribute('opacity', s.B > 0 ? 1 : 0.25);
+  const row = (x, y, a, b, bold) => `<text x="${x}" y="${y}" fill="${bold ? INK : INK2}" ${bold ? 'font-weight="700"' : ''}>${a}</text><text x="${x + 144}" y="${y}" text-anchor="end" class="m" fill="${INK}" ${bold ? 'font-weight="700"' : ''}>${inr(b)}</text>`;
+  let t = row(248, 142, 'Reserves', s.R) + row(248, 164, 'Loans', s.L);
+  t += row(412, 142, 'Deposits', s.D) + row(412, 164, 'From the RBI', s.B) + row(412, 186, 'Net worth', assets(s) - liabilities(s));
+  t += `<line x1="248" y1="204" x2="392" y2="204" stroke="#e2ded2"/><line x1="412" y1="204" x2="556" y2="204" stroke="#e2ded2"/>`;
+  t += row(248, 224, 'Total', assets(s), true) + row(412, 224, 'Total', liabilities(s), true);
+  $('bs').innerHTML = t;
+  const last = ep.rows[ep.rows.length - 1];
+  const n = ep.rows.length, who = n ? (n <= 2 && ep.cause === 'start' ? BORROWERS[n - 1] : `borrower ${n}`) : '—';
+  $('fBorrower').textContent = last && last.E > 0 ? who : last && last.E < 0 ? 'repays' : '—';
+  $('fLoan').textContent = last ? (last.E >= 0 ? `lends ${inr(last.E)}` : `calls back ${inr(-last.E)}`) : '';
+  $('fDep').textContent = last && last.E > 0 ? `deposits ${inr((1 - ep.c) * last.E)}` : '';
+  $('fSeller').textContent = last && last.E > 0 ? inr(last.E) : '—';
+  $('fCU').textContent = `CU ${inr(s.CU)}`;
+  $('aCash').setAttribute('opacity', S.c > 0 ? 1 : 0.3);
+}
+let CHMAX = 600;
+function paintChart(){
+  const ep = S.ep, s = S.sys;
+  /* the path of this episode: the starting state, then each round */
+  const pts = ep.path;
+  const N = Math.max(10, pts.length - 1);
+  const target = base(s) / S.crr;
+  const hi0 = Math.max(target, ...pts.map(p => Math.max(p.D, p.M))) * 1.1;
+  const step = niceStep(hi0 / 4); CHMAX = Math.ceil(hi0 / step) * step;
+  const x = i => CH.x0 + i / N * (CH.x1 - CH.x0), y = v => CH.y0 - v / CHMAX * (CH.y0 - CH.y1);
+  let a = `<line x1="${CH.x0}" y1="${CH.y0}" x2="${CH.x1}" y2="${CH.y0}" stroke="#9aa3a6"/><line x1="${CH.x0}" y1="${CH.y0}" x2="${CH.x0}" y2="${CH.y1 - 6}" stroke="#9aa3a6"/>`;
+  for (let v = 0; v <= CHMAX + 1e-9; v += step) a += `<text x="${CH.x0 - 6}" y="${y(v) + 4}" text-anchor="end" font-size="10.5" fill="${INK3}" class="m">${Math.round(v).toLocaleString('en-IN')}</text>`;
+  const xs = N > 40 ? Math.ceil(N / 8 / 5) * 5 : N > 20 ? 5 : 2;
+  for (let i = 0; i <= N; i += xs) a += `<text x="${x(i)}" y="${CH.y0 + 15}" text-anchor="middle" font-size="10.5" fill="${INK3}" class="m">${i}</text>`;
+  a += `<text x="${CH.x1}" y="${CH.y0 + 30}" text-anchor="end" font-size="11" fill="${INK2}">round of this run →</text>`;
+  $('chAxes').innerHTML = a;
+  const P = f => pts.map((p, i) => (i ? 'L' : 'M') + x(i).toFixed(1) + ' ' + y(f(p)).toFixed(1)).join('');
+  $('chD').setAttribute('d', P(p => p.D)); $('chL').setAttribute('d', P(p => p.L)); $('chR').setAttribute('d', P(p => p.R));
+  $('chM').setAttribute('d', S.c > 0 || pts.some(p => p.CU > 0.005) ? P(p => p.M) : '');
+  const ty = y(target);
+  for (const k of ['x1', 'x2']) $('chTarget').setAttribute(k, k === 'x1' ? CH.x0 : CH.x1);
+  $('chTarget').setAttribute('y1', ty); $('chTarget').setAttribute('y2', ty);
+  $('chTargetL').textContent = `H ÷ CRR = ${inr(target)}`; $('chTargetL').setAttribute('x', CH.x1 - 4); $('chTargetL').setAttribute('y', ty - 6); $('chTargetL').setAttribute('text-anchor', 'end');
+}
+function niceStep(x){ const p = Math.pow(10, Math.floor(Math.log10(x))), m = x / p; return (m <= 1 ? 1 : m <= 2 ? 2 : m <= 2.5 ? 2.5 : m <= 5 ? 5 : 10) * p; }
+function paintTable(){
+  const ep = S.ep, rows = ep.rows;
+  let t = '', y = 84;
+  const line = (r, i, bold) => {
+    const s = `<text x="636" y="${y}" text-anchor="middle" class="m" fill="${INK}" ${bold ? 'font-weight="700"' : ''}>${i}</text>
+      <text x="740" y="${y}" text-anchor="end" class="m" fill="${INK}" ${bold ? 'font-weight="700"' : ''}>${r2(r.D)}</text>
+      <text x="850" y="${y}" text-anchor="end" class="m" fill="${INK}" ${bold ? 'font-weight="700"' : ''}>${r2(r.req)}</text>
+      <text x="970" y="${y}" text-anchor="end" class="m" fill="${r.E < 0 ? '#b3261e' : INK}" ${bold ? 'font-weight="700"' : ''}>${r2(r.E)}</text>`;
+    y += 24; return s;
+  };
+  const show = rows.length > 10 ? rows.slice(0, 8) : rows;
+  show.forEach((r, i) => { t += line(r, i + 1); });
+  if (rows.length > 10) { t += `<text x="636" y="${y}" text-anchor="middle" fill="${INK3}">⋮</text><text x="970" y="${y}" text-anchor="end" font-size="11" fill="${INK3}">${rows.length - 9} more rounds</text>`; y += 24; t += line(rows[rows.length - 1], rows.length); }
+  if (settled() && rows.length) {
+    const s = S.sys;
+    t += `<line x1="616" y1="${y - 16}" x2="976" y2="${y - 16}" stroke="#cfc9b8"/>`;
+    t += `<text x="636" y="${y}" text-anchor="middle" font-size="12.5" font-weight="700" fill="${INK}">Last</text>
+      <text x="740" y="${y}" text-anchor="end" class="m" font-weight="700" fill="${INK}">${r2(s.D)}</text>
+      <text x="850" y="${y}" text-anchor="end" class="m" font-weight="700" fill="${INK}">${r2(S.crr * s.D)}</text>
+      <text x="970" y="${y}" text-anchor="end" class="m" font-weight="700" fill="${INK}">${r2(s.L)}</text>`;
+    y += 24;
+  }
+  if (!rows.length) t += `<text x="620" y="${y}" font-size="12.5" fill="${INK3}">No rounds yet in this run. Press ▶ Run the rounds.</text>`;
+  $('tab').innerHTML = t;
+  $('tabNote').textContent = settled() && rows.length ? 'Last row: loans shown in total, as in the book.' : ep.cause === 'start' ? '' : `This run began with: ${causeText(ep)}.`;
+}
+function causeText(ep){ return {start: 'Leela’s deposit', crr: `the CRR set to ${pct(ep.crr)}`, omo: ep.x > 0 ? 'an open market purchase' : 'an open market sale', repo: `the repo rate at ${fmt(S.repo, 2)}%`, cash: 'a new cash habit', mixed: 'several changes'}[ep.cause] || ep.cause; }
+function paintMM(){
+  const cx = r => MM.x0 + (r - 0) / 1 * (MM.x1 - MM.x0), mmax = 20, cy = m => MM.y0 - clamp(m, 0, mmax) / mmax * (MM.y0 - MM.y1);
+  let a = `<line x1="${MM.x0}" y1="${MM.y0}" x2="${MM.x1}" y2="${MM.y0}" stroke="#9aa3a6"/><line x1="${MM.x0}" y1="${MM.y0}" x2="${MM.x0}" y2="${MM.y1}" stroke="#9aa3a6"/>`;
+  for (const r of [0, 0.25, 0.5, 0.75, 1]) a += `<text x="${cx(r)}" y="${MM.y0 + 15}" text-anchor="middle" font-size="10.5" fill="${INK3}" class="m">${r * 100}%</text>`;
+  for (const m of [0, 5, 10, 20]) a += `<text x="${MM.x0 - 6}" y="${cy(m) + 4}" text-anchor="end" font-size="10.5" fill="${INK3}" class="m">${m}</text>`;
+  a += `<text x="${MM.x1}" y="${MM.y0 + 30}" text-anchor="end" font-size="11" fill="${INK2}">CRR →</text><text x="${MM.x0 + 8}" y="${MM.y1 + 4}" font-size="11" fill="${INK2}">dashed: 1 ÷ CRR</text>
+    <circle cx="${MM.x0 + 150}" cy="${MM.y1}" r="4" fill="${PURPLE}"/><text x="${MM.x0 + 158}" y="${MM.y1 + 4}" font-size="11" fill="${INK2}">no cash kept</text>
+    <circle cx="${MM.x0 + 250}" cy="${MM.y1}" r="4" fill="${ORANGE}"/><text x="${MM.x0 + 258}" y="${MM.y1 + 4}" font-size="11" fill="${INK2}">cash kept</text>`;
+  $('mmAxes').innerHTML = a;
+  $('mmTheory').setAttribute('d', Array.from({length: 96}, (_, i) => { const r = 0.05 + i / 100; return (i ? 'L' : 'M') + cx(r).toFixed(1) + ' ' + cy(1 / r).toFixed(1); }).join(''));
+  $('mmPts').innerHTML = S.pts.map(p => `<circle cx="${cx(p.crr).toFixed(1)}" cy="${cy(p.m).toFixed(1)}" r="5" fill="${p.c > 0 ? ORANGE : PURPLE}" stroke="#fff" stroke-width="1.4"><title>CRR ${pct(p.crr)}, cash ${pct(p.c)}: M1/H = ${fmt(p.m, 3)}</title></circle>`).join('');
+}
+function paintMeas(){
+  if (!S.locked) return;
+  $('measVeil').hidden = true; $('meas').hidden = false;
+  const s = S.sys, H = base(s), M = money(s);
+  $('measKick').textContent = settled() ? `Measured, settled after ${S.ep.rows.length} rounds` : `Measured, round ${S.ep.rows.length}`;
+  $('meas').innerHTML = `<span>Monetary base H = R + CU</span><b>${inr(H)}</b><span>Deposits D</span><b>${inr(s.D)}</b><span>Currency with the public CU</span><b>${inr(s.CU)}</b>
+    <span>Money supply M1 = CU + D</span><b>${inr(M)}</b><i class="sep"></i>
+    <span>Measured multiplier M1 ÷ H</span><b>${fmt(M / H, 4)}</b><span>1 ÷ CRR</span><b>${fmt(1 / S.crr, 4)}</b>
+    <span>Excess reserves now</span><b>${inr(excess(s, S.crr))}</b><span>Assets − liabilities</span><b>${inr(assets(s) - liabilities(s))}</b>`;
+}
+function paintWhy(){
+  if (!S.locked) return;
+  $('whyCard').hidden = false;
+  const s = S.sys, ep = S.ep, M = money(s), H = base(s);
+  let t = '';
+  if (!ep.rows.length && ep.cause === 'start') t = `<p>Leela has deposited ₹${fmt(ep.from.D, 0)}. The bank must keep ${pct(S.crr)} of its deposits as reserves: ${inr(S.crr * s.D)}. The other ${inr(excess(s, S.crr))} is excess: it can be lent.</p>`;
+  else if (!settled()) {
+    const E = excess(s, S.crr);
+    t = E > 0 ? `<p>Deposits are ${inr(s.D)}, so the bank must hold ${inr(S.crr * s.D)}. It holds ${inr(s.R)}, so it can lend ${inr(E)}. The loan is spent and ${S.c > 0 ? `${pct(1 - S.c)} of it` : 'all of it'} comes back as a deposit, which lets it lend again, a little less each time.</p>`
+      : `<p>With a CRR of ${pct(S.crr)}, deposits of ${inr(s.D)} need reserves of ${inr(S.crr * s.D)}, but the bank has only ${inr(s.R)}. It must <b>call back ${inr(-E)} of loans</b>; borrowers repay out of their deposits, and deposits shrink.</p>`;
+  } else {
+    t = `<p>Lending stops when reserves are exactly ${pct(S.crr)} of deposits: ${inr(s.R)} = ${pct(S.crr)} × ${inr(s.D)}. Base money of ${inr(H)} now supports money of <b>${inr(M)}</b>, ${fmt(M / H, 3)} times as much.</p>`;
+    if (S.c > 0) t += `<p>Because the public kept ${pct(S.c)} of each loan as cash, ${inr(s.CU)} never came back to the bank. Cash in pockets is not lent again, so the multiplier is ${fmt(M / H, 3)}, below 1 ÷ CRR = ${fmt(1 / S.crr, 3)}.</p>`;
+    else if (S.crr >= 0.999) t += `<p>With a 100% reserve requirement, the bank lends nothing: money is just the base, ${inr(H)}. Banks create money only because they keep a fraction.</p>`;
+    else t += `<p>No new money was printed. The bank’s loans (${inr(s.L)}) became deposits, and deposits are money. The multiplier is 1 ÷ CRR = ${fmt(1 / S.crr, 3)}.</p>`;
+    if (ep.cause !== 'start' && ep.rows.length) t += `<p>Since ${causeText(ep)}, money went from ${inr(ep.from.M)} to ${inr(M)}: ${M >= ep.from.M ? 'up' : 'down'} ${inr(Math.abs(M - ep.from.M))}.</p>`;
+  }
+  $('why').innerHTML = t;
+}
+
+/* ---- findings -------------------------------------------------------------------- */
+function check(){
+  if (!S.locked || !settled() || (!S.ep.rows.length && S.ep.cause !== 'start')) return;
+  const s = S.sys, ep = S.ep, M = money(s), H = base(s), m = M / H;
+  if (!ep.recorded) {
+    ep.recorded = true;
+    const i = S.pts.findIndex(p => Math.abs(p.crr - S.crr) < 1e-9 && Math.abs(p.c - S.c) < 1e-9);
+    const pt = {crr: S.crr, c: S.c, m};
+    if (i >= 0) S.pts[i] = pt; else S.pts.push(pt);
+    sound('pop');
+  }
+  if (Math.abs(S.crr - 0.2) < 1e-9 && S.c === 0 && Math.abs(H - 100) < 1e-6 && Math.abs(s.D - 500) < 0.05 && Math.abs(s.L - 400) < 0.05 && Math.abs(s.R - 100) < 0.05) { discover('table'); maybeExplain(); }
+  const good = S.pts.filter(p => p.c === 0 && p.crr < 0.999 && Math.abs(p.m * p.crr - 1) < 0.01);
+  if (new Set(good.map(p => p.crr)).size >= 2) discover('mult');
+  if (ep.cause === 'crr' && ep.eqBefore && S.crr > ep.fromCrr + 1e-9 && s.L < ep.from.L - 0.5 && s.D < ep.from.D - 0.5) discover('crr');
+  if (ep.cause === 'omo' && ep.eqBefore && ep.x > 0 && M > ep.from.M + ep.x + 0.5) discover('omo');
+  if (ep.cause === 'repo' && ep.eqBefore && ep.dB > 0 && M > ep.from.M + 0.5) discover('repo');
+  if (S.c > 0 && m < 1 / S.crr - 0.05) discover('drain');
+  if (S.crr >= 0.999 && Math.abs(M - H) < 0.01) discover('narrow');
+}
+let EXPLAINED = false;
+function maybeExplain(){
+  if (EXPLAINED || !POE || !POE.locked) return;
+  EXPLAINED = true;
+  const rows = S.ep.rows, s = S.sys;
+  POE.explain(`Round 1: deposits 100, reserve 20, loan ${r2(rows[0].E)}. Round 2: deposits ${r2(rows[1].D)}, reserve ${r2(rows[1].req)}, loan ${r2(rows[1].E)}. After ${rows.length} rounds deposits reached <b>${inr(s.D)}</b>, with reserves ${inr(s.R)} and loans ${inr(s.L)}. The bank could not go further: ${inr(s.R)} is exactly 20% of ${inr(s.D)}. The multiplier is 1 ÷ 0.2 = 5.`,
+    POE.choice === 'five');
+}
+
+function paint(){
+  paintTop(); paintChart(); paintTable(); paintMM(); paintControls(); paintMeas(); paintWhy(); check();
+  if (S.ep.recorded) paintMM();
+}
+function paintControls(){
+  $('crr').value = Math.round(S.crr * 100); $('crrOut').textContent = pct(S.crr);
+  $('repo').value = S.repo; $('repoOut').textContent = fmt(S.repo, 2) + '%';
+  $('cash').value = Math.round(S.c * 100); $('cashOut').textContent = pct(S.c);
+  $('lawTxt').innerHTML = `lend = reserves − ${pct(S.crr)} × deposits`;
+  $('btnRun').textContent = S.running ? '❚❚ Pause' : '▶ Run the rounds';
+  if (S.locked) { $('btnRun').disabled = !S.running && settled(); $('btnRound').disabled = settled(); $('btnSell').disabled = S.sys.D < 10 || S.sys.R < 10; }
+}
+
+/* ============================================================================
+   Controls
+   ============================================================================ */
+build();
+function record(){ S.ep.path.push(snap()); }
+function freshPath(){ S.ep.path = [snap()]; }
+freshPath();
+function step(){
+  if (settled()) return false;
+  const row = round(S.sys, S.crr, S.c);
+  S.ep.rows.push(row); S.rounds++; record(); S.ep.settledNow = settled();
+  flashDot();
+  return true;
+}
+let RUN = null;
+function stopRun(){ S.running = false; if (RUN) { RUN.stop(); RUN = null; } }
+function startRun(){
+  if (settled()) return;
+  stopRun(); S.running = true; track('run', {crr: S.crr, c: S.c});
+  if (reduced()) { let k = 0; while (step() && k++ < 5000); stopRun(); sound('snap'); paint(); return; }
+  let acc = 0;
+  RUN = loop(dt => {
+    acc += dt;
+    const n = S.ep.rows.length, every = n < 6 ? 0.32 : n < 20 ? 0.1 : 0.04, batch = n < 40 ? 1 : 6;
+    if (acc < every) return; acc = 0;
+    for (let i = 0; i < batch; i++) if (!step()) break;
+    if (n < 20) sound('tick');
+    if (settled()) { stopRun(); sound('snap'); }
+    paint();
+  });
+  paint();
+}
+let DOT = null;
+function flashDot(){
+  if (reduced()) return;
+  const p = $('loop'), len = p.getTotalLength(), d = $('dot');
+  if (DOT) DOT.stop();
+  let t = 0;
+  DOT = loop(dt => { t += dt / 0.3; if (t >= 1) { d.setAttribute('opacity', 0); DOT.stop(); DOT = null; return; }
+    const pt = p.getPointAtLength(t * len); d.setAttribute('cx', pt.x); d.setAttribute('cy', pt.y); d.setAttribute('opacity', 1); });
+}
+/* a change to the system starts a new run from wherever it now is */
+function change(cause, fn, extra = {}){
+  if (!S.locked) return;
+  stopRun();
+  const before = snap(), wasSettled = settled(), fromCrr = S.crr;
+  const e = S.ep;
+  /* several slider steps before any round has run are one change */
+  if (e && !e.rows.length && e.cause === cause && cause !== 'omo') { fn(); Object.assign(e, extra); e.settledNow = settled(); e.path = [e.from].concat([snap()]); paint(); return; }
+  S.ep = {cause, eqBefore: wasSettled, from: before, rows: [], crr: S.crr, c: S.c, fromCrr, settledNow: wasSettled};
+  fn();
+  Object.assign(S.ep, extra, {crr: S.crr, c: S.c});
+  S.ep.path = [before, snap()]; S.ep.settledNow = settled();
+  paint();
+}
+$('crr').addEventListener('input', e => change('crr', () => { S.crr = +e.target.value / 100; }));
+$('repo').addEventListener('input', e => { const target = +e.target.value; change('repo', () => { const d = setRepo(S.sys, target); S.repo = target; S.ep && (S.ep.dB = (S.ep.dB || 0) + d); }); });
+$('cash').addEventListener('input', e => change('cash', () => { S.c = +e.target.value / 100; }));
+for (const id of ['crr', 'repo', 'cash']) $(id).addEventListener('change', () => track('law', {crr: S.crr, repo: S.repo, c: S.c}));
+$('btnBuy').addEventListener('click', () => { change('omo', () => { openMarket(S.sys, 10); S.buys++; }, {x: 10}); sound('whoosh'); track('omo', {x: 10}); });
+$('btnSell').addEventListener('click', () => { change('omo', () => { openMarket(S.sys, -10); S.buys--; }, {x: -10}); sound('whoosh'); track('omo', {x: -10}); });
+$('btnRun').addEventListener('click', () => { if (S.running) { stopRun(); paint(); } else startRun(); });
+$('btnRound').addEventListener('click', () => { stopRun(); if (step()) sound('tick'); paint(); });
+$('btnReset').addEventListener('click', () => {
+  stopRun(); S.sys = start(100); S.repo = 8; S.buys = 0; S.rounds = 0;
+  S.ep = {cause: 'start', eqBefore: false, from: snap(), rows: [], crr: S.crr, c: S.c, settledNow: settled()}; freshPath();
+  sound('tick'); track('reset'); paint();
+});
+
+function lockControls(lock){
+  for (const id of ['btnRun', 'btnRound', 'btnReset', 'crr', 'btnBuy', 'btnSell', 'repo', 'cash']) $(id).disabled = lock;
+  $('gate').hidden = !lock;
+}
+
+/* ============================================================================
+   Start
+   ============================================================================ */
+findings($('finds'), [
+  {id: 'table',  icon: '▦', label: 'Table 3.2, reproduced', hint: 'Run Leela’s ₹100 at a CRR of 20% to the end'},
+  {id: 'mult',   icon: 'm', label: 'Multiplier = 1 ÷ CRR, measured', hint: 'Measure the multiplier at two different CRRs'},
+  {id: 'crr',    icon: '↑', label: 'A higher CRR calls loans back', hint: 'From a settled system, raise the CRR'},
+  {id: 'omo',    icon: '⇄', label: 'An open market purchase multiplies', hint: 'Let the RBI buy bonds, then run the rounds'},
+  {id: 'repo',   icon: '%', label: 'A cheaper repo, more money', hint: 'What does the repo rate do to money supply?'},
+  {id: 'drain',  icon: '👛', label: 'Cash in pockets shrinks the multiplier', hint: 'Break it: let the public keep some cash'},
+  {id: 'narrow', icon: '100', label: 'With a 100% reserve, no money is created', hint: 'What if the bank must keep everything?'},
+], () => toast('All seven. One rule, lend your excess reserves, gives credit creation and every one of the RBI’s levers.', 4800));
+
+const POE = predict($('poe'), {
+  id: 'credit',
+  q: 'Leela deposits ₹100 in the only bank in the country. The CRR is 20%, and every loan is spent and deposited back in the same bank. When the bank can lend no more, what are total deposits?',
+  options: [
+    {id: 'hundred', text: '₹100: a bank can only lend what it is given.'},
+    {id: 'one80',   text: '₹180: Leela’s ₹100 plus one loan of ₹80.'},
+    {id: 'five',    text: '₹500: five times the deposit.', right: true},
+    {id: 'ever',    text: 'They grow without limit.'},
+  ],
+  onLock(){
+    S.locked = true; lockControls(false);
+    $('veil').remove(); $('veilT').remove();
+    say('Now run the rounds.');
+    paint();
+  },
+});
+lockControls(!POE.locked);
+if (!Play.FF('predict')) S.locked = true;
+paint();
+window.applyFeatures = () => paint();
+window.PG_STATE = () => JSON.parse(JSON.stringify(Object.assign({}, S, {M: money(S.sys), H: base(S.sys), settled: settled(),
+  assets: assets(S.sys), liabilities: liabilities(S.sys)})));
+window.PG_MODEL = {start, round, runRounds, excess, money, base, assets, liabilities, openMarket, setRepo, borrowAt};
+</script>
+</body>
+</html>

@@ -1,0 +1,804 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Motion In A Plane</title>
+<meta name="description" content="Class 11–12: projectiles integrated step by step with gravity and air drag you set yourself, a car on a banked curve whose friction and skid come from its free-body diagram, and a block on a tilting incline.">
+<link rel="icon" href="../../favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600&family=Inter:wght@400;500;600;700&family=Nunito:wght@500;700;800&family=Newsreader:opsz,wght@6..72,400;6..72,500&family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="../../play.css">
+<style>
+/* Only what this page needs beyond play.css. */
+.pg-stage{background:#f9f8f4}
+.tabs{display:flex; gap:4px; padding:8px; background:var(--sunk); border-bottom:1px solid var(--hair)}
+.tabs button{flex:1; border:0; background:transparent; border-radius:8px; padding:8px 10px; font-weight:600; font-size:14px; cursor:pointer; color:var(--ink-2); font-family:var(--font-head)}
+.tabs button[aria-selected="true"]{background:var(--card); color:var(--ink); box-shadow:var(--shadow)}
+.tabs button:disabled{cursor:default; opacity:.55}
+.gate{position:absolute; inset:52px 0 0 0; display:grid; place-items:center; pointer-events:none}
+.gate span{background:rgba(29,35,39,.86); color:#fff; padding:10px 16px; border-radius:99px; font-weight:600; font-size:14px}
+.ctl{grid-template-columns:118px 1fr 82px; margin:2px 0}
+.ctl label{font-size:12.5px; line-height:1.2}
+.ctl output{font-family:var(--font-mono); font-size:12.5px; font-weight:600; min-width:0}
+.readout{display:grid; grid-template-columns:1fr auto auto; gap:2px 12px; font-size:13px; align-items:baseline}
+.readout span{color:var(--ink-2)}
+.readout b, .readout i{font-family:var(--font-mono); font-weight:600; font-size:12.5px; font-variant-numeric:tabular-nums; text-align:right; font-style:normal}
+.readout i{color:var(--ink-3); font-weight:400}
+.readout .hd{font-size:10.5px; letter-spacing:.06em; text-transform:uppercase; color:var(--ink-3); font-family:var(--font); font-weight:700}
+.hint{font-size:12.5px; color:var(--ink-3); margin:6px 0 0}
+.why p{font-size:13.5px; margin-bottom:.5em}
+.why b{color:var(--ink)}
+.dragHandle{cursor:grab} .dragHandle.dragging{cursor:grabbing}
+@media (max-width:1180px) and (min-width:981px){ .pg-main.wide-side{grid-template-columns:minmax(0,1fr) 340px} }
+</style>
+</head>
+<body>
+<header class="pg-top"></header>
+
+<div class="pg-intro">
+  <h1>Motion in a plane</h1>
+  <p>Every path on this page is integrated step by step from the forces, never drawn from a formula. Launch a projectile and set the
+     gravity and the air drag yourself; measure the range and see where <span class="mono" style="white-space:nowrap">R = u² sin 2θ / g</span> holds and where it breaks.
+     Then take a car round a banked curve, and tilt a block until it slides, with every force resolved on the free-body diagram.</p>
+</div>
+
+<main class="pg-main wide-side">
+  <section class="pg-stage" id="stageWrap">
+    <div class="tabs" role="tablist" aria-label="Three experiments">
+      <button role="tab" id="tabProj" data-tab="proj" aria-selected="true">Projectile</button>
+      <button role="tab" id="tabBank" data-tab="bank" aria-selected="false">Banked road</button>
+      <button role="tab" id="tabInc" data-tab="inc" aria-selected="false">Incline</button>
+    </div>
+    <svg id="stage" viewBox="0 0 1000 640" role="img" aria-label="The chosen experiment: a projectile path with its component shadows and a range-angle graph; a car on a banked curve with its free-body diagram, top view and friction graph; or a block on an incline"></svg>
+    <div class="gate" id="gate"><span>Make your prediction first →</span></div>
+  </section>
+
+  <aside class="pg-side">
+    <div id="poe"></div>
+
+    <div class="card" id="ctlProj">
+      <div class="kicker">Launch</div>
+      <div class="ctl"><label for="u">Speed, u</label><input type="range" id="u" min="5" max="40" step="0.5" value="28"><output id="uOut">28 m/s</output></div>
+      <div class="ctl"><label for="th">Angle, θ</label><input type="range" id="th" min="0" max="89" step="1" value="30"><output id="thOut">30°</output></div>
+      <div class="ctl"><label for="h">Launch height</label><input type="range" id="h" min="0" max="500" step="10" value="0"><output id="hOut">0 m</output></div>
+      <div class="kicker" style="margin-top:8px">The law you set</div>
+      <div class="ctl"><label for="g">Gravity, g</label><input type="range" id="g" min="1.6" max="25" step="0.1" value="9.8"><output id="gOut">9.8 m/s²</output></div>
+      <div class="ctl"><label for="k">Air drag, k</label><input type="range" id="k" min="0" max="0.05" step="0.001" value="0"><output id="kOut">0 /m</output></div>
+      <div class="row" style="margin-top:8px">
+        <button class="btn primary" id="btnFire">Launch</button>
+        <button class="btn sm" id="btnSweep">Sweep every angle</button>
+      </div>
+      <p class="hint">Drag the arrow’s tip to aim. Drag: a = −k|v|v, opposing the velocity. A cricket ball has k ≈ 0.008 per metre.</p>
+    </div>
+
+    <div class="card" id="ctlBank" hidden>
+      <div class="kicker">The curve and the car</div>
+      <div class="ctl"><label for="R">Radius, R</label><input type="range" id="R" min="3" max="500" step="1" value="300"><output id="ROut">300 m</output></div>
+      <div class="ctl"><label for="bank">Bank angle, θ</label><input type="range" id="bank" min="0" max="45" step="0.5" value="15"><output id="bankOut">15°</output></div>
+      <div class="ctl"><label for="mu">Friction, μs</label><input type="range" id="mu" min="0" max="1" step="0.01" value="0.2"><output id="muOut">0.20</output></div>
+      <div class="ctl"><label for="v">Speed, v</label><input type="range" id="v" min="0" max="60" step="0.5" value="20"><output id="vOut">20 m/s</output></div>
+      <div class="row" style="margin-top:8px">
+        <button class="btn primary" id="btnDrive">Drive round</button>
+        <button class="btn sm" id="btnBook">Example 4.11</button>
+        <button class="btn sm" id="btnCyc">Example 4.10</button>
+      </div>
+    </div>
+
+    <div class="card" id="ctlInc" hidden>
+      <div class="kicker">The block and the plane</div>
+      <div class="ctl"><label for="ang">Tilt, θ</label><input type="range" id="ang" min="0" max="45" step="0.5" value="5"><output id="angOut">5°</output></div>
+      <div class="ctl"><label for="mus">Static, μs</label><input type="range" id="mus" min="0.05" max="0.9" step="0.01" value="0.27"><output id="musOut">0.27</output></div>
+      <div class="ctl"><label for="muk">Kinetic, μk</label><input type="range" id="muk" min="0.02" max="0.9" step="0.01" value="0.2"><output id="mukOut">0.20</output></div>
+      <div class="ctl"><label for="mass">Mass</label><input type="range" id="mass" min="1" max="10" step="1" value="4"><output id="massOut">4 kg</output></div>
+      <button class="btn sm" id="btnTop">Put the block back at the top</button>
+      <p class="hint">Tilt the plane slowly, half a degree at a time.</p>
+    </div>
+
+    <div class="card" id="measCard">
+      <div class="kicker">Measured</div>
+      <div id="meas"><p class="hint" style="margin:0">The measurements appear once you have made a prediction.</p></div>
+    </div>
+
+    <div class="card why" id="whyCard" hidden>
+      <div class="kicker">What the model says</div>
+      <div id="why"></div>
+    </div>
+
+    <div class="card"><div class="kicker">To find</div><div id="finds"></div></div>
+  </aside>
+</main>
+
+<script src="../../play.js"></script>
+<script>
+'use strict';
+const {$, esc, clamp, fmt, drag, loop, sound, say, track, toast, predict, findings, discover, found,
+       shareState, sharedState, mount, reduced} = Play;
+mount({thread: 'motion', band: 'theorist'});
+
+/* MODEL:start ==================================================================
+   Three bodies, each integrated from its forces.
+
+   PROJECTILE. a = (0, −g) − k|v|v (quadratic air drag, k per metre; k = 0 is the textbook
+   vacuum). RK4 at DT = 1 ms from (0, h) with velocity (u cos θ, u sin θ). The landing is the
+   instant y crosses 0, interpolated linearly inside the last step.
+
+   BANKED ROAD. The car keeps its speed v along the curve; across the road it is free to
+   slide along the bank. With q the distance up the slope from the centre line, the radius is
+   r = R + q cos θ and, per unit mass,
+       along the slope (up = +):  v²/r · cos θ − g sin θ + f/m
+       normal to the slope:       N/m = g cos θ + v²/r · sin θ
+   Static friction takes whatever value keeps the car on its circle, as long as
+   |f| ≤ μs N. Otherwise the car slides, and friction is μs N against the sliding.
+   Eqs. (4.19)–(4.22) are the special cases the page measures against.
+
+   INCLINE. A block on a plane tilted by θ: along the plane, m g sin θ down the slope; the
+   normal force N = m g cos θ; static friction holds it while m g sin θ ≤ μs N, and kinetic
+   friction μk N acts once it slides.
+   ============================================================================ */
+const DT = 0.001, D2R = Math.PI / 180, R2D = 180 / Math.PI;
+function projDeriv(s, g, k){
+  const sp = Math.hypot(s.vx, s.vy);
+  return {x: s.vx, y: s.vy, vx: -k * sp * s.vx, vy: -g - k * sp * s.vy};
+}
+function projStep(s, dt, g, k){
+  const d1 = projDeriv(s, g, k);
+  const s2 = {x: s.x + d1.x * dt / 2, y: s.y + d1.y * dt / 2, vx: s.vx + d1.vx * dt / 2, vy: s.vy + d1.vy * dt / 2}, d2 = projDeriv(s2, g, k);
+  const s3 = {x: s.x + d2.x * dt / 2, y: s.y + d2.y * dt / 2, vx: s.vx + d2.vx * dt / 2, vy: s.vy + d2.vy * dt / 2}, d3 = projDeriv(s3, g, k);
+  const s4 = {x: s.x + d3.x * dt, y: s.y + d3.y * dt, vx: s.vx + d3.vx * dt, vy: s.vy + d3.vy * dt}, d4 = projDeriv(s4, g, k);
+  return {t: s.t + dt, x: s.x + (d1.x + 2 * d2.x + 2 * d3.x + d4.x) * dt / 6, y: s.y + (d1.y + 2 * d2.y + 2 * d3.y + d4.y) * dt / 6,
+          vx: s.vx + (d1.vx + 2 * d2.vx + 2 * d3.vx + d4.vx) * dt / 6, vy: s.vy + (d1.vy + 2 * d2.vy + 2 * d3.vy + d4.vy) * dt / 6};
+}
+/* Fly one projectile. Returns the path (every 10 ms), range, top height, flight time, landing speed. */
+function fly(u, thDeg, g, k, h = 0, dt = DT){
+  let s = {t: 0, x: 0, y: h, vx: u * Math.cos(thDeg * D2R), vy: u * Math.sin(thDeg * D2R)};
+  const path = [s]; let H = h, tH = 0, n = 0;
+  while (s.t < 600) {
+    const s1 = projStep(s, dt, g, k);
+    if (s1.y > H) { H = s1.y; tH = s1.t; }
+    if (s1.y < 0 && s1.t > 1e-9) {
+      const f = s.y / (s.y - s1.y);
+      const land = {t: s.t + f * dt, x: s.x + f * (s1.x - s.x), y: 0, vx: s.vx + f * (s1.vx - s.vx), vy: s.vy + f * (s1.vy - s.vy)};
+      path.push(land);
+      return {path, R: land.x, H, tH, T: land.t, vLand: Math.hypot(land.vx, land.vy), land};
+    }
+    s = s1;
+    if (++n % 10 === 0) path.push(s);
+  }
+  return {path, R: s.x, H, tH, T: s.t, vLand: Math.hypot(s.vx, s.vy), land: s};
+}
+/* Range at every whole degree, then the best angle from a parabola through the top three. */
+function sweep(u, g, k, h = 0){
+  const pts = [];
+  for (let a = 1; a <= 89; a++) pts.push([a, fly(u, a, g, k, h, 0.002).R]);
+  let i = 0; for (let j = 1; j < pts.length; j++) if (pts[j][1] > pts[i][1]) i = j;
+  i = clamp(i, 1, pts.length - 2);
+  const [x0, y0] = pts[i - 1], [, y1] = pts[i], [, y2] = pts[i + 1];
+  const den = y0 - 2 * y1 + y2;
+  const best = den !== 0 ? pts[i][0] + 0.5 * (y0 - y2) / den : pts[i][0];
+  return {pts, best, Rbest: fly(u, best, g, k, h, 0.002).R};
+}
+
+/* Banked road: what static friction must do to keep the car on radius r, per unit mass. */
+function bankNeed(v, r, thDeg, g = 9.8){
+  const t = thDeg * D2R, c = v * v / r;
+  return {need: -(c * Math.cos(t) - g * Math.sin(t)), N: g * Math.cos(t) + c * Math.sin(t)};   // need: f/m up the slope
+}
+/* One step of the car across the bank. q: metres up the slope from the centre line; w: dq/dt. */
+function bankStep(s, dt, p){
+  const t = p.th * D2R, r = p.R + s.q * Math.cos(t), c = p.v * p.v / r;
+  const along = c * Math.cos(t) - p.g * Math.sin(t), N = p.g * Math.cos(t) + c * Math.sin(t);
+  let f;
+  if (s.w === 0 && Math.abs(along) <= p.mu * N + 1e-12) { f = -along; s.slip = false; }
+  else { const dir = s.w !== 0 ? Math.sign(s.w) : Math.sign(along); f = -dir * p.mu * N; s.slip = true; }
+  const a = along + f;
+  const w1 = s.w + a * dt;
+  if (s.w !== 0 && Math.sign(w1) !== Math.sign(s.w) && Math.abs(along) <= p.mu * N) { s.w = 0; }   // friction stops the slide
+  else { s.q += (s.w + w1) / 2 * dt; s.w = w1; }
+  s.phi += p.v / r * dt; s.t += dt; s.f = f; s.N = N; s.along = along;
+  return s;
+}
+function bankRun(p, tEnd = 20, half = 6){
+  const s = {q: 0, w: 0, phi: 0, t: 0, f: 0, N: 0, slip: false};
+  while (s.t < tEnd) { bankStep(s, DT, p); if (Math.abs(s.q) > half) return {off: s.q > 0 ? 'out' : 'in', t: s.t, s}; }
+  return {off: null, t: s.t, s};
+}
+/* The speed at which static friction runs out, found by bisection on the model's own forces. */
+function bankVmax(R, thDeg, mu, g = 9.8){
+  const ok = v => { const b = bankNeed(v, R, thDeg, g); return Math.abs(b.need) <= mu * b.N; };
+  let lo = 0, hi = 400;
+  if (ok(hi)) return Infinity;
+  /* lo must be a speed that holds: start from the no-friction speed */
+  lo = Math.sqrt(R * g * Math.tan(thDeg * D2R));
+  if (!ok(lo)) return NaN;
+  for (let i = 0; i < 80; i++) { const m = (lo + hi) / 2; if (ok(m)) lo = m; else hi = m; }
+  return lo;
+}
+function bankVopt(R, thDeg, g = 9.8){
+  let lo = 0, hi = 400;                               // need(v) goes from + (up) to − (down) as v rises
+  for (let i = 0; i < 80; i++) { const m = (lo + hi) / 2; if (bankNeed(m, R, thDeg, g).need > 0) lo = m; else hi = m; }
+  return (lo + hi) / 2;
+}
+
+/* Incline */
+function incStep(s, dt, p){
+  const t = p.th * D2R, gAlong = p.g * Math.sin(t), N = p.g * Math.cos(t);
+  if (s.w === 0) {
+    if (gAlong <= p.mus * N + 1e-12) { s.f = gAlong; s.slide = false; s.t += dt; return s; }   // friction up the slope holds it
+  }
+  s.slide = true;
+  const a = gAlong - p.muk * N;                        // down the slope +
+  let w1 = s.w + a * dt;
+  if (w1 <= 0) { w1 = 0; }
+  s.x += (s.w + w1) / 2 * dt; s.w = w1; s.f = p.muk * N; s.t += dt;
+  return s;
+}
+/* MODEL:end */
+
+/* ---- state --------------------------------------------------------------- */
+const S = {
+  tab: 'proj', locked: false,
+  p: {u: 28, th: 30, h: 0, g: 9.8, k: 0, shot: null, t: 0, flying: false, log: [], sweeps: [], sweep: null},
+  b: {R: 300, th: 15, mu: 0.2, v: 20, run: null, driving: false, trail: [], seenUp: false, seenDown: false, out: null},
+  c: {th: 5, mus: 0.27, muk: 0.2, m: 4, s: {x: 0, w: 0, t: 0, f: 0, slide: false}, slidAt: null, fpts: []},
+};
+const shared = sharedState();
+if (shared) {
+  if (['proj', 'bank', 'inc'].includes(shared.tab)) S.tab = shared.tab;
+  if (shared.p) for (const k of ['u', 'th', 'h', 'g', 'k']) if (isFinite(+shared.p[k])) S.p[k] = +shared.p[k];
+  if (shared.b) for (const k of ['R', 'th', 'mu', 'v']) if (isFinite(+shared.b[k])) S.b[k] = +shared.b[k];
+}
+shareState(() => ({tab: S.tab, p: {u: S.p.u, th: S.p.th, h: S.p.h, g: S.p.g, k: S.p.k}, b: {R: S.b.R, th: S.b.th, mu: S.b.mu, v: S.b.v}}));
+
+/* ============================================================================
+   Stage
+   ============================================================================ */
+const svg = $('stage');
+const set = (id, attrs) => { const el = $(id); for (const k in attrs) el.setAttribute(k, attrs[k]); return el; };
+const W = {x0: 90, x1: 960, y0: 60, y1: 400};          // projectile world box (px)
+const RA = {x: 90, y: 470, w: 400, h: 130};            // range–angle graph
+const XS = {x: 150, y: 330};                           // bank cross-section: road centre
+const TV = {x: 760, y: 215, r: 150};                   // bank top view
+const FG = {x: 90, y: 470, w: 860, h: 130};            // friction–speed graph
+const IN = {x0: 120, y0: 400, L: 520};                 // incline pivot and length
+const IG = {x: 700, y: 110, w: 250, h: 200};           // incline friction graph
+let WS = null;                                         // world scale for the projectile
+
+function build(){
+  const marker = (id, col) => `<marker id="${id}" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="4.5" markerHeight="4.5" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="${col}"/></marker>`;
+  svg.innerHTML = `
+  <defs>${marker('mk', '#1d2327')}${marker('mb', '#3057c9')}${marker('mr', '#d6453d')}${marker('mg', '#2f9e5b')}${marker('mp', '#6a3fc2')}${marker('mo', '#c07000')}
+    <pattern id="hatch" width="8" height="8" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2="8" stroke="#b8b2a0" stroke-width="2"/></pattern></defs>
+  <rect x="0" y="0" width="1000" height="640" fill="#f9f8f4"/>
+
+  <g id="scProj">
+    <text x="24" y="30" font-size="15" class="serif" fill="#1d2327">The path, integrated</text>
+    <text id="wScale" x="976" y="30" font-size="11.5" fill="#7c878c" text-anchor="end"></text>
+    <g id="wAxes"></g>
+    <rect id="cliff" fill="url(#hatch)" stroke="#8a826c"/>
+    <g id="shadowsX"></g><g id="shadowsY"></g>
+    <path id="pathVac" fill="none" stroke="#b9b3a3" stroke-width="1.5" stroke-dasharray="5 5"/>
+    <path id="pathNow" fill="none" stroke="#6a3fc2" stroke-width="2.6"/>
+    <g id="pDots"></g>
+    <circle id="dropBall" r="6" fill="#c07000" opacity="0"/>
+    <line id="shX" stroke="#3057c9" stroke-width="1" stroke-dasharray="2 3"/>
+    <line id="shY" stroke="#d6453d" stroke-width="1" stroke-dasharray="2 3"/>
+    <circle id="shXd" r="5" fill="#3057c9"/>
+    <circle id="shYd" r="5" fill="#d6453d"/>
+    <circle id="ball" r="7" fill="#6a3fc2" stroke="#fff" stroke-width="1.5"/>
+    <line id="vArrow" stroke="#1d2327" stroke-width="2.5" marker-end="url(#mk)"/>
+    <text id="vLab" font-size="12" class="m" fill="#1d2327"></text>
+    <circle id="vHandle" class="dragHandle" r="14" fill="#1d2327" fill-opacity=".08" stroke="#1d2327" stroke-dasharray="3 3" tabindex="0" role="slider" aria-label="Launch velocity: drag to aim"/>
+    <text x="${RA.x}" y="${RA.y - 14}" font-size="14" class="serif" fill="#1d2327">Range against launch angle</text>
+    <rect x="${RA.x}" y="${RA.y}" width="${RA.w}" height="${RA.h}" fill="#fff" stroke="#dfddd3"/>
+    <g id="raAxes"></g><g id="raCurves"></g>
+    <g id="projRead" transform="translate(560 470)"></g>
+  </g>
+
+  <g id="scBank" style="display:none">
+    <text x="24" y="30" font-size="15" class="serif" fill="#1d2327">Cross-section, seen from behind the car</text>
+    <g id="xsGround"></g>
+    <g id="xsCar"><rect x="-34" y="-30" width="68" height="26" rx="6" fill="#2f7de1" stroke="#1d2327"/><rect x="-22" y="-44" width="40" height="16" rx="4" fill="#cfe6f7" stroke="#1d2327"/><circle cx="-20" cy="-3" r="7" fill="#1d2327"/><circle cx="20" cy="-3" r="7" fill="#1d2327"/></g>
+    <g id="fbd"></g>
+    <text x="${TV.x}" y="30" font-size="15" class="serif" fill="#1d2327" text-anchor="middle">From above</text>
+    <circle id="tvRoad" cx="${TV.x}" cy="${TV.y}" r="${TV.r}" fill="none" stroke="#7c848a" stroke-width="22"/>
+    <circle cx="${TV.x}" cy="${TV.y}" r="${TV.r}" fill="none" stroke="#f4f4f0" stroke-width="1.5" stroke-dasharray="10 8"/>
+    <circle cx="${TV.x}" cy="${TV.y}" r="4" fill="#7c848a"/>
+    <path id="tvTrail" fill="none" stroke="#d6453d" stroke-width="2"/>
+    <g id="tvCar"><rect x="-9" y="-5" width="18" height="10" rx="3" fill="#2f7de1" stroke="#1d2327"/></g>
+    <text id="tvNote" x="${TV.x}" y="${TV.y + TV.r + 38}" font-size="12.5" fill="#1d2327" text-anchor="middle"></text>
+    <text x="${FG.x}" y="${FG.y - 14}" font-size="14" class="serif" fill="#1d2327">Friction the curve needs, against speed (per unit weight, up the slope +)</text>
+    <rect x="${FG.x}" y="${FG.y}" width="${FG.w}" height="${FG.h}" fill="#fff" stroke="#dfddd3"/>
+    <g id="fgAxes"></g><g id="fgCurves"></g>
+  </g>
+
+  <g id="scInc" style="display:none">
+    <text x="24" y="30" font-size="15" class="serif" fill="#1d2327">A block on a plane you tilt</text>
+    <path id="incPlane" fill="#e6e1d2" stroke="#8a826c" stroke-width="1.5"/>
+    <path id="incArc" fill="none" stroke="#6a3fc2" stroke-width="1.5"/>
+    <text id="incAng" font-size="13" class="m" fill="#6a3fc2"></text>
+    <g id="incBlockG"><rect id="incBlock" x="-30" y="-44" width="60" height="44" rx="3" fill="#b98a52" stroke="#6b4a2b" stroke-width="1.5"/><text id="incMass" x="0" y="-17" font-size="12" font-weight="700" fill="#3a2a1a" text-anchor="middle">4 kg</text></g>
+    <g id="incFbd"></g>
+    <text x="${IG.x}" y="${IG.y - 16}" font-size="14" class="serif" fill="#1d2327">Friction against tilt</text>
+    <rect x="${IG.x}" y="${IG.y}" width="${IG.w}" height="${IG.h}" fill="#fff" stroke="#dfddd3"/>
+    <g id="igAxes"></g><g id="igCurves"></g>
+    <text id="incNote" x="${IG.x}" y="${IG.y + IG.h + 44}" font-size="12.5" fill="#1d2327"></text>
+  </g>`;
+}
+
+/* ============================================================================
+   Projectile
+   ============================================================================ */
+function fitWorld(){
+  const P = S.p;
+  const vac = fly(P.u, Math.max(P.th, 0), P.g, 0, P.h, 0.004);
+  const cur = P.k > 0 ? fly(P.u, P.th, P.g, P.k, P.h, 0.004) : vac;
+  const xm = Math.max(10, vac.R, cur.R, P.h * 0.3) * 1.08, ym = Math.max(5, vac.H, cur.H) * 1.12;
+  const sc = Math.min((W.x1 - W.x0) / xm, (W.y1 - W.y0) / ym);
+  WS = {sc, ox: W.x0, oy: W.y1};
+  const X = x => WS.ox + x * WS.sc, Y = y => WS.oy - y * WS.sc;
+  const step = niceStep(Math.max(xm, ym));
+  let s = `<line x1="${W.x0 - 30}" y1="${W.y1}" x2="${W.x1}" y2="${W.y1}" stroke="#8a826c" stroke-width="1.5"/>`;
+  for (let x = 0; X(x) <= W.x1 + 1; x += step) s += `<line x1="${X(x).toFixed(1)}" y1="${W.y1}" x2="${X(x).toFixed(1)}" y2="${W.y1 + 5}" stroke="#8a826c"/><text x="${X(x).toFixed(1)}" y="${W.y1 + 18}" font-size="10.5" class="m" fill="#7c878c" text-anchor="middle">${+x.toFixed(1)}</text>`;
+  for (let y = step; Y(y) >= W.y0 - 1; y += step) s += `<line x1="${W.x0 - 5}" y1="${Y(y).toFixed(1)}" x2="${W.x0}" y2="${Y(y).toFixed(1)}" stroke="#8a826c"/><text x="${W.x0 - 8}" y="${(Y(y) + 4).toFixed(1)}" font-size="10.5" class="m" fill="#7c878c" text-anchor="end">${+y.toFixed(1)}</text>`;
+  s += `<line x1="${W.x0}" y1="${W.y0}" x2="${W.x0}" y2="${W.y1}" stroke="#d6cfbd"/>`;
+  $('wAxes').innerHTML = s;
+  $('wScale').textContent = 'metres (x and y drawn to the same scale)';
+  if (P.h > 0) set('cliff', {x: W.x0 - 30, y: Y(P.h).toFixed(1), width: 30, height: (P.h * WS.sc).toFixed(1), opacity: 1}); else set('cliff', {opacity: 0, width: 0});
+  set('pathVac', {d: P.k > 0 ? pathD(vac.path) : ''});
+}
+const niceStep = span => { const raw = span / 7, p = Math.pow(10, Math.floor(Math.log10(raw))); for (const k of [1, 2, 2.5, 5, 10]) if (k * p >= raw) return k * p; return 10 * p; };
+const PX = x => WS.ox + x * WS.sc, PY = y => WS.oy - y * WS.sc;
+const pathD = path => path.map((s, i) => (i ? 'L' : 'M') + PX(s.x).toFixed(1) + ' ' + PY(s.y).toFixed(1)).join('');
+const V_PX = 4;                                          // px per m/s for the aiming arrow
+function paintProj(){
+  const P = S.p, sh = P.shot;
+  const x0 = PX(0), y0 = PY(P.h);
+  const vx = P.u * Math.cos(P.th * D2R), vy = P.u * Math.sin(P.th * D2R);
+  set('vArrow', {x1: x0, y1: y0.toFixed(1), x2: (x0 + vx * V_PX).toFixed(1), y2: (y0 - vy * V_PX).toFixed(1)});
+  set('vHandle', {cx: (x0 + vx * V_PX).toFixed(1), cy: (y0 - vy * V_PX).toFixed(1)});
+  set('vLab', {x: (x0 + vx * V_PX + 16).toFixed(1), y: (y0 - vy * V_PX - 6).toFixed(1)});
+  $('vLab').textContent = `u = ${fmt(P.u, 1)} m/s, θ = ${P.th}°`;
+  let ball = {x: 0, y: P.h}, t = 0;
+  if (sh) {
+    t = Math.min(P.t, sh.T);
+    const i = sh.path.findIndex(s => s.t >= t);
+    ball = i <= 0 ? sh.path[i < 0 ? sh.path.length - 1 : 0] : (() => { const a = sh.path[i - 1], b = sh.path[i], f = (t - a.t) / (b.t - a.t || 1); return {x: a.x + (b.x - a.x) * f, y: a.y + (b.y - a.y) * f}; })();
+    set('pathNow', {d: pathD(sh.path.filter(s => s.t <= t).concat([Object.assign({}, ball, {t})]))});
+    /* component shadows: equal time ticks */
+    const n = 12, dtm = sh.T / n;
+    let sx = '', sy = '', dots = '';
+    for (let j = 0; j <= n; j++) {
+      const tt = j * dtm; if (tt > t + 1e-9) break;
+      const k = sh.path.findIndex(s => s.t >= tt), s = k < 0 ? sh.path[sh.path.length - 1] : sh.path[k];
+      dots += `<circle cx="${PX(s.x).toFixed(1)}" cy="${PY(s.y).toFixed(1)}" r="3" fill="#6a3fc2" opacity=".55"/>`;
+      sx += `<line x1="${PX(s.x).toFixed(1)}" y1="${W.y1 - 6}" x2="${PX(s.x).toFixed(1)}" y2="${W.y1 + 6}" stroke="#3057c9" stroke-width="2"/>`;
+      sy += `<line x1="${W.x0 - 6}" y1="${PY(s.y).toFixed(1)}" x2="${W.x0 + 6}" y2="${PY(s.y).toFixed(1)}" stroke="#d6453d" stroke-width="2"/>`;
+    }
+    $('pDots').innerHTML = dots; $('shadowsX').innerHTML = sx; $('shadowsY').innerHTML = sy;
+    /* a ball simply dropped from the same height at the same instant (horizontal throws) */
+    if (sh.th === 0 && sh.h > 0) {
+      const d = fly(0, 0, sh.g, sh.k, sh.h, 0.002), td = Math.min(t, d.T);
+      const j = d.path.findIndex(s => s.t >= td), s = j < 0 ? d.path[d.path.length - 1] : d.path[j];
+      set('dropBall', {cx: PX(0) + 10, cy: PY(s.y).toFixed(1), opacity: 1});
+    } else set('dropBall', {opacity: 0});
+  } else {
+    set('pathNow', {d: ''}); $('pDots').innerHTML = ''; $('shadowsX').innerHTML = ''; $('shadowsY').innerHTML = ''; set('dropBall', {opacity: 0});
+  }
+  set('ball', {cx: PX(ball.x).toFixed(1), cy: PY(ball.y).toFixed(1)});
+  set('shXd', {cx: PX(ball.x).toFixed(1), cy: W.y1}); set('shYd', {cx: W.x0, cy: PY(ball.y).toFixed(1)});
+  set('shX', {x1: PX(ball.x).toFixed(1), y1: PY(ball.y).toFixed(1), x2: PX(ball.x).toFixed(1), y2: W.y1});
+  set('shY', {x1: PX(ball.x).toFixed(1), y1: PY(ball.y).toFixed(1), x2: W.x0, y2: PY(ball.y).toFixed(1)});
+  paintSweep();
+  paintProjRead();
+  $('u').value = P.u; $('uOut').textContent = fmt(P.u, 1) + ' m/s';
+  $('th').value = P.th; $('thOut').textContent = P.th + '°';
+  $('h').value = P.h; $('hOut').textContent = P.h + ' m';
+  $('g').value = P.g; $('gOut').textContent = fmt(P.g, 1) + ' m/s²';
+  $('k').value = P.k; $('kOut').textContent = P.k ? P.k.toFixed(3) + ' /m' : '0 /m';
+}
+function paintProjRead(){
+  const sh = S.p.shot;
+  let s = `<text x="0" y="-14" font-size="14" class="serif" fill="#1d2327">Last launch, model against formula</text>`;
+  if (sh && S.p.t >= sh.T) {
+    const th = sh.th * D2R, g = sh.g, u = sh.u;
+    const fR = sh.h === 0 ? u * u * Math.sin(2 * th) / g : null, fH = sh.h + Math.pow(u * Math.sin(th), 2) / (2 * g), fT = sh.h === 0 ? 2 * u * Math.sin(th) / g : (u * Math.sin(th) + Math.sqrt(Math.pow(u * Math.sin(th), 2) + 2 * g * sh.h)) / g;
+    const rows = [['Range R', sh.R, fR, 'm'], ['Top height', sh.H, fH, 'm'], ['Time of flight', sh.T, fT, 's'], ['Landing speed', sh.vLand, sh.h === 0 && sh.k === 0 ? u : Math.sqrt(u * u + 2 * g * sh.h), 'm/s']];
+    s += `<text x="0" y="12" font-size="10.5" fill="#7c878c" letter-spacing=".05em">QUANTITY</text><text x="175" y="12" font-size="10.5" fill="#7c878c" text-anchor="end">MODEL</text><text x="290" y="12" font-size="10.5" fill="#7c878c" text-anchor="end">FORMULA</text><text x="390" y="12" font-size="10.5" fill="#7c878c" text-anchor="end">GAP</text>`;
+    rows.forEach((r, i) => {
+      const y = 36 + i * 24, gap = r[2] == null ? null : (r[1] - r[2]) / (r[2] || 1) * 100;
+      s += `<text x="0" y="${y}" font-size="12.5" fill="#1d2327">${r[0]}</text><text x="175" y="${y}" font-size="12.5" class="m" text-anchor="end" fill="#1d2327">${fmt(r[1], 2)} ${r[3]}</text>` +
+           `<text x="290" y="${y}" font-size="12.5" class="m" text-anchor="end" fill="#5b666b">${r[2] == null ? '—' : fmt(r[2], 2)}</text>` +
+           `<text x="390" y="${y}" font-size="12.5" class="m" text-anchor="end" fill="${gap == null ? '#7c878c' : Math.abs(gap) < 0.1 ? '#1e7a45' : '#b0302a'}">${gap == null ? '' : (gap >= 0 ? '+' : '') + gap.toFixed(gap && Math.abs(gap) < 1 ? 3 : 1) + ' %'}</text>`;
+    });
+    s += `<text x="0" y="${36 + 4 * 24 + 6}" font-size="11.5" fill="#5b666b">${sh.k > 0 ? 'Drag is on: the vacuum formulas no longer describe the flight.' : sh.h > 0 ? 'Launched from a height: R = u² sin 2θ / g assumes the same level.' : 'In a vacuum the integration and the formula agree.'}</text>`;
+  } else s += `<text x="0" y="20" font-size="12.5" fill="#7c878c">Launch to measure.</text>`;
+  $('projRead').innerHTML = s;
+}
+function paintSweep(){
+  const sw = S.p.sweeps;
+  let ax = '', cur = '';
+  const Rmax = Math.max(10, ...sw.map(s => Math.max(...s.pts.map(p => p[1]))));
+  const X = a => RA.x + a / 90 * RA.w, Y = r => RA.y + RA.h - r / (Rmax * 1.1) * RA.h;
+  for (const a of [0, 15, 30, 45, 60, 75, 90]) ax += `<line x1="${X(a)}" y1="${RA.y}" x2="${X(a)}" y2="${RA.y + RA.h}" stroke="${a === 45 ? '#cfc9b8' : '#f0eee8'}"/><text x="${X(a)}" y="${RA.y + RA.h + 14}" font-size="10.5" class="m" fill="#7c878c" text-anchor="middle">${a}°</text>`;
+  const rs = niceStep(Rmax * 1.1);
+  for (let r = 0; r <= Rmax * 1.1; r += rs) ax += `<text x="${RA.x - 6}" y="${(Y(r) + 4).toFixed(1)}" font-size="10.5" class="m" fill="#7c878c" text-anchor="end">${+r.toFixed(1)}</text>`;
+  const cols = ['#6a3fc2', '#c07000', '#1f8a70', '#d6453d', '#3057c9'];
+  sw.slice(-5).forEach((s, i) => {
+    const col = cols[i % cols.length];
+    cur += `<path d="${s.pts.map((p, j) => (j ? 'L' : 'M') + X(p[0]).toFixed(1) + ' ' + Y(p[1]).toFixed(1)).join('')}" fill="none" stroke="${col}" stroke-width="2"/>` +
+      `<line x1="${X(s.best).toFixed(1)}" y1="${Y(s.Rbest).toFixed(1)}" x2="${X(s.best).toFixed(1)}" y2="${RA.y + RA.h}" stroke="${col}" stroke-dasharray="3 3"/>` +
+      `<circle cx="${X(s.best).toFixed(1)}" cy="${Y(s.Rbest).toFixed(1)}" r="4" fill="${col}"/>` +
+      `<text x="${(X(s.best) + 6).toFixed(1)}" y="${(Y(s.Rbest) - 6).toFixed(1)}" font-size="11" class="m" fill="${col}">${s.best.toFixed(1)}°${s.k ? ', k ' + s.k : ''}${s.g !== 9.8 ? ', g ' + s.g : ''}</text>`;
+  });
+  if (!sw.length) cur = `<text x="${RA.x + RA.w / 2}" y="${RA.y + RA.h / 2 + 4}" font-size="12" fill="#7c878c" text-anchor="middle">Press “Sweep every angle”.</text>`;
+  $('raAxes').innerHTML = ax; $('raCurves').innerHTML = cur;
+}
+function fire(){
+  const P = S.p;
+  if (P.flying) return;
+  fitWorld();
+  const r = fly(P.u, P.th, P.g, P.k, P.h);
+  P.shot = Object.assign(r, {u: P.u, th: P.th, g: P.g, k: P.k, h: P.h});
+  P.t = 0; P.flying = true;
+  sound('whoosh'); track('launch', {u: P.u, th: P.th, g: P.g, k: P.k, h: P.h});
+  if (reduced()) landed();
+  paintAll();
+}
+function landed(){
+  const P = S.p, sh = P.shot;
+  P.t = sh.T; P.flying = false;
+  sound('pop');
+  P.log.push({u: sh.u, th: sh.th, g: sh.g, k: sh.k, h: sh.h, R: sh.R, T: sh.T});
+  track('landed', {R: +sh.R.toFixed(3), T: +sh.T.toFixed(3)});
+  if (sh.k === 0 && sh.h === 0 && sh.th > 0) {
+    if (Math.abs(sh.R - sh.u * sh.u * Math.sin(2 * sh.th * D2R) / sh.g) < 1e-3 * sh.R) discover('formula');
+    for (const q of P.log) if (q !== P.log[P.log.length - 1] && q.k === 0 && q.h === 0 && q.u === sh.u && q.g === sh.g && q.th + sh.th === 90 && q.th !== 45 && Math.abs(q.R - sh.R) < 1e-3 * sh.R) discover('complement');
+  }
+  if (sh.th === 0 && sh.h > 0 && sh.k === 0) discover('independent');
+  paintAll();
+}
+function doSweep(){
+  const P = S.p;
+  const s = sweep(P.u, P.g, P.k, P.h);
+  P.sweeps.push(Object.assign(s, {u: P.u, g: P.g, k: P.k, h: P.h}));
+  sound('chime'); track('sweep', {best: +s.best.toFixed(2), k: P.k, h: P.h});
+  if (P.k === 0 && P.h === 0 && Math.abs(s.best - 45) < 0.5) discover('best45');
+  if (P.k > 0 && P.h === 0 && s.best < 43) discover('dragBest');
+  maybeExplain();
+  paintAll();
+}
+
+/* ============================================================================
+   Banked road
+   ============================================================================ */
+function bankParams(){ return {R: S.b.R, th: S.b.th, mu: S.b.mu, v: S.b.v, g: 9.8}; }
+function startDrive(){
+  const B = S.b;
+  if (B.driving) { B.driving = false; paintAll(); return; }
+  B.run = {q: 0, w: 0, phi: 0, t: 0, f: 0, N: 0, slip: false};
+  B.trail = []; B.out = null; B.driving = true;
+  sound('whoosh'); track('drive', bankParams());
+  if (reduced()) { const p = bankParams(); for (let i = 0; i < 12000 && !B.out; i++) { bankStep(B.run, DT, p); bankCheck(); } B.driving = false; }
+  paintAll();
+}
+const HALF = 6;                                         // metres of road either side of the centre line
+function bankCheck(){
+  const B = S.b, s = B.run;
+  if (!s) return;
+  if (Math.abs(s.q) > HALF && !B.out) {
+    B.out = s.q > 0 ? 'out' : 'in'; B.driving = false;
+    sound('oops'); track('skid', {side: B.out, v: B.v});
+    discover(B.out === 'out' ? 'skid' : 'slidein');
+    return;
+  }
+  if (!s.slip && s.t > 0.3 && B.v > 1) {
+    if (Math.abs(s.f) < 0.02 * 9.8) discover('nofriction');
+    if (s.f > 0.05) B.seenUp = true;
+    if (s.f < -0.05) B.seenDown = true;
+    if (B.seenUp && B.seenDown) discover('flip');
+  }
+}
+function paintBank(){
+  const B = S.b, p = bankParams(), t = B.th * D2R;
+  const s = B.run || {q: 0, w: 0, f: bankNeed(p.v, p.R, p.th).need, N: bankNeed(p.v, p.R, p.th).N, slip: false};
+  const need = bankNeed(p.v, p.R + s.q * Math.cos(t), p.th);
+  const f = B.run ? s.f : (Math.abs(need.need) <= p.mu * need.N ? need.need : Math.sign(need.need) * p.mu * need.N);
+  const N = need.N;
+  /* cross-section: the road rises to the right (outside of the curve) */
+  const ux = Math.cos(t), uy = -Math.sin(t), L = 260, SC = 7;         // px per metre across the road
+  const cx = XS.x + 110, cy = XS.y;
+  const q = clamp(s.q, -HALF - 1, HALF + 1);
+  $('xsGround').innerHTML = `<path d="M${cx - ux * L} ${cy - uy * L} L${cx + ux * L} ${cy + uy * L} L${cx + ux * L} ${XS.y + 70} L${cx - ux * L} ${XS.y + 70}Z" fill="#dcd6c6"/>` +
+    `<line x1="${cx - ux * HALF * SC * 3.3}" y1="${cy - uy * HALF * SC * 3.3}" x2="${cx + ux * HALF * SC * 3.3}" y2="${cy + uy * HALF * SC * 3.3}" stroke="#6d747a" stroke-width="8"/>` +
+    `<line x1="${cx - ux * L}" y1="${cy}" x2="${cx + ux * L}" y2="${cy}" stroke="#9aa39a" stroke-dasharray="4 4"/>` +
+    `<path d="M${cx + 70} ${cy} A70 70 0 0 0 ${(cx + 70 * ux).toFixed(1)} ${(cy + 70 * uy).toFixed(1)}" fill="none" stroke="#6a3fc2"/>` +
+    `<text x="${cx + 78}" y="${cy - 6}" font-size="12" class="m" fill="#6a3fc2">θ = ${B.th}°</text>` +
+    `<text x="${cx - L * ux}" y="${cy + 60}" font-size="11.5" fill="#5b666b">← centre of the curve</text>` +
+    `<text x="${cx + L * ux}" y="${cy + 60}" font-size="11.5" fill="#5b666b" text-anchor="end">outside →</text>`;
+  const carX = cx + ux * q * SC * 3.3, carY = cy + uy * q * SC * 3.3;
+  set('xsCar', {transform: `translate(${carX.toFixed(1)} ${carY.toFixed(1)}) rotate(${-B.th})`, opacity: B.out ? 0.35 : 1});
+  /* free-body diagram at the car's centre (per unit mass, 7 px per m/s²) */
+  let k = 6.5; const ox = 210, oy = 200;           // the free-body diagram, drawn beside the road
+  const Nv = [-Math.sin(t) * N, -Math.cos(t) * N];   // the normal leans towards the centre of the curve
+  const Fv = [ux * f, uy * f];
+  const Wv = [0, 9.8];
+  const net = [Nv[0] + Fv[0] + Wv[0], Nv[1] + Fv[1] + Wv[1]];
+  k = Math.min(k, 120 / Math.max(...[Nv, Fv, Wv, net].map(q => Math.hypot(q[0], q[1]))));   // keep huge forces on the page
+  const arr = (v, col, mk, lab, dash) => `<line x1="${ox.toFixed(1)}" y1="${oy.toFixed(1)}" x2="${(ox + v[0] * k).toFixed(1)}" y2="${(oy + v[1] * k).toFixed(1)}" stroke="${col}" stroke-width="3" ${dash ? 'stroke-dasharray="6 4"' : ''} marker-end="url(#${mk})"/>` +
+    (lab ? `<text x="${(ox + v[0] * k + (v[0] >= 0 ? 8 : -8)).toFixed(1)}" y="${(oy + v[1] * k + (v[1] > 0 ? 14 : -4)).toFixed(1)}" font-size="12" class="m" fill="${col}" text-anchor="${v[0] >= 0 ? 'start' : 'end'}">${lab}</text>` : '');
+  let fb = arr(Nv, '#3057c9', 'mb', `N = ${fmt(N, 2)}`) + arr(Wv, '#1d2327', 'mk', 'mg = 9.80');
+  if (Math.abs(f) > 0.01) fb += arr(Fv, '#d6453d', 'mr', `f = ${fmt(Math.abs(f), 2)} ${f > 0 ? 'up' : 'down'}`);
+  fb += arr(net, '#6a3fc2', 'mp', `net = ${fmt(Math.hypot(net[0], net[1]), 2)} ${B.run && s.slip ? '' : '(v²/r = ' + fmt(p.v * p.v / (p.R + q * Math.cos(t)), 2) + ')'}`, true);
+  fb = `<g transform="translate(${ox} ${oy}) rotate(${-B.th})"><rect x="-16" y="-10" width="32" height="20" rx="4" fill="#2f7de1" opacity=".35" stroke="#1d2327"/><line x1="-60" y1="10" x2="60" y2="10" stroke="#8a826c"/></g>` + fb;
+  fb += `<text x="24" y="52" font-size="12" fill="#5b666b">Free-body diagram (right), forces per unit mass in m/s².</text><text x="24" y="68" font-size="12" fill="#5b666b">Purple is their sum: it must point to the centre and equal v²/r.</text>`;
+  $('fbd').innerHTML = fb;
+  /* top view */
+  const rpx = TV.r + clamp(s.q * Math.cos(t), -HALF - 4, HALF + 4) * 2.2;
+  const phi = B.run ? s.phi : 0;
+  set('tvCar', {transform: `translate(${(TV.x + rpx * Math.cos(phi)).toFixed(1)} ${(TV.y + rpx * Math.sin(phi)).toFixed(1)}) rotate(${(phi * R2D + 90).toFixed(1)})`});
+  $('tvTrail').setAttribute('d', B.trail.map((pt, i) => (i ? 'L' : 'M') + pt[0].toFixed(1) + ' ' + pt[1].toFixed(1)).join(''));
+  $('tvNote').textContent = B.out === 'out' ? `Skidded off the outside edge after ${fmt(s.t, 1)} s` : B.out === 'in' ? `Slid down off the inside edge after ${fmt(s.t, 1)} s` :
+    B.driving ? (s.slip ? 'Sliding across the road…' : 'Holding its circle') : 'Press “Drive round”.';
+  paintFG();
+  $('R').value = B.R; $('ROut').textContent = B.R + ' m';
+  $('bank').value = B.th; $('bankOut').textContent = B.th + '°';
+  $('mu').value = B.mu; $('muOut').textContent = B.mu.toFixed(2);
+  $('v').value = B.v; $('vOut').textContent = fmt(B.v, 1) + ' m/s';
+  $('btnDrive').textContent = B.driving ? '❚❚ Stop' : 'Drive round';
+}
+function paintFG(){
+  const B = S.b, vM = 60;
+  let yM = 0.3;
+  for (let v = 0; v <= vM; v += 2) { const q = bankNeed(v, B.R, B.th); yM = Math.max(yM, Math.abs(q.need) / 9.8, B.mu * q.N / 9.8); }
+  yM = Math.min(3, yM * 1.1);
+  const X = v => FG.x + v / vM * FG.w, Y = r => FG.y + FG.h / 2 - r / yM * FG.h / 2;
+  let ax = `<line x1="${FG.x}" y1="${Y(0)}" x2="${FG.x + FG.w}" y2="${Y(0)}" stroke="#9aa39a"/>`;
+  for (let v = 0; v <= vM; v += 10) ax += `<text x="${X(v)}" y="${FG.y + FG.h + 14}" font-size="10.5" class="m" fill="#7c878c" text-anchor="middle">${v} m/s</text>`;
+  const ys = yM > 1.5 ? 1 : yM > 0.6 ? 0.5 : 0.1;
+  for (let r = -Math.floor(yM / ys) * ys; r <= yM + 1e-9; r += ys) if (Math.abs(r) > 1e-9) ax += `<line x1="${FG.x}" y1="${Y(r)}" x2="${FG.x + FG.w}" y2="${Y(r)}" stroke="#f0eee8"/><text x="${FG.x - 6}" y="${Y(r) + 4}" font-size="10.5" class="m" fill="#7c878c" text-anchor="end">${+r.toFixed(2)}</text>`;
+  $('fgAxes').innerHTML = ax;
+  let need = '', lim = '', limN = '';
+  for (let v = 0; v <= vM + 1e-9; v += 0.5) {
+    const b = bankNeed(v, B.R, B.th);
+    need += (v ? 'L' : 'M') + X(v).toFixed(1) + ' ' + Y(clamp(b.need / 9.8, -yM, yM)).toFixed(1);
+    lim += (v ? 'L' : 'M') + X(v).toFixed(1) + ' ' + Y(clamp(B.mu * b.N / 9.8, -yM, yM)).toFixed(1);
+    limN += (v ? 'L' : 'M') + X(v).toFixed(1) + ' ' + Y(clamp(-B.mu * b.N / 9.8, -yM, yM)).toFixed(1);
+  }
+  const vo = bankVopt(B.R, B.th), vx = bankVmax(B.R, B.th, B.mu);
+  let c = `<path d="${lim}" fill="none" stroke="#3057c9" stroke-width="1.5" stroke-dasharray="5 4"/><path d="${limN}" fill="none" stroke="#3057c9" stroke-width="1.5" stroke-dasharray="5 4"/>` +
+    `<path d="${need}" fill="none" stroke="#d6453d" stroke-width="2.5"/>` +
+    `<text x="${FG.x + FG.w - 6}" y="${FG.y + 14}" font-size="11" fill="#3057c9" text-anchor="end">dashed: ± μs N / mg, the most friction can give</text>`;
+  if (vo <= vM) c += `<line x1="${X(vo)}" y1="${FG.y}" x2="${X(vo)}" y2="${FG.y + FG.h}" stroke="#1f8a70" stroke-dasharray="3 3"/><text x="${X(vo) + 4}" y="${FG.y + FG.h - 6}" font-size="11" class="m" fill="#1f8a70">v₀ ${fmt(vo, 1)}</text>`;
+  if (isFinite(vx) && vx <= vM) c += `<line x1="${X(vx)}" y1="${FG.y}" x2="${X(vx)}" y2="${FG.y + FG.h}" stroke="#b0302a" stroke-dasharray="3 3"/><text x="${X(vx) + 4}" y="${FG.y + 26}" font-size="11" class="m" fill="#b0302a">v_max ${fmt(vx, 1)}</text>`;
+  const b = bankNeed(B.v, B.R, B.th);
+  c += `<circle cx="${X(Math.min(B.v, vM))}" cy="${Y(clamp(b.need / 9.8, -yM, yM))}" r="5" fill="#d6453d" stroke="#fff" stroke-width="1.5"/>`;
+  $('fgCurves').innerHTML = c;
+}
+
+/* ============================================================================
+   Incline
+   ============================================================================ */
+function incParams(){ const C = S.c; return {th: C.th, mus: C.mus, muk: C.muk, g: 9.8}; }
+function paintInc(){
+  const C = S.c, t = C.th * D2R, s = C.s;
+  const ux = Math.cos(t), uy = -Math.sin(t);
+  const x0 = IN.x0, y0 = IN.y0, L = IN.L;
+  set('incPlane', {d: `M${x0} ${y0} L${(x0 + L * ux).toFixed(1)} ${(y0 + L * uy).toFixed(1)} L${(x0 + L * ux).toFixed(1)} ${y0} Z`});
+  set('incArc', {d: `M${x0 + 60} ${y0} A60 60 0 0 0 ${(x0 + 60 * ux).toFixed(1)} ${(y0 + 60 * uy).toFixed(1)}`});
+  set('incAng', {x: x0 + 68, y: y0 - 8}); $('incAng').textContent = `θ = ${C.th}°`;
+  /* block position: distance from the top, down the slope */
+  const d = clamp(L - 60 - s.x * 40, 40, L - 40);
+  const bx = x0 + d * ux, by = y0 + d * uy;
+  set('incBlockG', {transform: `translate(${bx.toFixed(1)} ${by.toFixed(1)}) rotate(${-C.th})`});
+  $('incMass').textContent = C.m + ' kg';
+  /* FBD per unit mass at the block's centre */
+  const k = 8, ox = 830, oy = 500;                   // the free-body diagram, drawn in its own corner
+  const N = 9.8 * Math.cos(t);
+  const down = [-ux, -uy];                           // unit vector down the slope (towards the pivot)
+  const arr = (v, col, mk, lab, dash) => `<line x1="${ox.toFixed(1)}" y1="${oy.toFixed(1)}" x2="${(ox + v[0] * k).toFixed(1)}" y2="${(oy + v[1] * k).toFixed(1)}" stroke="${col}" stroke-width="${dash ? 1.8 : 3}" ${dash ? 'stroke-dasharray="5 4"' : ''} marker-end="url(#${mk})"/>` +
+    (lab ? `<text x="${(ox + v[0] * k + (v[0] >= 0 ? 8 : -8)).toFixed(1)}" y="${(oy + v[1] * k + (v[1] > 0 ? 14 : -4)).toFixed(1)}" font-size="12" class="m" fill="${col}" text-anchor="${v[0] >= 0 ? 'start' : 'end'}">${lab}</text>` : '');
+  const gA = 9.8 * Math.sin(t);
+  let fb = arr([0, 9.8], '#1d2327', 'mk', 'mg') + arr([-Math.sin(t) * N, -Math.cos(t) * N], '#3057c9', 'mb', `N = mg cos θ = ${fmt(N, 2)}`);
+  fb += arr([down[0] * gA, down[1] * gA], '#c07000', 'mo', `mg sin θ = ${fmt(gA, 2)}`, true);
+  if (s.f > 0.005) fb += arr([-down[0] * s.f, -down[1] * s.f], '#d6453d', 'mr', `f = ${fmt(s.f, 2)}${s.slide ? ' (kinetic)' : ' (static)'}`);
+  fb = `<text x="700" y="396" font-size="14" class="serif" fill="#1d2327">Free-body diagram, per kg</text><g transform="translate(${ox} ${oy}) rotate(${-C.th})"><rect x="-14" y="-14" width="28" height="28" rx="3" fill="#b98a52" opacity=".45" stroke="#6b4a2b"/><line x1="-70" y1="14" x2="70" y2="14" stroke="#8a826c"/></g>` + fb;
+  $('incFbd').innerHTML = fb;
+  /* friction–tilt graph */
+  const X = a => IG.x + a / 45 * IG.w, Y = f => IG.y + IG.h - f / 8 * IG.h;
+  let ax = '';
+  for (const a of [0, 15, 30, 45]) ax += `<text x="${X(a)}" y="${IG.y + IG.h + 14}" font-size="10.5" class="m" fill="#7c878c" text-anchor="middle">${a}°</text>`;
+  for (const f of [0, 2, 4, 6, 8]) ax += `<line x1="${IG.x}" y1="${Y(f)}" x2="${IG.x + IG.w}" y2="${Y(f)}" stroke="#f0eee8"/><text x="${IG.x - 6}" y="${Y(f) + 4}" font-size="10.5" class="m" fill="#7c878c" text-anchor="end">${f}</text>`;
+  $('igAxes').innerHTML = ax;
+  let lim = '';
+  for (let a = 0; a <= 45; a += 1) lim += (a ? 'L' : 'M') + X(a).toFixed(1) + ' ' + Y(C.mus * 9.8 * Math.cos(a * D2R)).toFixed(1);
+  let pts = C.fpts.map(p => `<circle cx="${X(p[0]).toFixed(1)}" cy="${Y(p[1]).toFixed(1)}" r="3.5" fill="${p[2] ? '#d6453d' : '#1f8a70'}"/>`).join('');
+  $('igCurves').innerHTML = `<path d="${lim}" fill="none" stroke="#3057c9" stroke-dasharray="5 4"/>` + pts +
+    `<text x="${IG.x + IG.w - 4}" y="${IG.y + 14}" font-size="11" fill="#3057c9" text-anchor="end">μs g cos θ</text>`;
+  $('incNote').textContent = C.slidAt != null ? `Slid at ${C.slidAt}°: tan ${C.slidAt}° = ${Math.tan(C.slidAt * D2R).toFixed(3)} ≥ μs = ${C.slidMus.toFixed(2)}` : (s.slide ? 'Sliding…' : 'Held by static friction.');
+  $('ang').value = C.th; $('angOut').textContent = C.th + '°';
+  $('mus').value = C.mus; $('musOut').textContent = C.mus.toFixed(2);
+  $('muk').value = C.muk; $('mukOut').textContent = C.muk.toFixed(2);
+  $('mass').value = C.m; $('massOut').textContent = C.m + ' kg';
+}
+function incTilt(){
+  const C = S.c, p = incParams();
+  const wasSliding = C.s.slide;
+  incStep(C.s, DT, p);                                 // one step at the new tilt: does friction still hold?
+  C.fpts.push([C.th, C.s.f, C.s.slide]);
+  if (C.fpts.length > 200) C.fpts.shift();
+  if (C.s.slide && !wasSliding && C.slidAt == null) {
+    C.slidAt = C.th; C.slidMus = C.mus;
+    sound('boing'); track('slid', {th: C.th, mus: C.mus});
+    if (C.th - Math.atan(C.mus) * R2D <= 0.6 && C.th - Math.atan(C.mus) * R2D >= 0) discover('repose');
+  }
+}
+
+/* ============================================================================
+   Narrator, measurements, paint
+   ============================================================================ */
+function paintMeas(){
+  if (!S.locked) return;
+  let h = '';
+  if (S.tab === 'proj') {
+    const sw = S.p.sweeps[S.p.sweeps.length - 1];
+    h = `<div class="readout"><span class="hd">Sweep</span><span class="hd">model</span><span class="hd">vacuum</span>` +
+      (sw ? `<span>Best angle</span><b>${sw.best.toFixed(2)}°</b><i>45°</i><span>Longest range</span><b>${fmt(sw.Rbest, 2)} m</b><i>${sw.h === 0 ? fmt(sw.u * sw.u / sw.g, 2) : '—'} m</i>` : '<span>Not swept yet</span><b></b><i></i>') + '</div>';
+  } else if (S.tab === 'bank') {
+    const B = S.b, vo = bankVopt(B.R, B.th), vx = bankVmax(B.R, B.th, B.mu);
+    const t = B.th * D2R, fvo = Math.sqrt(B.R * 9.8 * Math.tan(t)), fvx = B.mu * Math.tan(t) < 1 ? Math.sqrt(B.R * 9.8 * (B.mu + Math.tan(t)) / (1 - B.mu * Math.tan(t))) : Infinity;
+    h = `<div class="readout"><span class="hd">Speed</span><span class="hd">model</span><span class="hd">Eq. 4.21–22</span>` +
+      `<span>No friction needed, v₀</span><b>${fmt(vo, 2)} m/s</b><i>${fmt(fvo, 2)}</i>` +
+      `<span>Most before skidding, v_max</span><b>${isFinite(vx) ? fmt(vx, 2) + ' m/s' : 'none'}</b><i>${isFinite(fvx) ? fmt(fvx, 2) : '∞'}</i>` +
+      `<span>Friction needed now</span><b>${fmt(bankNeed(B.v, B.R, B.th).need / 9.8, 3)} mg</b><i>±${fmt(B.mu * bankNeed(B.v, B.R, B.th).N / 9.8, 3)}</i></div>`;
+  } else {
+    const C = S.c;
+    h = `<div class="readout"><span class="hd">Incline</span><span class="hd">model</span><span class="hd" style="text-transform:none">tan⁻¹ μs</span>` +
+      `<span>Angle it began to slide</span><b>${C.slidAt != null ? C.slidAt + '°' : '—'}</b><i>${fmt(Math.atan(C.mus) * R2D, 2)}°</i>` +
+      `<span>Along the slope, mg sin θ</span><b>${fmt(C.m * 9.8 * Math.sin(C.th * D2R), 2)} N</b><i></i>` +
+      `<span>Most static friction, μs N</span><b>${fmt(C.mus * C.m * 9.8 * Math.cos(C.th * D2R), 2)} N</b><i></i></div>`;
+  }
+  $('meas').innerHTML = h;
+}
+function paintWhy(){
+  if (!S.locked) return;
+  $('whyCard').hidden = false;
+  let h = '';
+  if (S.tab === 'proj') {
+    const P = S.p, vx = P.u * Math.cos(P.th * D2R), vy = P.u * Math.sin(P.th * D2R);
+    h = `<p>At launch: v<sub>x</sub> = u cos θ = <b>${fmt(vx, 2)} m/s</b>, v<sub>y</sub> = u sin θ = <b>${fmt(vy, 2)} m/s</b>.</p>`;
+    h += P.k === 0 ? `<p>With no drag the only force is gravity, straight down. Nothing acts sideways, so v<sub>x</sub> never changes: the blue marks along the ground are evenly spaced, while the red marks up the wall bunch together near the top.</p>`
+      : `<p>Drag of k|v|v opposes the velocity. It slows v<sub>x</sub> as well as v<sub>y</sub>, most when the ball is fastest. So the ground marks close up, the path comes down more steeply than it went up, and a lower launch (spending less time in the air) wins.</p>`;
+    if (P.g !== 9.8) h += `<p>Gravity is set to ${fmt(P.g, 1)} m/s² (the Moon has 1.6).</p>`;
+  } else if (S.tab === 'bank') {
+    const B = S.b, b = bankNeed(B.v, B.R, B.th), lim = B.mu * b.N;
+    h = `<p>To go round a circle of ${B.R} m at ${fmt(B.v, 1)} m/s the car needs a centripetal acceleration v²/R = <b>${fmt(B.v * B.v / B.R, 2)} m/s²</b>. The normal force supplies some of it through the bank; friction must supply the rest.</p>`;
+    h += Math.abs(b.need) < 0.02 * 9.8 ? `<p>Here the normal force alone is enough: <b>no friction is needed</b>.</p>`
+      : `<p>Friction must push <b>${b.need > 0 ? 'up' : 'down'} the slope</b> with ${fmt(Math.abs(b.need), 2)} m/s² per kg; it can give at most ${fmt(lim, 2)}. ${Math.abs(b.need) <= lim ? 'It can, so the car holds its line.' : `It cannot, so the car slides ${b.need > 0 ? 'down and in' : 'up and out'}.`}</p>`;
+  } else {
+    const C = S.c, t = C.th * D2R;
+    h = `<p>Down the slope the block feels mg sin θ = <b>${fmt(C.m * 9.8 * Math.sin(t), 2)} N</b>. Static friction can hold up to μs mg cos θ = <b>${fmt(C.mus * C.m * 9.8 * Math.cos(t), 2)} N</b>.</p>` +
+      `<p>They are equal when tan θ = μs, at ${fmt(Math.atan(C.mus) * R2D, 2)}°. The mass cancels, so a heavier block slides at the same angle.</p>`;
+  }
+  $('why').innerHTML = h;
+}
+function paintAll(){
+  for (const [g, t] of [['scProj', 'proj'], ['scBank', 'bank'], ['scInc', 'inc']]) $(g).style.display = S.tab === t ? '' : 'none';
+  $('ctlProj').hidden = S.tab !== 'proj'; $('ctlBank').hidden = S.tab !== 'bank'; $('ctlInc').hidden = S.tab !== 'inc';
+  document.querySelectorAll('.tabs button').forEach(b => { b.setAttribute('aria-selected', b.dataset.tab === S.tab); b.disabled = !S.locked; });
+  if (S.tab === 'proj') paintProj();
+  if (S.tab === 'bank') paintBank();
+  if (S.tab === 'inc') paintInc();
+  paintMeas(); paintWhy();
+}
+function lockControls(lock){
+  for (const id of ['u', 'th', 'h', 'g', 'k', 'btnFire', 'btnSweep', 'R', 'bank', 'mu', 'v', 'btnDrive', 'btnBook', 'btnCyc', 'ang', 'mus', 'muk', 'mass', 'btnTop']) $(id).disabled = lock;
+  $('vHandle').style.pointerEvents = lock ? 'none' : '';
+  $('gate').hidden = !lock;
+}
+
+/* ---- wiring --------------------------------------------------------------- */
+build();
+fitWorld();
+document.querySelectorAll('.tabs button').forEach(b => b.addEventListener('click', () => { if (!S.locked) return; S.tab = b.dataset.tab; sound('tick'); track('tab', {tab: S.tab}); paintAll(); }));
+const projInput = (id, key) => $(id).addEventListener('input', e => { S.p[key] = +e.target.value; if (!S.p.flying) { S.p.shot = null; fitWorld(); } paintAll(); });
+projInput('u', 'u'); projInput('th', 'th'); projInput('h', 'h'); projInput('g', 'g'); projInput('k', 'k');
+$('btnFire').addEventListener('click', fire);
+$('btnSweep').addEventListener('click', doSweep);
+drag($('vHandle'), svg, {
+  start(){ if (!S.locked || S.p.flying) return false; },
+  move(pt){
+    const x0 = PX(0), y0 = PY(S.p.h);
+    const dx = pt.x - x0, dy = y0 - pt.y;
+    S.p.u = clamp(Math.round(Math.hypot(dx, dy) / V_PX * 2) / 2, 5, 40);
+    S.p.th = clamp(Math.round(Math.atan2(dy, dx) * R2D), 0, 89);
+    S.p.shot = null;
+    paintAll();
+  },
+  end(){ fitWorld(); paintAll(); track('aim', {u: S.p.u, th: S.p.th}); },
+});
+const bankInput = (id, key) => $(id).addEventListener('input', e => { S.b[key] = +e.target.value; if (!S.b.driving) { S.b.run = null; S.b.out = null; S.b.trail = []; } paintAll(); });
+bankInput('R', 'R'); bankInput('bank', 'th'); bankInput('mu', 'mu'); bankInput('v', 'v');
+$('btnDrive').addEventListener('click', startDrive);
+$('btnBook').addEventListener('click', () => { Object.assign(S.b, {R: 300, th: 15, mu: 0.2, v: 28, run: null, out: null, trail: [], driving: false}); sound('pop'); paintAll(); });
+$('btnCyc').addEventListener('click', () => { Object.assign(S.b, {R: 3, th: 0, mu: 0.1, v: 5, run: null, out: null, trail: [], driving: false}); sound('pop'); paintAll(); });
+$('ang').addEventListener('input', e => { S.c.th = +e.target.value; incTilt(); paintAll(); });
+for (const [id, key] of [['mus', 'mus'], ['muk', 'muk'], ['mass', 'm']]) $(id).addEventListener('input', e => { S.c[key] = +e.target.value; paintAll(); });
+$('btnTop').addEventListener('click', () => { S.c.s = {x: 0, w: 0, t: 0, f: 0, slide: false}; S.c.th = 5; S.c.slidAt = null; S.c.fpts = []; sound('pop'); paintAll(); });
+
+loop(dt => {
+  let dirty = false;
+  const P = S.p;
+  if (P.flying) { P.t += dt; if (P.t >= P.shot.T) landed(); dirty = S.tab === 'proj'; }
+  const B = S.b;
+  if (B.driving && B.run) {
+    const p = bankParams(), n = Math.round(dt / DT);
+    for (let i = 0; i < n && B.driving; i++) { bankStep(B.run, DT, p); if (i % 10 === 0) bankCheck(); }
+    bankCheck();
+    const t = B.th * D2R, rpx = TV.r + clamp(B.run.q * Math.cos(t), -HALF - 4, HALF + 4) * 2.2;
+    B.trail.push([TV.x + rpx * Math.cos(B.run.phi), TV.y + rpx * Math.sin(B.run.phi)]);
+    if (B.trail.length > 400) B.trail.shift();
+    dirty = dirty || S.tab === 'bank';
+  }
+  const C = S.c;
+  if (C.s.slide) {
+    const p = incParams(), n = Math.round(dt / DT);
+    for (let i = 0; i < n; i++) incStep(C.s, DT, p);
+    if (C.s.x * 40 > IN.L - 100) { C.s.w = 0; C.s.slide = false; C.s.x = (IN.L - 100) / 40; }
+    dirty = dirty || S.tab === 'inc';
+  }
+  if (dirty) paintAll();
+});
+
+/* ---- findings, predict, start -------------------------------------------- */
+findings($('finds'), [
+  {id: 'formula',     icon: 'R', label: 'In a vacuum, R = u² sin 2θ / g exactly', hint: 'Launch with no drag from the ground'},
+  {id: 'complement',  icon: '⦣', label: 'θ and 90° − θ land together',          hint: 'Try two angles that add to 90°'},
+  {id: 'best45',      icon: '45', label: 'Without air, 45° throws farthest',       hint: 'Sweep every angle, no drag'},
+  {id: 'dragBest',    icon: '↘', label: 'With drag, the best angle drops below 45°', hint: 'Sweep again with drag on'},
+  {id: 'independent', icon: '⊥', label: 'Thrown sideways or dropped: they land together', hint: 'Throw horizontally from a height'},
+  {id: 'nofriction',  icon: '◎', label: 'At v₀ the bank alone turns the car',     hint: 'Find the speed that needs no friction'},
+  {id: 'flip',        icon: '⇅', label: 'Friction flips from up the slope to down', hint: 'Drive slower, then faster, than v₀'},
+  {id: 'skid',        icon: '↗', label: 'Past v_max it slides up and off',          hint: 'Too fast for the curve'},
+  {id: 'slidein',     icon: '↙', label: 'Too slow on a steep bank: it slides in',   hint: 'Steep, slippery and slow'},
+  {id: 'repose',      icon: '∠', label: 'It slides when tan θ = μs',                hint: 'Tilt the plane slowly'},
+], () => toast('All ten found. Every one of them came out of Newton’s second law, integrated.', 4200));
+
+let EXPLAINED = false;
+function maybeExplain(){
+  if (EXPLAINED || !found('dragBest')) return;
+  const sw = S.p.sweeps.filter(s => s.k > 0 && s.h === 0).pop(); if (!sw) return;
+  EXPLAINED = true;
+  const at45 = fly(sw.u, 45, sw.g, sw.k).R;
+  POE.explain(`With k = ${sw.k} per metre and u = ${sw.u} m/s the model’s longest throw is at <b>${sw.best.toFixed(1)}°</b>: ${fmt(sw.Rbest, 1)} m, against ${fmt(at45, 1)} m at 45°. ` +
+    `Drag takes most from a ball that stays up longest, and a high throw stays up longer, so the best angle comes down. The formula R = u² sin 2θ / g, and its 45°, belong to a vacuum.`);
+}
+
+const POE = predict($('poe'), {
+  id: 'drag-angle',
+  q: 'A cricket ball flies through real air, with drag. Which launch angle throws it farthest?',
+  options: [
+    {id: '45', text: '45°, as the formula says.'},
+    {id: 'higher', text: 'More than 45°: loft it to hang in the air.'},
+    {id: 'lower', text: 'Less than 45°.', right: true},
+    {id: 'any', text: 'Drag shortens every throw equally, so the angle does not change.'},
+  ],
+  onLock(){
+    S.locked = true;
+    lockControls(false);
+    say('Now find out. Sweep the angles with no drag, then turn the drag on.');
+    paintAll();
+  },
+});
+lockControls(!POE.locked);
+if (!Play.FF('predict')) S.locked = true;
+paintAll();
+window.applyFeatures = () => paintAll();
+window.PG_STATE = () => JSON.parse(JSON.stringify({tab: S.tab, locked: S.locked,
+  p: {u: S.p.u, th: S.p.th, h: S.p.h, g: S.p.g, k: S.p.k, flying: S.p.flying, log: S.p.log, sweeps: S.p.sweeps.map(s => ({best: s.best, Rbest: s.Rbest, k: s.k, g: s.g, h: s.h}))},
+  b: {R: S.b.R, th: S.b.th, mu: S.b.mu, v: S.b.v, driving: S.b.driving, out: S.b.out, seenUp: S.b.seenUp, seenDown: S.b.seenDown, q: S.b.run ? S.b.run.q : 0, f: S.b.run ? S.b.run.f : null},
+  c: {th: S.c.th, mus: S.c.mus, slidAt: S.c.slidAt, slide: S.c.s.slide}}));
+window.PG_MODEL = {fly, sweep, bankNeed, bankStep, bankRun, bankVmax, bankVopt, incStep};
+</script>
+</body>
+</html>

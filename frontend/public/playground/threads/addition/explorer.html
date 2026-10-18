@@ -1,0 +1,529 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Give and Take on the Hundred Grid</title>
+<meta name="description" content="Class 3: pack Kishan's saplings into crates of a hundred, boxes of ten and loose pots — opening a box only when an order needs it — then hop a counter on a 1–100 grid to see +9 as +10 then −1, and +11 as +10 then +1.">
+<link rel="icon" href="../../favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600&family=Nunito:wght@500;700;800&display=swap">
+<link rel="stylesheet" href="../../play.css">
+<style>
+#stageWrap{align-self:start; min-height:0}
+#stage{background:#f3ead9}
+.hit{cursor:pointer}
+.hit.off{cursor:default}
+svg [tabindex]:focus{outline:none}
+svg [tabindex]:focus-visible{outline:none; stroke:#e07b39; stroke-width:3; stroke-dasharray:6 5}
+.missions{list-style:none; margin:0; padding:0; display:grid; gap:8px}
+.missions li{display:grid; grid-template-columns:30px 1fr; gap:8px; align-items:center; font-weight:700; font-size:14px; line-height:1.3; color:var(--ink-2)}
+.missions li i{width:26px; height:26px; border-radius:50%; border:2.5px dashed var(--hair-2); display:grid; place-items:center; font-style:normal; font-size:14px; color:#fff}
+.missions li.done{color:var(--ink)}
+.missions li.done i{border:none; background:var(--good); animation:tickPop .5s var(--spring)}
+.missions li.done span{text-decoration:line-through; text-decoration-color:var(--good); text-decoration-thickness:2px}
+@keyframes tickPop{0%{transform:scale(.3)}100%{transform:scale(1)}}
+.says{display:grid; grid-template-columns:48px 1fr; gap:10px; align-items:center}
+.says svg{width:48px; height:48px}
+.npc{font-size:14.5px; font-weight:700; line-height:1.4}
+.jumps{display:grid; grid-template-columns:1fr 1fr 1fr; gap:6px; margin-top:8px}
+.jumps button{font-family:"JetBrains Mono", monospace; font-weight:700}
+.order p{font-size:14.5px; font-weight:700; line-height:1.4; margin:0 0 10px}
+.order b{color:#b8321f}
+[hidden]{display:none !important}
+</style>
+</head>
+<body>
+<header class="pg-top"></header>
+
+<div class="pg-intro">
+  <h1>Give and take on the hundred grid</h1>
+  <p>Pack Kishan's nursery order into crates, boxes and pots — open a box only when you must.
+     Then hop a counter on the 1–100 grid and find the shortcut in +9 and +11.</p>
+</div>
+
+<main class="pg-main">
+  <section class="pg-stage" id="stageWrap">
+    <svg id="stage" viewBox="0 0 1000 660" role="img" aria-label="Two tabs: Kishan's nursery, with crates of a hundred, boxes of ten and pots of one; and a 1 to 100 number grid with a hopping counter."></svg>
+  </section>
+
+  <aside class="pg-side">
+    <div class="card says">
+      <svg id="npcArt" viewBox="-30 -30 60 60" aria-hidden="true"></svg>
+      <div><div class="kicker" id="npcName">Kishan says</div><div class="npc" id="npcSays">Welcome to my nursery! Fill the crates, then start an order.</div></div>
+    </div>
+
+    <div class="card order" id="nurseryPanel">
+      <div class="kicker">Today's order</div>
+      <p id="orderText"></p>
+      <div class="row">
+        <button class="btn primary" id="doOrder"></button>
+        <button class="btn sm" id="nextOrder">Next order</button>
+      </div>
+    </div>
+
+    <div class="card" id="gridPanel" hidden>
+      <div class="kicker">Hop the counter</div>
+      <p style="font-size:14.5px; font-weight:700; margin:0 0 4px">You are at <b id="posNow" style="color:#b8321f">23</b></p>
+      <div class="jumps">
+        <button class="btn sm" id="jm11">−11</button><button class="btn sm" id="jm10">−10</button><button class="btn sm" id="jm9">−9</button>
+        <button class="btn sm" id="jp9">+9</button><button class="btn sm" id="jp10">+10</button><button class="btn sm" id="jp11">+11</button>
+      </div>
+      <div class="row" style="margin-top:8px"><button class="btn sm" id="resetGrid">Start over at 23</button></div>
+    </div>
+    <div id="poe"></div>
+
+    <div class="card"><h3>Missions</h3><ul class="missions" id="missions"></ul></div>
+    <div class="card"><h3>⭐ Found</h3><div id="finds"></div></div>
+  </aside>
+</main>
+
+<script src="../../play.js"></script>
+<script>
+'use strict';
+const {$, esc, clamp, lerp, sound, say, track, toast, tween, predict, findings, discover, found,
+       shareState, sharedState, mount, reduced, confetti, ease} = Play;
+mount({thread: 'addition', band: 'explorer'});
+
+/* MODEL:start ==================================================================
+   Two tools, one idea: regrouping by tens (NCERT Maths Mela Class 3, Ch 12
+   "Give and Take" and Ch 4 "Vacation with My Nani Maa").
+
+   1. THE NURSERY. Saplings are held as H crates of 100, T boxes of 10 and O
+      loose pots: N = 100H + 10T + O. The only legal moves are the ones a real
+      nursery worker can do: pack ten of one size into one of the size above
+      (T-10,H+1 / O-10,T+1), or open one box into ten of the size below
+      (H-1,T+10 / T-1,O+10). Neither changes N. Bringing an order IN just adds
+      its H/T/O digits to the matching floor (a floor may overflow past 9 or 19
+      until it is packed: that overflow, resolved by packing, IS carrying).
+      Taking an order OUT can only remove what a floor actually holds; when a
+      floor is short, a box upstream must be opened first: that open IS
+      borrowing.
+   2. THE GRID. A counter sits on 1..100. Hopping +10 or -10 moves straight up
+      or down a column (the tens digit changes, the ones digit does not).
+      +9 is walked as +10 then -1, and +11 as +10 then +1 — two real hops on
+      the grid, not a label: hopBy9(p) = [p, p+10, p+9], hopBy11(p) = [p, p+10, p+11].
+   ============================================================================ */
+const FLOORS = ['H', 'T', 'O'];
+const PLACE = {H: 100, T: 10, O: 1};
+const CAP = {H: 9, T: 19, O: 19};
+const valueOf = s => 100 * s.H + 10 * s.T + s.O;
+const split = n => ({H: Math.floor(n / 100), T: Math.floor(n / 10) % 10, O: n % 10});
+const neat = s => s.H <= 9 && s.T <= 9 && s.O <= 9;
+const BELOW = {H: 'T', T: 'O'}, ABOVE = {O: 'T', T: 'H'};
+const canPack = (s, f) => f !== 'H' && s[f] >= 10 && s[ABOVE[f]] + 1 <= CAP[ABOVE[f]];
+const canOpen = (s, f) => f !== 'O' && s[f] >= 1 && s[BELOW[f]] + 10 <= CAP[BELOW[f]];
+const pack = (s, f) => { if (!canPack(s, f)) return Object.assign({}, s); const r = Object.assign({}, s); r[f] -= 10; r[ABOVE[f]] += 1; return r; };
+const open = (s, f) => { if (!canOpen(s, f)) return Object.assign({}, s); const r = Object.assign({}, s); r[f] -= 1; r[BELOW[f]] += 10; return r; };
+const unload = (s, n) => { const d = split(n); return {H: s.H + d.H, T: s.T + d.T, O: s.O + d.O}; };
+const shortOf = (s, n) => { const d = split(n); return FLOORS.filter(f => s[f] < d[f]); };
+const takeOut = (s, n) => { const d = split(n); return shortOf(s, n).length ? null : {H: s.H - d.H, T: s.T - d.T, O: s.O - d.O}; };
+const fits = s => FLOORS.every(f => s[f] <= CAP[f] + (f === 'O' || f === 'T' ? 10 : 0)) && valueOf(s) <= 999;
+
+const ORDERS = [
+  {op: 'add', start: 364, n: 52,
+   text: 'Kishan has <b>364</b> saplings. His friend brings <b>52</b> more from another village.'},
+  {op: 'take', start: 230, n: 75,
+   text: 'The nursery holds <b>230</b> saplings. A school order needs <b>75</b> sent today. Load the cart.'},
+  {op: 'add', start: 85, n: 67,
+   text: 'Nandini plucks <b>85</b> apples, Chirag plucks <b>67</b> more. Bring both baskets together.'},
+  {op: 'take', start: 756, n: 465,
+   text: 'Peter uncle had ₹<b>465</b> in the morning and ₹<b>756</b> by afternoon. Take away the morning amount to see what he earned.'},
+];
+
+/* the grid: a counter on 1..100 */
+const clampPos = p => clamp(p, 1, 100);
+const gridJump = (pos, delta) => clampPos(pos + delta);
+const colOf = n => (n - 1) % 10;
+const rowOf = n => Math.floor((n - 1) / 10);
+const sameColumn = (a, b) => colOf(a) === colOf(b);
+const hopPath = (pos, delta) => {
+  if (Math.abs(delta) === 10) return [pos, clampPos(pos + delta)];
+  const tenStep = delta > 0 ? 10 : -10, last = delta - tenStep;
+  return [pos, clampPos(pos + tenStep), clampPos(pos + tenStep + last)];
+};
+/* MODEL:end */
+
+/* ---- state: plain data ------------------------------------------------------ */
+const S = {
+  tab: 'nursery',
+  H: 0, T: 0, O: 0, orderIdx: 0, pending: null, lastDone: null,
+  pos: 23, usedNine: false, usedEleven: false, usedTen: false, path: null,
+};
+const shared = sharedState();
+if (shared) {
+  if (shared.tab === 'grid') S.tab = 'grid';
+  if (Number.isInteger(+shared.pos)) S.pos = clampPos(+shared.pos);
+  const t = {H: clamp(Math.round(+shared.H || 0), 0, 9), T: clamp(Math.round(+shared.T || 0), 0, 19), O: clamp(Math.round(+shared.O || 0), 0, 19)};
+  if (fits(t)) Object.assign(S, t);
+  if (Number.isInteger(+shared.orderIdx)) S.orderIdx = clamp(+shared.orderIdx, 0, ORDERS.length - 1);
+}
+shareState(() => ({tab: S.tab, H: S.H, T: S.T, O: S.O, orderIdx: S.orderIdx, pos: S.pos}));
+const floors = () => ({H: S.H, T: S.T, O: S.O});
+
+/* ============================================================================
+   The stage: built once, then patched. Two panes, toggled with hidden — SVG
+   elements have no .hidden property (see WAVE5), so el.toggleAttribute('hidden', on).
+   ============================================================================ */
+const svg = $('stage');
+const f1 = n => (+n).toFixed(1);
+const NS = 'http://www.w3.org/2000/svg';
+const COL = {H: '#7b5cd6', T: '#2f7de1', O: '#e07b39'};
+const SOFT = {H: '#efe9fd', T: '#e3eefc', O: '#fdead9'};
+const NAME = {H: 'Crates of 100', T: 'Boxes of 10', O: 'Pots of 1'};
+const FLOOR_Y = {H: 70, T: 216, O: 362};
+const FLOOR_H = 130;
+
+const crateIcon = () => `<rect x="-19" y="-19" width="38" height="38" rx="5" fill="#c9863f" stroke="#6b4423" stroke-width="3"/><path d="M-19 0 H19 M0 -19 V19" stroke="#6b4423" stroke-width="2.5"/>`;
+const boxIcon = () => `<rect x="-8" y="-24" width="16" height="48" rx="4" fill="#6aa5f0" stroke="#1d5bb0" stroke-width="2.5"/><path d="M-8 -8 H8 M-8 8 H8" stroke="#1d5bb0" stroke-width="1.6"/>`;
+const potIcon = () => `<path d="M-9 -8 L-7 9 Q0 15 7 9 L9 -8 Z" fill="#e07b39" stroke="#8a4a1a" stroke-width="2"/><ellipse cx="0" cy="-8" rx="9" ry="3.4" fill="#2f9e5b"/>`;
+const itemArt = f => f === 'H' ? crateIcon() : f === 'T' ? boxIcon() : potIcon();
+const itemXY = (f, i) => {
+  if (f === 'H') return {x: 210 + (i % 9) * 44, y: FLOOR_Y.H + 65};
+  if (f === 'T') return {x: 200 + (i % 10) * 38, y: FLOOR_Y.T + 32 + Math.floor(i / 10) * 58};
+  return {x: 200 + (i % 10) * 38, y: FLOOR_Y.O + 26 + Math.floor(i / 10) * 34};
+};
+
+function button(id, x, y, w, h, label, col, aria, fs){
+  return `<g id="${id}G"><rect id="${id}Bg" x="${x - w / 2}" y="${y - h / 2}" width="${w}" height="${h}" rx="${Math.min(h / 2, 14)}" fill="#fff" stroke="${col}" stroke-width="3"/>
+    <text id="${id}T" x="${x}" y="${y + 6}" text-anchor="middle" font-family="Fredoka, Nunito, sans-serif" font-size="${fs || 16}" font-weight="600" fill="${col}">${label}</text></g>
+    <rect id="${id}" class="hit" x="${x - w / 2}" y="${y - h / 2}" width="${w}" height="${h}" rx="${Math.min(h / 2, 14)}" fill="transparent" role="button" tabindex="0" aria-label="${aria}"/>`;
+}
+
+function buildNursery(){
+  let items = '', rows = '', ctrls = '';
+  for (const f of FLOORS) {
+    const y = FLOOR_Y[f];
+    rows += `
+      <rect x="20" y="${y}" width="600" height="${FLOOR_H}" fill="${SOFT[f]}" stroke="${COL[f]}" stroke-width="3"/>
+      <rect x="20" y="${y}" width="150" height="${FLOOR_H}" fill="${COL[f]}" opacity=".12"/>
+      <text x="95" y="${y + 28}" text-anchor="middle" font-family="Fredoka, Nunito, sans-serif" font-size="16" font-weight="600" fill="${COL[f]}">${NAME[f]}</text>
+      <text id="cnt${f}" x="95" y="${y + 78}" text-anchor="middle" font-family="Fredoka, Nunito, sans-serif" font-size="44" font-weight="600" fill="${COL[f]}">0</text>
+      <rect id="warn${f}" x="24" y="${y + 4}" width="592" height="${FLOOR_H - 8}" fill="none" stroke="#ff7a2f" stroke-width="5" stroke-dasharray="12 8" rx="6" opacity="0"/>`;
+    for (let i = 0; i < CAP[f]; i++) { const p = itemXY(f, i); items += `<g id="it${f}${i}" opacity="0" transform="translate(${f1(p.x)} ${f1(p.y)})">${itemArt(f)}</g>`; }
+    ctrls += button('plus' + f, 660, y + 32, 52, 42, '+', COL[f], `Add one ${NAME[f].toLowerCase()}`, 26);
+    ctrls += button('minus' + f, 660, y + FLOOR_H - 32, 52, 42, '−', COL[f], `Take away one ${NAME[f].toLowerCase()}`, 26);
+  }
+  ctrls += button('packT', 740, FLOOR_Y.T + 30, 78, 40, 'Pack ↑', '#2f9e5b', 'Pack ten boxes of ten into a crate of a hundred');
+  ctrls += button('openH', 740, FLOOR_Y.T + 34 + 44, 78, 40, 'Open ↓', '#c2569b', 'Open a crate of a hundred into ten boxes of ten');
+  ctrls += button('packO', 740, FLOOR_Y.O + 30, 78, 40, 'Pack ↑', '#2f9e5b', 'Pack ten loose pots into one box of ten');
+  ctrls += button('openT', 740, FLOOR_Y.O + 34 + 44, 78, 40, 'Open ↓', '#c2569b', 'Open a box of ten into ten loose pots');
+
+  return `
+  <rect x="20" y="70" width="620" height="422" rx="14" fill="#f9f4ea" stroke="#e2d3ae" stroke-width="2"/>
+  ${rows}
+  <g id="nurseryItems">${items}</g>
+  ${ctrls}
+  <g filter="url(#soft)"><rect x="826" y="70" width="154" height="180" rx="16" fill="#fff"/></g>
+  <text x="903" y="98" text-anchor="middle" font-size="13" font-weight="800" letter-spacing="1" fill="#8a94a6">TOTAL</text>
+  <text id="totalNum" x="903" y="150" text-anchor="middle" font-family="Fredoka, Nunito, sans-serif" font-size="42" font-weight="600" fill="#1b2a3a">0</text>
+  <text id="totalSum" x="903" y="178" text-anchor="middle" font-size="13" font-weight="700" fill="#7b8ea2"></text>
+  <text id="totalNeat" x="903" y="210" text-anchor="middle" font-size="13" font-weight="700" fill="#e8590c"></text>
+  <g filter="url(#soft)"><rect x="826" y="270" width="154" height="222" rx="16" fill="#2f4a3f"/></g>
+  <text x="903" y="296" text-anchor="middle" font-size="13" font-weight="800" letter-spacing="1" fill="#cfe3d6">CARTS SO FAR</text>
+  <text id="doneCount" x="903" y="360" text-anchor="middle" font-family="Fredoka, Nunito, sans-serif" font-size="54" font-weight="600" fill="#8fe3a8">0</text>
+  <text x="903" y="392" text-anchor="middle" font-size="13" font-weight="700" fill="#cfe3d6">of 4 orders</text>
+  `;
+}
+
+function buildGrid(){
+  let tiles = '';
+  for (let n = 1; n <= 100; n++) {
+    const col = colOf(n), row = rowOf(n), x = 40 + col * 54, y = 70 + row * 54;
+    tiles += `<g id="tileG${n}"><rect x="${x}" y="${y}" width="50" height="50" rx="8" fill="#fff" stroke="#d8cba0" stroke-width="1.5"/>
+      <text x="${x + 25}" y="${y + 31}" text-anchor="middle" font-family="Fredoka, Nunito, sans-serif" font-size="16" font-weight="600" fill="#6b5a3a">${n}</text></g>
+      <rect id="tileHit${n}" class="hit" x="${x}" y="${y}" width="50" height="50" fill="transparent" role="button" tabindex="0" aria-label="Tile ${n}. Tap to move the counter here."/>`;
+  }
+  return `
+  <rect x="30" y="60" width="560" height="560" rx="16" fill="#fffaf0" stroke="#e2d3ae" stroke-width="2"/>
+  ${tiles}
+  <g id="hopArrow" fill="none" stroke="#e07b39" stroke-width="4" stroke-linecap="round" opacity="0"></g>
+  <g id="counter"><circle r="20" fill="#e07b39" stroke="#8a4a1a" stroke-width="3"/><circle cx="-6" cy="-4" r="3" fill="#fff"/><circle cx="6" cy="-4" r="3" fill="#fff"/><path d="M-6 6 Q0 11 6 6" stroke="#fff" stroke-width="2.4" fill="none" stroke-linecap="round"/></g>
+  <g filter="url(#soft)"><rect x="650" y="70" width="330" height="150" rx="16" fill="#fff"/></g>
+  <text x="815" y="100" text-anchor="middle" font-size="13" font-weight="800" letter-spacing="1" fill="#8a94a6">YOU ARE AT</text>
+  <text id="posBig" x="815" y="168" text-anchor="middle" font-family="Fredoka, Nunito, sans-serif" font-size="60" font-weight="600" fill="#b8321f">23</text>
+  <g filter="url(#soft)"><rect x="650" y="240" width="330" height="180" rx="16" fill="#2f4a3f"/></g>
+  <text x="815" y="266" text-anchor="middle" font-size="13" font-weight="800" letter-spacing="1" fill="#cfe3d6">LAST HOP</text>
+  <text id="lastHop" x="815" y="320" text-anchor="middle" font-family="Fredoka, Nunito, sans-serif" font-size="24" font-weight="600" fill="#f4f1e6"></text>
+  <text id="lastHopWord" x="815" y="352" text-anchor="middle" font-size="14.5" font-weight="700" fill="#8fe3a8"></text>
+  <text id="lastHopIdle" x="815" y="330" text-anchor="middle" font-size="15" font-weight="700" fill="#cfe3d6">Use a jump button</text>
+  `;
+}
+
+function build(){
+  svg.innerHTML = `
+  <defs><filter id="soft" x="-30%" y="-30%" width="160%" height="160%"><feDropShadow dx="0" dy="3" stdDeviation="3" flood-color="#1b2a3a" flood-opacity=".18"/></filter></defs>
+  <rect width="1000" height="660" fill="#f3ead9"/>
+  ${button('tabNursery', 150, 28, 260, 44, "Kishan's Nursery", '#e07b39', 'Show the nursery crates', 19)}
+  ${button('tabGrid', 470, 28, 260, 44, 'Number Grid', '#2f7de1', 'Show the 1 to 100 number grid', 19)}
+  <g id="paneNursery">${buildNursery()}</g>
+  <g id="paneGrid" hidden>${buildGrid()}</g>
+  `;
+}
+build();
+
+/* ---- juice ------------------------------------------------------------------ */
+function squash(el, ms = 400){
+  return tween(0, 1, ms, t => { const k = Math.sin(t * Math.PI * 3) * (1 - t) * 0.14;
+    el.setAttribute('transform', (el._base || '') + ` scale(${(1 + k).toFixed(3)} ${(1 - k).toFixed(3)})`); }, x => x)
+    .then(() => el.setAttribute('transform', el._base || ''));
+}
+function tileCentre(n){ const col = colOf(n), row = rowOf(n); return {x: 40 + col * 54 + 25, y: 70 + row * 54 + 25}; }
+
+/* ---- tabs --------------------------------------------------------------------- */
+function setTab(t){
+  S.tab = t;
+  $('paneNursery').toggleAttribute('hidden', t !== 'nursery');
+  $('paneGrid').toggleAttribute('hidden', t !== 'grid');
+  $('nurseryPanel').hidden = t !== 'nursery';
+  $('gridPanel').hidden = t !== 'grid';
+  $('poe').hidden = t !== 'grid';
+  $('tabNurseryBg').setAttribute('fill', t === 'nursery' ? '#e07b39' : '#fff');
+  $('tabNurseryT').setAttribute('fill', t === 'nursery' ? '#fff' : '#e07b39');
+  $('tabGridBg').setAttribute('fill', t === 'grid' ? '#2f7de1' : '#fff');
+  $('tabGridT').setAttribute('fill', t === 'grid' ? '#fff' : '#2f7de1');
+  paintNpc();
+  track('tab', {tab: t});
+}
+
+/* ---- nursery: paint ------------------------------------------------------------ */
+function paintNursery(){
+  const n = valueOf(S);
+  for (const f of FLOORS) {
+    for (let i = 0; i < CAP[f]; i++) { const el = $('it' + f + i); if (el) el.setAttribute('opacity', i < S[f] ? 1 : 0); }
+    $('cnt' + f).textContent = S[f];
+    const over = S[f] > CAP[f];
+    $('cnt' + f).setAttribute('fill', over ? '#e8590c' : COL[f]);
+    $('warn' + f).setAttribute('opacity', over ? 1 : 0);
+  }
+  setBtn('packO', canPack(S, 'O')); setBtn('packT', canPack(S, 'T'));
+  setBtn('openT', canOpen(S, 'T')); setBtn('openH', canOpen(S, 'H'));
+  for (const f of FLOORS) { setBtn('plus' + f, S[f] < CAP[f], true); setBtn('minus' + f, S[f] > 0, true); }
+  $('totalNum').textContent = n;
+  $('totalSum').textContent = `${S.H}H + ${S.T}T + ${S.O}O`;
+  $('totalNeat').textContent = neat(S) ? '' : 'Something needs packing!';
+  $('doneCount').textContent = ORDERS.filter((o, i) => S.lastDone && S.completed && S.completed[i]).length;
+  paintOrder();
+}
+function setBtn(id, on, quiet){
+  $(id + 'G').setAttribute('opacity', on ? 1 : (quiet ? 0.35 : 0.28));
+  $(id).classList.toggle('off', !on);
+  $(id).setAttribute('aria-disabled', !on);
+}
+function paintOrder(){
+  const O = ORDERS[S.orderIdx];
+  const started = S.pending && S.pending.idx === S.orderIdx;
+  $('orderText').innerHTML = O.text + (started ? '' : ` Tap <b>Start</b> to load the nursery to ${O.start}.`);
+  $('doOrder').textContent = !started ? 'Start this order' : (O.op === 'add' ? `Bring in ${O.n} more` : `Load ${O.n} for delivery`);
+}
+
+/* ---- nursery: the learner's moves ---------------------------------------------- */
+function plusF(f){ if (S[f] >= CAP[f]) return; S[f]++; sound('pop'); afterNursery(); }
+function minusF(f){ if (S[f] <= 0) return; S[f]--; sound('tick'); afterNursery(); }
+function doPack(f){
+  if (!canPack(S, f)) { sound('boing'); npcSay(`Kishan says: "I need ten on that floor to pack a box."`); return; }
+  Object.assign(S, pack(S, f));
+  sound('snap'); setTimeout(() => sound('chime'), 200);
+  if (S.pending && S.pending.op === 'add' && S.pending.idx === S.orderIdx) S.pending.packed = true;
+  squash($('nurseryItems'), 300);
+  afterNursery();
+  npcSay(`Ten went up as one! Still ${valueOf(S)} saplings.`);
+  checkAddDone();
+}
+function doOpen(f){
+  if (!canOpen(S, f)) { sound('boing'); npcSay(`Kishan says: "There is nothing there to open."`); return; }
+  Object.assign(S, open(S, f));
+  sound('boing'); setTimeout(() => sound('pop'), 180);
+  if (S.pending && S.pending.op === 'take' && S.pending.idx === S.orderIdx) S.pending.opened = true;
+  afterNursery();
+  npcSay(`One box opened into ten. Still ${valueOf(S)} saplings.`);
+}
+function afterNursery(){ paintNursery(); track('nursery', {H: S.H, T: S.T, O: S.O}); }
+
+function doOrder(){
+  const O = ORDERS[S.orderIdx];
+  const started = S.pending && S.pending.idx === S.orderIdx;
+  if (!started) {
+    Object.assign(S, split(O.start));
+    S.pending = {idx: S.orderIdx, op: O.op, packed: false, opened: false};
+    sound('whoosh');
+    npcSay(`The nursery now holds ${O.start}. ${O.op === 'add' ? 'Bring in the new saplings!' : 'Now load the cart.'}`);
+    afterNursery();
+    return;
+  }
+  if (O.op === 'add') {
+    const next = unload(S, O.n);
+    Object.assign(S, next);
+    sound('whoosh');
+    afterNursery();
+    if (!neat(S)) npcSay(`${O.n} more are in, but a floor has too many now. Pack ten into the size above!`);
+    checkAddDone();
+  } else {
+    const short = shortOf(S, O.n);
+    if (short.length) {
+      const f = short[0];
+      sound('oops');
+      $('warn' + f).setAttribute('opacity', 1);
+      npcSay(`The cart needs more ${NAME[f].toLowerCase()} than I have. Open a box first!`);
+      return;
+    }
+    const before = valueOf(S);
+    Object.assign(S, takeOut(S, O.n));
+    sound('whoosh');
+    S.completed = S.completed || {}; S.completed[S.orderIdx] = true;
+    S.lastDone = {idx: S.orderIdx, op: 'take', before, n: O.n, after: valueOf(S), opened: S.pending.opened};
+    if (S.pending.opened) disco('borrow', clientOf(740, 300));
+    npcSay(`Loaded! ${before} take away ${O.n} leaves ${valueOf(S)}.`);
+    S.pending = null;
+    afterNursery();
+    confetti(); sound('tada');
+  }
+}
+function checkAddDone(){
+  const O = ORDERS[S.orderIdx];
+  if (!S.pending || S.pending.op !== 'add' || S.pending.idx !== S.orderIdx) return;
+  if (neat(S) && valueOf(S) === O.start + O.n) {
+    S.completed = S.completed || {}; S.completed[S.orderIdx] = true;
+    S.lastDone = {idx: S.orderIdx, op: 'add', before: O.start, n: O.n, after: valueOf(S), packed: S.pending.packed};
+    if (S.pending.packed) disco('carry', clientOf(740, 200));
+    S.pending = null;
+    afterNursery();
+    confetti(); sound('tada');
+  }
+}
+function nextOrder(){
+  S.orderIdx = (S.orderIdx + 1) % ORDERS.length;
+  S.pending = null;
+  Object.assign(S, {H: 0, T: 0, O: 0});
+  sound('tick');
+  npcSay('A new order has come in!');
+  afterNursery();
+}
+
+/* ---- grid: paint --------------------------------------------------------------- */
+function paintGrid(){
+  const c = tileCentre(S.pos);
+  $('counter').setAttribute('transform', `translate(${f1(c.x)} ${f1(c.y)})`);
+  $('posBig').textContent = S.pos;
+  $('posNow').textContent = S.pos;
+  if (S.path) {
+    let d = `M${f1(tileCentre(S.path[0]).x)} ${f1(tileCentre(S.path[0]).y)}`;
+    for (let i = 1; i < S.path.length; i++) d += ` L${f1(tileCentre(S.path[i]).x)} ${f1(tileCentre(S.path[i]).y)}`;
+    $('hopArrow').innerHTML = `<path d="${d}" marker-end="url(#none)"/>`;
+    $('hopArrow').setAttribute('opacity', 1);
+  } else $('hopArrow').setAttribute('opacity', 0);
+  const L = S.lastMove;
+  $('lastHopIdle').setAttribute('opacity', L ? 0 : 1);
+  $('lastHop').textContent = L ? `${L.from} ${L.delta > 0 ? '+' : '−'} ${Math.abs(L.delta)} = ${L.to}` : '';
+  $('lastHopWord').textContent = L && Math.abs(L.delta) === 9 ? `That is +10, then −1.` : (L && Math.abs(L.delta) === 11 ? `That is +10, then +1.` : (L && Math.abs(L.delta) === 10 ? `Same ones digit, ten more tens.` : ''));
+}
+function clientOf(x, y){
+  const m = svg.getScreenCTM(); if (!m) return {x: innerWidth / 2, y: innerHeight / 2};
+  const p = svg.createSVGPoint(); p.x = x; p.y = y; const q = p.matrixTransform(m);
+  return {x: q.x, y: q.y};
+}
+function disco(id, at){ if (discover(id, at)) paintMissions(); }
+
+/* ---- grid: the learner's moves --------------------------------------------------- */
+async function doJump(delta){
+  const from = S.pos;
+  const path = hopPath(from, delta);
+  S.path = path;
+  paintGrid();
+  for (let i = 1; i < path.length; i++) {
+    await tween(0, 1, 260, t => {
+      const a = tileCentre(path[i - 1]), b = tileCentre(path[i]);
+      const k = ease.inOut(t), y = -18 * Math.sin(t * Math.PI);
+      $('counter').setAttribute('transform', `translate(${f1(lerp(a.x, b.x, k))} ${f1(lerp(a.y, b.y, k) + y)})`);
+    });
+    sound('pop');
+  }
+  S.pos = path[path.length - 1];
+  S.lastMove = {from, delta, to: S.pos};
+  S.path = null;
+  paintGrid();
+  if (Math.abs(delta) === 9) { S.usedNine = true; disco('nine', clientOf(815, 320)); }
+  if (Math.abs(delta) === 11) { S.usedEleven = true; disco('eleven', clientOf(815, 320)); }
+  if (Math.abs(delta) === 10 && sameColumn(from, S.pos)) { S.usedTen = true; disco('column', clientOf(815, 320)); }
+  if (S.pos === 100) disco('hundred', clientOf(815, 168));
+  track('hop', {from, delta, to: S.pos});
+  explainPredict();
+}
+function tapTile(n){
+  S.pos = n; S.lastMove = null; S.path = null;
+  sound('tick');
+  paintGrid();
+  if (n === 100) disco('hundred', clientOf(815, 168));
+  track('tapTile', {n});
+}
+function resetGrid(){ S.pos = 23; S.lastMove = null; S.path = null; sound('tick'); paintGrid(); npcSay('Back to 23. Try a jump!'); }
+
+/* ---- a light prediction (confidence off), tied to the grid ------------------------ */
+const POE = predict($('poe'), {
+  id: 'nine-or-eleven', confidence: false,
+  q: 'Starting at 23: which lands on the bigger number, hopping +9 or hopping +11?',
+  options: [{id: 'p9', text: '+9 lands bigger'}, {id: 'p11', text: '+11 lands bigger', right: true}, {id: 'same', text: 'They land the same'}],
+  onLock(){ sound('snap'); },
+});
+function explainPredict(){
+  if (!POE.locked || POE.explained || !S.usedNine || !S.usedEleven) return;
+  POE.explain(`From 23: +9 = +10 then −1, landing on <b>32</b>. +11 = +10 then +1, landing on <b>34</b>. 34 is bigger — adding 11 always lands two more than adding 9, from the same start.`);
+}
+
+/* ---- discoveries and missions ------------------------------------------------------ */
+const MISSIONS = [
+  {id: 'carry',   text: 'Bring in an order and pack a box when a floor overflows.'},
+  {id: 'borrow',  text: 'Load a cart by opening a box when a floor is short.'},
+  {id: 'nine',    text: 'Hop +9 on the grid and watch it go +10, then −1.'},
+  {id: 'eleven',  text: 'Hop +11 on the grid and watch it go +10, then +1.'},
+  {id: 'column',  text: 'Hop +10. Which digit never changes?'},
+  {id: 'hundred', text: 'Hop your way to 100.'},
+];
+function paintMissions(){ $('missions').innerHTML = MISSIONS.map(m => `<li class="${found(m.id) ? 'done' : ''}"><i>${found(m.id) ? '✓' : ''}</i><span>${esc(m.text)}</span></li>`).join(''); }
+
+/* ---- the nursery/grid character card ------------------------------------------------ */
+const NPC = {
+  nursery: {name: "Kishan says", art: `<circle r="26" fill="#e2c08a"/><path d="M-20 -8 Q-20 -28 0 -28 Q20 -28 20 -8 Z" fill="#2f9e5b"/><circle cx="-8" cy="-2" r="2.6" fill="#2a1d12"/><circle cx="8" cy="-2" r="2.6" fill="#2a1d12"/><path d="M-9 8 Q0 15 9 8" stroke="#5a3d20" stroke-width="2" fill="none" stroke-linecap="round"/>`},
+  grid: {name: "Nandini says", art: `<circle r="26" fill="#f6c9a0"/><path d="M-22 -10 Q-22 -30 0 -30 Q22 -30 22 -10 L20 4 Q10 -6 0 -6 Q-10 -6 -20 4 Z" fill="#3a2a1a"/><circle cx="-8" cy="-2" r="2.6" fill="#2a1d12"/><circle cx="8" cy="-2" r="2.6" fill="#2a1d12"/><path d="M-9 8 Q0 14 9 8" stroke="#5a3d20" stroke-width="2" fill="none" stroke-linecap="round"/>`},
+};
+function paintNpc(){ const n = NPC[S.tab]; $('npcArt').innerHTML = n.art; $('npcName').textContent = n.name; }
+function npcSay(line){ $('npcSays').innerHTML = line; say(line.replace(/<[^>]+>/g, '')); }
+
+/* ---- wiring ------------------------------------------------------------------------- */
+const onTap = (id, fn) => { $(id).addEventListener('click', fn); $(id).addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fn(); } }); };
+onTap('tabNursery', () => setTab('nursery'));
+onTap('tabGrid', () => setTab('grid'));
+for (const f of FLOORS) { onTap('plus' + f, () => plusF(f)); onTap('minus' + f, () => minusF(f)); }
+onTap('packO', () => doPack('O')); onTap('packT', () => doPack('T'));
+onTap('openT', () => doOpen('T')); onTap('openH', () => doOpen('H'));
+$('doOrder').addEventListener('click', doOrder);
+$('nextOrder').addEventListener('click', nextOrder);
+for (let n = 1; n <= 100; n++) onTap('tileHit' + n, () => tapTile(n));
+onTap('jp9', () => doJump(9)); onTap('jp10', () => doJump(10)); onTap('jp11', () => doJump(11));
+onTap('jm9', () => doJump(-9)); onTap('jm10', () => doJump(-10)); onTap('jm11', () => doJump(-11));
+$('resetGrid').addEventListener('click', resetGrid);
+
+/* ============================================================================
+   Start
+   ============================================================================ */
+findings($('finds'), [
+  {id: 'carry',   icon: '📦', label: 'Packed a carry',      say: 'You packed ten into a box above. That is a carry!'},
+  {id: 'borrow',  icon: '🔓', label: 'Opened a borrow',     say: 'You opened a box to have enough. That is a borrow!'},
+  {id: 'nine',    icon: '9️⃣', label: '+9 is +10, −1',  say: 'Plus nine is plus ten, then minus one!'},
+  {id: 'eleven',  icon: '🎯', label: '+11 is +10, +1', say: 'Plus eleven is plus ten, then plus one!'},
+  {id: 'column',  icon: '🔽', label: 'Same column, +10',    say: 'Ten more lands you right below, in the very same column!'},
+  {id: 'hundred', icon: '🏁', label: 'Reached 100!',        say: 'You reached one hundred!'},
+], () => { npcSay('Every mission found! You can give and take like a real nursery keeper.'); });
+
+setTab('nursery');
+paintNursery();
+paintGrid();
+paintMissions();
+window.applyFeatures = () => { paintNursery(); paintGrid(); };
+window.PG_STATE = () => ({tab: S.tab, H: S.H, T: S.T, O: S.O, n: valueOf(S), orderIdx: S.orderIdx, pending: S.pending, lastDone: S.lastDone,
+  pos: S.pos, lastMove: S.lastMove, usedNine: S.usedNine, usedEleven: S.usedEleven, usedTen: S.usedTen});
+window.PG_MODEL = {valueOf, split, canPack, canOpen, pack, open, unload, shortOf, takeOut, fits, neat, ORDERS, gridJump, hopPath, sameColumn, colOf, rowOf};
+</script>
+</body>
+</html>

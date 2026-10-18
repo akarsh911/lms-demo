@@ -1,0 +1,738 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>World Population</title>
+<meta name="description" content="Class 12: set the timing of the demographic transition yourself and measure what it does: birth and death rates, doubling time, the pyramid, and how much a late fall in births multiplies a country. Then let people settle an imaginary continent by push and pull, and measure its density and distribution.">
+<link rel="icon" href="../../favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600&family=Inter:wght@400;500;600;700&family=Nunito:wght@500;700;800&family=Newsreader:opsz,wght@6..72,400;6..72,500&family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="../../play.css">
+<style>
+/* Only what this page needs beyond play.css. */
+.pg-stage{min-height:0; background:#fbf7ec}
+.gate{position:absolute; left:0; right:0; top:0; height:60%; display:grid; place-items:center; pointer-events:none}
+.gate span{background:rgba(40,32,16,.84); color:#fff; padding:10px 16px; border-radius:99px; font-weight:600; font-size:14px}
+.seg{display:grid; grid-auto-flow:column; grid-auto-columns:1fr; gap:4px; background:var(--sunk); padding:4px; border-radius:var(--radius-sm)}
+.seg button{border:0; background:transparent; border-radius:7px; min-height:30px; font-weight:600; font-size:12.5px; cursor:pointer; color:var(--ink-2); padding:0 6px; line-height:1.2}
+.seg button[aria-pressed="true"]{background:var(--card); color:var(--ink); box-shadow:var(--shadow)}
+.seg button:disabled{opacity:.5; cursor:default}
+.ctl{grid-template-columns:132px 1fr 62px; margin:2px 0}
+.ctl label{font-size:12.5px; line-height:1.2}
+.ctl output{font-family:var(--font-mono); font-size:12.5px; font-weight:600; min-width:0}
+.sub{font-size:11px; letter-spacing:.07em; text-transform:uppercase; font-weight:700; color:var(--ink-3); margin:12px 0 4px}
+.note{font-size:12.5px; color:var(--ink-3); margin:6px 0 0}
+.tog[aria-pressed="true"]{background:var(--accent-soft); border-color:var(--accent)}
+.clock{font-family:var(--font-mono); font-size:16px; font-weight:600}
+.why p{font-size:13.5px; margin-bottom:.55em}
+.why .mono{font-size:12.5px}
+svg text.m{font-family:var(--font-mono)}
+svg text.serif{font-family:"Newsreader",Georgia,serif}
+#curHit{cursor:ew-resize}
+#mapHit{cursor:pointer}
+</style>
+</head>
+<body>
+<header class="pg-top"></header>
+
+<div class="pg-intro">
+  <h1>World population: the transition, measured</h1>
+  <p>Two models. In the first, a country is counted age by age, every year from 1800 to 2150. You set the law of its
+     demographic transition: when deaths begin to fall, how long births wait before they follow, and where both end up.
+     The birth rate, death rate, doubling time and pyramid are measured from the counts. In the second, people settle an imaginary continent,
+     pushed away from harsh places and pulled towards good ones, and you measure its density and distribution.</p>
+</div>
+
+<main class="pg-main">
+  <section class="pg-stage" id="stageWrap">
+    <svg id="stage" viewBox="0 0 1000 780" role="img" aria-label="Birth and death rates, population and a population pyramid through the demographic transition; or a density map of an imaginary continent"></svg>
+    <div class="gate" id="gate"><span>Make your prediction first →</span></div>
+  </section>
+
+  <aside class="pg-side">
+    <div id="poe"></div>
+
+    <div class="card" id="ctlCard">
+      <div class="seg" role="group" aria-label="Which model">
+        <button id="tabT" aria-pressed="true">The transition</button>
+        <button id="tabD" aria-pressed="false">Where people live</button>
+      </div>
+
+      <div id="grpT">
+        <div class="sub">Set the law of the transition</div>
+        <div class="ctl"><label for="Td">Deaths start falling in</label><input type="range" id="Td" min="1820" max="1950" step="5" value="1880"><output id="TdOut">1880</output></div>
+        <div class="ctl"><label for="lag">Births wait, then follow</label><input type="range" id="lag" min="0" max="80" step="5" value="20"><output id="lagOut">20 y</output></div>
+        <div class="ctl"><label for="tfrEnd">Children per woman, at the end</label><input type="range" id="tfrEnd" min="1" max="3" step="0.1" value="2.1"><output id="tfrEndOut">2.1</output></div>
+        <div class="ctl"><label for="e0End">Life expectancy, at the end</label><input type="range" id="e0End" min="50" max="85" step="1" value="75"><output id="e0EndOut">75 y</output></div>
+        <p class="note">Stage 1 is fixed: 4.5 children per woman, life expectancy 30. Deaths fall over 70 years; births over 60.</p>
+        <div class="row" style="justify-content:space-between; margin-top:10px">
+          <div><div class="kicker" style="margin:0">Year</div><div class="clock" id="clock">1800</div></div>
+          <div class="row" style="gap:6px">
+            <button class="btn sm" id="btnPlay">▶ Play</button>
+            <button class="btn sm" id="btnClear">Clear the runs</button>
+          </div>
+        </div>
+        <p class="note">Drag along the graphs to move through time. Each time you let go of the “births wait” slider, the run is recorded.</p>
+      </div>
+
+      <div id="grpD" hidden>
+        <div class="sub">What draws people (book: geographical and economic factors)</div>
+        <div class="ctl"><label for="wWater">Fresh water</label><input type="range" id="wWater" min="0" max="5" step="0.5" value="2"><output id="wWaterOut">2.0</output></div>
+        <div class="ctl"><label for="wLand">Flat land</label><input type="range" id="wLand" min="0" max="5" step="0.5" value="2"><output id="wLandOut">2.0</output></div>
+        <div class="ctl"><label for="wClim">Comfortable climate</label><input type="range" id="wClim" min="0" max="5" step="0.5" value="2"><output id="wClimOut">2.0</output></div>
+        <div class="ctl"><label for="wSoil">Fertile soil</label><input type="range" id="wSoil" min="0" max="5" step="0.5" value="2"><output id="wSoilOut">2.0</output></div>
+        <div class="ctl"><label for="wMin">Minerals and industry</label><input type="range" id="wMin" min="0" max="5" step="0.5" value="1"><output id="wMinOut">1.0</output></div>
+        <div class="sub">What pushes people away</div>
+        <div class="ctl"><label for="crowd">Crowding</label><input type="range" id="crowd" min="0.2" max="3" step="0.1" value="1"><output id="crowdOut">1.0</output></div>
+        <div class="sub">Show on the map</div>
+        <div class="seg" role="group" aria-label="Map layer">
+          <button id="lyPeople" aria-pressed="true">People</button><button id="lyWater" aria-pressed="false">Water</button><button id="lyLand" aria-pressed="false">Relief</button>
+          <button id="lyClim" aria-pressed="false">Climate</button><button id="lySoil" aria-pressed="false">Soil</button><button id="lyMin" aria-pressed="false">Minerals</button>
+        </div>
+        <p class="note">Click any square on the map to measure its density.</p>
+      </div>
+    </div>
+
+    <div class="card why" id="whyCard">
+      <div class="kicker">What the model measured</div>
+      <div id="why"><p class="note" style="margin:0">The measurements appear once you have made a prediction.</p></div>
+    </div>
+
+    <div class="card"><div class="kicker">To find</div><div id="finds"></div></div>
+  </aside>
+</main>
+
+<script src="../../play.js"></script>
+<script>
+'use strict';
+const {$, esc, clamp, fmt, drag, loop, sound, say, track, toast, predict, findings, discover, found,
+       shareState, sharedState, mount, reduced, svgPoint} = Play;
+mount({thread: 'people', band: 'theorist'});
+
+/* MODEL:start ==================================================================
+   1. THE TRANSITION. A country counted by single years of age, 0 to 100, women
+   and men, one year at a time from 1800 to 2150 (the cohort-component method).
+   Each year every age group loses its deaths, from a life table whose life
+   expectancy is the law's e0 for that year, and moves up one year; the women
+   aged 15–49 have births at the law's fertility. Nothing about the stages is
+   drawn in: the birth rate CBR = B/P × 1000 and death rate CDR = D/P × 1000
+   (the book's formulas) are read from what the counting produced.
+
+   2. WHERE PEOPLE LIVE. An imaginary continent in 100 km squares. Each square
+   has five scores between 0 and 1 (fresh water, flat land, comfortable
+   climate, fertile soil, minerals). Its pull is U = Σ weight × score. Every
+   year a share of people reconsider where to live and choose among squares
+   in proportion to e^(U − c·ln density): pulled by the good places, pushed
+   by crowding. That settles where p^(1+c) ∝ e^U — a law the test checks.
+   ============================================================================ */
+const MAXA = 100, Y0 = 1800, Y1 = 2150, FEM = 100 / 205;
+const hazard = (x, k) => Math.pow(k, 1.8) * 0.045 * Math.exp(-2.2 * x) + k * (0.0015 + 0.00003 * Math.exp(0.1 * x));
+function lifeTableK(k){
+  const l = [1], q = []; let e0 = 0;
+  for (let x = 0; x <= MAXA; x++) {
+    let H = 0; const n = 12;
+    for (let i = 0; i < n; i++) H += hazard(x + (i + .5) / n, k) / n;
+    const qq = x === MAXA ? 1 : 1 - Math.exp(-H);
+    q.push(qq); l.push(l[x] * (1 - qq));
+    e0 += x === MAXA ? l[x] : (l[x] + l[x + 1]) / 2;
+  }
+  return {l, q, e0};
+}
+const KC = new Map();
+function kFor(e0){
+  let lo = 0.01, hi = 200;
+  for (let i = 0; i < 44; i++) { const m = Math.sqrt(lo * hi); if (lifeTableK(m).e0 > e0) lo = m; else hi = m; }
+  return Math.sqrt(lo * hi);
+}
+/* women and men: men die a little faster at every age */
+function tables(e0){
+  const key = Math.round(e0 * 4) / 4;
+  if (KC.has(key)) return KC.get(key);
+  const k = kFor(key), t = {F: lifeTableK(k), M: lifeTableK(k * 1.15), e0: key};
+  KC.set(key, t); return t;
+}
+const W = (() => { const w = []; let s = 0; for (let x = 0; x <= MAXA; x++) { const v = x >= 15 && x <= 49 ? Math.pow(x - 14, 2.5) * Math.exp(-(x - 14) / 4.2) : 0; w.push(v); s += v; } return w.map(v => v / s); })();
+const smooth = (a, b, t) => { const u = clamp((t - a) / (b - a), 0, 1); return u * u * (3 - 2 * u); };
+const STAGE1 = {e0: 30, tfr: 4.5};
+/* the law: life expectancy and fertility in year y */
+function law(L, y){
+  return {e0: STAGE1.e0 + (L.e0End - STAGE1.e0) * smooth(L.Td, L.Td + 70, y),
+          tfr: STAGE1.tfr - (STAGE1.tfr - L.tfrEnd) * smooth(L.Td + L.lag, L.Td + L.lag + 60, y)};
+}
+function stepPop(p, e0, tfr){
+  const T = tables(e0), f = new Float64Array(MAXA + 1), m = new Float64Array(MAXA + 1);
+  let B = 0, D = 0;
+  for (let x = 15; x <= 49; x++) B += p.f[x] * tfr * W[x];
+  for (let x = 0; x < MAXA; x++) {
+    const df = p.f[x] * T.F.q[x], dm = p.m[x] * T.M.q[x];
+    D += df + dm; f[x + 1] += p.f[x] - df; m[x + 1] += p.m[x] - dm;
+  }
+  D += p.f[MAXA] + p.m[MAXA];
+  f[0] = B * FEM; m[0] = B * (1 - FEM);
+  return {p: {f, m}, B, D};
+}
+const total = p => { let s = 0; for (let x = 0; x <= MAXA; x++) s += p.f[x] + p.m[x]; return s; };
+/* a population that has lived under fixed rates so long that its age mix no longer changes */
+function stablePop(e0, tfr, size){
+  let p = {f: new Float64Array(MAXA + 1).fill(1), m: new Float64Array(MAXA + 1).fill(1)};
+  for (let i = 0; i < 300; i++) { p = stepPop(p, e0, tfr).p; const s = size / total(p); for (let x = 0; x <= MAXA; x++) { p.f[x] *= s; p.m[x] *= s; } }
+  return p;
+}
+let STABLE1 = null;
+/* the whole run, 1800–2150, from the law */
+function runLaw(L){
+  if (!STABLE1) STABLE1 = stablePop(STAGE1.e0, STAGE1.tfr, 10);
+  let p = {f: Float64Array.from(STABLE1.f), m: Float64Array.from(STABLE1.m)};
+  const out = [];
+  for (let y = Y0; y <= Y1; y++) {
+    const {e0, tfr} = law(L, y), P = total(p), r = stepPop(p, e0, tfr);
+    out.push({y, P, cbr: 1000 * r.B / P, cdr: 1000 * r.D / P, e0, tfr, pop: p});
+    p = r.p;
+  }
+  return out;
+}
+/* The stages of Fig. 2.2, read from the rates: I high births and high deaths; II deaths have fallen,
+   births still high; III both low. Below III, births under deaths. */
+function stageOf(cbr, cdr){
+  if (cbr < cdr - 1.5) return 4;
+  if (cdr >= 25) return 1;
+  if (cbr >= 25) return 2;
+  return 3;
+}
+/* natural growth r per year; doubling time ln 2 / r; and the doubling time actually counted */
+const growthR = row => (row.cbr - row.cdr) / 1000;
+const doublingTime = r => r > 0 ? Math.LN2 / r : Infinity;
+function countedDoubling(run, i){
+  const P0 = run[i].P;
+  for (let j = i + 1; j < run.length; j++) if (run[j].P >= 2 * P0) { const f = (2 * P0 - run[j - 1].P) / (run[j].P - run[j - 1].P); return j - 1 + f - i; }
+  return null;
+}
+/* how much the transition multiplied the country: from the year deaths start falling to 2150 */
+function multiplier(run, L){ const a = run.find(q => q.y === L.Td), b = run[run.length - 1]; return b.P / a.P; }
+function fitLine(pts){
+  const n = pts.length; if (n < 2) return null;
+  let sx = 0, sy = 0, sxx = 0, sxy = 0;
+  for (const [x, y] of pts) { sx += x; sy += y; sxx += x * x; sxy += x * y; }
+  const d = n * sxx - sx * sx; if (Math.abs(d) < 1e-12) return null;
+  const s = (n * sxy - sx * sy) / d; return {s, a: (sy - s * sx) / n};
+}
+const density = (people, areaKm2) => people / areaKm2;
+
+/* ---- 2. the continent ---------------------------------------------------- */
+const GW = 32, GH = 20, CELL_KM2 = 10000, TOTAL_PEOPLE = 200e6;
+const FACTORS = ['water', 'land', 'clim', 'soil', 'min'];
+const RIVER = [[11.5, 6.5], [13, 8.5], [15.5, 9.5], [17, 11.5], [19.5, 12], [21.5, 13.5], [24, 14], [26.5, 15.5], [28.5, 16.2]];
+function makeContinent(){
+  const cells = [], river = RIVER;
+  const segD = (x, y) => { let d = 1e9; for (let i = 0; i < river.length - 1; i++) { const [ax, ay] = river[i], [bx, by] = river[i + 1]; const dx = bx - ax, dy = by - ay; const t = clamp(((x - ax) * dx + (y - ay) * dy) / (dx * dx + dy * dy), 0, 1); d = Math.min(d, Math.hypot(x - ax - t * dx, y - ay - t * dy)); } return d; };
+  for (let j = 0; j < GH; j++) for (let i = 0; i < GW; i++) {
+    const x = i + .5, y = j + .5;
+    const shape = Math.pow((x - 16) / 15.2, 2) + Math.pow((y - 10) / 9.6, 2) + 0.07 * Math.sin(x * 0.9) + 0.06 * Math.cos(y * 1.3 + x * 0.4);
+    const land = shape < 1 && !(x > 28.2 && y > 16.8);
+    const ridge = (() => { const ax = 3, ay = 2.5, bx = 13, by = 7.5, dx = bx - ax, dy = by - ay; const t = clamp(((x - ax) * dx + (y - ay) * dy) / (dx * dx + dy * dy), 0, 1); return Math.hypot(x - ax - t * dx, y - ay - t * dy); })();
+    const alt = clamp(Math.exp(-ridge * ridge / 3.2) + (Math.hypot(x - 23, y - 5.5) < 3.2 ? 0.42 : 0), 0, 1);
+    const dr = segD(x, y);
+    const isRiver = dr < 0.75;
+    const desert = Math.exp(-(Math.pow(x - 8, 2) + Math.pow(y - 14.5, 2)) / 9);
+    const cold = clamp((5 - y) / 4, 0, 1);
+    const rain = clamp((y - 17.2) / 2, 0, 1) * (x > 10 && x < 24 ? 1 : 0);
+    const harsh = clamp(Math.max(desert * 1.1, cold, rain * 0.8, alt * 0.7), 0, 1);
+    const water = clamp(Math.exp(-dr / 1.4) + (land && shape > 0.8 ? 0.25 : 0), 0, 1) * (1 - 0.8 * desert);
+    const soil = clamp(0.35 + 0.65 * Math.exp(-dr / 2) - 0.35 * desert - 0.3 * alt - 0.2 * cold, 0, 1);
+    const min = Math.hypot(x - 23.5, y - 5.5) < 2.2 ? 1 : 0;
+    cells.push({i, j, land, isRiver, water, land_: 1 - alt, clim: 1 - harsh, soil, min, alt, desert: desert > 0.5, cold: cold > 0.5, rain: rain > 0.5});
+  }
+  return cells.map(c => ({i: c.i, j: c.j, land: c.land, isRiver: c.isRiver && c.land, water: c.water, land2: c.land_, clim: c.clim, soil: c.soil, min: c.min}));
+}
+const score = (c, k) => k === 'land' ? c.land2 : c[k];
+function pull(c, w){ return w.water * c.water + w.land * c.land2 + w.clim * c.clim + w.soil * c.soil + w.min * c.min; }
+/* one year of migration: a share m of everyone chooses again, by e^(U − c ln density) */
+function migrateStep(cells, pop, w, c, m){
+  const L = cells.filter(q => q.land);
+  const P = L.reduce((a, q) => a + pop[q.j * GW + q.i], 0);
+  const mean = P / L.length;
+  let Z = 0; const a = [];
+  for (const q of L) { const k = q.j * GW + q.i; const v = Math.exp(pull(q, w) - c * Math.log(Math.max(pop[k], 1e-9) / mean)); a.push(v); Z += v; }
+  const out = pop.slice(); let moved = 0;
+  L.forEach((q, n) => { const k = q.j * GW + q.i; const nv = (1 - m) * pop[k] + m * P * a[n] / Z; moved += Math.abs(nv - pop[k]) / 2; out[k] = nv; });
+  return {pop: out, moved};
+}
+/* where the migration settles: p ∝ e^(U/(1+c)) */
+function equilibrium(cells, w, c){
+  const L = cells.filter(q => q.land); let Z = 0;
+  const v = L.map(q => { const e = Math.exp(pull(q, w) / (1 + c)); Z += e; return e; });
+  const pop = new Array(GW * GH).fill(0);
+  L.forEach((q, n) => pop[q.j * GW + q.i] = TOTAL_PEOPLE * v[n] / Z);
+  return pop;
+}
+/* the distribution, measured: the share of people living on the most crowded x of the land */
+function lorenz(cells, pop){
+  const d = cells.filter(q => q.land).map(q => pop[q.j * GW + q.i]).sort((a, b) => b - a);
+  const P = d.reduce((a, b) => a + b, 0); const pts = [[0, 0]]; let acc = 0;
+  d.forEach((v, n) => { acc += v; pts.push([(n + 1) / d.length, acc / P]); });
+  const at = f => { const k = f * d.length, lo = Math.floor(k); if (lo >= d.length) return 1; return pts[lo][1] + (k - lo) * (pts[lo + 1][1] - pts[lo][1]); };
+  return {pts, top10: at(0.1), n: d.length};
+}
+/* MODEL:end */
+
+const COL = {birth: '#2f9e5b', death: '#d6453d', pop: '#1d2327', male: '#3f7fd8', fem: '#c2569b', tfr: '#c2569b', e0: '#1f8a70', fit: '#6a3fc2', people: '#b7791f'};
+const INK = '#1d2327', FAINT = '#7c878c', MID = '#4a555b', HAIR = '#e6dfcc', PAPER = '#fffdf7';
+const SEA = '#bcd9ec';
+
+/* ---- state: plain data --------------------------------------------------- */
+const DEF = {Td: 1880, lag: 20, tfrEnd: 2.1, e0End: 75, wWater: 2, wLand: 2, wClim: 2, wSoil: 2, wMin: 1, crowd: 1};
+const LIM = {Td: [1820, 1950], lag: [0, 80], tfrEnd: [1, 3], e0End: [50, 85], wWater: [0, 5], wLand: [0, 5], wClim: [0, 5], wSoil: [0, 5], wMin: [0, 5], crowd: [0.2, 3]};
+const S = {tab: 'T', par: Object.assign({}, DEF), year: 1800, playing: false, locked: false, runs: [], run: null,
+           layer: 'people', pop: null, moved: 0, sel: null, visited: {}};
+const shared = sharedState();
+if (shared) {
+  if (shared.par) for (const k in DEF) { const v = +shared.par[k]; if (isFinite(v)) S.par[k] = clamp(v, LIM[k][0], LIM[k][1]); }
+  if (shared.tab === 'D') S.tab = 'D';
+  if (isFinite(+shared.year)) S.year = clamp(Math.round(+shared.year), Y0, Y1);
+}
+shareState(() => ({tab: S.tab, par: Object.assign({}, S.par), year: S.year}));
+const lawPar = () => ({Td: S.par.Td, lag: S.par.lag, tfrEnd: S.par.tfrEnd, e0End: S.par.e0End});
+const weights = () => ({water: S.par.wWater, land: S.par.wLand, clim: S.par.wClim, soil: S.par.wSoil, min: S.par.wMin});
+const CELLS = makeContinent();
+function recompute(){ S.run = runLaw(lawPar()); }
+function resetMap(){ const n = CELLS.filter(q => q.land).length; S.pop = CELLS.map(q => q.land ? TOTAL_PEOPLE / n : 0); }
+
+/* ============================================================================
+   The stage: built once, then patched.
+   ============================================================================ */
+const svg = $('stage');
+const RG = {x: 70, y: 58, w: 560, h: 250};      // rates graph
+const PG = {x: 70, y: 368, w: 560, h: 170};     // population graph
+const LG = {x: 70, y: 600, w: 560, h: 120};     // the law
+const PY = {x: 670, y: 58, w: 310, h: 300, cx: 825};
+const SG = {x: 700, y: 470, w: 270, h: 230};    // lag study
+const MP = {x: 24, y: 48, cs: 19};              // map: 32 × 19 = 608 wide
+const LZ = {x: 700, y: 64, w: 260, h: 260};     // Lorenz curve
+const xY = y => RG.x + (y - Y0) / (Y1 - Y0) * RG.w;
+
+function build(){
+  let cells = '';
+  CELLS.forEach(q => cells += `<rect id="c${q.j * GW + q.i}" x="${MP.x + q.i * MP.cs}" y="${MP.y + q.j * MP.cs}" width="${MP.cs}" height="${MP.cs}" fill="${q.land ? '#eee' : SEA}" stroke="${q.land ? '#fbf7ec' : SEA}" stroke-width=".6"/>`);
+  const rp = RIVER.map(([x, y]) => [MP.x + x * MP.cs, MP.y + y * MP.cs]);
+  let rd = `M${rp[0][0]} ${rp[0][1]}`;
+  for (let n = 1; n < rp.length; n++) { const [x0, y0] = rp[n - 1], [x1, y1] = rp[n]; rd += ` Q${(x0 + x1) / 2 + (n % 2 ? 6 : -6)} ${(y0 + y1) / 2 + (n % 2 ? -5 : 5)} ${x1} ${y1}`; }
+  const riv = `<path d="${rd}" fill="none" stroke="#fffdf7" stroke-width="5.5" stroke-linecap="round" opacity=".8"/><path d="${rd}" fill="none" stroke="#2f78b7" stroke-width="3" stroke-linecap="round"/>`;
+  svg.innerHTML = `
+  <rect x="0" y="0" width="1000" height="780" fill="#fbf7ec"/>
+  <g id="viewT">
+    <text x="${RG.x - 44}" y="30" font-size="13" font-weight="700" fill="${MID}" letter-spacing=".08em">BIRTH RATE AND DEATH RATE (per 1,000), COUNTED</text>
+    <g id="rgKey" font-size="12"></g>
+    <g id="rgAxes"></g><g id="rgStages"></g>
+    <path id="rgGap" fill="${COL.birth}" opacity=".16"/>
+    <path id="rgB" fill="none" stroke="${COL.birth}" stroke-width="2.6" stroke-linejoin="round"/>
+    <path id="rgD" fill="none" stroke="${COL.death}" stroke-width="2.6" stroke-linejoin="round"/>
+    <text x="${PG.x - 44}" y="${PG.y - 22}" font-size="13" font-weight="700" fill="${MID}" letter-spacing=".08em">POPULATION (millions)</text>
+    <g id="pgAxes"></g><g id="pgDoubles"></g>
+    <path id="pgLine" fill="none" stroke="${COL.pop}" stroke-width="2.4"/>
+    <text x="${LG.x - 44}" y="${LG.y - 22}" font-size="13" font-weight="700" fill="${MID}" letter-spacing=".08em">THE LAW YOU SET</text>
+    <g id="lgAxes"></g>
+    <path id="lgTfr" fill="none" stroke="${COL.tfr}" stroke-width="2.2"/>
+    <path id="lgE0" fill="none" stroke="${COL.e0}" stroke-width="2.2"/>
+    <g id="cursor"><line id="curLine" y1="${RG.y}" y2="${LG.y + LG.h}" stroke="${INK}" stroke-width="1.4"/>
+      <circle id="curB" r="5" fill="${COL.birth}" stroke="#fff" stroke-width="2"/><circle id="curD" r="5" fill="${COL.death}" stroke="#fff" stroke-width="2"/><circle id="curP" r="5" fill="${COL.pop}" stroke="#fff" stroke-width="2"/>
+      <text id="curT" y="${RG.y - 6}" font-size="12" font-weight="700" fill="${INK}" text-anchor="middle" class="m"></text></g>
+    <rect id="curHit" x="${RG.x - 6}" y="${RG.y}" width="${RG.w + 12}" height="${LG.y + LG.h - RG.y}" fill="transparent"/>
+    <text x="${PY.x}" y="30" font-size="13" font-weight="700" fill="${MID}" letter-spacing=".08em">PYRAMID IN <tspan id="pyYear" class="m"></tspan></text>
+    <text x="${PY.cx - 20}" y="${PY.y - 6}" font-size="11.5" font-weight="700" fill="${COL.male}" text-anchor="end">males</text>
+    <text x="${PY.cx + 20}" y="${PY.y - 6}" font-size="11.5" font-weight="700" fill="${COL.fem}">females</text>
+    <g id="pyBars"></g>
+    <text id="pyNote" x="${PY.cx}" y="${PY.y + PY.h + 34}" font-size="12" fill="${MID}" text-anchor="middle"></text>
+    <text x="${SG.x - 30}" y="${SG.y - 44}" font-size="13" font-weight="700" fill="${MID}" letter-spacing=".08em">MEASURE THE LAW</text>
+    <text x="${SG.x - 30}" y="${SG.y - 26}" font-size="11.5" fill="${MID}">ln(growth factor, from when deaths fall to 2150)</text>
+    <g id="sgAxes"></g><g id="sgFit"></g><g id="sgPts"></g>
+    <text id="sgNote" x="${SG.x - 30}" y="${SG.y + SG.h + 40}" font-size="12" fill="${MID}"></text>
+    <text id="sgNote2" x="${SG.x - 30}" y="${SG.y + SG.h + 58}" font-size="12" fill="${MID}"></text>
+    <rect id="veil" x="0" y="40" width="1000" height="740" fill="#fbf7ec" opacity=".95"/>
+    <text id="veilT" x="500" y="330" text-anchor="middle" font-size="15" fill="${FAINT}" font-weight="600">The counted rates appear once you have made a prediction.</text>
+  </g>
+  <g id="viewD" hidden>
+    <text x="${MP.x}" y="30" font-size="13" font-weight="700" fill="${MID}" letter-spacing=".08em" id="mapTitle">AN IMAGINARY CONTINENT, IN 100 km SQUARES</text>
+    <rect x="${MP.x}" y="${MP.y}" width="${GW * MP.cs}" height="${GH * MP.cs}" fill="${SEA}"/>
+    <g id="cells">${cells}</g>
+    <g id="river">${riv}</g>
+    <g id="flows"></g>
+    <g font-size="11" font-weight="700" fill="#3a3024" class="serif" font-style="italic" stroke="#fffdf7" stroke-width="3" paint-order="stroke">
+      <text x="${MP.x + 3.5 * MP.cs}" y="${MP.y + 3.4 * MP.cs}">Mountains</text>
+      <text x="${MP.x + 5.2 * MP.cs}" y="${MP.y + 15 * MP.cs}">Desert</text>
+      <text x="${MP.x + 12.5 * MP.cs}" y="${MP.y + 1.9 * MP.cs}">Cold north</text>
+      <text x="${MP.x + 21 * MP.cs}" y="${MP.y + 3.1 * MP.cs}">Mineral plateau</text>
+      <text x="${MP.x + 16.5 * MP.cs}" y="${MP.y + 10.2 * MP.cs}">River valley</text>
+      <text x="${MP.x + 13.2 * MP.cs}" y="${MP.y + 18.6 * MP.cs}">Rainforest</text>
+    </g>
+    <rect id="selBox" width="${MP.cs}" height="${MP.cs}" fill="none" stroke="${INK}" stroke-width="2.4" visibility="hidden"/>
+    <rect id="mapHit" x="${MP.x}" y="${MP.y}" width="${GW * MP.cs}" height="${GH * MP.cs}" fill="transparent"/>
+    <g id="legend"></g>
+    <text x="${LZ.x - 40}" y="30" font-size="13" font-weight="700" fill="${MID}" letter-spacing=".08em">HOW UNEVEN? (MEASURED)</text>
+    <g id="lzAxes"></g>
+    <path id="lzLine" fill="none" stroke="${COL.people}" stroke-width="2.6"/>
+    <line id="lz10" stroke="${INK}" stroke-dasharray="3 3"/>
+    <circle id="lzDot" r="5" fill="${COL.people}" stroke="#fff" stroke-width="2"/>
+    <text id="lzT" font-size="12.5" font-weight="700" fill="${INK}" class="m"></text>
+    <g id="dNums"></g>
+    <rect id="veilD" x="0" y="40" width="1000" height="740" fill="#fbf7ec" opacity=".95"/>
+    <text id="veilDT" x="500" y="330" text-anchor="middle" font-size="15" fill="${FAINT}" font-weight="600">The map fills once you have made a prediction.</text>
+  </g>`;
+  $('rgKey').innerHTML = `<line x1="${RG.x + 380}" y1="${RG.y - 34}" x2="${RG.x + 400}" y2="${RG.y - 34}" stroke="${COL.birth}" stroke-width="2.6"/><text x="${RG.x + 405}" y="${RG.y - 30}" fill="#20774a">birth rate</text>` +
+    `<line x1="${RG.x + 475}" y1="${RG.y - 34}" x2="${RG.x + 495}" y2="${RG.y - 34}" stroke="${COL.death}" stroke-width="2.6"/><text x="${RG.x + 500}" y="${RG.y - 30}" fill="#b0332c">death rate</text>`;
+}
+
+/* ---- paint: the transition ------------------------------------------------ */
+const niceMax = v => { const p = Math.pow(10, Math.floor(Math.log10(v))); for (const m of [1, 1.5, 2, 2.5, 3, 4, 5, 6, 8, 10]) if (m * p >= v) return m * p; return 10 * p; };
+function xTicks(R){ let a = ''; for (let y = 1800; y <= 2150; y += 50) a += `<text x="${xY(y)}" y="${R.y + R.h + 15}" font-size="10.5" fill="${FAINT}" text-anchor="middle" class="m">${y}</text>`; return a; }
+function paintT(){
+  const run = S.run, L = lawPar(), i = S.year - Y0, row = run[i];
+  const RMAX = 50, yR = v => RG.y + RG.h - clamp(v, 0, RMAX) / RMAX * RG.h;
+  let ax = `<rect x="${RG.x}" y="${RG.y}" width="${RG.w}" height="${RG.h}" fill="${PAPER}" stroke="${HAIR}"/>`;
+  for (const v of [0, 10, 15, 20, 30, 35, 40, 50]) ax += `<line x1="${RG.x}" y1="${yR(v)}" x2="${RG.x + RG.w}" y2="${yR(v)}" stroke="${v === 15 || v === 35 ? '#e2d7bd' : '#f3eee2'}"/><text x="${RG.x - 6}" y="${yR(v) + 4}" font-size="10.5" fill="${v === 15 || v === 35 ? MID : FAINT}" text-anchor="end" class="m">${v}</text>`;
+  $('rgAxes').innerHTML = ax + xTicks(RG);
+  const path = (k, yf, R) => run.map((q, n) => (n ? 'L' : 'M') + xY(q.y).toFixed(1) + ' ' + yf(q[k]).toFixed(1)).join('');
+  $('rgB').setAttribute('d', path('cbr', yR)); $('rgD').setAttribute('d', path('cdr', yR));
+  $('rgGap').setAttribute('d', path('cbr', yR) + run.slice().reverse().map(q => 'L' + xY(q.y).toFixed(1) + ' ' + yR(q.cdr).toFixed(1)).join('') + 'Z');
+  /* stages along the top, from the rates */
+  let st = '', cur = null, from = Y0;
+  const names = ['', 'I', 'II', 'III', 'births < deaths'], fills = ['', '#efe4cf', '#dcefe2', '#e2e9f6', '#f6dcd8'];
+  const flush = to => { if (cur == null) return; const a = xY(from), b = xY(to); st += `<rect x="${a.toFixed(1)}" y="${RG.y + 1}" width="${(b - a).toFixed(1)}" height="17" fill="${fills[cur]}"/>` + (b - a > 30 ? `<text x="${((a + b) / 2).toFixed(1)}" y="${RG.y + 13}" font-size="11" font-weight="700" fill="${MID}" text-anchor="middle" class="serif">${cur < 4 ? 'Stage ' + names[cur] : names[cur]}</text>` : ''); };
+  run.forEach(q => { const s = stageOf(q.cbr, q.cdr); if (s !== cur) { flush(q.y); cur = s; from = q.y; } });
+  flush(Y1);
+  $('rgStages').innerHTML = st;
+  /* population with its doublings */
+  const PM = niceMax(Math.max(...run.map(q => q.P)) * 1.08), yP = v => PG.y + PG.h - v / PM * PG.h;
+  let pa = `<rect x="${PG.x}" y="${PG.y}" width="${PG.w}" height="${PG.h}" fill="${PAPER}" stroke="${HAIR}"/>`;
+  for (const f of [0, .5, 1]) pa += `<text x="${PG.x - 6}" y="${yP(PM * f) + 4}" font-size="10.5" fill="${FAINT}" text-anchor="end" class="m">${fmt(PM * f, PM < 20 ? 1 : 0)}</text>`;
+  $('pgAxes').innerHTML = pa + xTicks(PG);
+  $('pgLine').setAttribute('d', path('P', yP));
+  let dbl = '';
+  for (let k = 1; run[0].P * Math.pow(2, k) < PM; k++) { const v = run[0].P * Math.pow(2, k); dbl += `<line x1="${PG.x}" y1="${yP(v).toFixed(1)}" x2="${PG.x + PG.w}" y2="${yP(v).toFixed(1)}" stroke="#d9cfb6" stroke-dasharray="2 4"/><text x="${PG.x + PG.w - 4}" y="${(yP(v) - 3).toFixed(1)}" font-size="10" fill="${FAINT}" text-anchor="end">×${Math.pow(2, k)}</text>`; }
+  $('pgDoubles').innerHTML = dbl;
+  /* the law */
+  const yT = v => LG.y + LG.h - v / 5 * LG.h, yE = v => LG.y + LG.h - (v - 20) / 70 * LG.h;
+  let la = `<rect x="${LG.x}" y="${LG.y}" width="${LG.w}" height="${LG.h}" fill="${PAPER}" stroke="${HAIR}"/>`;
+  la += `<line x1="${LG.x}" y1="${yT(2.1)}" x2="${LG.x + LG.w}" y2="${yT(2.1)}" stroke="#ecd6e3" stroke-dasharray="3 3"/><text x="${LG.x + 4}" y="${yT(2.1) - 3}" font-size="10" fill="${COL.tfr}">2.1: replacement</text>`;
+  for (const v of [0, 2.5, 5]) la += `<text x="${LG.x - 6}" y="${yT(v) + 4}" font-size="10.5" fill="${COL.tfr}" text-anchor="end" class="m">${v}</text>`;
+  for (const v of [20, 55, 90]) la += `<text x="${LG.x + LG.w + 6}" y="${yE(v) + 4}" font-size="10.5" fill="${COL.e0}" class="m">${v}</text>`;
+  la += `<text x="${LG.x + 150}" y="${LG.y - 8}" font-size="11.5" fill="${COL.tfr}" font-weight="600">children per woman</text><text x="${LG.x + 300}" y="${LG.y - 8}" font-size="11.5" fill="${COL.e0}" font-weight="600">life expectancy (years)</text>`;
+  $('lgAxes').innerHTML = la + xTicks(LG);
+  $('lgTfr').setAttribute('d', path('tfr', yT)); $('lgE0').setAttribute('d', path('e0', yE));
+  /* cursor */
+  const cx = xY(S.year);
+  $('curLine').setAttribute('x1', cx); $('curLine').setAttribute('x2', cx);
+  $('curB').setAttribute('cx', cx); $('curB').setAttribute('cy', yR(row.cbr));
+  $('curD').setAttribute('cx', cx); $('curD').setAttribute('cy', yR(row.cdr));
+  $('curP').setAttribute('cx', cx); $('curP').setAttribute('cy', yP(row.P));
+  $('curT').setAttribute('x', clamp(cx, RG.x + 20, RG.x + RG.w - 20)); $('curT').textContent = S.year;
+  $('clock').textContent = S.year;
+  paintPyramid(row);
+  paintStudy();
+}
+function paintPyramid(row){
+  $('pyYear').textContent = S.year;
+  const p = row.pop, P = row.P, groups = 17, rowH = PY.h / groups, half = PY.w / 2 - 20;
+  const m = new Array(groups).fill(0), f = new Array(groups).fill(0);
+  for (let x = 0; x <= MAXA; x++) { const g = Math.min(16, Math.floor(x / 5)); m[g] += p.m[x]; f[g] += p.f[x]; }
+  const XM = 10, bx = v => clamp(100 * v / P, 0, XM) / XM * half;
+  let s = '';
+  const zone = [[0, 2, '#f8ecd2'], [3, 12, '#e3efe8'], [13, 16, '#ece6f5']];
+  for (const [a0, a1, c] of zone) s += `<rect x="${PY.x}" y="${PY.y + PY.h - (a1 + 1) * rowH}" width="${PY.w}" height="${(a1 - a0 + 1) * rowH}" fill="${c}"/>`;
+  for (let g = 0; g < groups; g++) {
+    const y = PY.y + PY.h - (g + 1) * rowH + 1.2, h = rowH - 2.4;
+    s += `<rect x="${(PY.cx - 20 - bx(m[g])).toFixed(1)}" y="${y.toFixed(1)}" width="${bx(m[g]).toFixed(1)}" height="${h.toFixed(1)}" rx="1.5" fill="${COL.male}"/>`;
+    s += `<rect x="${PY.cx + 20}" y="${y.toFixed(1)}" width="${bx(f[g]).toFixed(1)}" height="${h.toFixed(1)}" rx="1.5" fill="${COL.fem}"/>`;
+    if (g % 2 === 0) s += `<text x="${PY.cx}" y="${(y + h / 2 + 3.5).toFixed(1)}" font-size="9.5" fill="${MID}" text-anchor="middle" class="m">${g === 16 ? '80+' : 5 * g}</text>`;
+  }
+  for (const v of [5, 10]) { s += `<text x="${(PY.cx + 20 + bx(v * P / 100)).toFixed(1)}" y="${PY.y + PY.h + 14}" font-size="10" fill="${FAINT}" text-anchor="middle" class="m">${v}</text><text x="${(PY.cx - 20 - bx(v * P / 100)).toFixed(1)}" y="${PY.y + PY.h + 14}" font-size="10" fill="${FAINT}" text-anchor="middle" class="m">${v}</text>`; }
+  s += `<text x="${PY.cx}" y="${PY.y + PY.h + 14}" font-size="10" fill="${FAINT}" text-anchor="middle">% of all people</text>`;
+  $('pyBars').innerHTML = s;
+  const kids = m[0] + m[1] + m[2] + f[0] + f[1] + f[2], old = m[13] + m[14] + m[15] + m[16] + f[13] + f[14] + f[15] + f[16];
+  $('pyNote').textContent = `under 15: ${fmt(100 * kids / P, 0)}%  ·  65 and over: ${fmt(100 * old / P, 0)}%`;
+}
+function paintStudy(){
+  const pts = S.runs.filter(r => sameLaw(r)).map(r => [r.lag, Math.log(r.M)]);
+  const Ymax = Math.max(2.5, ...pts.map(p => p[1] + 0.3)), yS = v => SG.y + SG.h - v / Ymax * SG.h, xS = v => SG.x + v / 80 * SG.w;
+  let ax = `<rect x="${SG.x}" y="${SG.y}" width="${SG.w}" height="${SG.h}" fill="${PAPER}" stroke="${HAIR}"/>`;
+  for (let v = 0; v <= 80; v += 20) ax += `<text x="${xS(v)}" y="${SG.y + SG.h + 15}" font-size="10.5" fill="${FAINT}" text-anchor="middle" class="m">${v}</text>`;
+  for (let v = 0; v <= Ymax; v += Ymax > 4 ? 1 : 0.5) ax += `<line x1="${SG.x}" y1="${yS(v)}" x2="${SG.x + SG.w}" y2="${yS(v)}" stroke="#f3eee2"/><text x="${SG.x - 6}" y="${yS(v) + 4}" font-size="10.5" fill="${FAINT}" text-anchor="end" class="m">${fmt(v, 1)}</text>`;
+  ax += `<text x="${SG.x + SG.w}" y="${SG.y + SG.h + 28}" font-size="11" fill="${FAINT}" text-anchor="end">years births wait →</text>`;
+  $('sgAxes').innerHTML = ax;
+  $('sgPts').innerHTML = pts.map(p => `<circle cx="${xS(p[0]).toFixed(1)}" cy="${yS(p[1]).toFixed(1)}" r="5" fill="${COL.fit}" stroke="#fff" stroke-width="1.5"/>`).join('');
+  const fit = pts.length >= 3 ? fitLine(pts) : null;
+  $('sgFit').innerHTML = fit ? `<line x1="${xS(0)}" y1="${yS(fit.a)}" x2="${xS(80)}" y2="${yS(fit.a + 80 * fit.s)}" stroke="${COL.fit}" stroke-width="1.6" stroke-dasharray="6 4"/>` : '';
+  $('sgNote').textContent = !pts.length ? 'Let go of the “births wait” slider to record a run.' : fit ? `fitted slope ${fmt(fit.s, 4)} per year of waiting` : `${pts.length} run${pts.length > 1 ? 's' : ''} recorded; three give a fitted slope`;
+  $('sgNote2').textContent = fit ? `= each year of waiting multiplies the end by e^${fmt(fit.s, 3)} = ×${fmt(Math.exp(fit.s), 3)}` : '';
+}
+const sameLaw = r => r.Td === S.par.Td && r.tfrEnd === S.par.tfrEnd && r.e0End === S.par.e0End;
+function peakGrowth(run){ return Math.max(...run.map(growthR)); }
+
+/* ---- paint: the continent ------------------------------------------------- */
+const DCLASS = [[0, 1, '#f4efe2'], [1, 10, '#f3dfb4'], [10, 50, '#e9bd72'], [50, 200, '#cf8d35'], [200, 500, '#a4601c'], [500, Infinity, '#5e3309']];
+const LAYER = {water: ['#eef5fa', '#2f78b7'], land: ['#8a7a66', '#e9f1dc'], clim: ['#d9a07a', '#e3f0d6'], soil: ['#e9e1cf', '#5f8a2c'], min: ['#f1ede4', '#7a5c9e']};
+const mixHex = (a, b, t) => { const pa = [1, 3, 5].map(i => parseInt(a.slice(i, i + 2), 16)), pb = [1, 3, 5].map(i => parseInt(b.slice(i, i + 2), 16)); return '#' + pa.map((v, i) => Math.round(v + (pb[i] - v) * clamp(t, 0, 1)).toString(16).padStart(2, '0')).join(''); };
+function paintD(){
+  const pop = S.pop;
+  CELLS.forEach(q => {
+    if (!q.land) return;
+    const k = q.j * GW + q.i, el = $('c' + k);
+    if (S.layer === 'people') { const d = density(pop[k], CELL_KM2); el.setAttribute('fill', DCLASS.find(c => d >= c[0] && d < c[1])[2]); }
+    else { const [a, b] = LAYER[S.layer]; el.setAttribute('fill', mixHex(a, b, score(q, S.layer))); }
+  });
+  $('mapTitle').textContent = S.layer === 'people' ? 'AN IMAGINARY CONTINENT: PERSONS PER SQ KM' : 'AN IMAGINARY CONTINENT: ' + {water: 'FRESH WATER', land: 'FLAT LAND (pale) AND MOUNTAINS (dark)', clim: 'COMFORTABLE CLIMATE (green) AND HARSH (brown)', soil: 'FERTILE SOIL', min: 'MINERALS'}[S.layer];
+  /* legend */
+  let lg = '';
+  const LY = MP.y + GH * MP.cs + 22;
+  if (S.layer === 'people') DCLASS.forEach((c, n) => { const x = MP.x + n * 100; lg += `<rect x="${x}" y="${LY}" width="16" height="12" fill="${c[2]}" stroke="#d6ccb4"/><text x="${x + 21}" y="${LY + 10}" font-size="11" fill="${MID}">${c[1] === Infinity ? 'over ' + c[0] : c[0] + '–' + c[1]}</text>`; });
+  else { const [a, b] = LAYER[S.layer]; for (let n = 0; n <= 10; n++) lg += `<rect x="${MP.x + n * 16}" y="${LY}" width="16" height="12" fill="${mixHex(a, b, n / 10)}"/>`; lg += `<text x="${MP.x + 184}" y="${LY + 10}" font-size="11" fill="${MID}">score 0 → 1</text>`; }
+  $('legend').innerHTML = lg;
+  /* Lorenz */
+  const lz = lorenz(CELLS, pop), X = v => LZ.x + v * LZ.w, Yv = v => LZ.y + LZ.h - v * LZ.h;
+  let ax = `<rect x="${LZ.x}" y="${LZ.y}" width="${LZ.w}" height="${LZ.h}" fill="${PAPER}" stroke="${HAIR}"/><line x1="${X(0)}" y1="${Yv(0)}" x2="${X(1)}" y2="${Yv(1)}" stroke="#d9cfb6" stroke-dasharray="3 3"/>`;
+  for (const v of [0, .5, 1]) ax += `<text x="${X(v)}" y="${LZ.y + LZ.h + 15}" font-size="10.5" fill="${FAINT}" text-anchor="middle" class="m">${v * 100}%</text><text x="${LZ.x - 6}" y="${Yv(v) + 4}" font-size="10.5" fill="${FAINT}" text-anchor="end" class="m">${v * 100}%</text>`;
+  ax += `<text x="${LZ.x + LZ.w}" y="${LZ.y + LZ.h + 30}" font-size="11" fill="${FAINT}" text-anchor="end">share of the land, most crowded first →</text>`;
+  ax += `<text x="${LZ.x - 40}" y="${LZ.y - 10}" font-size="11" fill="${FAINT}">share of the people</text>`;
+  ax += `<text x="${LZ.x + LZ.w - 6}" y="${Yv(0.08)}" font-size="10.5" fill="${FAINT}" text-anchor="end">if everyone were spread evenly</text>`;
+  $('lzAxes').innerHTML = ax;
+  $('lzLine').setAttribute('d', lz.pts.map((p, n) => (n ? 'L' : 'M') + X(p[0]).toFixed(1) + ' ' + Yv(p[1]).toFixed(1)).join(''));
+  $('lz10').setAttribute('x1', X(.1)); $('lz10').setAttribute('x2', X(.1)); $('lz10').setAttribute('y1', Yv(0)); $('lz10').setAttribute('y2', Yv(lz.top10));
+  $('lzDot').setAttribute('cx', X(.1)); $('lzDot').setAttribute('cy', Yv(lz.top10));
+  $('lzT').setAttribute('x', X(.1) + 10); $('lzT').setAttribute('y', Yv(lz.top10) + 16);
+  $('lzT').textContent = `${fmt(100 * lz.top10, 0)}% of people on 10% of land`;
+  /* numbers */
+  const land = CELLS.filter(q => q.land), dens = land.map(q => density(pop[q.j * GW + q.i], CELL_KM2));
+  const n = (y, t, c = INK, w = 400) => `<text x="${LZ.x - 40}" y="${y}" font-size="12.5" fill="${c}" font-weight="${w}">${t}</text>`;
+  let s = '';
+  const Y = LZ.y + LZ.h + 64;
+  s += n(Y, `average: ${fmt(TOTAL_PEOPLE / 1e6, 0)} million ÷ ${(land.length * CELL_KM2).toLocaleString('en-IN')} sq km`, MID);
+  s += n(Y + 20, `= ${fmt(TOTAL_PEOPLE / (land.length * CELL_KM2), 0)} persons per sq km`, INK, 700);
+  s += n(Y + 46, `most crowded square: ${fmt(Math.max(...dens), 0)} per sq km`, MID);
+  s += n(Y + 66, `squares with under 1 per sq km: ${dens.filter(d => d < 1).length} of ${land.length}`, MID);
+  s += n(Y + 86, S.moved > TOTAL_PEOPLE * 0.0005 ? `moving this year: ${fmt(S.moved / 1e6, 2)} million` : 'settled: hardly anyone moves now', S.moved > TOTAL_PEOPLE * 0.0005 ? '#b0332c' : '#20774a', 600);
+  if (S.sel != null) {
+    const q = CELLS[S.sel], P = pop[S.sel];
+    s += n(Y + 122, 'THE SQUARE YOU CLICKED', MID, 700);
+    if (q.land) {
+      s += n(Y + 142, `${Math.round(P).toLocaleString('en-IN')} people ÷ 10,000 sq km`, INK);
+      s += n(Y + 162, `= ${fmt(density(P, CELL_KM2), 1)} persons per sq km`, INK, 700);
+      const best = FACTORS.map(k => [k, score(q, k)]).sort((a, b) => b[1] - a[1]);
+      const nm = {water: 'water', land: 'flat land', clim: 'climate', soil: 'soil', min: 'minerals'};
+      s += n(Y + 182, `strongest: ${nm[best[0][0]]} ${fmt(best[0][1], 2)}; weakest: ${nm[best[4][0]]} ${fmt(best[4][1], 2)}`, MID);
+    } else s += n(Y + 142, 'That square is sea.', MID);
+  }
+  $('dNums').innerHTML = s;
+  if (S.sel != null) { const q = CELLS[S.sel]; $('selBox').setAttribute('x', MP.x + q.i * MP.cs); $('selBox').setAttribute('y', MP.y + q.j * MP.cs); $('selBox').setAttribute('visibility', 'visible'); }
+}
+/* push and pull, drawn: from the squares losing most people to those gaining most */
+function paintFlows(prev){
+  if (!prev || S.moved < TOTAL_PEOPLE * 0.0005) { $('flows').innerHTML = ''; return; }
+  const d = CELLS.filter(q => q.land).map(q => { const k = q.j * GW + q.i; return {q, dv: S.pop[k] - prev[k]}; }).sort((a, b) => a.dv - b.dv);
+  const lose = d.slice(0, 3), gain = d.slice(-3).reverse();
+  const c = q => [MP.x + (q.i + .5) * MP.cs, MP.y + (q.j + .5) * MP.cs];
+  let s = '';
+  lose.forEach((a, n) => { const [x1, y1] = c(a.q), [x2, y2] = c(gain[n].q); s += `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="#7a2a12" stroke-width="1.8" opacity=".55" stroke-dasharray="5 4"/><circle cx="${x2}" cy="${y2}" r="4" fill="#7a2a12" opacity=".6"/>`; });
+  $('flows').innerHTML = s;
+}
+
+/* ---- what the model measured: words from the numbers --------------------- */
+function paintWhy(){
+  if (!S.locked) return;
+  if (S.tab === 'T') {
+    const run = S.run, i = S.year - Y0, row = run[i], r = growthR(row), td = doublingTime(r), cd = countedDoubling(run, i);
+    const stg = stageOf(row.cbr, row.cdr);
+    const names = ['', 'Stage I: high births and high deaths', 'Stage II: deaths have fallen, births are still high', 'Stage III: births and deaths are both low', 'Births below deaths: the population falls'];
+    let t = `<p><b>${S.year}. ${names[stg]}.</b></p><p class="mono">CBR = B/P × 1000 = ${fmt(row.cbr, 1)}<br>CDR = D/P × 1000 = ${fmt(row.cdr, 1)}<br>natural growth r = ${fmt(100 * r, 2)}% a year</p>`;
+    t += r > 0.0005 ? `<p>At this rate the population would double in ln 2 / r = <b>${fmt(td, 0)} years</b>. ` + (cd != null ? `Counted from the run, it actually doubled in <b>${fmt(cd, 0)} years</b>` + (Math.abs(cd - td) / td > 0.15 ? `, because r ${cd < td ? 'rose' : 'fell'} on the way.` : '.') : 'In this run it never doubles again.') + `</p>`
+      : `<p>The population is ${r < -0.0005 ? 'shrinking' : 'hardly changing'}: births ${r < -0.0005 ? 'no longer replace' : 'just replace'} deaths.</p>`;
+    const M = multiplier(run, lawPar());
+    t += `<p>From ${S.par.Td}, when deaths began to fall, to 2150 the country grows <b>×${fmt(M, 2)}</b>. The fastest natural growth in this run is <b>${fmt(100 * peakGrowth(run), 2)}%</b> a year.</p>`;
+    $('why').innerHTML = t;
+  } else {
+    const lz = lorenz(CELLS, S.pop), c = S.par.crowd;
+    let t = `<p><b>${fmt(100 * lz.top10, 0)}%</b> of the people live on the most crowded <b>10%</b> of the land. The book says that, for the whole world, it is about <b>90%</b> on 10%.</p>`;
+    t += `<p class="mono">pull U = ${fmt(S.par.wWater, 1)}·water + ${fmt(S.par.wLand, 1)}·flat + ${fmt(S.par.wClim, 1)}·climate + ${fmt(S.par.wSoil, 1)}·soil + ${fmt(S.par.wMin, 1)}·minerals<br>settles where people ∝ e^(U / (1 + ${fmt(c, 1)}))</p>`;
+    t += `<p>${c < 0.6 ? 'People put up with crowding, so they pile into the best places.' : c > 2 ? 'Crowding pushes hard, so people spread out even from good places.' : 'Crowding pushes back against the pull of good places.'}</p>`;
+    $('why').innerHTML = t;
+  }
+}
+
+/* ---- findings: reached by the model --------------------------------------- */
+function check(){
+  if (!S.locked) return;
+  if (S.tab === 'T') {
+    const run = S.run, i = S.year - Y0, row = run[i], r = growthR(row);
+    if (stageOf(row.cbr, row.cdr) === 2 && r >= 0.015) discover('gap');
+    if (r >= 0.015 && countedDoubling(run, i) != null) discover('double');
+    if (stageOf(row.cbr, row.cdr) === 4 && S.par.tfrEnd < 2.05) discover('below');
+    const pts = S.runs.filter(sameLaw);
+    const lags = [...new Set(pts.map(p => p.lag))].sort((a, b) => a - b);
+    if (lags.length >= 2) {
+      const lo = pts.find(p => p.lag === lags[0]), hi = pts.find(p => p.lag === lags[lags.length - 1]);
+      if (hi.lag - lo.lag >= 20 && hi.M > lo.M) { discover('lag'); maybeExplain(lo, hi); }
+    }
+    if (lags.length >= 3) discover('fit');
+  } else {
+    const lz = lorenz(CELLS, S.pop), w = weights(), settled = S.moved < TOTAL_PEOPLE * 0.0005;
+    if (!settled) return;
+    if (lz.top10 >= 0.85) discover('ninety');
+    const allZero = FACTORS.every(k => w[k] === 0);
+    if (allZero && lz.top10 <= 0.12) discover('even');
+    const land = CELLS.filter(q => q.land).map(q => ({q, p: S.pop[q.j * GW + q.i]})).sort((a, b) => b.p - a.p).slice(0, 10);
+    if (w.water > 0 && ['land', 'clim', 'soil', 'min'].every(k => w[k] === 0) && land.filter(o => o.q.isRiver).length >= 8) discover('valleys');
+    if (w.min >= Math.max(w.water, w.land, w.clim, w.soil) && w.min > 0 && land[0].q.min === 1) discover('mines');
+  }
+}
+let EXPLAINED = false;
+function maybeExplain(lo, hi){
+  if (EXPLAINED || !POE) return;
+  EXPLAINED = true;
+  POE.explain(`With births waiting <b>${lo.lag} years</b>, the country grew ×${fmt(lo.M, 2)} by 2150; waiting <b>${hi.lag} years</b>, ×${fmt(hi.M, 2)}. ` +
+    `The extra ${hi.lag - lo.lag} years were spent in Stage II, growing at up to ${fmt(100 * peakGrowth(S.run), 1)}% a year, and a smaller family size later never takes those people back: ` +
+    `ln(${fmt(hi.M, 2)}/${fmt(lo.M, 2)}) ÷ ${hi.lag - lo.lag} = <b>${fmt(Math.log(hi.M / lo.M) / (hi.lag - lo.lag), 4)}</b> per year of waiting.`);
+}
+
+/* ============================================================================
+   Controls
+   ============================================================================ */
+build();
+function setTab(t){
+  S.tab = t;
+  $('tabT').setAttribute('aria-pressed', t === 'T'); $('tabD').setAttribute('aria-pressed', t === 'D');
+  $('viewT').toggleAttribute('hidden', t !== 'T'); $('viewD').toggleAttribute('hidden', t !== 'D');
+  $('grpT').toggleAttribute('hidden', t !== 'T'); $('grpD').toggleAttribute('hidden', t !== 'D');
+  svg.setAttribute('viewBox', t === 'T' ? '0 0 1000 780' : '0 0 1000 620');
+  if (t !== 'T') setPlaying(false);
+  paint();
+}
+function paint(){
+  for (const k in DEF) { const el = $(k); if (el) el.value = S.par[k]; }
+  $('TdOut').textContent = S.par.Td; $('lagOut').textContent = S.par.lag + ' y';
+  $('tfrEndOut').textContent = fmt(S.par.tfrEnd, 1); $('e0EndOut').textContent = S.par.e0End + ' y';
+  for (const k of ['wWater', 'wLand', 'wClim', 'wSoil', 'wMin', 'crowd']) $(k + 'Out').textContent = fmt(S.par[k], 1);
+  if (S.tab === 'T') paintT(); else paintD();
+  paintWhy();
+  check();
+}
+let ANIM = null, ACC = 0;
+function setPlaying(on){
+  S.playing = on;
+  $('btnPlay').textContent = on ? '❚❚ Pause' : '▶ Play';
+  if (ANIM) { ANIM.stop(); ANIM = null; }
+  if (on) {
+    if (S.year >= Y1) S.year = Y0;
+    ANIM = loop(dt => {
+      ACC += dt * 40;
+      const jump = reduced() ? 25 : 1;
+      if (ACC < jump) return;
+      const n = Math.floor(ACC / jump) * jump; ACC -= n;
+      S.year = Math.min(Y1, S.year + n);
+      if (S.year >= Y1) setPlaying(false);
+      paint();
+    });
+  }
+}
+/* the continent's people keep moving, a year at a time, while its tab is open */
+let MAPLOOP = null, MACC = 0;
+function mapTick(){
+  const prev = S.pop, r = migrateStep(CELLS, S.pop, weights(), S.par.crowd, 0.45 / (1 + S.par.crowd) + 0.15);
+  S.pop = r.pop; S.moved = r.moved;
+  paintFlows(prev);
+}
+MAPLOOP = loop(dt => {
+  if (S.tab !== 'D' || !S.locked) return;
+  MACC += dt;
+  const every = reduced() ? 0.6 : 0.12;
+  if (MACC < every) return;
+  MACC = 0;
+  const steps = reduced() ? 5 : 1;
+  for (let i = 0; i < steps; i++) mapTick();
+  paintD(); paintWhy(); check();
+});
+function lockControls(lock){
+  for (const id of ['Td', 'lag', 'tfrEnd', 'e0End', 'btnPlay', 'btnClear', 'tabD', 'wWater', 'wLand', 'wClim', 'wSoil', 'wMin', 'crowd']) $(id).disabled = lock;
+  $('curHit').style.pointerEvents = lock ? 'none' : '';
+  $('mapHit').style.pointerEvents = lock ? 'none' : '';
+  $('gate').hidden = !lock;
+}
+function recordRun(){
+  const run = S.run, L = lawPar();
+  const rec = {lag: L.lag, Td: L.Td, tfrEnd: L.tfrEnd, e0End: L.e0End, M: multiplier(run, L)};
+  S.runs = S.runs.filter(r => !(sameLaw(r) && r.lag === rec.lag));
+  S.runs.push(rec);
+  track('recordRun', rec);
+}
+for (const k of ['Td', 'lag', 'tfrEnd', 'e0End']) {
+  $(k).addEventListener('input', e => { S.par[k] = +e.target.value; recompute(); paint(); });
+  $(k).addEventListener('change', () => { if (k === 'lag') { recordRun(); sound('tick'); } paint(); track('law', {k, v: S.par[k]}); });
+}
+for (const k of ['wWater', 'wLand', 'wClim', 'wSoil', 'wMin', 'crowd']) {
+  $(k).addEventListener('input', e => { S.par[k] = +e.target.value; paint(); });
+  $(k).addEventListener('change', () => track('pull', {k, v: S.par[k]}));
+}
+$('btnPlay').addEventListener('click', () => { setPlaying(!S.playing); sound('tick'); });
+$('btnClear').addEventListener('click', () => { S.runs = []; paint(); sound('whoosh'); });
+$('tabT').addEventListener('click', () => { setTab('T'); sound('tick'); });
+$('tabD').addEventListener('click', () => { setTab('D'); sound('tick'); });
+const LY = {lyPeople: 'people', lyWater: 'water', lyLand: 'land', lyClim: 'clim', lySoil: 'soil', lyMin: 'min'};
+for (const id in LY) $(id).addEventListener('click', () => { S.layer = LY[id]; for (const j in LY) $(j).setAttribute('aria-pressed', j === id); paintD(); sound('tick'); });
+drag($('curHit'), svg, {
+  start(p){ if (!S.locked) return false; setPlaying(false); S.year = clamp(Math.round(Y0 + (p.x - RG.x) / RG.w * (Y1 - Y0)), Y0, Y1); paint(); },
+  move(p){ S.year = clamp(Math.round(Y0 + (p.x - RG.x) / RG.w * (Y1 - Y0)), Y0, Y1); paint(); },
+  end(){ track('scrub', {year: S.year}); },
+});
+$('mapHit').addEventListener('click', e => {
+  if (!S.locked) return;
+  const p = svgPoint(svg, e), i = Math.floor((p.x - MP.x) / MP.cs), j = Math.floor((p.y - MP.y) / MP.cs);
+  if (i < 0 || j < 0 || i >= GW || j >= GH) return;
+  S.sel = j * GW + i; sound('pop'); paintD(); track('cell', {i, j});
+});
+
+findings($('finds'), [
+  {id: 'gap',     icon: '⇕', label: 'Stage II: the gap between births and deaths opens', hint: 'Move through the years'},
+  {id: 'double',  icon: '×2', label: 'Doubling time, predicted and counted', hint: 'Stop where growth is fast'},
+  {id: 'lag',     icon: '⏳', label: 'A later fall in births leaves a bigger country', hint: 'Record runs with different waits'},
+  {id: 'fit',     icon: '╱', label: 'The law measured: a straight line in ln(multiplier)', hint: 'Record at least three runs'},
+  {id: 'below',   icon: '▼', label: 'Break it: below replacement, deaths outrun births', hint: 'End with fewer than 2 children'},
+  {id: 'ninety',  icon: '◕', label: 'About 90% of people on 10% of the land', hint: 'Make good places matter more'},
+  {id: 'valleys', icon: '≈', label: 'River valleys are the most crowded', hint: 'Let only water matter'},
+  {id: 'mines',   icon: '⛏', label: 'Minerals pull people too', hint: 'Make industry matter most'},
+  {id: 'even',    icon: '▦', label: 'Break it: if no place is better, people spread evenly', hint: 'Set every pull to 0'},
+], () => toast('All nine found. You have measured both the transition and the map.', 4200));
+
+const POE = predict($('poe'), {
+  id: 'people-lag',
+  q: 'Deaths start falling. Births stay high for 20 years before they fall too. If births waited 40 years instead, what would the country’s population be by 2150, once both rates are low?',
+  options: [
+    {id: 'same',    text: 'About the same: it all evens out once births fall.'},
+    {id: 'bigger',  text: 'Bigger, and it stays bigger: the extra years of fast growth are never undone.', right: true},
+    {id: 'smaller', text: 'Smaller: a longer wait means more deaths overall.'},
+    {id: 'back',    text: 'Bigger for a while, then back to the same size.'},
+  ],
+  onLock(){
+    S.locked = true;
+    lockControls(false);
+    $('veil').remove(); $('veilT').remove(); $('veilD').remove(); $('veilDT').remove();
+    S.par.lag = 20; recompute(); recordRun();
+    say('Now find out. Move the births-wait slider to 40, and let go.');
+    toast('The run with births waiting 20 years is recorded. Now set the wait to 40 and let go.', 4200);
+    paint();
+  },
+});
+recompute();
+resetMap();
+setTab(S.tab);
+lockControls(!POE.locked);
+if (!Play.FF('predict')) S.locked = true;
+paint();
+window.PG_STATE = () => {
+  const run = S.run, row = run[S.year - Y0], lz = lorenz(CELLS, S.pop);
+  return {tab: S.tab, par: Object.assign({}, S.par), year: S.year, playing: S.playing, locked: S.locked,
+    cbr: row.cbr, cdr: row.cdr, P: row.P, stage: stageOf(row.cbr, row.cdr), runs: S.runs.slice(),
+    top10: lz.top10, moved: S.moved, sel: S.sel, M: multiplier(run, lawPar()), peak: peakGrowth(run)};
+};
+window.PG_MODEL = {tables, law, runLaw, stageOf, growthR, doublingTime, countedDoubling, multiplier, fitLine, density,
+  makeContinent, migrateStep, equilibrium, lorenz, pull, CELLS, TOTAL_PEOPLE, GW, GH, stablePop, total, stepPop, W};
+</script>
+</body>
+</html>

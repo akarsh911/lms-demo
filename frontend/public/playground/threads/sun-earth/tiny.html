@@ -1,0 +1,632 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Night And Day</title>
+<meta name="description" content="Class 1–2: spin the Earth with your finger. Make it night for the owl and morning for the rooster.">
+<link rel="icon" href="../../favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600&family=Inter:wght@400;500;600;700&family=Nunito:wght@500;700;800&display=swap">
+<link rel="stylesheet" href="../../play.css">
+<style>
+/* Tiny: the stage is almost the whole page. */
+.pg-main.tiny-main{grid-template-columns:minmax(0,1fr) 250px; padding-top:12px; padding-bottom:12px}
+.tiny-main .pg-stage{align-self:start; min-height:0}
+.pg-intro{display:flex; align-items:baseline; gap:18px; flex-wrap:wrap; padding-top:12px}
+.pg-intro p{margin:0}
+.pg-intro .syl{font-size:14px; font-weight:700; color:var(--ink-3); background:var(--sunk); padding:3px 12px; border-radius:99px}
+#stage{background:#0d1726}
+#earthHit{cursor:grab}
+#earthHit.dragging{cursor:grabbing}
+#sunHit, #wishHit{cursor:pointer}
+svg [tabindex]:focus{outline:none}
+svg [tabindex]:focus-visible{outline:none; stroke:#ffd84a; stroke-width:4; stroke-dasharray:8 8}
+.fade{transition:opacity .45s}
+.hear{width:100%; min-height:76px; font-size:24px; font-family:var(--font-head); border-radius:var(--radius)}
+.hear .ic{font-size:30px}
+.finds-card h3{display:flex; align-items:center; gap:8px}
+.tw{animation:tw 3s ease-in-out infinite}
+@keyframes tw{0%,100%{opacity:.25}50%{opacity:1}}
+@media (max-width:980px){ .pg-main.tiny-main{grid-template-columns:1fr} }
+</style>
+</head>
+<body>
+<header class="pg-top"></header>
+
+<div class="pg-intro">
+  <h1>Night and day</h1>
+  <p>Spin the Earth. Wake the rooster, put the owl to bed.</p>
+  <p class="syl">Class 1–2: the world around us, day and night</p>
+</div>
+
+<main class="pg-main tiny-main">
+  <section class="pg-stage" id="stageWrap">
+    <svg id="stage" viewBox="0 0 1000 640" role="img" aria-label="The Sun, and the Earth seen from above the North Pole with a little house on it. Drag round the Earth to spin it."></svg>
+  </section>
+
+  <aside class="pg-side">
+    <button class="btn primary hear" id="hear" aria-label="Hear what to do"><span class="ic">🔊</span> Hear it</button>
+    <div class="card finds-card"><h3>⭐ Found</h3><div id="finds"></div></div>
+  </aside>
+</main>
+
+<script src="../../play.js"></script>
+<script>
+'use strict';
+const {$, clamp, lerp, loop, tween, sleep, sound, tone, say, track, confetti, findings, discover, found,
+       shareState, sharedState, mount, reduced, drag, mulberry32, ease} = Play;
+mount({thread: 'sun-earth', band: 'tiny'});
+
+/* MODEL:start ==================================================================
+   The Earth seen from above the North Pole: a circle that turns ANTICLOCKWISE.
+   The Sun is far away to the left, so its light arrives from one side; the half of
+   the Earth facing it is day, the other half is night.
+
+   theta  — how far the Earth has turned from the start, radians, anticlockwise +.
+   a      — where the house is, as a screen angle about the Earth's centre (y down,
+            so anticlockwise on screen means a DEcreasing).
+   Everything the page shows about day and night comes from sunlight(a):
+   +1 when the house faces the Sun, −1 when it faces straight away, 0 on the line
+   between day and night (the terminator). Sunrise and sunset are the two crossings
+   of that line; which is which depends on the way the Earth is turning.
+   ============================================================================ */
+const C = {x: 620, y: 330}, R = 180;                       // the Earth
+const SUN = {x: 160, y: 330, r: 100};                     // the Sun (it never moves)
+const SUN_DIR = Math.atan2(SUN.y - C.y, SUN.x - C.x);     // direction of the Sun from the Earth: π
+const A0 = -2.3;                                          // the house's angle at the start (morning)
+const TW = 0.2;                                           // twilight band: |sunlight| < 0.2
+const FRICTION = 1.5;                                     // how fast a flick dies away, per second
+const DRIFT = 0.25;                                       // the Earth's own slow turn once it has been touched, rad/s
+const DIZZY = 7;                                          // rad/s: "very fast"
+const TAU = Math.PI * 2;
+const wrap = a => ((a % TAU) + TAU) % TAU;
+
+function houseAngle(theta){ return A0 - theta; }
+function sunlight(a){ return Math.cos(a - SUN_DIR); }
+/* The dawn side is the side that turns INTO the light as the Earth turns anticlockwise. */
+function side(a){ return Math.sin(a - SUN_DIR) > 0 ? 'dawn' : 'dusk'; }
+function phase(a){ const L = sunlight(a); return L > TW ? 'day' : L < -TW ? 'night' : side(a) === 'dawn' ? 'sunrise' : 'sunset'; }
+/* Clock time at the house: noon facing the Sun, midnight facing away. */
+function localHour(a){ return (12 + wrap(SUN_DIR - a) * 12 / Math.PI) % 24; }
+/* Did one small turn carry the house across the day/night line, and which way? */
+function crossing(a0, a1, dTheta){
+  const l0 = sunlight(a0), l1 = sunlight(a1);
+  if (l0 <= 0 && l1 > 0) return dTheta > 0 ? 'sunrise' : 'backwards';
+  if (l0 > 0 && l1 <= 0) return dTheta > 0 ? 'sunset' : 'backwards';
+  return null;
+}
+/* A flicked Earth slows down by friction towards its own gentle turn. */
+function spinStep(omega, dt, drift){ return drift + (omega - drift) * Math.exp(-FRICTION * dt); }
+/* MODEL:end */
+
+/* ---- state: plain data --------------------------------------------------- */
+const S = {theta: 0, omega: 0, spun: false, dragging: false, dizzy: 0, sunTalk: 0, oops: 0, turned: 0};
+const shared = sharedState();
+if (shared && isFinite(+shared.theta)) S.theta = +shared.theta;
+shareState(() => ({theta: +S.theta.toFixed(3)}));
+
+/* ============================================================================
+   The stage: drawn once, then only patched.
+   ============================================================================ */
+const svg = $('stage');
+const deg = r => r * 180 / Math.PI;
+const f1 = n => n.toFixed(1);
+
+/* Little pieces of art, as strings. Local origin at the feet, "up" is −y. */
+const ART = {
+  house: () => `
+    <rect x="16" y="-96" width="13" height="26" rx="2" fill="#b0453a"/>
+    <rect x="-37" y="-60" width="74" height="60" rx="6" fill="#ffe3b3" stroke="#8a5a2b" stroke-width="3"/>
+    <path d="M-50 -56 L0 -102 L50 -56 Z" fill="#e2553f" stroke="#8f2e22" stroke-width="3" stroke-linejoin="round"/>
+    <path d="M-38 -62 L0 -96 L38 -62" fill="none" stroke="#f2826d" stroke-width="3" stroke-linecap="round"/>
+    <rect x="-9" y="-32" width="18" height="32" rx="8" fill="#8a5a2b"/>
+    <circle cx="4" cy="-15" r="2" fill="#ffd36b"/>
+    <rect x="-31" y="-48" width="18" height="17" rx="3" fill="#bfe6ff" stroke="#8a5a2b" stroke-width="2.5"/>
+    <rect x="13" y="-48" width="18" height="17" rx="3" fill="#bfe6ff" stroke="#8a5a2b" stroke-width="2.5"/>`,
+  tree: () => `
+    <path d="M-7 0 L-5 -58 L5 -58 L7 0 Z" fill="#8a5a2b"/>
+    <path d="M2 -40 L20 -54" stroke="#8a5a2b" stroke-width="6" stroke-linecap="round"/>
+    <circle cx="0" cy="-86" r="34" fill="#3aa35a"/>
+    <circle cx="-18" cy="-74" r="20" fill="#2f9150"/><circle cx="16" cy="-98" r="18" fill="#4bb86b"/>
+    <circle cx="-8" cy="-104" r="4" fill="#e2553f"/><circle cx="22" cy="-78" r="4" fill="#e2553f"/>`,
+  owlBody: () => `
+    <ellipse cx="0" cy="-20" rx="17" ry="21" fill="#9a6a3f" stroke="#5e3d20" stroke-width="2.5"/>
+    <ellipse cx="0" cy="-14" rx="10" ry="12" fill="#e8c9a0"/>
+    <path d="M-15 -36 L-12 -46 L-5 -38 Z M15 -36 L12 -46 L5 -38 Z" fill="#9a6a3f" stroke="#5e3d20" stroke-width="2" stroke-linejoin="round"/>
+    <path d="M-2 -24 L0 -19 L2 -24 Z" fill="#f29a1f"/>`,
+  owlSleep: () => `<path d="M-12 -28 q5 4 10 0 M2 -28 q5 4 10 0" stroke="#3a2a1a" stroke-width="2.5" fill="none" stroke-linecap="round"/>`,
+  owlAwake: () => `<circle cx="-7" cy="-28" r="7.5" fill="#ffd84a" stroke="#5e3d20" stroke-width="2"/><circle cx="7" cy="-28" r="7.5" fill="#ffd84a" stroke="#5e3d20" stroke-width="2"/>
+    <circle cx="-6" cy="-28" r="3.6" fill="#1a1a1a"/><circle cx="8" cy="-28" r="3.6" fill="#1a1a1a"/><circle cx="-5" cy="-29.5" r="1.3" fill="#fff"/><circle cx="9" cy="-29.5" r="1.3" fill="#fff"/>`,
+  rooster: () => `
+    <path d="M-14 -30 C-34 -48 -30 -62 -22 -64 C-24 -52 -18 -44 -10 -38 Z" fill="#2f9e5b"/>
+    <path d="M-12 -32 C-28 -54 -16 -64 -10 -62 C-14 -52 -8 -44 -4 -38 Z" fill="#f29a1f"/>
+    <ellipse cx="0" cy="-24" rx="18" ry="15" fill="#fff4e0" stroke="#8a5a2b" stroke-width="2.5"/>
+    <path d="M-4 -10 L-6 0 M4 -10 L6 0" stroke="#f29a1f" stroke-width="3" stroke-linecap="round"/>
+    <circle cx="10" cy="-44" r="11" fill="#fff4e0" stroke="#8a5a2b" stroke-width="2.5"/>
+    <path d="M4 -54 q3 -8 6 -2 q3 -8 6 0 q4 -5 4 3 Z" fill="#e2453d"/>
+    <path d="M20 -46 L28 -43 L20 -40 Z" fill="#f2b21f"/>
+    <path d="M18 -38 q2 6 -2 7 q-3 -3 2 -7 Z" fill="#e2453d"/>`,
+  child: () => `
+    <path d="M-5 -2 L-5 -16 M5 -2 L5 -16" stroke="#3a2a1a" stroke-width="5" stroke-linecap="round"/>
+    <path d="M-11 -16 Q0 -44 11 -16 Z" fill="#ff7a2f"/>
+    <path d="M-9 -34 L-19 -44 M9 -34 L19 -44" stroke="#f0b98a" stroke-width="5" stroke-linecap="round"/>
+    <circle cx="0" cy="-46" r="12" fill="#f0b98a"/>
+    <path d="M-12 -48 q12 -16 24 0 q-6 -6 -12 -5 q-6 -1 -12 5 Z" fill="#3a2a1a"/>
+    <circle cx="-4.5" cy="-46" r="1.8" fill="#3a2a1a"/><circle cx="4.5" cy="-46" r="1.8" fill="#3a2a1a"/>
+    <path d="M-4 -41 q4 4 8 0" stroke="#3a2a1a" stroke-width="1.8" fill="none" stroke-linecap="round"/>`,
+  hand: () => `
+    <path d="M-6 0 L-6 -34 Q-6 -42 1 -42 Q8 -42 8 -34 L8 -14 L20 -14 Q30 -14 30 -4 L30 16 Q30 30 16 30 L2 30 Q-12 30 -16 18 L-24 4 Q-27 -3 -20 -5 Q-14 -6 -10 2 Z"
+      fill="#fff" stroke="#3a2a1a" stroke-width="3" stroke-linejoin="round"/>`,
+};
+
+function sunFace(){
+  return `
+  <g id="sunEyes">
+    <ellipse cx="-34" cy="-16" rx="15" ry="19" fill="#fff"/><ellipse cx="34" cy="-16" rx="15" ry="19" fill="#fff"/>
+    <circle id="pupL" cx="-34" cy="-16" r="8.5" fill="#3a2410"/><circle id="pupR" cx="34" cy="-16" r="8.5" fill="#3a2410"/>
+    <circle id="glL" cx="-31" cy="-20" r="3" fill="#fff"/><circle id="glR" cx="37" cy="-20" r="3" fill="#fff"/>
+    <rect id="lidL" x="-50" y="-36" width="32" height="0" fill="#ffc53d"/><rect id="lidR" x="18" y="-36" width="32" height="0" fill="#ffc53d"/>
+  </g>
+  <g id="sunDizzy" opacity="0" fill="none" stroke="#7a3d00" stroke-width="3.5" stroke-linecap="round">
+    <path d="M-34 -16 m0 0 a3 3 0 0 1 6 0 a6 6 0 0 1 -12 0 a9 9 0 0 1 18 0 a12 12 0 0 1 -24 0"/>
+    <path d="M34 -16 m0 0 a3 3 0 0 1 6 0 a6 6 0 0 1 -12 0 a9 9 0 0 1 18 0 a12 12 0 0 1 -24 0"/>
+  </g>
+  <ellipse cx="-58" cy="16" rx="13" ry="8" fill="#ff8a5c" opacity=".55"/><ellipse cx="58" cy="16" rx="13" ry="8" fill="#ff8a5c" opacity=".55"/>
+  <path id="sunMouth" d="M-26 22 Q0 48 26 22" fill="none" stroke="#7a3d00" stroke-width="5" stroke-linecap="round"/>
+  <path id="sunMouthOpen" d="M-22 20 Q0 62 22 20 Z" fill="#8a2a12" stroke="#7a3d00" stroke-width="4" stroke-linejoin="round" opacity="0"/>
+  <ellipse id="sunTongue" cx="0" cy="36" rx="9" ry="6" fill="#ff7a8a" opacity="0"/>`;
+}
+
+/* The pictures on the "wish" card: what to try next, shown, not written. */
+const WISH = {
+  night: {line: 'Can you make it night for the owl? Spin the Earth!', art: `
+    <rect x="-56" y="-50" width="112" height="100" rx="18" fill="#1b2560"/>
+    <circle cx="-30" cy="-30" r="2" fill="#fff"/><circle cx="36" cy="-36" r="1.6" fill="#fff"/><circle cx="-40" cy="10" r="1.6" fill="#fff"/><circle cx="42" cy="4" r="2" fill="#fff"/>
+    <path d="M22 -36 a18 18 0 1 0 14 30 a14 14 0 1 1 -14 -30 Z" fill="#ffe27a"/>
+    <g transform="translate(-6 40) scale(1.25)">${ART.owlBody()}${ART.owlAwake()}</g>`},
+  sunset: {line: 'Spin the Earth this way, round and round. Can you make the Sun go down?', art: `
+    <rect x="-56" y="-50" width="112" height="100" rx="18" fill="#ff9d5c"/>
+    <rect x="-56" y="-50" width="112" height="40" rx="18" fill="#9b6ad6" opacity=".6"/>
+    <path d="M-30 18 a30 30 0 0 1 60 0 Z" fill="#ffd84a"/>
+    <rect x="-56" y="18" width="112" height="32" fill="#3aa35a"/><path d="M-56 34 L-56 32 Q0 22 56 32 L56 50 L-56 50 Z" fill="#2f9150"/>
+    <path d="M40 -34 L40 -8 M32 -16 L40 -6 L48 -16" stroke="#fff" stroke-width="5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>`},
+  sunrise: {line: 'Wake up the rooster! Keep spinning till the Sun comes up.', art: `
+    <rect x="-56" y="-50" width="112" height="100" rx="18" fill="#ffc58a"/>
+    <path d="M-30 18 a30 30 0 0 1 60 0 Z" fill="#ffd84a"/>
+    <rect x="-56" y="18" width="112" height="32" fill="#3aa35a"/>
+    <path d="M-40 -8 L-40 -34 M-48 -26 L-40 -36 L-32 -26" stroke="#fff" stroke-width="5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+    <g transform="translate(22 30) scale(.9)">${ART.rooster()}</g>`},
+  day: {line: 'Turn the little house to look right at the Sun. Make it the middle of the day!', art: `
+    <rect x="-56" y="-50" width="112" height="100" rx="18" fill="#8fd8ff"/>
+    <circle cx="0" cy="-22" r="18" fill="#ffd84a"/>
+    <g stroke="#ffd84a" stroke-width="4" stroke-linecap="round"><path d="M0 -48 v-0 M-28 -22 h-8 M28 -22 h8 M-20 -42 l-5 -5 M20 -42 l5 -5"/></g>
+    <rect x="-56" y="24" width="112" height="26" fill="#3aa35a"/>
+    <g transform="translate(-24 26) scale(.8)">${ART.child()}</g><circle cx="10" cy="14" r="7" fill="#e2453d" stroke="#fff" stroke-width="2"/>`},
+  dizzy: {line: 'Now spin the Earth really, really fast! Whee!', art: `
+    <rect x="-56" y="-50" width="112" height="100" rx="18" fill="#e9e2ff"/>
+    <circle cx="0" cy="0" r="30" fill="#2f7de1"/><path d="M-12 -18 q14 -6 20 6 q-10 10 -20 -6 Z M4 10 q12 0 14 10 q-14 4 -14 -10 Z" fill="#3aa35a"/>
+    <g fill="none" stroke="#7b5cd6" stroke-width="4" stroke-linecap="round"><path d="M-40 -10 A42 42 0 0 1 -6 -41"/><path d="M40 10 A42 42 0 0 1 6 41"/></g>
+    <path d="M-8 -45 L-2 -40 L-9 -35" stroke="#7b5cd6" stroke-width="4" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M8 45 L2 40 L9 35" stroke="#7b5cd6" stroke-width="4" fill="none" stroke-linecap="round" stroke-linejoin="round"/>`},
+  sunNever: {line: 'Tap the Sun. Say hello!', art: `
+    <rect x="-56" y="-50" width="112" height="100" rx="18" fill="#fff1c9"/>
+    <circle cx="-8" cy="-8" r="30" fill="#ffc53d"/><circle cx="-18" cy="-14" r="4" fill="#3a2410"/><circle cx="2" cy="-14" r="4" fill="#3a2410"/>
+    <path d="M-20 2 q12 10 24 0" stroke="#7a3d00" stroke-width="3.5" fill="none" stroke-linecap="round"/>
+    <g transform="translate(30 26) rotate(-30) scale(.6)">${ART.hand()}</g>`},
+};
+const GOALS = ['night', 'sunrise', 'day', 'sunset', 'dizzy', 'sunNever'];
+
+function build(){
+  const rnd = mulberry32(11);
+  let stars = '';
+  for (let i = 0; i < 110; i++) {
+    const x = rnd() * 1000, y = rnd() * 640, r = rnd() * 1.6 + .4;
+    if (Math.hypot(x - C.x, y - C.y) < R + 6) continue;
+    stars += `<circle cx="${f1(x)}" cy="${f1(y)}" r="${r.toFixed(2)}" fill="#fff" opacity="${(rnd() * .6 + .25).toFixed(2)}"${i % 7 === 0 ? ` class="tw" style="animation-delay:${(rnd() * 3).toFixed(2)}s"` : ''}/>`;
+  }
+  /* continents: soft blobs, one of them under the house */
+  const blob = (cx, cy, r0, seed) => {
+    const rr = mulberry32(seed); let d = '';
+    const n = 14, pts = [];
+    for (let i = 0; i < n; i++) { const t = i / n * TAU, r = r0 * (0.72 + rr() * 0.5); pts.push([cx + r * Math.cos(t), cy + r * Math.sin(t)]); }
+    for (let i = 0; i < n; i++) {
+      const p = pts[i], q = pts[(i + 1) % n], m = [(p[0] + q[0]) / 2, (p[1] + q[1]) / 2];
+      d += (i ? '' : `M${f1((pts[n - 1][0] + p[0]) / 2)} ${f1((pts[n - 1][1] + p[1]) / 2)}`) + `Q${f1(p[0])} ${f1(p[1])} ${f1(m[0])} ${f1(m[1])}`;
+    }
+    return d + 'Z';
+  };
+  const at = (ang, r) => [C.x + r * Math.cos(ang), C.y + r * Math.sin(ang)];
+  const home = at(A0, 150), c2 = at(A0 + 2.2, 110), c3 = at(A0 - 2.0, 120), c4 = at(A0 + 3.6, 70);
+  const lands = [blob(home[0], home[1], 72, 3), blob(c2[0], c2[1], 58, 5), blob(c3[0], c3[1], 64, 9), blob(c4[0], c4[1], 34, 13)];
+  /* the ground strip the little scene stands on, in the "house at the top" frame */
+  const arc = (r, a0, a1) => { const p0 = at(-Math.PI / 2 + a0, r), p1 = at(-Math.PI / 2 + a1, r); return `M${f1(p0[0])} ${f1(p0[1])} A${r} ${r} 0 0 1 ${f1(p1[0])} ${f1(p1[1])}`; };
+  const place = (dA, inner) => `<g transform="rotate(${deg(dA).toFixed(2)} ${C.x} ${C.y}) translate(${C.x} ${C.y - R})">${inner}</g>`;
+
+  svg.innerHTML = `
+  <defs>
+    <radialGradient id="gSun" cx="42%" cy="38%"><stop offset="0" stop-color="#fff6c8"/><stop offset=".55" stop-color="#ffc53d"/><stop offset="1" stop-color="#f28a12"/></radialGradient>
+    <radialGradient id="gSunGlow"><stop offset=".45" stop-color="#ffcf5a" stop-opacity=".55"/><stop offset="1" stop-color="#ffcf5a" stop-opacity="0"/></radialGradient>
+    <radialGradient id="gSea" cx="42%" cy="40%"><stop offset="0" stop-color="#6fc1ff"/><stop offset=".7" stop-color="#2471c9"/><stop offset="1" stop-color="#1a5aa8"/></radialGradient>
+    <linearGradient id="gNight" gradientUnits="userSpaceOnUse" x1="${C.x - R}" y1="0" x2="${C.x + R}" y2="0">
+      <stop offset="0" stop-color="#050b1e" stop-opacity="0"/><stop offset=".45" stop-color="#050b1e" stop-opacity="0"/>
+      <stop offset=".49" stop-color="#ff9a3c" stop-opacity=".45"/><stop offset=".53" stop-color="#3a1f4a" stop-opacity=".55"/>
+      <stop offset=".58" stop-color="#050b1e" stop-opacity=".72"/><stop offset="1" stop-color="#050b1e" stop-opacity=".78"/></linearGradient>
+    <radialGradient id="gBubble"><stop id="bub0" offset="0" stop-color="#8fd8ff" stop-opacity=".95"/><stop id="bub1" offset=".72" stop-color="#8fd8ff" stop-opacity=".75"/><stop id="bub2" offset="1" stop-color="#8fd8ff" stop-opacity="0"/></radialGradient>
+    <radialGradient id="gWin"><stop offset="0" stop-color="#ffe27a" stop-opacity=".9"/><stop offset="1" stop-color="#ffe27a" stop-opacity="0"/></radialGradient>
+    <linearGradient id="gShoot" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="-90" y2="-30"><stop offset="0" stop-color="#fff"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient>
+    <clipPath id="clipEarth"><circle cx="${C.x}" cy="${C.y}" r="${R}"/></clipPath>
+    <filter id="soft" x="-20%" y="-20%" width="140%" height="140%"><feDropShadow dx="0" dy="4" stdDeviation="5" flood-color="#000" flood-opacity=".35"/></filter>
+  </defs>
+  <rect width="1000" height="640" fill="#0d1726"/>
+  <g>${stars}</g>
+  <g id="shoot" opacity="0"><line x1="0" y1="0" x2="-90" y2="-30" stroke="url(#gShoot)" stroke-width="3" stroke-linecap="round"/><circle r="2.6" fill="#fff"/></g>
+
+  <!-- sunlight streaming to the right -->
+  <g opacity=".10" fill="#ffd36b">
+    <path d="M${SUN.x} ${SUN.y - 70} L1000 ${C.y - R - 40} L1000 ${C.y - R + 10} L${SUN.x} ${SUN.y - 30} Z"/>
+    <path d="M${SUN.x} ${SUN.y + 30} L1000 ${C.y + R - 10} L1000 ${C.y + R + 40} L${SUN.x} ${SUN.y + 70} Z"/>
+  </g>
+
+  <!-- the Sun: a character. It never moves; its rays only shimmer. -->
+  <g id="sunJuice">
+    <circle cx="${SUN.x}" cy="${SUN.y}" r="190" fill="url(#gSunGlow)"/>
+    <g id="rays" fill="#ffb42a">${Array.from({length: 12}, (_, i) => {
+      const t = i / 12 * TAU, t1 = t - 0.11, t2 = t + 0.11, r0 = 104, r1 = i % 2 ? 140 : 152;
+      return `<path d="M${f1(SUN.x + r0 * Math.cos(t1))} ${f1(SUN.y + r0 * Math.sin(t1))} L${f1(SUN.x + r1 * Math.cos(t))} ${f1(SUN.y + r1 * Math.sin(t))} L${f1(SUN.x + r0 * Math.cos(t2))} ${f1(SUN.y + r0 * Math.sin(t2))} Z" stroke="#ffb42a" stroke-width="8" stroke-linejoin="round"/>`; }).join('')}</g>
+    <circle cx="${SUN.x}" cy="${SUN.y}" r="${SUN.r}" fill="url(#gSun)"/>
+    <g transform="translate(${SUN.x} ${SUN.y})">${sunFace()}</g>
+  </g>
+  <g id="sunBubble" opacity="0" class="fade" pointer-events="none">
+    <rect x="22" y="40" width="300" height="104" rx="30" fill="#fff" filter="url(#soft)"/>
+    <path d="M120 142 L150 176 L170 142 Z" fill="#fff"/>
+    <text x="172" y="84" text-anchor="middle" font-family="Fredoka, Nunito, sans-serif" font-size="30" font-weight="600" fill="#3a2a1a">I stay still!</text>
+    <text x="172" y="122" text-anchor="middle" font-family="Fredoka, Nunito, sans-serif" font-size="26" font-weight="500" fill="#b5620a">The Earth turns!</text>
+  </g>
+
+  <!-- the house's own patch of sky: it turns with the house and takes its colour from sunlight(a) -->
+  <g id="skyG">
+    <circle cx="${C.x}" cy="${C.y - R}" r="128" fill="url(#gBubble)"/>
+    <g id="skyStars" opacity="0">${Array.from({length: 16}, (_, i) => { const t = -Math.PI * (0.1 + 0.8 * ((i * 37) % 16) / 15), r = 70 + (i * 23) % 44;
+      return `<circle cx="${f1(C.x + r * Math.cos(t))}" cy="${f1(C.y - R + r * Math.sin(t))}" r="${i % 3 ? 1.6 : 2.4}" fill="#fff"/>`; }).join('')}
+      <path transform="translate(${C.x + 70} ${C.y - R - 84})" d="M8 -14 a15 15 0 1 0 12 25 a12 12 0 1 1 -12 -25 Z" fill="#ffe27a"/></g>
+  </g>
+  <g id="miniSun"><circle r="24" fill="#ffd84a" opacity=".35"/><circle r="15" fill="#ffd84a" stroke="#ffb42a" stroke-width="3"/></g>
+
+  <!-- the Earth, seen from above the North Pole -->
+  <circle cx="${C.x}" cy="${C.y}" r="${R + 10}" fill="#6fc1ff" opacity=".18"/>
+  <g clip-path="url(#clipEarth)">
+    <circle cx="${C.x}" cy="${C.y}" r="${R}" fill="url(#gSea)"/>
+    <g id="spin">
+      ${lands.map((d, i) => `<path d="${d}" fill="${i ? '#4fb46c' : '#57bf70'}" stroke="#3a9a58" stroke-width="3"/>`).join('')}
+      <path d="${blob(C.x, C.y, 26, 21)}" fill="#f4fbff" stroke="#d6ecf7" stroke-width="2"/>
+      <circle cx="${C.x}" cy="${C.y}" r="4.5" fill="#fff" stroke="#9cc8e6" stroke-width="1.5"/>
+    </g>
+    <rect x="${C.x - R}" y="${C.y - R}" width="${2 * R}" height="${2 * R}" fill="url(#gNight)"/>
+  </g>
+  <circle cx="${C.x}" cy="${C.y}" r="${R}" fill="none" stroke="#bfe3ff" stroke-width="3" opacity=".5"/>
+
+  <!-- the little world on top of the Earth: it all turns together -->
+  <g id="onEarth">
+    <path d="${arc(R - 3, -0.62, 0.66)}" fill="none" stroke="#3aa35a" stroke-width="14" stroke-linecap="round"/>
+    <g id="objDim">
+      ${place(-0.42, ART.tree() + `<g transform="translate(-2 -60)">${ART.owlBody()}<g id="owlSleep">${ART.owlSleep()}</g></g>`)}
+      ${place(0, ART.house())}
+      ${place(0.53, `<g id="rooster">${ART.rooster()}<g id="roosterShut"><path d="M6 -46 q4 3 8 0" stroke="#3a2a1a" stroke-width="2.2" fill="none" stroke-linecap="round"/></g><circle id="roosterEye" cx="12" cy="-46" r="2.2" fill="#3a2a1a"/></g>`)}
+      ${place(0.32, `<g id="childOut" class="fade"><g id="childBob">${ART.child()}</g><circle id="ball" cx="22" cy="-10" r="8" fill="#e2453d" stroke="#fff" stroke-width="2.5"/></g>`)}
+    </g>
+    <g id="objGlow">
+      ${place(0, `<g id="winLit" class="fade" opacity="0"><circle cx="-22" cy="-40" r="20" fill="url(#gWin)"/><circle cx="22" cy="-40" r="20" fill="url(#gWin)"/>
+        <rect x="-31" y="-48" width="18" height="17" rx="3" fill="#ffd75a" stroke="#8a5a2b" stroke-width="2.5"/><rect x="13" y="-48" width="18" height="17" rx="3" fill="#ffd75a" stroke="#8a5a2b" stroke-width="2.5"/>
+        <path d="M-27 -36 q5 -8 10 0 Z" fill="#f0b98a"/><path d="M-28 -38 q6 -9 12 -1 l-3 -6 q-4 -4 -9 7 Z" fill="#4a6fd6"/></g>
+        <g id="zzz" class="fade" opacity="0" font-family="Fredoka, Nunito, sans-serif" font-weight="600" fill="#fff">
+          <text id="z1" x="-44" y="-106" font-size="22">z</text><text id="z2" x="-58" y="-128" font-size="28">Z</text><text id="z3" x="-40" y="-150" font-size="18">z</text></g>`)}
+      ${place(-0.42, `<g id="owlEyes" class="fade" opacity="0" transform="translate(-2 -60)">${ART.owlAwake()}</g>`)}
+      ${place(0.53, `<g id="crow" opacity="0"><path d="M34 -52 q10 -6 18 -2 M34 -44 q12 0 20 4 M32 -60 q8 -12 16 -12" stroke="#ffd84a" stroke-width="3.5" fill="none" stroke-linecap="round"/></g>`)}
+      ${place(0, `<g id="dizzyStars" opacity="0">${[0, 1, 2, 3, 4].map(i => `<path d="M0 -8 L2.4 -2.4 L8 -2 L3.6 1.6 L5 7.6 L0 4.4 L-5 7.6 L-3.6 1.6 L-8 -2 L-2.4 -2.4 Z" fill="#ffe27a" data-i="${i}"/>`).join('')}</g>`)}
+    </g>
+  </g>
+
+  <!-- the "try this" card: a picture of what to do next; tap it to hear it -->
+  <g id="wish" filter="url(#soft)">
+    <rect x="852" y="14" width="136" height="150" rx="26" fill="#fff"/>
+    <g id="wishArt" transform="translate(920 78)"></g>
+    <g transform="translate(962 142)"><circle r="15" fill="#ff7a2f"/><path d="M-7 -4 h4 l6 -5 v18 l-6 -5 h-4 Z" fill="#fff"/><path d="M6 -5 q4 5 0 10" stroke="#fff" stroke-width="2" fill="none" stroke-linecap="round"/></g>
+    <circle id="wishDone" cx="880" cy="142" r="0" fill="#2f9e5b"/>
+  </g>
+
+  <!-- the hint hand: shows the spin gesture until the Earth has been spun once -->
+  <g id="hint" pointer-events="none">
+    <path d="M${f1(C.x + 235 * Math.cos(0.55))} ${f1(C.y + 235 * Math.sin(0.55))} A235 235 0 0 0 ${f1(C.x + 235 * Math.cos(-0.55))} ${f1(C.y + 235 * Math.sin(-0.55))}"
+      fill="none" stroke="#fff" stroke-width="7" stroke-linecap="round" stroke-dasharray="2 16" opacity=".85"/>
+    <path transform="translate(${f1(C.x + 235 * Math.cos(-0.55))} ${f1(C.y + 235 * Math.sin(-0.55))}) rotate(${deg(Math.PI - 0.55).toFixed(1)})" d="M-14 -2 L0 16 L14 -2" fill="none" stroke="#fff" stroke-width="7" stroke-linecap="round" stroke-linejoin="round" opacity=".85"/>
+    <g id="hintHand"><g transform="scale(1.3)">${ART.hand()}</g></g>
+  </g>
+
+  <!-- hit targets: they never move -->
+  <circle id="sunHit" cx="${SUN.x}" cy="${SUN.y}" r="125" fill="transparent" role="button" tabindex="0" aria-label="The Sun. Tap it."/>
+  <circle id="earthHit" cx="${C.x}" cy="${C.y}" r="282" fill="transparent" tabindex="0" role="slider" aria-label="The Earth. Drag round it to spin it. Arrow keys also spin it."/>
+  <rect id="wishHit" x="852" y="14" width="136" height="150" rx="26" fill="transparent" role="button" tabindex="0" aria-label="What to try next. Tap to hear it."/>
+  `;
+}
+
+build();
+
+/* ---- juice helpers --------------------------------------------------------- */
+function squash(el, cx, cy, amt = 0.18, ms = 520){
+  return tween(0, 1, ms, t => {
+    const k = Math.sin(t * Math.PI * 3) * (1 - t) * amt;
+    el.setAttribute('transform', `translate(${cx} ${cy}) scale(${(1 + k).toFixed(3)} ${(1 - k).toFixed(3)}) translate(${-cx} ${-cy})`);
+  }, x => x).then(() => el.removeAttribute('transform'));
+}
+function clientOf(x, y){
+  const m = svg.getScreenCTM(); if (!m) return {x: innerWidth / 2, y: innerHeight / 2};
+  const p = svg.createSVGPoint(); p.x = x; p.y = y; const q = p.matrixTransform(m);
+  return {x: q.x, y: q.y};
+}
+let lastSnd = 0;
+const sfx = (fn, gap = 220) => { const t = performance.now(); if (t - lastSnd < gap) return; lastSnd = t; fn(); };
+const crow = () => { tone(620, 0.12, 'square', 0.035, 0, 820); tone(820, 0.13, 'square', 0.035, 0.13, 900); tone(950, 0.5, 'sawtooth', 0.03, 0.28, 640); };
+const hoot = () => { tone(430, 0.28, 'sine', 0.14, 0, 390); tone(410, 0.42, 'sine', 0.14, 0.42, 360); };
+
+/* ---- paint: everything that depends on the state -------------------------- */
+const mixHex = (a, b, t) => {
+  const pa = [1, 3, 5].map(i => parseInt(a.slice(i, i + 2), 16)), pb = [1, 3, 5].map(i => parseInt(b.slice(i, i + 2), 16));
+  return '#' + pa.map((v, i) => Math.round(v + (pb[i] - v) * clamp(t, 0, 1)).toString(16).padStart(2, '0')).join('');
+};
+function skyColour(L){
+  if (L >= 0.3) return '#8fd8ff';
+  if (L >= 0) return mixHex('#ff9f6b', '#8fd8ff', L / 0.3);
+  if (L >= -0.3) return mixHex('#27306e', '#ff9f6b', (L + 0.3) / 0.3);
+  return '#27306e';
+}
+let T = 0;
+function paint(){
+  const a = houseAngle(S.theta), L = sunlight(a);
+  const rot = `rotate(${deg(a + Math.PI / 2).toFixed(2)} ${C.x} ${C.y})`;
+  $('onEarth').setAttribute('transform', rot);
+  $('skyG').setAttribute('transform', rot);
+  $('spin').setAttribute('transform', `rotate(${deg(-S.theta).toFixed(2)} ${C.x} ${C.y})`);
+  const col = skyColour(L);
+  for (const id of ['bub0', 'bub1', 'bub2']) $(id).setAttribute('stop-color', col);
+  $('skyStars').setAttribute('opacity', clamp((-L - 0.1) / 0.3, 0, 1).toFixed(2));
+  /* the Sun as the house sees it: it really is in that direction, and the Earth hides it at night */
+  const hx = C.x + R * Math.cos(a), hy = C.y + R * Math.sin(a);
+  $('miniSun').setAttribute('transform', `translate(${f1(hx + 100 * Math.cos(SUN_DIR))} ${f1(hy + 100 * Math.sin(SUN_DIR))})`);
+  /* who is awake */
+  $('objDim').style.filter = `brightness(${lerp(0.5, 1, clamp((L + 0.3) / 0.6, 0, 1)).toFixed(2)})`;
+  $('childOut').setAttribute('opacity', L > -0.05 ? 1 : 0);
+  $('winLit').setAttribute('opacity', L < 0.08 ? 1 : 0);
+  $('zzz').setAttribute('opacity', L < -0.15 ? 1 : 0);
+  const owlUp = L < 0.08;
+  $('owlEyes').setAttribute('opacity', owlUp ? 1 : 0);
+  $('owlSleep').setAttribute('opacity', owlUp ? 0 : 1);
+  const roosterUp = L > -0.08;
+  $('roosterEye').setAttribute('opacity', roosterUp ? 1 : 0);
+  $('roosterShut').setAttribute('opacity', roosterUp ? 0 : 1);
+  /* the Sun watches the house */
+  const dx = hx - SUN.x, dy = hy - SUN.y, dl = Math.hypot(dx, dy) || 1;
+  const px = dx / dl * 6, py = dy / dl * 7;
+  $('pupL').setAttribute('cx', -34 + px); $('pupL').setAttribute('cy', -16 + py);
+  $('pupR').setAttribute('cx', 34 + px); $('pupR').setAttribute('cy', -16 + py);
+  $('glL').setAttribute('cx', -31 + px); $('glL').setAttribute('cy', -20 + py);
+  $('glR').setAttribute('cx', 37 + px); $('glR').setAttribute('cy', -20 + py);
+  const dz = S.dizzy > 0;
+  $('sunEyes').setAttribute('opacity', dz ? 0 : 1);
+  $('sunDizzy').setAttribute('opacity', dz ? 1 : 0);
+  const talk = S.sunTalk > 0 || dz;
+  $('sunMouth').setAttribute('opacity', talk ? 0 : 1);
+  $('sunMouthOpen').setAttribute('opacity', talk ? 1 : 0);
+  $('sunTongue').setAttribute('opacity', dz ? 1 : 0);
+  $('sunMouth').setAttribute('d', S.oops > 0 ? 'M-22 32 Q0 18 22 32' : 'M-26 22 Q0 48 26 22');
+  $('dizzyStars').setAttribute('opacity', dz ? 1 : 0);
+  $('earthHit').setAttribute('aria-valuetext', phaseWords(phase(a)));
+}
+const phaseWords = p => ({day: 'Daytime at the house', night: 'Night-time at the house', sunrise: 'Sunrise at the house', sunset: 'Sunset at the house'})[p];
+
+/* little life: blinking, the ball, the zzz, the rays — skipped under reduced motion */
+let blinkT = 2;
+function idle(dt){
+  T += dt;
+  if (reduced()) return;
+  $('rays').setAttribute('transform', `translate(${SUN.x} ${SUN.y}) scale(${(1 + 0.035 * Math.sin(T * 2.4)).toFixed(3)}) translate(${-SUN.x} ${-SUN.y})`);
+  blinkT -= dt;
+  const lid = blinkT < 0.14 && blinkT > 0 ? 38 : 0;
+  $('lidL').setAttribute('height', lid); $('lidR').setAttribute('height', lid);
+  if (blinkT < 0) blinkT = 2 + Math.random() * 3;
+  const hop = Math.abs(Math.sin(T * 4));
+  $('ball').setAttribute('cy', (-10 - hop * 26).toFixed(1));
+  $('childBob').setAttribute('transform', `translate(0 ${(-hop * 4).toFixed(1)})`);
+  ['z1', 'z2', 'z3'].forEach((id, i) => $(id).setAttribute('transform', `translate(0 ${(-6 * Math.sin(T * 1.6 + i)).toFixed(1)})`));
+  $$('#dizzyStars path').forEach((p, i) => {
+    const t = T * 5 + i / 5 * TAU;
+    p.setAttribute('transform', `translate(${(34 * Math.cos(t)).toFixed(1)} ${(-128 + 10 * Math.sin(t)).toFixed(1)})`);
+  });
+  /* now and then, a shooting star */
+  const sk = (T % 9) / 1.1;
+  if (sk < 1) { $('shoot').setAttribute('opacity', (Math.sin(sk * Math.PI)).toFixed(2)); $('shoot').setAttribute('transform', `translate(${f1(360 + sk * 260)} ${f1(70 + sk * 86)})`); }
+  else $('shoot').setAttribute('opacity', 0);
+  if (!S.spun) {
+    const k = (T * 0.55) % 1, t = 0.55 - 1.1 * ease.inOut(k);
+    $('hintHand').setAttribute('transform', `translate(${f1(C.x + 235 * Math.cos(t) + 6)} ${f1(C.y + 235 * Math.sin(t) + 10)})`);
+    $('hintHand').setAttribute('opacity', k > 0.92 ? 0 : 1);
+  }
+}
+const $$ = sel => Array.from(svg.querySelectorAll(sel));
+
+/* ---- turning the Earth: every change of theta goes through here ------------ */
+function advance(dTheta){
+  let left = dTheta;
+  while (Math.abs(left) > 1e-9) {
+    const d = clamp(left, -0.3, 0.3); left -= d;
+    const a0 = houseAngle(S.theta);
+    S.theta += d; S.turned += Math.abs(d);
+    const a1 = houseAngle(S.theta);
+    const x = crossing(a0, a1, d);
+    if (x) onCross(x);
+  }
+  react();
+}
+function onCross(kind){
+  if (kind === 'sunrise') {
+    sfx(crow, 600);
+    flash($('crow'));
+    if (discover('sunrise', houseClient())) nextGoalSoon();
+  } else if (kind === 'sunset') {
+    sfx(() => { tone(660, 0.4, 'sine', 0.08, 0, 440); tone(440, 0.5, 'sine', 0.07, 0.25, 330); }, 600);
+    if (discover('sunset', houseClient())) nextGoalSoon();
+  } else {
+    /* turning backwards: not wrong, just funny — the Sun pulls a face */
+    S.oops = 1.2;
+    sfx(() => Play.sound('boing'), 700);
+    if (!S.saidBack) { S.saidBack = true; say('Whoa, backwards! The real Earth turns the other way.'); }
+  }
+}
+function react(){
+  const a = houseAngle(S.theta), L = sunlight(a);
+  if (L < -0.6 && S.spun) { if (discover('night', houseClient())) { sfx(hoot, 0); nextGoalSoon(); } }
+  if (L > 0.9 && S.spun && S.turned > 1) { if (discover('day', houseClient())) { sfx(crow, 0); nextGoalSoon(); } }
+}
+function houseClient(){ const a = houseAngle(S.theta); return clientOf(C.x + (R + 50) * Math.cos(a), C.y + (R + 50) * Math.sin(a)); }
+function flash(el){ el.setAttribute('opacity', 1); setTimeout(() => el.setAttribute('opacity', 0), 900); }
+
+let spokeHello = false;
+function hello(){ if (spokeHello) return; spokeHello = true; say(currentGoal() ? WISH[currentGoal()].line : 'Spin the Earth!'); }
+function firstSpin(){
+  if (S.spun) return;
+  S.spun = true;
+  $('hint').setAttribute('opacity', 0);
+  track('firstSpin');
+}
+
+/* ---- the Earth hit area: an angular drag about the centre ------------------ */
+let lastAng = 0, samples = [];
+const angDiff = (b, a) => { let d = b - a; while (d > Math.PI) d -= TAU; while (d < -Math.PI) d += TAU; return d; };
+function omegaNow(now){
+  const recent = samples.filter(s => now - s[0] <= 110);
+  if (recent.length < 2) return 0;
+  const s0 = recent[0], s1 = recent[recent.length - 1], dt = (s1[0] - s0[0]) / 1000;
+  return dt > 0.012 ? clamp((s1[1] - s0[1]) / dt, -25, 25) : 0;
+}
+drag($('earthHit'), svg, {
+  start(p){
+    if (Math.hypot(p.x - C.x, p.y - C.y) < 8) return false;
+    hello();
+    S.dragging = true; S.omega = 0;
+    lastAng = Math.atan2(p.y - C.y, p.x - C.x);
+    samples = [[performance.now(), S.theta]];
+  },
+  move(p){
+    if (Math.hypot(p.x - C.x, p.y - C.y) < 6) return;
+    const ang = Math.atan2(p.y - C.y, p.x - C.x);
+    const d = angDiff(ang, lastAng); lastAng = ang;
+    if (d === 0) return;
+    firstSpin();
+    advance(-d);                          // pointer going anticlockwise on screen (angle falling) turns the Earth +
+    const now = performance.now();
+    samples.push([now, S.theta]); samples = samples.filter(s => now - s[0] <= 300);
+    const w = omegaNow(now);
+    if (Math.abs(w) > DIZZY) goDizzy();
+    paint();
+  },
+  end(){
+    const now = performance.now();
+    const last = samples[samples.length - 1];
+    S.omega = last && now - last[0] < 90 ? omegaNow(now) : 0;
+    if (reduced()) S.omega = 0;
+    if (Math.abs(S.omega) > DIZZY) goDizzy();
+    if (Math.abs(S.omega) > 3) Play.sound('whoosh');
+    S.dragging = false;
+    track('spin', {omega: +S.omega.toFixed(2), phase: phase(houseAngle(S.theta))});
+  },
+});
+$('earthHit').addEventListener('keydown', e => {
+  const k = {ArrowLeft: 1, ArrowUp: 1, ArrowRight: -1, ArrowDown: -1}[e.key];
+  if (!k) return;
+  e.preventDefault(); hello(); firstSpin(); advance(k * 0.12); paint();
+});
+function goDizzy(){
+  S.dizzy = 2.4;
+  if (discover('dizzy', clientOf(C.x, C.y))) nextGoalSoon();
+}
+
+/* ---- the Sun: tap it ------------------------------------------------------- */
+function tapSun(){
+  S.sunTalk = 2.6;
+  squash($('sunJuice'), SUN.x, SUN.y, 0.12, 600);
+  Play.sound('boing');
+  $('sunBubble').setAttribute('opacity', 1);
+  clearTimeout(tapSun.t); tapSun.t = setTimeout(() => $('sunBubble').setAttribute('opacity', 0), 3200);
+  const first = discover('sunNever', clientOf(SUN.x, SUN.y - 60));
+  if (!first) say('I stay still. The Earth turns!');
+  else nextGoalSoon(3600);
+  track('tapSun');
+}
+$('sunHit').addEventListener('click', tapSun);
+$('sunHit').addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); tapSun(); } });
+
+/* ---- the wish card --------------------------------------------------------- */
+const currentGoal = () => GOALS.find(g => !found(g)) || null;
+let shownGoal = undefined;
+function paintWish(){
+  const g = currentGoal();
+  if (g === shownGoal) return;
+  shownGoal = g;
+  $('wishArt').innerHTML = g ? WISH[g].art : `<rect x="-56" y="-50" width="112" height="100" rx="18" fill="#fff1c9"/>
+    <path d="M0 -34 L10 -10 L36 -8 L16 8 L22 34 L0 20 L-22 34 L-16 8 L-36 -8 L-10 -10 Z" fill="#ffc53d" stroke="#f29a1f" stroke-width="3" stroke-linejoin="round"/>`;
+  squash($('wishArt').parentNode, 920, 90, 0.12, 500);
+}
+function sayGoal(){
+  const g = currentGoal();
+  say(g ? WISH[g].line : 'You found everything! Keep spinning the Earth.');
+  squash($('wish'), 920, 90, 0.1, 400);
+  track('hear', {goal: g});
+}
+function nextGoalSoon(ms = 2900){
+  setTimeout(() => { paintWish(); const g = currentGoal(); if (g) say(WISH[g].line); }, ms);
+}
+$('wishHit').addEventListener('click', () => { spokeHello = true; sayGoal(); });
+$('wishHit').addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); sayGoal(); } });
+$('hear').addEventListener('click', () => { spokeHello = true; sayGoal(); });
+
+/* ============================================================================
+   Start
+   ============================================================================ */
+findings($('finds'), [
+  {id: 'night',    icon: '🦉', label: 'Night-time',        say: 'Night-time! The house is facing away from the Sun. The owl wakes up. Hoo hoo!'},
+  {id: 'sunrise',  icon: '🌅', label: 'Sunrise',           say: 'Sunrise! The house turned into the sunlight. Cock-a-doodle-doo!'},
+  {id: 'day',      icon: '☀️', label: 'Daytime',           say: 'Daytime! The house is facing the Sun.'},
+  {id: 'sunset',   icon: '🌇', label: 'Sunset',            say: 'Sunset! The house is turning away from the Sun. Bye bye, Sun!'},
+  {id: 'dizzy',    icon: '😵', label: 'Dizzy Earth',       say: 'Whee! A dizzy Earth! Day, night, day, night!'},
+  {id: 'sunNever', icon: '🌞', label: 'The Sun never moves', say: 'I stay still. The Earth turns!'},
+], () => { say('You found them all! Day comes when your side of the Earth faces the Sun.'); paintWish(); });
+
+let prevT = 0;
+loop(dt => {
+  if (!S.dragging) {
+    if (reduced()) S.omega = 0;
+    else if (S.spun) S.omega = spinStep(S.omega, dt, DRIFT);
+    if (S.omega) {
+      advance(S.omega * dt);
+      if (Math.abs(S.omega) > DIZZY) goDizzy();
+    }
+  }
+  S.dizzy = Math.max(0, S.dizzy - dt); S.sunTalk = Math.max(0, S.sunTalk - dt); S.oops = Math.max(0, S.oops - dt);
+  idle(dt);
+  paint();
+});
+/* the first touch anywhere on the stage says hello */
+svg.addEventListener('pointerdown', hello);
+paint();
+paintWish();
+if (shared) firstSpin();
+window.applyFeatures = () => paint();
+window.PG_STATE = () => {
+  const a = houseAngle(S.theta);
+  return Object.assign(JSON.parse(JSON.stringify(S)), {houseAngle: a, sunlight: sunlight(a), phase: phase(a), hour: localHour(a), goal: currentGoal()});
+};
+window.PG_MODEL = {houseAngle, sunlight, side, phase, localHour, crossing, spinStep, SUN_DIR, A0, C, R, SUN, DRIFT, FRICTION};
+</script>
+</body>
+</html>

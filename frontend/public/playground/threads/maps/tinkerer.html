@@ -1,0 +1,671 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Locating Places on Earth</title>
+<meta name="description" content="Class 6: spin a globe under a lamp, pin two places by latitude and longitude, and watch their clocks: 15° of longitude is one hour of the Sun’s time.">
+<link rel="icon" href="../../favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600&family=Inter:wght@400;500;600;700&family=Nunito:wght@500;700;800&family=Newsreader:opsz,wght@6..72,400;6..72,500&family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="../../play.css">
+<style>
+/* Only what this page needs beyond play.css. */
+.pg-stage{min-height:0}
+#globeHit{cursor:grab}
+#globeHit.dragging{cursor:grabbing}
+.pinHit{cursor:grab}
+.pinHit.dragging{cursor:grabbing}
+.stripHit{cursor:ew-resize}
+.gate{position:absolute; inset:0; display:grid; place-items:center; pointer-events:none}
+.gate span{background:rgba(15,26,43,.86); color:#fff; padding:10px 16px; border-radius:99px; font-weight:600; font-size:14px}
+.play{width:40px; min-width:40px; padding:0}
+.timebig{font-family:"Fredoka",var(--font-head); font-size:26px; font-weight:600; line-height:1}
+.ctl{grid-template-columns:auto 1fr auto; margin:6px 0 0}
+.note{font-size:12.5px; color:var(--ink-3); margin:6px 0 0}
+.why p{font-size:14px; margin-bottom:.55em}
+.why b{color:var(--ink)}
+.mis{list-style:none; margin:0; padding:0; display:grid; gap:6px; font-size:13.5px}
+.mis li{display:grid; grid-template-columns:20px 1fr; gap:6px; align-items:start; line-height:1.35}
+.mis li i{font-style:normal; width:20px; height:20px; border-radius:50%; display:grid; place-items:center; font-size:12px; background:var(--sunk); color:var(--ink-3); font-weight:700}
+.mis li.done i{background:var(--good); color:#fff}
+.mis .co{font-family:var(--font-mono); font-size:12.5px; color:var(--ink-2)}
+.mis .nm{font-weight:700}
+@media (max-width:1200px) and (min-width:981px){ .pg-main.wide-side{grid-template-columns:minmax(0,1fr) 330px} }
+</style>
+</head>
+<body>
+<header class="pg-top"></header>
+
+<div class="pg-intro">
+  <h1>Locating places on the Earth</h1>
+  <p>Two friends are on the phone late in the afternoon, one in Porbandar in Gujarat and one in Tinsukia in Assam. In Tinsukia the Sun
+     has set; in Porbandar it is still full daylight. Pin places on the globe by their latitude and longitude, spin the Earth under the lamp,
+     and read each place’s clock.</p>
+</div>
+
+<main class="pg-main wide-side">
+  <section class="pg-stage" id="stageWrap">
+    <svg id="stage" viewBox="0 0 1000 660" role="img" aria-label="A globe lit by a lamp with a grid of latitudes and longitudes and two pins, the pins' clocks, and a strip of longitudes with their local times"></svg>
+    <div class="gate" id="gate"><span>Make your prediction first →</span></div>
+  </section>
+
+  <aside class="pg-side">
+    <div id="poe"></div>
+
+    <div class="card" id="ctlCard">
+      <div class="row" style="justify-content:space-between">
+        <div><div class="kicker">Time at Greenwich (GMT)</div><div class="timebig num" id="gmtOut">12:00 noon</div></div>
+        <button class="btn play" id="btnPlay" aria-label="Spin the Earth" title="Spin the Earth">▶</button>
+      </div>
+      <div class="ctl"><label for="gmt">Spin</label><input type="range" id="gmt" min="0" max="1436" step="4" value="720"><output id="gmtDeg" class="num">0°</output></div>
+      <p class="note">Each step of the slider turns the Earth by 1°. Drag the globe sideways to spin it, up or down to tip it towards you.
+        Drag pins <b style="color:#d6453d">A</b> and <b style="color:#2f6fd6">B</b> on the globe, or along the strip of longitudes.</p>
+    </div>
+
+    <div class="card" id="misCard">
+      <div class="kicker">Places to pin</div>
+      <ul class="mis" id="mis"></ul>
+    </div>
+
+    <div class="card why" id="whyCard" hidden>
+      <div class="kicker">What is happening</div>
+      <div id="why"></div>
+    </div>
+
+    <div class="card"><div class="kicker">To find</div><div id="finds"></div></div>
+  </aside>
+</main>
+
+<script src="../../play.js"></script>
+<script>
+'use strict';
+const {$, esc, clamp, fmt, drag, loop, sound, say, track, toast, predict, findings, discover, found,
+       shareState, sharedState, mount, reduced} = Play;
+mount({thread: 'maps', band: 'tinkerer'});
+
+/* MODEL:start ==================================================================
+   The Earth as the NCERT Class 6 chapter describes it (Exploring Society, Ch 1).
+
+   A sphere of radius 6371 km with a grid of parallels (latitude, 0° at the
+   Equator to 90° N/S) and meridians (longitude, 0° at Greenwich to 180° E/W).
+   It turns west to east once in 24 hours: 360° / 24 h = 15° an hour, or 4
+   minutes for every degree.
+
+   Time. The lamp is the Sun on an equinox day (it stands over the Equator).
+   At GMT t minutes past midnight, the Sun is overhead on longitude
+   λs = 180° − t/4 (noon at Greenwich puts it over 0°). A place's LOCAL
+   (sun) time is t + 4·λ minutes; IST is t + 330 minutes, the local time of
+   82°30′ E. The Sun's height at a place is the angle whose sine is the dot
+   product of the place's direction and the Sun's direction.
+
+   Distance along the ground is the great-circle distance; direction is the
+   starting compass bearing, named with the eight points the book uses.
+   ============================================================================ */
+const R_KM = 6371, D2R = Math.PI / 180, R2D = 180 / Math.PI;
+const wrap180 = l => ((l + 180) % 360 + 360) % 360 - 180;
+const unit = (lat, lon) => [Math.cos(lat * D2R) * Math.cos(lon * D2R), Math.cos(lat * D2R) * Math.sin(lon * D2R), Math.sin(lat * D2R)];
+const subsolarLon = t => wrap180(180 - t / 4);
+/* local (sun) time in minutes after midnight, and how many days ahead of Greenwich's date */
+function localTime(t, lon){ const m = t + 4 * lon; return {min: ((m % 1440) + 1440) % 1440, day: Math.floor(m / 1440)}; }
+function istTime(t){ const m = t + 330; return {min: ((m % 1440) + 1440) % 1440, day: Math.floor(m / 1440)}; }
+function sunAlt(t, lat, lon){ const p = unit(lat, lon), s = unit(0, subsolarLon(t)); return Math.asin(clamp(p[0] * s[0] + p[1] * s[1] + p[2] * s[2], -1, 1)) * R2D; }
+function distKm(a, b){
+  const p = unit(a.lat, a.lon), q = unit(b.lat, b.lon);
+  return R_KM * Math.acos(clamp(p[0] * q[0] + p[1] * q[1] + p[2] * q[2], -1, 1));
+}
+function bearing(a, b){
+  const f1 = a.lat * D2R, f2 = b.lat * D2R, dl = (b.lon - a.lon) * D2R;
+  return ((Math.atan2(Math.sin(dl) * Math.cos(f2), Math.cos(f1) * Math.sin(f2) - Math.sin(f1) * Math.cos(f2) * Math.cos(dl)) * R2D) + 360) % 360;
+}
+const POINTS8 = ['north', 'north-east', 'east', 'south-east', 'south', 'south-west', 'west', 'north-west'];
+const point8 = deg => POINTS8[Math.round(deg / 45) % 8];
+const parallelKm = lat => 2 * Math.PI * R_KM * Math.cos(lat * D2R);     // the circle a parallel draws
+const meridianKm = () => Math.PI * R_KM;                                  // pole to pole: a half circle
+const lonGap = (a, b) => wrap180(b - a);                                  // degrees B is east (+) of A
+/* Orthographic view of the globe from above (lat0, lon0): x right, y up, z towards the viewer. */
+function view(lat, lon, v){
+  const f = lat * D2R, l = (lon - v.lon0) * D2R, f0 = v.lat0 * D2R;
+  return {x: Math.cos(f) * Math.sin(l), y: Math.cos(f0) * Math.sin(f) - Math.sin(f0) * Math.cos(f) * Math.cos(l),
+          z: Math.sin(f0) * Math.sin(f) + Math.cos(f0) * Math.cos(f) * Math.cos(l)};
+}
+function unview(x, y, v){
+  let r = Math.hypot(x, y);
+  if (r > 0.999) { x *= 0.999 / r; y *= 0.999 / r; r = 0.999; }
+  if (r < 1e-9) return {lat: v.lat0, lon: v.lon0};
+  const c = Math.asin(r), f0 = v.lat0 * D2R;
+  const lat = Math.asin(Math.cos(c) * Math.sin(f0) + y * Math.sin(c) * Math.cos(f0) / r) * R2D;
+  const lon = v.lon0 + Math.atan2(x * Math.sin(c), r * Math.cos(c) * Math.cos(f0) - y * Math.sin(c) * Math.sin(f0)) * R2D;
+  return {lat, lon: wrap180(lon)};
+}
+/* MODEL:end */
+
+/* ---- places (rounded coordinates, degrees) ---------------------------------- */
+const CITIES = [
+  {id: 'delhi', name: 'Delhi', lat: 28.61, lon: 77.21}, {id: 'bengaluru', name: 'Bengaluru', lat: 12.97, lon: 77.59},
+  {id: 'mumbai', name: 'Mumbai', lat: 19.08, lon: 72.88}, {id: 'kolkata', name: 'Kolkata', lat: 22.57, lon: 88.36},
+  {id: 'chennai', name: 'Chennai', lat: 13.08, lon: 80.27}, {id: 'porbandar', name: 'Porbandar', lat: 21.64, lon: 69.61},
+  {id: 'tinsukia', name: 'Tinsukia', lat: 27.49, lon: 95.36}, {id: 'mirzapur', name: 'Mirzapur', lat: 25.15, lon: 82.57},
+  {id: 'ujjain', name: 'Ujjain', lat: 23.18, lon: 75.78}, {id: 'thimphu', name: 'Thimphu', lat: 27.47, lon: 89.64},
+  {id: 'singapore', name: 'Singapore', lat: 1.35, lon: 103.82}, {id: 'paris', name: 'Paris', lat: 48.86, lon: 2.35},
+  {id: 'greenwich', name: 'Greenwich (London)', lat: 51.48, lon: 0.0}, {id: 'newyork', name: 'New York', lat: 40.71, lon: -74.01},
+  {id: 'tokyo', name: 'Tokyo', lat: 35.68, lon: 139.69}, {id: 'cairo', name: 'Cairo', lat: 30.04, lon: 31.24},
+  {id: 'nairobi', name: 'Nairobi', lat: -1.29, lon: 36.82}, {id: 'sydney', name: 'Sydney', lat: -33.87, lon: 151.21},
+  {id: 'tromso', name: 'Tromsø', lat: 69.65, lon: 18.96}, {id: 'moscow', name: 'Moscow', lat: 55.76, lon: 37.62},
+  {id: 'suva', name: 'Suva (Fiji)', lat: -18.14, lon: 178.44}, {id: 'apia', name: 'Apia (Samoa)', lat: -13.83, lon: -171.76},
+  {id: 'quito', name: 'Quito', lat: -0.18, lon: -78.47}, {id: 'capetown', name: 'Cape Town', lat: -33.92, lon: 18.42},
+];
+const cityById = id => CITIES.find(c => c.id === id);
+const MYSTERY = ['mumbai', 'kolkata', 'singapore', 'paris'];       // the book's Let's Explore list
+const SNAP = 1.3;                                                  // degrees of arc: a pin this close lands on the town
+function nearestCity(lat, lon){
+  let best = null, bd = 1e9;
+  for (const c of CITIES) { const d = distKm({lat, lon}, c) / R_KM * R2D; if (d < bd) { bd = d; best = c; } }
+  return bd <= SNAP ? best : null;
+}
+
+/* ---- coastlines: simplified outlines (lon, lat), good to a degree or two ---- */
+const LAND = [
+  // Eurasia, round the coast from Gibraltar
+  [-5.6,36,-8.9,37,-9.5,38.7,-8.9,42,-9.3,43,-7.7,43.8,-1.8,43.4,-1.2,46,-4.7,48.4,-1.6,48.8,1.6,50.9,4,51.9,7,53.4,8.6,53.9,8.2,56.8,10.6,57.7,10.5,55,12.5,54.4,14.3,53.9,18.6,54.6,21.1,55.7,21,57,24.1,57,23.5,58.3,28,59.5,30.2,59.9,28,60.5,22.3,60.4,21.5,63,25.4,65,22.1,65.6,17.9,62.5,18,59.3,16,56.2,12.9,55.6,11.9,57.7,10.5,59.4,7,58,5.3,60.4,5,62,7.5,63,13,67,18.9,69.6,25.8,71.1,31,70.3,33.1,69,41,67,40.5,64.5,44,66,53,68.3,60,69,68,68.5,72.8,72.5,80,73.5,88,75.5,104,77.7,113,73.8,128,72.5,140,72.5,160,70,170,70,180,69,190.3,66,180,65,177,62.5,170,60,163,58,163,56,160,54,156.7,51,156,57,152,59,143,59.3,135,54.7,140,53,141,48,135,43.5,131.9,43.1,129.5,40.8,127.5,39.3,129.4,36,129,35.1,126.5,34.5,126.6,37.5,125,37.8,124.4,40,121.5,39,121.6,40.9,117.8,39,119,37.5,122.5,37,120.3,36,121.5,31.2,122,29.9,119.3,26.1,114.2,22.3,110.4,21.2,108.3,21.5,106.7,20.7,105.8,18.7,108.2,16.1,109.2,12.2,106.7,10.4,104.8,8.6,105,10.4,103,11,100.9,12.7,100.5,13.6,99.9,12,100.3,8.4,101.3,6.9,103.4,4,103.9,1.4,101.3,2.8,100.3,5.4,98.3,8,98.6,10,97.6,16.5,96.2,16.8,94.4,16,94.3,18.8,92.4,20.7,91.8,22.3,90.5,22.1,89,21.8,88.1,21.6,87.2,21.5,86.7,20.3,85.1,19.3,83.3,17.7,82.3,17,81.2,16.3,80.1,15.5,80.3,13.1,79.8,11.9,79.3,10.3,78.1,8.8,77.5,8.1,76.3,9.9,75.8,11.3,74.8,12.9,74.1,14.8,73.4,16.5,72.8,19,72.9,20,72.6,21.3,70.4,20.9,69.8,22.4,68.2,23.7,67,24.8,66.5,25.4,61.6,25.2,57.3,25.8,56.3,27.2,52,27.8,50.3,29.5,48,30,48,29.3,50.1,26.3,51.5,25.3,54.4,24.4,56.4,26.3,58.6,23.6,59.8,22.4,57.8,19,55,17,52,15.8,45,12.8,43.3,12.7,42.7,15.5,39.2,21.5,36.5,26,35,29.5,34.2,31.3,35,32.8,35.9,35.5,36.2,36.6,34.6,36.8,30.7,36.9,27.3,37,26.2,39.5,26.6,40.6,22.9,40.6,23.7,38,22.4,36.4,21.1,37.8,19.4,41.3,18.5,42.4,15.9,43.5,13.7,45.6,12.3,45.4,12.6,44,14.2,42.4,16.9,41.1,18.5,40.1,16.5,38.5,15.6,38,16,39.5,14.2,40.8,12.5,41.7,10.3,43.5,8.9,44.4,7.3,43.7,4.8,43.4,3.1,43,3.2,41.9,2.2,41.4,-0.4,39.5,-0.5,38.3,-2,36.8,-4.4,36.7],
+  // Africa
+  [-17.1,14.7,-16.9,21.3,-13.2,27.6,-9.8,29.9,-6,35.8,3,36.8,10.2,37.2,11,33,15.3,32.3,20.1,32.1,25,31.6,32.3,31.2,34.9,29.5,37.3,19,39,15.5,43.3,11.9,51.3,11.8,49,6,42.5,-0.4,39.7,-4,39.3,-6.8,40.6,-10.8,40.5,-15,35.3,-23.9,32.9,-26,31,-29.9,25.6,-34,20,-34.8,18.4,-34,15,-27,14.5,-22.9,11.8,-17.2,13.2,-8.8,12.3,-6,9.4,0.4,9.7,4,6.5,4.3,3.4,6.4,-1,5,-4,5.3,-7.5,4.4,-10.8,6.3,-13.2,8.5,-15.2,11],
+  [49.3,-12,50.4,-15.5,47.1,-24.9,44,-25,43.3,-22,44.3,-16.2,47.5,-14],                         // Madagascar
+  [-5.7,50.1,1.4,51.2,1.7,52.6,0.1,53.5,-1.4,55,-2,57.1,-3.4,58.6,-5,58.6,-6.2,56.5,-4.9,55,-3.1,53.9,-4.6,53.3,-4.2,52.3,-5.2,51.7,-3.2,51.4],   // Great Britain
+  [-6,52.2,-6.1,54.6,-7.3,55.3,-10,54.2,-9.9,52,-8.5,51.6],                                         // Ireland
+  [130.9,31.4,129.8,33.2,131,34.4,133,35.5,136,36.9,139,38.2,140,40.5,141.5,41.4,142,39.5,141,37.5,140.8,35.7,139.8,35,137,34.6,135.2,33.7,132.3,33],   // Japan
+  [140,41.5,141.5,45.4,145.5,43.3,143.2,42],                                                         // Hokkaido
+  [79.9,9.8,81.3,8.6,81.9,7.3,81.2,6.2,80.1,6,79.8,7.5],                                              // Sri Lanka
+  [95.3,5.6,98.7,3.8,103.4,-1,106,-5.9,104.5,-5.9,101,-2.5,98.5,1],                                    // Sumatra
+  [109,1.5,111,-3,116,-4,117.9,1,119,5,116.7,7,113.9,4.5,111,2],                                      // Borneo
+  [105.2,-6.8,114.4,-8.3,114.6,-7.7,106,-5.9],                                                        // Java
+  [131,-1,141,-2.6,147,-6,150,-10.5,146,-8.5,141,-9.2,138,-8.4,135,-4.5,132,-2.8],                     // New Guinea
+  [113.5,-22,114.1,-21.8,116.8,-20.6,122.2,-18,125,-14.5,129,-15,130.8,-12.4,132.6,-11.5,135.9,-12.2,136,-15,140,-17.5,141.6,-12.6,142.5,-10.7,145.4,-14.9,146.8,-19.3,150,-22.5,153.1,-26,153.6,-28.6,151.2,-33.9,150,-37.5,146.3,-39.1,144.9,-37.8,140.8,-38,138.5,-35,135.9,-34.8,134.2,-32.7,131.2,-31.5,126,-32.3,123.6,-33.9,117.9,-35,115,-34.3,115.7,-31.9,114,-26.5],   // Australia
+  [144.6,-40.7,148.3,-41,147.8,-43.2,146,-43.6],                                                      // Tasmania
+  [172.7,-34.4,175,-37,178.5,-37.7,177,-39.3,174.8,-41.3,174.6,-39],                                  // NZ north
+  [172.7,-40.5,174.3,-41.7,172.8,-43.6,171.2,-44.4,169,-46.6,166.5,-46,168,-44,171,-42],             // NZ south
+  // North America
+  [-168,65.6,-164,67,-156.8,71.3,-141,69.6,-133,69.5,-124,69.5,-115,68,-108,68,-96,68,-94,69.5,-85,69.5,-78,62.3,-72,61.8,-69.5,59,-65,60.4,-61,56,-55.7,52.2,-60,50.2,-66,50.2,-64.8,47.5,-61,45.5,-66,43.8,-70.2,43.6,-70,41.7,-74,40.6,-75.5,38.5,-76,36.9,-75.5,35.2,-78,33.9,-81.1,32,-81.4,30.3,-80.1,26.7,-80.4,25.2,-81.8,26.5,-82.7,28,-84.3,30,-89,30.3,-89.4,29,-94,29.6,-97.2,27.8,-97.5,25,-97.8,22,-96.1,19.2,-94.5,18.2,-91,18.6,-90.4,21,-87,21.5,-87.7,18.5,-88.3,16,-84,15.9,-83.3,15,-83.8,11,-81.5,8.8,-79.5,9.3,-77.4,8.6,-78,7.5,-80,7.3,-83,8.3,-85.7,10.8,-87.5,13.2,-91,13.9,-94,16,-96.5,15.7,-99.9,16.8,-104.3,19.1,-105.7,20.6,-105.4,23.2,-108.9,25.8,-111,27.9,-114.7,31.6,-112.8,29,-110.3,24.1,-109.9,22.9,-112.1,24.8,-114.1,27.7,-116.6,31.8,-117.2,32.7,-118.5,34,-120.6,34.6,-122.4,37.8,-124.2,40.4,-124.1,43.4,-124,46.2,-124.7,48.4,-123,49,-126,50.5,-128,52.5,-130.5,54.3,-133,57,-136.5,58.3,-139.7,59.6,-146,60.8,-151.4,59.2,-154,57.5,-158,56,-163,55,-159,58.5,-162,58.6,-165,60.5,-164.8,63,-161,64.4,-165.4,64.5],
+  [-73,78,-60,82,-30,83.5,-12,81.5,-18,76.5,-22,70.3,-32,68.2,-40,65,-43.5,60,-50,62.5,-53,66,-54.5,70.5,-58,75.5,-66,76.5],   // Greenland
+  [-80,73.5,-72,71,-66,68,-62,66.5,-65,63,-71,62.8,-78,64.5,-80,66.5,-86,70,-90,72.5],               // Baffin Island
+  [-84.9,21.9,-80,23.2,-74.1,20.2,-77.7,19.9,-81.5,22.2],                                             // Cuba
+  // South America
+  [-77.4,8.6,-75.5,10.4,-71.6,12.4,-68,10.5,-64,10.6,-61.9,10.7,-60,8.5,-57.2,6,-52.3,4.9,-50,1.8,-48.5,-1.4,-44.3,-2.5,-38.5,-3.7,-35.2,-5.8,-34.9,-8,-38.5,-13,-39,-17.7,-40.3,-20.3,-43.2,-22.9,-46.3,-24,-48.6,-27.6,-51.2,-30.8,-53.4,-33.7,-56.2,-34.9,-58.4,-34.6,-57.5,-36.5,-57.5,-38,-62.3,-38.8,-65,-41,-64.5,-42.5,-65.3,-45,-67.5,-46.4,-69.2,-51.6,-68.3,-52.4,-68.6,-54.8,-71,-54,-74.5,-52,-75.5,-48,-74,-44,-73.9,-41.5,-73.5,-37,-71.6,-33,-71.3,-29.9,-70.4,-23.6,-70.3,-18.5,-76.2,-13.7,-77.1,-12,-79,-8.1,-81.3,-4.7,-80.5,-2.2,-80.9,-1,-80,0.8,-78.9,1.8,-77.3,3.9,-77.4,6.6],
+  // Antarctica: a ring round the pole
+  [-180,-78,-160,-77,-140,-75,-120,-74,-100,-72,-80,-73,-70,-70,-60,-64,-58,-63,-62,-68,-50,-77,-30,-77,-10,-71,10,-70,30,-69,50,-67,70,-68,90,-66,110,-66,130,-66,150,-68,170,-72,180,-78],
+];
+const WATER = [
+  [28,41.2,29,41.2,31.2,41.1,35,42,38,41,41.6,41.6,41.5,42.6,39.7,44.1,37.5,44.7,35.5,45.3,33.4,44.5,32.5,45.4,30.7,46.5,29.6,45.3,28.6,44.2,27.9,42.6],      // Black Sea
+  [47,44.8,49,46.5,53,46.9,53.3,45,51.3,44.5,52.8,42,53.9,40.5,53,37.3,51.5,36.8,49,37.5,49.3,40.4,47.6,42.9],                                                // Caspian Sea
+  [-94.7,58.8,-92.5,57,-88,56,-82.2,52.9,-80,51.2,-79,54.5,-77,60,-78,62.5,-82,64.5,-87,64.5,-90,63.5,-94,61],                                                // Hudson Bay
+];
+/* India, a little more carefully: its coast and land border */
+const INDIA = [68.2,23.7,69.8,22.4,70.4,20.9,72.6,21.3,72.9,20,72.8,19,73.4,16.5,74.1,14.8,74.8,12.9,75.8,11.3,76.3,9.9,77.5,8.1,78.1,8.8,79.3,10.3,79.8,11.9,80.3,13.1,80.1,15.5,81.2,16.3,82.3,17,83.3,17.7,85.1,19.3,86.7,20.3,87.2,21.5,88.1,21.6,89,21.8,88.9,23,88.6,24.3,88.1,24.6,89.1,25.9,89.8,26.2,90.4,25.3,92,25.2,92.4,24.3,91.9,23.6,92.6,22,93.2,23,93.4,24,94.6,25.6,95.2,26.8,96.9,27.6,97.4,28.2,95.4,29.2,93.9,28,91.9,27.8,89.8,26.8,88.7,27.9,88.1,27,88.2,26.4,85,26.8,83,27.4,80.1,28.8,81,30.2,79,31,78.8,32.5,79.5,32.8,79,34.3,78,35.5,76.8,35.8,74.8,37.1,73.8,36,73.5,34.6,74,33.2,74.6,32.5,74.6,31,73.9,30.2,73.3,29,72.2,28,70.7,27.8,69.6,27,70.2,26.1,70.8,25.4,69.4,24.3,68.8,24.2];
+
+/* ---- state: plain data --------------------------------------------------------- */
+const S = {t: 720, lat0: 18, locked: false, playing: false,
+  pins: {A: {lat: 28.61, lon: 77.21, city: 'delhi'}, B: {lat: 13.08, lon: 80.27, city: 'chennai'}},
+  found: [], visited: {}};
+const LAMP_OFF = 70;                     // the lamp sits 70° west of the middle of the view
+const V = () => ({lat0: S.lat0, lon0: wrap180(subsolarLon(S.t) + LAMP_OFF)});
+const shared = sharedState();
+if (shared) {
+  S.t = ((+shared.t || 720) % 1440 + 1440) % 1440; S.lat0 = clamp(+shared.lat0 || 18, -70, 70);
+  for (const k of ['A', 'B']) if (shared.pins && shared.pins[k]) {
+    const p = shared.pins[k]; S.pins[k] = {lat: clamp(+p.lat, -89, 89), lon: wrap180(+p.lon)}; const c = nearestCity(S.pins[k].lat, S.pins[k].lon); S.pins[k].city = c ? c.id : null;
+  }
+}
+shareState(() => ({t: S.t, lat0: S.lat0, pins: {A: {lat: +S.pins.A.lat.toFixed(2), lon: +S.pins.A.lon.toFixed(2)}, B: {lat: +S.pins.B.lat.toFixed(2), lon: +S.pins.B.lon.toFixed(2)}}}));
+
+/* ---- formatting -------------------------------------------------------------- */
+const MONTH_DAY = d => (21 + d) + ' Mar';
+function clock(min){
+  min = Math.round(min) % 1440;
+  const h = Math.floor(min / 60), m = min % 60;
+  if (h === 12 && m === 0) return '12:00 noon';
+  if (h === 0 && m === 0) return '12:00 midnight';
+  return ((h + 11) % 12 + 1) + ':' + String(m).padStart(2, '0') + (h < 12 ? ' am' : ' pm');
+}
+const hmin = m => { m = Math.round(Math.abs(m)); const h = Math.floor(m / 60), r = m % 60; return h ? `${h} h${r ? ' ' + r + ' min' : ''}` : `${r} min`; };
+const latTxt = l => fmt(Math.abs(l), 1) + '° ' + (l >= 0 ? 'N' : 'S');
+const lonTxt = l => Math.abs(l) > 179.95 ? '180°' : fmt(Math.abs(l), 1) + '° ' + (l >= 0 ? 'E' : 'W');
+const round0 = l => Math.round(Math.abs(l)) + '°';
+
+/* ============================================================================
+   The stage: built once, then patched.
+   ============================================================================ */
+const svg = $('stage');
+const G = {x: 300, y: 240, R: 188};
+const SX = {x0: 60, x1: 940, y: 560};                      // the strip of longitudes
+const sxOf = lon => SX.x0 + (lon + 180) / 360 * (SX.x1 - SX.x0);
+const lonOfSx = x => clamp((x - SX.x0) / (SX.x1 - SX.x0) * 360 - 180, -180, 180);
+const PINCOL = {A: '#d6453d', B: '#2f6fd6'};
+
+function build(){
+  let stars = '';
+  const rnd = Play.mulberry32(11);
+  for (let i = 0; i < 80; i++) stars += `<circle cx="${(rnd() * 578).toFixed(1)}" cy="${(rnd() * 468).toFixed(1)}" r="${(rnd() * 1.1 + .3).toFixed(2)}" fill="#fff" opacity="${(rnd() * .5 + .2).toFixed(2)}"/>`;
+  const cityDots = CITIES.map(c => `<circle id="cd_${c.id}" r="2.3" fill="#fffbe6" stroke="#3a2a10" stroke-width=".6"/>`).join('');
+  const card = (k, x) => `
+    <g id="card${k}">
+      <rect x="${x}" y="14" width="190" height="252" rx="10" fill="#ffffff" stroke="#e2ded2"/>
+      <circle cx="${x + 18}" cy="34" r="9" fill="${PINCOL[k]}"/><text x="${x + 18}" y="38" text-anchor="middle" fill="#fff" font-size="11" font-weight="700">${k}</text>
+      <text id="nm${k}" x="${x + 34}" y="39" fill="#1d2327" font-size="14" font-weight="700"></text>
+      <circle cx="${x + 95}" cy="112" r="52" fill="#fbfaf6" stroke="#1d2327" stroke-width="2"/>
+      ${Array.from({length: 12}, (_, i) => { const a = i * 30 * D2R, r1 = i % 3 ? 46 : 42; return `<line x1="${(x + 95 + Math.sin(a) * r1).toFixed(1)}" y1="${(112 - Math.cos(a) * r1).toFixed(1)}" x2="${(x + 95 + Math.sin(a) * 50).toFixed(1)}" y2="${(112 - Math.cos(a) * 50).toFixed(1)}" stroke="#4a555b" stroke-width="${i % 3 ? 1 : 2}"/>`; }).join('')}
+      ${[12, 3, 6, 9].map((n, i) => { const a = i * 90 * D2R; return `<text x="${(x + 95 + Math.sin(a) * 33).toFixed(1)}" y="${(112 - Math.cos(a) * 33 + 4).toFixed(1)}" text-anchor="middle" font-size="11" fill="#4a555b" font-weight="600">${n}</text>`; }).join('')}
+      <path id="sky${k}" fill="none" stroke-width="3"/>
+      <line id="hh${k}" x1="${x + 95}" y1="112" x2="${x + 95}" y2="84" stroke="#1d2327" stroke-width="4" stroke-linecap="round"/>
+      <line id="mh${k}" x1="${x + 95}" y1="112" x2="${x + 95}" y2="72" stroke="#1d2327" stroke-width="2.4" stroke-linecap="round"/>
+      <circle cx="${x + 95}" cy="112" r="3.5" fill="${PINCOL[k]}"/>
+      <text id="co${k}" x="${x + 95}" y="186" text-anchor="middle" fill="#4a555b" font-size="12.5" class="m"></text>
+      <text x="${x + 14}" y="210" fill="#7c878c" font-size="11.5" font-weight="600">Sun time</text><text id="lt${k}" x="${x + 176}" y="210" text-anchor="end" fill="#1d2327" font-size="14" font-weight="700"></text>
+      <text x="${x + 14}" y="230" fill="#7c878c" font-size="11.5" font-weight="600">IST clocks</text><text id="it${k}" x="${x + 176}" y="230" text-anchor="end" fill="#4a555b" font-size="12.5"></text>
+      <text id="su${k}" x="${x + 95}" y="254" text-anchor="middle" fill="#8a4d00" font-size="12" font-weight="600"></text>
+    </g>`;
+  svg.innerHTML = `
+  <defs>
+    <radialGradient id="gSea" cx="42%" cy="38%"><stop offset="0" stop-color="#4f9be0"/><stop offset=".75" stop-color="#1f5fa8"/><stop offset="1" stop-color="#153f78"/></radialGradient>
+    <radialGradient id="gSun" cx="45%" cy="40%"><stop offset="0" stop-color="#fff4c2"/><stop offset=".55" stop-color="#ffc53d"/><stop offset="1" stop-color="#f28a12"/></radialGradient>
+    <radialGradient id="gGlow"><stop offset="0" stop-color="#ffcf5a" stop-opacity=".5"/><stop offset="1" stop-color="#ffcf5a" stop-opacity="0"/></radialGradient>
+    <clipPath id="clipGlobe"><circle cx="${G.x}" cy="${G.y}" r="${G.R}"/></clipPath>
+  </defs>
+  <rect x="0" y="0" width="580" height="470" fill="#0d1726"/>
+  <g>${stars}</g>
+  <text x="18" y="28" fill="#9fb3c8" font-size="13" font-weight="700" letter-spacing=".08em">THE GLOBE UNDER A LAMP</text>
+  <text x="18" y="46" fill="#6f8399" font-size="11.5">The lamp is the Sun on 21 March, over the Equator.</text>
+  <g id="lamp"><circle id="lampGlow" r="46" fill="url(#gGlow)"/><circle id="lampSun" r="20" fill="url(#gSun)"/></g>
+  <circle cx="${G.x}" cy="${G.y}" r="${G.R}" fill="url(#gSea)"/>
+  <g clip-path="url(#clipGlobe)">
+    <path id="land" fill="#7fb069" stroke="#4e7d3c" stroke-width=".7" stroke-linejoin="round"/>
+    <path id="water" fill="#2a6bb3" stroke="#4e7d3c" stroke-width=".5"/>
+    <path id="india" fill="#e9c46a" stroke="#9a6b12" stroke-width=".9" stroke-linejoin="round"/>
+    <path id="grid" fill="none" stroke="#dce9f7" stroke-width=".7" opacity=".55"/>
+    <path id="gridEq" fill="none" stroke="#ffe08a" stroke-width="1.8"/>
+    <path id="gridPM" fill="none" stroke="#ff9d8a" stroke-width="1.8"/>
+    <path id="night" fill="#040a18" opacity=".62"/>
+    <path id="term" fill="none" stroke="#ffcf5a" stroke-width="1.2" opacity=".7"/>
+    <g id="cityDots">${cityDots}</g>
+  </g>
+  <circle cx="${G.x}" cy="${G.y}" r="${G.R}" fill="none" stroke="#9fc2ea" stroke-width="1" opacity=".6"/>
+  <text id="lbEq" fill="#ffe08a" font-size="11" font-weight="700">Equator 0°</text>
+  <text id="lbPM" fill="#ff9d8a" font-size="11" font-weight="700" text-anchor="middle">Prime Meridian 0°</text>
+  <g id="latLbls" font-size="10" fill="#cfe0f2" font-weight="600"></g>
+  <circle id="globeHit" cx="${G.x}" cy="${G.y}" r="${G.R}" fill="transparent" role="slider" tabindex="0" aria-label="The globe: drag sideways to spin the Earth, up and down to tip it"/>
+  <g id="pinsArt" pointer-events="none">
+    ${['A', 'B'].map(k => `<g id="pin${k}"><line id="pinS${k}" stroke="${PINCOL[k]}" stroke-width="2"/><circle id="pinC${k}" r="10" fill="${PINCOL[k]}" stroke="#fff" stroke-width="2"/><text id="pinT${k}" font-size="11" font-weight="700" fill="#fff" text-anchor="middle">${k}</text><circle id="pinDot${k}" r="3" fill="#fff" stroke="${PINCOL[k]}" stroke-width="1.5"/><text id="pinN${k}" font-size="12" font-weight="700" fill="#fff" stroke="#0d1726" stroke-width="3" paint-order="stroke"></text></g>`).join('')}
+  </g>
+  <circle id="hitA" class="pinHit" r="16" fill="transparent" aria-label="Pin A"/>
+  <circle id="hitB" class="pinHit" r="16" fill="transparent" aria-label="Pin B"/>
+  <text id="behindA" x="18" y="438" fill="#ffb4ad" font-size="11.5"></text>
+  <text id="behindB" x="18" y="456" fill="#a9c8ff" font-size="11.5"></text>
+
+  <!-- the two clocks, and what separates them -->
+  <rect x="580" y="0" width="420" height="470" fill="#f3f1ea"/>
+  ${card('A', 596)}${card('B', 796)}
+  <g id="cmp">
+    <rect x="596" y="278" width="390" height="180" rx="10" fill="#ffffff" stroke="#e2ded2"/>
+    <text x="612" y="302" fill="#4a555b" font-size="12" font-weight="700" letter-spacing=".08em">FROM A TO B</text>
+    <text id="cmp1" x="612" y="328" fill="#1d2327" font-size="13.5"></text>
+    <text id="cmp2" x="612" y="352" fill="#1d2327" font-size="13.5"></text>
+    <text id="cmp3" x="612" y="376" fill="#1d2327" font-size="13.5"></text>
+    <text id="cmp4" x="612" y="400" fill="#1d2327" font-size="13.5"></text>
+    <text id="cmp5" x="612" y="424" fill="#4a555b" font-size="12.5"></text>
+    <text id="cmp6" x="612" y="446" fill="#4a555b" font-size="12.5"></text>
+  </g>
+
+  <!-- the strip: longitude and local time (the book's Fig. 1.7, for the whole world) -->
+  <rect x="0" y="470" width="1000" height="190" fill="#fbfaf6"/>
+  <line x1="0" y1="470" x2="1000" y2="470" stroke="#e2ded2"/>
+  <text x="18" y="494" fill="#4a555b" font-size="12" font-weight="700" letter-spacing=".08em">LONGITUDE AND LOCAL TIME · every colour is 15°</text>
+  <g id="zones"></g>
+  <path id="stripNight" fill="#0d1726" opacity=".18"/>
+  <g id="zoneTimes" font-size="10.5" font-weight="600" text-anchor="middle"></g>
+  <g id="stripAxis"></g>
+  <g id="stripSun"><line id="noonLine" y1="${SX.y - 34}" y2="${SX.y + 22}" stroke="#e8890c" stroke-width="2"/><circle id="noonSun" cy="${SX.y - 42}" r="8" fill="url(#gSun)"/></g>
+  <g id="stripPins">${['A', 'B'].map(k => `<g id="sp${k}"><line id="spL${k}" y1="${SX.y - 26}" y2="${SX.y + 22}" stroke="${PINCOL[k]}" stroke-width="2"/><path id="spT${k}" fill="${PINCOL[k]}"/><text id="spX${k}" y="${SX.y + 43}" text-anchor="middle" font-size="11" font-weight="700" fill="#fff">${k}</text></g>`).join('')}</g>
+  <rect id="stripA" class="stripHit" y="${SX.y - 26}" width="26" height="80" fill="transparent" aria-label="Pin A on the strip"/>
+  <rect id="stripB" class="stripHit" y="${SX.y - 26}" width="26" height="80" fill="transparent" aria-label="Pin B on the strip"/>
+  <rect id="veil" x="580" y="0" width="420" height="470" fill="#f3f1ea" opacity=".96"/>
+  <rect id="veil2" x="0" y="471" width="1000" height="189" fill="#fbfaf6" opacity=".96"/>
+  <text id="veilT" x="790" y="170" text-anchor="middle" fill="#7c878c" font-size="15" font-weight="600">The clocks start once you have made a prediction.</text>
+  `;
+  /* zones: 24 bands of 15°, centred on 0°, 15°, 30° … (the half-bands at the ends meet at 180°) */
+  let z = '';
+  for (let k = -12; k <= 12; k++) {
+    const a = Math.max(-180, k * 15 - 7.5), b = Math.min(180, k * 15 + 7.5);
+    z += `<rect x="${sxOf(a).toFixed(1)}" y="${SX.y - 26}" width="${(sxOf(b) - sxOf(a)).toFixed(1)}" height="48" fill="${(k & 1) ? '#cfe3d4' : '#e6f0e0'}"/>`;
+  }
+  z += `<rect x="${sxOf(68.1)}" y="${SX.y + 22}" width="${sxOf(97.4) - sxOf(68.1)}" height="5" fill="#e9c46a"/><text x="${sxOf(82.7)}" y="${SX.y + 80}" text-anchor="middle" font-size="10.5" fill="#9a6b12" font-weight="700">India 68°–97° E · IST meridian 82½° E</text>`;
+  z += `<line x1="${sxOf(82.5)}" y1="${SX.y - 26}" x2="${sxOf(82.5)}" y2="${SX.y + 27}" stroke="#9a6b12" stroke-width="1.4" stroke-dasharray="3 2"/>`;
+  $('zones').innerHTML = z;
+  let ax = `<line x1="${SX.x0}" y1="${SX.y + 22}" x2="${SX.x1}" y2="${SX.y + 22}" stroke="#9aa3a6"/>`;
+  for (let l = -180; l <= 180; l += 30) {
+    ax += `<line x1="${sxOf(l)}" y1="${SX.y + 22}" x2="${sxOf(l)}" y2="${SX.y + 27}" stroke="#7c878c"/>` +
+          `<text x="${sxOf(l)}" y="${SX.y + 62}" text-anchor="middle" font-size="11" fill="#4a555b">${l === 0 ? '0°' : Math.abs(l) === 180 ? '180°' : Math.abs(l) + '°' + (l > 0 ? 'E' : 'W')}</text>`;
+  }
+  $('stripAxis').innerHTML = ax;
+}
+
+/* ---- globe drawing ----------------------------------------------------------- */
+const scr = p => [G.x + G.R * p.x, G.y - G.R * p.y];
+/* A closed outline: points round the back are pushed out to the rim, so a coast that runs
+   behind the globe hugs the edge instead of cutting across the face. */
+function polyPath(arr, v){
+  let d = '', vis = 0;
+  for (let i = 0; i < arr.length; i += 2) {
+    const p = view(arr[i + 1], arr[i], v);
+    let x = p.x, y = p.y;
+    if (p.z < 0) { const r = Math.hypot(x, y) || 1; x /= r; y /= r; } else vis++;
+    d += (i ? 'L' : 'M') + (G.x + G.R * x).toFixed(1) + ' ' + (G.y - G.R * y).toFixed(1);
+  }
+  return vis ? d + 'Z' : '';
+}
+/* An open line (a parallel or a meridian): only the parts on the near side. */
+function linePath(pts, v){
+  let d = '', pen = false;
+  for (const [lat, lon] of pts) {
+    const p = view(lat, lon, v);
+    if (p.z < 0) { pen = false; continue; }
+    const [x, y] = scr(p);
+    d += (pen ? 'L' : 'M') + x.toFixed(1) + ' ' + y.toFixed(1); pen = true;
+  }
+  return d;
+}
+const PAR = lat => Array.from({length: 121}, (_, i) => [lat, -180 + i * 3]);
+const MER = lon => Array.from({length: 61}, (_, i) => [-90 + i * 3, lon]);
+function drawGlobe(){
+  const v = V();
+  $('land').setAttribute('d', LAND.map(a => polyPath(a, v)).join(''));
+  $('water').setAttribute('d', WATER.map(a => polyPath(a, v)).join(''));
+  $('india').setAttribute('d', polyPath(INDIA, v));
+  let g = '';
+  for (let lat = -75; lat <= 75; lat += 15) if (lat) g += linePath(PAR(lat), v);
+  for (let lon = -165; lon <= 180; lon += 15) if (lon) g += linePath(MER(lon), v);
+  $('grid').setAttribute('d', g);
+  $('gridEq').setAttribute('d', linePath(PAR(0), v));
+  $('gridPM').setAttribute('d', linePath(MER(0), v));
+  /* labels: the Equator where it is nearest the middle; parallels along the middle meridian */
+  const eq = view(0, v.lon0 - 35, v);
+  $('lbEq').setAttribute('opacity', eq.z > 0.2 ? 1 : 0);
+  if (eq.z > 0) { const [x, y] = scr(eq); $('lbEq').setAttribute('x', x.toFixed(1)); $('lbEq').setAttribute('y', (y - 6).toFixed(1)); }
+  const pm = view(-8, 0, v);
+  $('lbPM').setAttribute('opacity', pm.z > 0.25 ? 1 : 0);
+  if (pm.z > 0) { const [x, y] = scr(pm); $('lbPM').setAttribute('x', x.toFixed(1)); $('lbPM').setAttribute('y', (y + 16).toFixed(1)); }
+  let ll = '';
+  for (const lat of [-60, -30, 30, 60]) {
+    const p = view(lat, v.lon0 + 45, v);
+    if (p.z > 0.15) { const [x, y] = scr(p); ll += `<text x="${(x + 3).toFixed(1)}" y="${(y - 3).toFixed(1)}">${Math.abs(lat)}°${lat > 0 ? 'N' : 'S'}</text>`; }
+  }
+  $('latLbls').innerHTML = ll;
+  /* night: the half of the globe facing away from the lamp, as seen from here */
+  const s = view(0, subsolarLon(S.t), v);
+  const sxy = Math.hypot(s.x, s.y);
+  let nd = '', td = '';
+  if (sxy > 1e-6) {
+    const u = {x: s.x / sxy, y: s.y / sxy}, w = {x: -u.y, y: u.x}, N = 48;
+    const pt = (px, py) => (G.x + G.R * px).toFixed(1) + ' ' + (G.y - G.R * py).toFixed(1);
+    for (let i = 0; i <= N; i++) { const a = Math.PI * i / N; nd += (i ? 'L' : 'M') + pt(Math.cos(a) * w.x - Math.sin(a) * u.x, Math.cos(a) * w.y - Math.sin(a) * u.y); }
+    for (let i = N; i >= 0; i--) { const a = Math.PI * i / N, px = Math.cos(a) * w.x - s.z * Math.sin(a) * u.x, py = Math.cos(a) * w.y - s.z * Math.sin(a) * u.y;
+      nd += 'L' + pt(px, py); td += (i === N ? 'M' : 'L') + pt(px, py); }
+    nd += 'Z';
+  } else if (s.z < 0) nd = `M${G.x - G.R} ${G.y}a${G.R} ${G.R} 0 1 0 ${2 * G.R} 0a${G.R} ${G.R} 0 1 0 ${-2 * G.R} 0Z`;
+  $('night').setAttribute('d', nd); $('term').setAttribute('d', td);
+  /* the lamp, off to the side the light comes from */
+  const lx = G.x + (G.R + 70) * (sxy > 1e-6 ? s.x / sxy : -1), ly = G.y - (G.R + 70) * (sxy > 1e-6 ? s.y / sxy : 0);
+  for (const id of ['lampGlow', 'lampSun']) { $(id).setAttribute('cx', clamp(lx, 30, 560).toFixed(1)); $(id).setAttribute('cy', clamp(ly, 60, 440).toFixed(1)); }
+  for (const c of CITIES) {
+    const p = view(c.lat, c.lon, v), el = $('cd_' + c.id);
+    if (p.z < 0.02) { el.setAttribute('opacity', 0); continue; }
+    const [x, y] = scr(p); el.setAttribute('cx', x.toFixed(1)); el.setAttribute('cy', y.toFixed(1)); el.setAttribute('opacity', 1);
+  }
+}
+function drawPins(){
+  const v = V();
+  for (const k of ['A', 'B']) {
+    const P = S.pins[k], p = view(P.lat, P.lon, v), on = p.z > 0.02;
+    $('pin' + k).setAttribute('opacity', on ? 1 : 0);
+    $('hit' + k).style.display = on && S.locked ? '' : 'none';
+    const c = P.city ? cityById(P.city) : null;
+    $('behind' + k).textContent = on ? '' : `Pin ${k}${c ? ' (' + c.name + ')' : ''} is round the back of the globe.`;
+    if (!on) continue;
+    const [x, y] = scr(p);
+    $('pinDot' + k).setAttribute('cx', x.toFixed(1)); $('pinDot' + k).setAttribute('cy', y.toFixed(1));
+    $('pinS' + k).setAttribute('x1', x.toFixed(1)); $('pinS' + k).setAttribute('y1', y.toFixed(1));
+    $('pinS' + k).setAttribute('x2', x.toFixed(1)); $('pinS' + k).setAttribute('y2', (y - 16).toFixed(1));
+    $('pinC' + k).setAttribute('cx', x.toFixed(1)); $('pinC' + k).setAttribute('cy', (y - 24).toFixed(1));
+    $('pinT' + k).setAttribute('x', x.toFixed(1)); $('pinT' + k).setAttribute('y', (y - 20).toFixed(1));
+    $('pinN' + k).setAttribute('x', (x + 14).toFixed(1)); $('pinN' + k).setAttribute('y', (y - 20).toFixed(1));
+    $('pinN' + k).textContent = c ? c.name : '';
+    $('hit' + k).setAttribute('cx', x.toFixed(1)); $('hit' + k).setAttribute('cy', (y - 16).toFixed(1));
+  }
+}
+
+/* ---- clocks, comparison and the strip ------------------------------------------ */
+function drawClocks(){
+  for (const k of ['A', 'B']) {
+    const P = S.pins[k], lt = localTime(S.t, P.lon), it = istTime(S.t), alt = sunAlt(S.t, P.lat, P.lon), c = P.city ? cityById(P.city) : null;
+    const x = k === 'A' ? 596 : 796, cx = x + 95, cy = 112;
+    const m = lt.min, ha = ((m / 60) % 12) * 30 * D2R, ma = (m % 60) * 6 * D2R;
+    $('hh' + k).setAttribute('x2', (cx + Math.sin(ha) * 28).toFixed(1)); $('hh' + k).setAttribute('y2', (cy - Math.cos(ha) * 28).toFixed(1));
+    $('mh' + k).setAttribute('x2', (cx + Math.sin(ma) * 42).toFixed(1)); $('mh' + k).setAttribute('y2', (cy - Math.cos(ma) * 42).toFixed(1));
+    $('sky' + k).setAttribute('d', `M${cx - 55} ${cy}A55 55 0 0 1 ${cx + 55} ${cy}`);
+    $('sky' + k).setAttribute('stroke', alt > 0 ? '#ffc53d' : '#27406b');
+    $('nm' + k).textContent = c ? c.name : 'Pin ' + k;
+    $('co' + k).textContent = latTxt(P.lat) + ', ' + lonTxt(P.lon);
+    $('lt' + k).textContent = clock(m) + (lt.day ? (lt.day > 0 ? ' +1d' : ' −1d') : '');
+    $('it' + k).textContent = clock(it.min);
+    $('su' + k).textContent = alt > 0.5 ? `☀ Sun ${fmt(alt, 0)}° above the horizon` : alt > -0.5 ? 'The Sun is on the horizon' : '☾ Night: the Sun has set';
+    $('su' + k).setAttribute('fill', alt > 0 ? '#8a4d00' : '#27406b');
+  }
+  const A = S.pins.A, B = S.pins.B, dl = lonGap(A.lon, B.lon), dt = 4 * dl, d = distKm(A, B), br = bearing(A, B);
+  $('cmp1').textContent = `B is ${fmt(Math.abs(dl), 1)}° of longitude ${dl >= 0 ? 'east' : 'west'} of A.`;
+  $('cmp2').textContent = Math.abs(dt) < 1 ? 'So their sun times are the same.' :
+    `${fmt(Math.abs(dl), 1)} × 4 min = ${hmin(dt)}: B’s sun time is ${dt >= 0 ? 'ahead' : 'behind'}.`;
+  $('cmp3').textContent = d < 1 ? 'The two pins are in the same place.' : `${Math.round(d).toLocaleString('en-IN')} km over the ground; B lies ${point8(br)} of A.`;
+  $('cmp4').textContent = `On a map at 2.5 cm = 500 km, that is ${fmt(d / 200, 1)} cm.`;
+  $('cmp5').textContent = `Parallel through A: ${Math.round(parallelKm(A.lat)).toLocaleString('en-IN')} km round (Equator ${Math.round(parallelKm(0)).toLocaleString('en-IN')} km).`;
+  const la = localTime(S.t, A.lon), lb = localTime(S.t, B.lon);
+  $('cmp6').textContent = `Dates by the Sun: A ${MONTH_DAY(la.day)}, B ${MONTH_DAY(lb.day)}${la.day !== lb.day ? ' — two dates at once.' : '.'}`;
+}
+function drawStrip(){
+  const ls = subsolarLon(S.t), nx = sxOf(ls);
+  $('noonLine').setAttribute('x1', nx.toFixed(1)); $('noonLine').setAttribute('x2', nx.toFixed(1)); $('noonSun').setAttribute('cx', nx.toFixed(1));
+  /* night on the strip: local sun time before 6 am or after 6 pm (equinox day) */
+  let d = '';
+  const segs = [];
+  for (let l = -180; l < 180; l += 1) { const m = localTime(S.t, l + 0.5).min; if (m < 360 || m >= 1080) segs.push(l); }
+  for (let i = 0; i < segs.length; i++) {
+    const a = segs[i]; let b = a; while (i + 1 < segs.length && segs[i + 1] === b + 1) { b++; i++; }
+    d += `M${sxOf(a).toFixed(1)} ${SX.y - 26}H${sxOf(b + 1).toFixed(1)}V${SX.y + 22}H${sxOf(a).toFixed(1)}Z`;
+  }
+  $('stripNight').setAttribute('d', d);
+  let zt = '';
+  for (let k = -12; k <= 12; k++) {
+    const l = k * 15; if (Math.abs(l) === 180 && l > 0) continue;
+    const m = localTime(S.t, l).min, h = Math.round(m / 60) % 24;
+    const lab = h === 12 ? '12 PM' : h === 0 ? '12 AM' : ((h + 11) % 12 + 1) + (h < 12 ? ' AM' : ' PM');
+    zt += `<text x="${sxOf(l).toFixed(1)}" y="${SX.y - 8}" fill="${m < 360 || m >= 1080 ? '#27406b' : '#5a3a00'}">${Math.abs(m - h * 60) < 1 || Math.abs(m - h * 60 - 1440) < 1 ? lab : clock(m).replace(/ (am|pm)$/, '')}</text>`;
+  }
+  $('zoneTimes').innerHTML = zt;
+  for (const k of ['A', 'B']) {
+    const x = sxOf(S.pins[k].lon);
+    $('spL' + k).setAttribute('x1', x.toFixed(1)); $('spL' + k).setAttribute('x2', x.toFixed(1));
+    $('spT' + k).setAttribute('d', `M${x - 11} ${SX.y + 28}h22v20h-22Z`);
+    $('spX' + k).setAttribute('x', x.toFixed(1));
+    $('strip' + k).setAttribute('x', (x - 13).toFixed(1));
+  }
+}
+
+/* ---- the narrator: what THIS state is doing, from the model ----------------------- */
+function paintWhy(){
+  if (!S.locked) return;
+  $('whyCard').hidden = false;
+  const A = S.pins.A, B = S.pins.B, ca = A.city ? cityById(A.city) : null, cb = B.city ? cityById(B.city) : null;
+  const la = localTime(S.t, A.lon), altA = sunAlt(S.t, A.lat, A.lon), altB = sunAlt(S.t, B.lat, B.lon);
+  const dl = lonGap(A.lon, B.lon), name = (c, k) => c ? c.name : 'pin ' + k;
+  let t = `<p><b>${ca ? ca.name : 'Pin A'}</b> is at ${latTxt(A.lat)}, ${lonTxt(A.lon)}: ${round0(A.lat)} ${A.lat >= 0 ? 'north' : 'south'} of the Equator and ${round0(A.lon)} ${A.lon >= 0 ? 'east' : 'west'} of Greenwich. `;
+  t += `By the Sun it is <b>${clock(la.min)}</b> there; clocks in India all show IST, <b>${clock(istTime(S.t).min)}</b>.</p>`;
+  if (Math.abs(dl) < 0.6) t += `<p>${name(cb, 'B')} is on almost the same meridian, so the Sun is highest over both at the same moment: their sun times match, however far apart they are from north to south.</p>`;
+  else t += `<p>${name(cb, 'B')} is ${fmt(Math.abs(dl), 1)}° further ${dl > 0 ? 'east' : 'west'}. The Earth turns from west to east, so the Sun reaches ${dl > 0 ? name(cb, 'B') : name(ca, 'A')} first: noon, sunset and sunrise come <b>${hmin(4 * Math.abs(dl))}</b> earlier there.</p>`;
+  if ((altA > 0) !== (altB > 0)) t += `<p>Right now the Sun is up at ${altA > 0 ? name(ca, 'A') : name(cb, 'B')} (${fmt(Math.max(altA, altB), 0)}° high) but has set at ${altA > 0 ? name(cb, 'B') : name(ca, 'A')}.</p>`;
+  $('why').innerHTML = t;
+}
+
+/* ---- missions and findings: reached by the model ---------------------------------- */
+function paintMissions(){
+  const on = id => S.pins.A.city === id || S.pins.B.city === id;
+  const both = (a, b) => (S.pins.A.city === a && S.pins.B.city === b) || (S.pins.A.city === b && S.pins.B.city === a);
+  const rows = [
+    {done: S.visited.friends, html: `<span class="nm">The two friends:</span> A on Porbandar <span class="co">21.6° N, 69.6° E</span>, B on Tinsukia <span class="co">27.5° N, 95.4° E</span>`},
+    {done: S.visited.delblr, html: `<span class="nm">Question 6:</span> Delhi <span class="co">29° N, 77° E</span> and Bengaluru <span class="co">13° N, 77° E</span>`},
+    ...MYSTERY.map(id => { const c = cityById(id); const got = S.found.includes(id);
+      return {done: got, html: `<span class="co">${Math.round(c.lat)}° ${c.lat >= 0 ? 'N' : 'S'}, ${Math.round(c.lon)}° ${c.lon >= 0 ? 'E' : 'W'}</span> ${got ? '<span class="nm">' + esc(c.name) + '</span>' : '— which city is here?'}`}; }),
+  ];
+  $('mis').innerHTML = rows.map(r => `<li class="${r.done ? 'done' : ''}"><i>${r.done ? '✓' : '·'}</i><span>${r.html}</span></li>`).join('');
+  void on; void both;
+}
+function check(){
+  if (!S.locked) return;
+  const A = S.pins.A, B = S.pins.B;
+  const both = (a, b) => (A.city === a && B.city === b) || (A.city === b && B.city === a);
+  for (const id of MYSTERY) if ((A.city === id || B.city === id) && !S.found.includes(id)) { S.found.push(id); discover('coords'); }
+  if (both('porbandar', 'tinsukia')) {
+    S.visited.friends = true;
+    const tin = cityById('tinsukia'), por = cityById('porbandar');
+    if (sunAlt(S.t, tin.lat, tin.lon) < 0 && sunAlt(S.t, por.lat, por.lon) > 0) discover('sunset');
+    maybeExplain();
+  }
+  if (both('delhi', 'bengaluru')) S.visited.delblr = true;
+  if (Math.abs(lonGap(A.lon, B.lon)) < 0.6 && Math.abs(A.lat - B.lat) >= 10) discover('samelon');
+  for (const P of [A, B]) {
+    if (Math.abs(P.lat) >= 60) discover('shrink');
+    if (Math.abs(P.lon - 82.5) < 0.3) discover('ist');
+  }
+  if (localTime(S.t, A.lon).day !== localTime(S.t, B.lon).day) discover('twodates');
+  paintMissions();
+}
+let EXPLAINED = false;
+function maybeExplain(){
+  if (EXPLAINED || !POE) return;
+  EXPLAINED = true;
+  const p = cityById('porbandar'), q = cityById('tinsukia'), dl = lonGap(p.lon, q.lon);
+  POE.explain(`Tinsukia is <b>${fmt(dl, 1)}°</b> of longitude east of Porbandar. The Earth turns 1° every 4 minutes, so the Sun reaches Tinsukia
+    <b>${fmt(dl, 1)} × 4 = ${Math.round(4 * dl)} minutes</b> (${hmin(4 * dl)}) earlier. With the book’s round figure of 30°, that is 30 × 4 = <b>120 minutes, 2 hours</b>.
+    Both friends’ watches show the same IST, but IST is a standard time; the Sun keeps each town’s local time.`);
+}
+
+/* ---- paint ----------------------------------------------------------------------- */
+function paint(){
+  drawGlobe(); drawPins(); drawClocks(); drawStrip(); paintWhy();
+  $('gmtOut').textContent = clock(S.t);
+  $('gmt').value = Math.round(S.t / 4) * 4;
+  const turned = (S.t - 720) / 4;
+  $('gmtDeg').textContent = (turned > 0 ? '+' : '') + Math.round(turned) + '°';
+  check();
+}
+
+/* ============================================================================
+   Controls
+   ============================================================================ */
+build();
+let ANIM = null;
+function setPlaying(on){
+  S.playing = on;
+  $('btnPlay').textContent = on ? '❚❚' : '▶';
+  $('btnPlay').setAttribute('aria-label', on ? 'Pause' : 'Spin the Earth');
+  if (ANIM) { ANIM.stop(); ANIM = null; }
+  if (on) ANIM = loop(dt => { S.t = (S.t + dt * 90) % 1440; paint(); });   // 1.5 hours a second
+}
+$('btnPlay').addEventListener('click', () => { setPlaying(!S.playing); sound('tick'); track('spin', {on: S.playing}); });
+$('gmt').addEventListener('input', e => { setPlaying(false); S.t = +e.target.value; paint(); });
+$('gmt').addEventListener('change', () => track('time', {gmt: S.t}));
+
+/* Spin the globe by hand: sideways turns the Earth (and so moves time); up and down tips the view. */
+let G0 = null;
+drag($('globeHit'), svg, {
+  start(p){ if (!S.locked) return false; setPlaying(false); G0 = {p, t: S.t, lat0: S.lat0}; },
+  move(p){
+    const dx = p.x - G0.p.x, dy = p.y - G0.p.y;
+    S.t = ((G0.t + dx / G.R * R2D * 4) % 1440 + 1440) % 1440;
+    S.lat0 = clamp(G0.lat0 + dy / G.R * R2D, -70, 70);
+    paint();
+  },
+  end(){ track('spinByHand', {gmt: Math.round(S.t)}); },
+});
+/* Pins: drag on the globe (latitude and longitude), or along the strip (longitude only). */
+for (const k of ['A', 'B']) {
+  drag($('hit' + k), svg, {
+    start(){ if (!S.locked) return false; setPlaying(false); },
+    move(p){
+      const q = unview((p.x - G.x) / G.R, (G.y - (p.y + 16)) / G.R, V());
+      const c = nearestCity(q.lat, q.lon);
+      S.pins[k] = c ? {lat: c.lat, lon: c.lon, city: c.id} : {lat: q.lat, lon: q.lon, city: null};
+      paint();
+    },
+    end(){ const P = S.pins[k]; if (P.city) sound('pop'); track('pin', {pin: k, lat: +P.lat.toFixed(2), lon: +P.lon.toFixed(2), city: P.city}); },
+  });
+  drag($('strip' + k), svg, {
+    start(){ if (!S.locked) return false; setPlaying(false); },
+    move(p){
+      const lon = lonOfSx(p.x), P = S.pins[k];
+      const c = nearestCity(P.lat, lon);
+      S.pins[k] = c ? {lat: c.lat, lon: c.lon, city: c.id} : {lat: P.lat, lon, city: null};
+      paint();
+    },
+    end(){ track('pinStrip', {pin: k, lon: +S.pins[k].lon.toFixed(2)}); },
+  });
+}
+$('globeHit').addEventListener('keydown', e => {
+  const k = {ArrowRight: 4, ArrowLeft: -4, ArrowUp: 0, ArrowDown: 0}[e.key];
+  if (k == null || !S.locked) return;
+  e.preventDefault(); setPlaying(false);
+  if (k) S.t = (S.t + k * (e.shiftKey ? 15 : 1) + 1440) % 1440; else S.lat0 = clamp(S.lat0 + (e.key === 'ArrowDown' ? 5 : -5), -70, 70);
+  paint();
+});
+function lockControls(lock){
+  for (const id of ['gmt', 'btnPlay']) $(id).disabled = lock;
+  for (const id of ['globeHit', 'stripA', 'stripB']) $(id).style.pointerEvents = lock ? 'none' : '';
+  $('gate').hidden = !lock;
+}
+
+/* ============================================================================
+   Start
+   ============================================================================ */
+findings($('finds'), [
+  {id: 'sunset',   icon: '🌇', label: 'Sunset comes first in the east', hint: 'Porbandar and Tinsukia, late afternoon'},
+  {id: 'samelon',  icon: '↕', label: 'Same meridian, same sun time',    hint: 'Two places due north and south of each other'},
+  {id: 'ist',      icon: '🕰', label: 'IST is the sun time at 82½° E',   hint: 'Where do IST and sun time agree?'},
+  {id: 'coords',   icon: '⌖', label: 'Two numbers find any place',       hint: 'Find a city from its latitude and longitude'},
+  {id: 'shrink',   icon: '◯', label: 'Parallels shrink towards the poles', hint: 'Take a pin far north or south'},
+  {id: 'twodates', icon: '📅', label: 'Two dates at once',               hint: 'Is it tomorrow somewhere already?'},
+], () => toast('All six found. You can find any place on the Earth, and tell its time from the Sun.', 4200));
+
+const POE = predict($('poe'), {
+  id: 'porbandar-tinsukia',
+  q: 'Porbandar and Tinsukia are about 30° of longitude apart. The Sun has set in Tinsukia but it is still daylight in Porbandar. How far apart are their times by the Sun?',
+  options: [
+    {id: 'none',   text: 'Not at all: both towns are in India, so they have the same time.'},
+    {id: 'half',   text: 'About 30 minutes.'},
+    {id: 'two',    text: 'About 2 hours.', right: true},
+    {id: 'thirty', text: 'About 30 hours.'},
+  ],
+  onLock(){
+    S.locked = true;
+    lockControls(false);
+    for (const id of ['veil', 'veil2', 'veilT']) $(id).remove();
+    say('Now find out. Put pin A on Porbandar and pin B on Tinsukia, and turn the Earth.');
+    paint();
+  },
+});
+lockControls(!POE.locked);
+if (!Play.FF('predict')) S.locked = true;
+paint();
+paintMissions();
+window.applyFeatures = () => paint();
+window.PG_STATE = () => JSON.parse(JSON.stringify(Object.assign({}, S, {view: V()})));
+window.PG_MODEL = {localTime, istTime, subsolarLon, sunAlt, distKm, bearing, point8, parallelKm, meridianKm, lonGap, view, unview, nearestCity,
+  G, sxOf, cities: CITIES};
+</script>
+</body>
+</html>

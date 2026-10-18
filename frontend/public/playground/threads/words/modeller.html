@@ -1,0 +1,894 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Who Did What</title>
+<meta name="description" content="Class 9–10: build a sentence from a lexicon, flip it from active to passive with a small grammar engine, and turn direct speech into reported speech one rule at a time.">
+<link rel="icon" href="../../favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600&family=Inter:wght@400;500;600;700&family=Nunito:wght@500;700;800&family=Newsreader:opsz,wght@6..72,400;6..72,500&family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="../../play.css">
+<style>
+/* Only what this page needs beyond play.css. */
+.pg-stage{align-self:start}
+.gate{position:absolute; inset:0; display:grid; place-items:center; pointer-events:none}
+.gate span{background:rgba(29,35,39,.85); color:#fff; padding:10px 16px; border-radius:99px; font-weight:600; font-size:14px}
+.seg{display:grid; grid-template-columns:1fr 1fr; gap:4px; background:var(--sunk); padding:4px; border-radius:var(--radius-sm); margin-bottom:10px}
+.seg button{border:0; background:transparent; border-radius:7px; min-height:32px; font-weight:600; font-size:13px; cursor:pointer; color:var(--ink-2)}
+.seg button[aria-pressed="true"]{background:var(--card); color:var(--ink); box-shadow:var(--shadow)}
+.seg button:disabled{opacity:.5; cursor:default}
+.cyc{display:grid; grid-template-columns:78px 32px 1fr 32px; gap:6px; align-items:center; margin:5px 0}
+.cyc label{font-size:12px; font-weight:700; letter-spacing:.05em; text-transform:uppercase}
+.cyc output{text-align:center; font-weight:600; border-radius:8px; padding:5px 6px; background:var(--sunk); white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+.cyc .btn{padding:0; min-height:30px}
+.tgrid{display:grid; grid-template-columns:70px repeat(3, 1fr); gap:4px; margin:10px 0 8px; font-size:12.5px}
+.tgrid span{font-weight:700; color:var(--ink-3); font-size:11px; text-transform:uppercase; letter-spacing:.04em; align-self:center}
+.tgrid button{min-height:30px; border-radius:7px; border:1px solid var(--hair-2); background:var(--card); cursor:pointer; font-size:12.5px; font-weight:600; color:var(--ink-2); position:relative}
+.tgrid button[aria-pressed="true"]{background:var(--accent); border-color:var(--accent); color:#fff}
+.tgrid button.seen::after{content:"✓"; position:absolute; top:-2px; right:3px; font-size:10px; color:#2f9e5b}
+.tgrid button[aria-pressed="true"].seen::after{color:#fff}
+.nums{display:grid; grid-template-columns:auto 1fr; gap:4px 12px; font-size:13.5px}
+.nums b{font-weight:600; text-align:right}
+.why p{font-size:14px}
+.note{font-size:12.5px; color:var(--ink-3); margin:6px 0 0}
+.ctl output{min-width:120px; font-size:13px}
+#myQuote{flex:1; min-width:0; font:inherit; min-height:34px; border-radius:8px; border:1px solid var(--hair-2); background:var(--card); color:var(--ink); padding:0 8px}
+#endHit{cursor:grab}
+#endHit.dragging{cursor:grabbing}
+.chg{display:grid; grid-template-columns:auto 1fr; gap:4px 10px; font-size:13.5px; align-items:baseline}
+.chg i{font-style:normal; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.05em; padding:1px 6px; border-radius:5px; color:#fff; white-space:nowrap}
+</style>
+</head>
+<body>
+<header class="pg-top"></header>
+
+<div class="pg-intro">
+  <h1>Who did what to whom</h1>
+  <p>Build a sentence from word blocks and flip it: a small grammar engine moves the doer and the receiver, and rebuilds the verb in the same tense.
+     Then report what someone said, one rule at a time: the tense steps back, the pronouns change sides, and “today” becomes “that day”.</p>
+</div>
+
+<main class="pg-main wide-side">
+  <section class="pg-stage" id="stageWrap">
+    <svg id="stage" viewBox="0 0 1000 660" role="img" aria-label="A picture of who did what to whom, the sentence as word blocks grouped into doer, action and receiver, and its active and passive forms"></svg>
+    <div class="gate" id="gate"><span>Make your prediction first →</span></div>
+  </section>
+
+  <aside class="pg-side">
+    <div id="poe"></div>
+
+    <div class="card" id="ctlCard">
+      <div class="seg">
+        <button id="tabAP" aria-pressed="true">Active ↔ Passive</button>
+        <button id="tabRS" aria-pressed="false">Reported speech</button>
+      </div>
+      <div id="ctlAP">
+        <div class="cyc"><label style="color:#b26b00">Doer</label><button class="btn" id="dPrev" aria-label="Previous doer">‹</button><output id="dOut"></output><button class="btn" id="dNext" aria-label="Next doer">›</button></div>
+        <div class="cyc"><label style="color:#52606d">Action</label><button class="btn" id="vPrev" aria-label="Previous verb">‹</button><output id="vOut"></output><button class="btn" id="vNext" aria-label="Next verb">›</button></div>
+        <div class="cyc"><label style="color:#0f766e">Receiver</label><button class="btn" id="rPrev" aria-label="Previous receiver">‹</button><output id="rOut"></output><button class="btn" id="rNext" aria-label="Next receiver">›</button></div>
+        <div class="tgrid" id="tgrid"></div>
+        <div class="row">
+          <button class="btn primary" id="btnFlip">Flip to passive</button>
+          <button class="btn" id="btnAgent" aria-pressed="true">Doer shown</button>
+        </div>
+        <p class="note">You can also drag the last block of the sentence to the front.</p>
+      </div>
+      <div id="ctlRS" hidden>
+        <div class="cyc"><label>Quote</label><button class="btn" id="qPrev" aria-label="Previous quote">‹</button><output id="qOut"></output><button class="btn" id="qNext" aria-label="Next quote">›</button></div>
+        <div class="cyc"><label>Speaker</label><button class="btn" id="sPrev" aria-label="Previous speaker">‹</button><output id="sOut"></output><button class="btn" id="sNext" aria-label="Next speaker">›</button></div>
+        <div class="cyc"><label>Said to</label><button class="btn" id="lPrev" aria-label="Previous listener">‹</button><output id="lOut"></output><button class="btn" id="lNext" aria-label="Next listener">›</button></div>
+        <div class="row" style="margin:8px 0 2px"><input id="myQuote" placeholder="Or type your own: I am busy today" aria-label="Your own sentence to report"><button class="btn sm" id="btnMine">Report it</button></div>
+        <div class="ctl"><label for="rs">Direct → Reported</label><input type="range" id="rs" min="0" max="4" step="1" value="0"><output id="rsOut"></output></div>
+      </div>
+    </div>
+
+    <div class="card" id="numCard">
+      <div class="kicker" id="numKick">What the engine did</div>
+      <div id="nums"></div>
+    </div>
+
+    <div class="card why" id="whyCard" hidden>
+      <div class="kicker">What is happening</div>
+      <div id="why"></div>
+    </div>
+
+    <div class="card"><div class="kicker">To find</div><div id="finds"></div></div>
+  </aside>
+</main>
+
+<script src="../../play.js"></script>
+<script>
+'use strict';
+const {$, esc, clamp, lerp, drag, tween, sound, say, track, toast, predict, findings, discover, found,
+       shareState, sharedState, mount, reduced, ease} = Play;
+mount({thread: 'words', band: 'modeller'});
+
+/* MODEL:start ==================================================================
+   A small grammar engine over a curated lexicon. Nothing here is a stored
+   transformed sentence: the active clause, its passive and its reported form are
+   all BUILT from the lexicon by rules —
+     · verb morphology (third-person -s, -ing, past, past participle),
+     · agreement of be / have with the subject,
+     · pronoun case (subject I/he/they ↔ object me/him/them),
+     · the passive: receiver → subject, be (same tense) + past participle, by + doer,
+     · reported speech: one step back in tense, pronouns re-anchored to the
+       speaker and listener, time and place words moved to "then and there".
+   ============================================================================ */
+const PRON = {
+  I:    {s: 'I',    o: 'me',   p: 'my',    person: 1, num: 'sg', ref: '1sg'},
+  you:  {s: 'you',  o: 'you',  p: 'your',  person: 2, num: 'pl', ref: '2'},
+  he:   {s: 'he',   o: 'him',  p: 'his',   person: 3, num: 'sg'},
+  she:  {s: 'she',  o: 'her',  p: 'her',   person: 3, num: 'sg'},
+  it:   {s: 'it',   o: 'it',   p: 'its',   person: 3, num: 'sg'},
+  we:   {s: 'we',   o: 'us',   p: 'our',   person: 1, num: 'pl', ref: '1pl'},
+  they: {s: 'they', o: 'them', p: 'their', person: 3, num: 'pl'},
+};
+/* entities: who or what can do, or receive, an action */
+const ENT = [
+  {id: 'I', pron: 'I', icon: 'me'}, {id: 'you', pron: 'you', icon: 'you'}, {id: 'he', pron: 'he', icon: 'man'},
+  {id: 'she', pron: 'she', icon: 'woman'}, {id: 'we', pron: 'we', icon: 'we'}, {id: 'they', pron: 'they', icon: 'they'},
+  {id: 'Riya', name: 'Riya', icon: 'girl'}, {id: 'Arjun', name: 'Arjun', icon: 'boy'},
+  {id: 'dog', det: 'the', noun: 'dog', icon: 'dog'}, {id: 'cat', det: 'the', noun: 'cat', icon: 'cat'},
+  {id: 'teacher', det: 'the', noun: 'teacher', icon: 'teacher'}, {id: 'children', det: 'the', noun: 'children', num: 'pl', icon: 'children'},
+  {id: 'farmer', det: 'the', noun: 'farmer', icon: 'farmer'}, {id: 'birds', det: 'the', noun: 'birds', num: 'pl', icon: 'birds'},
+  {id: 'ball', det: 'the', noun: 'ball', icon: 'ball', thing: true, kind: 't'}, {id: 'letter', det: 'a', noun: 'letter', icon: 'letter', thing: true, kind: 'w'},
+  {id: 'cake', det: 'the', noun: 'cake', icon: 'cake', thing: true, kind: 'f'}, {id: 'song', det: 'a', noun: 'song', icon: 'song', thing: true, kind: 'sw'},
+  {id: 'window', det: 'the', noun: 'window', icon: 'window', thing: true, kind: 'o'}, {id: 'kite', det: 'the', noun: 'kite', icon: 'kite', thing: true, kind: 't'},
+  {id: 'book', det: 'the', noun: 'book', icon: 'book', thing: true, kind: 'bw'}, {id: 'mangoes', det: 'the', noun: 'mangoes', num: 'pl', icon: 'mangoes', thing: true, kind: 'f'},
+];
+const entOf = id => ENT.find(e => e.id === id);
+const DOERS = ENT.filter(e => !e.thing).map(e => e.id);
+const RECEIVERS = ENT.map(e => e.id);
+/* 22 transitive verbs: base, simple past, past participle (regular and irregular), who can do it
+   (p = people, a = animals) and what it can be done to — so the engine builds sense, not just grammar.
+   Receiver kinds: p people, a animals, t toys, f food, w things written, s songs, b books, o the window. */
+const VERBS = [
+  ['chase', 'chased', 'chased', 'pa', 'pat'], ['bite', 'bit', 'bitten', 'pa', 'paf'], ['eat', 'ate', 'eaten', 'pa', 'f'],
+  ['write', 'wrote', 'written', 'p', 'w'], ['sing', 'sang', 'sung', 'pa', 's'], ['throw', 'threw', 'thrown', 'p', 'tb'],
+  ['catch', 'caught', 'caught', 'pa', 'tpa'], ['see', 'saw', 'seen', 'pa', 'patfwsbo'], ['help', 'helped', 'helped', 'p', 'pa'],
+  ['call', 'called', 'called', 'p', 'pa'], ['paint', 'painted', 'painted', 'p', 'ot'], ['kick', 'kicked', 'kicked', 'p', 't'],
+  ['carry', 'carried', 'carried', 'pa', 'tfwbpa'], ['find', 'found', 'found', 'pa', 'patfwb'], ['take', 'took', 'taken', 'pa', 'tfwb'],
+  ['break', 'broke', 'broken', 'pa', 'ot'], ['draw', 'drew', 'drawn', 'p', 'pato'], ['teach', 'taught', 'taught', 'p', 'p'],
+  ['invite', 'invited', 'invited', 'p', 'p'], ['wash', 'washed', 'washed', 'p', 'aot'], ['feed', 'fed', 'fed', 'p', 'ap'],
+  ['bring', 'brought', 'brought', 'pa', 'tfwba'],
+].map(([base, past, pp, doer, objs]) => ({base, past, pp, doer, objs}));
+const kindOf = e => e.kind || (['dog', 'cat', 'birds'].includes(e.id) ? 'a' : 'p');
+/* does this doer–verb–receiver make sense? (the grammar works either way; this keeps it sensible) */
+function fits(doerId, verbBase, recvId){
+  const v = VERBS.find(x => x.base === verbBase); if (!v) return true;
+  const d = entOf(doerId), r = entOf(recvId);
+  return v.doer.includes(kindOf(d)) && kindOf(r).split('').some(k => v.objs.includes(k));
+}
+/* extra verbs that only appear inside quoted speech */
+const QVERBS = [['like', 'liked', 'liked'], ['go', 'went', 'gone'], ['come', 'came', 'come'], ['play', 'played', 'played'],
+  ['read', 'read', 'read'], ['finish', 'finished', 'finished'], ['want', 'wanted', 'wanted'], ['know', 'knew', 'known'],
+  ['live', 'lived', 'lived'], ['work', 'worked', 'worked'], ['love', 'loved', 'loved'], ['need', 'needed', 'needed'],
+  ['visit', 'visited', 'visited'], ['make', 'made', 'made'], ['meet', 'met', 'met'], ['win', 'won', 'won'], ['lose', 'lost', 'lost'],
+  ['buy', 'bought', 'bought'], ['do', 'did', 'done'], ['give', 'gave', 'given'], ['get', 'got', 'got'], ['stay', 'stayed', 'stayed'],
+  ['study', 'studied', 'studied'], ['watch', 'watched', 'watched'], ['leave', 'left', 'left']].map(([base, past, pp]) => ({base, past, pp}));
+const ALLV = VERBS.concat(QVERBS);
+
+function thirdS(b){ if (/(s|sh|ch|x|z|o)$/.test(b)) return b + 'es'; if (/[^aeiou]y$/.test(b)) return b.slice(0, -1) + 'ies'; return b + 's'; }
+function ing(b){
+  if (/ie$/.test(b)) return b.slice(0, -2) + 'ying';
+  if (/[^aeiouy]e$/.test(b)) return b.slice(0, -1) + 'ing';                               // chase → chasing, but see → seeing
+  if (/^[^aeiou]*[aeiou][^aeiouwxy]$/.test(b)) return b + b.slice(-1) + 'ing';           // run → running, win → winning
+  return b + 'ing';
+}
+const agrOf = e => e.pron ? PRON[e.pron] : {person: 3, num: e.num || 'sg'};
+const BE = {present: a => a.person === 1 && a.num === 'sg' ? 'am' : a.person === 3 && a.num === 'sg' ? 'is' : 'are',
+            past:    a => (a.num === 'sg' && a.person !== 2) ? 'was' : 'were'};
+const HAVE = a => a.person === 3 && a.num === 'sg' ? 'has' : 'have';
+/* the noun phrase of an entity in a case: subject or object */
+function np(e, cas){
+  if (e.pron) return [{w: PRON[e.pron][cas === 'obj' ? 'o' : 's'], pos: 'pronoun'}];
+  if (e.name) return [{w: e.name, pos: 'noun'}];
+  return [{w: e.det, pos: 'det'}, {w: e.noun, pos: 'noun'}];
+}
+const V = (w, aux) => ({w, pos: 'verb', aux: !!aux});
+/* the verb group for a tense = {time: past|present|future, aspect: simple|continuous|perfect} */
+function activeVG(v, t, a){
+  const T = t.time, A = t.aspect;
+  if (A === 'simple') return T === 'present' ? [V(a.person === 3 && a.num === 'sg' ? thirdS(v.base) : v.base)] : T === 'past' ? [V(v.past)] : [V('will', 1), V(v.base)];
+  if (A === 'continuous') return T === 'future' ? [V('will', 1), V('be', 1), V(ing(v.base))] : [V(BE[T](a), 1), V(ing(v.base))];
+  return T === 'present' ? [V(HAVE(a), 1), V(v.pp)] : T === 'past' ? [V('had', 1), V(v.pp)] : [V('will', 1), V('have', 1), V(v.pp)];
+}
+function passiveVG(v, t, a){
+  const T = t.time, A = t.aspect;
+  if (A === 'simple') return T === 'future' ? [V('will', 1), V('be', 1), V(v.pp)] : [V(BE[T](a), 1), V(v.pp)];
+  if (A === 'continuous') return T === 'future' ? null : [V(BE[T](a), 1), V('being', 1), V(v.pp)];
+  return T === 'present' ? [V(HAVE(a), 1), V('been', 1), V(v.pp)] : T === 'past' ? [V('had', 1), V('been', 1), V(v.pp)] : [V('will', 1), V('have', 1), V('been', 1), V(v.pp)];
+}
+/* build(doer, verb, receiver, tense, voice, agent) → the clause, in role groups */
+function clause(doerId, verbBase, recvId, tense, voice, agent = true){
+  const d = entOf(doerId), r = entOf(recvId), v = ALLV.find(x => x.base === verbBase);
+  if (voice === 'active') {
+    const g = {doer: np(d, 'subj'), action: activeVG(v, tense, agrOf(d)), receiver: np(r, 'obj'), by: []};
+    return finish(g, ['doer', 'action', 'receiver'], voice);
+  }
+  const vg = passiveVG(v, tense, agrOf(r));
+  if (!vg) return {ok: false, why: 'The future continuous has no passive in common use (“will be being chased” is avoided).'};
+  const g = {receiver: np(r, 'subj'), action: vg, by: agent ? [{w: 'by', pos: 'prep'}] : [], doer: agent ? np(d, 'obj') : []};
+  return finish(g, ['receiver', 'action', 'doer'], voice, agent);
+}
+function finish(g, order, voice, agent = true){
+  const tokens = [];
+  order.forEach(role => { if (role === 'doer' && voice === 'passive') g.by.forEach(t => tokens.push(Object.assign({role: 'doer'}, t))); g[role].forEach(t => tokens.push(Object.assign({role}, t))); });
+  if (tokens.length) tokens[0] = Object.assign({}, tokens[0], {w: cap(tokens[0].w)});
+  return {ok: true, voice, groups: g, order, tokens, text: tokens.map(t => t.w).join(' ') + '.'};
+}
+const cap = w => w ? w[0].toUpperCase() + w.slice(1) : w;
+const sameRef = (a, b) => { const A = entOf(a), B = entOf(b); return !!(A.pron && B.pron && PRON[A.pron].ref && PRON[A.pron].ref === PRON[B.pron].ref); };
+
+/* ---- reported speech ------------------------------------------------------- */
+const QPRON = {   // word → [pronoun, case]
+  i: ['I', 's'], me: ['I', 'o'], my: ['I', 'p'], mine: ['I', 'm'], myself: ['I', 'x'],
+  we: ['we', 's'], us: ['we', 'o'], our: ['we', 'p'], ours: ['we', 'm'], ourselves: ['we', 'x'],
+  you: ['you', '?'], your: ['you', 'p'], yours: ['you', 'm'], yourself: ['you', 'x'],
+  he: ['he', 's'], him: ['he', 'o'], his: ['he', 'p'], she: ['she', 's'], her: ['she', 'p'],
+  they: ['they', 's'], them: ['they', 'o'], their: ['they', 'p'], it: ['it', 's'],
+};
+const PFORM = {I: {s: 'I', o: 'me', p: 'my', m: 'mine', x: 'myself'}, we: {s: 'we', o: 'us', p: 'our', m: 'ours', x: 'ourselves'},
+  you: {s: 'you', o: 'you', p: 'your', m: 'yours', x: 'yourself'}, he: {s: 'he', o: 'him', p: 'his', m: 'his', x: 'himself'},
+  she: {s: 'she', o: 'her', p: 'her', m: 'hers', x: 'herself'}, they: {s: 'they', o: 'them', p: 'their', m: 'theirs', x: 'themselves'},
+  it: {s: 'it', o: 'it', p: 'its', m: 'its', x: 'itself'}};
+const PEOPLE = [
+  {id: 'Riya', np: 'Riya', pron: 'she', icon: 'girl'}, {id: 'Arjun', np: 'Arjun', pron: 'he', icon: 'boy'},
+  {id: 'children', np: 'the children', pron: 'they', icon: 'children'}, {id: 'mother', np: 'my mother', pron: 'she', icon: 'woman'},
+  {id: 'rao', np: 'Mr Rao', pron: 'he', icon: 'teacher'},
+];
+const LISTENERS = [{id: 'none', np: '', pron: null}, {id: 'Arjun', np: 'Arjun', pron: 'he', icon: 'boy'},
+  {id: 'Riya', np: 'Riya', pron: 'she', icon: 'girl'}, {id: 'me', np: 'me', pron: 'I', icon: 'me'}];
+const TIMEWORDS = [
+  [['next', 'week'], ['the', 'following', 'week']], [['last', 'week'], ['the', 'previous', 'week']], [['last', 'night'], ['the', 'night', 'before']],
+  [['today'], ['that', 'day']], [['tonight'], ['that', 'night']], [['tomorrow'], ['the', 'next', 'day']], [['yesterday'], ['the', 'day', 'before']],
+  [['now'], ['then']], [['here'], ['there']], [['this'], ['that']], [['these'], ['those']], [['ago'], ['before']],
+];
+const AUX_BACK = {will: ['would'], shall: ['should'], can: ['could'], may: ['might'], must: ['had', 'to']};
+const MODAL_PAST = new Set(['would', 'could', 'should', 'might']);
+const POS = {
+  adj: 'tired happy best busy hungry late ready sad good new big small hot cold sure right early free angry'.split(' '),
+  noun: 'name snake work book friend mangoes school home game cricket homework letter film match exam party kite dog cat bus train cake team song week night day morning'.split(' '),
+  det: 'a an the that those some every'.split(' '),
+  adv: 'now then today tomorrow yesterday tonight here there soon again very ago already not never always'.split(' '),
+  prep: 'to in at on with for before after from of by'.split(' '),
+  conj: 'and but or that'.split(' '),
+};
+function tagWord(w){
+  const l = w.toLowerCase();
+  if (QPRON[l]) return 'pronoun';
+  if (['am', 'is', 'are', 'was', 'were', 'will', 'shall', 'can', 'may', 'must', 'would', 'could', 'should', 'might', 'have', 'has', 'had', 'do', 'does', 'did', 'been', 'be', 'being'].includes(l)) return 'verb';
+  if (verbForm(l)) return 'verb';
+  for (const [p, list] of Object.entries(POS)) if (list.includes(l)) return p;
+  if (l === 'this' || l === 'these') return 'det';
+  return 'unknown';
+}
+function verbForm(l){
+  for (const v of ALLV) {
+    if (l === v.base) return {v, form: 'base'};
+    if (l === thirdS(v.base)) return {v, form: '3s'};
+    if (l === v.past) return {v, form: v.past === v.pp ? 'past/pp' : 'past'};
+    if (l === v.pp) return {v, form: 'pp'};
+    if (l === ing(v.base)) return {v, form: 'ing'};
+  }
+  return null;
+}
+/* report(quote, speakerId, listenerId, stage) → direct tokens, reported tokens and the changes.
+   stage 1: reporting verb + that; 2: tense one step back; 3: pronouns; 4: time and place. */
+function report(quote, speakerId, listenerId, stage = 4){
+  const words = quote.replace(/[.,!?"“”]/g, ' ').trim().split(/\s+/).filter(Boolean);
+  const Q = words.map((w, i) => ({w, l: w.toLowerCase(), pos: tagWord(w), i}));
+  const sp = PEOPLE.find(p => p.id === speakerId) || PEOPLE[0];
+  const li = LISTENERS.find(p => p.id === listenerId) || LISTENERS[0];
+  /* finite verb: the first verb-tagged word that is not a bare participle */
+  let fin = Q.findIndex(t => t.pos === 'verb' && !['been', 'being'].includes(t.l) && (!verbForm(t.l) || !['ing', 'pp'].includes(verbForm(t.l).form)));
+  const subjIdx = fin > 0 ? fin - 1 : -1;
+  const out = Q.map(t => ({w: t.w, pos: t.pos, src: t.i, chg: null}));
+  const notes = [];
+  /* 2: tense */
+  if (stage >= 2 && fin >= 0) {
+    const t = Q[fin], vf = verbForm(t.l);
+    let rep = null;
+    if (['am', 'is'].includes(t.l)) rep = ['was'];
+    else if (t.l === 'are') rep = ['were'];
+    else if (t.l === 'was' || t.l === 'were') rep = ['had', 'been'];
+    else if (AUX_BACK[t.l]) rep = AUX_BACK[t.l];
+    else if (t.l === 'have' || t.l === 'has') rep = ['had'];
+    else if (t.l === 'do' || t.l === 'does') rep = ['did'];
+    else if (t.l === 'did') {
+      const nx = Q[fin + 1] && verbForm(Q[fin + 1].l);
+      if (nx) { rep = ['had']; out[fin + 1] = Object.assign({}, out[fin + 1], {w: nx.v.pp, chg: 'tense'}); }
+    }
+    else if (t.l === 'had' || MODAL_PAST.has(t.l)) notes.push(`“${t.w}” is already as far back as it can go, so it stays.`);
+    else if (vf && (vf.form === 'base' || vf.form === '3s')) rep = [vf.v.past];
+    else if (vf && (vf.form === 'past' || vf.form === 'past/pp')) rep = ['had', vf.v.pp];
+    if (rep) {
+      out[fin] = Object.assign({}, out[fin], {w: rep.join(' '), chg: 'tense', from: t.w, back: t.l});
+    }
+  }
+  /* 3: pronouns, re-anchored to the speaker (I, we) and the listener (you) */
+  if (stage >= 3) {
+    for (let i = 0; i < Q.length; i++) {
+      const pr = QPRON[Q[i].l]; if (!pr) continue;
+      let [who, cas] = pr;
+      if (who === 'he' || who === 'she' || who === 'they' || who === 'it') continue;     // third person stays
+      if (cas === '?') cas = (i < fin || fin < 0) && i === subjIdx ? 's' : (i === 0 ? 's' : 'o');
+      let to;
+      if (who === 'I') to = sp.pron;
+      else if (who === 'we') to = 'they';                 // the speaker and others
+      else to = li.pron || 'they';
+      const nw = PFORM[to][cas];
+      if (nw !== Q[i].l) out[i] = Object.assign({}, out[i], {w: nw, chg: 'pronoun', from: Q[i].w});
+    }
+    /* agreement: a shifted be-verb must agree with the new subject */
+    if (fin >= 0 && subjIdx >= 0 && out[fin].chg === 'tense' && /^(was|were)$/.test(out[fin].w)) {
+      const sw = out[subjIdx].w.toLowerCase(), sp3 = QPRON[sw] ? PRON[QPRON[sw][0]] || {person: 3, num: 'sg'} : {person: 3, num: /s$/.test(sw) ? 'pl' : 'sg'};
+      out[fin].w = BE.past(sp3);
+    }
+  }
+  /* 4: time and place */
+  if (stage >= 4) {
+    for (let i = 0; i < Q.length; i++) {
+      for (const [a, b] of TIMEWORDS) {
+        if (a.every((w, k) => Q[i + k] && Q[i + k].l === w) && !out[i].chg) {
+          out[i] = Object.assign({}, out[i], {w: b.join(' '), chg: 'time', from: a.join(' ')});
+          for (let k = 1; k < a.length; k++) out[i + k] = Object.assign({}, out[i + k], {w: '', chg: 'time', gone: true});
+          break;
+        }
+      }
+    }
+  }
+  /* first word of the quote: lower case inside a reported clause, unless I or a name */
+  const lowFirst = w => (w === 'I' || /^[A-Z][a-z]+$/.test(w) && !QPRON[w.toLowerCase()] && tagWord(w) === 'unknown') ? w : w[0].toLowerCase() + w.slice(1);
+  const body = out.filter(t => t.w !== '' && !t.gone).map((t, k) => k === 0 && stage >= 1 ? Object.assign({}, t, {w: lowFirst(t.w)}) : t);
+  /* 1: the frame */
+  const frame = [];
+  if (stage >= 1) {
+    frame.push(...npTokens(sp.np, true));
+    if (li.pron) { frame.push({w: 'told', pos: 'verb', chg: 'frame'}); frame.push(...npTokens(li.np, false)); }
+    else frame.push({w: 'said', pos: 'verb', chg: 'frame'});
+    frame.push({w: 'that', pos: 'conj', chg: 'frame'});
+  }
+  const reported = stage >= 1 ? frame.concat(body) : body;
+  const splitTok = [];     // multi-word replacements become several blocks with the same source
+  reported.forEach(t => t.w.split(' ').forEach((w, k) => splitTok.push(Object.assign({}, t, {w, full: t.w, pos: t.chg === 'time' ? (/^(that|those|the)$/.test(w) ? 'det' : w === 'following' || w === 'previous' || w === 'next' ? 'adj' : w === 'before' && t.w !== 'before' ? 'adv' : t.w === 'then' || t.w === 'there' || t.w === 'before' ? 'adv' : 'noun') : t.chg === 'tense' ? 'verb' : t.pos, first: k === 0}))));
+  return {direct: Q, speaker: sp, listener: li, fin, tokens: splitTok, notes,
+          text: stage >= 1 ? cap(splitTok.map(t => t.w).join(' ')) + '.' : '“' + words.join(' ') + ',” ' + (li.pron ? `${sp.np} said to ${li.np}` : `said ${sp.np}`) + '.',
+          changes: out.filter(t => t.chg).map(t => ({from: t.from, to: t.w, kind: t.chg}))};
+}
+function npTokens(s, first){ return s.split(' ').map((w, k) => ({w: first && k === 0 ? cap(w) : w, pos: w === 'the' || w === 'my' ? (w === 'my' ? 'pronoun' : 'det') : w === 'me' ? 'pronoun' : w === 'Mr' ? 'noun' : 'noun', chg: 'frame'})); }
+/* where a verb form sits on the tense ladder: 2 = present form, 1 = past form, 0 = past perfect */
+function ladder(word){
+  const l = (word || '').toLowerCase();
+  if (/^had( |$)/.test(l)) return 0;
+  if (/^(am|is|are|will|shall|can|may|must|have|has|do|does)$/.test(l)) return 2;
+  if (/^(was|were|would|should|could|might|did)$/.test(l)) return 1;
+  const vf = verbForm(l); if (!vf) return null;
+  return vf.form === 'base' || vf.form === '3s' ? 2 : vf.form === 'past' || vf.form === 'past/pp' ? 1 : null;
+}
+/* MODEL:end */
+
+/* ---- state: plain data --------------------------------------------------- */
+const TENSES = [];
+for (const time of ['present', 'past', 'future']) for (const aspect of ['simple', 'continuous', 'perfect']) TENSES.push({time, aspect});
+const QUOTES = [
+  {q: 'I am tired', s: 'Riya', l: 'none'}, {q: 'I will come tomorrow', s: 'Arjun', l: 'none'},
+  {q: 'We have finished our work', s: 'children', l: 'none'}, {q: 'I saw a snake here yesterday', s: 'Riya', l: 'none'},
+  {q: 'You are my best friend', s: 'Riya', l: 'Arjun'}, {q: 'I am reading this book now', s: 'Arjun', l: 'none'},
+  {q: 'We can play cricket today', s: 'children', l: 'none'}, {q: 'I like mangoes', s: 'mother', l: 'none'},
+  {q: 'I do not know your name', s: 'rao', l: 'me'},
+];
+const S = {tab: 'ap', doer: 'dog', verb: 'chase', recv: 'cat', tense: 3, voice: 'active', agent: true, flipT: 0,
+           seenPassive: [], locked: false, qi: 0, quote: QUOTES[0].q, speaker: 'Riya', listener: 'none', stage: 0};
+const shared = sharedState();
+if (shared) {
+  if (DOERS.includes(shared.d)) S.doer = shared.d; if (RECEIVERS.includes(shared.r)) S.recv = shared.r;
+  if (VERBS.some(v => v.base === shared.v)) S.verb = shared.v; S.tense = clamp(+shared.t || 0, 0, 8);
+  if (shared.tab === 'rs') S.tab = 'rs';
+}
+shareState(() => ({tab: S.tab, d: S.doer, v: S.verb, r: S.recv, t: S.tense}));
+
+/* ============================================================================
+   The stage: drawn once, then only patched.
+   ============================================================================ */
+const svg = $('stage');
+const COL = {noun: '#3f7fd8', verb: '#d6453d', adj: '#2f9e5b', det: '#8a94a6', adv: '#f29a1f', pronoun: '#7b5cd6', prep: '#16a3a3', conj: '#c2569b', unknown: '#b0b6bf', punct: 'none'};
+const ROLE = {doer: {c: '#c77d0a', lab: 'DOER'}, action: {c: '#52606d', lab: 'ACTION'}, receiver: {c: '#0f766e', lab: 'RECEIVER'}};
+const KIND = {tense: {c: '#d6453d', lab: 'tense'}, pronoun: {c: '#7b5cd6', lab: 'pronoun'}, time: {c: '#e08a0b', lab: 'time/place'}, frame: {c: '#8a94a6', lab: 'reporting'}};
+const BLOCK_Y = 372, TILE_H = 40;
+
+/* text width, for laying out word blocks */
+const mctx = document.createElement('canvas').getContext('2d');
+function tw(s, size = 19, weight = 700){ mctx.font = `${weight} ${size}px Inter, system-ui, sans-serif`; return mctx.measureText(s).width; }
+function tileW(t, size){ return Math.ceil(tw(t.w, size)) + 22; }
+function tilesSVG(tokens, size = 19, h = TILE_H){
+  let x = 0, g = '';
+  for (const t of tokens) {
+    const w = tileW(t, size), aux = t.aux;
+    const fill = COL[t.pos] || COL.unknown;
+    g += `<g transform="translate(${x} 0)"><rect width="${w}" height="${h}" rx="9" fill="${fill}" ${aux ? 'opacity=".78"' : ''} ${t.pos === 'unknown' ? 'stroke="#6b7479" stroke-dasharray="4 3"' : ''}/>
+          <text x="${w / 2}" y="${h / 2 + size * 0.36}" font-size="${size}" font-weight="700" fill="#fff" text-anchor="middle">${esc(t.w)}</text></g>`;
+    x += w + 7;
+  }
+  return {svg: g, w: Math.max(0, x - 7)};
+}
+
+function build(){
+  svg.innerHTML = `
+  <defs>
+    <marker id="aK" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="#1d2327"/></marker>
+    ${Object.entries(KIND).map(([k, v]) => `<marker id="a_${k}" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0L10 5L0 10z" fill="${v.c}"/></marker>`).join('')}
+    <radialGradient id="spot"><stop offset="0" stop-color="#ffe9a8" stop-opacity=".95"/><stop offset="1" stop-color="#ffe9a8" stop-opacity="0"/></radialGradient>
+  </defs>
+  <rect x="0" y="0" width="1000" height="660" fill="#fbfaf7"/>
+
+  <!-- ===== active / passive ===== -->
+  <g id="vAP">
+    <rect x="0" y="0" width="1000" height="300" fill="#eef3f9"/>
+    <text x="24" y="32" fill="#4a555b" font-size="13" font-weight="700" letter-spacing=".08em">WHO DID WHAT TO WHOM</text>
+    <text x="24" y="50" fill="#7c878c" font-size="12">The picture never changes when you flip. Only the spotlight — what the sentence is about — moves.</text>
+    <circle id="spot" r="112" fill="url(#spot)"/>
+    <g id="doerFig"></g><g id="recvFig"></g>
+    <path id="actArrow" fill="none" stroke="#1d2327" stroke-width="3" marker-end="url(#aK)"/>
+    <text id="actLab" x="500" y="122" font-size="19" font-weight="700" fill="#d6453d" text-anchor="middle"></text>
+    <text id="tenseLab" x="500" y="208" font-size="12.5" font-weight="600" fill="#52606d" text-anchor="middle"></text>
+    <text id="doerTag" y="286" font-size="12" font-weight="700" fill="${ROLE.doer.c}" text-anchor="middle" letter-spacing=".06em">DOER</text>
+    <text id="recvTag" y="286" font-size="12" font-weight="700" fill="${ROLE.receiver.c}" text-anchor="middle" letter-spacing=".06em">RECEIVER</text>
+    <text x="24" y="336" fill="#4a555b" font-size="13" font-weight="700" letter-spacing=".08em" id="voiceLab">ACTIVE VOICE</text>
+    <g id="gReceiver"></g><g id="gAction"></g><g id="gDoer"></g>
+    <rect id="endHit" y="${BLOCK_Y - 6}" height="${TILE_H + 12}" fill="transparent" role="button" aria-label="The last block of the sentence: drag it to the front to flip"/>
+    <text id="noPassive" x="500" y="${BLOCK_Y + 82}" font-size="14" font-weight="600" fill="#b0305a" text-anchor="middle"></text>
+    <line x1="24" y1="480" x2="976" y2="480" stroke="#ece6d8"/>
+    <text x="24" y="512" font-size="12" font-weight="700" fill="#7c878c" letter-spacing=".06em">ACTIVE</text>
+    <text id="sentA" x="110" y="512" font-size="19" fill="#1d2327"></text>
+    <text x="24" y="548" font-size="12" font-weight="700" fill="#7c878c" letter-spacing=".06em">PASSIVE</text>
+    <text id="sentP" x="110" y="548" font-size="19" fill="#1d2327"></text>
+    <g id="formula"></g>
+  </g>
+
+  <!-- ===== reported speech ===== -->
+  <g id="vRS" display="none">
+    <rect x="0" y="0" width="1000" height="220" fill="#eef3f9"/>
+    <text x="24" y="32" fill="#4a555b" font-size="13" font-weight="700" letter-spacing=".08em">WHAT WAS SAID, AND HOW WE REPORT IT</text>
+    <g id="spkFig"></g><g id="lisFig"></g>
+    <g id="bubble"></g>
+    <text x="24" y="258" fill="#4a555b" font-size="12" font-weight="700" letter-spacing=".08em">DIRECT</text>
+    <g id="rowD"></g>
+    <g id="rsArrows"></g>
+    <text x="24" y="424" fill="#4a555b" font-size="12" font-weight="700" letter-spacing=".08em">REPORTED</text>
+    <g id="rowR"></g>
+    <text id="rsText" x="500" y="520" font-size="17" fill="#1d2327" text-anchor="middle"></text>
+    <g id="timeline"></g>
+  </g>
+  `;
+}
+
+/* ---- figures, drawn in code ------------------------------------------------ */
+function person(o){
+  const {skin = '#e0a878', shirt = '#3f7fd8', hair = '#2b1d14', long = false, small = 1, badge = '', beard = false, hat = false} = o;
+  return `<g transform="scale(${small})">
+    <rect x="-22" y="8" width="44" height="52" rx="16" fill="${shirt}"/>
+    <rect x="-16" y="56" width="12" height="30" rx="5" fill="#34404a"/><rect x="4" y="56" width="12" height="30" rx="5" fill="#34404a"/>
+    ${long ? `<path d="M-22 -18 Q-26 20 -14 22 L14 22 Q26 20 22 -18Z" fill="${hair}"/>` : ''}
+    <circle cx="0" cy="-16" r="21" fill="${skin}"/>
+    <path d="M-21 -20 Q-18 -42 0 -40 Q18 -42 21 -20 Q10 -30 -21 -20Z" fill="${hair}"/>
+    ${hat ? `<path d="M-30 -30 L30 -30 L20 -40 Q0 -54 -20 -40Z" fill="#c98a2b"/>` : ''}
+    <circle cx="-7" cy="-16" r="2.4" fill="#1d2327"/><circle cx="7" cy="-16" r="2.4" fill="#1d2327"/>
+    <path d="M-6 -6 Q0 -1 6 -6" stroke="#1d2327" stroke-width="2" fill="none" stroke-linecap="round"/>
+    ${beard ? `<path d="M-14 -8 Q0 12 14 -8 Q0 2 -14 -8Z" fill="${hair}"/>` : ''}
+    ${badge ? `<rect x="-22" y="-74" width="44" height="20" rx="10" fill="#fff" stroke="#c9d2dc"/><text x="0" y="-60" font-size="12" font-weight="700" text-anchor="middle" fill="#1d2327">${badge}</text>` : ''}
+  </g>`;
+}
+function figure(icon){
+  switch (icon) {
+    case 'girl': return person({shirt: '#e0567a', long: true, small: .95});
+    case 'boy': return person({shirt: '#2f9e5b', small: .95});
+    case 'woman': return person({shirt: '#7b5cd6', long: true});
+    case 'man': return person({shirt: '#16a3a3', beard: true});
+    case 'teacher': return person({shirt: '#52606d', hair: '#8a8f94'}) + `<rect x="18" y="16" width="18" height="24" rx="2" fill="#fff" stroke="#8a94a6"/>`;
+    case 'farmer': return person({shirt: '#c98a2b', hat: true});
+    case 'me': return person({shirt: '#f29a1f', badge: 'me'});
+    case 'you': return person({shirt: '#3f7fd8', badge: 'you'});
+    case 'we': return `<g transform="translate(-26 8)">${person({shirt: '#f29a1f', small: .8})}</g><g transform="translate(26 8)">${person({shirt: '#e0567a', long: true, small: .8})}</g><rect x="-22" y="-66" width="44" height="20" rx="10" fill="#fff" stroke="#c9d2dc"/><text x="0" y="-52" font-size="12" font-weight="700" text-anchor="middle">us</text>`;
+    case 'they': return [-36, 0, 36].map((dx, i) => `<g transform="translate(${dx} ${10 + (i % 2) * 6})">${person({shirt: ['#16a3a3', '#7b5cd6', '#2f9e5b'][i], long: i === 1, small: .72})}</g>`).join('');
+    case 'children': return [-30, 0, 30].map((dx, i) => `<g transform="translate(${dx} ${22})">${person({shirt: ['#e0567a', '#3f7fd8', '#f29a1f'][i], long: i !== 1, small: .6})}</g>`).join('');
+    case 'dog': return `<g transform="translate(0 20)"><ellipse cx="0" cy="0" rx="42" ry="22" fill="#b07a4a"/><circle cx="40" cy="-18" r="18" fill="#b07a4a"/><path d="M48 -34 q10 -2 8 14" fill="#7d5230"/><circle cx="46" cy="-22" r="2.6" fill="#1d2327"/><circle cx="57" cy="-14" r="3.4" fill="#1d2327"/>
+      <rect x="-32" y="14" width="10" height="24" rx="4" fill="#9a683c"/><rect x="18" y="14" width="10" height="24" rx="4" fill="#9a683c"/><path d="M-40 -6 q-18 -16 -10 -26" stroke="#b07a4a" stroke-width="7" fill="none" stroke-linecap="round"/></g>`;
+    case 'cat': return `<g transform="translate(0 20)"><ellipse cx="0" cy="4" rx="34" ry="20" fill="#8a94a6"/><circle cx="30" cy="-18" r="16" fill="#8a94a6"/><path d="M20 -30 l4 -14 l8 10z M34 -32 l8 -12 l2 14z" fill="#8a94a6"/>
+      <circle cx="26" cy="-20" r="2.3" fill="#1d2327"/><circle cx="36" cy="-20" r="2.3" fill="#1d2327"/><rect x="-24" y="18" width="8" height="18" rx="3" fill="#77808f"/><rect x="12" y="18" width="8" height="18" rx="3" fill="#77808f"/><path d="M-32 0 q-24 -6 -18 -32" stroke="#8a94a6" stroke-width="6" fill="none" stroke-linecap="round"/></g>`;
+    case 'birds': return [[-30, 0], [20, -24], [30, 20]].map(([x, y]) => `<g transform="translate(${x} ${y})"><ellipse rx="16" ry="11" fill="#f29a1f"/><circle cx="13" cy="-8" r="8" fill="#f29a1f"/><path d="M20 -8 l8 2 l-8 3z" fill="#c2569b"/><circle cx="15" cy="-10" r="1.8" fill="#1d2327"/><path d="M-6 -4 q-6 -16 -18 -6" fill="#d9851a"/></g>`).join('');
+    case 'ball': return `<circle cx="0" cy="20" r="34" fill="#d6453d"/><path d="M-34 20 Q0 0 34 20 M-20 -6 Q0 20 -20 48 M20 -6 Q0 20 20 48" stroke="#fff" stroke-width="3" fill="none"/>`;
+    case 'letter': return `<rect x="-44" y="-10" width="88" height="58" rx="4" fill="#fff" stroke="#8a94a6" stroke-width="2"/><path d="M-44 -10 L0 26 L44 -10" stroke="#8a94a6" stroke-width="2" fill="none"/><rect x="24" y="-4" width="14" height="16" fill="#e0567a"/>`;
+    case 'cake': return `<rect x="-40" y="4" width="80" height="44" rx="6" fill="#f3c98b"/><path d="M-40 14 q10 10 20 0 q10 10 20 0 q10 10 20 0 q10 10 20 0" stroke="#e0567a" stroke-width="6" fill="none"/><rect x="-3" y="-16" width="6" height="20" fill="#3f7fd8"/><path d="M0 -26 q6 6 0 10 q-6 -4 0 -10" fill="#f29a1f"/>`;
+    case 'song': return `<path d="M-24 -20 L20 -30 L20 26" stroke="#7b5cd6" stroke-width="5" fill="none"/><path d="M-24 -20 L-24 36" stroke="#7b5cd6" stroke-width="5"/><ellipse cx="-32" cy="38" rx="11" ry="8" fill="#7b5cd6"/><ellipse cx="12" cy="28" rx="11" ry="8" fill="#7b5cd6"/>`;
+    case 'window': return `<rect x="-40" y="-20" width="80" height="70" rx="4" fill="#cde8fb" stroke="#6b4a2b" stroke-width="5"/><path d="M0 -20 V50 M-40 15 H40" stroke="#6b4a2b" stroke-width="4"/>`;
+    case 'kite': return `<path d="M0 -30 L30 10 L0 50 L-30 10Z" fill="#e0567a" stroke="#b0305a" stroke-width="2"/><path d="M0 -30 V50 M-30 10 H30" stroke="#b0305a" stroke-width="1.5"/><path d="M0 50 q10 14 -4 24 q-12 10 4 20" stroke="#1d2327" stroke-width="1.5" fill="none"/>`;
+    case 'book': return `<path d="M-44 -6 L0 4 L44 -6 L44 44 L0 54 L-44 44Z" fill="#3f7fd8"/><path d="M0 4 V54" stroke="#fff" stroke-width="2"/><path d="M-36 4 L-8 10 M-36 16 L-8 22 M8 10 L36 4 M8 22 L36 16" stroke="#cfe0f7" stroke-width="2"/>`;
+    case 'mangoes': return [[-26, 20], [10, 26], [-6, 0]].map(([x, y]) => `<g transform="translate(${x} ${y})"><ellipse rx="20" ry="15" fill="#f6b21a" transform="rotate(-20)"/><path d="M8 -12 q8 -8 16 -6" stroke="#2f9e5b" stroke-width="4" fill="none"/></g>`).join('');
+  }
+  return '';
+}
+
+/* ---- active / passive ------------------------------------------------------ */
+const tenseOf = () => TENSES[S.tense];
+const tName = t => `${t.time} ${t.aspect}`;
+function cur(voice){ return clause(S.doer, S.verb, S.recv, tenseOf(), voice || S.voice, S.agent); }
+/* x positions of the three role groups for a clause */
+function layout(c){
+  const size = 19, gap = 24;
+  const ws = {}; for (const role of c.order) ws[role] = tilesSVG(roleTokens(c, role), size).w;
+  const total = c.order.reduce((a, r) => a + ws[r] + (ws[r] ? gap : 0), -gap);
+  let x = 500 - total / 2; const pos = {};
+  for (const role of c.order) { pos[role] = x; x += ws[role] + (ws[role] ? gap : 0); }
+  return {pos, ws};
+}
+function roleTokens(c, role){ return c.tokens.filter(t => t.role === role); }
+function groupSVG(c, role, w){
+  const t = tilesSVG(roleTokens(c, role));
+  if (!t.w) return '';
+  const R = ROLE[role];
+  const lab = role === 'doer' && c.voice === 'passive' ? 'DOER (agent)' : role === 'receiver' && c.voice === 'passive' ? 'RECEIVER = SUBJECT' : role === 'doer' ? 'DOER = SUBJECT' : R.lab;
+  return `${t.svg}<path d="M0 ${TILE_H + 8} v6 h${t.w} v-6" fill="none" stroke="${R.c}" stroke-width="2"/>
+    <text x="${t.w / 2}" y="${TILE_H + 30}" font-size="11.5" font-weight="700" fill="${R.c}" text-anchor="middle" letter-spacing=".06em">${lab}</text>`;
+}
+let FLIP = null;   // {from, to, t}
+function paintAP(){
+  const c = cur();
+  const d = entOf(S.doer), r = entOf(S.recv), t = tenseOf();
+  /* scene */
+  $('doerFig').innerHTML = `<g transform="translate(200 160)">${figure(d.icon)}</g>`;
+  $('recvFig').innerHTML = `<g transform="translate(800 160)">${figure(r.icon)}</g>`;
+  $('doerTag').setAttribute('x', 200); $('recvTag').setAttribute('x', 800);
+  $('actArrow').setAttribute('d', 'M300 170 Q500 120 700 170');
+  const v = ALLV.find(x => x.base === S.verb);
+  $('actLab').textContent = ing(v.base);
+  $('tenseLab').textContent = tName(t);
+  const subjRole = FLIP ? (FLIP.t < 0.5 ? (FLIP.from === 'active' ? 'doer' : 'receiver') : (FLIP.to === 'active' ? 'doer' : 'receiver')) : (S.voice === 'active' ? 'doer' : 'receiver');
+  const sx = FLIP ? lerp(FLIP.from === 'active' ? 200 : 800, FLIP.to === 'active' ? 200 : 800, ease.inOut(FLIP.t)) : subjRole === 'doer' ? 200 : 800;
+  $('spot').setAttribute('cx', sx.toFixed(1)); $('spot').setAttribute('cy', 165);
+  $('voiceLab').textContent = (FLIP ? (FLIP.t < .5 ? FLIP.from : FLIP.to) : S.voice).toUpperCase() + ' VOICE';
+
+  /* blocks: during a flip, groups travel from their old places to their new ones */
+  const shown = FLIP ? (FLIP.t < 0.5 ? clause(S.doer, S.verb, S.recv, t, FLIP.from, S.agent) : clause(S.doer, S.verb, S.recv, t, FLIP.to, S.agent)) : c;
+  $('noPassive').textContent = shown.ok ? '' : shown.why;
+  if (!shown.ok) { ['gDoer', 'gAction', 'gReceiver'].forEach(id => $(id).innerHTML = ''); $('endHit').setAttribute('width', 0); }
+  else {
+    const L = layout(shown);
+    let pos = L.pos, dy = {doer: 0, action: 0, receiver: 0};
+    if (FLIP) {
+      const A = clause(S.doer, S.verb, S.recv, t, FLIP.from, S.agent), B = clause(S.doer, S.verb, S.recv, t, FLIP.to, S.agent);
+      const LA = layout(A), LB = layout(B), k = ease.inOut(FLIP.t);
+      pos = {}; for (const role of ['doer', 'action', 'receiver']) pos[role] = lerp(LA.pos[role] ?? 500, LB.pos[role] ?? 500, k);
+      const arc = Math.sin(Math.PI * FLIP.t) * 58;
+      dy = {doer: arc, action: 0, receiver: -arc};
+    }
+    for (const role of ['doer', 'action', 'receiver']) {
+      const g = $('g' + role[0].toUpperCase() + role.slice(1));
+      g.innerHTML = groupSVG(shown, role);
+      g.setAttribute('transform', `translate(${(pos[role] ?? 0).toFixed(1)} ${(BLOCK_Y + dy[role]).toFixed(1)})`);
+      g.setAttribute('opacity', role === 'doer' && shown.voice === 'passive' && !S.agent ? 0 : 1);
+    }
+    /* the drag handle covers whichever group is last */
+    const last = shown.order.filter(r => L.ws[r] > 0).slice(-1)[0];
+    const lastOk = !FLIP && last !== 'action';
+    $('endHit').setAttribute('x', lastOk ? L.pos[last].toFixed(1) : 0); $('endHit').setAttribute('width', lastOk ? L.ws[last].toFixed(1) : 0);
+    $('endHit').dataset.role = last;
+  }
+  /* both sentences, always, so the two can be compared */
+  const A = clause(S.doer, S.verb, S.recv, t, 'active'), P = clause(S.doer, S.verb, S.recv, t, 'passive', S.agent);
+  $('sentA').textContent = A.text;
+  $('sentP').textContent = !S.locked ? '(flip to find out)' : P.ok ? P.text : '—  no passive in common use';
+  $('sentA').setAttribute('font-weight', S.voice === 'active' ? 700 : 400);
+  $('sentP').setAttribute('font-weight', S.voice === 'passive' ? 700 : 400);
+  /* the verb formula, from the engine */
+  let f = '';
+  if (S.locked && P.ok) {
+    const vg = P.groups.action.map(x => x.w), pp = vg[vg.length - 1], be = vg.slice(0, -1).join(' ');
+    f = `<text x="24" y="600" font-size="12" font-weight="700" fill="#7c878c" letter-spacing=".06em">THE PASSIVE VERB</text>
+      <text x="200" y="600" font-size="16" fill="#1d2327"><tspan font-weight="700" fill="#d6453d">${esc(be)}</tspan>  (be, ${tName(t)}, agreeing with “${esc(P.groups.receiver.map(x => x.w).join(' '))}”)  +  <tspan font-weight="700" fill="#d6453d">${esc(pp)}</tspan>  (past participle of ${esc(S.verb)})</text>`;
+    if (!S.agent) f += `<text x="200" y="628" font-size="13.5" fill="#7c878c">The doer has been dropped. The sentence is still complete: the action just has no named doer.</text>`;
+  }
+  $('formula').innerHTML = f;
+  /* the side */
+  $('dOut').textContent = np(d, 'subj').map(x => x.w).join(' ');
+  $('vOut').textContent = S.verb;
+  $('rOut').textContent = np(r, 'obj').map(x => x.w).join(' ');
+  $('btnFlip').textContent = S.voice === 'active' ? 'Flip to passive' : 'Flip to active';
+  $('btnAgent').setAttribute('aria-pressed', S.agent); $('btnAgent').textContent = S.agent ? 'Doer shown' : 'Doer dropped';
+  paintTenseGrid();
+  paintAPNums(A, P);
+}
+function paintTenseGrid(){
+  let h = '<span></span><span>simple</span><span>continuous</span><span>perfect</span>';
+  ['present', 'past', 'future'].forEach((time, i) => {
+    h += `<span>${time}</span>`;
+    ['simple', 'continuous', 'perfect'].forEach((aspect, j) => {
+      const k = i * 3 + j;
+      h += `<button data-t="${k}" aria-pressed="${S.tense === k}" class="${S.seenPassive.includes(k) ? 'seen' : ''}" title="${time} ${aspect}">${aspect === 'simple' ? 'simple' : aspect === 'continuous' ? 'cont.' : 'perfect'}</button>`;
+    });
+  });
+  const g = $('tgrid');
+  if (g.dataset.built !== '1') { g.innerHTML = h; g.dataset.built = '1'; }
+  g.querySelectorAll('button').forEach(b => { const k = +b.dataset.t; b.setAttribute('aria-pressed', S.tense === k); b.classList.toggle('seen', S.seenPassive.includes(k)); b.disabled = !S.locked; });
+}
+function paintAPNums(A, P){
+  if (!S.locked) { $('nums').innerHTML = '<p style="font-size:13px;color:var(--ink-3);margin:0">The engine’s working appears once you have made a prediction.</p>'; return; }
+  $('numKick').textContent = 'What the engine did';
+  if (!P.ok) { $('nums').innerHTML = `<p style="font-size:13.5px;margin:0">${esc(P.why)}</p>`; return; }
+  const d = entOf(S.doer), r = entOf(S.recv);
+  const rs = np(r, 'obj').map(x => x.w).join(' '), rsS = np(r, 'subj').map(x => x.w).join(' ');
+  const ds = np(d, 'subj').map(x => x.w).join(' '), doO = np(d, 'obj').map(x => x.w).join(' ');
+  const rows = [
+    ['Subject', S.voice === 'active' ? `${ds} (the doer)` : `${rsS} (the receiver)`],
+    ['Tense', tName(tenseOf()) + ' — in both'],
+    ['Active verb', A.groups.action.map(x => x.w).join(' ')],
+    ['Passive verb', P.groups.action.map(x => x.w).join(' ')],
+    ['Receiver', rs === rsS ? rs : `${rs} → ${rsS} (object → subject)`],
+    ['Doer', !S.agent ? 'dropped' : ds === doO ? `by ${doO}` : `${ds} → by ${doO} (subject → object)`],
+  ];
+  $('nums').innerHTML = `<div class="nums">${rows.map(([a, b]) => `<span>${a}</span><b>${esc(b)}</b>`).join('')}</div>`;
+  $('whyCard').hidden = false;
+  $('why').innerHTML = S.voice === 'active'
+    ? `<p>An active sentence starts with the <b>doer</b>: ${esc(A.text)} Flip it, and the sentence will be about the ${d.thing ? 'thing' : 'one'} the action happens to.</p>`
+    : `<p>The passive starts with the <b>receiver</b>, ${esc(rsS)}. The verb keeps its tense by putting <b>be</b> into it (${esc(P.groups.action.slice(0, -1).map(x => x.w).join(' '))}) and adds the past participle <b>${esc(P.groups.action.slice(-1)[0].w)}</b>. ${S.agent ? `The doer can come back after <b>by</b>, in its object form.` : 'With the doer dropped, we no longer know who did it: useful when it is unknown or unimportant.'}</p>`;
+}
+
+/* ---- reported speech ------------------------------------------------------- */
+const STAGES = ['Direct speech', 'Reporting verb + that', 'Tense one step back', 'Pronouns change sides', 'Time and place words'];
+function paintRS(){
+  const R = report(S.quote, S.speaker, S.listener, S.stage), F = report(S.quote, S.speaker, S.listener, 4);
+  const sp = R.speaker, li = R.listener;
+  /* scene: speaker with a bubble, listener if any */
+  $('spkFig').innerHTML = `<g transform="translate(110 118)">${figure(sp.icon)}</g><text x="110" y="214" font-size="12.5" font-weight="700" text-anchor="middle" fill="#1d2327">${esc(cap(sp.np))}</text>`;
+  $('lisFig').innerHTML = li.pron ? `<g transform="translate(900 118)">${figure(li.icon)}</g><text x="900" y="214" font-size="12.5" font-weight="700" text-anchor="middle" fill="#1d2327">${esc(li.np === 'me' ? 'me (the reporter)' : li.np)}</text>` : '';
+  const qtxt = '“' + S.quote + '”', bw = Math.min(640, tw(qtxt, 20, 600) + 44);
+  const fade = 1 - S.stage * 0.15;
+  $('bubble').innerHTML = `<g opacity="${fade.toFixed(2)}"><path d="M190 ${72} h${bw} a14 14 0 0 1 14 14 v44 a14 14 0 0 1 -14 14 h${-bw + 30} l-30 18 l6 -18 h-6 a14 14 0 0 1 -14 -14 v-44 a14 14 0 0 1 14 -14z" fill="#fff" stroke="#c9d2dc" stroke-width="1.5"/>
+    <text x="${190 + bw / 2 + 7}" y="115" font-size="20" font-weight="600" text-anchor="middle" fill="#1d2327">${esc(qtxt)}</text></g>`;
+  /* direct row: the quote as blocks, quotes and reporting clause in plain text */
+  const dTok = R.direct.map(t => ({w: t.w, pos: t.pos === 'unknown' ? 'unknown' : t.pos}));
+  const dT = tilesSVG(dTok, 17, 34);
+  const dTail = li.pron ? ` ${sp.np} said to ${li.np}.` : ` said ${sp.np}.`;
+  const dW = dT.w + tw('“', 22, 600) + tw(',”' + dTail, 17, 500) + 12;
+  const dScale = Math.min(1, 940 / dW), dx0 = 500 - dW * dScale / 2;
+  const qw = tw('“', 22, 600);
+  $('rowD').innerHTML = `<g transform="translate(${dx0.toFixed(1)} 272) scale(${dScale.toFixed(3)})"><text x="0" y="26" font-size="22" font-weight="600" fill="#1d2327">“</text>
+    <g transform="translate(${qw + 4} 0)">${dT.svg}</g><text x="${qw + 8 + dT.w}" y="24" font-size="17" font-weight="500" fill="#1d2327">,”${esc(dTail)}</text></g>`;
+  /* reported row */
+  const rTok = R.tokens.map(t => Object.assign({}, t));
+  const rT = tilesSVG(rTok, 17, 34), rW = rT.w + 10;
+  const rScale = Math.min(1, 940 / rW), rx0 = 500 - rW * rScale / 2;
+  $('rowR').innerHTML = S.stage === 0 ? `<text x="500" y="462" font-size="15" fill="#9aa3a6" text-anchor="middle">Slide towards “reported” to start.</text>`
+    : `<g transform="translate(${rx0.toFixed(1)} 438) scale(${rScale.toFixed(3)})">${rT.svg}<text x="${rT.w + 3}" y="24" font-size="17" font-weight="600" fill="#1d2327">.</text></g>`;
+  /* arrows from each changed word in the direct row to its replacement */
+  const dCentre = i => { let x = qw + 4; for (let k = 0; k < i; k++) x += tileW(dTok[k], 17) + 7; return dx0 + (x + tileW(dTok[i], 17) / 2) * dScale; };
+  const rCentre = i => { let x = 0; for (let k = 0; k < i; k++) x += tileW(rTok[k], 17) + 7; return rx0 + (x + tileW(rTok[i], 17) / 2) * rScale; };
+  let ar = '';
+  const lastKind = [null, 'frame', 'tense', 'pronoun', 'time'][S.stage];
+  rTok.forEach((t, i) => {
+    if (!t.chg || !t.first) return;
+    const k = KIND[t.chg], bold = t.chg === lastKind;
+    if (t.chg === 'frame') {
+      ar += `<rect x="${(rCentre(i) - tileW(t, 17) * rScale / 2 - 2).toFixed(1)}" y="${434}" width="${(tileW(t, 17) * rScale + 4).toFixed(1)}" height="42" rx="11" fill="none" stroke="${k.c}" stroke-width="${bold ? 2.5 : 1.2}" stroke-dasharray="4 3"/>`;
+      return;
+    }
+    if (t.src == null) return;
+    const x1 = dCentre(t.src), x2 = rCentre(i);
+    ar += `<path d="M${x1.toFixed(1)} 310 C${x1.toFixed(1)} 372 ${x2.toFixed(1)} 372 ${x2.toFixed(1)} 432" fill="none" stroke="${k.c}" stroke-width="${bold ? 3 : 1.6}" marker-end="url(#a_${t.chg})" opacity="${bold ? 1 : .6}"/>`;
+    if (bold) ar += `<text x="${((x1 + x2) / 2 + 6).toFixed(1)}" y="376" font-size="11.5" font-weight="700" fill="${k.c}">${k.lab}</text>`;
+  });
+  $('rsArrows').innerHTML = ar;
+  $('rsText').textContent = S.stage === 0 ? '' : R.text;
+  /* the timeline: where the reported verb's form sits, and where it moves to */
+  paintTimeline(R, F);
+  $('qOut').textContent = S.quote; $('sOut').textContent = cap(sp.np); $('lOut').textContent = li.pron ? li.np : 'nobody';
+  $('rs').value = S.stage; $('rsOut').textContent = STAGES[S.stage];
+  paintRSNums(R, F);
+}
+function paintTimeline(R, F){
+  const y = 596, xs = [260, 500, 740], labs = ['past perfect', 'past', 'present'];
+  const fin = R.fin, orig = fin >= 0 ? R.direct[fin].w : null;
+  const from = ladder(orig);
+  const now = fin >= 0 ? (R.tokens.find(t => t.src === fin && t.first && t.chg === 'tense') || null) : null;
+  const moved = now ? ladder(now.full) : from;
+  let g = `<line x1="80" y1="620" x2="920" y2="620" stroke="#ece6d8"/><text x="24" y="566" font-size="12" font-weight="700" fill="#4a555b" letter-spacing=".08em">TENSE, ONE STEP BACK</text>
+    <line x1="150" y1="${y}" x2="850" y2="${y}" stroke="#1d2327" stroke-width="1.6" marker-end="url(#aK)" transform="rotate(180 500 ${y})"/>
+    <text x="870" y="${y + 4}" font-size="11" fill="#7c878c">now</text><text x="104" y="${y + 4}" font-size="11" fill="#7c878c" text-anchor="end">earlier</text>`;
+  xs.forEach((x, i) => { g += `<line x1="${x}" y1="${y - 6}" x2="${x}" y2="${y + 6}" stroke="#1d2327"/><text x="${x}" y="${y + 22}" font-size="11.5" text-anchor="middle" fill="#7c878c">${labs[i]}</text>`; });
+  if (from != null) {
+    g += `<g transform="translate(${xs[from]} ${y - 30})"><rect x="${-tw(orig, 15) / 2 - 10}" y="-14" width="${tw(orig, 15) + 20}" height="26" rx="7" fill="#fff" stroke="#d6453d" stroke-width="1.5" stroke-dasharray="${moved !== from ? '4 3' : '0'}"/><text y="4" font-size="15" font-weight="700" text-anchor="middle" fill="#d6453d" opacity="${moved !== from ? .55 : 1}">${esc(orig)}</text></g>`;
+    if (moved != null && moved !== from) {
+      g += `<path d="M${xs[from] - 40} ${y - 30} L${xs[moved] + 44} ${y - 30}" stroke="#d6453d" stroke-width="2" marker-end="url(#a_tense)"/>`;
+      g += `<g transform="translate(${xs[moved]} ${y - 30})"><rect x="${-tw(now.full, 15) / 2 - 10}" y="-14" width="${tw(now.full, 15) + 20}" height="26" rx="7" fill="#d6453d"/><text y="4" font-size="15" font-weight="700" text-anchor="middle" fill="#fff">${esc(now.full)}</text></g>`;
+    }
+  } else g += `<text x="500" y="${y - 26}" font-size="13" text-anchor="middle" fill="#9aa3a6">No verb from the lexicon found in this sentence.</text>`;
+  $('timeline').innerHTML = g;
+}
+function paintRSNums(R, F){
+  if (!S.locked) return;
+  $('numKick').textContent = 'Every change, and why';
+  const ch = F.changes.filter(c => c.kind !== 'frame');
+  const unk = R.direct.filter(t => t.pos === 'unknown').map(t => t.w);
+  $('nums').innerHTML = `<div class="chg">${ch.length ? ch.map(c => `<i style="background:${KIND[c.kind].c};opacity:${stageOf(c.kind) <= S.stage ? 1 : .35}">${KIND[c.kind].lab}</i><span>${esc(c.from)} → <b>${esc(c.to)}</b></span>`).join('') : '<span></span><span>Nothing to change.</span>'}</div>
+    ${F.notes.map(n => `<p class="note">${esc(n)}</p>`).join('')}
+    ${unk.length ? `<p class="note">Not in the lexicon, left as they are: ${unk.map(esc).join(', ')}.</p>` : ''}
+    <p class="note" style="margin-top:8px">Fully reported: <b style="color:var(--ink)">${esc(F.text)}</b></p>`;
+  $('whyCard').hidden = false;
+  const tch = ch.find(c => c.kind === 'tense');
+  $('why').innerHTML = [
+    `<p>This is what ${esc(cap(R.speaker.np))} said, in ${esc(cap(R.speaker.np))}’s own words.</p>`,
+    `<p>Now it is <b>reported</b>: a reporting verb in the past (${R.listener.pron ? 'told' : 'said'}) and <b>that</b>. But the words inside still belong to the moment of speaking.</p>`,
+    `<p>Because the reporting verb is in the past, the verb goes <b>one step back</b>${tch ? `: ${esc(tch.from)} → ${esc(tch.to)}` : ''}.</p>`,
+    `<p>The pronouns were anchored to the speaker (I, we) and the listener (you). Reported by someone else, they change sides.</p>`,
+    `<p>Words that point at <b>now and here</b> must point at <b>then and there</b>: the report is made at another time and place.</p>`,
+  ][S.stage];
+}
+const stageOf = k => ({frame: 1, tense: 2, pronoun: 3, time: 4})[k];
+
+/* ---- paint ----------------------------------------------------------------- */
+function paint(){
+  $('vAP').setAttribute('display', S.tab === 'ap' ? '' : 'none'); $('vRS').setAttribute('display', S.tab === 'rs' ? '' : 'none');
+  $('ctlAP').hidden = S.tab !== 'ap'; $('ctlRS').hidden = S.tab !== 'rs';
+  $('tabAP').setAttribute('aria-pressed', S.tab === 'ap'); $('tabRS').setAttribute('aria-pressed', S.tab === 'rs');
+  if (S.tab === 'ap') paintAP(); else paintRS();
+  check();
+}
+
+/* ---- findings: reached by the model, never by a button -------------------- */
+function check(){
+  if (!S.locked || FLIP) return;
+  if (S.tab === 'ap' && S.voice === 'passive') {
+    const P = cur('passive');
+    if (!P.ok) return;
+    discover('receiver');
+    if (!S.seenPassive.includes(S.tense)) S.seenPassive.push(S.tense);
+    if (S.seenPassive.length >= 3) discover('tense');
+    if (!S.agent) discover('agent');
+    const d = entOf(S.doer), r = entOf(S.recv);
+    if ((S.agent && d.pron && PRON[d.pron].s !== PRON[d.pron].o) || (r.pron && PRON[r.pron].s !== PRON[r.pron].o)) discover('pronouns');
+    paintTenseGrid();
+    maybeExplain();
+  }
+  if (S.tab === 'rs') {
+    const R = report(S.quote, S.speaker, S.listener, S.stage);
+    if (S.stage >= 2 && R.changes.some(c => c.kind === 'tense')) discover('backstep');
+    if (S.stage >= 3 && R.changes.some(c => c.kind === 'pronoun')) discover('pronouns');
+    if (S.stage >= 4 && R.changes.some(c => c.kind === 'time' && c.from === 'today')) discover('today');
+  }
+}
+let EXPLAINED = false;
+function maybeExplain(){
+  if (EXPLAINED || !POE || !found('receiver')) return;
+  EXPLAINED = true;
+  const A = clause('dog', 'chase', 'cat', {time: 'past', aspect: 'simple'}, 'active'), P = clause('dog', 'chase', 'cat', {time: 'past', aspect: 'simple'}, 'passive');
+  POE.explain(`In “${esc(A.text)}” the receiver <b>${esc(P.groups.receiver.map(x => x.w).join(' '))}</b> moves to the front and becomes the subject:
+    “${esc(P.text)}” The verb becomes <b>${esc(P.groups.action.map(x => x.w).join(' '))}</b> — <i>be</i> in the same past tense plus the past participle —
+    and the doer can follow <b>by</b>, or be left out.`);
+}
+
+/* ============================================================================
+   Controls. The stage is built first, so there is something to wire.
+   ============================================================================ */
+build();
+async function flip(){
+  if (!S.locked || FLIP) return;
+  const to = S.voice === 'active' ? 'passive' : 'active';
+  if (to === 'passive' && !cur('passive').ok) { S.voice = 'passive'; sound('oops'); paint(); return; }
+  sound('whoosh');
+  FLIP = {from: S.voice, to, t: 0};
+  await tween(0, 1, 900, v => { FLIP.t = v; paintAP(); });
+  FLIP = null; S.voice = to;
+  sound('snap');
+  track('flip', {to, sentence: cur().text || null, tense: tName(tenseOf())});
+  paint();
+}
+$('btnFlip').addEventListener('click', flip);
+$('btnAgent').addEventListener('click', () => { S.agent = !S.agent; sound('tick'); paint(); });
+function cycle(list, curId, dir, skip){
+  let i = list.indexOf(curId);
+  for (let n = 0; n < list.length; n++) { i = (i + dir + list.length) % list.length; if (!skip || !skip(list[i])) return list[i]; }
+  return curId;
+}
+const badD = id => sameRef(id, S.recv) || !fits(id, S.verb, S.recv), badR = id => sameRef(S.doer, id) || !fits(S.doer, S.verb, id);
+$('dPrev').addEventListener('click', () => { S.doer = cycle(DOERS, S.doer, -1, badD); sound('tick'); paint(); });
+$('dNext').addEventListener('click', () => { S.doer = cycle(DOERS, S.doer, 1, badD); sound('tick'); paint(); });
+const VB = VERBS.map(v => v.base);
+/* a new verb may need a new receiver to make sense: move to the nearest that fits */
+function setVerb(dir){
+  S.verb = cycle(VB, S.verb, dir, b => !VERBS.find(v => v.base === b).doer.includes(kindOf(entOf(S.doer))));
+  if (!fits(S.doer, S.verb, S.recv) || sameRef(S.doer, S.recv)) S.recv = cycle(RECEIVERS, S.recv, 1, badR);
+  sound('tick'); paint();
+}
+$('vPrev').addEventListener('click', () => setVerb(-1));
+$('vNext').addEventListener('click', () => setVerb(1));
+$('rPrev').addEventListener('click', () => { S.recv = cycle(RECEIVERS, S.recv, -1, badR); sound('tick'); paint(); });
+$('rNext').addEventListener('click', () => { S.recv = cycle(RECEIVERS, S.recv, 1, badR); sound('tick'); paint(); });
+$('tgrid').addEventListener('click', e => { const b = e.target.closest('[data-t]'); if (!b || !S.locked) return; S.tense = +b.dataset.t; sound('tick'); paint(); track('tense', {tense: tName(tenseOf())}); });
+/* drag the last block of the sentence to the front: that is the flip */
+let DRAG0 = null;
+drag($('endHit'), svg, {
+  start(p){ if (!S.locked || FLIP) return false; DRAG0 = {x: p.x, role: $('endHit').dataset.role}; },
+  move(p){
+    if (!DRAG0) return;
+    const g = $('g' + DRAG0.role[0].toUpperCase() + DRAG0.role.slice(1));
+    const L = layout(cur());
+    g.setAttribute('transform', `translate(${(L.pos[DRAG0.role] + Math.min(0, p.x - DRAG0.x)).toFixed(1)} ${BLOCK_Y - Math.min(40, Math.abs(Math.min(0, p.x - DRAG0.x)) * .2)})`);
+  },
+  end(p){
+    if (!DRAG0) return;
+    const L = layout(cur()), goFront = p.x - DRAG0.x < -(L.pos[DRAG0.role] - L.pos[cur().order[0]]) * 0.5;
+    DRAG0 = null;
+    if (goFront) flip(); else { sound('boing'); paint(); }
+  },
+});
+
+/* reported speech */
+function setQuote(i){ S.qi = (i + QUOTES.length) % QUOTES.length; const q = QUOTES[S.qi]; S.quote = q.q; S.speaker = q.s; S.listener = q.l; sound('tick'); paint(); }
+$('qPrev').addEventListener('click', () => setQuote(S.qi - 1));
+$('qNext').addEventListener('click', () => setQuote(S.qi + 1));
+const PID = PEOPLE.map(p => p.id), LID = LISTENERS.map(p => p.id);
+$('sPrev').addEventListener('click', () => { S.speaker = cycle(PID, S.speaker, -1); sound('tick'); paint(); });
+$('sNext').addEventListener('click', () => { S.speaker = cycle(PID, S.speaker, 1); sound('tick'); paint(); });
+$('lPrev').addEventListener('click', () => { S.listener = cycle(LID, S.listener, -1); sound('tick'); paint(); });
+$('lNext').addEventListener('click', () => { S.listener = cycle(LID, S.listener, 1); sound('tick'); paint(); });
+$('rs').addEventListener('input', e => { S.stage = +e.target.value; sound('tick'); paint(); });
+$('rs').addEventListener('change', () => track('reportStage', {stage: S.stage, quote: S.quote}));
+function useMine(){
+  const v = $('myQuote').value.replace(/[“”"]/g, '').replace(/[.!?,]+$/, '').trim();
+  if (!v || v.split(/\s+/).length > 12) { toast('Type a short statement (up to 12 words), like: I am busy today'); return; }
+  S.quote = v; S.stage = 0; sound('pop'); paint(); track('ownQuote', {q: v});
+}
+$('btnMine').addEventListener('click', useMine);
+$('myQuote').addEventListener('keydown', e => { if (e.key === 'Enter') useMine(); });
+
+$('tabAP').addEventListener('click', () => { S.tab = 'ap'; sound('tick'); paint(); });
+$('tabRS').addEventListener('click', () => { S.tab = 'rs'; sound('tick'); paint(); track('tab', {tab: 'rs'}); });
+
+function lockControls(lock){
+  for (const id of ['tabAP', 'tabRS', 'dPrev', 'dNext', 'vPrev', 'vNext', 'rPrev', 'rNext', 'btnFlip', 'btnAgent', 'qPrev', 'qNext', 'sPrev', 'sNext', 'lPrev', 'lNext', 'rs', 'myQuote', 'btnMine']) $(id).disabled = lock;
+  $('endHit').style.pointerEvents = lock ? 'none' : '';
+  $('gate').hidden = !lock;
+  paintTenseGrid();
+}
+
+/* ============================================================================
+   Start
+   ============================================================================ */
+findings($('finds'), [
+  {id: 'receiver', icon: '⇄', label: 'The receiver becomes the subject', hint: 'Flip a sentence'},
+  {id: 'tense',    icon: '⏱', label: 'The tense survives the flip',      hint: 'Flip in three different tenses'},
+  {id: 'agent',    icon: '∅', label: 'The doer can vanish',               hint: 'A passive with no “by …”'},
+  {id: 'backstep', icon: '↶', label: 'One step back in time',             hint: 'Report something someone said'},
+  {id: 'pronouns', icon: '⇆', label: 'Pronouns change sides',             hint: 'Watch he, him, I and she'},
+  {id: 'today',    icon: '📅', label: 'today → that day',                 hint: 'Report a quote with “today” in it'},
+], () => toast('All six. You can now take a sentence apart and put it back together the other way round.', 4200));
+
+const POE = predict($('poe'), {
+  id: 'passive-subject',
+  q: 'In the passive of ‘The dog chased the cat’, which words become the subject?',
+  options: [
+    {id: 'dog',    text: '“the dog”'},
+    {id: 'cat',    text: '“the cat”', right: true},
+    {id: 'chased', text: '“chased”'},
+    {id: 'none',   text: 'A passive sentence has no subject.'},
+  ],
+  onLock(){
+    S.locked = true; lockControls(false);
+    say('Now flip it, and watch who moves.');
+    paint();
+  },
+});
+lockControls(!POE.locked);
+if (!Play.FF('predict')) S.locked = true;
+paint();
+if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => paint());
+window.applyFeatures = () => paint();
+window.PG_STATE = () => JSON.parse(JSON.stringify(Object.assign({}, S, {flipping: !!FLIP, sentence: cur().ok ? cur().text : null})));
+window.PG_MODEL = {PRON, ENT, VERBS, QUOTES, thirdS, ing, clause, report, ladder, verbForm, fits,
+  say: (d, v, r, time, aspect, voice, agent) => { const c = clause(d, v, r, {time, aspect}, voice, agent !== false); return c.ok ? c.text : null; },
+  rep: (q, s, l, stage) => report(q, s, l, stage == null ? 4 : stage).text};
+</script>
+</body>
+</html>

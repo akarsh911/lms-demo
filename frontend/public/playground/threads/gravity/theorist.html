@@ -1,0 +1,735 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Newton's Cannon</title>
+<meta name="description" content="Class 11–12: fire Newton's cannon faster and faster from a mountain on a round Earth, and see why the Moon keeps falling but never lands.">
+<link rel="icon" href="../../favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600&family=Inter:wght@400;500;600;700&family=Nunito:wght@500;700;800&family=Newsreader:opsz,wght@6..72,400;6..72,500&family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="../../play.css">
+<style>
+/* Only what this page needs beyond play.css. */
+.gate{position:absolute; inset:0; display:grid; place-items:center; pointer-events:none}
+.gate span{background:rgba(15,26,43,.85); color:#fff; padding:10px 16px; border-radius:99px; font-weight:600; font-size:14px}
+.seg{display:grid; grid-template-columns:1fr 1fr; gap:4px; background:var(--sunk); padding:4px; border-radius:var(--radius-sm)}
+.seg button{border:0; background:transparent; border-radius:7px; min-height:32px; font-weight:600; font-size:13.5px; cursor:pointer; color:var(--ink-2)}
+.seg button[aria-pressed="true"]{background:var(--card); color:var(--ink); box-shadow:var(--shadow)}
+.seg button:disabled{opacity:.5; cursor:default}
+.big{font-family:var(--font-mono); font-size:24px; font-weight:600; line-height:1}
+.nums{display:grid; grid-template-columns:1fr auto; gap:3px 12px; font-size:13.5px}
+.nums b{font-family:var(--font-mono); font-weight:600; font-variant-numeric:tabular-nums; text-align:right}
+.nums .eq{grid-column:1/-1; font-family:var(--font-mono); font-size:12px; color:var(--ink-3); margin:-2px 0 4px}
+.why p{font-size:14px}
+.note{font-size:12.5px; color:var(--ink-3); margin:6px 0 0}
+.pg-stage{align-self:start}
+#ballHit, #moonHit{cursor:grab}
+#ballHit.dragging, #moonHit.dragging{cursor:grabbing}
+.scrub{cursor:ew-resize}
+</style>
+</head>
+<body>
+<header class="pg-top"></header>
+
+<div class="pg-intro">
+  <h1>Why the Moon doesn’t fall</h1>
+  <p>Newton’s thought experiment: a cannon on a mountain above the air, fired horizontally, faster each time.
+     Each path is integrated numerically (velocity Verlet) under <span class="mono">a = −GM r̂/r²</span> with the Earth’s real GM and radius, not drawn from a formula.
+     Find the speed at which the fall matches the curve of the Earth, <span class="mono">v = √(GM/r)</span>, and the speed at which the ball never returns, <span class="mono">v = √(2GM/r)</span>.
+     Then test Newton’s own check that the Moon falls by the same law as an apple.</p>
+</div>
+
+<main class="pg-main wide-side">
+  <section class="pg-stage" id="stageWrap">
+    <svg id="stage" viewBox="0 0 1000 660" role="img" aria-label="Newton's cannon on a round Earth, a graph of height against time and a graph of how far the ball lands against launch speed"></svg>
+    <div class="gate" id="gate"><span>Make your prediction first →</span></div>
+  </section>
+
+  <aside class="pg-side">
+    <div id="poe"></div>
+
+    <div class="card" id="ctlCard">
+      <div class="seg" role="tablist">
+        <button id="tabCannon" aria-pressed="true">Newton’s cannon</button>
+        <button id="tabMoon" aria-pressed="false">The Moon</button>
+      </div>
+      <div id="cannonCtl">
+        <div class="ctl"><label for="speed">Launch speed</label><input type="range" id="speed" min="0" max="12" step="0.1" value="3"><output id="speedOut" class="num">3.0 km/s</output></div>
+        <div class="row">
+          <button class="btn primary" id="btnFire">Fire!</button>
+          <button class="btn" id="btnReplay">Replay</button>
+          <span style="flex:1"></span>
+          <span class="note" id="warpOut" style="margin:0"></span>
+        </div>
+        <p class="note">You can also drag along the lower graph to set the speed, drag the ball along its path, or drag across the upper graph to step through time.</p>
+      </div>
+      <div id="moonCtl" hidden>
+        <div class="ctl"><label for="mt">Time</label><input type="range" id="mt" min="0" max="7" step="1" value="4"><output id="mtOut" class="num">6 h</output></div>
+        <p class="note">Or drag the Moon along its orbit. The dashed line is where it would go with no gravity.</p>
+      </div>
+    </div>
+
+    <div class="card" id="numCard">
+      <div class="kicker" id="numKick">The numbers, right now</div>
+      <div id="nums"></div>
+    </div>
+
+    <div class="card why" id="whyCard" hidden>
+      <div class="kicker">What is happening</div>
+      <div id="why"></div>
+    </div>
+
+    <div class="card"><div class="kicker">To find</div><div id="finds"></div></div>
+  </aside>
+</main>
+
+<script src="../../play.js"></script>
+<script>
+'use strict';
+const {$, esc, clamp, fmt, drag, loop, tween, sound, say, track, toast, predict, findings, discover, found,
+       shareState, sharedState, mount, reduced} = Play;
+mount({thread: 'gravity', band: 'theorist'});
+
+/* MODEL:start ==================================================================
+   Newton's cannon, integrated. Nothing on this page is a drawn curve: every path
+   is stepped forward with velocity Verlet under a = −GM r / r³, using the real
+   GM of the Earth and its real radius. The ball starts on the top of a mountain
+   50 km high (above the air, which Newton's thought experiment removes), moving
+   horizontally.
+
+   The Moon: the same law, the same integrator, with the Moon at its real mean
+   distance. Its "fall" in a time t is how far the real (integrated) Moon is below
+   the straight line it would follow if gravity switched off.
+   ============================================================================ */
+const GM = 3.986e14;            // m³/s², the Earth
+const R_E = 6.371e6;            // m, mean radius
+const H_MT = 50e3;              // m, the mountain
+const R0 = R_E + H_MT;
+const R_MOON = 3.844e8;         // m, mean Earth–Moon distance
+const T_MOON = 27.32 * 86400;   // s, sidereal month (the Moon's measured period)
+const TAU = Math.PI * 2;
+
+const gAt = r => GM / (r * r);
+const vCirc = r => Math.sqrt(GM / r);
+const vEsc = r => Math.sqrt(2 * GM / r);
+function accel(x, y){ const r2 = x * x + y * y, r = Math.sqrt(r2), k = -GM / (r2 * r); return [k * x, k * y]; }
+
+/* simulate(v) — fire horizontally at v m/s from the mountain top. x is to the right, y up,
+   the Earth's centre at the origin. Returns samples and how it ended:
+     landed  — hit the ground (range = distance along the surface)
+     orbit   — went all the way round without landing (stopped after one turn)
+     escape  — total energy ≥ 0 and it has left the picture
+     far     — still bound, but out beyond the frame or past the time limit          */
+function simulate(v, o = {}){
+  const r0 = o.r0 || R0, RMAX = o.rmax || 40 * R_E, TMAX = o.tmax || 2.5e6;
+  let x = 0, y = r0, vx = v, vy = 0, [ax, ay] = accel(x, y), t = 0;
+  let prevTh = 0, swept = 0, outcome = null, maxR = r0;
+  const E0 = 0.5 * v * v - GM / r0;
+  const S = [{t, x, y, vx, vy, sw: 0}];
+  while (!outcome) {
+    const r = Math.hypot(x, y);
+    const dt = o.dt || clamp(0.5 * Math.pow(r / R_E, 1.5), 0.25, 60);
+    const p = {t, x, y, vx, vy, sw: swept};
+    x += vx * dt + 0.5 * ax * dt * dt; y += vy * dt + 0.5 * ay * dt * dt;
+    const [nx, ny] = accel(x, y);
+    vx += 0.5 * (ax + nx) * dt; vy += 0.5 * (ay + ny) * dt; ax = nx; ay = ny; t += dt;
+    const th = Math.atan2(x, y);                       // clockwise from straight up
+    let d = th - prevTh; if (d > Math.PI) d -= TAU; if (d < -Math.PI) d += TAU;
+    swept += d; prevTh = th;
+    const rn = Math.hypot(x, y); maxR = Math.max(maxR, rn);
+    const lerpTo = f => ({t: p.t + (t - p.t) * f, x: p.x + (x - p.x) * f, y: p.y + (y - p.y) * f,
+                          vx: p.vx + (vx - p.vx) * f, vy: p.vy + (vy - p.vy) * f, sw: p.sw + (swept - p.sw) * f});
+    if (rn <= R_E) { S.push(lerpTo((r - R_E) / (r - rn))); outcome = 'landed'; break; }
+    if (swept >= TAU) { S.push(lerpTo((TAU - p.sw) / (swept - p.sw))); outcome = 'orbit'; break; }
+    S.push({t, x, y, vx, vy, sw: swept});
+    if (rn > RMAX || t > TMAX) outcome = (0.5 * (vx * vx + vy * vy) - GM / rn) >= 0 ? 'escape' : 'far';
+  }
+  const last = S[S.length - 1];
+  const E1 = 0.5 * (last.vx * last.vx + last.vy * last.vy) - GM / Math.hypot(last.x, last.y);
+  /* thin to at most ~1800 samples for drawing, always keeping the last */
+  const k = Math.max(1, Math.ceil(S.length / 1800));
+  const thin = S.filter((_, i) => i % k === 0); if (thin[thin.length - 1] !== last) thin.push(last);
+  const a = E0 < 0 ? -GM / (2 * E0) : Infinity;           // semi-major axis of the ellipse
+  return {v, outcome, samples: thin, steps: S.length, tEnd: last.t, maxR,
+          range: outcome === 'landed' ? R_E * last.sw : null,
+          E0, drift: Math.abs((E1 - E0) / E0), a, period: a < Infinity ? TAU * Math.sqrt(a * a * a / GM) : Infinity};
+}
+/* The state of a flight at time t (linear between samples). */
+function stateAt(sim, t){
+  const S = sim.samples; let lo = 0, hi = S.length - 1;
+  if (t <= S[0].t) return derive(S[0]);
+  if (t >= S[hi].t) return derive(S[hi]);
+  while (hi - lo > 1) { const m = (lo + hi) >> 1; if (S[m].t <= t) lo = m; else hi = m; }
+  const a = S[lo], b = S[hi], f = (t - a.t) / (b.t - a.t);
+  return derive({t, x: a.x + (b.x - a.x) * f, y: a.y + (b.y - a.y) * f, vx: a.vx + (b.vx - a.vx) * f, vy: a.vy + (b.vy - a.vy) * f, sw: a.sw + (b.sw - a.sw) * f});
+}
+function derive(s){ const r = Math.hypot(s.x, s.y); return Object.assign({}, s, {r, h: r - R_E, speed: Math.hypot(s.vx, s.vy), g: gAt(r), ground: R_E * s.sw}); }
+
+/* The Moon's fall. Integrate the real Moon for time t from a point on its orbit, moving at the
+   circular speed; compare with the straight line it would take with no gravity. */
+function moonFall(t){
+  const v = vCirc(R_MOON), n = Math.max(200, Math.ceil(t / 60)), dt = t / n;
+  let x = 0, y = R_MOON, vx = v, vy = 0, [ax, ay] = accel(x, y);
+  for (let i = 0; i < n; i++) {
+    x += vx * dt + 0.5 * ax * dt * dt; y += vy * dt + 0.5 * ay * dt * dt;
+    const [nx, ny] = accel(x, y); vx += 0.5 * (ax + nx) * dt; vy += 0.5 * (ay + ny) * dt; ax = nx; ay = ny;
+  }
+  /* no-gravity point: (v t, R_MOON). The fall is how far the real Moon is below it, measured
+     towards the Earth's centre from the straight-line point. */
+  const sx = v * t, sy = R_MOON, sr = Math.hypot(sx, sy);
+  const fall = sr - Math.hypot(x, y) * ((x * sx + y * sy) / (Math.hypot(x, y) * sr));
+  return {t, v, x, y, sx, sy, fall, angle: Math.atan2(x, y)};
+}
+/* The Moon's acceleration two ways: from its measured orbit (4π²r/T²) and from Newton's law. */
+const moonAccelMeasured = () => 4 * Math.PI * Math.PI * R_MOON / (T_MOON * T_MOON);
+const moonAccelLaw = () => gAt(R_MOON);
+/* MODEL:end */
+
+/* ---- state: plain data --------------------------------------------------- */
+const MT = [1, 60, 600, 3600, 6 * 3600, 86400, 3 * 86400, 7 * 86400];
+const MT_LAB = ['1 s', '1 min', '10 min', '1 h', '6 h', '1 day', '3 days', '7 days'];
+const S = {tab: 'cannon', v: 3.0, t: 0, locked: false, shots: [], flying: false, mtIdx: 4, mtCustom: null, seenFar: false};
+const shared = sharedState();
+if (shared) { S.v = clamp(+shared.v || 3, 0, 12); S.mtIdx = clamp(+shared.mt || 4, 0, 7); if (shared.tab === 'moon') S.tab = 'moon'; }
+shareState(() => ({tab: S.tab, v: S.v, mt: S.mtIdx}));
+let SIM = null;                // the current flight
+let VIEW = {s: 150 / R_E};    // px per metre in the cannon view
+
+/* ============================================================================
+   The stage: drawn once, then only patched.
+   ============================================================================ */
+const svg = $('stage');
+const C = {x: 300, y: 335};                    // Earth's centre, cannon view
+const HG = {x: 668, y: 58, w: 300, h: 190};    // height vs time
+const RG = {x: 668, y: 396, w: 300, h: 186};   // landing distance vs launch speed
+const MC = {x: 300, y: 335, R: 250};           // moon view
+
+function build(){
+  let stars = '';
+  const rnd = Play.mulberry32(11);
+  for (let i = 0; i < 90; i++) stars += `<circle cx="${(rnd() * 598).toFixed(1)}" cy="${(rnd() * 658).toFixed(1)}" r="${(rnd() * 1.1 + .3).toFixed(2)}" fill="#fff" opacity="${(rnd() * .5 + .2).toFixed(2)}"/>`;
+  svg.innerHTML = `
+  <defs>
+    <radialGradient id="gEarth" cx="40%" cy="36%"><stop offset="0" stop-color="#6fc1ff"/><stop offset=".7" stop-color="#2471c9"/><stop offset="1" stop-color="#174d93"/></radialGradient>
+    <radialGradient id="gMoon" cx="40%" cy="36%"><stop offset="0" stop-color="#f4f1e8"/><stop offset="1" stop-color="#a9a597"/></radialGradient>
+    <radialGradient id="gAir"><stop offset=".9" stop-color="#7fc4ff" stop-opacity=".0"/><stop offset=".97" stop-color="#7fc4ff" stop-opacity=".35"/><stop offset="1" stop-color="#7fc4ff" stop-opacity="0"/></radialGradient>
+    <clipPath id="clipSpace"><rect x="0" y="0" width="600" height="660"/></clipPath>
+    <marker id="arrV" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#ffd36b"/></marker>
+    <marker id="arrG" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#ff7b7b"/></marker>
+    <marker id="arrI" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#1d2327"/></marker>
+  </defs>
+  <rect x="0" y="0" width="600" height="660" fill="#0d1726"/>
+  <g>${stars}</g>
+
+  <!-- ===== cannon view ===== -->
+  <g id="vCannon" clip-path="url(#clipSpace)">
+    <text x="18" y="28" fill="#9fb3c8" font-size="13" font-weight="700" letter-spacing=".08em">NEWTON’S CANNON</text>
+    <text x="18" y="46" fill="#6f8399" font-size="11.5" id="scaleNote">The Earth to scale. The mountain (50 km) is drawn taller so you can see it.</text>
+    <circle id="earth" cx="${C.x}" cy="${C.y}" fill="url(#gEarth)"/>
+    <path id="land" fill="#2f8a4e" opacity=".85"/>
+    <circle id="rCirc" cx="${C.x}" cy="${C.y}" fill="none" stroke="#6f8399" stroke-width="1" stroke-dasharray="2 6" opacity=".6"/>
+    <g id="oldPaths"></g>
+    <path id="path" fill="none" stroke="#ffd36b" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round"/>
+    <path id="mountain" fill="#8a6a4a" stroke="#5f4630" stroke-width="1"/>
+    <g id="cannon"><rect x="-4" y="-5" width="16" height="6" rx="2" fill="#2b2f36"/><circle r="4.5" fill="#2b2f36"/></g>
+    <line id="vArrow" stroke="#ffd36b" stroke-width="2" marker-end="url(#arrV)"/>
+    <line id="gArrow" stroke="#ff7b7b" stroke-width="2" marker-end="url(#arrG)"/>
+    <circle id="ball" r="5.5" fill="#f5f1e6" stroke="#1d2327" stroke-width="1.2"/>
+    <text id="landLab" fill="#ffd36b" font-size="13" font-weight="700" text-anchor="middle"></text>
+    <text id="outcomeLab" x="300" y="636" fill="#dce6f0" font-size="15" font-weight="600" text-anchor="middle"></text>
+  </g>
+
+  <!-- ===== moon view ===== -->
+  <g id="vMoon" display="none">
+    <text x="18" y="28" fill="#9fb3c8" font-size="13" font-weight="700" letter-spacing=".08em">THE MOON IS FALLING TOO</text>
+    <text x="18" y="46" fill="#6f8399" font-size="11.5">The Earth and the Moon’s orbit to scale (384 400 km).</text>
+    <circle cx="${MC.x}" cy="${MC.y}" r="${MC.R}" fill="none" stroke="#3d5573" stroke-width="1.5" stroke-dasharray="3 6"/>
+    <circle cx="${MC.x}" cy="${MC.y}" r="${(MC.R * R_E / R_MOON).toFixed(2)}" fill="url(#gEarth)"/>
+    <text x="${MC.x}" y="${MC.y + 22}" fill="#9fb3c8" font-size="11" text-anchor="middle">Earth</text>
+    <line id="mTan" stroke="#ffd36b" stroke-width="1.6" stroke-dasharray="6 5"/>
+    <circle id="mGhost" r="7" fill="none" stroke="#ffd36b" stroke-width="1.5" stroke-dasharray="3 3"/>
+    <path id="mArc" fill="none" stroke="#f5f1e6" stroke-width="2.2"/>
+    <line id="mFall" stroke="#ff7b7b" stroke-width="2" marker-end="url(#arrG)"/>
+    <circle cx="${MC.x}" cy="${MC.y - MC.R}" r="7" fill="url(#gMoon)" opacity=".35"/>
+    <circle id="moon" r="9" fill="url(#gMoon)"/>
+    <circle id="moonHit" r="22" fill="transparent" role="slider" aria-label="The Moon: drag it along its orbit to change the time"/>
+    <!-- magnifier -->
+    <g id="mag">
+      <rect x="360" y="468" width="222" height="172" rx="10" fill="#132238" stroke="#3d5573"/>
+      <text x="372" y="488" fill="#9fb3c8" font-size="11.5" font-weight="700" letter-spacing=".06em">CLOSE UP</text>
+      <text id="magScale" x="570" y="488" fill="#6f8399" font-size="11" text-anchor="end"></text>
+      <line x1="380" y1="540" x2="562" y2="540" stroke="#ffd36b" stroke-width="1.6" stroke-dasharray="6 5"/>
+      <text x="380" y="530" fill="#ffd36b" font-size="11">no gravity: straight on</text>
+      <path id="magArc" fill="none" stroke="#f5f1e6" stroke-width="2.2"/>
+      <line id="magFall" stroke="#ff7b7b" stroke-width="2" marker-end="url(#arrG)"/>
+      <text id="magLab" x="470" y="626" fill="#ff9d9d" font-size="13" font-weight="700" text-anchor="middle"></text>
+    </g>
+  </g>
+
+  <!-- ===== right: graphs, cannon ===== -->
+  <rect x="600" y="0" width="400" height="660" fill="#fbfaf6"/>
+  <line x1="600" y1="0" x2="600" y2="660" stroke="#e2ded2"/>
+  <g id="gCannon">
+    <text x="618" y="28" fill="#4a555b" font-size="13" font-weight="700" letter-spacing=".08em">HEIGHT AGAINST TIME</text>
+    <g id="hAxes"></g>
+    <path id="hCurve" fill="none" stroke="#3057c9" stroke-width="2.4" stroke-linejoin="round"/>
+    <line id="hNow" stroke="#1d2327" stroke-width="1.3"/>
+    <circle id="hDot" r="5" fill="#3057c9" stroke="#fff" stroke-width="2"/>
+    <rect id="hHit" class="scrub" x="${HG.x}" y="${HG.y}" width="${HG.w}" height="${HG.h}" fill="transparent"/>
+
+    <line x1="600" y1="330" x2="1000" y2="330" stroke="#e2ded2"/>
+    <text x="618" y="356" fill="#4a555b" font-size="13" font-weight="700" letter-spacing=".08em">WHERE IT COMES DOWN</text>
+    <g id="rAxes"></g>
+    <g id="rPts"></g>
+    <line id="rNow" y1="${RG.y}" y2="${RG.y + RG.h}" stroke="#3057c9" stroke-width="1.6" stroke-dasharray="4 4"/>
+    <rect id="rHit" class="scrub" x="${RG.x}" y="${RG.y - 14}" width="${RG.w}" height="${RG.h + 28}" fill="transparent"/>
+  </g>
+
+  <!-- ===== right: moon comparison ===== -->
+  <g id="gMoonR" display="none">
+    <text x="618" y="28" fill="#4a555b" font-size="13" font-weight="700" letter-spacing=".08em">HOW FAR IT FALLS</text>
+    <text x="618" y="46" fill="#7c878c" font-size="11.5">in the same time, from rest (apple) or from its orbit (Moon)</text>
+    <g id="barAxes"></g>
+    <rect id="barApple" x="720" height="34" rx="4" fill="#d6453d"/>
+    <rect id="barMoon" x="720" height="34" rx="4" fill="#8a94a6"/>
+    <text x="712" y="0" id="labApple" fill="#4a555b" font-size="12.5" font-weight="600" text-anchor="end">Apple</text>
+    <text x="712" y="126" fill="#7c878c" font-size="10" text-anchor="end">if g stayed 9.8</text>
+    <text x="712" y="0" id="labMoon" fill="#4a555b" font-size="12.5" font-weight="600" text-anchor="end">Moon</text>
+    <text id="valApple" fill="#8a2a24" font-size="12.5" font-weight="700" font-family="JetBrains Mono, monospace"></text>
+    <text id="valMoon" fill="#4a555b" font-size="12.5" font-weight="700" font-family="JetBrains Mono, monospace"></text>
+    <line x1="600" y1="300" x2="1000" y2="300" stroke="#e2ded2"/>
+    <text x="618" y="328" fill="#4a555b" font-size="13" font-weight="700" letter-spacing=".08em">NEWTON’S CHECK</text>
+    <g id="check" font-size="13.5" fill="#1d2327"></g>
+  </g>
+  `;
+}
+
+/* ---- the cannon view: screen mapping --------------------------------------
+   Radii above the mountain top are pushed out by a fixed Q px, so the (exaggerated)
+   mountain and the ball's path agree. Everything else is to scale. */
+const Q = () => clamp(0.1 * VIEW.s * R_E, 3, 16);
+function rho(r){ return VIEW.s * r + Q() * clamp((r - R_E) / H_MT, 0, 1); }
+function toScreen(x, y){ const r = Math.hypot(x, y), th = Math.atan2(x, y), p = rho(r); return {x: C.x + p * Math.sin(th), y: C.y - p * Math.cos(th)}; }
+function fitScale(sim){
+  const far = sim ? Math.min(sim.maxR, 40 * R_E) : R0;
+  return Math.min(150 / R_E, 290 / (far * 1.04));
+}
+function paintEarth(){
+  const re = VIEW.s * R_E;
+  $('earth').setAttribute('r', re.toFixed(2));
+  $('rCirc').setAttribute('r', rho(R0).toFixed(2));
+  /* some land, so the turning is visible: fixed blobs round the globe */
+  let d = '';
+  for (const [a0, a1, k] of [[-0.4, 0.5, .9], [1.3, 2.1, .8], [2.8, 3.6, .85], [4.4, 5.2, .75]]) {
+    const pts = [];
+    for (let a = a0; a <= a1 + 1e-9; a += 0.05) pts.push([C.x + re * Math.sin(a), C.y - re * Math.cos(a)]);
+    for (let a = a1; a >= a0 - 1e-9; a -= 0.05) { const kk = k + 0.05 * Math.sin(a * 7); pts.push([C.x + re * kk * Math.sin(a), C.y - re * kk * Math.cos(a)]); }
+    d += 'M' + pts.map(p => p[0].toFixed(1) + ' ' + p[1].toFixed(1)).join('L') + 'Z';
+  }
+  $('land').setAttribute('d', d);
+  const top = C.y - re, q = Q(), w = Math.max(10, q * 1.2);
+  $('mountain').setAttribute('d', `M${C.x - w} ${top + 2} L${C.x - 2} ${top - q} L${C.x + 2} ${top - q} L${C.x + w} ${top + 2}Z`);
+  $('cannon').setAttribute('transform', `translate(${C.x} ${top - q - 3})`);
+}
+
+/* ---- graph scales ---------------------------------------------------------- */
+let HSC = {tMax: 600, hMax: 100000};
+const hx = t => HG.x + t / HSC.tMax * HG.w;
+const hy = h => HG.y + HG.h - clamp(h / HSC.hMax, 0, 1.02) * HG.h;
+const niceUp = v => { const p = Math.pow(10, Math.floor(Math.log10(v))); for (const m of [1, 2, 2.5, 5, 10]) if (m * p >= v) return m * p; return 10 * p; };
+function tUnit(tMax){ return tMax > 2 * 86400 ? {div: 86400, lab: 'days'} : tMax > 3 * 3600 ? {div: 3600, lab: 'hours'} : tMax > 180 ? {div: 60, lab: 'minutes'} : {div: 1, lab: 'seconds'}; }
+function drawHAxes(){
+  const u = tUnit(HSC.tMax), tm = niceUp(HSC.tMax / u.div), hm = HSC.hMax / 1000;
+  HSC.tMax = tm * u.div;
+  let ax = `<line x1="${HG.x}" y1="${HG.y + HG.h}" x2="${HG.x + HG.w}" y2="${HG.y + HG.h}" stroke="#9aa3a6"/><line x1="${HG.x}" y1="${HG.y}" x2="${HG.x}" y2="${HG.y + HG.h}" stroke="#9aa3a6"/>`;
+  for (let i = 0; i <= 4; i++) {
+    const v = tm * i / 4, x = HG.x + HG.w * i / 4;
+    ax += `<line x1="${x}" y1="${HG.y + HG.h}" x2="${x}" y2="${HG.y + HG.h + 4}" stroke="#9aa3a6"/><text x="${x}" y="${HG.y + HG.h + 17}" fill="#7c878c" font-size="11" text-anchor="middle">${+v.toFixed(2)}</text>`;
+    const hv = hm * i / 4, y = HG.y + HG.h - HG.h * i / 4;
+    ax += `<line x1="${HG.x}" y1="${y}" x2="${HG.x + HG.w}" y2="${y}" stroke="#ece8dc"/><text x="${HG.x - 6}" y="${y + 4}" fill="#3057c9" font-size="11" text-anchor="end">${hv >= 1000 ? (hv / 1000).toFixed(hv % 1000 ? 1 : 0) + 'k' : +hv.toFixed(1)}</text>`;
+  }
+  ax += `<text x="${HG.x + HG.w}" y="${HG.y + HG.h + 32}" fill="#7c878c" font-size="11" text-anchor="end">time (${u.lab})</text>`;
+  ax += `<text x="${HG.x - 44}" y="${HG.y - 10}" fill="#3057c9" font-size="11" font-weight="600">height above the ground (km)</text>`;
+  $('hAxes').innerHTML = ax;
+}
+/* Landing distance on a square-root scale so short throws still show. */
+const R_TOP = 45000;                            // km
+const rx = v => RG.x + v / 12 * RG.w;
+const ry = km => RG.y + RG.h - Math.sqrt(clamp(km, 0, R_TOP) / R_TOP) * RG.h;
+const CIRC_KM = TAU * R_E / 1000;
+function drawRAxes(){
+  let ax = `<line x1="${RG.x}" y1="${RG.y + RG.h}" x2="${RG.x + RG.w}" y2="${RG.y + RG.h}" stroke="#9aa3a6"/><line x1="${RG.x}" y1="${RG.y}" x2="${RG.x}" y2="${RG.y + RG.h}" stroke="#9aa3a6"/>`;
+  for (let v = 0; v <= 12; v += 2) ax += `<text x="${rx(v)}" y="${RG.y + RG.h + 17}" fill="#7c878c" font-size="11" text-anchor="middle">${v}</text>`;
+  for (const km of [0, 1000, 5000, 10000, 20000]) ax += `<line x1="${RG.x}" y1="${ry(km).toFixed(1)}" x2="${RG.x + RG.w}" y2="${ry(km).toFixed(1)}" stroke="#ece8dc"/><text x="${RG.x - 6}" y="${(ry(km) + 4).toFixed(1)}" fill="#1f7a68" font-size="11" text-anchor="end">${km >= 1000 ? km / 1000 + 'k' : km}</text>`;
+  ax += `<line x1="${RG.x}" y1="${ry(CIRC_KM).toFixed(1)}" x2="${RG.x + RG.w}" y2="${ry(CIRC_KM).toFixed(1)}" stroke="#1f7a68" stroke-dasharray="5 4"/>`;
+  ax += `<text x="${RG.x + 4}" y="${(ry(CIRC_KM) - 5).toFixed(1)}" fill="#1f7a68" font-size="11" font-weight="600">once round the Earth: ${Math.round(CIRC_KM).toLocaleString('en-IN')} km</text>`;
+  ax += `<text x="${RG.x + RG.w}" y="${RG.y + RG.h + 32}" fill="#7c878c" font-size="11" text-anchor="end">launch speed (km/s)</text>`;
+  ax += `<text x="618" y="376" fill="#1f7a68" font-size="11" font-weight="600">distance along the ground (km), square-root scale</text>`;
+  $('rAxes').innerHTML = ax;
+}
+function drawShots(){
+  let g = '';
+  for (const s of S.shots) {
+    const x = rx(s.v).toFixed(1);
+    if (s.outcome === 'landed') g += `<circle cx="${x}" cy="${ry(s.range / 1000).toFixed(1)}" r="4.5" fill="#1f7a68" stroke="#fff" stroke-width="1.5"><title>${fmt(s.v, 1)} km/s: ${Math.round(s.range / 1000)} km</title></circle>`;
+    else if (s.outcome === 'escape') g += `<path d="M${x} ${RG.y - 2} l-5 8 h10z" fill="#d6453d"/><text x="${x}" y="${RG.y - 6}" fill="#d6453d" font-size="10" text-anchor="middle">gone</text>`;
+    else g += `<path d="M${x} ${ry(CIRC_KM) - 9} l-5 8 h10z" fill="#3057c9"/>`;
+  }
+  $('rPts').innerHTML = g;
+}
+
+/* ---- paint --------------------------------------------------------------- */
+function curState(){ return SIM ? stateAt(SIM, S.t) : derive({t: 0, x: 0, y: R0, vx: S.v * 1000, vy: 0, sw: 0}); }
+function paint(){
+  $('vCannon').setAttribute('display', S.tab === 'cannon' ? '' : 'none');
+  $('gCannon').setAttribute('display', S.tab === 'cannon' ? '' : 'none');
+  $('vMoon').setAttribute('display', S.tab === 'moon' ? '' : 'none');
+  $('gMoonR').setAttribute('display', S.tab === 'moon' ? '' : 'none');
+  $('cannonCtl').hidden = S.tab !== 'cannon'; $('moonCtl').hidden = S.tab !== 'moon';
+  $('tabCannon').setAttribute('aria-pressed', S.tab === 'cannon'); $('tabMoon').setAttribute('aria-pressed', S.tab === 'moon');
+  $('speed').value = S.v; $('speedOut').textContent = fmt(S.v, 1) + ' km/s';
+  if (S.tab === 'cannon') paintCannon(); else paintMoon();
+}
+function paintCannon(){
+  paintEarth();
+  const st = curState();
+  /* path so far */
+  if (SIM) {
+    const pts = [];
+    for (const s of SIM.samples) { if (s.t > S.t) break; const p = toScreen(s.x, s.y); pts.push(p.x.toFixed(1) + ' ' + p.y.toFixed(1)); }
+    const p = toScreen(st.x, st.y); pts.push(p.x.toFixed(1) + ' ' + p.y.toFixed(1));
+    $('path').setAttribute('d', 'M' + pts.join('L'));
+  } else $('path').setAttribute('d', '');
+  const b = toScreen(st.x, st.y);
+  $('ball').setAttribute('cx', b.x.toFixed(1)); $('ball').setAttribute('cy', b.y.toFixed(1));
+  $('ballHit').setAttribute('cx', b.x.toFixed(1)); $('ballHit').setAttribute('cy', b.y.toFixed(1));
+  /* velocity arrow (length ∝ speed) and gravity arrow (length ∝ g) */
+  const vs = st.speed / 1000 * 5.5, gs = st.g * 3;
+  const th = Math.atan2(st.x, st.y);
+  $('vArrow').setAttribute('x1', b.x.toFixed(1)); $('vArrow').setAttribute('y1', b.y.toFixed(1));
+  $('vArrow').setAttribute('x2', (b.x + st.vx / st.speed * vs || b.x).toFixed(1)); $('vArrow').setAttribute('y2', (b.y - st.vy / st.speed * vs || b.y).toFixed(1));
+  $('vArrow').setAttribute('opacity', S.locked && st.speed > 50 ? 1 : 0);
+  $('gArrow').setAttribute('x1', b.x.toFixed(1)); $('gArrow').setAttribute('y1', b.y.toFixed(1));
+  $('gArrow').setAttribute('x2', (b.x - Math.sin(th) * gs).toFixed(1)); $('gArrow').setAttribute('y2', (b.y + Math.cos(th) * gs).toFixed(1));
+  $('gArrow').setAttribute('opacity', S.locked ? 1 : 0);
+  /* outcome label, once the flight is over */
+  const done = SIM && S.t >= SIM.tEnd - 1e-6;
+  let lab = '';
+  if (SIM && done) {
+    if (SIM.outcome === 'landed') lab = `Landed ${km(SIM.range)} away, after ${dur(SIM.tEnd)}.`;
+    else if (SIM.outcome === 'orbit') lab = `All the way round in ${dur(SIM.tEnd)} — and it never touched the ground.`;
+    else if (SIM.outcome === 'escape') lab = `It has escaped: it is never coming back.`;
+    else lab = `A huge ellipse: it comes back round after ${dur(SIM.period)}.`;
+  }
+  $('outcomeLab').textContent = lab;
+  if (SIM && done && SIM.outcome === 'landed') {
+    const p = toScreen(st.x * 1.0, st.y * 1.0), dx = p.x - C.x, dy = p.y - C.y, L = Math.hypot(dx, dy) || 1;
+    $('landLab').setAttribute('x', (p.x + dx / L * 22).toFixed(1)); $('landLab').setAttribute('y', (p.y + dy / L * 22 + 4).toFixed(1));
+    $('landLab').textContent = '✕';
+  } else $('landLab').textContent = '';
+  $('scaleNote').textContent = VIEW.s * R_E < 140 ? `Zoomed out: the Earth is ${Math.round(VIEW.s * R_E)} px across its radius. The mountain is drawn taller.` : 'The Earth to scale. The mountain (50 km) is drawn taller so you can see it.';
+
+  /* height graph */
+  if (SIM) {
+    let d = '';
+    for (const s of SIM.samples) d += (d ? 'L' : 'M') + hx(s.t).toFixed(1) + ' ' + hy(Math.hypot(s.x, s.y) - R_E).toFixed(1);
+    $('hCurve').setAttribute('d', S.locked ? d : '');
+  } else $('hCurve').setAttribute('d', '');
+  $('hNow').setAttribute('x1', hx(S.t).toFixed(1)); $('hNow').setAttribute('x2', hx(S.t).toFixed(1));
+  $('hNow').setAttribute('y1', HG.y); $('hNow').setAttribute('y2', HG.y + HG.h);
+  $('hDot').setAttribute('cx', hx(S.t).toFixed(1)); $('hDot').setAttribute('cy', hy(st.h).toFixed(1));
+  $('rNow').setAttribute('x1', rx(S.v).toFixed(1)); $('rNow').setAttribute('x2', rx(S.v).toFixed(1));
+  paintNums(st);
+  paintWhy(st);
+  check(st);
+}
+const km = m => Math.round(m / 1000).toLocaleString('en-IN') + ' km';
+function dur(s){
+  if (!isFinite(s)) return 'forever';
+  if (s < 120) return fmt(s, 0) + ' s';
+  if (s < 3 * 3600) { const m = Math.floor(s / 60); return m + ' min ' + Math.round(s - m * 60) + ' s'; }
+  if (s < 2 * 86400) { const h = Math.floor(s / 3600); return h + ' h ' + Math.round((s - h * 3600) / 60) + ' min'; }
+  return fmt(s / 86400, 1) + ' days';
+}
+function paintNums(st){
+  if (!S.locked) { $('nums').innerHTML = '<p style="font-size:13px;color:var(--ink-3);margin:0">The numbers appear once you have made a prediction.</p>'; return; }
+  if (S.tab === 'moon') return paintMoonNums();
+  $('numKick').textContent = 'The numbers, right now';
+  const g0 = gAt(R_E);
+  $('nums').innerHTML = `<div class="nums">
+    <span>Time since firing</span><b>${dur(st.t)}</b>
+    <span>Height above the ground</span><b>${st.h < 1e5 ? fmt(Math.max(0, st.h) / 1000, 1) : Math.round(st.h / 1000).toLocaleString('en-IN')} km</b>
+    <span>Speed</span><b>${fmt(st.speed / 1000, 2)} km/s</b>
+    <span>g at this height</span><b>${fmt(st.g, 2)} m/s²</b>
+    <span class="eq">g = GM/r² = ${(GM).toExponential(3)} ÷ (${fmt(st.r / 1000, 0)} km)² · ${fmt(st.g / g0 * 100, 0)}% of the ground’s ${fmt(g0, 2)}</span>
+    <span>Distance along the ground</span><b>${km(Math.abs(st.ground))}</b>
+    <span>Speed to circle at this height</span><b>${fmt(vCirc(R0) / 1000, 2)} km/s</b>
+    <span class="eq">v = √(GM/r) at the mountain top</span>
+  </div>`;
+}
+function paintWhy(st){
+  if (!S.locked) return;
+  $('whyCard').hidden = false;
+  if (S.tab === 'moon') return;
+  const vc = vCirc(R0), ve = vEsc(R0), v = S.v * 1000;
+  let t = '';
+  if (!SIM) t = `<p>Set a speed and press <b>Fire!</b>.</p>`;
+  else if (v < 0.5) t = `<p>Barely pushed: it just drops off the mountain, straight down. Gravity pulls at <b>${fmt(gAt(R0), 2)} m/s²</b> up there.</p>`;
+  else if (v < vc * 0.995 && SIM.outcome === 'landed') {
+    t = `<p>It falls <b>${fmt(gAt(R0) / 2, 2)} m</b> in its first second, like anything dropped. But while it falls it also moves sideways, and the round Earth curves away beneath it — by only <b>${fmt(v * v / (2 * R0), 2)} m</b> in that second at this speed.</p>
+         <p>It falls faster than the ground drops away, so it lands. Faster throws make the ground curve away more.</p>`;
+  } else if (SIM.outcome === 'escape' || v >= ve) {
+    t = `<p>At <b>${fmt(S.v, 1)} km/s</b> its energy of motion is bigger than the pull can ever take back. Above <b>${fmt(ve / 1000, 2)} km/s</b> from this mountain (the escape speed, √(2GM/r)) it leaves for good.</p>`;
+  } else {
+    t = `<p>At <b>${fmt(S.v, 1)} km/s</b> the ground curves away at least as fast as the ball falls: in one second it falls about <b>${fmt(gAt(R0) / 2, 2)} m</b>, and the surface drops away <b>${fmt(v * v / (2 * R0), 2)} m</b>. It is falling all the time — and always missing.</p>
+         <p>Just ${fmt(vc / 1000, 2)} km/s gives a circle. Faster makes a stretched ellipse; the ball swings out to <b>${km(SIM.maxR - R_E)}</b> above the ground and comes back.</p>`;
+  }
+  $('why').innerHTML = t;
+}
+
+/* ---- the moon ------------------------------------------------------------ */
+function moonT(){ return S.mtCustom != null ? S.mtCustom : MT[S.mtIdx]; }
+function paintMoon(){
+  const t = moonT(), mf = moonFall(t);
+  $('mt').value = S.mtIdx; $('mtOut').textContent = S.mtCustom != null ? dur(t) : MT_LAB[S.mtIdx];
+  const k = MC.R / R_MOON;
+  const mx = MC.x + mf.x * k, my = MC.y - mf.y * k;
+  const gx = MC.x + mf.sx * k, gy = MC.y - mf.sy * k;
+  $('moon').setAttribute('cx', mx.toFixed(1)); $('moon').setAttribute('cy', my.toFixed(1));
+  $('moonHit').setAttribute('cx', mx.toFixed(1)); $('moonHit').setAttribute('cy', my.toFixed(1));
+  $('mGhost').setAttribute('cx', gx.toFixed(1)); $('mGhost').setAttribute('cy', gy.toFixed(1));
+  $('mTan').setAttribute('x1', MC.x); $('mTan').setAttribute('y1', MC.y - MC.R);
+  $('mTan').setAttribute('x2', gx.toFixed(1)); $('mTan').setAttribute('y2', gy.toFixed(1));
+  /* the orbit travelled: an arc from the top through angle mf.angle */
+  const a = mf.angle, large = a > Math.PI ? 1 : 0;
+  $('mArc').setAttribute('d', a < 1e-4 ? '' : `M${MC.x} ${MC.y - MC.R} A${MC.R} ${MC.R} 0 ${large} 1 ${mx.toFixed(1)} ${my.toFixed(1)}`);
+  const fallPx = mf.fall * k;
+  $('mFall').setAttribute('x1', gx.toFixed(1)); $('mFall').setAttribute('y1', gy.toFixed(1));
+  $('mFall').setAttribute('x2', mx.toFixed(1)); $('mFall').setAttribute('y2', my.toFixed(1));
+  $('mFall').setAttribute('opacity', fallPx > 8 ? 1 : 0);
+  /* close-up: the straight line at y=540, the real path curving below it, magnified so the
+     drop is 60 px (the curve is the model's own ½at² shape, sampled) */
+  const drop = 60, mag = drop / Math.max(mf.fall, 1e-9);
+  let d = '';
+  for (let i = 0; i <= 40; i++) { const f = i / 40; const x = 380 + f * 182; const y = 540 + moonFall(t * f).fall * mag; d += (i ? 'L' : 'M') + x.toFixed(1) + ' ' + y.toFixed(1); }
+  $('magArc').setAttribute('d', d);
+  $('magFall').setAttribute('x1', 562); $('magFall').setAttribute('y1', 540); $('magFall').setAttribute('x2', 562); $('magFall').setAttribute('y2', 540 + drop - 3);
+  $('magLab').textContent = 'fallen ' + len(mf.fall);
+  $('mag').setAttribute('display', fallPx < 8 ? '' : 'none');
+  $('magScale').textContent = `in ${S.mtCustom != null ? dur(t) : MT_LAB[S.mtIdx]} · the drop is magnified`;
+
+  /* bars: log scale from 0.1 mm to 10 million km */
+  const apple = 0.5 * gAt(R_E) * t * t;
+  const L0 = -4, L1 = 11, bx = v => 720 + clamp((Math.log10(Math.max(v, 1e-6)) - L0) / (L1 - L0), 0, 1) * 250;
+  let ax = '';
+  const TL = {'-4': '0.1 mm', '-1': '10 cm', '2': '100 m', '5': '100 km', '8': '10⁵ km', '11': '10⁸ km'};
+  for (let e = L0; e <= L1; e += 3) ax += `<line x1="${bx(Math.pow(10, e))}" y1="70" x2="${bx(Math.pow(10, e))}" y2="220" stroke="#ece8dc"/><text x="${bx(Math.pow(10, e))}" y="236" fill="#7c878c" font-size="10.5" text-anchor="middle">${TL[e]}</text>`;
+  ax += `<text x="970" y="254" fill="#7c878c" font-size="10.5" text-anchor="end">each line is ×1000 the one before</text>`;
+  $('barAxes').innerHTML = ax;
+  $('barApple').setAttribute('y', 88); $('barApple').setAttribute('width', (bx(apple) - 720).toFixed(1));
+  $('barMoon').setAttribute('y', 158); $('barMoon').setAttribute('width', (bx(mf.fall) - 720).toFixed(1));
+  $('labApple').setAttribute('y', 110); $('labMoon').setAttribute('y', 180);
+  const val = (id, w, v, y) => { const x = bx(v), inside = x > 860; const el = $(id);
+    el.setAttribute('x', inside ? x - 8 : x + 6); el.setAttribute('y', y); el.setAttribute('text-anchor', inside ? 'end' : 'start');
+    el.setAttribute('fill', inside ? '#fff' : (id === 'valApple' ? '#8a2a24' : '#4a555b')); el.textContent = len(v); };
+  val('valApple', 0, apple, 110); val('valMoon', 0, mf.fall, 180);
+
+  const one = moonFall(1), ratio = 0.5 * gAt(R_E) / one.fall, dist = R_MOON / R_E;
+  const aM = moonAccelMeasured(), aL = moonAccelLaw();
+  const line = (y, a, b, bold) => `<text x="618" y="${y}" ${bold ? 'font-weight="700"' : ''}>${a}</text><text x="982" y="${y}" text-anchor="end" font-family="JetBrains Mono, monospace" ${bold ? 'font-weight="700"' : ''}>${b}</text>`;
+  $('check').innerHTML = S.locked ? (
+    line(356, 'In one second: apple ' + len(0.5 * gAt(R_E)) + ', Moon ' + len(one.fall), sig(ratio) + '×') +
+    line(380, 'The Moon is this many Earth-radii away', fmt(dist, 1)) +
+    line(404, 'Inverse square: (distance)²', fmt(dist, 1) + '² = ' + sig(dist * dist), true) +
+    `<text x="618" y="438" fill="#4a555b" font-size="12.5">The Moon is ${fmt(dist, 0)} times farther from the Earth’s centre,</text>` +
+    `<text x="618" y="456" fill="#4a555b" font-size="12.5">so gravity there is about ${fmt(dist, 0)}² ≈ ${sig(dist * dist)} times weaker.</text>` +
+    line(494, 'Moon’s pull, from its orbit (4π²r/T²)', aM.toExponential(3) + ' m/s²') +
+    line(518, 'Moon’s pull, from the law (GM/r²)', aL.toExponential(3) + ' m/s²') +
+    `<text x="618" y="548" fill="#4a555b" font-size="12.5">They agree to ${fmt(Math.abs(aM - aL) / aM * 100, 1)}%: the measured month and the law of</text>` +
+    `<text x="618" y="566" fill="#4a555b" font-size="12.5">gravity tell the same story. The small gap is because</text>` +
+    `<text x="618" y="584" fill="#4a555b" font-size="12.5">the Moon pulls the Earth too.</text>`
+  ) : '';
+  paintMoonNums(mf);
+  paintMoonWhy(mf, apple);
+  check(null, mf);
+}
+function paintMoonNums(mf){
+  if (!S.locked) return;
+  mf = mf || moonFall(moonT());
+  $('numKick').textContent = 'The Moon, right now';
+  $('nums').innerHTML = `<div class="nums">
+    <span>Time</span><b>${dur(mf.t)}</b>
+    <span>Moon’s speed</span><b>${fmt(mf.v / 1000, 3)} km/s</b>
+    <span class="eq">v = √(GM/r), r = 384 400 km</span>
+    <span>Distance along its orbit</span><b>${len(mf.v * mf.t)}</b>
+    <span>Fallen below the straight line</span><b>${len(mf.fall)}</b>
+    <span>g at the Moon’s distance</span><b>${(gAt(R_MOON) * 1000).toFixed(2)} mm/s²</b>
+  </div>`;
+}
+function paintMoonWhy(mf, apple){
+  if (!S.locked) return;
+  $('why').innerHTML = `<p>In ${dur(mf.t)} the Moon moves <b>${len(mf.v * mf.t)}</b> along its orbit. With no gravity it would go straight on, along the dashed line.
+    Instead it ends up <b>${len(mf.fall)}</b> closer to the Earth: that is how far it has fallen.</p>
+    <p>An apple falling freely for the same time would drop ${len(apple)}. The Moon falls ${sig(apple / mf.fall)} times less, because it is ${fmt(R_MOON / R_E, 0)} times farther away.</p>`;
+}
+const sig = v => v >= 100 ? Math.round(v).toLocaleString('en-IN') : v >= 10 ? v.toFixed(1) : v.toFixed(2);
+function len(m, short){
+  const a = Math.abs(m);
+  if (a >= 1e6) return (short ? +(m / 1000).toPrecision(2) : sig(m / 1000)).toLocaleString('en-IN') + ' km';
+  if (a >= 1000) return (short ? +(m / 1000).toPrecision(2) : +(m / 1000).toPrecision(3)) + ' km';
+  if (a >= 1) return +(m).toPrecision(3) + ' m';
+  if (a >= 0.01) return +(m * 100).toPrecision(3) + ' cm';
+  return +(m * 1000).toPrecision(3) + ' mm';
+}
+
+/* ---- findings: reached by the model, never by a button -------------------- */
+function check(st, mf){
+  if (!S.locked) return;
+  if (st && SIM && S.t > 0 && st.g < 0.75 * gAt(R_E)) discover('gweak');
+  if (mf && mf.t <= 1.0001) discover('moon');
+  maybeExplain();
+}
+function afterFlight(){
+  if (!SIM || !S.locked) return;
+  const sh = {v: S.v, outcome: SIM.outcome, range: SIM.range};
+  S.shots = S.shots.filter(s => Math.abs(s.v - sh.v) > 0.05).concat([sh]).sort((a, b) => a.v - b.v);
+  drawShots();
+  track('shot', {v: S.v, outcome: SIM.outcome, range: SIM.range && Math.round(SIM.range / 1000)});
+  const landed = S.shots.filter(s => s.outcome === 'landed' && s.v > 0.2);
+  if (landed.length >= 2 && landed[landed.length - 1].range > landed[0].range) discover('longer');
+  if (SIM.outcome === 'orbit' || SIM.outcome === 'far') discover('orbit');
+  if (SIM.outcome === 'escape') discover('escape');
+  maybeExplain();
+}
+let EXPLAINED = false;
+function maybeExplain(){
+  if (EXPLAINED || !POE || !found('orbit')) return;
+  EXPLAINED = true;
+  const vc = vCirc(R0), ve = vEsc(R0), c = simulate(vc);
+  POE.explain(`Faster throws do land further — until about <b>${fmt(vc / 1000, 2)} km/s</b>. At that speed, in each second the ball falls
+    ${fmt(gAt(R0) / 2, 2)} m and the curved ground drops away by the same ${fmt(vc * vc / (2 * R0), 2)} m, so it never gets closer:
+    it falls all the way round in <b>${dur(c.tEnd)}</b>. That is an orbit. Above <b>${fmt(ve / 1000, 2)} km/s</b> it escapes altogether.
+    The Moon is doing exactly this, 384 400 km up, at ${fmt(vCirc(R_MOON) / 1000, 2)} km/s.`);
+}
+
+/* ============================================================================
+   Controls. The stage is built first, so there is something to wire.
+   ============================================================================ */
+build();
+/* hit targets live in their own layer, above everything, and never move between layers */
+svg.insertAdjacentHTML('beforeend', `<circle id="ballHit" r="18" fill="transparent" role="slider" aria-label="The cannonball: drag it along its path to step through time"/>`);
+$('vCannon').appendChild($('ballHit'));
+drawRAxes(); drawHAxes();
+
+let ANIM = null;
+function stopAnim(){ if (ANIM) { ANIM.stop(); ANIM = null; } S.flying = false; }
+function fire(){
+  if (!S.locked) return;
+  stopAnim();
+  SIM = simulate(S.v * 1000);
+  /* the graph and the view fit the whole flight */
+  const hMax = Math.max(SIM.maxR - R_E, 1000);
+  HSC = {tMax: SIM.tEnd, hMax: niceUp(hMax / 1000) * 1000};
+  drawHAxes();
+  const s1 = fitScale(SIM), s0 = VIEW.s;
+  S.t = 0;
+  sound('whoosh');
+  const warp = clamp(SIM.tEnd / 6, 20, 1e6);
+  $('warpOut').textContent = `time ×${sig(warp)}`;
+  if (reduced()) { VIEW.s = s1; S.t = SIM.tEnd; paint(); afterFlight(); return; }
+  tween(s0, s1, 500, v => { VIEW.s = v; if (!S.flying) paint(); });
+  S.flying = true;
+  ANIM = loop(dt => {
+    S.t = Math.min(SIM.tEnd, S.t + dt * warp);
+    paint();
+    if (S.t >= SIM.tEnd) { stopAnim(); sound(SIM.outcome === 'landed' ? 'drum' : 'chime', true); afterFlight(); paint(); }
+  });
+}
+$('btnFire').addEventListener('click', fire);
+$('btnReplay').addEventListener('click', () => { if (!SIM) return fire(); if (Math.abs(SIM.v - S.v * 1000) > 1) return fire(); stopAnim(); S.t = 0; S.flying = true;
+  const warp = clamp(SIM.tEnd / 6, 20, 1e6);
+  if (reduced()) { S.t = SIM.tEnd; S.flying = false; paint(); return; }
+  ANIM = loop(dt => { S.t = Math.min(SIM.tEnd, S.t + dt * warp); paint(); if (S.t >= SIM.tEnd) stopAnim(); }); });
+$('speed').addEventListener('input', e => { S.v = +e.target.value; paint(); });
+$('speed').addEventListener('change', () => track('speed', {v: S.v}));
+
+/* Graph → model: drag along the landing graph to choose the launch speed. */
+function setSpeedFromGraph(p){ S.v = Math.round(clamp((p.x - RG.x) / RG.w * 12, 0, 12) * 10) / 10; paint(); }
+drag($('rHit'), svg, {
+  start(p){ if (!S.locked) return false; setSpeedFromGraph(p); },
+  move: setSpeedFromGraph,
+  end(){ sound('tick'); track('speedFromGraph', {v: S.v}); },
+});
+/* Graph → simulation: drag across the height graph to scrub through the flight. */
+function scrub(p){ if (!SIM) return; S.t = clamp((p.x - HG.x) / HG.w * HSC.tMax, 0, SIM.tEnd); paint(); }
+drag($('hHit'), svg, {start(p){ if (!S.locked || !SIM) return false; stopAnim(); scrub(p); }, move: scrub});
+/* Simulation → graph: drag the ball along its own path. */
+drag($('ballHit'), svg, {
+  start(){ if (!S.locked || !SIM) return false; stopAnim(); },
+  move(p){
+    let best = null, bd = Infinity;
+    for (const s of SIM.samples) { const q = toScreen(s.x, s.y), d = (q.x - p.x) ** 2 + (q.y - p.y) ** 2; if (d < bd) { bd = d; best = s; } }
+    if (best) { S.t = best.t; paint(); }
+  },
+});
+/* The Moon: drag it round its orbit to set the time. */
+drag($('moonHit'), svg, {
+  start(){ if (!S.locked) return false; },
+  move(p){
+    let a = Math.atan2(p.x - MC.x, -(p.y - MC.y)); if (a < 0) a += TAU;
+    const t = clamp(a * R_MOON / vCirc(R_MOON), 1, MT[7]);
+    /* snap to the marked times when close, so 1 second is reachable by hand */
+    let idx = -1; MT.forEach((m, i) => { if (Math.abs(Math.log(t / m)) < 0.25) idx = i; });
+    if (a < 0.02) idx = 0;
+    if (idx >= 0) { S.mtIdx = idx; S.mtCustom = null; } else S.mtCustom = t;
+    paint();
+  },
+});
+$('mt').addEventListener('input', e => { S.mtIdx = +e.target.value; S.mtCustom = null; paint(); });
+$('tabCannon').addEventListener('click', () => { S.tab = 'cannon'; sound('tick'); paint(); });
+$('tabMoon').addEventListener('click', () => { S.tab = 'moon'; stopAnim(); sound('tick'); paint(); track('tab', {tab: 'moon'}); });
+
+function lockControls(lock){
+  for (const id of ['speed', 'btnFire', 'btnReplay', 'mt', 'tabCannon', 'tabMoon']) $(id).disabled = lock;
+  for (const id of ['ballHit', 'moonHit', 'rHit', 'hHit']) $(id).style.pointerEvents = lock ? 'none' : '';
+  $('gate').hidden = !lock;
+}
+
+/* ============================================================================
+   Start
+   ============================================================================ */
+findings($('finds'), [
+  {id: 'longer', icon: '↦', label: 'A faster throw lands further',     hint: 'Fire two different speeds that both land'},
+  {id: 'orbit',  icon: '◯', label: 'Falling all the way round',         hint: 'How fast before it never lands?'},
+  {id: 'escape', icon: '↗', label: 'Escape',                            hint: 'Faster still…'},
+  {id: 'gweak',  icon: '↓', label: 'g weakens with height',             hint: 'Watch g as the ball climbs high'},
+  {id: 'moon',   icon: '☾', label: 'The Moon is falling too',           hint: 'On the Moon tab, look at a single second'},
+], () => toast('All five found. That is Newton’s argument, the one that joined the apple to the Moon.', 4200));
+
+const POE = predict($('poe'), {
+  id: 'newtons-cannon',
+  q: 'The cannon fires faster and faster. What happens to the cannonball?',
+  options: [
+    {id: 'further', text: 'It lands further away each time, for ever.'},
+    {id: 'round',   text: 'Eventually it falls all the way round the Earth and never lands.', right: true},
+    {id: 'straight', text: 'It flies off in a straight line.'},
+    {id: 'stops',   text: 'It stops in the air.'},
+  ],
+  onLock(){
+    S.locked = true;
+    lockControls(false);
+    say('Now fire it. Start slow, and go faster.');
+    paint();
+  },
+});
+lockControls(!POE.locked);
+if (!Play.FF('predict')) S.locked = true;
+paint();
+window.applyFeatures = () => paint();
+window.PG_STATE = () => JSON.parse(JSON.stringify(Object.assign({}, S, {sim: SIM ? {v: SIM.v, outcome: SIM.outcome, tEnd: SIM.tEnd, range: SIM.range} : null})));
+window.PG_MODEL = {GM, R_E, R0, R_MOON, T_MOON, gAt, vCirc, vEsc, simulate, stateAt, moonFall, moonAccelMeasured, moonAccelLaw};
+</script>
+</body>
+</html>

@@ -1,0 +1,751 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Proportional Reasoning</title>
+<meta name="description" content="Class 8: resize a picture without stretching it, scale a recipe on a double number line, share counters in a ratio, and see why more workers means fewer days.">
+<link rel="icon" href="../../favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="../../play.css">
+<style>
+/* Only what this page needs beyond play.css. The stage paints its own paper in light and dark chrome. */
+.pg-stage{background:#fbfaf6}
+html, body{overflow-anchor:none}   /* the side panel grows as you play: never let the page jump under a drag */
+@media (max-width:1180px) and (min-width:981px){ .pg-main.wide-side{grid-template-columns:minmax(0,1fr) 340px} }
+.gate{position:absolute; inset:0; display:grid; place-items:center; pointer-events:none}
+.gate span{background:rgba(15,26,43,.82); color:#fff; padding:10px 16px; border-radius:99px; font-weight:600; font-size:14px}
+.seg{display:grid; grid-template-columns:repeat(4,1fr); background:var(--sunk); border-radius:99px; padding:3px; gap:3px}
+.seg button{border:0; background:transparent; border-radius:99px; padding:7px 4px; font-weight:600; font-size:13.5px; cursor:pointer; color:var(--ink-2)}
+.seg button[aria-pressed="true"]{background:var(--card); color:var(--ink); box-shadow:var(--shadow)}
+.seg button:disabled{cursor:default; opacity:.5}
+.chips{display:flex; flex-wrap:wrap; gap:6px; margin:10px 0 4px}
+.chip{border:1px solid var(--hair-2); background:var(--card); color:var(--ink); border-radius:99px; padding:6px 11px; font-weight:600; font-size:13px; cursor:pointer}
+.chip:hover:not(:disabled){border-color:#c9602a}
+.chip[aria-pressed="true"]{border-color:#c9602a; background:var(--warm-soft)}
+.chip:disabled{opacity:.45; cursor:default}
+.chip small{font-weight:500; color:var(--ink-3); margin-left:4px}
+.stepper{display:flex; align-items:center; gap:8px; margin:8px 0; flex-wrap:wrap}
+.stepper label{font-size:13px; font-weight:600; color:var(--ink-2); min-width:78px}
+.stepper output{font-family:"Fredoka",var(--font-head); font-size:22px; font-weight:600; min-width:26px; text-align:center; font-variant-numeric:tabular-nums}
+.stepper .btn{min-height:34px; width:34px; padding:0; font-size:18px}
+.stepper .colon{font-family:"Fredoka",var(--font-head); font-size:22px; font-weight:600; color:var(--ink-3)}
+.hint{font-size:12.5px; color:var(--ink-3); margin:6px 0 0}
+.why p{font-size:14px; margin:0 0 .55em}
+.why b{color:var(--ink)}
+#rzHit, #scHit, #invHit{cursor:pointer}
+#rzHit.dragging, #scHit.dragging, #invHit.dragging{cursor:grabbing}
+.ctr{transition:transform .32s var(--spring)}
+</style>
+</head>
+<body>
+<header class="pg-top"></header>
+
+<div class="pg-intro">
+  <h1>Proportional reasoning</h1>
+  <p>Make a picture smaller and the tiger in it can come out squashed, or not. Before you touch anything, predict which. Then resize the picture,
+     scale a recipe up and down on a double number line, share counters in a ratio, and find out why more workers means <em>fewer</em> days.</p>
+</div>
+
+<main class="pg-main wide-side">
+  <section class="pg-stage" id="stageWrap">
+    <svg id="stage" viewBox="0 0 1000 640" role="img" aria-label="A picture you can resize on a millimetre grid, a double number line with a ratio table and a graph, counters shared out in a ratio, and a graph of an inverse proportion"></svg>
+    <div class="gate" id="gate"><span>Make your prediction first →</span></div>
+  </section>
+
+  <aside class="pg-side">
+    <div id="poe"></div>
+
+    <div class="card" id="ctlCard">
+      <div class="seg" role="group" aria-label="What to explore">
+        <button id="tabResize" data-tab="resize" aria-pressed="true">Resize</button>
+        <button id="tabScale" data-tab="scale" aria-pressed="false">Scale</button>
+        <button id="tabShare" data-tab="share" aria-pressed="false">Share</button>
+        <button id="tabInverse" data-tab="inverse" aria-pressed="false">Inverse</button>
+      </div>
+
+      <div id="ctlResize">
+        <div class="chips" id="imgChips">
+          <button class="chip" data-img="A">A<small>60 × 40</small></button>
+          <button class="chip" data-img="B">B<small>40 × 20</small></button>
+          <button class="chip" data-img="C">C<small>30 × 20</small></button>
+          <button class="chip" data-img="D">D<small>90 × 60</small></button>
+          <button class="chip" data-img="E">E<small>60 × 60</small></button>
+        </div>
+        <p class="hint">The five pictures from the book, in millimetres. Or drag anywhere on the grid to move the picture’s corner.</p>
+      </div>
+
+      <div id="ctlScale" hidden>
+        <div class="chips" id="setChips">
+          <button class="chip" data-set="lemonade">Lemonade</button>
+          <button class="chip" data-set="rice">Mid-day meal</button>
+          <button class="chip" data-set="car">Car trip</button>
+          <button class="chip" data-set="map">Map</button>
+        </div>
+        <div class="ctl"><label for="scaleC" id="scaleLab">Glasses</label><input type="range" id="scaleC" min="0" max="30" step="1" value="6"><output id="scaleOut" class="num">6</output></div>
+        <p class="hint">Or drag the marker along the top line. The bottom line always keeps the same ratio.</p>
+      </div>
+
+      <div id="ctlShare" hidden>
+        <div class="ctl"><label for="shareN">Counters</label><input type="range" id="shareN" min="2" max="60" step="1" value="12"><output id="shareNOut" class="num">12</output></div>
+        <div class="stepper"><label>In the ratio</label>
+          <button class="btn" data-sh="m" data-d="-1" aria-label="Partner's part down">−</button><output id="mOut">3</output><button class="btn" data-sh="m" data-d="1" aria-label="Partner's part up">+</button>
+          <span class="colon">:</span>
+          <button class="btn" data-sh="n" data-d="-1" aria-label="Your part down">−</button><output id="nOut">1</output><button class="btn" data-sh="n" data-d="1" aria-label="Your part up">+</button>
+        </div>
+        <div class="row"><button class="btn primary" id="btnDeal">Share them out</button></div>
+        <p class="hint">Each round, your partner takes the first number of counters and you take the second, until too few are left for another round.</p>
+      </div>
+
+      <div id="ctlInverse" hidden>
+        <div class="chips" id="invChips">
+          <button class="chip" data-inv="travel">Lucknow to Kanpur</button>
+          <button class="chip" data-inv="workers">Road workers</button>
+          <button class="chip" data-inv="pumps">Pumps</button>
+        </div>
+        <div class="ctl"><label for="invX" id="invLab">Speed</label><input type="range" id="invX" min="5" max="90" step="5" value="5"><output id="invOut" class="num">5</output></div>
+        <p class="hint">Or drag on the graph. Each rectangle’s width is one quantity and its height is the other.</p>
+      </div>
+    </div>
+
+    <div class="card why" id="whyCard" hidden>
+      <div class="kicker">What is happening</div>
+      <div id="why"></div>
+    </div>
+
+    <div class="card"><div class="kicker">To find</div><div id="finds"></div></div>
+  </aside>
+</main>
+
+<script src="../../play.js"></script>
+<script>
+'use strict';
+const {$, esc, clamp, fmt, drag, sound, say, track, toast, predict, findings, discover, found,
+       shareState, sharedState, mount, reduced, sleep} = Play;
+mount({thread: 'ratio', band: 'tinkerer'});
+
+/* MODEL:start ==================================================================
+   Ratios as pairs of whole numbers, reduced by their HCF; every answer is an exact
+   fraction. Nothing is looked up: each view asks the model.
+
+   Resize:   a picture w × h is the same shape as Image A (60 × 40) exactly when the
+             two ratios are proportional, i.e. when they cross-multiply: 60·h = 40·w.
+   Scale:    the rule of three. a : b :: c : d  gives  d = b·c / a.
+   Share:    x in the ratio m : n. Deal m and n counters a round at a time; there
+             are x ÷ (m + n) rounds, so the parts are m·x/(m+n) and n·x/(m+n).
+   Inverse:  x·y stays the same, so x₁·y₁ = x₂·y₂ and y₂ = x₁·y₁ / x₂.
+   ============================================================================ */
+function gcd(a, b){ a = Math.abs(a); b = Math.abs(b); while (b) [a, b] = [b, a % b]; return a || 1; }
+function frac(n, d){ if (d === 0) throw new Error('zero denominator'); if (d < 0) { n = -n; d = -d; } const g = gcd(n, d); return {n: n / g, d: d / g}; }
+const fval = x => x.n / x.d;
+const fstr = x => x.d === 1 ? String(x.n) : x.n + '/' + x.d;
+function mixed(x){ if (x.d === 1) return String(x.n); const w = Math.floor(x.n / x.d), r = x.n - w * x.d; return w ? w + ' ' + r + '/' + x.d : r + '/' + x.d; }
+const hcf = (...t) => t.reduce((a, b) => gcd(a, b));
+const simplest = (...t) => { const g = hcf(...t); return t.map(v => v / g); };
+const proportional = (a, b, c, d) => a * d === b * c;               // cross multiplication
+const IMG_A = {w: 60, h: 40};
+function resize(w, h){
+  const g = hcf(w, h);
+  return {w, h, g, s: [w / g, h / g], fw: frac(w, IMG_A.w), fh: frac(h, IMG_A.h),
+          same: proportional(IMG_A.w, IMG_A.h, w, h), dw: w - IMG_A.w, dh: h - IMG_A.h,
+          stretch: (w / IMG_A.w) / (h / IMG_A.h)};
+}
+const ruleOfThree = (a, b, c) => frac(b * c, a);                     // a : b :: c : ?
+function share(x, m, n){
+  const t = m + n;
+  return {total: t, group: frac(x, t), first: frac(m * x, t), second: frac(n * x, t),
+          rounds: Math.floor(x / t), left: x % t};
+}
+const inverse = (x1, y1, x2) => frac(x1 * y1, x2);                   // x1·y1 = x2·y2
+/* MODEL:end */
+
+/* The book's situations. */
+const IMGS = {A: [60, 40], B: [40, 20], C: [30, 20], D: [90, 60], E: [60, 60]};
+const SETS = {
+  lemonade: {A: 'glasses of lemonade', B: 'spoons of sugar', short: 'Glasses', a: 6, b: 10, max: 30, step: 1, who: 'Kesang’s lemonade: 6 glasses take 10 spoons of sugar.'},
+  rice:     {A: 'students', B: 'kg of rice', short: 'Students', a: 120, b: 15, max: 160, step: 10, who: 'The mid-day meal: 120 students eat 15 kg of rice.'},
+  car:      {A: 'minutes', B: 'km', short: 'Minutes', a: 150, b: 90, max: 300, step: 30, who: 'A car covers 90 km in 150 minutes, at a steady speed.'},
+  map:      {A: 'cm on the map', B: 'km on the ground', short: 'Map cm', a: 1, b: 60, max: 10, step: 1, who: 'A map with the scale 1 : 60,00,000: 1 cm stands for 60,00,000 cm, which is 60 km.'},
+};
+const INV = {
+  travel:  {A: 'speed', B: 'time', uA: 'km/h', uB: 'hours', short: 'Speed', x1: 5, y1: 18, min: 5, max: 90, step: 5, k: 'km, the distance from Lucknow to Kanpur',
+            who: 'Walking at 5 km/h, Lucknow to Kanpur takes 18 hours.'},
+  workers: {A: 'workers', B: 'days', uA: 'workers', uB: 'days', short: 'Workers', x1: 20, y1: 4, min: 2, max: 40, step: 2, k: 'worker-days of work: the road',
+            who: '20 workers take 4 days to lay a road.'},
+  pumps:   {A: 'pumps', B: 'hours', uA: 'pumps', uB: 'hours', short: 'Pumps', x1: 2, y1: 18, min: 1, max: 12, step: 1, k: 'pump-hours: one full tank',
+            who: '2 pumps fill a tank in 18 hours.'},
+};
+
+/* ---- state: plain data --------------------------------------------------- */
+const S = {tab: 'resize', locked: false, w: 60, h: 40, set: 'lemonade', c: 6, N: 12, m: 3, n: 1, dealt: 0, dealing: false, done: false,
+           inv: 'travel', x: 5, scaleSeen: {}, invSeen: {}, changes: 0};
+const shared = sharedState();
+if (shared) {
+  if (['resize', 'scale', 'share', 'inverse'].includes(shared.tab)) S.tab = shared.tab;
+  if (shared.w) S.w = clamp(Math.round(+shared.w / 5) * 5 || 60, 10, 120);
+  if (shared.h) S.h = clamp(Math.round(+shared.h / 5) * 5 || 40, 10, 120);
+  if (SETS[shared.set]) { S.set = shared.set; S.c = clamp(+shared.c || SETS[S.set].a, 0, SETS[S.set].max); }
+  if (shared.N) S.N = clamp(Math.round(+shared.N) || 12, 2, 60);
+  if (shared.m) S.m = clamp(Math.round(+shared.m) || 3, 1, 9);
+  if (shared.n) S.n = clamp(Math.round(+shared.n) || 1, 1, 9);
+  if (INV[shared.inv]) { S.inv = shared.inv; S.x = clamp(+shared.x || INV[S.inv].x1, INV[S.inv].min, INV[S.inv].max); }
+}
+shareState(() => ({tab: S.tab, w: S.w, h: S.h, set: S.set, c: S.c, N: S.N, m: S.m, n: S.n, inv: S.inv, x: S.x}));
+
+/* ============================================================================
+   The stage: drawn once, then only patched.
+   ============================================================================ */
+const svg = $('stage');
+const OR = '#c9602a', OR_D = '#9a4518', OR_L = '#f3c9a8', BL = '#2f6db5', BL_D = '#1f4f94', BL_L = '#bcd3ef', GR = '#2f9e5b';
+const INK = '#1d2327', INK2 = '#4a555b', INK3 = '#6f7a80', PAPER = '#fbfaf6', HAIR = '#e2ded2';
+const R = {x0: 80, y0: 592, P: 3.9};                // resize grid: mm → px
+const DL = {x: 200, w: 720, top: 150, bot: 250};      // double number line
+const SG = {x: 600, y: 596, w: 330, h: 190};         // scale graph
+const IG = {x: 96, y: 580, w: 500, h: 480};          // inverse graph
+const NS = 'http://www.w3.org/2000/svg';
+const set = (id, attrs) => { const el = typeof id === 'string' ? $(id) : id; for (const k in attrs) el.setAttribute(k, attrs[k]); return el; };
+const T = (x, y, txt, o = '') => `<text x="${x}" y="${y}" ${o}>${txt}</text>`;
+const H = (x, y, txt) => T(x, y, txt, `fill="${INK2}" font-size="13" font-weight="700" letter-spacing=".08em"`);
+
+/* The tiger, drawn in a 300 × 200 box. The box is stretched to the picture's size, so
+   a wrong ratio squashes the tiger exactly as a photo editor would. */
+const TIGER = `
+  <rect width="300" height="200" fill="#bfe3f5"/>
+  <circle cx="258" cy="36" r="20" fill="#ffd34d"/>
+  <rect y="158" width="300" height="42" fill="#8cc265"/>
+  <g stroke="#1d2327" stroke-width="3" stroke-linecap="round">
+    <circle cx="96" cy="58" r="24" fill="#f08a24"/><circle cx="204" cy="58" r="24" fill="#f08a24"/>
+    <circle cx="96" cy="58" r="11" fill="#ffd9b8" stroke="none"/><circle cx="204" cy="58" r="11" fill="#ffd9b8" stroke="none"/>
+    <circle cx="150" cy="108" r="72" fill="#f08a24"/>
+  </g>
+  <g fill="#1d2327">
+    <path d="M150 38 l-7 24 h14z"/><path d="M122 44 l-2 20 l9 -2z"/><path d="M178 44 l2 20 l-9 -2z"/>
+    <path d="M80 100 q18 4 26 10 q-16 2 -26 -4z"/><path d="M84 124 q16 0 22 6 q-14 4 -22 0z"/>
+    <path d="M220 100 q-18 4 -26 10 q16 2 26 -4z"/><path d="M216 124 q-16 0 -22 6 q14 4 22 0z"/>
+  </g>
+  <ellipse cx="127" cy="136" rx="26" ry="20" fill="#fff6ea"/><ellipse cx="173" cy="136" rx="26" ry="20" fill="#fff6ea"/>
+  <circle cx="124" cy="96" r="12" fill="#fff"/><circle cx="176" cy="96" r="12" fill="#fff"/>
+  <circle cx="126" cy="98" r="7" fill="#2f5d2a"/><circle cx="178" cy="98" r="7" fill="#2f5d2a"/>
+  <circle cx="128" cy="96" r="2.4" fill="#fff"/><circle cx="180" cy="96" r="2.4" fill="#fff"/>
+  <path d="M138 120 h24 l-12 12z" fill="#d45a7a"/>
+  <path d="M150 132 v8 m0 0 q-10 10 -20 4 m20 -4 q10 10 20 4" fill="none" stroke="#1d2327" stroke-width="2.6" stroke-linecap="round"/>
+  <g stroke="#8a6d55" stroke-width="1.6" stroke-linecap="round"><path d="M108 134 h-34 M108 142 l-32 8 M192 134 h34 M192 142 l32 8"/></g>`;
+
+function build(){
+  /* ---------- resize: a millimetre grid ---------- */
+  let grid = '';
+  for (let mm = 0; mm <= 120; mm += 5) {
+    const major = mm % 10 === 0, x = R.x0 + mm * R.P, y = R.y0 - mm * R.P;
+    grid += `<line x1="${x}" y1="${R.y0}" x2="${x}" y2="${R.y0 - 120 * R.P}" stroke="${major ? '#e3ddd0' : '#efeae0'}"/>` +
+            `<line x1="${R.x0}" y1="${y}" x2="${R.x0 + 120 * R.P}" y2="${y}" stroke="${major ? '#e3ddd0' : '#efeae0'}"/>`;
+    if (mm % 20 === 0) grid += T(x, R.y0 + 17, mm, `fill="${INK3}" font-size="11.5" text-anchor="middle"`) + (mm ? T(R.x0 - 8, y + 4, mm, `fill="${INK3}" font-size="11.5" text-anchor="end"`) : '');
+  }
+  /* ---------- share: the counters, made once ---------- */
+  let ctrs = '';
+  for (let i = 0; i < 60; i++) ctrs += `<circle class="ctr" id="ct${i}" cx="0" cy="0" r="12" stroke="#fff" stroke-width="2"/>`;
+
+  svg.innerHTML = `
+  <defs>
+    <clipPath id="clipSG"><rect x="${SG.x}" y="${SG.y - SG.h}" width="${SG.w}" height="${SG.h}"/></clipPath>
+    <clipPath id="clipIG"><rect x="${IG.x}" y="${IG.y - IG.h}" width="${IG.w}" height="${IG.h}"/></clipPath>
+    <marker id="arrO" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="${OR_D}"/></marker>
+    <marker id="arrB" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="${BL_D}"/></marker>
+  </defs>
+  <rect x="0" y="0" width="1000" height="640" fill="${PAPER}"/>
+
+  <!-- ===================== RESIZE ===================== -->
+  <g id="vResize">
+    ${H(22, 30, 'RESIZE THE PICTURE')}
+    ${T(22, 48, 'Width and height in millimetres. The corner of the picture sits where you drag.', `fill="${INK3}" font-size="12"`)}
+    ${grid}
+    <line id="rzLine" x1="${R.x0}" y1="${R.y0}" x2="${R.x0 + 120 * R.P}" y2="${R.y0 - 80 * R.P}" stroke="${GR}" stroke-width="2" stroke-dasharray="7 5"/>
+    <text id="rzLineLab" x="${R.x0 + 120 * R.P - 4}" y="${R.y0 - 80 * R.P - 10}" fill="#1f7a45" font-size="12.5" font-weight="700" text-anchor="end">every 3 : 2 picture has its corner on this line</text>
+    <svg id="rzPic" viewBox="0 0 300 200" preserveAspectRatio="none" x="${R.x0}" y="${R.y0 - 40 * R.P}" width="${60 * R.P}" height="${40 * R.P}">${TIGER}</svg>
+    <rect id="rzFrame" fill="none" stroke="${INK}" stroke-width="2.5"/>
+    <rect id="rzGhost" x="${R.x0}" y="${R.y0 - 40 * R.P}" width="${60 * R.P}" height="${40 * R.P}" fill="none" stroke="${OR_D}" stroke-width="1.6" stroke-dasharray="4 4"/>
+    <text id="rzGhostLab" x="${R.x0 + 6}" y="${R.y0 - 40 * R.P - 6}" fill="${OR_D}" font-size="11.5" font-weight="700">Image A</text>
+    <circle id="rzKnob" r="10" fill="${OR}" stroke="#fff" stroke-width="3"/>
+    <text id="rzDims" font-size="13" font-weight="700" fill="${INK}"></text>
+
+    <rect x="590" y="70" width="390" height="520" rx="14" fill="#fff" stroke="${HAIR}"/>
+    ${T(612, 100, 'WIDTH : HEIGHT', `fill="${INK3}" font-size="12" font-weight="700" letter-spacing=".08em"`)}
+    <text id="rzRatio" x="612" y="148" fill="${INK}" font-size="42" font-weight="700" font-family="Fredoka, Inter, sans-serif"></text>
+    <text id="rzSimple" x="612" y="178" fill="${INK2}" font-size="14"></text>
+    <text id="rzA" x="612" y="202" fill="${OR_D}" font-size="14" font-weight="600">Image A is 60 : 40, which is 3 : 2</text>
+    <line x1="612" y1="224" x2="958" y2="224" stroke="${HAIR}"/>
+    ${T(612, 252, 'FROM IMAGE A', `fill="${INK3}" font-size="12" font-weight="700" letter-spacing=".08em"`)}
+    ${T(612, 282, 'Width', `fill="${INK2}" font-size="14" font-weight="600"`)}${T(612, 312, 'Height', `fill="${INK2}" font-size="14" font-weight="600"`)}
+    <text id="rzW1" x="680" y="282" fill="${INK}" font-size="14"></text><text id="rzW2" x="820" y="282" fill="${OR_D}" font-size="15" font-weight="700"></text><text id="rzW3" x="958" y="282" fill="${INK3}" font-size="13" text-anchor="end"></text>
+    <text id="rzH1" x="680" y="312" fill="${INK}" font-size="14"></text><text id="rzH2" x="820" y="312" fill="${OR_D}" font-size="15" font-weight="700"></text><text id="rzH3" x="958" y="312" fill="${INK3}" font-size="13" text-anchor="end"></text>
+    ${T(820, 258, 'factor', `fill="${INK3}" font-size="11.5"`)}${T(958, 258, 'difference', `fill="${INK3}" font-size="11.5" text-anchor="end"`)}
+    <rect id="rzVerdictBg" x="612" y="340" width="346" height="64" rx="12"/>
+    <text id="rzVerdict" x="785" y="368" font-size="19" font-weight="700" text-anchor="middle"></text>
+    <text id="rzVerdict2" x="785" y="392" font-size="13" text-anchor="middle"></text>
+    ${T(612, 440, 'CROSS-MULTIPLY WITH IMAGE A', `fill="${INK3}" font-size="12" font-weight="700" letter-spacing=".08em"`)}
+    <text id="rzCross1" x="612" y="470" fill="${INK}" font-size="15" font-family="JetBrains Mono, monospace"></text>
+    <text id="rzCross2" x="612" y="496" fill="${INK}" font-size="15" font-family="JetBrains Mono, monospace"></text>
+    <text id="rzCross3" x="612" y="530" fill="${INK2}" font-size="13.5"></text>
+    <text id="rzCross4" x="612" y="552" fill="${INK2}" font-size="13.5"></text>
+    <rect id="rzHit" x="${R.x0 - 10}" y="${R.y0 - 120 * R.P - 10}" width="${120 * R.P + 20}" height="${120 * R.P + 20}" fill="transparent" role="slider" aria-label="The picture's corner: drag to set its width and height"/>
+  </g>
+
+  <!-- ===================== SCALE ===================== -->
+  <g id="vScale" style="display:none">
+    ${H(22, 30, 'A DOUBLE NUMBER LINE')}
+    <text id="scWho" x="22" y="48" fill="${INK3}" font-size="12"></text>
+    <text id="scTopLab" x="${DL.x - 26}" y="${DL.top + 5}" fill="${OR_D}" font-size="13.5" font-weight="700" text-anchor="end"></text>
+    <text id="scBotLab" x="${DL.x - 26}" y="${DL.bot + 5}" fill="${BL_D}" font-size="13.5" font-weight="700" text-anchor="end"></text>
+    <g id="scAxes"></g>
+    <path id="scArcTop" fill="none" stroke="${OR_D}" stroke-width="1.8" marker-end="url(#arrO)"/>
+    <path id="scArcBot" fill="none" stroke="${BL_D}" stroke-width="1.8" marker-end="url(#arrB)"/>
+    <text id="scArcTopLab" fill="${OR_D}" font-size="13" font-weight="700" text-anchor="middle"></text>
+    <text id="scArcBotLab" fill="${BL_D}" font-size="13" font-weight="700" text-anchor="middle"></text>
+    <line id="scLink" y1="${DL.top}" y2="${DL.bot}" stroke="${INK3}" stroke-width="1.4" stroke-dasharray="4 4"/>
+    <g id="scMarkTop"><path d="M0 -4 L-11 -24 L11 -24Z" fill="${OR}" stroke="#fff" stroke-width="2"/><text id="scMarkTopLab" y="-30" fill="${OR_D}" font-size="15" font-weight="700" text-anchor="middle"></text></g>
+    <g id="scMarkBot"><path d="M0 4 L-11 24 L11 24Z" fill="${BL}" stroke="#fff" stroke-width="2"/><text id="scMarkBotLab" y="42" fill="${BL_D}" font-size="15" font-weight="700" text-anchor="middle"></text></g>
+    <rect id="scHit" x="${DL.x - 16}" y="${DL.top - 50}" width="${DL.w + 32}" height="72" fill="transparent" role="slider" aria-label="The top number line: drag the marker"/>
+
+    <line x1="0" y1="326" x2="1000" y2="326" stroke="${HAIR}"/>
+    ${H(22, 356, 'RATIO TABLE')}
+    ${T(22, 374, 'Every row cross-multiplies to the same product.', `fill="${INK3}" font-size="12"`)}
+    <g id="scTable"></g>
+    ${H(560, 356, 'THE GRAPH')}
+    <text id="scGSub" x="560" y="374" fill="${INK3}" font-size="12"></text>
+    <g id="scGAxes"></g>
+    <g clip-path="url(#clipSG)">
+      <line id="scGLine" x1="${SG.x}" y1="${SG.y}" stroke="${OR}" stroke-width="2.6"/>
+      <g id="scGPts"></g>
+      <circle id="scGDot" r="7" fill="${OR}" stroke="#fff" stroke-width="2.2"/>
+    </g>
+  </g>
+
+  <!-- ===================== SHARE ===================== -->
+  <g id="vShare" style="display:none">
+    ${H(22, 30, 'SHARING, BUT NOT EQUALLY')}
+    <text id="shSub" x="22" y="48" fill="${INK3}" font-size="12"></text>
+    <rect x="70" y="66" width="860" height="170" rx="18" fill="#f3ead8" stroke="#e2d3b4"/>
+    <text id="shPileLab" x="90" y="226" fill="#7a5a2c" font-size="12.5" font-weight="700"></text>
+    <rect x="70" y="262" width="415" height="262" rx="16" fill="#fdf1e8" stroke="${OR_L}"/>
+    <rect x="515" y="262" width="415" height="262" rx="16" fill="#edf3fb" stroke="${BL_L}"/>
+    <text id="shPartLab" x="90" y="290" fill="${OR_D}" font-size="15" font-weight="700"></text>
+    <text id="shYouLab" x="535" y="290" fill="${BL_D}" font-size="15" font-weight="700"></text>
+    <g id="shCtrs">${ctrs}</g>
+    <g id="shBar"></g>
+    <text id="shBarLab" x="70" y="556" fill="${INK2}" font-size="12.5" font-weight="700"></text>
+  </g>
+
+  <!-- ===================== INVERSE ===================== -->
+  <g id="vInverse" style="display:none">
+    ${H(22, 30, 'MORE OF ONE, LESS OF THE OTHER')}
+    <text id="ivWho" x="22" y="48" fill="${INK3}" font-size="12"></text>
+    <g id="ivAxes"></g>
+    <g clip-path="url(#clipIG)">
+      <g id="ivGhosts"></g>
+      <rect id="ivRect" fill="${OR_L}" fill-opacity=".75" stroke="${OR}" stroke-width="2"/>
+      <text id="ivArea" fill="${OR_D}" font-size="14" font-weight="700" text-anchor="middle"></text>
+      <path id="ivDirect" fill="none" stroke="${BL}" stroke-width="2" stroke-dasharray="7 6"/>
+      <path id="ivCurve" fill="none" stroke="${OR_D}" stroke-width="3"/>
+      <g id="ivPts"></g>
+      <circle id="ivDot" r="8" fill="${OR}" stroke="#fff" stroke-width="2.4"/>
+    </g>
+    <text id="ivDirectLab" fill="${BL_D}" font-size="12.5" font-weight="700"></text>
+    <text id="ivCurveLab" fill="${OR_D}" font-size="12.5" font-weight="700"></text>
+    <rect id="invHit" x="${IG.x}" y="${IG.y - IG.h}" width="${IG.w}" height="${IG.h}" fill="transparent" role="slider" aria-label="The graph: drag to change the first quantity"/>
+    <rect x="640" y="70" width="340" height="510" rx="14" fill="#fff" stroke="${HAIR}"/>
+    ${T(660, 100, 'WHAT YOU HAVE TRIED', `fill="${INK3}" font-size="12" font-weight="700" letter-spacing=".08em"`)}
+    <g id="ivTable"></g>
+  </g>
+  `;
+}
+
+/* ============================================================================
+   RESIZE
+   ============================================================================ */
+function paintResize(){
+  const r = resize(S.w, S.h);
+  const W = S.w * R.P, Hh = S.h * R.P, x = R.x0, y = R.y0 - Hh;
+  set('rzPic', {x, y, width: W.toFixed(1), height: Hh.toFixed(1)});
+  set('rzFrame', {x, y, width: W.toFixed(1), height: Hh.toFixed(1)});
+  set('rzKnob', {cx: (x + W).toFixed(1), cy: y.toFixed(1), fill: r.same ? GR : OR});
+  set('rzDims', {x: (x + W + (x + W > 470 ? -16 : 16)).toFixed(1), y: (y - 16).toFixed(1), 'text-anchor': x + W > 470 ? 'end' : 'start'}).textContent = `${S.w} mm × ${S.h} mm`;
+  $('rzRatio').textContent = `${S.w} : ${S.h}`;
+  $('rzSimple').textContent = r.g > 1 ? `Divide both by ${r.g}, their HCF:  ${r.s[0]} : ${r.s[1]}` : 'Already in its simplest form';
+  $('rzW1').textContent = `60 → ${S.w} mm`; $('rzH1').textContent = `40 → ${S.h} mm`;
+  $('rzW2').textContent = '× ' + fstr(r.fw); $('rzH2').textContent = '× ' + fstr(r.fh);
+  const sg = v => v > 0 ? '+' + v + ' mm' : v < 0 ? '−' + (-v) + ' mm' : 'no change';
+  $('rzW3').textContent = sg(r.dw); $('rzH3').textContent = sg(r.dh);
+  const bg = r.same ? '#e1f5e8' : '#fde6dc', col = r.same ? '#1f7a45' : '#b23c17';
+  set('rzVerdictBg', {fill: bg});
+  set('rzVerdict', {fill: col}).textContent = r.same ? 'The same shape as Image A' : r.stretch > 1 ? 'Stretched sideways' : 'Stretched upwards';
+  set('rzVerdict2', {fill: col}).textContent = r.same ? `Width and height both changed by × ${fstr(r.fw)}`
+    : `The width changed by × ${fstr(r.fw)} but the height by × ${fstr(r.fh)}`;
+  $('rzCross1').textContent = `60 × ${S.h} = ${60 * S.h}`;
+  $('rzCross2').textContent = `40 × ${S.w} = ${40 * S.w}`;
+  $('rzCross3').textContent = r.same ? `The products match, so 60 : 40 :: ${S.w} : ${S.h}.` : `The products differ, so 60 : 40 and ${S.w} : ${S.h}`;
+  $('rzCross4').textContent = r.same ? `The two ratios are proportional.` : `are not proportional.`;
+  for (const b of document.querySelectorAll('[data-img]')) b.setAttribute('aria-pressed', IMGS[b.dataset.img][0] === S.w && IMGS[b.dataset.img][1] === S.h);
+  return r;
+}
+
+/* ============================================================================
+   SCALE: the double number line
+   ============================================================================ */
+function paintScale(){
+  const P = SETS[S.set], bmax = P.max * P.b / P.a;
+  const xOf = v => DL.x + v / P.max * DL.w;          // both lines share one scale of "how many times the base"
+  const d = ruleOfThree(P.a, P.b, S.c), f = frac(S.c, P.a);
+  $('scWho').textContent = P.who;
+  $('scTopLab').textContent = P.A;
+  $('scBotLab').textContent = P.B;
+  /* axes: a tick at every step on top; the matching (maybe fractional) tick below; labels at multiples of the base pair */
+  let ax = `<line x1="${DL.x - 10}" y1="${DL.top}" x2="${DL.x + DL.w + 10}" y2="${DL.top}" stroke="${OR_D}" stroke-width="2.4"/>` +
+           `<line x1="${DL.x - 10}" y1="${DL.bot}" x2="${DL.x + DL.w + 10}" y2="${DL.bot}" stroke="${BL_D}" stroke-width="2.4"/>`;
+  const nSteps = Math.round(P.max / P.step);
+  for (let i = 0; i <= nSteps; i++) {
+    const v = i * P.step, x = xOf(v).toFixed(1), base = v % P.a === 0;
+    ax += `<line x1="${x}" y1="${DL.top - (base ? 9 : 5)}" x2="${x}" y2="${DL.top + (base ? 9 : 5)}" stroke="${OR_D}" stroke-width="${base ? 2 : 1.2}"/>`;
+    ax += `<line x1="${x}" y1="${DL.bot - (base ? 9 : 5)}" x2="${x}" y2="${DL.bot + (base ? 9 : 5)}" stroke="${BL_D}" stroke-width="${base ? 2 : 1.2}"/>`;
+    if (base) {
+      ax += T(x, DL.top + 26, v, `fill="${OR_D}" font-size="12.5" font-weight="600" text-anchor="middle"`);
+      ax += T(x, DL.bot - 16, mixed(ruleOfThree(P.a, P.b, v)), `fill="${BL_D}" font-size="12.5" font-weight="600" text-anchor="middle"`);
+    }
+  }
+  $('scAxes').innerHTML = ax;
+  const xc = xOf(S.c), xa = xOf(P.a);
+  set('scMarkTop', {transform: `translate(${xc.toFixed(1)} ${DL.top})`});
+  set('scMarkBot', {transform: `translate(${xc.toFixed(1)} ${DL.bot})`});
+  $('scMarkTopLab').textContent = S.c;
+  $('scMarkBotLab').textContent = mixed(d);
+  set('scLink', {x1: xc.toFixed(1), x2: xc.toFixed(1)});
+  /* the same factor on both lines, from the base pair to where you are */
+  if (S.c !== P.a && S.c > 0) {
+    const h = Math.min(44, 16 + Math.abs(xc - xa) * 0.1), mid = (xa + xc) / 2;
+    set('scArcTop', {d: `M${xa.toFixed(1)} ${DL.top - 12} Q${mid.toFixed(1)} ${(DL.top - 12 - h).toFixed(1)} ${xc.toFixed(1)} ${DL.top - 12}`, opacity: 0});
+    set('scArcBot', {d: `M${xa.toFixed(1)} ${DL.bot + 12} Q${mid.toFixed(1)} ${(DL.bot + 12 + h).toFixed(1)} ${xc.toFixed(1)} ${DL.bot + 12}`, opacity: 1});
+    set('scArcBotLab', {x: mid.toFixed(1), y: (DL.bot + 12 + h / 2 + 18).toFixed(1), opacity: 1}).textContent = `× ${fstr(f)}`;
+    set('scArcTopLab', {x: ((xa + xc) / 2).toFixed(1), y: (DL.top + 50).toFixed(1), opacity: 1}).textContent = `× ${fstr(f)}`;
+  } else { for (const id of ['scArcTop', 'scArcBot', 'scArcTopLab', 'scArcBotLab']) set(id, {opacity: 0}); }
+
+  /* ratio table: the base pair, then what you tried */
+  const seen = (S.scaleSeen[S.set] || []).filter(v => v !== P.a).slice(-5);
+  const rows = [P.a].concat(seen);
+  let tb = `<text x="40" y="404" fill="${OR_D}" font-size="12.5" font-weight="700">${esc(P.A)}</text><text x="190" y="404" fill="${BL_D}" font-size="12.5" font-weight="700">${esc(P.B)}</text>` +
+           `<text x="330" y="404" fill="${INK3}" font-size="12.5" font-weight="700">cross-multiply</text>`;
+  rows.forEach((v, i) => {
+    const y = 434 + i * 30, dv = ruleOfThree(P.a, P.b, v), now = v === S.c;
+    tb += (now ? `<rect x="28" y="${y - 20}" width="500" height="28" rx="6" fill="#fdf1e8"/>` : '') +
+          T(40, y, v, `fill="${INK}" font-size="15" font-weight="${now ? 700 : 500}"`) +
+          T(190, y, mixed(dv), `fill="${INK}" font-size="15" font-weight="${now ? 700 : 500}"`) +
+          T(330, y, i === 0 ? 'the book’s pair' : `${P.a} × ${mixed(dv)} = ${P.b} × ${v}`, `fill="${INK2}" font-size="13" font-family="JetBrains Mono, monospace"`);
+  });
+  $('scTable').innerHTML = tb;
+
+  /* graph */
+  const gx = v => SG.x + v / P.max * SG.w, gy = v => SG.y - v / bmax * SG.h;
+  let ga = `<line x1="${SG.x}" y1="${SG.y}" x2="${SG.x + SG.w + 6}" y2="${SG.y}" stroke="#9aa3a6"/><line x1="${SG.x}" y1="${SG.y}" x2="${SG.x}" y2="${SG.y - SG.h - 6}" stroke="#9aa3a6"/>`;
+  for (let k = 0; k <= 4; k++) {
+    const v = P.max * k / 4, w = bmax * k / 4;
+    ga += `<line x1="${gx(v)}" y1="${SG.y}" x2="${gx(v)}" y2="${SG.y - SG.h}" stroke="#ece8dc"/>` + T(gx(v), SG.y + 16, fmt(v, v % 1 ? 1 : 0), `fill="${INK3}" font-size="11" text-anchor="middle"`);
+    ga += `<line x1="${SG.x}" y1="${gy(w)}" x2="${SG.x + SG.w}" y2="${gy(w)}" stroke="#ece8dc"/>` + T(SG.x - 7, gy(w) + 4, fmt(w, w % 1 ? 1 : 0), `fill="${INK3}" font-size="11" text-anchor="end"`);
+  }
+  ga += T(SG.x + SG.w, SG.y + 32, esc(P.A), `fill="${OR_D}" font-size="11.5" font-weight="600" text-anchor="end"`);
+  ga += T(SG.x + 6, SG.y - SG.h - 8, esc(P.B), `fill="${BL_D}" font-size="11.5" font-weight="600"`);
+  $('scGAxes').innerHTML = ga;
+  set('scGLine', {x2: gx(P.max), y2: gy(bmax)});
+  $('scGPts').innerHTML = rows.map(v => `<circle cx="${gx(v).toFixed(1)}" cy="${gy(fval(ruleOfThree(P.a, P.b, v))).toFixed(1)}" r="4.5" fill="#fff" stroke="${OR_D}" stroke-width="2"/>`).join('');
+  set('scGDot', {cx: gx(S.c).toFixed(1), cy: gy(fval(d)).toFixed(1)});
+  $('scGSub').textContent = `A straight line through 0: double one, and the other doubles.`;
+  $('scaleLab').textContent = P.short;
+  const rg = $('scaleC'); rg.max = P.max; rg.step = P.step; rg.value = S.c; $('scaleOut').textContent = S.c;
+  for (const b of document.querySelectorAll('[data-set]')) b.setAttribute('aria-pressed', b.dataset.set === S.set);
+  return {P, d, f};
+}
+
+/* ============================================================================
+   SHARE: deal counters in rounds
+   ============================================================================ */
+const PILE = i => ({x: 108 + (i % 15) * 56, y: 96 + Math.floor(i / 15) * 34});
+const TRAY = (side, i) => ({x: (side ? 553 : 108) + (i % 10) * 38, y: 322 + Math.floor(i / 10) * 34});
+function paintShare(){
+  const sh = share(S.N, S.m, S.n), per = S.m + S.n;
+  $('shSub').textContent = `${S.N} counters, shared in the ratio ${S.m} : ${S.n}. Your partner takes ${S.m}, you take ${S.n}, round after round.`;
+  let pi = 0, yi = 0;
+  const onPile = S.N - S.dealt * per;
+  for (let i = 0; i < 60; i++) {
+    const el = $('ct' + i);
+    if (i >= S.N) { el.style.display = 'none'; continue; }
+    el.style.display = '';
+    const round = Math.floor(i / per), j = i % per;
+    let p, fill;
+    if (round < S.dealt) {
+      if (j < S.m) { p = TRAY(0, pi++); fill = round % 2 ? '#e39b6e' : OR; }
+      else { p = TRAY(1, yi++); fill = round % 2 ? '#7fa7dc' : BL; }
+    } else { p = PILE(i); fill = '#b08850'; }
+    el.style.transform = `translate(${p.x}px, ${p.y}px)`;
+    el.setAttribute('fill', fill);
+  }
+  $('shPileLab').textContent = onPile === S.N ? `The pile: ${S.N} counters` :
+    onPile === 0 ? 'The pile is empty.' : S.done ? `${onPile} left over: too few for another round of ${S.m} + ${S.n}` : `${onPile} still in the pile`;
+  $('shPartLab').textContent = `Your partner: ${pi}`;
+  $('shYouLab').textContent = `You: ${yi}`;
+  /* the bar: the whole cut into m + n equal groups */
+  const exact = sh.left === 0;
+  let bar = '';
+  const bx = 70, bw = 860, by = 566, gw = bw / per;
+  for (let k = 0; k < per; k++) {
+    const mine = k >= S.m;
+    bar += `<rect x="${(bx + k * gw).toFixed(1)}" y="${by}" width="${(gw - 2).toFixed(1)}" height="34" rx="5" fill="${mine ? BL_L : OR_L}" stroke="${mine ? BL : OR}" stroke-width="1.2"/>`;
+    if (gw > 40) bar += T((bx + (k + .5) * gw).toFixed(1), by + 22, mixed(sh.group), `fill="${mine ? BL_D : OR_D}" font-size="13" font-weight="700" text-anchor="middle"`);
+  }
+  $('shBar').innerHTML = S.done ? bar : '';
+  $('shBarLab').textContent = S.done ? `The whole, ${S.N}, cut into ${S.m} + ${S.n} = ${per} equal groups of ${mixed(sh.group)}: your partner gets ${S.m} groups, you get ${S.n}.` : '';
+  $('shareN').value = S.N; $('shareNOut').textContent = S.N;
+  $('mOut').textContent = S.m; $('nOut').textContent = S.n;
+  return sh;
+}
+
+/* ============================================================================
+   INVERSE
+   ============================================================================ */
+function paintInverse(){
+  const P = INV[S.inv], k = P.x1 * P.y1, ymax = k / P.min, y = inverse(P.x1, P.y1, S.x), yv = fval(y);
+  const gx = v => IG.x + v / P.max * IG.w, gy = v => IG.y - v / ymax * IG.h;
+  $('ivWho').textContent = P.who + ` Whatever you change, ${P.A} × ${P.B} = ${k} ${P.k}.`;
+  let ax = `<line x1="${IG.x}" y1="${IG.y}" x2="${IG.x + IG.w + 6}" y2="${IG.y}" stroke="#9aa3a6"/><line x1="${IG.x}" y1="${IG.y}" x2="${IG.x}" y2="${IG.y - IG.h - 6}" stroke="#9aa3a6"/>`;
+  for (let i = 0; i <= 4; i++) {
+    const v = P.max * i / 4, w = ymax * i / 4;
+    ax += `<line x1="${gx(v)}" y1="${IG.y}" x2="${gx(v)}" y2="${IG.y - IG.h}" stroke="#ece8dc"/>` + T(gx(v), IG.y + 17, fmt(v, v % 1 ? 1 : 0), `fill="${INK3}" font-size="11.5" text-anchor="middle"`);
+    ax += `<line x1="${IG.x}" y1="${gy(w)}" x2="${IG.x + IG.w}" y2="${gy(w)}" stroke="#ece8dc"/>` + T(IG.x - 7, gy(w) + 4, fmt(w, w % 1 ? 1 : 0), `fill="${INK3}" font-size="11.5" text-anchor="end"`);
+  }
+  const nm = (a, u) => a === u ? a : `${a} (${u})`;
+  ax += T(IG.x + IG.w, IG.y + 36, nm(P.A, P.uA), `fill="${OR_D}" font-size="12" font-weight="700" text-anchor="end"`);
+  ax += T(IG.x - 4, IG.y - IG.h - 12, nm(P.B, P.uB), `fill="${OR_D}" font-size="12" font-weight="700"`);
+  $('ivAxes').innerHTML = ax;
+  set('ivRect', {x: IG.x, y: gy(yv).toFixed(1), width: (gx(S.x) - IG.x).toFixed(1), height: (IG.y - gy(yv)).toFixed(1)});
+  set('ivArea', {x: ((IG.x + gx(S.x)) / 2).toFixed(1), y: clamp((gy(yv) + IG.y) / 2 + 5, IG.y - IG.h + 20, IG.y - 8).toFixed(1)}).textContent =
+    gx(S.x) - IG.x > 110 ? `${S.x} × ${mixed(y)} = ${k}` : '';
+  let c = '';
+  for (let i = 0; i <= 160; i++) { const xv = P.min * 0.98 + (P.max - P.min * 0.98) * i / 160; c += (i ? 'L' : 'M') + gx(xv).toFixed(1) + ' ' + gy(k / xv).toFixed(1); }
+  set('ivCurve', {d: c});
+  /* what the rule of three would wrongly say: y grows with x, a straight line through the book's pair */
+  const xd = Math.min(P.max, ymax * P.x1 / P.y1);
+  set('ivDirect', {d: `M${IG.x} ${IG.y} L${gx(xd).toFixed(1)} ${gy(xd * P.y1 / P.x1).toFixed(1)}`});
+  set('ivDirectLab', {x: (gx(xd) - 6).toFixed(1), y: (gy(xd * P.y1 / P.x1) + (xd < P.max ? 18 : -10)).toFixed(1), 'text-anchor': 'end'}).textContent = 'if it were direct (it is not)';
+  set('ivCurveLab', {x: (gx(P.max) - 4).toFixed(1), y: (gy(k / P.max) - 12).toFixed(1), 'text-anchor': 'end'}).textContent = `${P.A} × ${P.B} = ${k}`;
+  set('ivDot', {cx: gx(S.x).toFixed(1), cy: gy(yv).toFixed(1)});
+  const seen = (S.invSeen[S.inv] || []).slice().sort((a, b) => a - b);
+  $('ivGhosts').innerHTML = seen.filter(v => v !== S.x).map(v => { const w = fval(inverse(P.x1, P.y1, v));
+    return `<rect x="${IG.x}" y="${gy(w).toFixed(1)}" width="${(gx(v) - IG.x).toFixed(1)}" height="${(IG.y - gy(w)).toFixed(1)}" fill="none" stroke="${OR}" stroke-opacity=".45" stroke-dasharray="3 4"/>`; }).join('');
+  $('ivPts').innerHTML = seen.map(v => `<circle cx="${gx(v).toFixed(1)}" cy="${gy(fval(inverse(P.x1, P.y1, v))).toFixed(1)}" r="4.5" fill="#fff" stroke="${OR_D}" stroke-width="2"/>`).join('');
+  /* table */
+  const rows = seen.slice(-11);
+  let tb = T(660, 130, esc(P.uA), `fill="${OR_D}" font-size="12.5" font-weight="700"`) + T(760, 130, esc(P.uB), `fill="${OR_D}" font-size="12.5" font-weight="700"`) +
+           T(960, 130, 'product', `fill="${INK3}" font-size="12.5" font-weight="700" text-anchor="end"`);
+  rows.forEach((v, i) => {
+    const yy = 160 + i * 36, w = inverse(P.x1, P.y1, v), now = v === S.x;
+    tb += (now ? `<rect x="652" y="${yy - 22}" width="316" height="30" rx="6" fill="#fdf1e8"/>` : '') +
+          T(660, yy, v, `fill="${INK}" font-size="15" font-weight="${now ? 700 : 500}"`) + T(760, yy, mixed(w), `fill="${INK}" font-size="15" font-weight="${now ? 700 : 500}"`) +
+          T(960, yy, `${v} × ${mixed(w)} = ${fval(w) * v}`, `fill="${INK2}" font-size="12.5" font-family="JetBrains Mono, monospace" text-anchor="end"`);
+  });
+  if (!rows.length) tb += T(660, 170, 'Move the slider or drag on the graph.', `fill="${INK3}" font-size="13"`);
+  $('ivTable').innerHTML = tb;
+  $('invLab').textContent = P.short;
+  const rg = $('invX'); rg.min = P.min; rg.max = P.max; rg.step = P.step; rg.value = S.x; $('invOut').textContent = S.x;
+  for (const b of document.querySelectorAll('[data-inv]')) b.setAttribute('aria-pressed', b.dataset.inv === S.inv);
+  return {P, k, y};
+}
+
+/* ---- paint: everything that depends on the state -------------------------- */
+const VIEWS = {resize: 'vResize', scale: 'vScale', share: 'vShare', inverse: 'vInverse'};
+const CTLS = {resize: 'ctlResize', scale: 'ctlScale', share: 'ctlShare', inverse: 'ctlInverse'};
+function paint(){
+  for (const t in VIEWS) { $(VIEWS[t]).style.display = t === S.tab ? '' : 'none'; $(CTLS[t]).hidden = t !== S.tab; }
+  for (const b of document.querySelectorAll('[data-tab]')) b.setAttribute('aria-pressed', b.dataset.tab === S.tab);
+  const res = S.tab === 'resize' ? paintResize() : S.tab === 'scale' ? paintScale() : S.tab === 'share' ? paintShare() : paintInverse();
+  paintWhy(res);
+  check(res);
+}
+
+/* A live narrator: it describes what THIS state is doing, in words, from the model. */
+function paintWhy(r){
+  if (!S.locked) return;
+  $('whyCard').hidden = false;
+  let t = '';
+  if (S.tab === 'resize') {
+    t += `<p>Your picture is <b>${S.w} : ${S.h}</b>${r.g > 1 ? `, which is <b>${r.s[0]} : ${r.s[1]}</b> in its simplest form (divide by the HCF, ${r.g})` : ''}. Image A is 3 : 2.</p>`;
+    if (r.same && r.dw === 0) t += `<p>This is Image A itself. Try making it smaller or bigger without squashing the tiger.</p>`;
+    else if (r.same) t += `<p>The width and the height were both multiplied by <b>${fstr(r.fw)}</b>, the same factor, so the tiger keeps its shape: 60 : 40 :: ${S.w} : ${S.h}. Its corner lies on the green line.</p>`;
+    else t += `<p>The width was multiplied by <b>${fstr(r.fw)}</b> but the height by <b>${fstr(r.fh)}</b>. Different factors, so the tiger is ${r.stretch > 1 ? 'pulled sideways' : 'pulled upwards'}.` +
+              (r.dw === r.dh ? ` Both sides changed by the <b>same amount</b> (${r.dw > 0 ? '+' : '−'}${Math.abs(r.dw)} mm), and that is exactly why it looks wrong: adding or taking away the same amount does not keep a ratio.` : '') + `</p>`;
+  } else if (S.tab === 'scale') {
+    const {P, d, f} = r;
+    t += `<p>${esc(P.who)} So ${P.a} : ${P.b} :: ${S.c} : <b>${mixed(d)}</b>.</p>`;
+    if (S.c > 0) t += `<p>From ${P.a} to ${S.c} is <b>× ${fstr(f)}</b>, so ${P.b} is multiplied by ${fstr(f)} too: ${P.b} × ${fstr(f)} = <b>${mixed(d)}</b> ${esc(P.B)}. ` +
+      (f.d !== 1 ? `The factor is a fraction, and the rule of three still works: ${P.b} × ${S.c} ÷ ${P.a} = ${mixed(d)}.` : '') + `</p>`;
+    t += `<p>Check by cross-multiplying: ${P.a} × ${mixed(d)} = ${fmt(P.a * fval(d), fval(d) % 1 ? 2 : 0)} and ${P.b} × ${S.c} = ${P.b * S.c}.</p>`;
+  } else if (S.tab === 'share') {
+    const sh = r, per = S.m + S.n;
+    t += `<p>One round uses <b>${S.m} + ${S.n} = ${per}</b> counters. ${S.N} counters make <b>${sh.rounds}</b> full round${sh.rounds === 1 ? '' : 's'}${sh.left ? `, with ${sh.left} left over` : ''}.</p>`;
+    if (!S.done) t += `<p>Press <b>Share them out</b> to deal the rounds.</p>`;
+    else if (!sh.left) t += `<p>Your partner gets ${S.m} × ${sh.rounds} = <b>${fval(sh.first)}</b> and you get ${S.n} × ${sh.rounds} = <b>${fval(sh.second)}</b>. ` +
+      `${fval(sh.first)} : ${fval(sh.second)} simplifies back to ${simplest(fval(sh.first), fval(sh.second)).join(' : ')}.</p>`;
+    else t += `<p>${S.N} is not a multiple of ${per}, so whole counters cannot be shared exactly. The exact shares would be ${S.m} × ${S.N} ÷ ${per} = <b>${mixed(sh.first)}</b> and ${S.n} × ${S.N} ÷ ${per} = <b>${mixed(sh.second)}</b>.</p>`;
+  } else {
+    const {P, k, y} = r;
+    t += `<p>At <b>${S.x} ${P.uA}</b> it takes <b>${mixed(y)} ${P.uB}</b>, because ${S.x} × ${mixed(y)} = ${k}. The rectangle always has the same area, ${k}.</p>`;
+    const f = frac(S.x, P.x1);
+    if (S.x !== P.x1) t += `<p>Compared with the book’s ${P.x1} ${P.uA}: ${P.A} × <b>${fstr(f)}</b>, so ${P.B} × <b>${fstr(frac(f.d, f.n))}</b>. The same factor, turned upside down. That is an <b>inverse proportion</b>, and its graph is a curve, not a straight line.</p>`;
+    else t += `<p>Change the ${P.A} and watch the ${P.B} change by the upside-down factor.</p>`;
+  }
+  $('why').innerHTML = t;
+}
+
+/* ---- findings: reached by the model, never by a button -------------------- */
+function check(r){
+  if (!S.locked || S.changes < 1) return;
+  if (S.tab === 'resize') {
+    if (r.same && r.dw !== 0) discover('factor');
+    if (!r.same && r.dw === r.dh && r.dw !== 0) discover('difference');
+  } else if (S.tab === 'scale') {
+    if (S.c > 0 && r.f.d !== 1) discover('rule3');
+  } else if (S.tab === 'share') {
+    if (S.done && r.left === 0 && S.m !== S.n) discover('share');
+  } else {
+    if ((S.invSeen[S.inv] || []).length >= 3) discover('inverse');
+  }
+  const scaleMost = Math.max(0, ...Object.values(S.scaleSeen).map(a => a.length));
+  const invMost = Math.max(0, ...Object.values(S.invSeen).map(a => a.length));
+  if (scaleMost >= 3 && invMost >= 3) discover('curve');
+  maybeExplain();
+}
+let EXPLAINED = false;
+function maybeExplain(){
+  if (EXPLAINED || !POE || !found('difference')) return;
+  EXPLAINED = true;
+  const a = resize(60, 40), b = resize(40, 20), d = resize(90, 60);
+  POE.explain(`Image B is ${b.w} : ${b.h}, which is <b>${b.s.join(' : ')}</b>; Image A is <b>${a.s.join(' : ')}</b>. Taking 20 mm off both sides changed the width by × ${fstr(b.fw)} ` +
+    `but the height by × ${fstr(b.fh)}, so the tiger comes out stretched. Only multiplying both sides by the <b>same factor</b> keeps the shape: Image D, ${d.w} : ${d.h}, is × ${fstr(d.fw)} both ways and simplifies to ${d.s.join(' : ')}.`);
+}
+
+/* ============================================================================
+   Controls. The stage is built first, so there is something to wire.
+   ============================================================================ */
+build();
+function note(what){ S.changes++; paint(); track('change', {what, tab: S.tab}); }
+function remember(bucket, key, v){ const a = bucket[key] || (bucket[key] = []); if (!a.includes(v)) a.push(v); }
+
+document.querySelectorAll('[data-tab]').forEach(b => b.addEventListener('click', () => {
+  if (!S.locked || S.tab === b.dataset.tab) return;
+  S.tab = b.dataset.tab; sound('pop');
+  if (S.tab === 'inverse') remember(S.invSeen, S.inv, S.x);
+  note('tab');
+}));
+/* resize */
+document.querySelectorAll('[data-img]').forEach(b => b.addEventListener('click', () => {
+  if (!S.locked) return;
+  [S.w, S.h] = IMGS[b.dataset.img]; sound('snap'); note('image' + b.dataset.img);
+}));
+function corner(p){
+  const w = clamp(Math.round((p.x - R.x0) / R.P / 5) * 5, 10, 120), h = clamp(Math.round((R.y0 - p.y) / R.P / 5) * 5, 10, 120);
+  if (w !== S.w || h !== S.h) { S.w = w; S.h = h; sound('tick'); note('corner'); }
+}
+drag($('rzHit'), svg, {start(p){ if (!S.locked) return false; corner(p); }, move: corner, end(){ track('resize', {w: S.w, h: S.h}); }});
+/* scale */
+function setC(v){
+  const P = SETS[S.set]; v = clamp(Math.round(v / P.step) * P.step, 0, P.max);
+  if (v === S.c) return;
+  S.c = v; if (v > 0) remember(S.scaleSeen, S.set, v); sound('tick'); note('scale');
+}
+document.querySelectorAll('[data-set]').forEach(b => b.addEventListener('click', () => {
+  if (!S.locked || S.set === b.dataset.set) return;
+  S.set = b.dataset.set; S.c = SETS[S.set].a; sound('pop'); note('set');
+}));
+$('scaleC').addEventListener('input', e => { if (S.locked) setC(+e.target.value); });
+drag($('scHit'), svg, {start(p){ if (!S.locked) return false; setC((p.x - DL.x) / DL.w * SETS[S.set].max); },
+  move(p){ setC((p.x - DL.x) / DL.w * SETS[S.set].max); }});
+/* share */
+let DEAL_RUN = 0;
+function resetDeal(){ DEAL_RUN++; S.dealt = 0; S.done = false; S.dealing = false; $('btnDeal').disabled = !S.locked; }
+$('shareN').addEventListener('input', e => { if (!S.locked) return; S.N = +e.target.value; resetDeal(); note('N'); });
+document.querySelectorAll('[data-sh]').forEach(b => b.addEventListener('click', () => {
+  if (!S.locked) return;
+  const k = b.dataset.sh, v = clamp(S[k] + +b.dataset.d, 1, 9);
+  if (v === S[k]) return;
+  S[k] = v; sound('tick'); resetDeal(); note(k);
+}));
+$('btnDeal').addEventListener('click', async () => {
+  if (!S.locked || S.dealing) return;
+  resetDeal(); paint();
+  const run = DEAL_RUN, sh = share(S.N, S.m, S.n);
+  S.dealing = true; $('btnDeal').disabled = true;
+  for (let r = 1; r <= sh.rounds; r++) {
+    if (!reduced()) await sleep(r === 1 ? 120 : 330);
+    if (run !== DEAL_RUN) return;
+    S.dealt = r; sound('tick'); paint();
+  }
+  if (!reduced()) await sleep(250);
+  if (run !== DEAL_RUN) return;
+  S.dealing = false; S.done = true; $('btnDeal').disabled = false;
+  sound(sh.left ? 'oops' : 'snap'); note('dealt');
+  track('share', {N: S.N, m: S.m, n: S.n, rounds: sh.rounds, left: sh.left});
+});
+/* inverse */
+function setX(v){
+  const P = INV[S.inv]; v = clamp(Math.round(v / P.step) * P.step, P.min, P.max);
+  if (v === S.x) return;
+  S.x = v; remember(S.invSeen, S.inv, v); sound('tick'); note('inverse');
+}
+document.querySelectorAll('[data-inv]').forEach(b => b.addEventListener('click', () => {
+  if (!S.locked || S.inv === b.dataset.inv) return;
+  S.inv = b.dataset.inv; S.x = INV[S.inv].x1; remember(S.invSeen, S.inv, S.x); sound('pop'); note('invSet');
+}));
+$('invX').addEventListener('input', e => { if (S.locked) setX(+e.target.value); });
+drag($('invHit'), svg, {start(p){ if (!S.locked) return false; setX((p.x - IG.x) / IG.w * INV[S.inv].max); },
+  move(p){ setX((p.x - IG.x) / IG.w * INV[S.inv].max); }});
+
+function lockControls(lock){
+  for (const el of document.querySelectorAll('#ctlCard button, #ctlCard input')) el.disabled = lock;
+  for (const id of ['rzHit', 'scHit', 'invHit']) $(id).style.pointerEvents = lock ? 'none' : '';
+  $('gate').hidden = !lock;
+}
+
+/* ============================================================================
+   Start
+   ============================================================================ */
+findings($('finds'), [
+  {id: 'factor',     icon: '×', label: 'Same factor, same shape',            hint: 'Resize without squashing the tiger'},
+  {id: 'difference', icon: '−', label: 'Same difference, different shape',   hint: 'Take the same amount off both sides'},
+  {id: 'rule3',      icon: '⅔', label: 'The rule of three with a fraction',  hint: 'Scale by a factor that is not whole'},
+  {id: 'share',      icon: '◐', label: 'Shared in a ratio, not equally',     hint: 'Deal out counters in rounds'},
+  {id: 'inverse',    icon: '↘', label: 'More workers, fewer days',           hint: 'Try three values in the Inverse view'},
+  {id: 'curve',      icon: '⌒', label: 'A straight line and a curve',        hint: 'Compare the Scale and Inverse graphs'},
+], () => toast('All six found. Proportional means “the same factor”, never “the same amount”.', 4200));
+
+const POE = predict($('poe'), {
+  id: 'tiger-resize',
+  q: 'Image A is 60 mm wide and 40 mm tall. Image B takes 20 mm off both: 40 mm by 20 mm. Will the tiger in B look the same shape?',
+  options: [
+    {id: 'same',    text: 'Yes. The same amount was taken off both sides.'},
+    {id: 'stretch', text: 'No. It will look stretched.', right: true},
+    {id: 'any',     text: 'Yes. Every smaller picture looks the same.'},
+    {id: 'cant',    text: 'Can’t tell without seeing it.'},
+  ],
+  onLock(){
+    S.locked = true;
+    lockControls(false);
+    remember(S.invSeen, S.inv, S.x);
+    say('Now find out. Try picture B, then make a smaller tiger that is not squashed.');
+    paint();
+  },
+});
+lockControls(!POE.locked);
+if (!Play.FF('predict')) S.locked = true;
+paint();
+window.applyFeatures = () => paint();
+window.PG_STATE = () => JSON.parse(JSON.stringify(S));
+window.PG_MODEL = {gcd, frac, fstr, mixed, hcf, simplest, proportional, resize, ruleOfThree, share, inverse, SETS, INV};
+</script>
+</body>
+</html>

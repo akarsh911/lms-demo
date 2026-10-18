@@ -1,0 +1,835 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Exploring Magnets</title>
+<meta name="description" content="Class 6–8: test which things a magnet pulls, find the poles, watch a compass swing near a magnet, push like poles apart, and make your own magnet by stroking a needle. Every push and swing is computed from the magnets on the table.">
+<link rel="icon" href="../../favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600&family=Inter:wght@400;500;600;700&family=Nunito:wght@500;700;800&family=Newsreader:opsz,wght@6..72,400;6..72,500&family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="../../play.css">
+<style>
+/* Only what this page needs beyond play.css. */
+.gate{position:absolute; left:0; width:74%; top:0; height:72%; display:grid; place-items:center; pointer-events:none}
+.gate span{background:rgba(29,35,39,.86); color:#fff; padding:10px 16px; border-radius:99px; font-weight:600; font-size:14px}
+.pg-stage{min-height:0; position:sticky; top:84px}
+@media (max-width:1100px){ .pg-main.wide-side{grid-template-columns:1fr} .pg-stage{position:relative; top:0} }
+.dragme{cursor:grab} .dragme.dragging{cursor:grabbing}
+body.locked .dragme{pointer-events:none}
+.magrow{display:grid; grid-template-columns:auto 1fr 1fr; gap:6px; align-items:center; margin:4px 0}
+.magrow b{font-size:13px; min-width:64px}
+.btn[aria-pressed="true"]{background:var(--accent-soft); border-color:var(--accent)}
+.note{font-size:12.5px; color:var(--ink-3); margin:6px 0 0}
+.why p{font-size:13.5px; margin-bottom:.5em}
+.obs{width:100%; border-collapse:collapse; font-size:12.5px}
+.obs th{text-align:left; font-size:11px; letter-spacing:.05em; text-transform:uppercase; color:var(--ink-3); font-weight:700; padding:3px 4px; border-bottom:1px solid var(--hair)}
+.obs td{padding:3px 4px; border-bottom:1px solid var(--hair)}
+.obs td.y{color:var(--good); font-weight:700} .obs td.n{color:var(--bad); font-weight:700}
+.obs td.q{color:var(--ink-3)}
+</style>
+</head>
+<body class="locked">
+<header class="pg-top"></header>
+
+<div class="pg-intro">
+  <h1>Exploring magnets</h1>
+  <p>Reshma’s sailors lost the stars in a storm. What else could show them north? On this table are two bar magnets, a compass,
+     a bowl of water, a heap of steel U-clips and a tray of things to test. Every pull, push and swing you see is worked out from where the magnets are:
+     nothing here is a recording.</p>
+</div>
+
+<main class="pg-main wide-side">
+  <section class="pg-stage" id="stageWrap">
+    <svg id="stage" viewBox="0 0 1000 660" role="img" aria-label="A table seen from above with two bar magnets, a compass, a bowl of water, a heap of steel clips and a tray of objects, and a graph of how far the compass needle turns"></svg>
+    <div class="gate" id="gate"><span>Make your prediction first →</span></div>
+  </section>
+
+  <aside class="pg-side">
+    <div id="poe"></div>
+
+    <div class="card" id="ctlCard">
+      <div class="kicker">Your hands</div>
+      <div class="magrow"><b>Magnet A</b><button class="btn sm" id="flipA">⇄ Turn round</button><button class="btn sm" id="rotA">↻ Turn 45°</button></div>
+      <div class="magrow"><b>Magnet B</b><button class="btn sm" id="flipB">⇄ Turn round</button><button class="btn sm" id="rotB">↻ Turn 45°</button></div>
+      <div class="row" style="margin-top:8px">
+        <button class="btn sm" id="btnFilings" aria-pressed="false">✦ Sprinkle iron filings</button>
+        <button class="btn sm" id="btnShake">Shake the clips off</button>
+        <button class="btn sm" id="btnReset">↺ Clear the table</button>
+      </div>
+      <p class="note">Drag anything. A magnet you let go of sits on round pencils, so it can roll if something pushes or pulls it. Drag things from the tray onto the table to test them.</p>
+    </div>
+
+    <div class="card why" id="whyCard" hidden>
+      <div class="kicker">What is happening</div>
+      <div id="why"></div>
+    </div>
+
+    <div class="card" id="obsCard">
+      <div class="kicker">My observations (Table 4.1)</div>
+      <table class="obs" id="obs"></table>
+      <p class="note" id="obsNote">Bring a magnet close to each object on the table. The table fills itself in.</p>
+    </div>
+
+    <div class="card"><div class="kicker">To find</div><div id="finds"></div></div>
+  </aside>
+</main>
+
+<script src="../../play.js"></script>
+<script>
+'use strict';
+const {$, esc, clamp, fmt, drag, loop, sound, say, track, toast, predict, findings, discover, found,
+       shareState, sharedState, mount, reduced} = Play;
+mount({thread: 'magnetism', band: 'tinkerer'});
+document.body.classList.add('locked');
+
+/* MODEL:start ==================================================================
+   Magnets on a table, seen from above.
+
+   A bar magnet is two poles, +q (North) and −q (South), a little in from its ends
+   (0.42 of its length from the centre). Each pole makes an inverse-square field,
+   B = q r̂ / r² (softened by 6 px so a point on a pole is finite). The Earth adds a
+   small uniform field pointing north (up the screen). Every field on the page is the
+   SUM over the poles present: the compass, the filings and the forces all read it.
+
+     - A pole feels F = q B from the OTHER magnets' poles (like poles repel, unlike attract).
+     - A compass needle turns to lie along B (its north end along the arrow).
+     - A piece of iron is not a magnet but is magnetised by B, so it is pulled towards
+       where the field is strongest: F = χ ∇(B²). χ is 0 for wood, plastic, glass, rubber,
+       aluminium and copper — they feel nothing.
+     - Stroking a needle with one pole, always the same way, lines up its domains a
+       little more each time: M ← M + 0.1 (target − M). The end the pole leaves from
+       gets the same name as the pole; the end it finishes at gets the opposite name.
+
+   Units: 20 px = 1 cm. Field numbers are quoted as "times the Earth's field".
+   ============================================================================ */
+const PX_CM = 20;
+const BE = 4.0e-5;            // Earth's horizontal field, pointing north (−y on screen)
+const SOFT = 36;              // softening, px²
+const MAG_LEN = 140, MAG_W = 32, POLE_AT = 0.42;
+const NEEDLE_LEN = 100, NEEDLE_Q = 0.3;   // a fully magnetised needle has poles 0.3 as strong as a bar magnet's
+const G_CLIP = 5e-8;          // pull needed to hold one U-clip (in ∇B² units)
+const FS_OBJ = 2.5e-8;        // friction holding an object still
+const FS_MAG = 1.4e-4;        // friction holding a magnet on its pencils
+const MATERIALS = {
+  iron:     {name: 'Iron',      chi: 1.0},
+  steel:    {name: 'Steel',     chi: 0.9},
+  nickel:   {name: 'Nickel',    chi: 0.3},
+  wood:     {name: 'Wood',      chi: 0},
+  rubber:   {name: 'Rubber',    chi: 0},
+  plastic:  {name: 'Plastic',   chi: 0},
+  glass:    {name: 'Glass',     chi: 0},
+  aluminium:{name: 'Aluminium', chi: 0},
+  copper:   {name: 'Copper',    chi: 0},
+};
+
+/* Where a magnet's poles are. ang is the direction S → N, radians, screen frame. */
+function magPoles(m){
+  const d = m.len * POLE_AT, c = Math.cos(m.ang), s = Math.sin(m.ang);
+  return [{x: m.x + c * d, y: m.y + s * d, q: m.q, name: 'N'}, {x: m.x - c * d, y: m.y - s * d, q: -m.q, name: 'S'}];
+}
+/* The field at (x, y) from a list of poles, plus the Earth's if earth is true. */
+function fieldAt(x, y, poles, earth = true){
+  let bx = 0, by = earth ? -BE : 0;
+  for (const p of poles) {
+    const dx = x - p.x, dy = y - p.y, r2 = dx * dx + dy * dy + SOFT, k = p.q / (r2 * Math.sqrt(r2));
+    bx += k * dx; by += k * dy;
+  }
+  return {x: bx, y: by};
+}
+/* The pull on a piece of iron (per unit χ): the gradient of B², by central differences. */
+function gradB2(x, y, poles, earth = true){
+  const h = 1.5, f = (a, b) => { const B = fieldAt(a, b, poles, earth); return B.x * B.x + B.y * B.y; };
+  return {x: (f(x + h, y) - f(x - h, y)) / (2 * h), y: (f(x, y + h) - f(x, y - h)) / (2 * h)};
+}
+/* Force on a magnet from the other poles: each of its poles feels q·B. */
+function forceOnMagnet(m, others){
+  let fx = 0, fy = 0;
+  for (const p of magPoles(m)) { const B = fieldAt(p.x, p.y, others, false); fx += p.q * B.x; fy += p.q * B.y; }
+  return {x: fx, y: fy};
+}
+/* Which way a compass needle's north end rests, and how far that is from north (degrees). */
+function compassRest(x, y, poles){
+  const B = fieldAt(x, y, poles, true);
+  const ang = Math.atan2(B.y, B.x);
+  return {ang, dev: Math.abs(wrap(ang + Math.PI / 2)) * 180 / Math.PI, ratio: Math.hypot(B.x, B.y + BE) / BE, total: Math.hypot(B.x, B.y) / BE};
+}
+const wrap = a => Math.atan2(Math.sin(a), Math.cos(a));
+/* How many U-clips cling at seven stations along one long side of a magnet. */
+function clipCounts(m){
+  const P = magPoles(m), c = Math.cos(m.ang), s = Math.sin(m.ang);
+  return [-0.45, -0.3, -0.15, 0, 0.15, 0.3, 0.45].map(f => {
+    const x = m.x + c * f * m.len - s * (MAG_W / 2 + 6), y = m.y + s * f * m.len + c * (MAG_W / 2 + 6);
+    const g = gradB2(x, y, P, false);
+    return Math.min(12, Math.floor(Math.hypot(g.x, g.y) / G_CLIP));
+  });
+}
+/* One stroke of a pole (sign q) along a needle, in direction dir (+1 or −1 along the needle's axis).
+   The domains are nudged towards the direction opposite to (pole × stroke). */
+function stroke(M, q, dir){ const target = -Math.sign(q) * dir; return M + 0.1 * (target - M); }
+/* MODEL:end */
+
+/* ---- state: plain data --------------------------------------------------- */
+const TABLE = {x: 0, y: 0, w: 730, h: 470};
+const BOWL = {x: 630, y: 384, r: 60};
+const HEAP = {x: 100, y: 404, r: 34};
+const ITEMS = [
+  {id: 'nail',   label: 'Iron nail',       mat: 'iron',      w: 68, h: 9},
+  {id: 'clip',   label: 'Steel clip',      mat: 'steel',     w: 30, h: 14},
+  {id: 'washer', label: 'Nickel washer',   mat: 'nickel',    w: 24, h: 24},
+  {id: 'pencil', label: 'Pencil',          mat: 'wood',      w: 66, h: 9},
+  {id: 'eraser', label: 'Eraser',          mat: 'rubber',    w: 34, h: 20},
+  {id: 'ruler',  label: 'Plastic scale',   mat: 'plastic',   w: 66, h: 14},
+  {id: 'marble', label: 'Glass marble',    mat: 'glass',     w: 22, h: 22},
+  {id: 'foil',   label: 'Aluminium foil',  mat: 'aluminium', w: 24, h: 24},
+  {id: 'copper', label: 'Copper wire',     mat: 'copper',    w: 40, h: 16},
+];
+const SLOT = (i) => ({x: 790 + (i % 3) * 82, y: 86 + Math.floor(i / 3) * 70});
+const NEEDLE_HOME = {x: 866, y: 322}, BOARD_HOME = {x: 866, y: 408};
+
+function freshState(){
+  return {
+    locked: false, filings: false,
+    mags: [{id: 'A', x: 190, y: 130, ang: 0, q: 1, len: MAG_LEN, vx: 0, vy: 0, held: false, clips: null},
+           {id: 'B', x: 190, y: 330, ang: 0, q: 1, len: MAG_LEN, vx: 0, vy: 0, held: false, clips: null}],
+    compass: {x: 560, y: 150, ang: -Math.PI / 2, w: 0, held: false},
+    items: ITEMS.map((it, i) => ({id: it.id, x: SLOT(i).x, y: SLOT(i).y, onTable: false, held: false, stuck: null,
+                                  tested: false, moved: false, pulledFrom: null})),
+    needle: {x: NEEDLE_HOME.x, y: NEEDLE_HOME.y, ang: 0, w: 0, M: 0, strokes: 0, onTable: false, inBowl: false, held: false},
+    board: {x: BOARD_HOME.x, y: BOARD_HOME.y, onTable: false, held: false},
+    trace: [],            // [cm, deg] compass points for the graph
+    repelRun: 0, attractRun: 0,
+  };
+}
+let S = freshState();
+const shared = sharedState();
+if (shared && shared.mags) {
+  shared.mags.forEach((m, i) => { if (S.mags[i]) Object.assign(S.mags[i], {x: clamp(+m.x || 0, 60, 670), y: clamp(+m.y || 0, 30, 440), ang: +m.ang || 0}); });
+  if (shared.compass) Object.assign(S.compass, {x: clamp(+shared.compass.x, 30, 700), y: clamp(+shared.compass.y, 30, 440)});
+  S.filings = !!shared.filings;
+}
+shareState(() => ({mags: S.mags.map(m => ({x: Math.round(m.x), y: Math.round(m.y), ang: +m.ang.toFixed(3)})),
+                   compass: {x: Math.round(S.compass.x), y: Math.round(S.compass.y)}, filings: S.filings}));
+
+/* Every pole on the table right now: the two magnets, and the needle once it is a magnet. */
+function allPoles(except){
+  const P = [];
+  for (const m of S.mags) if (m !== except) P.push(...magPoles(m));
+  const n = S.needle;
+  if (n !== except && (n.onTable || n.inBowl) && Math.abs(n.M) > 0.01) P.push(...needlePoles());
+  return P;
+}
+function needlePoles(){
+  const n = S.needle, d = NEEDLE_LEN * 0.45, c = Math.cos(n.ang), s = Math.sin(n.ang), q = NEEDLE_Q * n.M;
+  return [{x: n.x + c * d, y: n.y + s * d, q, name: q >= 0 ? 'N' : 'S'}, {x: n.x - c * d, y: n.y - s * d, q: -q, name: q >= 0 ? 'S' : 'N'}];
+}
+/* A magnet as a capsule: the segment between its rounded ends. */
+function magSeg(m){ const h = m.len / 2 - MAG_W / 2, c = Math.cos(m.ang), s = Math.sin(m.ang); return [{x: m.x - c * h, y: m.y - s * h}, {x: m.x + c * h, y: m.y + s * h}]; }
+function ptSeg(p, a, b){
+  const vx = b.x - a.x, vy = b.y - a.y, t = clamp(((p.x - a.x) * vx + (p.y - a.y) * vy) / (vx * vx + vy * vy || 1), 0, 1);
+  const q = {x: a.x + vx * t, y: a.y + vy * t};
+  return {d: Math.hypot(p.x - q.x, p.y - q.y), q, t};
+}
+function segSeg(a1, a2, b1, b2){
+  let best = null;
+  for (const [p, s1, s2, flip] of [[a1, b1, b2, 0], [a2, b1, b2, 0], [b1, a1, a2, 1], [b2, a1, a2, 1]]) {
+    const r = ptSeg(p, s1, s2);
+    if (!best || r.d < best.d) best = flip ? {d: r.d, pa: r.q, pb: p} : {d: r.d, pa: p, pb: r.q};
+  }
+  return best;          // pa on the first segment, pb on the second
+}
+const itemDef = id => ITEMS.find(i => i.id === id);
+const itemR = it => Math.max(it.w, it.h) / 2 * 0.62;
+const onTableXY = (x, y) => x > TABLE.x + 8 && x < TABLE.x + TABLE.w - 8 && y > TABLE.y + 8 && y < TABLE.y + TABLE.h - 8;
+
+/* ============================================================================
+   The stage: built once, then only patched.
+   ============================================================================ */
+const svg = $('stage');
+const GR = {x: 70, y: 510, w: 600, h: 110};
+function itemArt(it){
+  switch (it.id) {
+    case 'nail': return `<rect x="-30" y="-2.5" width="58" height="5" rx="1" fill="#7d858c"/><rect x="-34" y="-5" width="5" height="10" rx="1.5" fill="#646c73"/><path d="M28 -2.5 L35 0 L28 2.5Z" fill="#7d858c"/>`;
+    case 'clip': return `<path d="M-13 -5 H10 A5 5 0 0 1 10 5 H-9 A3 3 0 0 1 -9 -1 H7" fill="none" stroke="#9aa4ad" stroke-width="2.4" stroke-linecap="round"/>`;
+    case 'washer': return `<circle r="12" fill="#b9bcc0" stroke="#8d9196" stroke-width="1.5"/><circle r="4.5" fill="#efe3c8" stroke="#8d9196"/>`;
+    case 'pencil': return `<rect x="-26" y="-4.5" width="46" height="9" fill="#f2b632"/><rect x="-33" y="-4.5" width="8" height="9" rx="2" fill="#e88aa0"/><path d="M20 -4.5 L31 0 L20 4.5Z" fill="#e8c9a0"/><path d="M28 -1.2 L31 0 L28 1.2Z" fill="#333"/>`;
+    case 'eraser': return `<rect x="-17" y="-10" width="34" height="20" rx="4" fill="#f4f1ea" stroke="#c9c2b4"/><rect x="-17" y="-10" width="13" height="20" rx="4" fill="#5b8fd6"/>`;
+    case 'ruler': return `<rect x="-33" y="-7" width="66" height="14" rx="2" fill="#bfe3f7" fill-opacity=".85" stroke="#6fa8c9"/>${[...Array(12)].map((_, i) => `<line x1="${-30 + i * 5.2}" y1="-7" x2="${-30 + i * 5.2}" y2="${i % 2 ? -3 : 0}" stroke="#3f7fa8" stroke-width=".8"/>`).join('')}`;
+    case 'marble': return `<circle r="11" fill="#9fd8d0" fill-opacity=".8" stroke="#5aa39a"/><circle cx="-3.5" cy="-3.5" r="3" fill="#fff" opacity=".8"/>`;
+    case 'foil': return `<path d="M-11 -4 L-6 -11 L3 -10 L11 -5 L10 5 L4 11 L-6 10 L-11 3Z" fill="#d7dbe0" stroke="#9ea5ad"/><path d="M-5 -4 L2 -6 L6 1 L-1 5Z" fill="#eef0f3"/>`;
+    case 'copper': return `<path d="M-19 0 C-15 -9 -9 -9 -6 0 S3 9 6 0 S15 -9 19 0" fill="none" stroke="#c87533" stroke-width="3" stroke-linecap="round"/>`;
+  }
+  return '';
+}
+function build(){
+  const rnd = Play.mulberry32(11);
+  let grain = '';
+  for (let i = 0; i < 26; i++) {
+    const y = rnd() * 470, a = rnd() * 8 - 4;
+    grain += `<path d="M0 ${y.toFixed(1)} C200 ${(y + a).toFixed(1)} 480 ${(y - a).toFixed(1)} 730 ${(y + a * .5).toFixed(1)}" stroke="#d8c39c" stroke-width="${(rnd() * 1.4 + .4).toFixed(2)}" fill="none" opacity=".55"/>`;
+  }
+  let heap = '';
+  for (let i = 0; i < 26; i++) {
+    const a = rnd() * 6.283, r = Math.sqrt(rnd()) * 28, rot = rnd() * 180;
+    heap += `<path transform="translate(${(HEAP.x + Math.cos(a) * r).toFixed(1)} ${(HEAP.y + Math.sin(a) * r).toFixed(1)}) rotate(${rot.toFixed(0)})" d="M-5 -3 H4 A3 3 0 0 1 4 3 H-5" fill="none" stroke="#8f99a3" stroke-width="1.6"/>`;
+  }
+  svg.innerHTML = `
+  <defs>
+    <radialGradient id="gWater" cx="45%" cy="40%"><stop offset="0" stop-color="#cfeefc"/><stop offset="1" stop-color="#7cc3e6"/></radialGradient>
+    <radialGradient id="gDial" cx="45%" cy="40%"><stop offset="0" stop-color="#ffffff"/><stop offset="1" stop-color="#e9eef2"/></radialGradient>
+    <clipPath id="clipTable"><rect x="0" y="0" width="730" height="470"/></clipPath>
+    <marker id="arr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0 L10 5 L0 10Z" fill="#1d2327"/></marker>
+  </defs>
+  <rect x="0" y="0" width="730" height="470" fill="#efe1c3"/>
+  <g>${grain}</g>
+  <!-- north marker -->
+  <g transform="translate(40 44)">
+    <circle r="24" fill="#fff8ea" stroke="#c9b48a"/>
+    <path d="M0 -19 L6 2 L0 -2 L-6 2Z" fill="#d6453d"/><path d="M0 19 L6 -2 L0 2 L-6 -2Z" fill="#8a94a6"/>
+    <text y="-28" text-anchor="middle" font-size="12" font-weight="800" fill="#5a4526">N</text>
+  </g>
+  <text x="72" y="40" font-size="11.5" font-weight="700" fill="#7a6040" letter-spacing=".06em">NORTH IS UP</text>
+  <text x="72" y="55" font-size="11" fill="#8a7050">The Earth’s own magnetism points this way.</text>
+  <!-- the bowl of water and the heap of clips -->
+  <circle cx="${BOWL.x}" cy="${BOWL.y}" r="${BOWL.r + 7}" fill="#f7f7f5" stroke="#b9c3c9" stroke-width="2"/>
+  <circle cx="${BOWL.x}" cy="${BOWL.y}" r="${BOWL.r}" fill="url(#gWater)"/>
+  <text x="${BOWL.x}" y="${BOWL.y + BOWL.r + 22}" text-anchor="middle" font-size="11.5" font-weight="600" fill="#6f5a3a">Bowl of water</text>
+  <g>${heap}</g>
+  <text x="${HEAP.x}" y="${HEAP.y + HEAP.r + 20}" text-anchor="middle" font-size="11.5" font-weight="600" fill="#6f5a3a">Steel U-clips</text>
+  <!-- iron filings -->
+  <path id="filings" clip-path="url(#clipTable)" stroke="#2e2a26" stroke-width="1.6" stroke-linecap="round" fill="none"/>
+  <path id="filings2" clip-path="url(#clipTable)" stroke="#2e2a26" stroke-width="1.6" stroke-linecap="round" fill="none"/>
+  <!-- the tray -->
+  <rect x="730" y="0" width="270" height="470" fill="#e6dccb"/>
+  <line x1="730" y1="0" x2="730" y2="470" stroke="#c9b791" stroke-width="2"/>
+  <text x="746" y="30" font-size="12.5" font-weight="700" fill="#5a4526" letter-spacing=".07em">TRAY: THINGS TO TEST</text>
+  <text x="746" y="47" font-size="11" fill="#7a6545">Drag one onto the table.</text>
+  ${ITEMS.map((it, i) => `<text x="${SLOT(i).x}" y="${SLOT(i).y + 30}" text-anchor="middle" font-size="10.5" font-weight="600" fill="#6f5a3a">${it.label}</text>`).join('')}
+  <text x="${NEEDLE_HOME.x}" y="${NEEDLE_HOME.y + 24}" text-anchor="middle" font-size="10.5" font-weight="600" fill="#6f5a3a">Iron sewing needle</text>
+  <text x="${BOARD_HOME.x + 22}" y="${BOARD_HOME.y + 4}" font-size="10.5" font-weight="600" fill="#6f5a3a">Wooden board</text>
+  <!-- things on the table: hit targets are these groups; they are only ever moved by transform -->
+  <g id="boardG" class="dragme"><rect x="-7" y="-50" width="14" height="100" rx="2" fill="#b0824f" stroke="#8a5f31"/><line x1="-2" y1="-44" x2="-2" y2="44" stroke="#9a6d3c"/></g>
+  <g id="itemsL">${ITEMS.map(it => `<g id="it_${it.id}" class="dragme"><rect x="${-it.w / 2 - 6}" y="${-it.h / 2 - 6}" width="${it.w + 12}" height="${it.h + 12}" fill="transparent"/>${itemArt(it)}</g>`).join('')}</g>
+  <g id="needleG" class="dragme">
+    <ellipse id="cork" rx="12" ry="9" fill="#c9965e" opacity="0"/>
+    <rect x="-52" y="-6" width="104" height="12" fill="transparent"/>
+    <path d="M-50 0 L46 -1.6 L50 0 L46 1.6Z" fill="#7d858c"/><ellipse cx="-44" cy="0" rx="4" ry="1.6" fill="none" stroke="#5c646b" stroke-width="1"/>
+    <text id="nN" font-size="11" font-weight="800" fill="#d6453d" text-anchor="middle" opacity="0">N</text>
+    <text id="nS" font-size="11" font-weight="800" fill="#2f5fb0" text-anchor="middle" opacity="0">S</text>
+  </g>
+  <g id="magsL">${['A', 'B'].map(id => `
+    <g id="mag_${id}" class="dragme">
+      <g id="clips_${id}"></g>
+      <rect x="-70" y="-16" width="70" height="32" rx="5" fill="#3f7fd8"/>
+      <rect x="0" y="-16" width="70" height="32" rx="5" fill="#d6453d"/>
+      <rect x="-4" y="-16" width="8" height="32" fill="#d6453d"/><rect x="-4" y="-16" width="4" height="32" fill="#3f7fd8"/>
+      <line x1="0" y1="-16" x2="0" y2="16" stroke="#fff" stroke-opacity=".5" stroke-width="1"/>
+      <text x="52" y="6" font-size="17" font-weight="800" fill="#fff" text-anchor="middle">N</text>
+      <text x="-52" y="6" font-size="17" font-weight="800" fill="#fff" text-anchor="middle">S</text>
+      <g id="magLab_${id}"><circle r="9" fill="#fff" opacity=".92"/><text y="4.5" font-size="12" font-weight="800" fill="#3a2a1a" text-anchor="middle">${id}</text></g>
+    </g>`).join('')}</g>
+  <g id="compassG" class="dragme">
+    <circle r="31" fill="#6b4a2b"/><circle r="27" fill="url(#gDial)"/>
+    ${[...Array(16)].map((_, i) => { const a = i * Math.PI / 8; return `<line x1="${(Math.sin(a) * 22).toFixed(1)}" y1="${(-Math.cos(a) * 22).toFixed(1)}" x2="${(Math.sin(a) * (i % 4 ? 25 : 27)).toFixed(1)}" y2="${(-Math.cos(a) * (i % 4 ? 25 : 27)).toFixed(1)}" stroke="#8a94a6" stroke-width="1"/>`; }).join('')}
+    <text y="-13" font-size="8.5" font-weight="800" text-anchor="middle" fill="#5a646c">N</text>
+    <g id="needle"><path d="M0 -3.4 L23 0 L0 3.4Z" fill="#d6453d"/><path d="M0 -3.4 L-23 0 L0 3.4Z" fill="#dfe4e8" stroke="#9aa3aa" stroke-width=".8"/></g>
+    <circle r="2.6" fill="#2d3336"/>
+  </g>
+  <g id="labels" font-size="11.5" font-weight="700"></g>
+
+  <!-- the graph -->
+  <rect x="0" y="470" width="1000" height="190" fill="#fbfaf6"/>
+  <line x1="0" y1="470" x2="1000" y2="470" stroke="#e2ded2"/>
+  <text x="18" y="494" font-size="12.5" font-weight="700" fill="#4a555b" letter-spacing=".07em">HOW FAR THE COMPASS NEEDLE TURNS AWAY FROM NORTH</text>
+  <g id="gAxes"></g>
+  <path id="gPts" stroke="#c8323c" stroke-width="6" stroke-linecap="round" fill="none" opacity=".55"/>
+  <circle id="gNow" r="6" fill="#c8323c" stroke="#fff" stroke-width="2"/>
+  <text id="gHint" x="${GR.x + GR.w / 2}" y="${GR.y + GR.h / 2}" text-anchor="middle" font-size="13" fill="#7c878c">Drag the compass towards a magnet and away again: each spot you try is plotted here.</text>
+  <!-- the needle meter -->
+  <text x="720" y="494" font-size="12.5" font-weight="700" fill="#4a555b" letter-spacing=".07em">THE SEWING NEEDLE</text>
+  <text id="mStroke" x="720" y="520" font-size="13" fill="#4a555b">Not stroked yet.</text>
+  <rect x="720" y="534" width="250" height="14" rx="7" fill="#ebe7dc"/>
+  <rect id="mBar" x="720" y="534" width="0" height="14" rx="7" fill="#c8323c"/>
+  <text id="mPct" x="720" y="570" font-size="12" fill="#7c878c">How strongly it is magnetised</text>
+  <text x="720" y="598" font-size="11.5" fill="#7c878c">Stroke it with one pole of a magnet, from</text>
+  <text x="720" y="614" font-size="11.5" fill="#7c878c">one end to the other, always the same way.</text>
+  <text x="720" y="630" font-size="11.5" fill="#7c878c">(NCERT Activity 4.4: 30 to 40 times.)</text>
+  `;
+  let ax = `<line x1="${GR.x}" y1="${GR.y + GR.h}" x2="${GR.x + GR.w}" y2="${GR.y + GR.h}" stroke="#9aa3a6"/><line x1="${GR.x}" y1="${GR.y}" x2="${GR.x}" y2="${GR.y + GR.h}" stroke="#9aa3a6"/>`;
+  for (let c = 0; c <= 18; c += 3) ax += `<text x="${gx(c).toFixed(1)}" y="${GR.y + GR.h + 16}" font-size="11" text-anchor="middle" fill="#7c878c">${c}</text>`;
+  for (const d of [0, 90, 180]) ax += `<line x1="${GR.x}" y1="${gy(d)}" x2="${GR.x + GR.w}" y2="${gy(d)}" stroke="#ece8dc"/><text x="${GR.x - 8}" y="${gy(d) + 4}" font-size="11" text-anchor="end" fill="#7c878c">${d}°</text>`;
+  ax += `<text x="${GR.x + GR.w}" y="${GR.y + GR.h + 32}" font-size="11.5" text-anchor="end" fill="#4a555b" font-weight="600">distance from the nearest magnet pole, cm →</text>`;
+  $('gAxes').innerHTML = ax;
+}
+const gx = cm => GR.x + clamp(cm, 0, 18) / 18 * GR.w;
+const gy = deg => GR.y + GR.h - deg / 180 * GR.h;
+
+/* ---- physics step -------------------------------------------------------- */
+function step(dt){
+  if (!S.locked) return;
+  const n = S.needle;
+  /* free magnets roll on their pencils */
+  for (const m of S.mags) {
+    if (m.held) continue;
+    const others = allPoles(m);
+    const F = forceOnMagnet(m, others), f = Math.hypot(F.x, F.y);
+    let vx = 0, vy = 0;
+    if (f > FS_MAG) { const k = Math.min(700, (f - FS_MAG) * 1.2e6) / f; vx = F.x * k; vy = F.y * k; }
+    const before = {x: m.x, y: m.y};
+    m.x = clamp(m.x + vx * dt, 75, TABLE.w - 75); m.y = clamp(m.y + vy * dt, 22, TABLE.h - 22);
+    collide(m);
+    const moved = Math.hypot(m.x - before.x, m.y - before.y);
+    const o = S.mags.find(k => k !== m);
+    if (moved > 0.05 && o) {
+      /* which poles face each other, and did this magnet move away or towards? */
+      const near = nearestPoles(m, o);
+      const d0 = Math.hypot(before.x - o.x, before.y - o.y), d1 = Math.hypot(m.x - o.x, m.y - o.y);
+      if (near.like && d1 > d0) { S.repelRun += moved; if (S.repelRun > 25) discover('repel'); }
+      if (!near.like && d1 < d0) S.attractRun += moved;
+    }
+  }
+  /* magnetic objects are pulled; stuck ones ride along */
+  const poles = allPoles(null);
+  for (const it of S.items) {
+    if (!it.onTable || it.held) continue;
+    const def = itemDef(it.id), chi = MATERIALS[def.mat].chi;
+    if (it.stuck) { const m = S.mags.find(k => k.id === it.stuck.mag); const c = Math.cos(m.ang), s = Math.sin(m.ang);
+      it.x = m.x + c * it.stuck.lx - s * it.stuck.ly; it.y = m.y + s * it.stuck.lx + c * it.stuck.ly; continue; }
+    /* testing: a pole has come within 2.5 cm */
+    for (const p of poles) if (Math.hypot(p.x - it.x, p.y - it.y) < 50 + itemR(def)) { if (!it.tested) { it.tested = true; tableDirty = true; } }
+    if (!chi) continue;
+    const g = gradB2(it.x, it.y, poles), F = {x: -0, y: 0};
+    F.x = chi * g.x; F.y = chi * g.y;
+    const f = Math.hypot(F.x, F.y);
+    if (f > FS_OBJ) {
+      if (!it.moved) { it.moved = true; it.pulledFrom = nearestPoleDist(it.x, it.y) / PX_CM; tableDirty = true; }
+      const k = Math.min(650, (f - FS_OBJ) * 5e8) / f;
+      it.x += F.x * k * dt; it.y += F.y * k * dt;
+      for (const m of S.mags) {
+        const [a, b] = magSeg(m), r = ptSeg(it, a, b);
+        if (r.d < MAG_W / 2 + itemR(def) + 1) {
+          const nx = (it.x - r.q.x) / (r.d || 1), ny = (it.y - r.q.y) / (r.d || 1), dd = MAG_W / 2 + itemR(def);
+          it.x = r.q.x + nx * dd; it.y = r.q.y + ny * dd;
+          const c = Math.cos(m.ang), s = Math.sin(m.ang), dx = it.x - m.x, dy = it.y - m.y;
+          it.stuck = {mag: m.id, lx: dx * c + dy * s, ly: -dx * s + dy * c};
+          sound('snap'); tableDirty = true;
+          break;
+        }
+      }
+    }
+  }
+  /* clips cling where a magnet touches the heap */
+  for (const m of S.mags) {
+    const [a, b] = magSeg(m);
+    if (ptSeg(HEAP, a, b).d < MAG_W / 2 + HEAP.r - 6) {
+      const c = clipCounts(m);
+      if (!m.clips || c.some((v, i) => v !== m.clips[i])) { m.clips = c; drawClips(m); if (!m.clipSnd) { sound('snap'); m.clipSnd = true; } }
+      const ends = Math.min(c[0], c[6]), mid = c[3];
+      if (ends >= 5 && mid * 4 <= ends) discover('poles');
+    } else m.clipSnd = false;
+  }
+  /* the compass needle swings towards the field; under reduced motion it jumps */
+  const C = S.compass, rest = compassRest(C.x, C.y, poles);
+  C.rest = rest;
+  if (reduced()) { C.ang = rest.ang; C.w = 0; }
+  else {
+    const K = 70 * Math.min(rest.total, 25), damp = 2 * Math.sqrt(K) * 0.3;
+    for (let i = 0; i < 4; i++) { const h = dt / 4; C.w += (-K * Math.sin(C.ang - rest.ang) - damp * C.w) * h; C.ang += C.w * h; }
+  }
+  /* the floating needle turns only if it is a magnet */
+  if (n.inBowl && !n.held) {
+    const others = allPoles(n), B = fieldAt(n.x, n.y, others, true), psi = Math.atan2(B.y, B.x);
+    const ratio = Math.hypot(B.x, B.y) / BE;
+    const K = 40 * Math.abs(n.M) * Math.min(ratio, 25), damp = 2 * Math.sqrt(K + 1e-9) * 0.35 + 0.8;
+    if (reduced() && Math.abs(n.M) > 0.02) { n.ang = n.M >= 0 ? psi : psi + Math.PI; n.w = 0; }
+    else { const target = n.M >= 0 ? psi : psi + Math.PI;
+      for (let i = 0; i < 4; i++) { const h = dt / 4; n.w += (-K * Math.sin(n.ang - target) - damp * n.w) * h; n.ang += n.w * h; } }
+  }
+}
+function collide(m){
+  const [a1, a2] = magSeg(m);
+  for (const o of S.mags) {
+    if (o === m) continue;
+    const [b1, b2] = magSeg(o), r = segSeg(a1, a2, b1, b2);
+    if (r.d < MAG_W) {
+      const nx = (r.pa.x - r.pb.x) / (r.d || 1), ny = (r.pa.y - r.pb.y) / (r.d || 1), push = MAG_W - r.d;
+      m.x += nx * push; m.y += ny * push;
+      if (!nearestPoles(m, o).like && S.attractRun > 8) discover('attract');
+    }
+  }
+}
+function nearestPoles(m, o){
+  let best = null;
+  for (const p of magPoles(m)) for (const q of magPoles(o)) { const d = Math.hypot(p.x - q.x, p.y - q.y); if (!best || d < best.d) best = {d, p, q, like: p.q * q.q > 0}; }
+  return best;
+}
+function nearestPoleDist(x, y){
+  let best = 1e9;
+  for (const p of allPoles(null)) best = Math.min(best, Math.hypot(p.x - x, p.y - y));
+  return best;
+}
+function nearestPole(x, y, except){
+  let best = null;
+  for (const m of S.mags) for (const p of magPoles(m)) { const d = Math.hypot(p.x - x, p.y - y); if (!best || d < best.d) best = {d, p, m}; }
+  return best;
+}
+
+/* ---- paint: patch attributes only ------------------------------------------ */
+const T = (id, x, y, a) => $(id).setAttribute('transform', `translate(${x.toFixed(1)} ${y.toFixed(1)})${a ? ` rotate(${(a * 180 / Math.PI).toFixed(2)})` : ''}`);
+function drawClips(m){
+  const g = $('clips_' + m.id);
+  if (!m.clips) { g.innerHTML = ''; return; }
+  let h = '';
+  [-0.45, -0.3, -0.15, 0, 0.15, 0.3, 0.45].forEach((f, i) => {
+    const n = m.clips[i], x = f * m.len;
+    for (let k = 0; k < Math.min(n, 12); k++) {
+      const side = k % 2 ? -1 : 1, depth = Math.floor(k / 2);
+      const y = side * (MAG_W / 2 + 5 + depth * 7), rx = x + (k % 3 - 1) * 3;
+      h += `<path transform="translate(${rx.toFixed(1)} ${y.toFixed(1)}) rotate(${side > 0 ? 90 : -90})" d="M-4 -2.4 H3 A2.4 2.4 0 0 1 3 2.4 H-4" fill="none" stroke="#8f99a3" stroke-width="1.5"/>`;
+    }
+  });
+  g.innerHTML = h;
+}
+let filDirty = true, tableDirty = true, lastWhy = '';
+function paint(){
+  for (const m of S.mags) T('mag_' + m.id, m.x, m.y, m.ang);
+  /* keep the letter A/B upright-ish */
+  for (const m of S.mags) { const up = Math.cos(m.ang) < -0.01; $('magLab_' + m.id).setAttribute('transform', up ? 'rotate(180)' : ''); }
+  const C = S.compass;
+  T('compassG', C.x, C.y); $('needle').setAttribute('transform', `rotate(${(C.ang * 180 / Math.PI).toFixed(2)})`);
+  for (const it of S.items) T('it_' + it.id, it.x, it.y);
+  const n = S.needle;
+  T('needleG', n.x, n.y, n.ang);
+  $('cork').setAttribute('opacity', n.inBowl ? 1 : 0);
+  const showPoles = Math.abs(n.M) > 0.2;
+  $('nN').setAttribute('opacity', showPoles ? 1 : 0); $('nS').setAttribute('opacity', showPoles ? 1 : 0);
+  $('nN').setAttribute('x', n.M >= 0 ? 44 : -44); $('nS').setAttribute('x', n.M >= 0 ? -44 : 44);
+  $('nN').setAttribute('y', -6); $('nS').setAttribute('y', -6);
+  T('boardG', S.board.x, S.board.y);
+  if (S.filings && filDirty) drawFilings();
+  if (!S.filings) { $('filings').setAttribute('d', ''); $('filings2').setAttribute('d', ''); }
+  filDirty = false;
+  paintLabels();
+  paintGraph();
+  paintNeedleMeter();
+  if (tableDirty) { paintTable(); tableDirty = false; }
+  paintWhy();
+}
+function drawFilings(){
+  const P = allPoles(null), rnd = Play.mulberry32(5);
+  let d1 = '', d2 = '';
+  for (let y = 10; y < TABLE.h; y += 13) for (let x = 8; x < TABLE.w; x += 13) {
+    const px = x + (rnd() - .5) * 8, py = y + (rnd() - .5) * 8;
+    const B = fieldAt(px, py, P, false), b = Math.hypot(B.x, B.y);
+    if (b < 1.2e-5) continue;
+    /* on top of a magnet the filings pile up at the ends only; skip the body */
+    let inside = false;
+    for (const m of S.mags) { const [a, bb] = magSeg(m); if (ptSeg({x: px, y: py}, a, bb).d < MAG_W / 2 + 2) inside = true; }
+    if (inside) continue;
+    const L = 4.2, ux = B.x / b * L, uy = B.y / b * L;
+    const seg = `M${(px - ux).toFixed(1)} ${(py - uy).toFixed(1)}l${(2 * ux).toFixed(1)} ${(2 * uy).toFixed(1)}`;
+    if (b > 1.5e-4) d2 += seg; else d1 += seg;
+  }
+  $('filings').setAttribute('d', d1); $('filings').setAttribute('opacity', .35);
+  $('filings2').setAttribute('d', d2); $('filings2').setAttribute('opacity', .8);
+}
+function paintLabels(){
+  const C = S.compass, r = C.rest;
+  let h = '';
+  if (r && S.locked) {
+    const txt = r.dev < 5 ? 'points north' : `turned ${fmt(r.dev, 0)}° from north`;
+    const y = C.y > 60 ? C.y - 40 : C.y + 50;
+    h += `<text x="${C.x.toFixed(1)}" y="${y.toFixed(1)}" text-anchor="middle" fill="#3a2a1a" stroke="#efe1c3" stroke-width="4" paint-order="stroke">${txt}</text>`;
+  }
+  $('labels').innerHTML = h;
+}
+function paintGraph(){
+  const pts = S.trace;
+  $('gHint').setAttribute('opacity', pts.length ? 0 : 1);
+  $('gPts').setAttribute('d', pts.map(p => `M${gx(p[0]).toFixed(1)} ${gy(p[1]).toFixed(1)}l.01 0`).join(''));
+  const C = S.compass;
+  if (C.rest && S.locked) {
+    const d = nearestPoleDist(C.x, C.y) / PX_CM;
+    $('gNow').setAttribute('cx', gx(d).toFixed(1)); $('gNow').setAttribute('cy', gy(C.rest.dev).toFixed(1));
+    $('gNow').setAttribute('opacity', d <= 18 ? 1 : 0);
+  } else $('gNow').setAttribute('opacity', 0);
+}
+function paintNeedleMeter(){
+  const n = S.needle;
+  $('mBar').setAttribute('width', (Math.abs(n.M) * 250).toFixed(1));
+  $('mStroke').textContent = n.strokes ? `${n.strokes} stroke${n.strokes > 1 ? 's' : ''} so far` : 'Not stroked yet.';
+  $('mPct').textContent = `Magnetised: ${fmt(Math.abs(n.M) * 100, 0)}% of the most it can be`;
+}
+function paintTable(){
+  const rows = S.items.filter(it => it.tested);
+  $('obsNote').hidden = rows.length > 0;
+  $('obs').innerHTML = rows.length ? `<tr><th>Object</th><th>Made of</th><th>Pulled?</th></tr>` + rows.map(it => {
+    const def = itemDef(it.id), mat = MATERIALS[def.mat];
+    const res = it.moved ? `<td class="y">Yes${it.pulledFrom ? ` <span style="font-weight:500;color:var(--ink-3)">from ${fmt(it.pulledFrom, 1)} cm</span>` : ''}</td>` : `<td class="n">No</td>`;
+    return `<tr><td>${esc(def.label)}</td><td>${mat.name}</td>${res}</tr>`;
+  }).join('') : '';
+  checkMaterials();
+}
+function paintWhy(){
+  if (!S.locked) return;
+  $('whyCard').hidden = false;
+  const C = S.compass, r = C.rest; if (!r) return;
+  const np = nearestPole(C.x, C.y);
+  const magOnly = fieldAt(C.x, C.y, allPoles(null), false), mr = Math.hypot(magOnly.x, magOnly.y) / BE;
+  let t = '';
+  if (mr < 0.2) t += `<p><b>The compass is far from every magnet.</b> Here the magnets’ pull is only ${fmt(mr * 100, 0)}% of the Earth’s, so the needle rests along north–south.</p>`;
+  else {
+    const who = np ? `the ${np.p.name} pole of magnet ${np.m.id}` : 'a magnet';
+    const dir = np && np.p.q > 0 ? 'its north end is pushed away from that N pole: like poles repel' : 'its north end is pulled towards that S pole: unlike poles attract';
+    t += `<p>The compass is <b>${fmt(np.d / PX_CM, 1)} cm</b> from ${who}. There the magnets pull <b>${mr >= 10 ? fmt(mr, 0) : fmt(mr, 1)}×</b> as hard as the Earth does, ` +
+         (mr > 1 ? `so the needle forgets north: ${dir}.` : `so the needle is turned ${fmt(r.dev, 0)}° from north, but the Earth still matters.`) + `</p>`;
+  }
+  const n = S.needle;
+  if (n.strokes) t += `<p>The needle has had <b>${n.strokes}</b> stroke${n.strokes > 1 ? 's' : ''} and is <b>${fmt(Math.abs(n.M) * 100, 0)}%</b> magnetised.` +
+      (n.inBowl ? (Math.abs(n.M) > 0.2 ? ' Floating on its cork, it turns to lie north–south.' : ' Floating on its cork, it hardly turns at all: it is not magnet enough yet.') : '') + `</p>`;
+  else if (n.inBowl) t += `<p>The unmagnetised needle floats on its cork but rests <b>any which way</b>: plain iron does not seek north.</p>`;
+  const [A, B] = S.mags, np2 = nearestPoles(A, B);
+  if (np2.d < 110) t += `<p>Magnet A’s ${np2.p.name} pole is ${fmt(np2.d / PX_CM, 1)} cm from magnet B’s ${np2.q.name} pole: <b>${np2.like ? 'like poles, they push apart' : 'unlike poles, they pull together'}</b>.</p>`;
+  if (t !== lastWhy) { $('why').innerHTML = t; lastWhy = t; }
+}
+
+/* ---- findings ---------------------------------------------------------------- */
+function checkState(){
+  if (!S.locked) return;
+  const C = S.compass, r = C.rest;
+  if (r && !C.held) {
+    const magOnly = fieldAt(C.x, C.y, allPoles(null), false), mr = Math.hypot(magOnly.x, magOnly.y) / BE;
+    const settled = Math.abs(C.w) < 0.05 && Math.abs(wrap(C.ang - r.ang)) < 0.05;
+    if (mr < 0.2 && settled && r.dev < 4) discover('north');
+    /* a N pole near the compass pushes its N end away */
+    const np = nearestPole(C.x, C.y);
+    if (np && np.p.q > 0 && mr > 2 && settled) {
+      const away = Math.atan2(C.y - np.p.y, C.x - np.p.x);
+      if (Math.abs(wrap(C.ang - away)) < 0.6) discover('deflect');
+    }
+    /* the wooden board between the compass and a pole changes nothing */
+    const b = S.board;
+    if (b.onTable && np && mr > 1) {
+      if (segHitsRect(C, np.p, {x: b.x - 7, y: b.y - 50, w: 14, h: 100}) && r.dev > 20) discover('through');
+    }
+  }
+  const n = S.needle;
+  if (Math.abs(n.M) >= 0.5) discover('made');
+  if (n.inBowl && !n.held && Math.abs(n.M) >= 0.5) {
+    const magB = fieldAt(n.x, n.y, allPoles(n), false);
+    const mAng = n.M >= 0 ? n.ang : n.ang + Math.PI;
+    if (Math.hypot(magB.x, magB.y) < 0.2 * BE && Math.abs(wrap(mAng + Math.PI / 2)) < 0.1 && Math.abs(n.w) < 0.05) discover('floater');
+  }
+}
+function segHitsRect(a, b, R){
+  for (let i = 0; i <= 40; i++) { const t = i / 40, x = a.x + (b.x - a.x) * t, y = a.y + (b.y - a.y) * t;
+    if (x > R.x && x < R.x + R.w && y > R.y && y < R.y + R.h) return true; }
+  return false;
+}
+function checkMaterials(){
+  const t = S.items.filter(it => it.tested);
+  const mag = t.filter(it => MATERIALS[itemDef(it.id).mat].chi > 0 && it.moved), non = t.filter(it => !MATERIALS[itemDef(it.id).mat].chi);
+  if (mag.length >= 2 && non.length >= 2) discover('materials');
+  const g = id => S.items.find(i => i.id === id);
+  if (POE && !EXPLAINED && g('nail').tested && g('foil').tested && g('copper').tested && g('nail').moved) {
+    EXPLAINED = true;
+    const metals = t.filter(it => ['aluminium', 'copper'].includes(itemDef(it.id).mat)).map(it => itemDef(it.id).label.toLowerCase());
+    POE.explain(`The magnet pulled the <b>iron nail</b> from <b>${fmt(g('nail').pulledFrom || 0, 1)} cm</b> away. ` +
+      `The ${metals.join(' and the ')} did not move at all, even touching the magnet: they are metals, but they are <b>not magnetic materials</b>. ` +
+      `Iron, steel, nickel and cobalt are magnetic; most other metals are not.`);
+  }
+}
+let EXPLAINED = false;
+
+/* ============================================================================
+   Controls
+   ============================================================================ */
+build();
+drawClips(S.mags[0]); drawClips(S.mags[1]);
+function toSvgClamp(p){ return {x: clamp(p.x, 0, 1000), y: clamp(p.y, 0, 470)}; }
+/* magnets */
+for (const m of S.mags) {
+  let off = null, strokeT = null;
+  drag($('mag_' + m.id), svg, {
+    start(p){ if (!S.locked) return false; m.held = true; off = {x: m.x - p.x, y: m.y - p.y}; strokeT = {}; sound('tick'); },
+    move(p){
+      p = toSvgClamp(p);
+      const bx = m.x, by = m.y;
+      m.x = clamp(p.x + off.x, 75, TABLE.w - 75); m.y = clamp(p.y + off.y, 22, TABLE.h - 22);
+      collide(m);
+      trackStroke(m, strokeT);
+      filDirty = true;
+    },
+    end(){ m.held = false; finishStrokes(strokeT, true); track('magnet', {id: m.id, x: Math.round(m.x), y: Math.round(m.y)}); },
+  });
+}
+/* Stroking: follow each pole of the dragged magnet along the needle. */
+function needleAxisCoord(p){
+  const n = S.needle, c = Math.cos(n.ang), s = Math.sin(n.ang), dx = p.x - n.x, dy = p.y - n.y;
+  return {t: dx * c + dy * s, perp: Math.abs(-dx * s + dy * c)};
+}
+function trackStroke(m, st){
+  const n = S.needle;
+  if (!n.onTable || n.inBowl) return;
+  for (const p of magPoles(m)) {
+    /* the pole face is at the magnet's end, slightly beyond the pole point */
+    const c = Math.cos(m.ang), s = Math.sin(m.ang), sg = p.q > 0 ? 1 : -1;
+    const face = {x: m.x + c * sg * m.len / 2, y: m.y + s * sg * m.len / 2};
+    const a = needleAxisCoord(face);
+    const on = a.perp < 24 && Math.abs(a.t) < NEEDLE_LEN / 2 + 14;
+    const k = p.name;
+    if (on) { if (!st[k]) st[k] = {t0: a.t, t1: a.t, q: p.q}; else st[k].t1 = a.t; }
+    else if (st[k]) { finishOne(st[k]); st[k] = null; }
+  }
+}
+function finishOne(s){
+  const dt = s.t1 - s.t0;
+  if (Math.abs(dt) >= NEEDLE_LEN * 0.75) {
+    const n = S.needle;
+    n.M = stroke(n.M, s.q, Math.sign(dt)); n.strokes++;
+    sound('tick'); filDirty = true;
+    track('stroke', {n: n.strokes, M: +n.M.toFixed(3)});
+  }
+}
+function finishStrokes(st, all){ for (const k in st) if (st[k]) { finishOne(st[k]); st[k] = null; } }
+
+/* compass */
+{
+  let off = null;
+  drag($('compassG'), svg, {
+    start(p){ if (!S.locked) return false; S.compass.held = true; off = {x: S.compass.x - p.x, y: S.compass.y - p.y}; },
+    move(p){ const C = S.compass; C.x = clamp(p.x + off.x, 34, TABLE.w - 34); C.y = clamp(p.y + off.y, 34, TABLE.h - 34); recordTrace(false); },
+    end(){ S.compass.held = false; recordTrace(true); track('compass', {x: Math.round(S.compass.x), y: Math.round(S.compass.y)}); },
+  });
+}
+let lastRec = null;
+function recordTrace(force){
+  const C = S.compass, P = allPoles(null);
+  if (!force && lastRec && Math.hypot(C.x - lastRec.x, C.y - lastRec.y) < 14) return;
+  const r = compassRest(C.x, C.y, P), d = nearestPoleDist(C.x, C.y) / PX_CM;
+  if (d > 18) return;
+  S.trace.push([+d.toFixed(2), +r.dev.toFixed(1)]);
+  if (S.trace.length > 240) S.trace.shift();
+  lastRec = {x: C.x, y: C.y};
+}
+/* tray items */
+S.items.forEach((it, i) => {
+  let off = null;
+  drag($('it_' + it.id), svg, {
+    start(p){ if (!S.locked) return false; it.held = true; it.stuck = null; off = {x: it.x - p.x, y: it.y - p.y}; sound('tick'); },
+    move(p){ p = toSvgClamp(p); it.x = p.x + off.x; it.y = p.y + off.y; },
+    end(){
+      it.held = false;
+      if (onTableXY(it.x, it.y)) { it.onTable = true; it.x = clamp(it.x, 20, TABLE.w - 20); it.y = clamp(it.y, 20, TABLE.h - 20); }
+      else { it.onTable = false; it.x = SLOT(i).x; it.y = SLOT(i).y; }
+      track('item', {id: it.id, onTable: it.onTable});
+    },
+  });
+});
+/* the needle */
+{
+  const n = S.needle; let off = null;
+  drag($('needleG'), svg, {
+    start(p){ if (!S.locked) return false; n.held = true; off = {x: n.x - p.x, y: n.y - p.y}; },
+    move(p){ p = toSvgClamp(p); n.x = p.x + off.x; n.y = p.y + off.y; filDirty = true; },
+    end(){
+      n.held = false; n.w = 0;
+      if (Math.hypot(n.x - BOWL.x, n.y - BOWL.y) < BOWL.r) { n.inBowl = true; n.onTable = true; n.x = BOWL.x; n.y = BOWL.y; sound('pop'); }
+      else if (onTableXY(n.x, n.y)) { n.inBowl = false; n.onTable = true; n.x = clamp(n.x, 60, TABLE.w - 60); n.y = clamp(n.y, 16, TABLE.h - 16); n.ang = 0; }
+      else { n.inBowl = false; n.onTable = false; n.x = NEEDLE_HOME.x; n.y = NEEDLE_HOME.y; n.ang = 0; }
+      filDirty = true;
+      track('needle', {inBowl: n.inBowl, onTable: n.onTable});
+    },
+  });
+}
+/* the wooden board */
+{
+  const b = S.board; let off = null;
+  drag($('boardG'), svg, {
+    start(p){ if (!S.locked) return false; b.held = true; off = {x: b.x - p.x, y: b.y - p.y}; },
+    move(p){ p = toSvgClamp(p); b.x = p.x + off.x; b.y = p.y + off.y; },
+    end(){ b.held = false;
+      if (onTableXY(b.x, b.y)) { b.onTable = true; b.x = clamp(b.x, 10, TABLE.w - 10); b.y = clamp(b.y, 52, TABLE.h - 52); }
+      else { b.onTable = false; b.x = BOARD_HOME.x; b.y = BOARD_HOME.y; } },
+  });
+}
+function turn(id, by){
+  const m = S.mags.find(k => k.id === id);
+  m.ang = wrap(m.ang + by);
+  for (const it of S.items) if (it.stuck && it.stuck.mag === id) it.stuck = null, it.x += 0, it.y += 0;
+  if (m.clips) { m.clips = null; drawClips(m); }
+  collide(m); filDirty = true; sound('pop'); track('turn', {id, ang: +m.ang.toFixed(2)});
+}
+$('flipA').addEventListener('click', () => turn('A', Math.PI));
+$('rotA').addEventListener('click', () => turn('A', Math.PI / 4));
+$('flipB').addEventListener('click', () => turn('B', Math.PI));
+$('rotB').addEventListener('click', () => turn('B', Math.PI / 4));
+$('btnFilings').addEventListener('click', e => {
+  S.filings = !S.filings; e.currentTarget.setAttribute('aria-pressed', S.filings);
+  e.currentTarget.textContent = S.filings ? '✦ Sweep the filings away' : '✦ Sprinkle iron filings';
+  filDirty = true; sound('whoosh'); track('filings', {on: S.filings});
+});
+$('btnShake').addEventListener('click', () => {
+  for (const m of S.mags) { m.clips = null; drawClips(m); }
+  for (const it of S.items) if (it.stuck) { const m = S.mags.find(k => k.id === it.stuck.mag); it.stuck = null; it.x = clamp(it.x + (it.x - m.x) * 0.9, 20, TABLE.w - 20); it.y = clamp(it.y + (it.y - m.y) * 0.9 + 30, 20, TABLE.h - 20); }
+  sound('boing');
+});
+$('btnReset').addEventListener('click', () => {
+  const keep = {locked: S.locked, trace: S.trace, needleM: S.needle.M, strokes: S.needle.strokes, tested: S.items.map(i => [i.tested, i.moved, i.pulledFrom])};
+  const f = freshState();
+  f.locked = keep.locked; f.trace = keep.trace; f.needle.M = keep.needleM; f.needle.strokes = keep.strokes;
+  f.items.forEach((it, i) => { [it.tested, it.moved, it.pulledFrom] = keep.tested[i]; });
+  Object.assign(S, f);
+  for (const m of S.mags) drawClips(m);
+  filDirty = true; tableDirty = true; sound('whoosh');
+});
+
+/* ============================================================================
+   Start
+   ============================================================================ */
+findings($('finds'), [
+  {id: 'materials', icon: '🧲', label: 'Only some materials are magnetic', hint: 'Test things from the tray'},
+  {id: 'poles',     icon: '⇹', label: 'The poles hold the most',         hint: 'Touch a magnet to the clips'},
+  {id: 'north',     icon: '⬆', label: 'A free compass points north',     hint: 'Take the compass away from the magnets'},
+  {id: 'deflect',   icon: '↺', label: 'A N pole pushes the needle’s N end away', hint: 'Bring a magnet to the compass'},
+  {id: 'repel',     icon: '⇠⇢', label: 'Like poles repel',               hint: 'Push one magnet at the other'},
+  {id: 'attract',   icon: '⇢⇠', label: 'Unlike poles attract',           hint: 'Try the other end'},
+  {id: 'through',   icon: '▮', label: 'Magnetism works through wood',    hint: 'Put the board in the way'},
+  {id: 'made',      icon: '✧', label: 'You made a magnet',               hint: 'Stroke the needle'},
+  {id: 'floater',   icon: '🧭', label: 'A needle compass in water',      hint: 'Float your magnet'},
+], () => toast('All nine found. Reshma’s sailors could find north with a needle and a bowl of water.', 4200));
+
+const POE = predict($('poe'), {
+  id: 'which-metals',
+  q: 'An iron nail, a ball of aluminium foil and a piece of copper wire are all metals. Which of them will a magnet pull?',
+  options: [
+    {id: 'all',   text: 'All three: magnets pull metals.'},
+    {id: 'iron',  text: 'Only the iron nail.', right: true},
+    {id: 'ironcu',text: 'The iron nail and the copper wire.'},
+    {id: 'none',  text: 'None of them: magnets only pull other magnets.'},
+  ],
+  onLock(){
+    S.locked = true;
+    document.body.classList.remove('locked');
+    lockControls(false);
+    say('Now test them. Drag things from the tray onto the table, and bring a magnet close.');
+    tableDirty = true;
+  },
+});
+function lockControls(lock){
+  for (const id of ['flipA', 'rotA', 'flipB', 'rotB', 'btnFilings', 'btnShake', 'btnReset']) $(id).disabled = lock;
+  $('gate').hidden = !lock;
+}
+lockControls(!POE.locked);
+if (!Play.FF('predict')) { S.locked = true; document.body.classList.remove('locked'); lockControls(false); }
+if (S.filings) { $('btnFilings').setAttribute('aria-pressed', 'true'); $('btnFilings').textContent = '✦ Sweep the filings away'; }
+S.compass.rest = compassRest(S.compass.x, S.compass.y, allPoles(null));
+S.compass.ang = S.compass.rest.ang;
+paint();
+loop(dt => { step(dt); paint(); checkState(); });
+window.applyFeatures = () => paint();
+window.PG_STATE = () => JSON.parse(JSON.stringify(S));
+window.PG_MODEL = {magPoles, fieldAt, gradB2, forceOnMagnet, compassRest, clipCounts, stroke, MATERIALS, BE, PX_CM, SOFT};
+</script>
+</body>
+</html>

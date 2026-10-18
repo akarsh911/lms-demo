@@ -1,0 +1,415 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Landforms and Life</title>
+<meta name="description" content="Class 6: push the crust up into mountains and a plateau, leave the rest as plains, and watch temperature fall with height, vegetation change belt by belt, and how people live change with the land.">
+<link rel="icon" href="../../favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600&family=Inter:wght@400;500;600;700&family=Nunito:wght@500;700;800&family=Newsreader:opsz,wght@6..72,400;6..72,500&family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="../../play.css">
+<style>
+/* Only what this page needs beyond play.css. */
+.pg-stage{background:#eef3f6}
+.gate{position:absolute; left:0; right:0; top:52px; height:40%; display:grid; place-items:center; pointer-events:none}
+.gate span{background:rgba(20,28,45,.86); color:#fff; padding:10px 16px; border-radius:99px; font-weight:600; font-size:14px}
+.zone{border:1px solid var(--hair); border-radius:10px; padding:8px 10px; margin:0 0 8px}
+.zone h4{font-size:12.5px; text-transform:uppercase; letter-spacing:.06em; color:var(--ink-3); margin:0 0 4px; font-weight:700}
+.ctl{grid-template-columns:64px 1fr 74px; margin:2px 0}
+.ctl label{font-size:12.5px; line-height:1.2}
+.ctl output{font-size:12.5px}
+.seg{display:flex; gap:3px; background:var(--sunk); border-radius:8px; padding:3px; margin-top:4px}
+.seg button{flex:1; border:0; background:transparent; border-radius:6px; padding:5px 4px; font-weight:600; font-size:12px; cursor:pointer; color:var(--ink-2)}
+.seg button[aria-pressed="true"]{background:var(--card); color:var(--ink); box-shadow:var(--shadow)}
+.readout{display:grid; grid-template-columns:1fr auto; gap:3px 12px; font-size:13px}
+.readout span{color:var(--ink-2)}
+.readout b{font-family:var(--font-mono); font-weight:600; font-size:12.5px; font-variant-numeric:tabular-nums; text-align:right}
+.why p{font-size:13.5px; margin-bottom:.5em}
+.why b{color:var(--ink)}
+#markHit{cursor:ew-resize}
+</style>
+</head>
+<body>
+<header class="pg-top"></header>
+
+<div class="pg-intro">
+  <h1>Landforms and life</h1>
+  <p>As in NCERT Class 6 Social Science, Chapter 3, “Landforms and Life”. Push the land up into a mountain and a plateau,
+     and leave the rest as plains — the shapes decide what they are, not their names. Then walk a marker across the
+     land and see how the height changes the temperature, the plants, and how people live there.</p>
+</div>
+
+<main class="pg-main wide-side">
+  <section class="pg-stage" id="stageWrap">
+    <svg id="stage" viewBox="0 0 1000 660" role="img" aria-label="A cross-section of land that can be pushed up into a mountain, a plateau, or left as plains, with a temperature graph below"></svg>
+    <div class="gate" id="gate"><span>Make your prediction first →</span></div>
+  </section>
+
+  <aside class="pg-side">
+    <div id="poe"></div>
+
+    <div class="card" id="ctlCard">
+      <div class="zone">
+        <h4>West push</h4>
+        <div class="ctl"><label for="hW">Height</label><input type="range" id="hW" min="0" max="6500" step="50" value="3400"><output id="hWOut" class="num">3400 m</output></div>
+        <div class="seg" id="mW"><button data-m="peak" aria-pressed="true">Sharp peak</button><button data-m="flat" aria-pressed="false">Flat top</button></div>
+      </div>
+      <div class="zone">
+        <h4>Middle push</h4>
+        <div class="ctl"><label for="hM">Height</label><input type="range" id="hM" min="0" max="6500" step="50" value="1500"><output id="hMOut" class="num">1500 m</output></div>
+        <div class="seg" id="mM"><button data-m="peak" aria-pressed="false">Sharp peak</button><button data-m="flat" aria-pressed="true">Flat top</button></div>
+      </div>
+      <div class="zone">
+        <h4>East push</h4>
+        <div class="ctl"><label for="hE">Height</label><input type="range" id="hE" min="0" max="6500" step="50" value="50"><output id="hEOut" class="num">50 m</output></div>
+        <div class="seg" id="mE"><button data-m="peak" aria-pressed="false">Sharp peak</button><button data-m="flat" aria-pressed="true">Flat top</button></div>
+      </div>
+      <p class="hint" style="font-size:12px;color:var(--ink-3);margin:4px 0 0">Drag the pin along the land to read it anywhere.</p>
+      <div class="readout" style="margin-top:8px">
+        <span>At the pin</span><b id="atX">—</b>
+        <span>Height</span><b id="atZ">—</b>
+        <span>This looks like</span><b id="atLabel">—</b>
+        <span>Temperature</span><b id="atT">—</b>
+        <span>Life here</span><b id="atLife">—</b>
+      </div>
+    </div>
+
+    <div class="card why" id="whyCard" hidden>
+      <div class="kicker">What is happening</div>
+      <div id="why"></div>
+    </div>
+
+    <div class="card"><div class="kicker">To find</div><div id="finds"></div></div>
+  </aside>
+</main>
+
+<script src="../../play.js"></script>
+<script>
+'use strict';
+const {$, esc, clamp, fmt, drag, sound, say, track, toast, predict, findings, discover, found,
+       shareState, sharedState, mount, mulberry32, reduced} = Play;
+mount({thread: 'earth', band: 'tinkerer'});
+
+/* MODEL:start ================================================================
+   The land is a cross-section 100 km wide. Three "pushes" (a very simplified
+   stand-in for the plates lifting the crust) each raise the ground either into
+   a triangular PEAK (a point summit, sides sloping at height/half-width) or a
+   rigid FLAT-TOP block (a level top with a steep skirt at its edge) — the two
+   real shapes NCERT Ch.3 uses to tell mountains and plateaus apart. Whatever a
+   push does NOT reach keeps its own low, gently rolling ground: a plain.
+   A column's landform is read off its OWN geometry, not off which push made it:
+     height < 300 m                              -> Plain      (NCERT: plains are
+                                                                  "generally not more
+                                                                  than 300 m")
+     height >= 300 m and (locally) flat-topped    -> Plateau
+     height >= 300 m, peaked, height < 600 m      -> Hill
+     height >= 600 m, peaked                      -> Mountain
+   Temperature falls with height at the standard environmental lapse rate
+   (6.5°C per 1000 m) from a 30°C base at sea level — real physics, so the
+   snowline, the tree line and the farmed lowland all fall out of one formula,
+   not three labels. Melting snow (the band between the tree line and the
+   permanent snowline) feeds the river; land above the snowline never melts.
+   =============================================================================*/
+const T0 = 30, LAPSE = 6.5;                       // °C at sea level; °C per 1000 m
+const tempAt = z => T0 - LAPSE * z / 1000;
+const heightForTemp = T => Math.max(0, (T0 - T) * 1000 / LAPSE);
+const H20 = heightForTemp(20), H5 = heightForTemp(5), H0 = heightForTemp(0);   // farmland / forest / grass&lichen / snow
+const PEAK_HALF = 4.5, FLAT_HALF = 6, FLAT_SKIRT = 1.8;                        // km
+function contribution(zone, x){
+  const d = Math.abs(x - zone.cx);
+  if (zone.mode === 'peak') return zone.height * clamp(1 - d / PEAK_HALF, 0, 1);
+  if (d <= FLAT_HALF) return zone.height;
+  if (d <= FLAT_HALF + FLAT_SKIRT) return zone.height * (1 - (d - FLAT_HALF) / FLAT_SKIRT);
+  return 0;
+}
+const baseline = x => 40 + 12 * Math.sin(x / 9 + 1.3) + 6 * Math.sin(x / 3.3 + 0.4);
+function heightAt(x, zones){ let h = baseline(x); for (const z of zones) h += contribution(z, x); return h; }
+function classifyAt(x, zones){
+  const h = heightAt(x, zones);
+  if (h < 300) return 'Plain';
+  const lo = heightAt(x - 5, zones), hi = heightAt(x + 5, zones);
+  const range = Math.max(h, lo, hi) - Math.min(h, lo, hi);
+  const flat = range < Math.max(20, h * 0.06);
+  if (flat) return 'Plateau';
+  return h < 600 ? 'Hill' : 'Mountain';
+}
+function slopeDegAt(x, zones){ const d = (heightAt(x + 2, zones) - heightAt(x - 2, zones)); return Math.atan2(Math.abs(d), 4000) * 180 / Math.PI; }
+function riverFlow(zones){ let f = 0; for (const z of zones) f += clamp(Math.min(z.height, H0) - H5, 0, H0 - H5); return f / (H0 - H5); } // 0..(count)
+/* MODEL:end */
+
+/* ---- state ---------------------------------------------------------------- */
+const S = {
+  zones: [{id: 'W', cx: 18, height: 3400, mode: 'peak'}, {id: 'M', cx: 50, height: 1500, mode: 'flat'}, {id: 'E', cx: 82, height: 50, mode: 'flat'}],
+  markX: 18, locked: false,
+};
+const shared = sharedState();
+if (shared && Array.isArray(shared.zones) && shared.zones.length === 3) {
+  shared.zones.forEach((z, i) => { S.zones[i].height = clamp(+z.h || 0, 0, 6500); S.zones[i].mode = z.m === 'peak' ? 'peak' : 'flat'; });
+  if (shared.mark != null) S.markX = clamp(+shared.mark, 0, 100);
+}
+shareState(() => ({zones: S.zones.map(z => ({h: z.height, m: z.mode})), mark: S.markX}));
+
+/* ---- geometry --------------------------------------------------------------*/
+const svg = $('stage');
+const ZMAX = 6600, TOPY = 60, BASEY = 430, GX0 = 40, GX1 = 960;
+const PX = x => GX0 + x / 100 * (GX1 - GX0);
+const PY = z => BASEY - z / ZMAX * (BASEY - TOPY);
+const GR = {x0: 40, x1: 960, y0: 468, y1: 636};                    // temperature graph
+const TMIN = -20, TMAX = 32;
+const GY = T => GR.y1 - (T - TMIN) / (TMAX - TMIN) * (GR.y1 - GR.y0);
+const N = 231;
+function sampleProfile(){
+  const xs = [], zs = [];
+  for (let i = 0; i < N; i++) { const x = i / (N - 1) * 100; xs.push(x); zs.push(heightAt(x, S.zones)); }
+  return {xs, zs};
+}
+
+function build(){
+  svg.innerHTML = `
+  <defs>
+    <clipPath id="clipLand"><path id="landClip"/></clipPath>
+    <pattern id="rocky" width="8" height="8" patternUnits="userSpaceOnUse" patternTransform="rotate(35)">
+      <rect width="8" height="8" fill="#ab9873"/><line x1="0" y1="0" x2="0" y2="8" stroke="#93805e" stroke-width="2.4"/></pattern>
+    <linearGradient id="gSky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#bfe0f4"/><stop offset="1" stop-color="#eef6fb"/></linearGradient>
+  </defs>
+  <rect width="1000" height="660" fill="#fbfaf6"/>
+  <rect x="${GX0}" y="${TOPY - 24}" width="${GX1 - GX0}" height="${BASEY - TOPY + 24}" fill="url(#gSky)"/>
+  <text x="${GX0}" y="${TOPY - 34}" fill="#4a555b" font-size="13" font-weight="700" letter-spacing=".08em">THE LAND, WEST TO EAST · 100 KM</text>
+  <text id="stretchNote" x="${GX1}" y="${TOPY - 34}" text-anchor="end" fill="#7c878c" font-size="11.5">heights stretched about 16 times</text>
+  <g clip-path="url(#clipLand)">
+    <rect id="bandSnow" x="${GX0}" width="${GX1 - GX0}" fill="#f1f8fc"/>
+    <rect id="bandGrass" x="${GX0}" width="${GX1 - GX0}" fill="#c7d19a"/>
+    <rect id="bandForest" x="${GX0}" width="${GX1 - GX0}" fill="#2f6b46"/>
+    <rect id="bandLow" x="${GX0}" width="${GX1 - GX0}" y2="440" fill="#8fbf5a"/>
+    <g id="rockyCaps"></g>
+    <g id="terraces" stroke="#6b4a2b" stroke-width="1.6" stroke-linecap="round"></g>
+    <g id="trees" font-size="15"></g>
+  </g>
+  <path id="landLine" fill="none" stroke="#3d3226" stroke-width="1.6"/>
+  <line id="snowLine" x1="${GX0}" x2="${GX1}" stroke="#6c93ab" stroke-width="1.2" stroke-dasharray="5 4"/>
+  <text id="snowLab" x="${GX1 - 4}" text-anchor="end" fill="#3f6a86" font-size="11" font-weight="600" stroke="#fff" stroke-width="3" paint-order="stroke"></text>
+  <line id="treeLine" x1="${GX0}" x2="${GX1}" stroke="#3f6a4a" stroke-width="1.2" stroke-dasharray="5 4"/>
+  <text id="treeLab" x="${GX1 - 4}" text-anchor="end" fill="#2f5a3c" font-size="11" font-weight="600" stroke="#fff" stroke-width="3" paint-order="stroke"></text>
+  <path id="river" fill="none" stroke="#3f7fd8" stroke-linecap="round" stroke-linejoin="round"/>
+  <text id="riverLab" x="500" y="452" text-anchor="middle" font-size="12.5" font-weight="700" fill="#1f4f94"></text>
+  <g id="icons" font-size="18"></g>
+  <line id="markLine" y1="${TOPY - 24}" y2="${GR.y1}" stroke="#d6453d" stroke-width="1.3" stroke-dasharray="4 4"/>
+  <circle id="markDot" r="6.5" fill="#d6453d" stroke="#fff" stroke-width="2"/>
+  <circle id="markHit" r="16" fill="transparent" role="slider" tabindex="0" aria-label="Pin: drag along the land to read it"/>
+  <!-- graph -->
+  <rect x="${GR.x0}" y="${GR.y0 - 34}" width="${GR.x1 - GR.x0}" height="${GR.y1 - GR.y0 + 60}" fill="#fbfaf6"/>
+  <text x="${GR.x0}" y="${GR.y0 - 18}" fill="#4a555b" font-size="13" font-weight="700" letter-spacing=".08em">TEMPERATURE ACROSS THE LAND</text>
+  <g id="gAxes"></g>
+  <path id="tCurve" fill="none" stroke="#e8890c" stroke-width="2.6" stroke-linejoin="round"/>
+  <line id="gSnow" x1="${GR.x0}" x2="${GR.x1}" stroke="#6c93ab" stroke-width="1" stroke-dasharray="4 4"/>
+  <line id="gTree" x1="${GR.x0}" x2="${GR.x1}" stroke="#3f6a4a" stroke-width="1" stroke-dasharray="4 4"/>
+  <circle id="gDot" r="5.5" fill="#e8890c" stroke="#fff" stroke-width="2"/>
+  <rect id="graphVeil" x="0" y="${GR.y0 - 34}" width="1000" height="${GR.y1 - GR.y0 + 60}" fill="#fbfaf6" opacity=".94"/>
+  <text id="graphVeilT" x="500" y="${(GR.y0 + GR.y1) / 2}" text-anchor="middle" fill="#7c878c" font-size="15" font-weight="600">The graph appears once you have made a prediction.</text>
+  `;
+}
+
+function landPath(zs, xs){
+  let top = '';
+  for (let i = 0; i < N; i++) top += (i ? 'L' : 'M') + PX(xs[i]).toFixed(1) + ' ' + PY(zs[i]).toFixed(1);
+  return `M${GX0} ${BASEY + 10} L${GX0} ${PY(zs[0]).toFixed(1)} ` + top.slice(1) + ` L${GX1} ${PY(zs[N - 1]).toFixed(1)} L${GX1} ${BASEY + 10}Z`;
+}
+/* Invert a peak zone's straight-sided profile: the x (both flanks) where it stands at height h. */
+function peakFlankX(zone, h){
+  if (zone.mode !== 'peak' || zone.height <= 0 || h > zone.height) return null;
+  const d = PEAK_HALF * (1 - h / zone.height);
+  return [zone.cx - d, zone.cx + d];
+}
+
+function paint(){
+  const {xs, zs} = sampleProfile();
+  const d = landPath(zs, xs);
+  $('landClip').setAttribute('d', d);
+  $('landLine').setAttribute('d', d);
+  const ySnow = PY(H0).toFixed(1), yTree = PY(H5).toFixed(1), yLow = PY(300).toFixed(1);
+  $('bandSnow').setAttribute('y', TOPY - 24); $('bandSnow').setAttribute('height', Math.max(0, ySnow - (TOPY - 24)));
+  $('bandGrass').setAttribute('y', ySnow); $('bandGrass').setAttribute('height', Math.max(0, yTree - ySnow));
+  $('bandForest').setAttribute('y', yTree); $('bandForest').setAttribute('height', Math.max(0, yLow - yTree));
+  $('bandLow').setAttribute('y', yLow);
+  $('snowLine').setAttribute('y1', ySnow); $('snowLine').setAttribute('y2', ySnow);
+  $('snowLab').setAttribute('y', +ySnow - 4);
+  $('snowLab').textContent = `permanent snow above ${fmt(H0, 0)} m (0°C)`;
+  $('treeLine').setAttribute('y1', yTree); $('treeLine').setAttribute('y2', yTree);
+  $('treeLab').setAttribute('y', +yTree - 4);
+  $('treeLab').textContent = `grass & lichen above ${fmt(H5, 0)} m (5°C)`;
+
+  /* rocky caps on flat-top zones that qualify as a plateau, terraces + trees on peaked mountains/hills.
+     Icons are drawn from shapes, not emoji, so they always contrast with whatever band sits behind them. */
+  const pineIcon = (x, y) => `<g transform="translate(${x.toFixed(1)} ${y.toFixed(1)})"><rect x="-1.4" y="4" width="2.8" height="4" fill="#5a3d22"/>
+    <path d="M0 -10 L6 3 L-6 3 Z" fill="#7fc47a" stroke="#274d31" stroke-width=".8"/><path d="M0 -5 L4.4 4 L-4.4 4 Z" fill="#6fae6b" stroke="#274d31" stroke-width=".8"/></g>`;
+  const pickIcon = (x, y) => `<g transform="translate(${x.toFixed(1)} ${y.toFixed(1)})" stroke="#4a4136" stroke-width="2" stroke-linecap="round">
+    <line x1="-7" y1="6" x2="4" y2="-7"/><line x1="-5" y1="-6" x2="6" y2="7"/></g><circle cx="${x.toFixed(1)}" cy="${(y + 9).toFixed(1)}" r="3" fill="#8a7a5c"/>`;
+  const wheatIcon = (x, y) => `<g transform="translate(${x.toFixed(1)} ${y.toFixed(1)})" stroke="#b8862c" stroke-width="1.6" stroke-linecap="round">
+    <line x1="0" y1="6" x2="0" y2="-8"/><line x1="0" y1="-2" x2="-5" y2="-6"/><line x1="0" y1="-2" x2="5" y2="-6"/><line x1="0" y1="2" x2="-5" y2="-2"/><line x1="0" y1="2" x2="5" y2="-2"/></g>`;
+  let caps = '', terr = '', trees = '';
+  for (const z of S.zones) {
+    if (z.mode === 'flat' && z.height >= 300) {
+      const x0 = PX(z.cx - FLAT_HALF), x1 = PX(z.cx + FLAT_HALF), y = PY(z.height);
+      caps += `<rect x="${x0.toFixed(1)}" y="${y.toFixed(1)}" width="${(x1 - x0).toFixed(1)}" height="40" fill="url(#rocky)"/>`;
+      caps += pickIcon((x0 + x1) / 2, y + 20);
+    }
+    if (z.mode === 'peak' && z.height >= 300) {
+      for (let h = 320; h < Math.min(z.height, H20); h += 220) {
+        const fl = peakFlankX(z, h); if (!fl) continue;
+        for (const fx of fl) { const px = PX(fx), py = PY(h); terr += `<line x1="${(px - 9).toFixed(1)}" y1="${py.toFixed(1)}" x2="${(px + 9).toFixed(1)}" y2="${py.toFixed(1)}"/>`; }
+      }
+      for (let h = 340; h < Math.min(z.height, H5); h += 420) {
+        const fl = peakFlankX(z, h); if (!fl) continue;
+        for (const fx of fl) trees += pineIcon(PX(fx), PY(h) - 6);
+      }
+    }
+  }
+  $('rockyCaps').innerHTML = caps; $('terraces').innerHTML = terr; $('trees').innerHTML = trees;
+
+  /* the river: born at the foot of the tallest push, runs east across the low ground only —
+     it flows around a raised push, never over it, so it is drawn only where the land is a plain. */
+  const flow = riverFlow(S.zones);
+  const tallest = S.zones.reduce((a, b) => a.height > b.height ? a : b);
+  const edge = tallest.cx + (tallest.mode === 'peak' ? PEAK_HALF : FLAT_HALF + FLAT_SKIRT);
+  let riv = '', drawing = false;
+  for (let x = clamp(edge, 0, 100); x <= 100; x += 1.25) {
+    const plain = classifyAt(x, S.zones) === 'Plain';
+    if (plain) { riv += (drawing ? 'L' : 'M') + PX(x).toFixed(1) + ' ' + (PY(heightAt(x, S.zones)) - 3).toFixed(1); drawing = true; }
+    else drawing = false;
+  }
+  $('river').setAttribute('d', riv);
+  $('river').setAttribute('stroke-width', (flow > 0.02 ? 3 + flow * 8 : 1.4).toFixed(1));
+  $('river').setAttribute('stroke', flow > 0.02 ? '#3f7fd8' : '#a9b3ab');
+  $('riverLab').textContent = flow > 0.02 ? `melting snow feeds the river (flow ${fmt(flow, 2)})` : 'no melt yet — the river runs low';
+
+  /* farm/village icons on the lowland, well clear of a raised push */
+  let ic = '';
+  for (const x of [8, 30, 66, 96]) if (classifyAt(x, S.zones) === 'Plain') ic += wheatIcon(PX(x), PY(heightAt(x, S.zones)) - 8);
+  $('icons').innerHTML = ic;
+
+  /* the marker */
+  const mx = S.markX, mz = heightAt(mx, S.zones), mT = tempAt(mz), label = classifyAt(mx, S.zones);
+  const px = PX(mx), py = PY(mz);
+  $('markLine').setAttribute('x1', px); $('markLine').setAttribute('x2', px);
+  $('markDot').setAttribute('cx', px); $('markDot').setAttribute('cy', py);
+  $('markHit').setAttribute('cx', px); $('markHit').setAttribute('cy', py);
+  $('atX').textContent = fmt(mx, 0) + ' km';
+  $('atZ').textContent = fmt(mz, 0) + ' m';
+  $('atLabel').textContent = label;
+  $('atT').textContent = fmt(mT, 1) + '°C';
+  $('atLife').textContent = life(label, mz, mT);
+
+  /* graph */
+  let axes = `<line x1="${GR.x0}" y1="${GR.y1}" x2="${GR.x1}" y2="${GR.y1}" stroke="#9aa3a6"/>`;
+  for (let T = -20; T <= 30; T += 10) axes += `<line x1="${GR.x0}" x2="${GR.x1}" y1="${GY(T).toFixed(1)}" y2="${GY(T).toFixed(1)}" stroke="#efece4"/><text x="${GR.x0 - 8}" y="${(GY(T) + 4).toFixed(1)}" text-anchor="end" fill="#7c878c" font-size="11">${T}°</text>`;
+  for (let x = 0; x <= 100; x += 20) axes += `<text x="${PX(x).toFixed(1)}" y="${GR.y1 + 16}" text-anchor="middle" fill="#7c878c" font-size="11">${x} km</text>`;
+  $('gAxes').innerHTML = axes;
+  let tp = ''; for (let i = 0; i < N; i++) tp += (i ? 'L' : 'M') + PX(xs[i]).toFixed(1) + ' ' + GY(tempAt(zs[i])).toFixed(1);
+  $('tCurve').setAttribute('d', tp);
+  $('gSnow').setAttribute('y1', GY(0)); $('gSnow').setAttribute('y2', GY(0));
+  $('gTree').setAttribute('y1', GY(5)); $('gTree').setAttribute('y2', GY(5));
+  $('gDot').setAttribute('cx', px); $('gDot').setAttribute('cy', GY(mT));
+
+  paintWhy(mx, mz, mT, label, flow);
+  checkFindings(xs, zs, flow);
+}
+function life(label, z, T){
+  if (label === 'Mountain' || label === 'Hill') return T < 0 ? 'too cold to live — bare rock and ice' : z > H5 ? 'herding; grass, moss and lichen only' : 'terrace farms, conifer forest, herding';
+  if (label === 'Plateau') return 'mining; rocky soil, little farming';
+  return 'farming and fishing on the flat, fertile ground';
+}
+function paintWhy(mx, mz, mT, label, flow){
+  if (!S.locked) return;
+  $('whyCard').hidden = false;
+  const w = zonesLabel();
+  $('why').innerHTML = `<p>At <b>${fmt(mx, 0)} km</b> the land stands <b>${fmt(mz, 0)} m</b> high, which the model reads as a <b>${label}</b> — ` +
+    (label === 'Plateau' ? 'high, but flat on top and steep at the edge.' : label === 'Plain' ? 'low and gently rolling.' : 'peaked, with a narrow top.') + `</p>` +
+    `<p>Its temperature is <b>${fmt(mT, 1)}°C</b> (30°C at sea level, minus 6.5°C for every 1000 m). ` +
+    (mT < 0 ? 'That is below freezing: snow settles here and never fully melts.' : mT < 5 ? 'Too cold for trees — only grass, moss and lichen survive.' : mT < 20 ? 'Cool enough for montane forest: pines, firs and deodar.' : 'Warm enough for ordinary farmland.') + `</p>` +
+    `<p>${w}</p>`;
+}
+function zonesLabel(){
+  const parts = S.zones.map(z => `${z.height >= 300 ? classifyAt(z.cx, S.zones) : 'low ground'} at ${fmt(z.height, 0)} m`);
+  return `Right now the land carries: ${parts.join(', ')}.`;
+}
+
+/* ---- findings ---------------------------------------------------------------*/
+function checkFindings(xs, zs, flow){
+  if (!S.locked) return;
+  let has = {Mountain: false, Hill: false, Plateau: false, Plain: false, snow: false};
+  for (let i = 0; i < N; i++) { has[classifyAt(xs[i], S.zones)] = true; if (zs[i] >= H0) has.snow = true; }
+  if (has.Mountain) discover('mountain');
+  if (has.Hill) discover('hill');
+  if (has.Plateau) discover('plateau');
+  if (has.snow) discover('snowcap');
+  if (flow > 0.15) discover('riverfeed');
+  if (has.Mountain && has.Plateau && has.Plain) discover('together');
+  maybeExplain(has);
+}
+let EXPLAINED = false;
+function maybeExplain(has){
+  if (EXPLAINED || !POE || !found('snowcap')) return;
+  EXPLAINED = true;
+  POE.explain(`Push any land above about <b>${fmt(H0, 0)} m</b> and its temperature drops below freezing (30°C − 6.5°C for every 1000 m). ` +
+    `Snow that falls there never fully melts — a permanent snow cap, exactly like the high Himalaya. Lower down, between ${fmt(H5, 0)} m and ${fmt(H0, 0)} m, ` +
+    `snow does melt every summer, and that meltwater is what feeds the river.`);
+}
+
+/* ---- controls -----------------------------------------------------------*/
+build();
+function lockControls(lock){
+  for (const id of ['hW', 'hM', 'hE']) $(id).disabled = lock;
+  for (const g of ['mW', 'mM', 'mE']) for (const b of $(g).querySelectorAll('button')) b.disabled = lock;
+  $('markHit').style.pointerEvents = lock ? 'none' : '';
+  $('gate').hidden = !lock;
+}
+const IDX = {W: 0, M: 1, E: 2};
+function wireZone(letter, sliderId, outId, segId){
+  $(sliderId).addEventListener('input', e => { S.zones[IDX[letter]].height = +e.target.value; $(outId).textContent = e.target.value + ' m'; paint(); });
+  $(sliderId).addEventListener('change', () => track('push', {zone: letter, height: S.zones[IDX[letter]].height}));
+  $(segId).addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; S.zones[IDX[letter]].mode = b.dataset.m;
+    [...$(segId).children].forEach(x => x.setAttribute('aria-pressed', x === b)); sound('tick'); paint(); track('mode', {zone: letter, mode: b.dataset.m}); });
+}
+wireZone('W', 'hW', 'hWOut', 'mW'); wireZone('M', 'hM', 'hMOut', 'mM'); wireZone('E', 'hE', 'hEOut', 'mE');
+
+drag($('markHit'), svg, {
+  start(){ if (!S.locked) return false; },
+  move(p){ S.markX = clamp((p.x - GX0) / (GX1 - GX0) * 100, 0, 100); paint(); },
+  end(){ track('mark', {x: Math.round(S.markX)}); },
+});
+$('markHit').addEventListener('keydown', e => {
+  const k = {ArrowRight: 1, ArrowLeft: -1}[e.key]; if (!k || !S.locked) return;
+  e.preventDefault(); S.markX = clamp(S.markX + k * (e.shiftKey ? 5 : 1), 0, 100); paint();
+});
+
+/* ---- start ---------------------------------------------------------------*/
+findings($('finds'), [
+  {id: 'mountain', icon: '⛰️', label: 'A mountain: high and peaked', hint: 'Push a peak above 600 m'},
+  {id: 'hill',     icon: '🟢', label: 'A hill: lower and rounder', hint: 'A peak between 300 and 600 m'},
+  {id: 'plateau',  icon: '🪨', label: 'A plateau: high, flat and steep-edged', hint: 'Push a flat top above 300 m'},
+  {id: 'snowcap',  icon: '❄️', label: 'A permanent snow cap', hint: 'Push a peak past the snowline'},
+  {id: 'riverfeed', icon: '💧', label: 'Melting snow feeds the river', hint: 'Get some land into the melt zone'},
+  {id: 'together', icon: '🗺️', label: 'A mountain, a plateau and a plain, all standing together', hint: 'Build all three at once'},
+], () => toast('All six found — you have Fig. 3.1, alive.', 4200));
+
+const POE = predict($('poe'), {
+  id: 'landforms-height',
+  q: 'You push land higher and higher. What happens at the very top, eventually?',
+  options: [
+    {id: 'hotter', text: 'It gets hotter — it is closer to the Sun.'},
+    {id: 'colder', text: 'It gets colder, until snow settles there permanently.', right: true},
+    {id: 'same',   text: 'The temperature stays exactly the same everywhere.'},
+    {id: 'rain',   text: 'It starts raining upward.'},
+  ],
+  onLock(){ S.locked = true; lockControls(false); $('graphVeil').remove(); $('graphVeilT').remove(); say('Now push the land and watch the temperature graph below.'); paint(); },
+});
+lockControls(!POE.locked);
+if (!Play.FF('predict')) S.locked = true;
+paint();
+window.applyFeatures = () => paint();
+window.PG_STATE = () => JSON.parse(JSON.stringify(S));
+window.PG_MODEL = {heightAt, classifyAt, tempAt, heightForTemp, riverFlow, slopeDegAt, H0, H5, H20};
+</script>
+</body>
+</html>

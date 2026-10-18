@@ -1,0 +1,419 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Nets and Views</title>
+<meta name="description" content="Class 4: fold a flat net in 3-D and see whether it really closes into a box, then build with Jagat's matchboxes and draw what Mini sees from the top, the front and the side.">
+<link rel="icon" href="../../favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600&family=Inter:wght@400;500;600;700&family=Nunito:wght@500;700;800&family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="../../play.css">
+<style>
+.pg-stage{min-height:0}
+.tabs{display:flex; gap:8px; padding:10px 12px; background:var(--sunk); border-bottom:1px solid var(--hair)}
+.tab{flex:1; min-height:48px; border-radius:var(--radius-sm); border:2px solid transparent; background:var(--card); cursor:pointer;
+  font-family:var(--font-head); font-size:16px; font-weight:600; color:var(--ink-2); display:flex; align-items:center; justify-content:center; gap:8px}
+.tab[aria-selected="true"]{border-color:var(--accent); color:var(--ink); box-shadow:0 2px 0 var(--accent)}
+.tab:hover{border-color:var(--hair-2)}
+.chips{display:flex; flex-wrap:wrap; gap:6px; margin:2px 0 8px}
+.chip{border:2px solid var(--hair-2); background:var(--card); border-radius:99px; padding:7px 13px; font-size:14px; cursor:pointer; font-weight:600; color:var(--ink-2)}
+.chip[aria-pressed="true"]{background:#8a6d3b; border-color:#8a6d3b; color:#fff}
+.hit{cursor:pointer}
+.readout{font-size:14px; line-height:1.4; margin-top:4px}
+.readout b{color:var(--ink)}
+.missions{list-style:none; margin:0; padding:0; display:grid; gap:6px}
+.missions li{display:grid; grid-template-columns:26px 1fr; gap:8px; align-items:center; font-weight:600; font-size:14px; color:var(--ink-2)}
+.missions li i{width:24px; height:24px; border-radius:50%; border:2.5px dashed var(--hair-2); display:grid; place-items:center; font-style:normal; font-size:13px}
+.missions li.done{color:var(--ink)}
+.missions li.done i{border:none; background:var(--good)}
+.views{display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:6px}
+.viewbox{text-align:center}
+.viewbox .lab{font-size:12px; font-weight:700; color:var(--ink-3); text-transform:uppercase; letter-spacing:.05em}
+svg text{pointer-events:none}
+</style>
+</head>
+<body>
+<header class="pg-top"></header>
+
+<div class="pg-intro">
+  <h1>Nets and views</h1>
+  <p>Fold a flat net in 3-D and see whether it really closes — then build with matchboxes, the way Jagat and Mini do, and see what each of them draws.</p>
+</div>
+
+<main class="pg-main">
+  <section class="pg-stage">
+    <div class="tabs" role="tablist">
+      <button class="tab" role="tab" id="tabNet" aria-selected="true">📦 Fold a net</button>
+      <button class="tab" role="tab" id="tabBlk" aria-selected="false">🧱 Jagat's matchboxes</button>
+    </div>
+    <svg id="stN" viewBox="0 0 1000 620" role="img" aria-label="Six squares that can fold up in 3-D. A slider unfolds or folds them."></svg>
+    <svg id="stB" viewBox="0 0 1000 620" role="img" aria-label="A 3 by 3 board of matchboxes. Tap a square to build a stack there." hidden></svg>
+  </section>
+
+  <aside class="pg-side">
+    <div class="card" id="cardN">
+      <div class="kicker">Which net?</div>
+      <div class="chips" id="netChips">
+        <button class="chip" data-n="valid" aria-pressed="true">A tidy net</button>
+        <button class="chip" data-n="broken" aria-pressed="false">A stretched-out net</button>
+      </div>
+      <div class="ctl"><label for="fold">Fold</label><input type="range" id="fold" min="0" max="1" step="0.01" value="0"><output id="foldOut">0%</output></div>
+      <div class="readout" id="netRead">Drag <b>Fold</b> all the way, and see what happens.</div>
+    </div>
+
+    <div class="card" id="cardB" hidden>
+      <div class="kicker">Views</div>
+      <div class="views">
+        <div class="viewbox"><div class="lab">Top (Mini)</div><svg id="vTop" viewBox="0 0 96 96"></svg></div>
+        <div class="viewbox"><div class="lab">Front (Jagat)</div><svg id="vFront" viewBox="0 0 96 96"></svg></div>
+        <div class="viewbox"><div class="lab">Side</div><svg id="vSide" viewBox="0 0 96 96"></svg></div>
+        <div class="viewbox"><button class="btn sm" id="btnClear">Clear the board</button></div>
+      </div>
+      <p class="readout">Tap a square on the board to stack matchboxes there. Tap again to make it taller (up to 3), then it empties.</p>
+    </div>
+
+    <div class="card"><div class="kicker">Missions</div><div id="finds"></div></div>
+  </aside>
+</main>
+
+<script src="../../play.js"></script>
+<script>
+'use strict';
+const {$, esc, clamp, lerp, fmt, sound, say, track, findings, discover, found, shareState, sharedState, mount, reduced} = Play;
+mount({thread: 'solids', band: 'explorer'});
+
+/* MODEL:start ==================================================================
+   PART 1 — NETS (NCERT Class 4, "Shapes Around Us": Diksha folds a box flat and
+   calls it the box's net; folding along the dotted lines gives the box back).
+
+   Six squares are joined edge to edge in a flat sheet. Each square (after the
+   first) is hinged to ONE neighbour along one of its own edges (L/R/T/B in the
+   flat layout). Folding turns every hinge by the SAME angle, 90° x t: that is
+   exactly how a cube's own faces meet. The 3-D position of every square is
+   built by walking the hinge chain from the fixed square outward — nothing
+   about "does this net work" is looked up; it falls out of where the squares
+   actually land.
+
+   At the end (t = 1) each square's flat FRONT direction should point along
+   one of the six axis directions (+x, -x, +y, -y, +z, -z) — the six sides of
+   a box — and each direction should be used exactly once. The page checks
+   this directly: a direction used twice means two squares folded onto each
+   other; a direction used zero times means a side is left open. A "tidy" net
+   (one of the eleven that really unfold a box) always closes; a net with a
+   2x2 block in it (like six squares in a straight row) never does — you can
+   SEE why: it wraps around the sides and then doubles back on itself.
+
+   PART 2 — VIEWS (NCERT Class 4, "Hide and Seek": Jagat and Mini build with
+   matchboxes and draw the same building from the top, the front and the
+   side). A 3x3 board holds a stack of 0-3 matchboxes at each square. The
+   three views are read straight off those heights:
+     top view (col,row)   = the height there (blank if 0)             — Mini
+     front view (col)     = the TALLEST stack in that column, any row — Jagat
+     side view (row)      = the TALLEST stack in that row, any column
+   ============================================================================ */
+const EDGE_OFFSET = {L: [-1, 0, 0], R: [1, 0, 0], T: [0, 0, -1], B: [0, 0, 1]};
+const EDGE_HALF = {L: [-0.5, 0, 0], R: [0.5, 0, 0], T: [0, 0, -0.5], B: [0, 0, 0.5]};
+/* Every hinge must lift its flap toward the SAME side (the parent's own "up"),
+   so opposite edges turn about opposite-signed axes. */
+const EDGE_AXIS = {L: [0, 0, -1], R: [0, 0, 1], T: [1, 0, 0], B: [-1, 0, 0]};
+const NETS = {
+  valid: [
+    {id: 'front', col: 0, row: 0, parent: null},
+    {id: 'left', col: -1, row: 0, parent: 'front', edge: 'L'},
+    {id: 'right', col: 1, row: 0, parent: 'front', edge: 'R'},
+    {id: 'back', col: 2, row: 0, parent: 'right', edge: 'R'},
+    {id: 'top', col: 0, row: -1, parent: 'front', edge: 'T'},
+    {id: 'bottom', col: 0, row: 1, parent: 'front', edge: 'B'},
+  ],
+  broken: [
+    {id: 'f0', col: 0, row: 0, parent: null},
+    {id: 'f1', col: 1, row: 0, parent: 'f0', edge: 'R'},
+    {id: 'f2', col: 2, row: 0, parent: 'f1', edge: 'R'},
+    {id: 'f3', col: 3, row: 0, parent: 'f2', edge: 'R'},
+    {id: 'f4', col: 4, row: 0, parent: 'f3', edge: 'R'},
+    {id: 'f5', col: 5, row: 0, parent: 'f4', edge: 'R'},
+  ],
+};
+const NET_COLOR = ['#e2453d', '#f2b84a', '#3f9fe0', '#a084e8', '#2f9e5b', '#16a3a3'];
+
+/* ---- small 3-D vector/matrix helpers (as in solids/modeller) ------------------- */
+const add = (a, b) => [a[0] + b[0], a[1] + b[1], a[2] + b[2]];
+const sub = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
+const scl = (a, k) => [a[0] * k, a[1] * k, a[2] * k];
+const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+const norm = a => { const m = Math.hypot(...a) || 1; return scl(a, 1 / m); };
+const mm = (A, B) => A.map(r => [0, 1, 2].map(j => r[0] * B[0][j] + r[1] * B[1][j] + r[2] * B[2][j]));
+const mv = (A, v) => A.map(r => r[0] * v[0] + r[1] * v[1] + r[2] * v[2]);
+const IDENT = [[1, 0, 0], [0, 1, 0], [0, 0, 1]];
+const rotX = a => [[1, 0, 0], [0, Math.cos(a), -Math.sin(a)], [0, Math.sin(a), Math.cos(a)]];
+const rotY = a => [[Math.cos(a), 0, Math.sin(a)], [0, 1, 0], [-Math.sin(a), 0, Math.cos(a)]];
+/* Rodrigues' rotation: a unit-vector axis, an angle, about the origin. */
+function rotAxis(axis, theta){
+  const [x, y, z] = axis, c = Math.cos(theta), s = Math.sin(theta), t = 1 - c;
+  return [[t * x * x + c, t * x * y - s * z, t * x * z + s * y],
+          [t * x * y + s * z, t * y * y + c, t * y * z - s * x],
+          [t * x * z - s * y, t * y * z + s * x, t * z * z + c]];
+}
+const FACE_CORNERS = [[-0.5, 0, -0.5], [0.5, 0, -0.5], [0.5, 0, 0.5], [-0.5, 0, 0.5]];
+
+/* ---- fold the net by angle t (0 = flat, 1 = fully folded, 90° per hinge) ------- */
+function foldNet(nodes, t){
+  const theta = t * Math.PI / 2;
+  const T = {};
+  const root = nodes.find(n => n.parent == null);
+  T[root.id] = {M: IDENT, C: [root.col + 0.5, 0, root.row + 0.5]};
+  let rest = nodes.filter(n => n.parent != null);
+  while (rest.length) {
+    rest = rest.filter(n => {
+      const P = T[n.parent]; if (!P) return true;
+      const axisW = norm(mv(P.M, EDGE_AXIS[n.edge]));
+      const hingePt = add(P.C, mv(P.M, EDGE_HALF[n.edge]));
+      const C0 = add(P.C, mv(P.M, EDGE_OFFSET[n.edge]));
+      const Rw = rotAxis(axisW, theta);
+      T[n.id] = {M: mm(Rw, P.M), C: add(hingePt, mv(Rw, sub(C0, hingePt)))};
+      return false;
+    });
+  }
+  return T;
+}
+/* a real, computed check: does every one of the 6 box directions get exactly one face? */
+function analyzeFold(T){
+  const groups = {};
+  for (const id in T) {
+    const n = mv(T[id].M, [0, 1, 0]).map(v => Math.round(v));
+    const key = n[0] ? 'x' + (n[0] > 0 ? '+' : '-') : n[1] ? 'y' + (n[1] > 0 ? '+' : '-') : 'z' + (n[2] > 0 ? '+' : '-');
+    (groups[key] = groups[key] || []).push(id);
+  }
+  const AXES = ['x+', 'x-', 'y+', 'y-', 'z+', 'z-'];
+  const missing = AXES.filter(a => !groups[a] || !groups[a].length);
+  const overlap = AXES.filter(a => groups[a] && groups[a].length > 1);
+  return {groups, missing, overlap, closed: !missing.length && !overlap.length};
+}
+function faceCorners(node, T){ return FACE_CORNERS.map(c => add(T[node.id].C, mv(T[node.id].M, c))); }
+
+/* ---- views, read straight off the heights ------------------------------------- */
+const GRID = 3, MAXH = 3;
+function topView(H){ return H.map(col => col.slice()); }
+function frontView(H){ return H.map(col => Math.max(...col)); }        // per column, over all rows
+function sideView(H){ const s = []; for (let r = 0; r < GRID; r++) s.push(Math.max(...H.map(col => col[r]))); return s; }
+/* MODEL:end */
+
+/* ---- state ---------------------------------------------------------------------- */
+const S = {tab: 'net', net: 'valid', t: 0, locked: false,
+  H: Array.from({length: GRID}, () => Array(GRID).fill(0))};
+const shared = sharedState();
+if (shared) {
+  if (NETS[shared.net]) S.net = shared.net;
+  if (Array.isArray(shared.H) && shared.H.length === GRID) S.H = shared.H.map(c => Array.isArray(c) ? c.slice(0, GRID).map(v => clamp(+v || 0, 0, MAXH)) : Array(GRID).fill(0));
+}
+shareState(() => ({net: S.net, H: S.H}));
+
+/* ============================================================================
+   The 3-D renderer: a pool of paths, painted far to near — copied from
+   solids/modeller and extended to also hand back the fit, so the block
+   board's tap targets can be projected with the very same camera.
+   ============================================================================ */
+const CAM = 2400;
+function makePool(g, n){ const out = []; for (let i = 0; i < n; i++) { const p = document.createElementNS('http://www.w3.org/2000/svg', 'path'); g.appendChild(p); out.push(p); } return out; }
+const hex = c => [1, 3, 5].map(i => parseInt(c.slice(i, i + 2), 16));
+const shade = (c, k) => '#' + hex(c).map(v => clamp(Math.round(v * k), 0, 255).toString(16).padStart(2, '0')).join('');
+const LIGHT = norm([-0.45, 0.6, 0.66]);
+function render(pool, faces, view, box, fit){
+  let lo = [1e9, 1e9, 1e9], hi = [-1e9, -1e9, -1e9];
+  for (const f of faces) for (const p of f.p) for (let q = 0; q < 3; q++) { lo[q] = Math.min(lo[q], p[q]); hi[q] = Math.max(hi[q], p[q]); }
+  const c = fit ? fit.c : [0, 1, 2].map(q => (lo[q] + hi[q]) / 2);
+  let Rb = 1e-6; for (const f of faces) for (const p of f.p) Rb = Math.max(Rb, Math.hypot(p[0] - c[0], p[1] - c[1], p[2] - c[2]));
+  const K = fit ? fit.K : (Math.min(box.w, box.h) / 2 - 14) / Rb;
+  const drawn = faces.map(f => {
+    const w = f.p.map(p => mv(view, [p[0] - c[0], p[1] - c[1], p[2] - c[2]]));
+    const P = w.map(v => { const s = CAM / (CAM - v[2] * K); return [box.x + box.w / 2 + v[0] * K * s, box.y + box.h / 2 - v[1] * K * s]; });
+    let n = [0, 0, 0];
+    for (let i = 0; i < w.length; i++) { const a = w[i], b = w[(i + 1) % w.length]; n[0] += (a[1] - b[1]) * (a[2] + b[2]); n[1] += (a[2] - b[2]) * (a[0] + b[0]); n[2] += (a[0] - b[0]) * (a[1] + b[1]); }
+    const nm = Math.hypot(...n) || 1, lit = Math.abs((n[0] * LIGHT[0] + n[1] * LIGHT[1] + n[2] * LIGHT[2]) / nm);
+    return {P, z: w.reduce((s, v) => s + v[2], 0) / w.length, col: f.c ? shade(f.c, 0.6 + 0.45 * lit) : null, alpha: f.a};
+  }).sort((a, b) => a.z - b.z);
+  for (let i = 0; i < pool.length; i++) {
+    const e = pool[i], d = drawn[i];
+    if (!d || !d.col) { e.setAttribute('d', ''); continue; }
+    e.setAttribute('d', 'M' + d.P.map(p => p[0].toFixed(1) + ' ' + p[1].toFixed(1)).join('L') + 'Z');
+    e.setAttribute('fill', d.col); e.setAttribute('fill-opacity', d.alpha == null ? 1 : d.alpha);
+    e.setAttribute('stroke', d.col); e.setAttribute('stroke-width', 0.8); e.setAttribute('stroke-linejoin', 'round');
+  }
+  return {K, c, view};
+}
+function projectPt(p, fit, box){
+  const v = mv(fit.view, [p[0] - fit.c[0], p[1] - fit.c[1], p[2] - fit.c[2]]);
+  const s = CAM / (CAM - v[2] * fit.K);
+  return {x: box.x + box.w / 2 + v[0] * fit.K * s, y: box.y + box.h / 2 - v[1] * fit.K * s};
+}
+const viewOf = (yaw, pitch) => mm(rotX(pitch), rotY(yaw));
+
+/* ============================================================================
+   Tab: fold a net
+   ============================================================================ */
+const sN = $('stN'), BOXN = {x: 20, y: 30, w: 960, h: 560};
+let POOLN = null;
+function buildN(){
+  sN.innerHTML = `<rect width="1000" height="620" fill="#fbfaf6"/><g id="meshN"></g>
+    <text id="netTitle" x="500" y="600" fill="#6f5a34" font-size="14" font-weight="700" text-anchor="middle"></text>
+    <rect id="rotHitN" class="hit" x="20" y="30" width="960" height="540" fill="transparent" tabindex="0" aria-label="The net"/>`;
+  POOLN = makePool($('meshN'), 6);
+}
+buildN();
+const VIEW_N = viewOf(0.7, 0.5);
+function paintN(){
+  const T = foldNet(NETS[S.net], S.t);
+  const faces = NETS[S.net].map((n, i) => ({p: faceCorners(n, T), c: NET_COLOR[i % NET_COLOR.length]}));
+  render(POOLN, faces, VIEW_N, BOXN);
+  $('fold').value = S.t; $('foldOut').textContent = Math.round(S.t * 100) + '%';
+  const a = analyzeFold(T);
+  if (S.t > 0.995) {
+    $('netTitle').textContent = a.closed ? 'It closes into a box — six faces, no gaps.' : 'It does NOT close — look closely.';
+    let msg;
+    if (a.closed) msg = `<b>Closed!</b> Every one of the six sides (front/back/left/right/top/bottom) is covered exactly once.`;
+    else {
+      const bits = [];
+      if (a.overlap.length) bits.push(`<b>${a.overlap.length} side${a.overlap.length > 1 ? 's are' : ' is'} doubled up</b> — two squares land in the same place`);
+      if (a.missing.length) bits.push(`<b>${a.missing.length} side${a.missing.length > 1 ? 's are' : ' is'} left open</b> — nothing folds there`);
+      msg = 'It does not close. ' + bits.join(', and ') + '.';
+    }
+    $('netRead').innerHTML = msg;
+  } else {
+    $('netTitle').textContent = S.t > 0.02 ? 'Folding…' : 'A flat sheet of six squares.';
+    $('netRead').innerHTML = 'Drag <b>Fold</b> all the way, and see what happens.';
+  }
+  if (S.t > 0.995) { if (a.closed) discover('fold_ok'); else discover('fold_broken'); }
+}
+paintN();
+$('netChips').addEventListener('click', e => {
+  const b = e.target.closest('[data-n]'); if (!b) return;
+  S.net = b.dataset.n;
+  $('netChips').querySelectorAll('.chip').forEach(c => c.setAttribute('aria-pressed', c.dataset.n === S.net));
+  sound('pop'); paintN(); track('net', {net: S.net});
+});
+$('fold').addEventListener('input', () => { S.t = +$('fold').value; if (Math.abs(S.t - 1) < 0.005) sound('snap'); paintN(); track('fold', {net: S.net, t: S.t}); });
+
+/* ============================================================================
+   Tab: matchboxes and views
+   ============================================================================ */
+const sB = $('stB'), BOXB = {x: 20, y: 30, w: 960, h: 560};
+let POOLB = null, FITB = null, CELL_XY = [];
+function buildB(){
+  sB.innerHTML = `<rect width="1000" height="620" fill="#fbfaf6"/><g id="meshB"></g>
+    ${Array.from({length: GRID * GRID}, (_, i) => `<circle id="cellHit-${i}" class="hit" cx="0" cy="0" r="27" fill="transparent" role="button" tabindex="0" aria-label="Board square ${i + 1}. Tap to add a matchbox; keep tapping to stack up to three, then it clears."/>`).join('')}`;
+  POOLB = makePool($('meshB'), 400);
+}
+buildB();
+const VIEW_B = viewOf(0.62, 0.5);
+const CHECKER = ['#e7dcc0', '#d7c79f'];
+function blockFaces(){
+  const faces = [{p: [[0, 0, 0], [0, 0, 0], [0, 0, 0], [0, 0, 0]], c: null}, {p: [[GRID, MAXH, GRID], [GRID, MAXH, GRID], [GRID, MAXH, GRID], [GRID, MAXH, GRID]], c: null}];
+  for (let c = 0; c < GRID; c++) for (let r = 0; r < GRID; r++) {
+    faces.push({p: [[c, 0, r], [c + 1, 0, r], [c + 1, 0, r + 1], [c, 0, r + 1]], c: CHECKER[(c + r) % 2]});
+    for (let k = 0; k < S.H[c][r]; k++) faces.push(...cubeFaces(c + 0.5, k + 0.5, r + 0.5, 0.92, {top: '#f2d38a', side: '#c9975a'}));
+  }
+  return faces;
+}
+function cubeFaces(cx, cy, cz, s, col){
+  const h = s / 2, V = (dx, dy, dz) => [cx + dx * h, cy + dy * h, cz + dz * h];
+  return [
+    {p: [V(-1, 1, -1), V(1, 1, -1), V(1, 1, 1), V(-1, 1, 1)], c: col.top},
+    {p: [V(-1, -1, 1), V(1, -1, 1), V(1, -1, -1), V(-1, -1, -1)], c: shade(col.side, 0.7)},
+    {p: [V(-1, -1, 1), V(-1, 1, 1), V(-1, 1, -1), V(-1, -1, -1)], c: shade(col.side, 0.85)},
+    {p: [V(1, -1, -1), V(1, 1, -1), V(1, 1, 1), V(1, -1, 1)], c: col.side},
+    {p: [V(-1, -1, -1), V(-1, 1, -1), V(1, 1, -1), V(1, -1, -1)], c: col.side},
+    {p: [V(1, -1, 1), V(1, 1, 1), V(-1, 1, 1), V(-1, -1, 1)], c: shade(col.side, 0.92)},
+  ];
+}
+function paintB(){
+  FITB = render(POOLB, blockFaces(), VIEW_B, BOXB, FITB && {K: FITB.K, c: FITB.c, view: VIEW_B});
+  let i = 0;
+  for (let c = 0; c < GRID; c++) for (let r = 0; r < GRID; r++, i++) {
+    const p = projectPt([c + 0.5, S.H[c][r] > 0 ? S.H[c][r] / 2 : 0.4, r + 0.5], FITB, BOXB);
+    CELL_XY[i] = p;
+    const hit = $('cellHit-' + i); hit.setAttribute('cx', p.x.toFixed(1)); hit.setAttribute('cy', p.y.toFixed(1));
+  }
+  paintViews();
+  checkBlocks();
+}
+function tinyGrid(svgEl, cells, label){
+  const n = GRID, cell = 28, pad = (96 - n * cell) / 2;
+  let s = '';
+  for (let c = 0; c < n; c++) for (let r = 0; r < n; r++) {
+    const v = cells[c][r], x = pad + c * cell, y = pad + r * cell;
+    s += `<rect x="${x}" y="${y}" width="${cell - 2}" height="${cell - 2}" rx="3" fill="${v ? '#c9975a' : '#f0ece2'}" stroke="#b9ab9a" stroke-width="1"/>`;
+    if (v) s += `<text x="${x + (cell - 2) / 2}" y="${y + (cell - 2) / 2 + 5}" text-anchor="middle" font-size="14" font-weight="700" fill="#fff">${v}</text>`;
+  }
+  svgEl.innerHTML = s;
+}
+function barGrid(svgEl, heights){
+  const n = heights.length, cell = 28, pad = (96 - n * cell) / 2;
+  let s = '';
+  for (let i = 0; i < n; i++) {
+    const h = heights[i], x = pad + i * cell;
+    for (let k = 0; k < MAXH; k++) {
+      const y = 8 + (MAXH - 1 - k) * (cell - 2);
+      s += `<rect x="${x}" y="${y}" width="${cell - 2}" height="${cell - 4}" rx="3" fill="${k < h ? '#c9975a' : '#f0ece2'}" stroke="#b9ab9a" stroke-width="1"/>`;
+    }
+  }
+  svgEl.innerHTML = s;
+}
+function paintViews(){
+  tinyGrid($('vTop'), topView(S.H));
+  barGrid($('vFront'), frontView(S.H));
+  barGrid($('vSide'), sideView(S.H));
+}
+function checkBlocks(){
+  const f = frontView(S.H), sd = sideView(S.H);
+  const total = S.H.flat().reduce((a, b) => a + b, 0);
+  if (S.H.some(col => col.some(v => v === MAXH))) discover('tower');
+  if (total > 0 && f.join(',') !== sd.join(',')) discover('views_differ');
+  if (total > 0 && f.join(',') === sd.join(',')) discover('views_match');
+}
+function tapCell(i){
+  const c = Math.floor(i / GRID), r = i % GRID;
+  S.H[c][r] = (S.H[c][r] + 1) % (MAXH + 1);
+  sound(S.H[c][r] === 0 ? 'whoosh' : 'pop');
+  paintB();
+  track('cell', {c, r, h: S.H[c][r]});
+}
+for (let i = 0; i < GRID * GRID; i++) {
+  const id = 'cellHit-' + i;
+  $(id).addEventListener('click', () => tapCell(i));
+  $(id).addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); tapCell(i); } });
+}
+$('btnClear').addEventListener('click', () => { S.H = Array.from({length: GRID}, () => Array(GRID).fill(0)); sound('whoosh'); paintB(); track('clear'); });
+paintB();
+
+/* ============================================================================
+   Tabs
+   ============================================================================ */
+function selectTab(id){
+  S.tab = id;
+  $('tabNet').setAttribute('aria-selected', id === 'net'); $('tabBlk').setAttribute('aria-selected', id === 'blk');
+  $('stN').toggleAttribute('hidden', id !== 'net'); $('stB').toggleAttribute('hidden', id !== 'blk');
+  $('cardN').hidden = id !== 'net'; $('cardB').hidden = id !== 'blk';
+  track('tab', {tab: id});
+}
+$('tabNet').addEventListener('click', () => selectTab('net'));
+$('tabBlk').addEventListener('click', () => selectTab('blk'));
+
+/* ============================================================================
+   Start
+   ============================================================================ */
+findings($('finds'), [
+  {id: 'fold_ok',      icon: '📦', label: 'A net that closes',        hint: 'Fold the tidy net all the way.'},
+  {id: 'fold_broken',  icon: '🕳️', label: 'A net that will not close', hint: 'Fold the stretched-out net all the way.'},
+  {id: 'tower',        icon: '🗼', label: 'A stack of three',          hint: 'Tap one square until it has three matchboxes.'},
+  {id: 'views_differ', icon: '👀', label: 'Three different views',     hint: 'Build something uneven, and compare Jagat’s and Mini’s drawings.'},
+  {id: 'views_match',  icon: '🟰', label: 'Front matches the side',    hint: 'Build something even on every side.'},
+], () => { say('You found every mission! Nets and views are both about the same shape, seen differently.'); });
+say('Fold the net, and see if it really closes into a box.', {interrupt: false});
+window.applyFeatures = () => { paintN(); paintB(); };
+window.PG_STATE = () => ({tab: S.tab, net: S.net, t: S.t, closed: analyzeFold(foldNet(NETS[S.net], S.t)).closed,
+  H: S.H.map(c => c.slice()), top: topView(S.H), front: frontView(S.H), side: sideView(S.H)});
+window.PG_MODEL = {NETS, foldNet, analyzeFold, topView, frontView, sideView, GRID, MAXH};
+</script>
+</body>
+</html>

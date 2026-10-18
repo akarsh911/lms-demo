@@ -1,0 +1,617 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Sliding Filament</title>
+<meta name="description" content="Class 11: a sarcomere whose myosin heads each run the cross-bridge cycle. Release calcium and the heads pull actin in; measure the A band, I band and H zone, build the length–tension and load–speed curves, and take the ATP away to see rigor.">
+<link rel="icon" href="../../favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600&family=Inter:wght@400;500;600;700&family=Nunito:wght@500;700;800&family=Newsreader:opsz,wght@6..72,400;6..72,500&family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="../../play.css">
+<style>
+/* Only what this page needs beyond play.css. */
+.pg-stage{min-height:0; background:#faf8f4}
+@media (max-width:1180px) and (min-width:981px){ .pg-main{grid-template-columns:minmax(0,1fr) 330px} }
+.gate{position:absolute; left:0; right:0; top:14%; height:34%; display:grid; place-items:center; pointer-events:none}
+.gate span{background:rgba(29,35,39,.85); color:#fff; padding:10px 16px; border-radius:99px; font-weight:600; font-size:14px}
+.seg{display:grid; grid-auto-flow:column; grid-auto-columns:1fr; gap:4px; background:var(--sunk); padding:4px; border-radius:var(--radius-sm)}
+.seg button{border:0; background:transparent; border-radius:7px; min-height:30px; font-weight:600; font-size:12.5px; cursor:pointer; color:var(--ink-2); padding:0 6px; line-height:1.2}
+.seg button[aria-pressed="true"]{background:var(--card); color:var(--ink); box-shadow:var(--shadow)}
+.seg button:disabled{opacity:.5; cursor:default}
+.ctl{grid-template-columns:112px 1fr 70px; margin:2px 0}
+.ctl label{font-size:12.5px; line-height:1.2}
+.ctl output{font-family:var(--font-mono); font-size:12.5px; font-weight:600; min-width:0}
+.sub{font-size:11px; letter-spacing:.07em; text-transform:uppercase; font-weight:700; color:var(--ink-3); margin:12px 0 4px}
+.note{font-size:12.5px; color:var(--ink-3); margin:6px 0 0}
+.stim{width:100%; min-height:40px; font-size:14.5px}
+.stim[aria-pressed="true"]{background:#c53030; border-color:#c53030; color:#fff}
+.readout{display:grid; grid-template-columns:1fr auto; gap:3px 12px; font-size:13px; align-items:baseline}
+.readout span{color:var(--ink-2)}
+.readout b{font-family:var(--font-mono); font-weight:600; font-size:12.5px; font-variant-numeric:tabular-nums; text-align:right}
+.readout .sep{grid-column:1/-1; height:1px; background:var(--hair); margin:4px 0}
+.why p{font-size:13.5px; margin-bottom:.55em}
+.why .mono{font-size:12.5px}
+svg text.m{font-family:var(--font-mono)}
+svg .serif{font-family:"Newsreader",Georgia,serif}
+#zHit{cursor:ew-resize}
+</style>
+</head>
+<body>
+<header class="pg-top"></header>
+
+<div class="pg-intro">
+  <h1>The sliding filament</h1>
+  <p>One sarcomere, Z line to Z line, with 200 myosin heads. Each head runs the book’s cycle on its own: it binds to actin only where calcium has
+     moved troponin aside, pulls, and lets go only when a new ATP binds. Release the calcium and measure what shortens.
+     Then change the rules: the calcium, the ATP, the load, the length and the size of the power stroke.</p>
+</div>
+
+<main class="pg-main">
+  <section class="pg-stage" id="stageWrap">
+    <svg id="stage" viewBox="0 0 1000 800" role="img" aria-label="A sarcomere with thin actin filaments and thick myosin filaments whose heads bind, pull and let go; the A band, I band and H zone measured beneath; graphs of band lengths against time, tension against sarcomere length, and shortening speed against load"></svg>
+    <div class="gate" id="gate"><span>Make your prediction first →</span></div>
+  </section>
+
+  <aside class="pg-side">
+    <div id="poe"></div>
+
+    <div class="card" id="ctlCard">
+      <button class="btn stim" id="btnStim" aria-pressed="false">⚡ Nerve signal: release Ca²⁺</button>
+      <div class="seg" role="group" aria-label="What the ends do" style="margin-top:10px">
+        <button id="modeTon" aria-pressed="true">Lift a load</button>
+        <button id="modeMet" aria-pressed="false">Hold the length</button>
+      </div>
+      <div class="ctl" style="margin-top:6px"><label for="load">Load on the Z lines</label><input type="range" id="load" min="0" max="100" step="5" value="0"><output id="loadOut">0 pN</output></div>
+      <div class="ctl"><label for="len">Resting length</label><input type="range" id="len" min="1.7" max="3.8" step="0.05" value="2.5"><output id="lenOut">2.50 µm</output></div>
+      <div class="sub">Change the law</div>
+      <div class="ctl"><label for="ca">Ca²⁺ released</label><input type="range" id="ca" min="-1" max="1" step="0.05" value="1"><output id="caOut">10 µM</output></div>
+      <div class="ctl"><label for="atp">ATP</label><input type="range" id="atp" min="0" max="5" step="0.25" value="5"><output id="atpOut">5.00 mM</output></div>
+      <div class="ctl"><label for="stroke">Power stroke</label><input type="range" id="stroke" min="4" max="16" step="1" value="10"><output id="strokeOut">10 nm</output></div>
+      <div class="row" style="justify-content:space-between; margin-top:10px">
+        <div><div class="kicker" style="margin:0">Model time</div><div class="mono" id="clock" style="font-weight:600">0 ms</div></div>
+        <div class="row" style="gap:6px">
+          <button class="btn sm" id="btnSlow" aria-pressed="true">Slow ×1/20</button>
+          <button class="btn sm" id="btnReset">↺ Fresh fibre</button>
+        </div>
+      </div>
+      <p class="note">Drag either Z line to set the length. The model’s clock runs 20 times slower than yours so you can watch the heads.</p>
+    </div>
+
+    <div class="card">
+      <div class="kicker">Measured now</div>
+      <div class="readout" id="readout"></div>
+    </div>
+
+    <div class="card why" id="whyCard">
+      <div class="kicker">What the model shows</div>
+      <div id="why"><p class="note" style="margin:0">The measurements appear once you have made a prediction.</p></div>
+    </div>
+
+    <div class="card"><div class="kicker">To find</div><div id="finds"></div></div>
+  </aside>
+</main>
+
+<script src="../../play.js"></script>
+<script>
+'use strict';
+const {$, esc, clamp, fmt, loop, sound, say, track, toast, predict, findings, discover, found,
+       shareState, sharedState, mount, reduced, mulberry32, drag, svgPoint} = Play;
+mount({thread: 'muscle', band: 'theorist'});
+
+/* MODEL:start ==================================================================
+   A sarcomere as NCERT Class 11 Biology Ch 17 “Locomotion and Movement” describes it (§17.2.2).
+
+   GEOMETRY (nm, measured from the M line; a half-sarcomere is s long, so the sarcomere is 2s):
+     thick (myosin) filament 1600 long, its middle 160 bare of heads; thin (actin) filaments
+     1000 long, fixed to each Z line. 2 × 4 rows of 25 heads, each facing its own row of actin
+     binding sites, one every 36.5 nm along the thin filament.
+   REGULATION: each binding site is masked by troponin–tropomyosin or open. It flips towards
+     an open share θ = [Ca]² / ([Ca]² + (1 µM)²) at 120 /s; a head bound to a site holds it open.
+   THE CROSS-BRIDGE CYCLE, head by head, as random events (rates per second):
+     M·ATP  —hydrolysis of its bound ATP, 100→  M·ADP·Pi (cocked)
+     cocked —binds an OPEN site within 7 nm, 250 (×0.4 where the two thin filaments overlap)→ bound
+     bound  —power stroke 400: the lever swings δ = 10 nm towards the M line→ pulled (rigor-like)
+     pulled —a new ATP binds, 180·[ATP]/([ATP] + 0.15 mM) (faster if dragged past its end)→ M·ATP, released
+     With no ATP a pulled head never lets go: rigor.
+   MECHANICS: every bound head is a spring (1 pN/nm) stretched by how far its site has moved
+     from its lever’s end. The Z lines move until the heads’ pull balances the load plus a weak
+     elastic return (0.3 pN/nm) — solved implicitly each 0.2 ms. “Hold the length” clamps the Z lines
+     and reads the tension instead.
+   BANDS, measured from the filaments: A = the thick filament’s length; I = the thin-only stretch
+     either side of the Z line; H = the thick-only stretch in the middle.
+   ============================================================================ */
+const GEO = {thick: 1600, bare: 160, thin: 1000, rows: 4, perRow: 25, siteGap: 36.5, min: 810, max: 1900};
+const KIN = {kh: 100, ka: 250, reach: 7, kback: 20, kp: 400, kd: 180, kmATP: 0.15, stiff: 1, delta: 10, kon: 120, kdCa: 1, hill: 2,
+             eta: 0.03, kr: 0.3, drag: 0.5, crowd: 0.4};
+const D0 = 0, D1 = 1, A1 = 2, A2 = 3;
+const NSITE = Math.floor(GEO.thin / GEO.siteGap);
+const headX = j => GEO.bare / 2 + (GEO.thick / 2 - GEO.bare / 2) * (j + 0.5) / GEO.perRow;
+const siteD = k => GEO.siteGap * (k + 0.5);                 // a site's distance from its Z line
+const exposedFrac = ca => Math.pow(ca, KIN.hill) / (Math.pow(ca, KIN.hill) + Math.pow(KIN.kdCa, KIN.hill));
+
+function makeSarc(seed, o = {}){
+  const rest = o.rest || 1250;
+  const S = {s: o.s || rest, rest, t: 0, ca: o.ca == null ? 0.1 : o.ca, atp: o.atp == null ? 5 : o.atp, load: o.load || 0, delta: o.delta || KIN.delta,
+    iso: !!o.iso, rnd: mulberry32(seed || 1), heads: [], sites: [], atpUsed: 0, strokes: 0, F: 0, v: 0, nAtt: 0};
+  for (let side = 0; side < 2; side++) for (let r = 0; r < GEO.rows; r++) {
+    for (let j = 0; j < GEO.perRow; j++) S.heads.push({side, r, j, h: headX(j), st: D1, k: -1, arm: 0, ext: 0});
+    const row = []; for (let k = 0; k < NSITE; k++) row.push({open: S.rnd() < exposedFrac(S.ca), held: 0});
+    S.sites.push(row);
+  }
+  return S;
+}
+const sitePos = (S, k) => S.s - siteD(k);                   // from the M line
+function release(S, H, to){ if (H.k >= 0) S.sites[H.side * GEO.rows + H.r][H.k].held = 0; H.st = to; H.k = -1; H.arm = 0; H.ext = 0; }
+function step(S, dt){
+  const K = KIN, rnd = S.rnd, th = exposedFrac(S.ca), fATP = S.atp / (S.atp + K.kmATP);
+  for (const row of S.sites) for (const q of row) {
+    if (q.held) { q.open = true; continue; }
+    if (q.open) { if (rnd() < K.kon * (1 - th) * dt) q.open = false; }
+    else if (rnd() < K.kon * th * dt) q.open = true;
+  }
+  const crowdIn = GEO.thin - S.s;                             // the two thin filaments overlap within this of M
+  for (const H of S.heads) {
+    const row = S.sites[H.side * GEO.rows + H.r];
+    if (H.st === D0) { if (rnd() < K.kh * dt) { H.st = D1; S.atpUsed++; } }
+    else if (H.st === D1) {
+      const k = Math.round((S.s - H.h) / GEO.siteGap - 0.5);
+      if (k >= 0 && k < NSITE) {
+        const off = sitePos(S, k) - H.h, q = row[k];
+        const p = K.ka * dt * (H.h < crowdIn ? K.crowd : 1);
+        if (Math.abs(off) <= K.reach && q.open && !q.held && rnd() < p) { H.st = A1; H.k = k; H.arm = 0; q.held = 1; }
+      }
+    } else {
+      H.ext = sitePos(S, H.k) - H.h + H.arm;
+      if (H.st === A1) {
+        if (rnd() < K.kp * dt) { H.st = A2; H.arm = S.delta; S.strokes++; }
+        else if (rnd() < K.kback * dt) release(S, H, D1);
+      } else {
+        let kd = K.kd * (H.ext < 0 ? 1 + K.drag * -H.ext : 1);
+        if (H.ext < -12) kd += 400;                           // dragged far past its end: ATP prises it off fast
+        kd *= fATP;                                           // …but only ATP can prise it off
+        if (rnd() < kd * dt) release(S, H, D0);
+      }
+    }
+  }
+  let n = 0, C = 0;
+  for (const H of S.heads) if (H.st >= A1) { n++; C += -siteD(H.k) - H.h + H.arm; }
+  if (S.iso) S.v = 0;
+  else {
+    /* implicit: η(s′ − s)/dt = load + kr(rest − s′) − ½Σk(s′ − d − h + arm)   (the two halves are in series) */
+    const eta = K.eta / dt;
+    let sNew = (eta * S.s + S.load + K.kr * S.rest - K.stiff * C / 2) / (eta + K.stiff * n / 2 + K.kr);
+    sNew = clamp(sNew, GEO.min, Math.max(S.rest, S.s));    // the load cannot stretch it past its resting length
+    S.v = (sNew - S.s) / dt; S.s = sNew;
+  }
+  let F = 0; for (const H of S.heads) if (H.st >= A1) { H.ext = sitePos(S, H.k) - H.h + H.arm; F += K.stiff * H.ext; }
+  S.F = F / 2; S.nAtt = n; S.t += dt;
+}
+function run(S, T, dt = 2e-4){ const n = Math.round(T / dt); for (let i = 0; i < n; i++) step(S, dt); return S; }
+/* the bands, measured from where the filaments are */
+const bands = s => ({L: 2 * s, A: GEO.thick, I: Math.max(0, 2 * (s - GEO.thick / 2)), H: Math.max(0, 2 * (s - GEO.thin))});
+/* how many heads sit opposite a thin filament at this half-length (the geometric overlap) */
+function overlapHeads(s){ let n = 0; for (let j = 0; j < GEO.perRow; j++) if (headX(j) >= s - GEO.thin) n++; return n / GEO.perRow; }
+/* the shortening speed from a free contraction: time to go from 10 nm to 70 nm shorter (nm/s per half) */
+function speedUnder(load, seed, delta){
+  const S = makeSarc(seed, {ca: 10, load, delta}); let t1 = null, t2 = null; const dt = 2e-4;
+  for (let i = 0; i < 2500; i++) { step(S, dt); const d = S.rest - S.s; if (t1 == null && d >= 10) t1 = S.t; if (d >= 70) { t2 = S.t; break; } }
+  return t2 ? 60 / (t2 - t1) : 0;
+}
+function tensionAt(L, seed){ const S = makeSarc(seed, {s: L * 500, rest: L * 500, iso: true, ca: 10}); run(S, 0.1); let f = 0; for (let i = 0; i < 750; i++) { step(S, 2e-4); f += S.F; } return f / 750; }
+/* MODEL:end */
+
+/* ---- state: plain data --------------------------------------------------- */
+const DEF = {load: 0, len: 2.5, ca: 1, atp: 5, stroke: 10};
+const LIM = {load: [0, 100], len: [1.7, 3.8], ca: [-1, 1], atp: [0, 5], stroke: [4, 16]};
+const S = {par: Object.assign({}, DEF), iso: false, stim: false, slow: true, locked: false, seed: 1,
+  M: null, hist: [], lt: [], fv: [], con: null, maxShort: 0, restAtStim: null, contracted: false, EXPLAINED: false};
+const shared = sharedState();
+if (shared && shared.par) { for (const k in DEF) { const v = +shared.par[k]; if (isFinite(v)) S.par[k] = clamp(v, LIM[k][0], LIM[k][1]); } S.iso = !!shared.iso; }
+shareState(() => ({par: Object.assign({}, S.par), iso: S.iso}));
+const caLevel = () => Math.pow(10, S.par.ca);                 // µM
+function fresh(){ S.seed++; S.M = makeSarc(S.seed, {rest: S.par.len * 500, atp: S.par.atp, load: S.par.load, iso: S.iso, delta: S.par.stroke}); S.caTarget = 0.1; S.stim = false; S.hist = []; S.con = null; }
+
+/* ============================================================================
+   The stage: drawn once, then patched.
+   ============================================================================ */
+const svg = $('stage');
+const INK = '#1d2327', FAINT = '#7c878c', HAIR = '#e7e1d6', PAPER = '#fffdf8';
+const COL = {actin: '#3a9d8f', trop: '#1d5e56', site: '#f2c230', myosin: '#7b5cd6', D0: '#c5b8ef', D1: '#7b5cd6', A1: '#e0567a', A2: '#c53030',
+  L: INK, A: '#7b5cd6', I: '#3a9d8f', H: '#e08a1f', ca: '#2f7de1'};
+const CX = 500, SC = 0.24;                                    // px per nm
+const THIN_Y = [170, 250, 330], THICK_Y = [210, 290];
+const ROWMAP = [[0, -1, 0], [0, 1, 1], [1, -1, 1], [1, 1, 2]];  // row → [thick, direction, thin]
+const GT = {x: 60, y: 468, w: 250, h: 230}, GLT = {x: 380, y: 468, w: 250, h: 230}, GFV = {x: 700, y: 468, w: 250, h: 230};
+let HEADS = [], LEVER = [], CAION = [];
+
+function build(){
+  const rnd = mulberry32(99);
+  let thin = '', thick = '', heads = '';
+  for (let side = 0; side < 2; side++) for (let t = 0; t < 3; t++) {
+    let beads = '', sites = '';
+    for (let k = 0; k < Math.floor(GEO.thin / 18.25); k++) { const x = (k + 0.5) * 18.25 * SC; beads += `<circle cx="${x.toFixed(1)}" cy="${(k % 2 ? 1.6 : -1.6)}" r="2.6"/>`; }
+    for (let r = 0; r < GEO.rows; r++) if (ROWMAP[r][2] === t) {
+      const dy = -ROWMAP[r][1] * 4.2;       // the site sits on the face the heads come from
+      for (let k = 0; k < NSITE; k++) sites += `<circle id="st-${side}-${r}-${k}" cx="${(siteD(k) * SC).toFixed(1)}" cy="${dy}" r="2.2" fill="${COL.site}"/>`;
+    }
+    thin += `<g id="thin-${side}-${t}"><g transform="scale(${side ? -1 : 1} 1)"><line x1="0" y1="0" x2="${GEO.thin * SC}" y2="0" stroke="${COL.actin}" stroke-width="3" opacity=".35"/>
+      <g fill="${COL.actin}">${beads}</g><path d="M0 -0.5 ${Array.from({length: 24}, (_, i) => `Q${((i + .5) * GEO.thin * SC / 24).toFixed(1)} ${i % 2 ? 3.4 : -3.4} ${((i + 1) * GEO.thin * SC / 24).toFixed(1)} 0`).join(' ')}" fill="none" stroke="${COL.trop}" stroke-width="1.3"/>${sites}</g></g>`;
+  }
+  for (const y of THICK_Y) thick += `<rect x="${CX - 800 * SC}" y="${y - 3.5}" width="${1600 * SC}" height="7" rx="3.5" fill="${COL.myosin}" opacity=".85"/>`;
+  for (let i = 0; i < 200; i++) heads += `<path id="lv${i}" fill="none" stroke="#5b43b0" stroke-width="1.6" stroke-linecap="round"/><ellipse id="hd${i}" rx="3.6" ry="2.4"/>`;
+  let ions = ''; for (let i = 0; i < 70; i++) { CAION.push({x: 40 + rnd() * 920, y: 146 + rnd() * 206, p: rnd() * 6.28, r: rnd()}); ions += `<circle id="ca${i}" r="2.4" fill="${COL.ca}" opacity=".75"/>`; }
+  svg.innerHTML = `
+  <defs>
+    <linearGradient id="gFib" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#e9a3a0"/><stop offset=".5" stop-color="#d9706c"/><stop offset="1" stop-color="#c05a58"/></linearGradient>
+    <clipPath id="clipFib"><rect x="376" y="34" width="596" height="40" rx="20"/></clipPath>
+    <clipPath id="clipGT"><rect x="${GT.x}" y="${GT.y}" width="${GT.w}" height="${GT.h}"/></clipPath>
+  </defs>
+  <rect x="0" y="0" width="1000" height="800" fill="#faf8f4"/>
+  <!-- from muscle to myofibril -->
+  <g id="hier">
+    <text x="30" y="24" font-size="12" font-weight="700" fill="#4a555b" letter-spacing=".08em">MUSCLE → FASCICLE → FIBRE → MYOFIBRIL</text>
+    <g transform="translate(30 36)">
+      <path d="M0 20 C 20 0, 70 0, 90 20 C 70 40, 20 40, 0 20 Z" fill="#d9706c"/><path d="M8 20 C 30 10, 60 10, 82 20" fill="none" stroke="#f3c9c5" stroke-width="1"/>
+      <text x="45" y="52" font-size="10.5" fill="${FAINT}" text-anchor="middle">muscle</text>
+      <g transform="translate(112 4)"><circle cx="16" cy="16" r="16" fill="#e8b3ae" stroke="#c05a58"/>${[[9, 11], [20, 9], [13, 21], [23, 20], [16, 15]].map(([x, y]) => `<circle cx="${x}" cy="${y}" r="4.2" fill="#d9706c"/>`).join('')}
+        <text x="16" y="48" font-size="10.5" fill="${FAINT}" text-anchor="middle">fascicle</text></g>
+      <g transform="translate(166 8)"><rect x="0" y="0" width="120" height="24" rx="12" fill="url(#gFib)"/>${Array.from({length: 24}, (_, i) => `<line x1="${6 + i * 4.6}" y1="3" x2="${6 + i * 4.6}" y2="21" stroke="#a84442" stroke-width="1.6" opacity=".55"/>`).join('')}
+        <ellipse cx="30" cy="12" rx="5" ry="3" fill="#6d2d2c" opacity=".6"/><ellipse cx="86" cy="13" rx="5" ry="3" fill="#6d2d2c" opacity=".6"/>
+        <text x="60" y="44" font-size="10.5" fill="${FAINT}" text-anchor="middle">fibre: one cell, many nuclei</text></g>
+    </g>
+    <g clip-path="url(#clipFib)"><rect x="376" y="34" width="596" height="40" fill="#f1dcd8"/><g id="fibStripes"></g></g>
+    <rect x="376" y="34" width="596" height="40" rx="20" fill="none" stroke="#c9a9a4"/>
+    <text id="fibT" x="674" y="92" font-size="11" fill="${FAINT}" text-anchor="middle">a myofibril: sarcomeres end to end, drawn from the model’s own band lengths</text>
+    <path id="zoomL" d="" fill="none" stroke="#c9a9a4" stroke-dasharray="3 3"/>
+  </g>
+  <!-- the sarcomere -->
+  <text x="30" y="124" font-size="12" font-weight="700" fill="#4a555b" letter-spacing=".08em">ONE SARCOMERE</text>
+  <g id="legend" font-size="11">
+    ${[['D0', 'M·ATP'], ['D1', 'cocked (ADP·Pi)'], ['A1', 'bound'], ['A2', 'pulled / rigor']].map(([k, t], i) => `<ellipse cx="${190 + i * 118}" cy="120" rx="4.2" ry="2.8" fill="${COL[k]}"/><text x="${198 + i * 118}" y="124" fill="#4a555b">${t}</text>`).join('')}
+    <circle cx="668" cy="120" r="3" fill="${COL.site}"/><text x="676" y="124" fill="#4a555b">open site</text>
+    <circle cx="752" cy="120" r="2.6" fill="${COL.ca}"/><text x="760" y="124" fill="#4a555b">Ca²⁺</text>
+  </g>
+  <rect x="20" y="138" width="960" height="222" rx="10" fill="${PAPER}" stroke="${HAIR}"/>
+  <g id="ions">${ions}</g>
+  <line x1="${CX}" y1="192" x2="${CX}" y2="308" stroke="#8b78c9" stroke-width="2" stroke-dasharray="3 2"/>
+  <g id="thinL">${thin}</g>
+  <g id="thickL">${thick}</g>
+  <g id="headsL">${heads}</g>
+  <g id="zL"><path id="z0" fill="none" stroke="${INK}" stroke-width="3" stroke-linejoin="round"/><path id="z1" fill="none" stroke="${INK}" stroke-width="3" stroke-linejoin="round"/></g>
+  <text x="${CX}" y="186" font-size="11" fill="#8b78c9" text-anchor="middle" font-weight="700">M</text>
+  <text id="zT0" y="156" font-size="11" fill="${INK}" text-anchor="middle" font-weight="700">Z</text><text id="zT1" y="156" font-size="11" fill="${INK}" text-anchor="middle" font-weight="700">Z</text>
+  <g id="bandsL" font-size="12"></g>
+  <g id="zHitL"><rect id="zHit0" y="140" width="30" height="220" fill="transparent" style="cursor:ew-resize"/><rect id="zHit" y="140" width="30" height="220" fill="transparent"/></g>
+  <!-- graphs -->
+  <line x1="20" y1="424" x2="980" y2="424" stroke="${HAIR}"/>
+  <text x="${GT.x - 30}" y="${GT.y - 26}" font-size="12" font-weight="700" fill="#4a555b" letter-spacing=".08em">BAND LENGTHS AGAINST TIME</text>
+  <g id="gtAxes"></g><g clip-path="url(#clipGT)"><path id="gtL" fill="none" stroke="${COL.L}" stroke-width="2"/><path id="gtA" fill="none" stroke="${COL.A}" stroke-width="2.2"/>
+    <path id="gtI" fill="none" stroke="${COL.I}" stroke-width="2"/><path id="gtH" fill="none" stroke="${COL.H}" stroke-width="2"/></g>
+  <g id="gtKey" font-size="11"></g>
+  <text x="${GLT.x - 30}" y="${GLT.y - 26}" font-size="12" font-weight="700" fill="#4a555b" letter-spacing=".08em">TENSION AGAINST LENGTH</text>
+  <g id="ltAxes"></g><path id="ltOver" fill="none" stroke="#9aa3a6" stroke-width="1.4" stroke-dasharray="5 4"/><g id="ltPts"></g>
+  <text x="${GFV.x - 30}" y="${GFV.y - 26}" font-size="12" font-weight="700" fill="#4a555b" letter-spacing=".08em">SPEED AGAINST LOAD</text>
+  <g id="fvAxes"></g><path id="fvLine" fill="none" stroke="#c53030" stroke-width="1.4" stroke-dasharray="5 4"/><g id="fvPts"></g>
+  <text id="gNote" x="500" y="782" font-size="12" fill="${FAINT}" text-anchor="middle"></text>
+  <rect id="veil" x="20" y="430" width="960" height="360" fill="#faf8f4" opacity=".96"/>
+  <text id="veilT" x="500" y="610" text-anchor="middle" fill="${FAINT}" font-size="15" font-weight="600">The measurements appear once you have made a prediction.</text>`;
+  HEADS = []; for (let i = 0; i < 200; i++) HEADS.push({lv: $('lv' + i), hd: $('hd' + i)});
+  CAION = CAION.map((c, i) => Object.assign(c, {el: $('ca' + i)}));
+}
+
+/* ---- painting ---------------------------------------------------------------- */
+const zx = (side, s) => side ? CX + s * SC : CX - s * SC;
+function zigzag(x){ let d = `M${x} 144`; for (let y = 144, i = 0; y < 356; y += 12, i++) d += ` L${(x + (i % 2 ? -5 : 5)).toFixed(1)} ${y + 6} L${x} ${y + 12}`; return d; }
+let CLOCK = 0;
+function paintSarc(){
+  const M = S.M, s = M.s;
+  for (let side = 0; side < 2; side++) {
+    const x = zx(side, s);
+    for (let t = 0; t < 3; t++) $(`thin-${side}-${t}`).setAttribute('transform', `translate(${x.toFixed(1)} ${THIN_Y[t]})`);
+    $('z' + side).setAttribute('d', zigzag(x));
+    $('zT' + side).setAttribute('x', x);
+    $(side ? 'zHit' : 'zHit0').setAttribute('x', x - 15);
+    for (let r = 0; r < GEO.rows; r++) { const row = M.sites[side * GEO.rows + r]; for (let k = 0; k < NSITE; k++) { const el = $(`st-${side}-${r}-${k}`); const o = row[k].open ? 1 : 0; if (el._o !== o) { el._o = o; el.setAttribute('opacity', o ? 1 : 0.08); } } }
+  }
+  /* heads */
+  for (let i = 0; i < M.heads.length; i++) {
+    const H = M.heads[i], [tk, dir, tn] = ROWMAP[H.r], sg = H.side ? 1 : -1;
+    const bx = CX + sg * H.h * SC, by = THICK_Y[tk] + dir * 3.5, ty = THIN_Y[tn] - dir * 4.5;
+    let hx, hy;
+    const wob = Math.sin(CLOCK * 7 + i * 1.7) * 0.8;
+    if (H.st >= A1) { hx = CX + sg * sitePos(M, H.k) * SC; hy = ty; }
+    else if (H.st === D1) { hx = bx + sg * 1.6 + wob; hy = by + dir * 22; }
+    else { hx = bx - sg * 5 + wob; hy = by + dir * 17; }
+    const mx = (bx + hx) / 2 - sg * (H.st === A2 ? 3 : H.st === A1 ? -1 : 0), my = (by + hy) / 2;
+    const e = HEADS[i];
+    e.lv.setAttribute('d', `M${bx.toFixed(1)} ${by.toFixed(1)} Q${mx.toFixed(1)} ${my.toFixed(1)} ${hx.toFixed(1)} ${(hy - dir * 2.4).toFixed(1)}`);
+    e.hd.setAttribute('cx', hx.toFixed(1)); e.hd.setAttribute('cy', hy.toFixed(1));
+    const c = H.st === D0 ? COL.D0 : H.st === D1 ? COL.D1 : H.st === A1 ? COL.A1 : COL.A2;
+    if (e._c !== c) { e._c = c; e.hd.setAttribute('fill', c); }
+  }
+  /* calcium ions: as many as the sarcoplasm's level on a log scale */
+  const nCa = clamp(Math.round(22 * (Math.log10(M.ca) + 1.3)), 0, CAION.length);
+  CAION.forEach((c, i) => { c.el.style.display = i < nCa ? '' : 'none'; if (i < nCa) { c.el.setAttribute('cx', (c.x + Math.sin(CLOCK * .8 + c.p) * 6).toFixed(1)); c.el.setAttribute('cy', (c.y + Math.cos(CLOCK * .6 + c.p) * 5).toFixed(1)); } });
+  /* bands, measured */
+  const B = bands(s), yb = 376;
+  const aL = CX - 800 * SC, aR = CX + 800 * SC, z0 = zx(0, s), z1 = zx(1, s);
+  let g = '';
+  const brk = (x1, x2, y, col, label, up) => x2 - x1 < 1 ? `<text x="${(x1 + x2) / 2}" y="${y + 13}" fill="${col}" text-anchor="middle" font-weight="700" class="m">${label}</text>` :
+    `<path d="M${x1} ${y - 5} V${y} H${x2} V${y - 5}" fill="none" stroke="${col}" stroke-width="1.6"/><text x="${(x1 + x2) / 2}" y="${y + 14}" fill="${col}" text-anchor="middle" font-weight="700" class="m">${label}</text>`;
+  g += brk(aL, aR, yb, COL.A, `A band ${fmt(B.A / 1000, 2)} µm`);
+  g += brk(z0, aL, yb + 22, COL.I, `½ I`) + brk(aR, z1, yb + 22, COL.I, `½ I`);
+  if (B.H > 0) g += brk(CX - B.H / 2 * SC, CX + B.H / 2 * SC, yb + 22, COL.H, `H ${fmt(B.H / 1000, 2)}`);
+  else g += `<text x="${CX}" y="${yb + 36}" fill="${COL.H}" text-anchor="middle" font-weight="700" class="m">H zone gone</text>`;
+  $('bandsL').innerHTML = g;
+  /* the myofibril strip: six sarcomeres from the model's band lengths */
+  const per = 2 * s * 0.1, n = Math.ceil(596 / per) + 2; let f = '';
+  for (let i = -1; i < n; i++) {
+    const x0 = 376 + i * per + (per / 2) % 40;
+    const a0 = x0 + per / 2 - 80, a1 = x0 + per / 2 + 80;
+    f += `<rect x="${a0.toFixed(1)}" y="34" width="160" height="40" fill="#9b4744"/>`;
+    if (B.H > 0) f += `<rect x="${(x0 + per / 2 - B.H / 2 * 0.1).toFixed(1)}" y="34" width="${(B.H * 0.1).toFixed(1)}" height="40" fill="#b86a66"/>`;
+    f += `<line x1="${x0.toFixed(1)}" y1="34" x2="${x0.toFixed(1)}" y2="74" stroke="#3a1c1b" stroke-width="2"/>`;
+  }
+  $('fibStripes').innerHTML = f;
+}
+
+/* ---- graphs ------------------------------------------------------------------- */
+function axes(R, x0, x1, y0, y1, xt, yt, xlab, ylab, nx = 4, ny = 4){
+  let a = `<rect x="${R.x}" y="${R.y}" width="${R.w}" height="${R.h}" fill="${PAPER}" stroke="${HAIR}"/>`;
+  for (let i = 0; i <= ny; i++) { const y = R.y + R.h - R.h * i / ny; a += `<line x1="${R.x}" y1="${y}" x2="${R.x + R.w}" y2="${y}" stroke="#f1ebdf"/><text x="${R.x - 6}" y="${y + 4}" font-size="10.5" fill="${FAINT}" text-anchor="end" class="m">${yt(y0 + (y1 - y0) * i / ny)}</text>`; }
+  for (let i = 0; i <= nx; i++) { const x = R.x + R.w * i / nx; a += `<text x="${x}" y="${R.y + R.h + 15}" font-size="10.5" fill="${FAINT}" text-anchor="middle" class="m">${xt(x0 + (x1 - x0) * i / nx)}</text>`; }
+  a += `<text x="${R.x + R.w}" y="${R.y + R.h + 31}" font-size="11" fill="${FAINT}" text-anchor="end">${xlab}</text><text x="${R.x}" y="${R.y - 7}" font-size="11" fill="${FAINT}">${ylab}</text>`;
+  return a;
+}
+const TW = 0.4;       // seconds of model time on the band graph
+function paintGraphs(){
+  const M = S.M;
+  const t1 = Math.max(TW, M.t), t0 = t1 - TW;
+  const gx = t => GT.x + (t - t0) / TW * GT.w, gy = v => GT.y + GT.h - v / 4 * GT.h;
+  $('gtAxes').innerHTML = axes(GT, t0 * 1000, t1 * 1000, 0, 4, v => Math.round(v), v => v.toFixed(0), 'model time, ms →', 'µm');
+  for (const k of ['L', 'A', 'I', 'H']) { let d = ''; for (const q of S.hist) if (q.t >= t0) d += (d ? 'L' : 'M') + gx(q.t).toFixed(1) + ' ' + gy(q[k] / 1000).toFixed(1); $('gt' + k).setAttribute('d', d); }
+  const B = bands(M.s);
+  $('gtKey').innerHTML = [['L', 'sarcomere'], ['A', 'A band'], ['I', 'I band'], ['H', 'H zone']].map(([k, t], i) => `<line x1="${GT.x - 30 + i * 74}" y1="${GT.y + GT.h + 46}" x2="${GT.x - 18 + i * 74}" y2="${GT.y + GT.h + 46}" stroke="${COL[k]}" stroke-width="2.4"/><text x="${GT.x - 15 + i * 74}" y="${GT.y + GT.h + 50}" fill="#4a555b">${t}</text>`).join('');
+  /* tension–length */
+  const lx = v => GLT.x + (v - 1.5) / 2.5 * GLT.w, ly = v => GLT.y + GLT.h - v / 120 * GLT.h;
+  $('ltAxes').innerHTML = axes(GLT, 1.5, 4, 0, 120, v => v.toFixed(1), v => v.toFixed(0), 'sarcomere length, µm →', 'tension, pN (held length)', 5, 4);
+  const top = S.lt.reduce((m, p) => Math.max(m, p.F), 0);
+  if (S.lt.length >= 3 && top > 0) { let d = ''; for (let L = 1.7; L <= 3.85; L += 0.025) d += (d ? 'L' : 'M') + lx(L).toFixed(1) + ' ' + ly(top * overlapHeads(L * 500)).toFixed(1); $('ltOver').setAttribute('d', d); }
+  else $('ltOver').setAttribute('d', '');
+  $('ltPts').innerHTML = S.lt.map(p => `<circle cx="${lx(p.L).toFixed(1)}" cy="${ly(p.F).toFixed(1)}" r="4.5" fill="#c53030" stroke="#fff" stroke-width="1.5"/>`).join('') +
+    (S.iso ? `<line x1="${lx(B.L / 1000)}" y1="${GLT.y}" x2="${lx(B.L / 1000)}" y2="${GLT.y + GLT.h}" stroke="#c53030" stroke-dasharray="2 3" opacity=".6"/>` : '') +
+    (S.iso && S.stim ? `<circle cx="${lx(B.L / 1000)}" cy="${ly(clamp(M.F, 0, 120))}" r="3" fill="none" stroke="#c53030"/>` : '');
+  /* speed–load */
+  const fx = v => GFV.x + v / 100 * GFV.w, fy = v => GFV.y + GFV.h - v / 4 * GFV.h;
+  $('fvAxes').innerHTML = axes(GFV, 0, 100, 0, 4, v => v.toFixed(0), v => v.toFixed(0), 'load, pN →', 'shortening speed, µm/s', 4, 4);
+  const pts = S.fv.slice().sort((a, b) => a.W - b.W);
+  $('fvLine').setAttribute('d', pts.length >= 2 ? pts.map((p, i) => (i ? 'L' : 'M') + fx(p.W).toFixed(1) + ' ' + fy(p.v).toFixed(1)).join('') : '');
+  $('fvPts').innerHTML = pts.map(p => `<circle cx="${fx(p.W).toFixed(1)}" cy="${fy(p.v).toFixed(1)}" r="4.5" fill="#7b5cd6" stroke="#fff" stroke-width="1.5"/>`).join('');
+  $('gNote').textContent = S.iso ? 'Holding the length: each stimulus adds a point to the middle graph. Drag a Z line to try another length.'
+    : 'Lifting a load: each stimulus from rest adds a point to the right-hand graph. Change the load and stimulate again.';
+}
+
+/* ---- readouts ---------------------------------------------------------------- */
+function paintReadout(){
+  const M = S.M, B = bands(M.s), over = overlapHeads(M.s);
+  const rows = [['sarcomere', fmt(B.L / 1000, 3) + ' µm'], ['A band', fmt(B.A / 1000, 3) + ' µm'], ['I band', fmt(B.I / 1000, 3) + ' µm'], ['H zone', fmt(B.H / 1000, 3) + ' µm'], ['sep'],
+    ['sarcoplasm Ca²⁺', fmt(M.ca, 2) + ' µM'], ['sites open (share)', fmt(100 * openShare(M), 0) + '%'], ['heads bound', `${M.nAtt} of 200`], ['heads opposite actin', fmt(100 * over, 0) + '%'], ['sep'],
+    [S.iso ? 'tension (held)' : 'pull of the heads', fmt(M.F, 0) + ' pN'], ['speed', fmt(-2 * M.v / 1000, 2) + ' µm/s'], ['power strokes', M.strokes.toLocaleString('en-IN')], ['ATP split', M.atpUsed.toLocaleString('en-IN')]];
+  $('readout').innerHTML = rows.map(r => r[0] === 'sep' ? '<div class="sep"></div>' : `<span>${r[0]}</span><b>${r[1]}</b>`).join('');
+}
+function openShare(M){ let o = 0, n = 0; for (const row of M.sites) for (const q of row) { n++; if (q.open) o++; } return o / n; }
+function paintWhy(){
+  if (!S.locked) return;
+  const M = S.M, B = bands(M.s), th = exposedFrac(M.ca);
+  let t = `<p>At <span class="mono">${fmt(M.ca, 2)} µM</span> Ca²⁺ the law gives <span class="mono">${fmt(100 * th, 0)}%</span> of binding sites open; the model has <span class="mono">${fmt(100 * openShare(M), 0)}%</span> open now.</p>`;
+  if (S.con && S.con.shortest) t += `<p>Last contraction: sarcomere <span class="mono">${fmt(S.con.L0 / 1000, 2)} → ${fmt(S.con.shortest / 1000, 2)} µm</span>. A band stayed <span class="mono">${fmt(GEO.thick / 1000, 2)} µm</span>; the I band went <span class="mono">${fmt(bands(S.con.L0 / 2).I / 1000, 2)} → ${fmt(bands(S.con.shortest / 2).I / 1000, 2)}</span>.</p>`;
+  if (M.atp === 0) t += `<p><b>No ATP.</b> A pulled head can only let go when a new ATP binds, so every head that binds stays bound: <span class="mono">${M.nAtt}</span> locked on.</p>`;
+  if (S.par.stroke !== 10) t += `<p>Power stroke <span class="mono">${S.par.stroke} nm</span> instead of 10: each cycle moves the actin that much further.</p>`;
+  if (M.strokes > 0) t += `<p>ATP split per power stroke: <span class="mono">${fmt(M.atpUsed / M.strokes, 2)}</span>.</p>`;
+  $('why').innerHTML = t;
+}
+
+/* ============================================================================
+   Running the model
+   ============================================================================ */
+const DT = 2e-4;
+function advance(dtReal){
+  const M = S.M, span = dtReal * (S.slow ? 0.05 : 0.25);
+  const n = Math.max(1, Math.round(span / DT));
+  for (let i = 0; i < n; i++) {
+    /* calcium: released from the sarcoplasmic reticulum in ~3 ms, pumped back in ~30 ms */
+    const tau = S.caTarget > M.ca ? 0.003 : 0.03;
+    M.ca += (S.caTarget - M.ca) * Math.min(1, DT / tau);
+    step(M, DT);
+    measure();
+  }
+  const B = bands(M.s);
+  S.hist.push({t: M.t, L: B.L, A: B.A, I: B.I, H: B.H});
+  while (S.hist.length && S.hist[0].t < M.t - TW - 0.02) S.hist.shift();
+}
+/* measurements taken from the running model, the way a physiologist would */
+function measure(){
+  const M = S.M, C = S.con; if (!C) return;
+  const age = M.t - C.t0;
+  C.shortest = Math.min(C.shortest || 1e9, 2 * M.s);
+  if (C.iso) {
+    if (age > 0.08 && age <= 0.2) { C.sum += M.F; C.n++; }
+    if (age > 0.2 && !C.done) {
+      C.done = true;
+      const F = C.sum / C.n, L = 2 * M.s / 1000;
+      S.lt = S.lt.filter(p => Math.abs(p.L - L) > 0.04); S.lt.push({L, F}); S.lt.sort((a, b) => a.L - b.L);
+      sound('tick'); track('record', {kind: 'tension', L, F});
+      checkFinds();
+    }
+  } else {
+    const d = C.s0 - M.s;
+    if (C.t1 == null && d >= 10) C.t1 = M.t;
+    if (!C.done && C.fresh && C.atp > 0 && (d >= 70 || age > 0.3)) {
+      C.done = true;
+      const v = d >= 70 && C.t1 != null ? 2 * 60 / (M.t - C.t1) / 1000 : 0;     // µm/s, whole sarcomere
+      const W = S.par.load;
+      S.fv = S.fv.filter(p => p.W !== W || p.delta !== S.par.stroke); S.fv.push({W, v, delta: S.par.stroke});
+      if (S.fv.some(p => p.delta !== S.par.stroke)) S.fv = S.fv.filter(p => p.delta === S.par.stroke);
+      sound('tick'); track('record', {kind: 'speed', W, v});
+      checkFinds();
+    }
+  }
+}
+
+/* ---- findings, reached by the model's own state ----------------------------------- */
+function checkFinds(){
+  if (!S.locked) return;
+  const M = S.M, C = S.con;
+  if (C && !C.iso && C.atp > 0) {
+    const short = C.s0 * 2 - C.shortest;
+    if (short >= 150 && C.ca >= 1) discover('calcium');
+    if (short >= 250) discover('aband');
+    if (short >= 250 && Math.abs(M.v) < 20 && M.t - C.t0 > 0.12) explainOnce();
+  }
+  if (S.relaxFrom && M.atp > 0 && !S.stim && Math.abs(M.s - M.rest) < 15 && S.relaxFrom.short >= 150) discover('relax');
+  if (M.atp === 0 && M.ca < 0.3 && M.nAtt >= Math.max(20, 0.6 * 200 * overlapHeads(M.s))) discover('rigor');
+  const lt = S.lt;
+  if (lt.length >= 4) {
+    const top = Math.max(...lt.map(p => p.F));
+    const plat = lt.find(p => p.L >= 1.95 && p.L <= 2.3 && p.F >= 0.85 * top), longp = lt.find(p => p.L >= 3.0 && p.F <= 0.6 * top);
+    if (plat && longp) discover('overlap');
+  }
+  const fv = S.fv.slice().sort((a, b) => a.W - b.W);
+  if (fv.length >= 3 && fv[fv.length - 1].W - fv[0].W >= 40) {
+    let mono = true; for (let i = 1; i < fv.length; i++) if (fv[i].v > fv[i - 1].v + 0.08) mono = false;
+    if (mono && fv[0].v > fv[fv.length - 1].v + 0.3) discover('fv');
+  }
+}
+function explainOnce(){
+  if (S.EXPLAINED || !POE || !POE.locked) return;
+  S.EXPLAINED = true;
+  const C = S.con, b0 = bands(C.s0), b1 = bands(C.shortest / 2);
+  POE.explain(`The model measured the bands from its own filaments. The sarcomere went from <span class="mono">${fmt(b0.L / 1000, 2)}</span> to <span class="mono">${fmt(b1.L / 1000, 2)} µm</span>. ` +
+    `The <b>A band stayed ${fmt(b0.A / 1000, 2)} µm</b>: it is the length of the thick filaments, and no filament got shorter. ` +
+    `The I band shrank from <span class="mono">${fmt(b0.I / 1000, 2)}</span> to <span class="mono">${fmt(b1.I / 1000, 2)} µm</span> and the H zone from <span class="mono">${fmt(b0.H / 1000, 2)}</span> to <span class="mono">${fmt(b1.H / 1000, 2)} µm</span>, because the thin filaments slid over the thick ones towards the M line (${S.M.strokes.toLocaleString('en-IN')} power strokes so far).`);
+}
+
+/* ============================================================================
+   Controls
+   ============================================================================ */
+build();
+const OUT = {load: v => v + ' pN', len: v => v.toFixed(2) + ' µm', ca: v => { const c = Math.pow(10, v); return (c < 1 ? c.toFixed(2) : c.toFixed(c < 9.95 ? 1 : 0)) + ' µM'; }, atp: v => v.toFixed(2) + ' mM', stroke: v => v + ' nm'};
+function syncControls(){
+  for (const k in OUT) { $(k).value = S.par[k]; $(k + 'Out').textContent = OUT[k](S.par[k]); }
+  $('modeTon').setAttribute('aria-pressed', !S.iso); $('modeMet').setAttribute('aria-pressed', S.iso);
+  $('btnStim').setAttribute('aria-pressed', S.stim);
+  $('btnStim').textContent = S.stim ? '↺ Pump Ca²⁺ back: relax' : '⚡ Nerve signal: release Ca²⁺';
+  $('btnSlow').setAttribute('aria-pressed', S.slow); $('btnSlow').textContent = S.slow ? 'Slow ×1/20' : 'Faster ×1/4';
+  $('load').disabled = !S.locked || S.iso;
+}
+function setStim(on){
+  const M = S.M;
+  S.stim = on; S.caTarget = on ? caLevel() : 0.1;
+  if (on) {
+    S.con = {t0: M.t, iso: S.iso, s0: M.s, L0: 2 * M.s, fresh: Math.abs(M.s - M.rest) < 5, ca: caLevel(), atp: M.atp, sum: 0, n: 0, t1: null, shortest: 2 * M.s, done: false};
+    S.relaxFrom = null;
+    sound('snap');
+  } else {
+    if (S.con) S.relaxFrom = {short: S.con.s0 * 2 - S.con.shortest};
+    sound('whoosh');
+  }
+  track('stimulate', {on, ca: caLevel(), iso: S.iso});
+  syncControls();
+}
+$('btnStim').addEventListener('click', () => setStim(!S.stim));
+$('modeTon').addEventListener('click', () => { S.iso = false; S.M.iso = false; sound('tick'); syncControls(); paintAll(); });
+$('modeMet').addEventListener('click', () => { S.iso = true; S.M.iso = true; sound('tick'); syncControls(); paintAll(); });
+$('btnSlow').addEventListener('click', () => { S.slow = !S.slow; sound('tick'); syncControls(); });
+$('btnReset').addEventListener('click', () => { fresh(); sound('whoosh'); syncControls(); paintAll(); track('reset'); });
+function setPar(k, v){
+  S.par[k] = clamp(v, LIM[k][0], LIM[k][1]);
+  $(k + 'Out').textContent = OUT[k](S.par[k]);
+  const M = S.M;
+  if (k === 'load') M.load = S.par.load;
+  if (k === 'atp') M.atp = S.par.atp;
+  if (k === 'stroke') M.delta = S.par.stroke;
+  if (k === 'ca' && S.stim) S.caTarget = caLevel();
+  if (k === 'len') setLength(S.par.len * 500);
+  paintAll(); checkFinds();
+}
+/* the resting length: the Z lines are moved only if the heads let them */
+function setLength(half){
+  const M = S.M;
+  if (M.nAtt > 40 && Math.abs(half - M.s) > 2) { if (!setLength.warned) { toast(M.atp === 0 ? 'Rigor: the heads are locked on, so it will not stretch or shorten.' : 'The heads are holding on: relax it first.'); setLength.warned = true; setTimeout(() => setLength.warned = false, 2500); } S.par.len = 2 * M.s / 1000; $('len').value = S.par.len; $('lenOut').textContent = OUT.len(S.par.len); return false; }
+  M.rest = clamp(half, 850, 1900); M.s = M.rest;
+  for (const H of M.heads) if (H.st >= A1) release(M, H, D1);
+  S.par.len = 2 * M.rest / 1000; S.con = null; return true;
+}
+for (const k in OUT) {
+  $(k).addEventListener('input', e => setPar(k, +e.target.value));
+  $(k).addEventListener('change', () => track('set', {k, v: S.par[k]}));
+}
+/* drag either Z line */
+for (const id of ['zHit', 'zHit0']) drag($(id), svg, {
+  start(){ if (!S.locked) return false; },
+  move(p){ const half = Math.abs(p.x - CX) / SC; if (setLength(clamp(Math.round(half / 12.5) * 12.5, 850, 1900))) { $('len').value = S.par.len; $('lenOut').textContent = OUT.len(S.par.len); paintAll(); } },
+  end(){ track('set', {k: 'len', v: S.par.len}); },
+});
+
+function lockControls(lock){
+  for (const el of document.querySelectorAll('#ctlCard button, #ctlCard input')) el.disabled = lock;
+  $('gate').hidden = lock ? false : true;
+  if (!lock) syncControls();
+}
+function paintAll(){ paintSarc(); if (S.locked) paintGraphs(); paintReadout(); $('clock').textContent = fmt(S.M.t * 1000, 0) + ' ms'; }
+
+/* ============================================================================
+   Start
+   ============================================================================ */
+findings($('finds'), [
+  {id: 'calcium', icon: 'Ca', label: 'Calcium uncovers actin, and the heads pull', hint: 'Release calcium'},
+  {id: 'aband',   icon: 'A',  label: 'The A band keeps its length; I and H shrink', hint: 'Let it shorten a long way'},
+  {id: 'relax',   icon: '↔',  label: 'Pump the calcium back and it relaxes', hint: 'After a contraction…'},
+  {id: 'rigor',   icon: '⛓', label: 'No ATP: the heads cannot let go (rigor)', hint: 'Take the ATP away'},
+  {id: 'overlap', icon: '∩',  label: 'Tension follows the filament overlap', hint: 'Hold the length at several lengths'},
+  {id: 'fv',      icon: '↘',  label: 'The heavier the load, the slower it shortens', hint: 'Lift different loads'},
+], () => toast('All six. The sliding filament theory, measured head by head.', 4800));
+
+const POE = predict($('poe'), {
+  id: 'aband',
+  q: 'A muscle fibre contracts and each sarcomere gets shorter. What happens to the length of the <b>A band</b>?',
+  options: [
+    {id: 'short', text: 'It gets shorter, like the sarcomere'},
+    {id: 'same', text: 'It stays the same length', right: true},
+    {id: 'long', text: 'It gets longer'},
+    {id: 'gone', text: 'It disappears'},
+  ],
+  onLock(){
+    S.locked = true;
+    lockControls(false);
+    for (const id of ['veil', 'veilT']) $(id).remove();
+    say('Now release the calcium and measure the bands.');
+    paintAll(); paintWhy();
+  },
+});
+fresh();
+lockControls(!POE.locked);
+if (!Play.FF('predict')) { S.locked = true; lockControls(false); }
+syncControls();
+paintAll();
+
+const RM = reduced();
+let whyT = 0, acc = 0;
+loop(dt => {
+  CLOCK += dt;
+  if (RM) { acc += dt; if (acc < 0.25) return; dt = acc; acc = 0; }
+  if (S.locked) advance(dt);
+  paintAll();
+  if (S.locked) checkFinds();
+  whyT += dt; if (whyT > 0.5 || RM) { whyT = 0; paintWhy(); }
+});
+window.PG_STATE = () => {
+  const M = S.M, B = bands(M.s);
+  return {locked: S.locked, stim: S.stim, iso: S.iso, par: Object.assign({}, S.par), t: M.t, s: M.s, L: B.L, A: B.A, I: B.I, H: B.H, ca: M.ca, atp: M.atp, F: M.F,
+    nAtt: M.nAtt, strokes: M.strokes, atpUsed: M.atpUsed, lt: S.lt.slice(), fv: S.fv.slice(), con: S.con ? {L0: S.con.L0, shortest: S.con.shortest, done: S.con.done, iso: S.con.iso} : null};
+};
+window.PG_MODEL = {GEO, KIN, makeSarc, step, run, bands, exposedFrac, overlapHeads, speedUnder, tensionAt, headX, siteD};
+</script>
+</body>
+</html>

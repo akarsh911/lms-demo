@@ -1,0 +1,433 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Periodic Classification</title>
+<meta name="description" content="Class 10: check Döbereiner's triads, watch Newlands' every-eighth-element pattern hold and then break, then sort real element cards by mass and by atomic number and watch three famous anomalies appear — and vanish.">
+<link rel="icon" href="../../favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600&family=Inter:wght@400;500;600;700&family=Nunito:wght@500;700;800&family=Newsreader:opsz,wght@6..72,400;6..72,500&family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="../../play.css">
+<style>
+.pg-stage{min-height:0}
+.tabs{display:flex; gap:4px; padding:10px 12px 0; border-bottom:1px solid var(--hair); background:var(--card)}
+.tab{border:1px solid transparent; border-bottom:none; background:none; padding:8px 14px; border-radius:10px 10px 0 0; cursor:pointer;
+  font-weight:600; font-size:15px; color:var(--ink-3); margin-bottom:-1px; font-family:var(--font-head)}
+.tab[aria-selected="true"]{background:var(--card); color:var(--ink); border-color:var(--hair); border-bottom:1px solid var(--card)}
+.gate{position:absolute; left:0; right:0; top:48px; bottom:0; display:grid; place-items:center; pointer-events:none}
+.gate span{background:rgba(29,35,39,.86); color:#fff; padding:10px 16px; border-radius:99px; font-weight:600; font-size:14px}
+.nums{display:grid; grid-template-columns:1fr auto; gap:3px 12px; font-size:13.5px}
+.nums b{font-family:var(--font-mono); font-weight:600; font-variant-numeric:tabular-nums}
+.why p{font-size:13.5px; margin-bottom:.5em}
+.why b{color:var(--ink)}
+.note{font-size:12.5px; color:var(--ink-3); margin:6px 0 0}
+.seg{display:grid; grid-auto-flow:column; grid-auto-columns:1fr; gap:4px; background:var(--sunk); padding:4px; border-radius:var(--radius-sm); margin:4px 0 8px}
+.seg button{border:0; background:transparent; border-radius:6px; min-height:32px; font-weight:600; font-size:13px; cursor:pointer; color:var(--ink-2)}
+.seg button[aria-pressed="true"]{background:var(--card); color:var(--ink); box-shadow:var(--shadow)}
+.elCard, .triadRow, .colHead{cursor:pointer}
+.elCard:hover .elBg, .colHead:hover .colBg{stroke:#6a3fc2; stroke-width:2}
+@media (max-width:1100px) and (min-width:981px){ .pg-main{grid-template-columns:minmax(0,1fr) 310px; padding-inline:12px} }
+</style>
+</head>
+<body>
+<header class="pg-top"></header>
+
+<div class="pg-intro">
+  <h1>Periodic classification</h1>
+  <p>Check three of Döbereiner's triads with real atomic masses, then sort real elements the way Newlands did &mdash; every eighth
+     one alike, until it isn't. Sort a shelf of real elements by mass, the way Mendeleev did, and three pairs land in the wrong
+     order; sort the very same cards by atomic number, and every one of them disappears. CBSE Class 10 Science, Periodic
+     Classification of Elements.</p>
+</div>
+
+<main class="pg-main">
+  <section class="pg-stage" id="stageWrap">
+    <div class="tabs" role="tablist">
+      <button class="tab" role="tab" id="tabTriad" aria-selected="true">⚛ Triads and octaves</button>
+      <button class="tab" role="tab" id="tabMendel" aria-selected="false">📇 Mass or number?</button>
+    </div>
+    <svg id="stage" viewBox="0 0 1000 640" role="img" aria-label="Three Dobereiner triads, a Newlands grid of elements sorted by mass, and a Mendeleev-to-modern grid sortable by mass or atomic number"></svg>
+    <div class="gate" id="gate"><span>Make your prediction first →</span></div>
+  </section>
+
+  <aside class="pg-side">
+    <div id="poe"></div>
+
+    <div class="card" id="ctlTriad">
+      <div class="kicker">Triads and the octave</div>
+      <p class="note" style="margin-top:0">Click a triad to check Döbereiner's rule. Click a numbered column above the Newlands grid to see whether every eighth element still matches.</p>
+    </div>
+
+    <div class="card" id="ctlMendel" hidden>
+      <div class="kicker">Sort the shelf</div>
+      <div class="seg" id="segSort"><button data-s="mass" aria-pressed="true">By atomic mass</button><button data-s="z" aria-pressed="false">By atomic number</button></div>
+      <p class="note" style="margin-top:0">Click a card to see its mass, its atomic number, and whether it sits out of order.</p>
+    </div>
+
+    <div class="card" id="numCard">
+      <div class="kicker">The numbers</div>
+      <div class="nums" id="nums"></div>
+    </div>
+
+    <div class="card why" id="whyCard" hidden>
+      <div class="kicker">What is happening</div>
+      <div id="why"></div>
+    </div>
+
+    <div class="card"><div class="kicker">To find</div><div id="finds"></div></div>
+  </aside>
+</main>
+
+<script src="../../play.js"></script>
+<script>
+'use strict';
+const {$, esc, clamp, fmt, drag, tween, sound, say, track, toast, predict, findings, discover, found,
+       shareState, sharedState, mount, reduced} = Play;
+mount({thread: 'periodic', band: 'modeller'});
+
+/* MODEL:start ==================================================================
+   PERIODIC CLASSIFICATION OF ELEMENTS.
+
+   Döbereiner's triads: for three elements of similar chemistry, the middle
+   atomic mass is close to the mean of the outer two — checked here against the
+   real, modern atomic masses, not looked up as "correct/incorrect" per triad.
+
+   Newlands' octaves: 23 real elements, sorted by their real atomic mass (not a
+   fixed historical table), grouped into rows of 7. "Family" is standard
+   chemistry (alkali metal, alkaline earth, boron group, carbon group,
+   pnictogen, chalcogen, halogen, transition metal). A column (position mod 7)
+   is checked for whether every element in it shares a family — computed from
+   the family tags, not hand-picked per column.
+
+   Mendeleev → modern: 28 real elements with their real atomic mass and atomic
+   number. Sorting by mass and scanning for adjacent pairs whose atomic number
+   goes DOWN instead of up finds exactly the three historical anomalies
+   (argon/potassium, cobalt/nickel, tellurium/iodine) — a plain descent count,
+   the same for any dataset, not a lookup of "the three anomalies". Sorting by
+   atomic number is monotonic by definition, so the count is always zero: the
+   modern periodic law (a periodic function of atomic number) has no exceptions
+   where the law based on atomic mass did.
+   ============================================================================ */
+const TRIADS = [
+  {name: 'Alkali metals', els: [['Li', 6.94], ['Na', 22.990], ['K', 39.098]]},
+  {name: 'Alkaline earths', els: [['Ca', 40.078], ['Sr', 87.62], ['Ba', 137.33]]},
+  {name: 'Halogens', els: [['Cl', 35.45], ['Br', 79.904], ['I', 126.904]]},
+];
+function triadCheck(t){
+  const [a, b, c] = t.els.map(e => e[1]), predicted = (a + c) / 2, err = Math.abs(predicted - b) / b * 100;
+  return {predicted, actual: b, err};
+}
+const NEWLANDS = [
+  ['Li', 6.94, 'alkali'], ['Be', 9.012, 'alkaline'], ['B', 10.81, 'boron'], ['C', 12.011, 'carbon'], ['N', 14.007, 'pnictogen'], ['O', 15.999, 'chalcogen'], ['F', 18.998, 'halogen'],
+  ['Na', 22.990, 'alkali'], ['Mg', 24.305, 'alkaline'], ['Al', 26.982, 'boron'], ['Si', 28.085, 'carbon'], ['P', 30.974, 'pnictogen'], ['S', 32.06, 'chalcogen'], ['Cl', 35.45, 'halogen'],
+  ['K', 39.098, 'alkali'], ['Ca', 40.078, 'alkaline'], ['Sc', 44.956, 'transition'], ['Ti', 47.867, 'transition'], ['V', 50.942, 'transition'], ['Cr', 51.996, 'transition'], ['Mn', 54.938, 'transition'],
+  ['Fe', 55.845, 'transition'], ['Co', 58.933, 'transition'],
+].map(([sym, mass, fam], i) => ({sym, mass, fam, i}));
+const FAM_COL = {alkali: '#e8890c', alkaline: '#2f9e5b', boron: '#3f9e9e', carbon: '#3f7fd8', pnictogen: '#7b5cd6', chalcogen: '#c23b3b', halogen: '#c2569b', transition: '#8a94a6'};
+/* "Holds" checks only the first two rows (the clean part of the pattern, up to calcium);
+   "breaks" checks whether any later row (the transition metals) departs from that family —
+   so a column can hold AND later break, which is exactly Newlands' own story. */
+function columnInfo(col){
+  const members = NEWLANDS.filter(e => e.i % 7 === col);
+  const fams = members.map(e => e.fam), allSame = fams.every(f => f === fams[0]);
+  const first2 = members.slice(0, 2);
+  const holds = first2.length === 2 && first2[0].fam === first2[1].fam;
+  const breaks = members.slice(2).some(e => e.fam !== first2[0].fam);
+  return {members, allSame, holds, breaks};
+}
+const MENDEL = [
+  ['H', 1.008, 1], ['He', 4.003, 2], ['Li', 6.94, 3], ['Be', 9.012, 4], ['B', 10.81, 5], ['C', 12.011, 6], ['N', 14.007, 7],
+  ['O', 15.999, 8], ['F', 18.998, 9], ['Ne', 20.180, 10], ['Na', 22.990, 11], ['Mg', 24.305, 12], ['Al', 26.982, 13], ['Si', 28.085, 14],
+  ['P', 30.974, 15], ['S', 32.06, 16], ['Cl', 35.45, 17], ['Ar', 39.948, 18], ['K', 39.098, 19], ['Ca', 40.078, 20],
+  ['Co', 58.933, 27], ['Ni', 58.693, 28], ['Cu', 63.546, 29], ['Zn', 65.38, 30], ['Se', 78.971, 34], ['Br', 79.904, 35], ['Te', 127.60, 52], ['I', 126.904, 53],
+].map(([sym, mass, z]) => ({sym, mass, z}));
+function sortedBy(key){ return MENDEL.slice().sort((a, b) => a[key] - b[key]); }
+function violations(order){
+  const bad = new Set(); let count = 0;
+  for (let i = 0; i < order.length - 1; i++) if (order[i].z > order[i + 1].z) { count++; bad.add(order[i].sym); bad.add(order[i + 1].sym); }
+  return {count, bad};
+}
+/* MODEL:end */
+
+/* ---- state -------------------------------------------------------------- */
+const S = {tab: 'triad', locked: false, checkedTriads: new Set(), col: null, sortBy: 'mass', selEl: null, seenAnomaly: new Set()};
+const shared = sharedState();
+if (shared) {
+  if (['triad', 'mendel'].includes(shared.tab)) S.tab = shared.tab;
+  if (shared.sortBy === 'mass' || shared.sortBy === 'z') S.sortBy = shared.sortBy;
+}
+shareState(() => ({tab: S.tab, sortBy: S.sortBy}));
+
+/* ============================================================================
+   The stage
+   ============================================================================ */
+const svg = $('stage');
+function card(x, y, w, h, title){
+  return `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="12" fill="#ffffff" stroke="#d8d2c4"/>` +
+    (title ? `<text x="${x + 16}" y="${y + 26}" fill="#2b3338" font-size="13.5" font-weight="700" letter-spacing=".06em">${title}</text>` : '');
+}
+function build(){
+  /* triads, stacked */
+  let triads = '';
+  TRIADS.forEach((t, ti) => {
+    const y = 58 + ti * 182;
+    triads += `<g class="triadRow" id="triad_${ti}" data-t="${ti}" role="button" tabindex="0" aria-label="Check the ${esc(t.name)} triad">
+      <rect class="elBg" x="30" y="${y}" width="256" height="160" rx="10" fill="#f7f5f0" stroke="#c9c2b0" stroke-width="1.4"/>
+      <text x="46" y="${y + 24}" font-size="12.5" font-weight="700" fill="#4a555b" letter-spacing=".04em">${esc(t.name.toUpperCase())}</text>
+      ${t.els.map((e, i) => `<text x="${46 + i * 82}" y="${y + 58}" font-size="16" font-weight="700" fill="#1d2327">${e[0]}</text>
+        <text x="${46 + i * 82}" y="${y + 76}" font-size="12" class="m" fill="#4a555b">${fmt(e[1], 2)}</text>`).join('')}
+      <text id="triadOut_${ti}" x="46" y="${y + 106}" font-size="13" fill="#4a555b"></text>
+      <text id="triadVerdict_${ti}" x="46" y="${y + 128}" font-size="13" font-weight="700"></text>
+    </g>`;
+  });
+  /* Newlands grid: 7 columns */
+  const NW = {x0: 350, y0: 84, cw: 88, ch: 118};
+  let heads = '', cells = '';
+  for (let c = 0; c < 7; c++) heads += `<g class="colHead" id="col_${c}" data-c="${c}" role="button" tabindex="0" aria-label="Column ${c + 1}">
+    <rect class="colBg" x="${NW.x0 + c * NW.cw + 6}" y="${NW.y0 - 34}" width="${NW.cw - 12}" height="24" rx="6" fill="#eee9db" stroke="#cfc9b8"/>
+    <text x="${NW.x0 + c * NW.cw + NW.cw / 2}" y="${NW.y0 - 17}" text-anchor="middle" font-size="12.5" font-weight="700" fill="#4a555b">${c + 1}</text></g>`;
+  NEWLANDS.forEach(e => {
+    const row = Math.floor(e.i / 7), col = e.i % 7, x = NW.x0 + col * NW.cw, y = NW.y0 + row * NW.ch;
+    cells += `<g class="elCard" id="nw_${e.sym}" data-i="${e.i}">
+      <rect class="elBg" x="${x + 6}" y="${y}" width="${NW.cw - 12}" height="${NW.ch - 10}" rx="8" fill="#f7f5f0" stroke="#c9c2b0" stroke-width="1.4"/>
+      <circle id="nwDot_${e.i}" cx="${x + NW.cw / 2}" cy="${y + 16}" r="5" fill="${FAM_COL[e.fam]}" opacity="0"/>
+      <text x="${x + NW.cw / 2}" y="${y + 48}" text-anchor="middle" font-size="16" font-weight="700" fill="#1d2327">${e.sym}</text>
+      <text x="${x + NW.cw / 2}" y="${y + 68}" text-anchor="middle" font-size="11" class="m" fill="#4a555b">${fmt(e.mass, 2)}</text>
+    </g>`;
+  });
+  /* Mendeleev grid: 7 columns x 4 rows */
+  const MG = {x0: 40, y0: 78, cw: 132, ch: 122};
+  let mcells = '';
+  MENDEL.forEach((e, i) => {
+    mcells += `<g class="elCard" id="me_${e.sym}" data-sym="${e.sym}" role="button" tabindex="0" aria-label="${e.sym}">
+      <rect class="elBg" id="meBg_${e.sym}" x="0" y="0" width="${MG.cw - 12}" height="${MG.ch - 12}" rx="9" fill="#f7f5f0" stroke="#c9c2b0" stroke-width="1.6"/>
+      <text x="${(MG.cw - 12) / 2}" y="44" text-anchor="middle" font-size="20" font-weight="700" fill="#1d2327">${e.sym}</text>
+      <text x="${(MG.cw - 12) / 2}" y="66" text-anchor="middle" font-size="12" class="m" fill="#4a555b">mass ${fmt(e.mass, 2)}</text>
+      <text x="${(MG.cw - 12) / 2}" y="84" text-anchor="middle" font-size="12" class="m" fill="#4a555b">Z = ${e.z}</text>
+      <text id="meFlag_${e.sym}" x="${MG.cw - 24}" y="20" text-anchor="middle" font-size="13" font-weight="700" fill="#b3261e" opacity="0">⚠</text>
+    </g>`;
+  });
+  svg.innerHTML = `
+  <rect x="0" y="0" width="1000" height="640" fill="#fbfaf6"/>
+
+  <g id="tG">
+    ${card(18, 18, 300, 604, "DÖBEREINER'S TRIADS")}
+    ${triads}
+
+    ${card(334, 18, 648, 604, "NEWLANDS: SORTED BY MASS, EVERY EIGHTH ELEMENT")}
+    <g id="colHeads">${heads}</g>
+    <g id="nwCells">${cells}</g>
+    <text id="colNote" x="350" y="592" font-size="13" fill="#1d2327"></text>
+    <text id="colNote2" x="350" y="610" font-size="12.5" fill="#4a555b"></text>
+  </g>
+
+  <g id="mG" hidden>
+    ${card(18, 18, 964, 604, '')}
+    <text id="mendelTitle" x="34" y="46" font-size="14" font-weight="700" letter-spacing=".06em" fill="#4a555b"></text>
+    <text id="mendelCount" x="966" y="46" text-anchor="end" font-size="14" font-weight="700"></text>
+    <g id="mCells">${mcells}</g>
+    <text id="mendelNote" x="34" y="596" font-size="13" fill="#1d2327"></text>
+    <text id="mendelNote2" x="34" y="614" font-size="12.5" fill="#4a555b"></text>
+  </g>
+
+  <rect id="veil" x="0" y="0" width="1000" height="640" fill="#fbfaf6" opacity=".9"/>
+  <text id="veilT" x="500" y="320" text-anchor="middle" fill="#7c878c" font-size="15" font-weight="600">The triads open once you have made a prediction.</text>`;
+  MENDEL.forEach((e, i) => { const r = Math.floor(i / 7), c = i % 7; $('me_' + e.sym).setAttribute('transform', `translate(${MG.x0 + c * MG.cw} ${MG.y0 + r * MG.ch})`); });
+}
+
+/* ---- paint: triads and octaves --------------------------------------------- */
+function paintTriads(){
+  TRIADS.forEach((t, ti) => {
+    const chk = S.checkedTriads.has(ti);
+    if (!chk) { $('triadOut_' + ti).textContent = ''; $('triadVerdict_' + ti).textContent = ''; return; }
+    const r = triadCheck(t);
+    $('triadOut_' + ti).textContent = `Mean of the ends: ${fmt(r.predicted, 2)}`;
+    $('triadVerdict_' + ti).textContent = `Real: ${fmt(r.actual, 2)} — off by ${fmt(r.err, 2)}%`;
+    $('triadVerdict_' + ti).setAttribute('fill', r.err < 2 ? '#1f7a4a' : '#b3261e');
+  });
+  for (let c = 0; c < 7; c++) $('col_' + c).querySelector('.colBg').setAttribute('fill', S.col === c ? '#e1d6f5' : '#eee9db');
+  NEWLANDS.forEach(e => {
+    const inCol = S.col != null && e.i % 7 === S.col;
+    $('nw_' + e.sym).querySelector('.elBg').setAttribute('stroke', inCol ? '#6a3fc2' : '#c9c2b0');
+    $('nw_' + e.sym).querySelector('.elBg').setAttribute('stroke-width', inCol ? 2.4 : 1.4);
+    $('nwDot_' + e.i).setAttribute('opacity', inCol ? 1 : 0);
+  });
+  if (S.col == null) { $('colNote').textContent = 'Click a column above to test it.'; $('colNote2').textContent = ''; }
+  else {
+    const info = columnInfo(S.col);
+    $('colNote').textContent = `Column ${S.col + 1}: ${info.members.map(m => m.sym).join(', ')}`;
+    $('colNote2').textContent = !info.holds ? 'Not even the first two rows share a family here.'
+      : info.breaks ? 'The first two rows share a family — but a later row breaks the pattern.'
+      : 'Every element here shares a family: Newlands’ rule holds.';
+    $('colNote2').setAttribute('fill', info.breaks || !info.holds ? '#b3261e' : '#1f7a4a');
+  }
+}
+
+/* ---- paint: Mendeleev to modern --------------------------------------------- */
+function paintMendel(){
+  for (const b of $('segSort').querySelectorAll('button')) b.setAttribute('aria-pressed', b.dataset.s === S.sortBy);
+  const order = sortedBy(S.sortBy), v = violations(order);
+  $('mendelTitle').textContent = S.sortBy === 'mass' ? 'SORTED BY ATOMIC MASS' : 'SORTED BY ATOMIC NUMBER';
+  $('mendelCount').textContent = `${v.count} pair${v.count === 1 ? '' : 's'} out of order`;
+  $('mendelCount').setAttribute('fill', v.count ? '#b3261e' : '#1f7a4a');
+  order.forEach((e, i) => {
+    const r = Math.floor(i / 7), c = i % 7, MG = {x0: 40, y0: 78, cw: 132, ch: 122};
+    $('me_' + e.sym).setAttribute('transform', `translate(${MG.x0 + c * MG.cw} ${MG.y0 + r * MG.ch})`);
+    const bad = v.bad.has(e.sym);
+    $('meBg_' + e.sym).setAttribute('stroke', bad ? '#b3261e' : e.sym === S.selEl ? '#6a3fc2' : '#c9c2b0');
+    $('meBg_' + e.sym).setAttribute('stroke-width', bad || e.sym === S.selEl ? 2.4 : 1.6);
+    $('meBg_' + e.sym).setAttribute('fill', bad ? '#fdeceb' : '#f7f5f0');
+    $('meFlag_' + e.sym).setAttribute('opacity', bad ? 1 : 0);
+  });
+  if (!S.selEl) { $('mendelNote').textContent = 'Click a card to read its details.'; $('mendelNote2').textContent = ''; }
+  else {
+    const e = MENDEL.find(x => x.sym === S.selEl), bad = v.bad.has(S.selEl);
+    $('mendelNote').textContent = `${S.selEl}: atomic mass ${fmt(e.mass, 2)}, atomic number ${e.z}.`;
+    $('mendelNote2').textContent = bad ? `Out of order here: its neighbour by ${S.sortBy === 'mass' ? 'mass' : 'number'} has the wrong atomic number to be next to it.` : 'In the right place: its neighbours have consistent atomic numbers.';
+    $('mendelNote2').setAttribute('fill', bad ? '#b3261e' : '#1f7a4a');
+  }
+}
+
+function paint(){
+  $('tG').toggleAttribute('hidden', S.tab !== 'triad');
+  $('mG').toggleAttribute('hidden', S.tab !== 'mendel');
+  $('ctlTriad').hidden = S.tab !== 'triad'; $('ctlMendel').hidden = S.tab !== 'mendel';
+  for (const [id, key] of [['tabTriad', 'triad'], ['tabMendel', 'mendel']]) $(id).setAttribute('aria-selected', S.tab === key);
+  $('veil').toggleAttribute('hidden', S.locked); $('veilT').toggleAttribute('hidden', S.locked);
+  if (S.tab === 'triad') paintTriads(); else paintMendel();
+  paintWhy();
+  let rows;
+  if (S.tab === 'triad') {
+    rows = [['Triads checked', S.checkedTriads.size + ' of 3'], ['Column selected', S.col == null ? '—' : S.col + 1]];
+  } else {
+    const v = violations(sortedBy(S.sortBy));
+    rows = [['Sorted by', S.sortBy === 'mass' ? 'atomic mass' : 'atomic number'], ['Pairs out of order', v.count], ['Elements affected', v.bad.size]];
+  }
+  $('nums').innerHTML = S.locked ? rows.map(r => `<span>${r[0]}</span><b>${r[1]}</b>`).join('') : '<span style="grid-column:1/-1;color:var(--ink-3)">The numbers appear once you have made a prediction.</span>';
+}
+
+function paintWhy(){
+  if (!S.locked) return;
+  $('whyCard').hidden = false;
+  let h = '';
+  if (S.tab === 'triad') {
+    h += `<p>Döbereiner noticed this pattern in 1817, decades before atoms or atomic number were understood — it works because chemically similar elements tend to sit an even number of mass units apart.</p>`;
+    h += `<p>Newlands' "law of octaves" (1865) is the same idea stretched across the whole known set of elements: counted off in sevens, the eighth element resembles the first — for the lightest elements. Once transition metals appear, there just aren't enough slots between chemically similar elements, and the pattern breaks.</p>`;
+  } else {
+    h += `<p>Sorted by atomic mass, ${violations(sortedBy('mass')).count} adjacent pairs run backwards in atomic number: potassium (mass 39.10) sits before argon (mass 39.95), even though argon's atomic number (18) is lower; cobalt (58.93) before nickel (58.69); iodine (126.90) before tellurium (127.60).</p>`;
+    h += `<p>Sort the very same cards by atomic number instead, and the count drops to zero — not because the elements changed, but because atomic number, not atomic mass, is what the periodic law actually depends on (Moseley, 1913).</p>`;
+  }
+  $('why').innerHTML = h;
+}
+
+/* ---- findings --------------------------------------------------------------- */
+let EXPLAINED = false;
+function maybeExplain(){
+  if (EXPLAINED || !POE || !POE.locked) return;
+  const massV = violations(sortedBy('mass'));
+  if (massV.count === 0) return;
+  EXPLAINED = true;
+  const pairs = [];
+  const order = sortedBy('mass');
+  for (let i = 0; i < order.length - 1; i++) if (order[i].z > order[i + 1].z) pairs.push(`${order[i].sym} (Z=${order[i].z}) before ${order[i + 1].sym} (Z=${order[i + 1].z})`);
+  POE.explain(`Sorted strictly by mass, ${massV.count} adjacent pairs run backwards in atomic number: ${pairs.join('; ')}. ` +
+    `Argon and potassium is exactly this case — sorting by mass alone gets their chemical order wrong. Switch to "By atomic number" and the count drops to zero.`);
+}
+function checkTriad(){
+  if (!S.locked) return;
+  if (S.checkedTriads.size === 3) discover('triads_all');
+}
+function checkCol(){
+  if (!S.locked || S.col == null) return;
+  const info = columnInfo(S.col);
+  if (info.holds) discover('octave_hold');
+  if (info.breaks) discover('octave_break');
+}
+function checkMendel(){
+  if (!S.locked) return;
+  if (S.sortBy === 'z' && violations(sortedBy('z')).count === 0) discover('z_fixes');
+  if (S.sortBy === 'mass' && S.selEl && violations(sortedBy('mass')).bad.has(S.selEl)) {
+    S.seenAnomaly.add(S.selEl);
+    discover('mass_anomaly');
+    if (S.seenAnomaly.size >= 4) discover('allthree');
+    maybeExplain();
+  }
+}
+
+/* ============================================================================
+   Controls
+   ============================================================================ */
+build();
+function setTab(t){ S.tab = t; paint(); }
+$('tabTriad').addEventListener('click', () => { setTab('triad'); sound('tick'); track('tab', {tab: 'triad'}); });
+$('tabMendel').addEventListener('click', () => { setTab('mendel'); sound('tick'); track('tab', {tab: 'mendel'}); });
+
+TRIADS.forEach((t, ti) => {
+  const g = $('triad_' + ti);
+  const act = () => { if (!S.locked) return; S.checkedTriads.add(ti); sound('pop'); paint(); checkTriad(); track('triad', {t: ti}); };
+  g.addEventListener('click', act);
+  g.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); act(); } });
+});
+for (let c = 0; c < 7; c++) {
+  const g = $('col_' + c);
+  const act = () => { if (!S.locked) return; S.col = S.col === c ? null : c; sound('tick'); paint(); checkCol(); track('col', {c}); };
+  g.addEventListener('click', act);
+  g.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); act(); } });
+}
+$('segSort').addEventListener('click', e => {
+  const b = e.target.closest('[data-s]'); if (!b || !S.locked) return;
+  S.sortBy = b.dataset.s; sound('whoosh'); paint(); checkMendel(); track('sort', {sortBy: S.sortBy});
+});
+MENDEL.forEach(e => {
+  const g = $('me_' + e.sym);
+  const act = () => { if (!S.locked) return; S.selEl = S.selEl === e.sym ? null : e.sym; sound('pop'); paint(); checkMendel(); track('el', {sym: e.sym}); };
+  g.addEventListener('click', act);
+  g.addEventListener('keydown', ev => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); act(); } });
+});
+
+function lockControls(lock){
+  for (const id of ['tabMendel']) $(id).disabled = lock;
+  for (const b of $('segSort').querySelectorAll('button')) b.disabled = lock;
+  $('nwCells').style.pointerEvents = lock ? 'none' : ''; $('colHeads').style.pointerEvents = lock ? 'none' : '';
+  $('mCells').style.pointerEvents = lock ? 'none' : ''; $('stageWrap').querySelectorAll('.triadRow').forEach(g => g.style.pointerEvents = lock ? 'none' : '');
+  $('gate').hidden = !lock;
+}
+
+/* ============================================================================
+   Start
+   ============================================================================ */
+findings($('finds'), [
+  {id: 'triads_all',  icon: '⚖', label: 'All three triads checked',            hint: 'Click every triad'},
+  {id: 'octave_hold', icon: '✓', label: 'A column that still matches',         hint: 'Click a column with two members'},
+  {id: 'octave_break',icon: '✗', label: 'The pattern breaks down',             hint: 'Click a column with three members'},
+  {id: 'mass_anomaly',icon: '⚠', label: 'A pair out of order by mass',         hint: 'Sort by mass and click a flagged card'},
+  {id: 'allthree',    icon: '🔍', label: 'All three anomalies found',      hint: 'Click every flagged card, sorted by mass'},
+  {id: 'z_fixes',     icon: '✨', label: 'Sorted by number, no anomalies left', hint: 'Switch to sort by atomic number'},
+], () => toast('All six found. Atomic number, not mass, is what the law depends on.', 4200));
+
+const POE = predict($('poe'), {
+  id: 'mass-or-number',
+  q: 'Argon has a higher atomic MASS than potassium, but a lower atomic NUMBER. If elements are sorted strictly by mass, will argon and potassium end up in their chemically correct order?',
+  options: [
+    {id: 'yes',    text: 'Yes — mass and atomic number always agree.'},
+    {id: 'no',     text: 'No — sorting by mass puts them in the wrong order.', right: true},
+    {id: 'doesnt', text: "It doesn't matter which one is used."},
+    {id: 'neither',text: 'Neither order is chemically meaningful.'},
+  ],
+  onLock(){
+    S.locked = true; lockControls(false);
+    say('Now check a triad, then try sorting the elements yourself.');
+    paint();
+  },
+});
+lockControls(!POE.locked);
+if (!Play.FF('predict')) S.locked = true;
+paint();
+window.applyFeatures = () => paint();
+window.PG_STATE = () => JSON.parse(JSON.stringify({tab: S.tab, locked: S.locked, checkedTriads: [...S.checkedTriads], col: S.col,
+  sortBy: S.sortBy, selEl: S.selEl, massViolations: violations(sortedBy('mass')).count, zViolations: violations(sortedBy('z')).count}));
+window.PG_MODEL = {TRIADS, triadCheck, NEWLANDS, columnInfo, MENDEL, sortedBy, violations};
+</script>
+</body>
+</html>

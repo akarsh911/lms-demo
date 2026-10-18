@@ -1,0 +1,400 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fractions in Disguise</title>
+<meta name="description" content="Class 6–8: predict whether a price that goes up 20% then down 20% ends back where it started, then chain your own percentage changes and watch the hundred-square.">
+<link rel="icon" href="../../favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="../../play.css">
+<style>
+/* Only what this page needs beyond play.css. */
+.pg-stage{background:#fbfaf6}
+@media (max-width:1180px) and (min-width:981px){ .pg-main.wide-side{grid-template-columns:minmax(0,1fr) 340px} }
+.gate{position:absolute; inset:0; display:grid; place-items:center; pointer-events:none}
+.gate span{background:rgba(15,26,43,.82); color:#fff; padding:10px 16px; border-radius:99px; font-weight:600; font-size:14px}
+.seg{display:flex; background:var(--sunk); border-radius:99px; padding:3px; gap:3px}
+.seg button{flex:1; border:0; background:transparent; border-radius:99px; padding:7px 6px; font-weight:600; font-size:12.5px; cursor:pointer; color:var(--ink-2)}
+.seg button[aria-pressed="true"]{background:var(--card); color:var(--ink); box-shadow:var(--shadow)}
+.seg button:disabled{cursor:default; opacity:.5}
+.stepper{display:flex; align-items:center; gap:8px; justify-content:space-between}
+.stepper button{width:30px; height:30px; border-radius:50%; border:1px solid var(--hair-2); background:var(--card); cursor:pointer; font-weight:700; font-size:16px; line-height:1; color:var(--ink-2)}
+.stepper button:hover:not(:disabled){border-color:var(--accent); color:var(--accent)}
+.stepper button:disabled{opacity:.4; cursor:default}
+.stepper b{font-family:"Fredoka",var(--font-head); font-size:20px; font-weight:600; min-width:66px; text-align:center; font-variant-numeric:tabular-nums}
+.row2{display:flex; gap:8px; margin-top:8px}
+.row2 .btn{flex:1}
+.chiprow{display:flex; flex-wrap:wrap; gap:6px; margin-top:8px}
+.chip{padding:4px 10px; border-radius:99px; font-size:12px; font-weight:700; background:var(--sunk); color:var(--ink-2)}
+.chip.inc{background:#dff0d8; color:#2f6b3a}
+.chip.dec{background:#fbe1e1; color:#9c2c2c}
+.why p{font-size:14px}
+.why b{color:var(--ink)}
+.presets{display:flex; flex-wrap:wrap; gap:6px; margin-top:6px}
+.presets button{font-size:12px; padding:6px 10px; border-radius:99px; border:1px solid var(--hair-2); background:var(--card); cursor:pointer; color:var(--ink-2); font-weight:600}
+.presets button:hover{border-color:var(--accent)}
+.hint{font-size:12.5px; color:var(--ink-3); margin:6px 0 0}
+.numOut{font-family:"JetBrains Mono",var(--font-mono); font-weight:600}
+</style>
+</head>
+<body>
+<header class="pg-top"></header>
+
+<div class="pg-intro">
+  <h1>Fractions in disguise</h1>
+  <p>A percentage is just a fraction out of a hundred — and a hundred squares you can count. Before you touch
+     anything, decide whether a price that rises 20% and then falls 20% comes back to where it started. Then
+     chain your own rises and falls, compare two ways of giving a discount, and check a shopkeeper's profit.</p>
+</div>
+
+<main class="pg-main wide-side">
+  <section class="pg-stage" id="stageWrap">
+    <svg id="stage" viewBox="0 0 1000 700" role="img" aria-label="A hundred-square showing a value as a percentage of where it started, a tape of the changes applied, and a graph of the value"></svg>
+    <div class="gate" id="gate"><span>Make your prediction first →</span></div>
+  </section>
+
+  <aside class="pg-side">
+    <div id="poe"></div>
+
+    <div class="card" id="ctlCard">
+      <div class="seg" role="group" aria-label="What to explore">
+        <button data-mode="chain" aria-pressed="true">Chain changes</button>
+        <button data-mode="compare" aria-pressed="false">Two discounts</button>
+        <button data-mode="pl" aria-pressed="false">Profit or loss</button>
+      </div>
+
+      <div id="chainCtl">
+        <div class="kicker" style="margin-top:10px">Starting price</div>
+        <div class="stepper"><button data-base="-1" aria-label="Lower the starting price">−</button><b id="baseOut">₹500</b><button data-base="1" aria-label="Raise the starting price">+</button></div>
+        <div class="kicker" style="margin-top:10px">Change to apply</div>
+        <div class="stepper"><button data-pct="-1" aria-label="Smaller change">−</button><b id="pctOut">20%</b><button data-pct="1" aria-label="Bigger change">+</button></div>
+        <div class="row2">
+          <button class="btn" id="btnInc">▲ Increase</button>
+          <button class="btn" id="btnDec">▼ Decrease</button>
+        </div>
+        <div class="row2">
+          <button class="btn sm" id="btnSwap" disabled>Swap the last two</button>
+          <button class="btn sm" id="btnReset">Reset</button>
+        </div>
+        <div class="chiprow" id="chips"></div>
+      </div>
+
+      <div id="compareCtl" hidden>
+        <div class="kicker" style="margin-top:10px">Price of the cake</div>
+        <div class="stepper"><button data-cbase="-1" aria-label="Lower the price">−</button><b id="cbaseOut">₹200</b><button data-cbase="1" aria-label="Raise the price">+</button></div>
+        <p class="hint">Cakely offers 30% off, then a further 20% off. Cakify offers 50% off in one go. Same benefit?</p>
+      </div>
+
+      <div id="plCtl" hidden>
+        <div class="kicker" style="margin-top:10px">Cost price</div>
+        <div class="stepper"><button data-cp="-1" aria-label="Lower the cost price">−</button><b id="cpOut">₹300</b><button data-cp="1" aria-label="Raise the cost price">+</button></div>
+        <div class="kicker" style="margin-top:10px">Selling price</div>
+        <div class="stepper"><button data-sp="-1" aria-label="Lower the selling price">−</button><b id="spOut">₹430</b><button data-sp="1" aria-label="Raise the selling price">+</button></div>
+        <div class="presets">
+          <button data-preset="kishanlal">Kishanlal's sweater</button>
+          <button data-preset="raghu">Raghu's rice</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="card why" id="whyCard" hidden>
+      <div class="kicker">What is happening</div>
+      <div id="why"></div>
+    </div>
+
+    <div class="card"><div class="kicker">To find</div><div id="finds"></div></div>
+  </aside>
+</main>
+
+<script src="../../play.js"></script>
+<script>
+'use strict';
+const {$, $$, esc, clamp, fmt, sound, say, track, toast, predict, findings, discover, found,
+       shareState, sharedState, mount, reduced} = Play;
+mount({thread: 'percent', band: 'tinkerer'});
+
+/* MODEL:start ================================================================
+   NCERT Class 8 Ganita Prakash, "Fractions in Disguise". A percentage change
+   multiplies: +p% means ×(1+p/100), −p% means ×(1−p/100). Chained changes
+   COMPOUND (multiply together), they do not add — which is exactly the
+   chapter's Example 12 (Cakely's 30%+20% vs Cakify's 50%) and Example 13
+   (a 50% profit margin wiped out by a 50% discount, a 25% loss, not zero).
+   Profit/loss percentage is always taken on the COST price (Examples 4-6):
+   Kishanlal buys at ₹300, sells at ₹430, profit = 130/300 = 43.3%.
+   ============================================================================ */
+function applyPct(value, sign, pct){ return sign > 0 ? value * (1 + pct / 100) : value * (1 - pct / 100); }
+function chainFinal(base, steps){ return steps.reduce((v, s) => applyPct(v, s.sign, s.pct), base); }
+function cakely(base){ return base * 0.7 * 0.8; }   // 30% off, then 20% off what remains
+function cakify(base){ return base * 0.5; }          // 50% off in one go
+function profitLoss(cp, sp){ const d = sp - cp; return {type: d >= 0 ? 'profit' : 'loss', pct: Math.abs(d) / cp * 100}; }
+/* MODEL:end */
+
+const round1 = n => Math.round(n * 10) / 10;
+const rupee = n => '₹' + fmt(n, n < 100 ? 1 : 0);
+
+/* ---- state: plain data ----------------------------------------------------- */
+const S = {mode: 'chain', base: 500, pct: 20, steps: [], cbase: 200, cp: 300, sp: 430, locked: false, swapped: false};
+const shared = sharedState();
+if (shared) {
+  if (['chain', 'compare', 'pl'].includes(shared.mode)) S.mode = shared.mode;
+  S.base = clamp(+shared.base || 500, 50, 5000);
+  if (Array.isArray(shared.steps)) S.steps = shared.steps.filter(s => s && (s.sign === 1 || s.sign === -1) && s.pct > 0).slice(0, 8);
+  S.cbase = clamp(+shared.cbase || 200, 20, 2000);
+  S.cp = clamp(+shared.cp || 300, 20, 5000);
+  S.sp = clamp(+shared.sp || 430, 20, 5000);
+}
+shareState(() => ({mode: S.mode, base: S.base, steps: S.steps, cbase: S.cbase, cp: S.cp, sp: S.sp}));
+
+/* ============================================================================
+   The stage: a hundred-square (or two), a tape of the changes, a graph.
+   ============================================================================ */
+const svg = $('stage');
+const CELL = 21, GAP = 1.6, GRIDW = CELL * 10 + GAP * 9;
+
+function build(){
+  svg.innerHTML = `
+  <rect x="0" y="0" width="1000" height="700" fill="#fbfaf6"/>
+  <text id="gridsCaption" x="500" y="30" text-anchor="middle" font-size="13" font-weight="700" letter-spacing=".04em" fill="#4a555b"></text>
+  <g id="grids"></g>
+  <g id="readouts"></g>
+  <g id="graph"></g>
+  `;
+}
+
+/* A hundred-square: 100 little cells, `fillN` of them coloured. Percentages over
+   100 spill into extra whole squares — nothing is ever just a number. */
+function hundredSquare(x, y, fillN, color, label){
+  fillN = clamp(Math.round(fillN), 0, 100);
+  let g = `<g transform="translate(${x} ${y})">`;
+  for (let r = 0; r < 10; r++) {
+    for (let c = 0; c < 10; c++) {
+      const i = r * 10 + c;
+      const cx = c * (CELL + GAP), cy = r * (CELL + GAP);
+      g += `<rect x="${cx.toFixed(1)}" y="${cy.toFixed(1)}" width="${CELL}" height="${CELL}" rx="2.5" fill="${i < fillN ? color : '#e7e3d6'}"/>`;
+    }
+  }
+  g += `</g>`;
+  if (label) g += `<text x="${x + GRIDW / 2}" y="${y + GRIDW + 22}" text-anchor="middle" font-size="13" font-weight="700" fill="#333">${esc(label)}</text>`;
+  return g;
+}
+/* Squares for a percentage that may exceed 100: whole coloured squares, then a partial one
+   (skipped when the percentage lands on an exact multiple of 100 — one full square, not two). */
+function pctSquares(x, y, pct, color, label, gap){
+  gap = gap == null ? 26 : gap;
+  const whole = Math.min(3, Math.floor(pct / 100));
+  const partial = clamp(pct - whole * 100, 0, 100);
+  const showPartial = partial > 0 || whole === 0;
+  const n = whole + (showPartial ? 1 : 0);
+  let g = '';
+  for (let i = 0; i < whole; i++) g += hundredSquare(x + i * (GRIDW + gap), y, 100, color);
+  if (showPartial) g += hundredSquare(x + whole * (GRIDW + gap), y, partial, color);
+  const totalW = n * GRIDW + (n - 1) * gap;
+  if (label) g += `<text x="${(x + totalW / 2).toFixed(1)}" y="${y + GRIDW + 22}" text-anchor="middle" font-size="13" font-weight="700" fill="#333">${esc(label)}</text>`;
+  if (pct > 300) g += `<text x="${(x + totalW / 2).toFixed(1)}" y="${y - 8}" text-anchor="middle" font-size="12" font-weight="700" fill="#b5620a">and more — ${fmt(pct, 0)}% in all</text>`;
+  return {svg: g, width: totalW};
+}
+function squaresWidth(pct, gap){
+  gap = gap == null ? 26 : gap;
+  const whole = Math.min(3, Math.floor(pct / 100));
+  const partial = clamp(pct - whole * 100, 0, 100);
+  const n = whole + ((partial > 0 || whole === 0) ? 1 : 0);
+  return n * GRIDW + (n - 1) * gap;
+}
+
+/* ---- graph: value across the steps applied (chain mode) -------------------- */
+const GX = {x: 90, y: 470, w: 820, h: 170};
+function drawGraph(values, labelPrefix){
+  if (values.length < 2) { $('graph').innerHTML = ''; return; }
+  const mx = Math.max(...values, 1), mn = Math.min(...values, 0);
+  const pad = (mx - mn) * 0.15 || 10;
+  const lo = Math.max(0, mn - pad), hi = mx + pad;
+  const gx = i => GX.x + i / (values.length - 1) * GX.w;
+  const gy = v => GX.y + GX.h - (v - lo) / (hi - lo) * GX.h;
+  let axes = `<line x1="${GX.x}" y1="${GX.y + GX.h}" x2="${GX.x + GX.w}" y2="${GX.y + GX.h}" stroke="#c9c3b3"/>` +
+             `<line x1="${GX.x}" y1="${GX.y}" x2="${GX.x}" y2="${GX.y + GX.h}" stroke="#c9c3b3"/>`;
+  for (const v of [lo, (lo + hi) / 2, hi]) axes += `<text x="${GX.x - 8}" y="${(gy(v) + 4).toFixed(1)}" text-anchor="end" font-size="11" fill="#8a8577">${fmt(v, 0)}</text>`;
+  let path = values.map((v, i) => (i ? 'L' : 'M') + gx(i).toFixed(1) + ' ' + gy(v).toFixed(1)).join('');
+  let dots = values.map((v, i) => `<circle cx="${gx(i).toFixed(1)}" cy="${gy(v).toFixed(1)}" r="4.5" fill="#c0392b"/><text x="${gx(i).toFixed(1)}" y="${(gy(v) - 10).toFixed(1)}" text-anchor="middle" font-size="11" font-weight="700" fill="#c0392b">${fmt(v, v < 20 ? 1 : 0)}</text>`).join('');
+  let xl = values.map((v, i) => `<text x="${gx(i).toFixed(1)}" y="${GX.y + GX.h + 18}" text-anchor="middle" font-size="11" fill="#8a8577">${i === 0 ? 'start' : 'step ' + i}</text>`).join('');
+  $('graph').innerHTML = axes + `<path d="${path}" fill="none" stroke="#c0392b" stroke-width="2.2"/>` + dots + xl +
+    `<text x="${GX.x}" y="${GX.y - 12}" font-size="12.5" font-weight="700" fill="#4a555b">${esc(labelPrefix || 'VALUE AFTER EACH CHANGE')}</text>`;
+}
+
+/* ---- paint: everything that depends on the state --------------------------- */
+function paint(){
+  $$('#ctlCard [data-mode]').forEach(b => b.setAttribute('aria-pressed', b.dataset.mode === S.mode));
+  $('chainCtl').hidden = S.mode !== 'chain';
+  $('compareCtl').hidden = S.mode !== 'compare';
+  $('plCtl').hidden = S.mode !== 'pl';
+  $('baseOut').textContent = rupee(S.base);
+  $('pctOut').textContent = S.pct + '%';
+  $('cbaseOut').textContent = rupee(S.cbase);
+  $('cpOut').textContent = rupee(S.cp);
+  $('spOut').textContent = rupee(S.sp);
+  $('btnSwap').disabled = S.steps.length < 2;
+  $('chips').innerHTML = S.steps.map((s, i) => `<span class="chip ${s.sign > 0 ? 'inc' : 'dec'}">${s.sign > 0 ? '+' : '−'}${s.pct}%</span>`).join('');
+
+  if (S.mode === 'chain') paintChain();
+  else if (S.mode === 'compare') paintCompare();
+  else paintPL();
+  if (S.locked) { paintWhy(); check(); }
+}
+
+function paintChain(){
+  const values = [S.base, ...S.steps.reduce((acc, s) => { acc.push(applyPct(acc[acc.length - 1], s.sign, s.pct)); return acc; }, [S.base]).slice(1)];
+  const final = values[values.length - 1];
+  const pctOfBase = final / S.base * 100;
+  $('gridsCaption').textContent = `${rupee(final)} IS ${fmt(pctOfBase, pctOfBase % 1 ? 1 : 0)}% OF THE STARTING ${rupee(S.base)}`;
+  const w = squaresWidth(pctOfBase);
+  const {svg: sq} = pctSquares(500 - w / 2, 60, pctOfBase, pctOfBase >= 100 ? '#2f9e5b' : '#c0392b', 'of the starting price');
+  $('grids').innerHTML = sq;
+  $('readouts').innerHTML = '';
+  drawGraph(values);
+}
+
+function paintCompare(){
+  const c1 = cakely(S.cbase), c2 = cakify(S.cbase);
+  const p1 = c1 / S.cbase * 100, p2 = c2 / S.cbase * 100;
+  $('gridsCaption').textContent = `SAME ${rupee(S.cbase)} CAKE, TWO WAYS OF DISCOUNTING IT`;
+  const gap = 60;
+  const w1 = squaresWidth(p1), w2 = squaresWidth(p2), totalW = w1 + w2 + gap, sx = 500 - totalW / 2;
+  const left = pctSquares(sx, 60, p1, '#2471a3', `Cakely: 30% then 20% off → ${rupee(c1)}`);
+  const right = pctSquares(sx + w1 + gap, 60, p2, '#8e44ad', `Cakify: 50% off → ${rupee(c2)}`);
+  $('grids').innerHTML = left.svg + right.svg;
+  $('graph').innerHTML = '';
+  $('readouts').innerHTML = `<text x="500" y="${60 + GRIDW + 60}" text-anchor="middle" font-size="15" font-weight="700" fill="${c1 < c2 ? '#2471a3' : '#8e44ad'}">${c1 < c2 ? 'Cakely' : c2 < c1 ? 'Cakify' : 'Both the same'} is cheaper by ${rupee(Math.abs(c1 - c2))}</text>`;
+}
+
+function paintPL(){
+  const r = profitLoss(S.cp, S.sp);
+  const pctOfCost = S.sp / S.cp * 100;
+  $('gridsCaption').textContent = `SELLING PRICE ${rupee(S.sp)} IS ${fmt(pctOfCost, 1)}% OF THE COST PRICE ${rupee(S.cp)}`;
+  const color = r.type === 'profit' ? '#2f9e5b' : '#c0392b';
+  const w = squaresWidth(pctOfCost);
+  const {svg: sq} = pctSquares(500 - w / 2, 60, pctOfCost, color, `cost price = 100%`);
+  $('grids').innerHTML = sq;
+  $('graph').innerHTML = '';
+  $('readouts').innerHTML = `<text x="500" y="${60 + GRIDW + 46}" text-anchor="middle" font-size="17" font-weight="700" fill="${color}">${r.type === 'profit' ? 'Profit' : 'Loss'}: ${fmt(r.pct, 1)}%</text>`;
+}
+
+function paintWhy(){
+  $('whyCard').hidden = false;
+  let txt = '';
+  if (S.mode === 'chain') {
+    const final = chainFinal(S.base, S.steps), pct = final / S.base * 100;
+    if (!S.steps.length) txt = `<p>Nothing applied yet. Increase or decrease the starting price by the chosen percentage, and watch the square fill.</p>`;
+    else txt = `<p>Starting at <b>${rupee(S.base)}</b>, after ${S.steps.length} change${S.steps.length > 1 ? 's' : ''} the price is <b>${rupee(final)}</b> — <b>${fmt(pct, pct % 1 ? 1 : 0)}%</b> of where it started. Each change multiplies the price; it does not add to the percentage.</p>`;
+  } else if (S.mode === 'compare') {
+    const c1 = cakely(S.cbase), c2 = cakify(S.cbase);
+    txt = `<p>30% off, then 20% off what remains, is <b>not</b> the same as 40%. It works out to <b>${fmt(100 - c1 / S.cbase * 100, 1)}%</b> off in all — Cakely's price is <b>${rupee(c1)}</b>, Cakify's is <b>${rupee(c2)}</b>. Successive discounts compound; they do not add.</p>`;
+  } else {
+    const r = profitLoss(S.cp, S.sp);
+    txt = `<p>Profit or loss is always measured against the <b>cost price</b> (the buying price = 100%). Bought at <b>${rupee(S.cp)}</b>, sold at <b>${rupee(S.sp)}</b>: a <b>${r.type}</b> of <b>${fmt(r.pct, 1)}%</b>.</p>`;
+  }
+  $('why').innerHTML = txt;
+}
+
+/* ---- findings: reached by the model, never by a button --------------------- */
+function check(){
+  if (S.mode === 'chain' && S.steps.length === 2) {
+    const [a, b] = S.steps;
+    if (a.sign > 0 && b.sign < 0 && a.pct === b.pct) discover('upDownNotEqual');
+    if (a.sign > 0 && b.sign < 0 && a.pct === 50 && b.pct === 50) discover('mishap');
+  }
+  if (S.mode === 'compare') discover('cakelyCheaper');
+  if (S.mode === 'pl' && S.cp === 300 && S.sp === 430) discover('profitPercent');
+  if (S.swapped) discover('commutative');
+  maybeExplain();
+}
+let EXPLAINED = false;
+function maybeExplain(){
+  if (EXPLAINED || !POE || S.mode !== 'chain' || S.steps.length < 2) return;
+  const [a, b] = S.steps;
+  if (!(a.sign > 0 && b.sign < 0 && a.pct === b.pct)) return;
+  EXPLAINED = true;
+  const final = chainFinal(S.base, S.steps), pct = final / S.base * 100;
+  POE.explain(`+${a.pct}% on ${rupee(S.base)} makes it <b>${rupee(applyPct(S.base, 1, a.pct))}</b>. Taking ${b.pct}% off THAT (a bigger number) removes more rupees than the first rise added, so it lands at <b>${rupee(final)}</b> — only <b>${fmt(pct, 1)}%</b> of the start, not back to 100%.`);
+}
+
+/* ============================================================================
+   Controls.
+   ============================================================================ */
+build();
+function lockControls(lock){
+  $$('#ctlCard button, #ctlCard input').forEach(b => b.disabled = lock);
+  $('gate').hidden = !lock;
+}
+$('ctlCard').addEventListener('click', e => {
+  const m = e.target.closest('[data-mode]');
+  if (m && !m.disabled) { S.mode = m.dataset.mode; sound('pop'); track('mode', {mode: S.mode}); paint(); return; }
+  const bb = e.target.closest('[data-base]');
+  if (bb && !bb.disabled) { S.base = clamp(S.base + (+bb.dataset.base) * 50, 50, 5000); S.steps = []; sound('tick'); paint(); return; }
+  const pp = e.target.closest('[data-pct]');
+  if (pp && !pp.disabled) { S.pct = clamp(S.pct + (+pp.dataset.pct) * 5, 5, 100); sound('tick'); paint(); return; }
+  const cb = e.target.closest('[data-cbase]');
+  if (cb && !cb.disabled) { S.cbase = clamp(S.cbase + (+cb.dataset.cbase) * 25, 25, 2000); sound('tick'); paint(); return; }
+  const cp = e.target.closest('[data-cp]');
+  if (cp && !cp.disabled) { S.cp = clamp(S.cp + (+cp.dataset.cp) * 10, 20, 5000); sound('tick'); paint(); return; }
+  const sp = e.target.closest('[data-sp]');
+  if (sp && !sp.disabled) { S.sp = clamp(S.sp + (+sp.dataset.sp) * 10, 20, 5000); sound('tick'); paint(); return; }
+  const preset = e.target.closest('[data-preset]');
+  if (preset && !preset.disabled) {
+    if (preset.dataset.preset === 'kishanlal') { S.cp = 300; S.sp = 430; }
+    else { S.cp = 350; S.sp = 300; }
+    sound('pop'); track('preset', {preset: preset.dataset.preset}); paint(); return;
+  }
+});
+$('btnInc').addEventListener('click', () => { if (S.steps.length >= 8) return; S.steps.push({sign: 1, pct: S.pct}); S.swapped = false; sound('chime'); track('apply', {sign: 1, pct: S.pct}); paint(); });
+$('btnDec').addEventListener('click', () => { if (S.steps.length >= 8) return; S.steps.push({sign: -1, pct: S.pct}); S.swapped = false; sound('chime'); track('apply', {sign: -1, pct: S.pct}); paint(); });
+$('btnSwap').addEventListener('click', () => {
+  if (S.steps.length < 2) return;
+  const n = S.steps.length;
+  const before = round1(chainFinal(S.base, S.steps));
+  [S.steps[n - 2], S.steps[n - 1]] = [S.steps[n - 1], S.steps[n - 2]];
+  const after = round1(chainFinal(S.base, S.steps));
+  S.swapped = Math.abs(before - after) < 0.05 && (S.steps[n - 1].pct !== S.steps[n - 2].pct || S.steps[n - 1].sign !== S.steps[n - 2].sign);
+  sound('snap'); track('swap', {before, after});
+  paint();
+});
+$('btnReset').addEventListener('click', () => { S.steps = []; S.swapped = false; sound('pop'); paint(); });
+
+/* ============================================================================
+   Start
+   ============================================================================ */
+findings($('finds'), [
+  {id: 'upDownNotEqual', icon: '↕', label: 'Up then down by the same % is not back to 100%', hint: 'Increase, then decrease, by the same percentage'},
+  {id: 'mishap', icon: '📉', label: 'A 50% margin, undone by a 50% discount, is a 25% loss', hint: 'Chain +50% then −50%'},
+  {id: 'cakelyCheaper', icon: '🎂', label: '30% + 20% off is not 50% off', hint: 'Open "Two discounts"'},
+  {id: 'profitPercent', icon: '💰', label: "Kishanlal's real profit: 43.3%", hint: 'Try the Kishanlal preset in "Profit or loss"'},
+  {id: 'commutative', icon: '🔁', label: 'Swapping the order changes nothing', hint: 'Chain two different changes, then swap them'},
+], () => toast('All five found. Percentages compound — they never just add.', 4200));
+
+const POE = predict($('poe'), {
+  id: 'why-percent',
+  q: 'A shirt priced ₹500 goes up 20%, then down 20%. Where does it end up?',
+  options: [
+    {id: 'same', text: 'Back to exactly ₹500.'},
+    {id: 'more', text: 'More than ₹500.'},
+    {id: 'less', text: 'Less than ₹500.', right: true},
+    {id: 'cant', text: "There's no way to tell without knowing what it was sold for."},
+  ],
+  onLock(){
+    S.locked = true;
+    lockControls(false);
+    S.steps = [{sign: 1, pct: 20}, {sign: -1, pct: 20}];
+    say('Now find out. Chain your own rises and falls, and watch the hundred-square.');
+    paint();
+  },
+});
+lockControls(!POE.locked);
+if (!Play.FF('predict')) S.locked = true;
+paint();
+window.applyFeatures = () => paint();
+window.PG_STATE = () => JSON.parse(JSON.stringify(S));
+window.PG_MODEL = {applyPct, chainFinal, cakely, cakify, profitLoss};
+</script>
+</body>
+</html>

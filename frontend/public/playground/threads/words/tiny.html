@@ -1,0 +1,711 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Word Train</title>
+<meta name="description" content="Class 1–2: put letter sounds in the train's carriages and hear them blend into a word.">
+<link rel="icon" href="../../favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600&family=Inter:wght@400;500;600;700&family=Nunito:wght@500;700;800&display=swap">
+<link rel="stylesheet" href="../../play.css">
+<style>
+.pg-main.tiny-main{grid-template-columns:minmax(0,1fr) 250px; padding-top:12px; padding-bottom:12px}
+.tiny-main .pg-stage{align-self:start; min-height:0}
+.pg-intro{display:flex; align-items:baseline; gap:18px; flex-wrap:wrap; padding-top:12px}
+.pg-intro p{margin:0}
+.pg-intro .syl{font-size:14px; font-weight:700; color:var(--ink-3); background:var(--sunk); padding:3px 12px; border-radius:99px}
+#stage{background:#bfe7ff}
+.tile, .carHit{cursor:grab}
+.tile.dragging, .carHit.dragging{cursor:grabbing}
+#engineHit, #addCar{cursor:pointer}
+svg [tabindex]:focus{outline:none}
+svg [tabindex]:focus-visible{outline:none; stroke:#ff7a2f; stroke-width:4; stroke-dasharray:8 8}
+svg text{font-family:"Fredoka","Nunito",sans-serif}
+.fade{transition:opacity .35s}
+.hear{width:100%; min-height:76px; font-size:24px; font-family:var(--font-head); border-radius:var(--radius)}
+.hear .ic{font-size:30px}
+.try{padding:10px; text-align:center; cursor:pointer; border:2px solid var(--hair-2); transition:transform .2s var(--spring)}
+.try:hover{border-color:var(--accent)}
+.try:active{transform:scale(.97)}
+.try svg{display:block; width:100%; height:auto}
+.try .kicker{margin:2px 0 0}
+@media (max-width:980px){ .pg-main.tiny-main{grid-template-columns:1fr} }
+</style>
+</head>
+<body>
+<header class="pg-top"></header>
+
+<div class="pg-intro">
+  <h1>The word train</h1>
+  <p>Put sounds in the carriages and hear the word come to life.</p>
+  <p class="syl">Class 1–2 English: letter sounds and blending</p>
+</div>
+
+<main class="pg-main tiny-main">
+  <section class="pg-stage" id="stageWrap">
+    <svg id="stage" viewBox="0 0 1000 660" role="img" aria-label="A little steam train with empty carriages, and a shelf of letter blocks. Drag letters into the carriages to make a word."></svg>
+  </section>
+
+  <aside class="pg-side">
+    <button class="btn primary hear" id="hear" aria-label="Hear what to do"><span class="ic">🔊</span> Hear it</button>
+    <button class="card try" id="tryCard" aria-label="What to try next. Tap to hear it."><svg id="tryArt" viewBox="-80 -55 160 110"></svg><div class="kicker">Try this</div></button>
+    <div class="card"><h3>⭐ Found</h3><div id="finds"></div></div>
+  </aside>
+</main>
+
+<script src="../../play.js"></script>
+<script>
+'use strict';
+const {$, clamp, lerp, loop, tween, sleep, sound, tone, say, track, confetti, findings, discover, found,
+       shareState, sharedState, mount, reduced, drag, mulberry32, ease} = Play;
+mount({thread: 'words', band: 'tiny'});
+
+/* MODEL:start ==================================================================
+   Letters -> sounds -> a blended word.
+
+   A word is split into its SOUNDS (phonemes) left to right; the four digraphs a
+   Class 1–2 reader meets (sh, ch, th, ck) are one sound each, so "ship" is sh-i-p
+   and "duck" is d-u-ck. Each sound has a short spoken form (the table below) that
+   the voice says; the blend is the letters read together as one word.
+
+   The train decides nothing by itself: it reads exactly the letters placed in its
+   carriages. If they spell a word the page knows, the word's picture comes out
+   (PICTURES, drawn in code); a real word without a picture still counts; anything
+   else is read out as a silly word.
+   ============================================================================ */
+const SOUND = {a: 'ah', b: 'buh', c: 'kuh', d: 'duh', e: 'eh', f: 'fff', g: 'guh', h: 'huh', i: 'ih', k: 'kuh', l: 'lll',
+  n: 'nnn', o: 'aw', p: 'puh', r: 'rrr', s: 'sss', t: 'tuh', u: 'uh', v: 'vvv', x: 'ks', sh: 'shhh', ch: 'chuh', th: 'thh', ck: 'kuh'};
+const DIGRAPHS = ['sh', 'ch', 'th', 'ck'];
+const VOWELS = new Set(['a', 'e', 'i', 'o', 'u']);
+const ANIMALS = new Set(['cat', 'bat', 'rat', 'dog', 'pig', 'hen', 'fox', 'fish', 'frog', 'duck', 'pup', 'cub', 'bug', 'hog']);
+/* Real words a child may build from these letters that have no picture here. */
+const EXTRA = new Set(('bad bag big bit bed beg bet bin bud bug but cab can cap cob cot cub cut dad did dig dip dot dug fat fed fig fin fit fix fog fun ' +
+  'gap gas get got had has hid hip hit hog hop hot hub hug hut kid kit lab lad lap led leg let lid lip lit lot nap net nib nod not nut pad pan pat peg pet ' +
+  'pin pit pod pot pup put rag ran rap red rib rip rod rot rub rug run sad sat set sit six sob tab tag tan tap ten tin tip top tub tug vet ' +
+  'back pack sack rack tick pick sick kick lick rock sock lock dock luck tuck neck deck ' +
+  'dish rush hush cash dash shop shed shut chip chop chin chat thin that this then bath path ' +
+  'crab crib grab grin grip trip trap drop drip drag flag flap flip flat clap clip slip spot spin stop step snap ' +
+  'nest best rest test vest desk help hand band land sand pond bend send tent bent gift lift soft raft fist list lost').split(' '));
+
+function phonemes(word){
+  const out = [];
+  for (let i = 0; i < word.length; i++) {
+    const two = word.slice(i, i + 2);
+    if (DIGRAPHS.includes(two)) { out.push(two); i++; } else out.push(word[i]);
+  }
+  return out;
+}
+function isWord(w){ return w in PICTURES || EXTRA.has(w); }
+function hasPicture(w){ return w in PICTURES; }
+const rhymes = (a, b) => a !== b && a.length >= 3 && b.length >= 3 && a.slice(-2) === b.slice(-2);
+function oneChange(a, b){ if (!a || !b || a.length !== b.length || a === b) return false; let d = 0; for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) d++; return d === 1; }
+/* The spoken sounds for a word, one per phoneme. */
+const soundsOf = w => phonemes(w).map(p => SOUND[p] || p);
+/* MODEL:end */
+
+/* ---- pictures, drawn in code: each fits a 100 x 100 box round (0, 0) ------- */
+const K = '#3a2a1a';
+const eyes = (x1, x2, y, r = 5) => `<circle cx="${x1}" cy="${y}" r="${r}" fill="${K}"/><circle cx="${x2}" cy="${y}" r="${r}" fill="${K}"/><circle cx="${x1 + 1.6}" cy="${y - 1.8}" r="${r * .35}" fill="#fff"/><circle cx="${x2 + 1.6}" cy="${y - 1.8}" r="${r * .35}" fill="#fff"/>`;
+const smile = (y, w = 9) => `<path d="M${-w} ${y} q${w} ${w * .9} ${2 * w} 0" fill="none" stroke="${K}" stroke-width="3" stroke-linecap="round"/>`;
+const wheel = (x, y, r = 9) => `<circle cx="${x}" cy="${y}" r="${r}" fill="#3a3f4a"/><circle cx="${x}" cy="${y}" r="${r * .4}" fill="#c9d1dc"/>`;
+const PICTURES = {
+  cat: `<path d="M-34 -14 L-30 -44 L-8 -30 Z M34 -14 L30 -44 L8 -30 Z" fill="#f7a54a" stroke="#b86d1f" stroke-width="3" stroke-linejoin="round"/><path d="M-27 -22 L-26 -36 L-15 -28 Z M27 -22 L26 -36 L15 -28 Z" fill="#ffc2cf"/>
+    <ellipse cx="0" cy="4" rx="38" ry="34" fill="#f7a54a" stroke="#b86d1f" stroke-width="3"/><path d="M-10 -28 l4 10 M0 -30 v10 M10 -28 l-4 10" stroke="#d9822b" stroke-width="3" stroke-linecap="round"/>
+    ${eyes(-14, 14, -2, 5.5)}<path d="M-4 8 h8 l-4 5 Z" fill="#e0567a"/><path d="M-8 16 q4 5 8 0 q4 5 8 0" fill="none" stroke="${K}" stroke-width="2.5" stroke-linecap="round"/>
+    <g stroke="#b86d1f" stroke-width="2" stroke-linecap="round"><path d="M-16 12 L-42 6 M-16 16 L-42 20 M16 12 L42 6 M16 16 L42 20"/></g>`,
+  bat: `<path d="M-12 -4 C-26 -24 -44 -22 -50 -10 C-42 -10 -40 -2 -44 6 C-34 2 -30 8 -30 14 C-22 6 -16 6 -12 10 Z" fill="#6b4fa8" stroke="#3e2a6e" stroke-width="3" stroke-linejoin="round"/>
+    <path d="M12 -4 C26 -24 44 -22 50 -10 C42 -10 40 -2 44 6 C34 2 30 8 30 14 C22 6 16 6 12 10 Z" fill="#6b4fa8" stroke="#3e2a6e" stroke-width="3" stroke-linejoin="round"/>
+    <path d="M-12 -22 L-10 -36 L-2 -24 Z M12 -22 L10 -36 L2 -24 Z" fill="#7d61bb" stroke="#3e2a6e" stroke-width="3" stroke-linejoin="round"/>
+    <ellipse cx="0" cy="0" rx="18" ry="24" fill="#7d61bb" stroke="#3e2a6e" stroke-width="3"/><circle cx="-7" cy="-6" r="6" fill="#fff"/><circle cx="7" cy="-6" r="6" fill="#fff"/>${eyes(-6, 8, -6, 3)}
+    <path d="M-5 8 q5 5 10 0" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round"/><path d="M-4 9 l1.5 4 l1.5 -3.5 M1 9.5 l1.5 3.5 l1.5 -4" fill="#fff"/>`,
+  rat: `<path d="M34 10 C52 8 52 -14 40 -22" fill="none" stroke="#e8a0ae" stroke-width="4" stroke-linecap="round"/>
+    <ellipse cx="8" cy="10" rx="32" ry="22" fill="#a7adb8" stroke="#6d7482" stroke-width="3"/>
+    <circle cx="-22" cy="-12" r="11" fill="#a7adb8" stroke="#6d7482" stroke-width="3"/><circle cx="-22" cy="-12" r="6" fill="#ffc2cf"/>
+    <path d="M-10 -6 C-24 -8 -40 0 -46 8 C-38 14 -20 14 -8 10 Z" fill="#b9bfca" stroke="#6d7482" stroke-width="3" stroke-linejoin="round"/>
+    <circle cx="-46" cy="8" r="4" fill="#e0567a"/>${eyes(-24, -24, 2, 3.5)}<path d="M-6 30 v4 M18 30 v4" stroke="#6d7482" stroke-width="4" stroke-linecap="round"/>`,
+  hat: `<ellipse cx="0" cy="26" rx="46" ry="12" fill="#3a3f4a"/><path d="M-28 24 L-24 -34 Q0 -40 24 -34 L28 24 Z" fill="#4a5060" stroke="#2a2e38" stroke-width="3" stroke-linejoin="round"/>
+    <path d="M-27 6 L27 6 L28 18 L-28 18 Z" fill="#e0567a"/><ellipse cx="0" cy="-34" rx="24" ry="6" fill="#5a6173"/><circle cx="16" cy="12" r="6" fill="#ffc53d"/>`,
+  dog: `<ellipse cx="-30" cy="-2" rx="13" ry="26" fill="#8a5a2b" transform="rotate(18 -30 -2)"/><ellipse cx="30" cy="-2" rx="13" ry="26" fill="#8a5a2b" transform="rotate(-18 30 -2)"/>
+    <circle cx="0" cy="0" r="32" fill="#d9a066" stroke="#8a5a2b" stroke-width="3"/><ellipse cx="12" cy="-12" rx="10" ry="8" fill="#fff" opacity=".35"/>
+    <ellipse cx="0" cy="14" rx="18" ry="13" fill="#f3d6b0"/>${eyes(-12, 12, -6, 5)}<ellipse cx="0" cy="6" rx="7" ry="5" fill="${K}"/>
+    <path d="M-7 16 q7 6 14 0" fill="none" stroke="${K}" stroke-width="2.5" stroke-linecap="round"/><path d="M-4 18 q4 12 8 0 Z" fill="#ff7a8a"/>`,
+  log: `<rect x="-42" y="-16" width="76" height="36" rx="6" fill="#a8672e" stroke="#6e4019" stroke-width="3"/><path d="M-32 -6 h40 M-24 8 h46" stroke="#8a5220" stroke-width="3" stroke-linecap="round"/>
+    <ellipse cx="34" cy="2" rx="12" ry="18" fill="#e3b27a" stroke="#6e4019" stroke-width="3"/><ellipse cx="34" cy="2" rx="6" ry="10" fill="none" stroke="#b9854d" stroke-width="2.5"/>
+    <path d="M-20 -16 q-4 -16 8 -20 q2 12 -8 20 Z" fill="#3aa35a"/>`,
+  pig: `<path d="M-30 -20 L-34 -42 L-12 -32 Z M30 -20 L34 -42 L12 -32 Z" fill="#f5a3b5" stroke="#c96a82" stroke-width="3" stroke-linejoin="round"/>
+    <circle cx="0" cy="0" r="36" fill="#f9b8c6" stroke="#c96a82" stroke-width="3"/>${eyes(-14, 14, -8, 5)}
+    <ellipse cx="0" cy="10" rx="15" ry="11" fill="#f5a3b5" stroke="#c96a82" stroke-width="3"/><ellipse cx="-5" cy="10" rx="2.8" ry="4" fill="#a4485f"/><ellipse cx="5" cy="10" rx="2.8" ry="4" fill="#a4485f"/>
+    <ellipse cx="-26" cy="10" rx="6" ry="4" fill="#ff8aa0" opacity=".6"/><ellipse cx="26" cy="10" rx="6" ry="4" fill="#ff8aa0" opacity=".6"/>${smile(24, 6)}`,
+  sun: `<g stroke="#ffb42a" stroke-width="7" stroke-linecap="round">${Array.from({length: 10}, (_, i) => { const t = i / 10 * Math.PI * 2; return `<path d="M${(36 * Math.cos(t)).toFixed(1)} ${(36 * Math.sin(t)).toFixed(1)} L${(47 * Math.cos(t)).toFixed(1)} ${(47 * Math.sin(t)).toFixed(1)}"/>`; }).join('')}</g>
+    <circle r="29" fill="#ffd84a" stroke="#f29a1f" stroke-width="3"/>${eyes(-10, 10, -5, 4)}<ellipse cx="-17" cy="6" rx="5" ry="3" fill="#ff8a5c" opacity=".6"/><ellipse cx="17" cy="6" rx="5" ry="3" fill="#ff8a5c" opacity=".6"/>${smile(7, 8)}`,
+  bun: `<path d="M-42 18 C-42 -30 42 -30 42 18 Z" fill="#e7a45a" stroke="#a8672e" stroke-width="3" stroke-linejoin="round"/><path d="M-30 -2 C-22 -18 0 -22 14 -16" fill="none" stroke="#f6c68a" stroke-width="5" stroke-linecap="round"/>
+    <rect x="-44" y="16" width="88" height="12" rx="6" fill="#d38d45" stroke="#a8672e" stroke-width="3"/>
+    ${[[-18, -4], [0, -10], [18, -2], [-6, 6], [10, 8], [26, 8], [-26, 8]].map(([x, y]) => `<ellipse cx="${x}" cy="${y}" rx="3" ry="1.8" fill="#fff6dc" transform="rotate(${x} ${x} ${y})"/>`).join('')}`,
+  hen: `<path d="M22 -2 C40 -10 44 -30 34 -36 C36 -24 28 -16 18 -12 Z" fill="#fff" stroke="#b9ab9a" stroke-width="3"/>
+    <ellipse cx="0" cy="8" rx="30" ry="24" fill="#fff" stroke="#b9ab9a" stroke-width="3"/><path d="M-6 8 q10 12 22 0" fill="none" stroke="#e5ddd2" stroke-width="4" stroke-linecap="round"/>
+    <circle cx="-22" cy="-18" r="14" fill="#fff" stroke="#b9ab9a" stroke-width="3"/><path d="M-30 -30 q3 -9 7 -3 q3 -9 7 -1 q5 -5 4 4 Z" fill="#e2453d"/>
+    <path d="M-36 -18 L-46 -15 L-36 -12 Z" fill="#f2b21f"/><path d="M-34 -10 q-2 7 3 7 q2 -4 -3 -7 Z" fill="#e2453d"/><circle cx="-24" cy="-20" r="2.6" fill="${K}"/>
+    <path d="M-6 30 v10 l-5 3 M6 30 v10 l5 3" fill="none" stroke="#f29a1f" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>`,
+  pen: `<g transform="rotate(-35)"><rect x="-44" y="-8" width="70" height="16" rx="6" fill="#3f7fd8" stroke="#24508f" stroke-width="3"/><rect x="-44" y="-8" width="22" height="16" rx="6" fill="#24508f"/>
+    <path d="M-30 -8 v-6 h18" fill="none" stroke="#c9d1dc" stroke-width="3" stroke-linecap="round"/><path d="M26 -7 L42 0 L26 7 Z" fill="#f3d6b0" stroke="#8a6a44" stroke-width="2.5" stroke-linejoin="round"/><circle cx="41" cy="0" r="2.4" fill="#24508f"/></g>`,
+  bus: `<rect x="-46" y="-28" width="92" height="50" rx="12" fill="#ffc53d" stroke="#b9860e" stroke-width="3"/><rect x="-46" y="8" width="92" height="7" fill="#e2453d"/>
+    ${[-38, -18, 2].map(x => `<rect x="${x}" y="-20" width="16" height="16" rx="3" fill="#bfe6ff" stroke="#b9860e" stroke-width="2"/>`).join('')}<rect x="24" y="-20" width="15" height="30" rx="3" fill="#bfe6ff" stroke="#b9860e" stroke-width="2"/>
+    <circle cx="42" cy="14" r="3" fill="#fff6c8"/>${wheel(-26, 24, 10)}${wheel(26, 24, 10)}`,
+  cup: `<path d="M-16 -40 q6 -8 0 -16 M0 -38 q6 -8 0 -16 M16 -40 q6 -8 0 -16" fill="none" stroke="#c9d1dc" stroke-width="3.5" stroke-linecap="round"/>
+    <path d="M26 -14 q20 0 18 16 q-2 14 -22 12" fill="none" stroke="#2f9e5b" stroke-width="7"/>
+    <path d="M-32 -24 L32 -24 L26 18 Q24 26 16 26 L-16 26 Q-24 26 -26 18 Z" fill="#3fbf7a" stroke="#227a4d" stroke-width="3" stroke-linejoin="round"/><ellipse cx="0" cy="-24" rx="32" ry="6" fill="#8a5a2b" stroke="#227a4d" stroke-width="3"/>
+    <circle cx="0" cy="2" r="7" fill="#fff" opacity=".85"/><ellipse cx="0" cy="34" rx="42" ry="7" fill="#e9eef3" stroke="#aab4c0" stroke-width="2.5"/>`,
+  fan: `<path d="M-4 20 L-8 40 L8 40 L4 20 Z" fill="#8793a3"/><rect x="-22" y="38" width="44" height="8" rx="4" fill="#5d6b7c"/>
+    <circle cx="0" cy="-6" r="30" fill="#e9f5ff" stroke="#5d6b7c" stroke-width="3"/>
+    ${[0, 120, 240].map(a => `<ellipse cx="0" cy="-20" rx="9" ry="15" fill="#3f7fd8" transform="rotate(${a} 0 -6)"/>`).join('')}<circle cx="0" cy="-6" r="6" fill="#24508f"/>
+    <g stroke="#5d6b7c" stroke-width="1.5" opacity=".6">${[0, 30, 60, 90, 120, 150].map(a => `<path d="M${(-30 * Math.cos(a * Math.PI / 180)).toFixed(1)} ${(-6 - 30 * Math.sin(a * Math.PI / 180)).toFixed(1)} L${(30 * Math.cos(a * Math.PI / 180)).toFixed(1)} ${(-6 + 30 * Math.sin(a * Math.PI / 180)).toFixed(1)}"/>`).join('')}</g>`,
+  van: `<path d="M-46 18 L-46 -18 Q-46 -26 -38 -26 L14 -26 Q22 -26 28 -18 L42 0 Q46 4 46 10 L46 18 Z" fill="#e2453d" stroke="#8f2e22" stroke-width="3" stroke-linejoin="round"/>
+    <path d="M16 -18 L28 -2 L16 -2 Z" fill="#bfe6ff" stroke="#8f2e22" stroke-width="2" stroke-linejoin="round"/><rect x="-36" y="-18" width="44" height="16" rx="3" fill="#bfe6ff" stroke="#8f2e22" stroke-width="2"/>
+    <rect x="-46" y="2" width="92" height="5" fill="#fff" opacity=".8"/><circle cx="42" cy="8" r="3" fill="#fff6c8"/>${wheel(-24, 20, 10)}${wheel(26, 20, 10)}`,
+  box: `<path d="M-34 -10 L-44 -30 L-4 -24 L0 -10 Z" fill="#e3b27a" stroke="#9b6431" stroke-width="3" stroke-linejoin="round"/><path d="M34 -10 L44 -30 L4 -24 L0 -10 Z" fill="#d9a066" stroke="#9b6431" stroke-width="3" stroke-linejoin="round"/>
+    <rect x="-36" y="-12" width="72" height="50" rx="4" fill="#d69a5e" stroke="#9b6431" stroke-width="3"/><rect x="-6" y="-12" width="12" height="50" fill="#e8c28f"/><path d="M-26 28 h14" stroke="#9b6431" stroke-width="3" stroke-linecap="round"/>`,
+  fox: `<path d="M-38 -34 L-26 4 L-4 -18 Z M38 -34 L26 4 L4 -18 Z" fill="#f27a2a" stroke="#a84a12" stroke-width="3" stroke-linejoin="round"/><path d="M-36 -32 L-30 -18 L-24 -24 Z M36 -32 L30 -18 L24 -24 Z" fill="${K}"/>
+    <path d="M-36 -8 Q-38 20 0 38 Q38 20 36 -8 Q20 -26 0 -26 Q-20 -26 -36 -8 Z" fill="#f27a2a" stroke="#a84a12" stroke-width="3" stroke-linejoin="round"/>
+    <path d="M-34 4 Q-20 8 -4 22 L0 38 L4 22 Q20 8 34 4 Q24 30 0 38 Q-24 30 -34 4 Z" fill="#fff"/>${eyes(-14, 14, -4, 4.5)}<ellipse cx="0" cy="26" rx="6" ry="4.5" fill="${K}"/>`,
+  bed: `<rect x="-46" y="-26" width="10" height="56" rx="4" fill="#9b6431"/><rect x="36" y="-6" width="10" height="36" rx="4" fill="#9b6431"/>
+    <rect x="-40" y="0" width="80" height="18" rx="5" fill="#fff" stroke="#c9d1dc" stroke-width="2"/><ellipse cx="-24" cy="-4" rx="13" ry="8" fill="#fff" stroke="#c9d1dc" stroke-width="2.5"/>
+    <path d="M-10 -6 Q10 -12 40 -4 L40 18 L-10 18 Z" fill="#3f7fd8" stroke="#24508f" stroke-width="3" stroke-linejoin="round"/><path d="M4 -4 L4 18 M22 -6 L22 18" stroke="#7fb0ec" stroke-width="3"/>`,
+  fish: `<path d="M24 0 L46 -18 L42 0 L46 18 Z" fill="#f27a2a" stroke="#a84a12" stroke-width="3" stroke-linejoin="round"/>
+    <ellipse cx="-2" cy="0" rx="32" ry="22" fill="#ff9d4a" stroke="#a84a12" stroke-width="3"/><path d="M-4 -20 q10 -12 22 -4" fill="#f27a2a" stroke="#a84a12" stroke-width="3"/>
+    <path d="M6 -14 q8 14 0 28" fill="none" stroke="#f27a2a" stroke-width="3"/><circle cx="-18" cy="-4" r="6" fill="#fff"/><circle cx="-19" cy="-4" r="3.5" fill="${K}"/>
+    <path d="M-30 8 q4 4 8 0" fill="none" stroke="${K}" stroke-width="2.5" stroke-linecap="round"/><circle cx="-40" cy="-22" r="4" fill="none" stroke="#7fc3f0" stroke-width="2.5"/><circle cx="-46" cy="-34" r="2.6" fill="none" stroke="#7fc3f0" stroke-width="2"/>`,
+  frog: `<circle cx="-18" cy="-20" r="14" fill="#5cc26e" stroke="#2f7d44" stroke-width="3"/><circle cx="18" cy="-20" r="14" fill="#5cc26e" stroke="#2f7d44" stroke-width="3"/>
+    <ellipse cx="0" cy="6" rx="42" ry="28" fill="#5cc26e" stroke="#2f7d44" stroke-width="3"/><circle cx="-18" cy="-21" r="8" fill="#fff"/><circle cx="18" cy="-21" r="8" fill="#fff"/>${eyes(-17, 19, -20, 4.5)}
+    <path d="M-22 8 q22 18 44 0" fill="none" stroke="#2f7d44" stroke-width="3.5" stroke-linecap="round"/><ellipse cx="-30" cy="6" rx="6" ry="4" fill="#ff8aa0" opacity=".55"/><ellipse cx="30" cy="6" rx="6" ry="4" fill="#ff8aa0" opacity=".55"/>`,
+  duck: `<ellipse cx="6" cy="14" rx="36" ry="22" fill="#ffd84a" stroke="#c99a12" stroke-width="3"/><path d="M8 8 q14 -4 22 8 q-12 8 -22 -8 Z" fill="#f5c518" stroke="#c99a12" stroke-width="2.5"/>
+    <path d="M38 8 L48 0 L44 14 Z" fill="#ffd84a" stroke="#c99a12" stroke-width="2.5" stroke-linejoin="round"/>
+    <circle cx="-18" cy="-16" r="18" fill="#ffd84a" stroke="#c99a12" stroke-width="3"/><path d="M-34 -14 Q-48 -12 -46 -6 Q-40 -4 -32 -8 Z" fill="#f27a2a" stroke="#a84a12" stroke-width="2.5" stroke-linejoin="round"/>
+    <circle cx="-20" cy="-20" r="3.5" fill="${K}"/><circle cx="-19" cy="-21" r="1.2" fill="#fff"/><ellipse cx="-10" cy="-10" rx="4" ry="2.6" fill="#ff8a5c" opacity=".6"/>`,
+  ship: `<path d="M-10 -40 L-10 -14 L14 -14 L14 -40 Z" fill="#e2453d" stroke="#8f2e22" stroke-width="3"/><rect x="-10" y="-34" width="24" height="5" fill="#fff"/>
+    <circle cx="4" cy="-50" r="6" fill="#e9eef3"/><circle cx="14" cy="-56" r="4.5" fill="#e9eef3"/>
+    <rect x="-30" y="-16" width="56" height="16" rx="3" fill="#fff" stroke="#8793a3" stroke-width="2.5"/>${[-22, -8, 6].map(x => `<circle cx="${x + 4}" cy="-8" r="3.2" fill="#7fc3f0"/>`).join('')}
+    <path d="M-46 0 L46 0 L34 22 L-36 22 Z" fill="#24508f" stroke="#17365f" stroke-width="3" stroke-linejoin="round"/><rect x="-42" y="4" width="84" height="5" fill="#e2453d"/>
+    <path d="M-50 28 q8 -6 16 0 q8 6 16 0 q8 -6 16 0 q8 6 16 0 q8 -6 16 0 q8 6 16 0" fill="none" stroke="#3f9fe0" stroke-width="4" stroke-linecap="round"/>`,
+};
+const SILLY = `<circle r="38" fill="#ffe27a" stroke="#f29a1f" stroke-width="3"/><path d="M-20 -12 l10 8 M-20 -4 l10 -8 M10 -12 l10 8 M10 -4 l10 -8" stroke="${K}" stroke-width="3.5" stroke-linecap="round"/>
+  <path d="M-16 10 q16 18 32 0" fill="#7a2a1a" stroke="${K}" stroke-width="3" stroke-linejoin="round"/><ellipse cx="4" cy="20" rx="7" ry="6" fill="#ff7a8a"/>`;
+const WORD_ONLY = `<path d="M0 -38 L11 -12 L40 -10 L18 8 L25 36 L0 21 L-25 36 L-18 8 L-40 -10 L-11 -12 Z" fill="#ffd84a" stroke="#f29a1f" stroke-width="3" stroke-linejoin="round"/>`;
+
+/* ---- the world ------------------------------------------------------------ */
+const LETTERS = 'abcdefghiklnoprstuvx'.split('');
+const TILE = 74, TGAP = 12;
+const tilePos = i => ({x: 76 + (i % 10) * (TILE + TGAP), y: i < 10 ? 470 : 560});
+const CAR_W = 144, ENGINE_W = 262;
+const CAR_COLS = ['#ff7a5c', '#ffc53d', '#5cc26e', '#8a6fe0'];
+const NOUN = '#3f7fd8';
+const trainX0 = n => Math.round((1000 - (n * CAR_W + ENGINE_W)) / 2);
+
+/* ---- state: plain data ----------------------------------------------------- */
+const S = {nCar: 3, cars: ['', '', '', ''], busy: false, made: [], lastRead: '', lastReal: '', placed: 0, trip: 0, x0: trainX0(3)};
+const shared = sharedState();
+if (shared && Array.isArray(shared.cars)) {
+  S.nCar = shared.nCar === 4 ? 4 : 3; S.x0 = trainX0(S.nCar);
+  S.cars = [0, 1, 2, 3].map(i => (typeof shared.cars[i] === 'string' && LETTERS.includes(shared.cars[i]) && i < S.nCar) ? shared.cars[i] : '');
+}
+shareState(() => ({nCar: S.nCar, cars: S.cars}));
+
+/* ============================================================================
+   The stage: drawn once, then only patched.
+   ============================================================================ */
+const svg = $('stage');
+const f1 = n => (+n).toFixed(1);
+const handArt = `<path d="M-6 0 L-6 -34 Q-6 -42 1 -42 Q8 -42 8 -34 L8 -14 L20 -14 Q30 -14 30 -4 L30 16 Q30 30 16 30 L2 30 Q-12 30 -16 18 L-24 4 Q-27 -3 -20 -5 Q-14 -6 -10 2 Z" fill="#fff" stroke="#3a2a1a" stroke-width="3" stroke-linejoin="round"/>`;
+const cloud = (w) => `<g fill="#fff"><ellipse cx="0" cy="0" rx="${w}" ry="${w * .42}"/><circle cx="${-w * .35}" cy="${-w * .25}" r="${w * .38}"/><circle cx="${w * .2}" cy="${-w * .38}" r="${w * .45}"/><circle cx="${w * .6}" cy="${-w * .1}" r="${w * .3}"/></g>`;
+function wheelArt(id, cx, cy, r, col){
+  return `<g transform="translate(${cx} ${cy})"><circle r="${r}" fill="#3a3f4a"/><circle r="${r - 5}" fill="${col}"/>
+    <g class="spokes" id="${id}">${[0, 60, 120].map(a => `<rect x="-2" y="${-(r - 6)}" width="4" height="${2 * (r - 6)}" rx="2" fill="#3a3f4a" transform="rotate(${a})"/>`).join('')}</g>
+    <circle r="${r * .28}" fill="#3a3f4a"/><circle r="${r * .12}" fill="#c9d1dc"/></g>`;
+}
+function carArt(c){
+  const col = CAR_COLS[c];
+  return `
+    <g id="blk${c}" transform="translate(66 290)">
+      <g id="blkJ${c}"><rect x="-46" y="-48" width="92" height="92" rx="16" id="blkR${c}" fill="#fff6e3" stroke="#d9b98a" stroke-width="3"/>
+      <text id="blkT${c}" x="0" y="20" text-anchor="middle" font-size="64" font-weight="600" fill="#2f4f8f"></text></g>
+    </g>
+    <rect id="slot${c}" x="20" y="244" width="92" height="80" rx="16" fill="#fff" fill-opacity=".45" stroke="#fff" stroke-width="4" stroke-dasharray="10 8"/>
+    <rect x="0" y="318" width="132" height="16" rx="8" fill="${col}" stroke="#00000030" stroke-width="2"/>
+    <rect x="4" y="326" width="124" height="66" rx="12" fill="${col}"/>
+    <rect x="4" y="326" width="124" height="66" rx="12" fill="url(#shine)"/>
+    <rect x="16" y="340" width="100" height="38" rx="9" fill="#ffffff" opacity=".22"/>
+    <rect x="128" y="366" width="18" height="8" rx="3" fill="#3a3f4a"/>
+    ${wheelArt('wh' + c + 'a', 34, 400, 19, '#e9eef3')}${wheelArt('wh' + c + 'b', 98, 400, 19, '#e9eef3')}`;
+}
+const engineArt = `
+  <g id="puffs"></g>
+  <rect x="-8" y="224" width="112" height="20" rx="9" fill="#8f2e22"/>
+  <rect x="0" y="238" width="96" height="168" rx="14" fill="#e2553f"/>
+  <rect x="18" y="256" width="60" height="50" rx="12" fill="#bfe6ff" stroke="#ffd36b" stroke-width="5"/>
+  <path d="M26 300 q22 -26 44 0" fill="#fff" opacity=".35"/>
+  <rect x="84" y="298" width="156" height="106" rx="46" fill="#e2553f"/>
+  <rect x="84" y="298" width="156" height="106" rx="46" fill="url(#shine)"/>
+  <rect x="118" y="298" width="10" height="106" fill="#ffc53d"/><rect x="206" y="304" width="9" height="96" fill="#ffc53d"/>
+  <path d="M188 300 L186 260 Q186 250 196 250 L218 250 Q228 250 228 260 L226 300 Z" fill="#3a3f4a"/><rect x="180" y="244" width="54" height="14" rx="7" fill="#4a5060"/>
+  <path d="M140 300 a18 16 0 0 1 36 0 Z" fill="#ffc53d"/>
+  <rect x="236" y="318" width="16" height="82" rx="6" fill="#8f2e22"/><circle cx="256" cy="330" r="7" fill="#3a3f4a"/><circle cx="256" cy="384" r="7" fill="#3a3f4a"/>
+  <path d="M238 396 L276 420 L238 420 Z" fill="#ffc53d" stroke="#b9860e" stroke-width="3" stroke-linejoin="round"/>
+  <!-- the face -->
+  <g id="face">
+    <ellipse cx="136" cy="366" rx="11" ry="7" fill="#ff8aa0" opacity=".7"/><ellipse cx="212" cy="366" rx="11" ry="7" fill="#ff8aa0" opacity=".7"/>
+    <g id="eyeOpen"><ellipse cx="152" cy="338" rx="15" ry="18" fill="#fff"/><ellipse cx="194" cy="338" rx="15" ry="18" fill="#fff"/>
+      <g id="pupils"><circle cx="152" cy="340" r="8" fill="${K}"/><circle cx="194" cy="340" r="8" fill="${K}"/><circle cx="155" cy="336" r="3" fill="#fff"/><circle cx="197" cy="336" r="3" fill="#fff"/></g>
+      <rect id="lid1" x="136" y="318" width="32" height="0" fill="#e2553f"/><rect id="lid2" x="178" y="318" width="32" height="0" fill="#e2553f"/></g>
+    <g id="eyeHappy" opacity="0" fill="none" stroke="${K}" stroke-width="4.5" stroke-linecap="round"><path d="M140 342 q12 -14 24 0 M182 342 q12 -14 24 0"/></g>
+    <g id="eyeSilly" opacity="0"><ellipse cx="152" cy="338" rx="15" ry="18" fill="#fff"/><ellipse cx="194" cy="338" rx="15" ry="18" fill="#fff"/>
+      <circle cx="160" cy="342" r="8" fill="${K}"/><circle cx="186" cy="342" r="8" fill="${K}"/></g>
+    <path id="mSmile" d="M156 370 q17 16 34 0" fill="none" stroke="${K}" stroke-width="4.5" stroke-linecap="round"/>
+    <g id="mOpen" opacity="0"><path d="M154 366 q19 30 38 0 Z" fill="#7a2a1a" stroke="${K}" stroke-width="3.5" stroke-linejoin="round"/><ellipse cx="173" cy="380" rx="8" ry="4" fill="#ff7a8a"/></g>
+    <g id="mSilly" opacity="0"><path d="M156 370 q17 10 34 0" fill="none" stroke="${K}" stroke-width="4.5" stroke-linecap="round"/><path d="M176 373 q2 16 10 12 q4 -4 -2 -12 Z" fill="#ff7a8a" stroke="${K}" stroke-width="2.5"/></g>
+    <g id="mSay" opacity="0"><ellipse cx="173" cy="374" rx="9" ry="8" fill="#7a2a1a" stroke="${K}" stroke-width="3"/></g>
+  </g>
+  ${wheelArt('whE1', 44, 396, 28, '#ffc53d')}${wheelArt('whE2', 128, 402, 22, '#ffc53d')}${wheelArt('whE3', 196, 402, 22, '#ffc53d')}
+  <rect id="rod" x="120" y="398" width="84" height="8" rx="4" fill="#c9d1dc" stroke="#6d7482" stroke-width="2"/>`;
+
+function build(){
+  const rnd = mulberry32(3);
+  let flowers = '';
+  for (let i = 0; i < 26; i++) { const x = rnd() * 1000, y = 412 + rnd() * 12; flowers += `<circle cx="${f1(x)}" cy="${f1(y)}" r="${f1(2.5 + rnd() * 2)}" fill="${['#fff', '#ffd84a', '#ff8aa0'][i % 3]}"/>`; }
+  let sleepers = '';
+  for (let x = -20; x < 1020; x += 34) sleepers += `<rect x="${x}" y="424" width="22" height="10" rx="3" fill="#9b6431"/>`;
+  svg.innerHTML = `
+  <defs>
+    <linearGradient id="gSky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#8fd3ff"/><stop offset=".7" stop-color="#d9f1ff"/><stop offset="1" stop-color="#f3fbff"/></linearGradient>
+    <linearGradient id="shine" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".32"/><stop offset=".45" stop-color="#fff" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity=".12"/></linearGradient>
+    <linearGradient id="gShelf" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#e2ac72"/><stop offset="1" stop-color="#c58549"/></linearGradient>
+    <radialGradient id="gSun" cx="42%" cy="38%"><stop offset="0" stop-color="#fff6c8"/><stop offset=".6" stop-color="#ffd84a"/><stop offset="1" stop-color="#ffb42a"/></radialGradient>
+    <filter id="soft" x="-20%" y="-20%" width="140%" height="140%"><feDropShadow dx="0" dy="4" stdDeviation="4" flood-color="#28405a" flood-opacity=".25"/></filter>
+    <filter id="soft2" x="-20%" y="-20%" width="140%" height="140%"><feDropShadow dx="0" dy="3" stdDeviation="2" flood-color="#6b3a10" flood-opacity=".3"/></filter>
+  </defs>
+  <rect width="1000" height="660" fill="url(#gSky)"/>
+  <g transform="translate(930 70)"><circle r="70" fill="#fff3b0" opacity=".45"/><circle r="40" fill="url(#gSun)"/></g>
+  <g id="clouds" opacity=".95">
+    <g id="cl0" transform="translate(120 90)">${cloud(46)}</g><g id="cl1" transform="translate(760 150)">${cloud(34)}</g><g id="cl2" transform="translate(420 60)">${cloud(28)}</g>
+  </g>
+  <path d="M0 330 Q120 270 250 320 Q380 250 520 318 Q660 262 800 312 Q900 280 1000 300 L1000 440 L0 440 Z" fill="#a8dca0"/>
+  <path d="M0 370 Q160 330 330 372 Q520 320 700 368 Q860 336 1000 360 L1000 440 L0 440 Z" fill="#7cc576"/>
+  <g fill="#5aa857">${[90, 300, 640, 880].map((x, i) => `<g transform="translate(${x} ${350 + (i % 2) * 14})"><rect x="-4" y="-6" width="8" height="26" fill="#8a5a2b"/><circle cx="0" cy="-18" r="${18 + (i % 2) * 4}"/></g>`).join('')}</g>
+  <rect x="0" y="408" width="1000" height="44" fill="#6bbb63"/>
+  <g>${flowers}</g>
+  ${sleepers}
+  <rect x="0" y="421" width="1000" height="5" rx="2" fill="#8793a3"/><rect x="0" y="432" width="1000" height="4" rx="2" fill="#6d7482"/>
+
+  <!-- the words made so far -->
+  <g id="shelf">${[0, 1, 2, 3, 4].map(k => `<g transform="translate(${50 + k * 76} 50)"><rect x="-32" y="-32" width="64" height="64" rx="16" fill="#fff" fill-opacity=".6" stroke="#fff" stroke-width="3" stroke-dasharray="6 6" id="frame${k}"/>
+    <g id="shelfPic${k}" transform="scale(.5)"></g></g>`).join('')}</g>
+
+  <!-- the picture that pops out of the train -->
+  <g id="pop" opacity="0" pointer-events="none">
+    <g id="popJ" filter="url(#soft)"><rect x="-100" y="-96" width="200" height="192" rx="34" fill="#fff"/>
+      <g id="popPic" transform="translate(0 -18) scale(1.35)"></g>
+      <text id="popWord" x="0" y="80" text-anchor="middle" font-size="34" font-weight="600" fill="${NOUN}"></text></g>
+  </g>
+
+  <!-- the train -->
+  <g id="train">
+    ${[0, 1, 2, 3].map(c => `<g id="car${c}" transform="translate(${c * CAR_W} 0)">${carArt(c)}</g>`).join('')}
+    <g id="addCarG" transform="translate(${3 * CAR_W - 8} 190)" class="fade" filter="url(#soft)">
+      <circle r="34" fill="#fff" stroke="#8a6fe0" stroke-width="4" stroke-dasharray="8 6"/>
+      <rect x="-20" y="-6" width="40" height="20" rx="6" fill="#8a6fe0"/><circle cx="-10" cy="16" r="5" fill="#3a3f4a"/><circle cx="10" cy="16" r="5" fill="#3a3f4a"/>
+      <circle cx="18" cy="-16" r="11" fill="#2f9e5b"/><path d="M18 -22 v12 M12 -16 h12" stroke="#fff" stroke-width="3.5" stroke-linecap="round"/>
+    </g>
+    <g id="engine">${engineArt}</g>
+    ${[0, 1, 2, 3].map(c => `<rect class="carHit" id="carHit${c}" x="${c * CAR_W + 8}" y="236" width="118" height="178" rx="18" fill="transparent" role="button" tabindex="0" aria-label="Carriage ${c + 1}"/>`).join('')}
+    <rect id="engineHit" x="0" y="220" width="${ENGINE_W}" height="196" rx="24" fill="transparent" role="button" tabindex="0" aria-label="The engine: tap it to read the train"/>
+    <circle id="addCar" cx="${3 * CAR_W - 8}" cy="190" r="36" fill="transparent" role="button" tabindex="0" aria-label="Add one more carriage"/>
+  </g>
+
+  <!-- the letter shelf -->
+  <rect x="44" y="456" width="912" height="192" rx="30" fill="url(#gShelf)" filter="url(#soft2)"/>
+  <rect x="60" y="548" width="880" height="8" rx="4" fill="#a86a33" opacity=".5"/>
+  ${LETTERS.map((l, i) => { const p = tilePos(i); return `<g transform="translate(${p.x + TILE / 2} ${p.y + TILE / 2})"><g id="tileJ-${l}" filter="url(#soft2)">
+    <rect x="${-TILE / 2}" y="${-TILE / 2}" width="${TILE}" height="${TILE}" rx="16" fill="#fff6e3" stroke="#d9b98a" stroke-width="3"/>
+    <rect x="${-TILE / 2 + 5}" y="${-TILE / 2 + 5}" width="${TILE - 10}" height="${TILE / 2 - 6}" rx="11" fill="#fff" opacity=".6"/>
+    <text x="0" y="18" text-anchor="middle" font-size="50" font-weight="600" fill="${VOWELS.has(l) ? '#e0567a' : '#2f4f8f'}">${l}</text></g></g>`; }).join('')}
+  ${LETTERS.map((l, i) => { const p = tilePos(i); return `<rect class="tile" id="tile-${l}" x="${p.x}" y="${p.y}" width="${TILE}" height="${TILE}" rx="16" fill="transparent" role="button" tabindex="0" aria-label="Letter ${l}. Tap to hear its sound, drag it to the train."/>`; }).join('')}
+
+  <!-- a letter being carried, and the hint hand -->
+  <g id="ghost" opacity="0" pointer-events="none" filter="url(#soft)"><rect x="-46" y="-46" width="92" height="92" rx="16" fill="#fff6e3" stroke="#ffb42a" stroke-width="4"/>
+    <text id="ghostT" x="0" y="20" text-anchor="middle" font-size="60" font-weight="600" fill="#2f4f8f"></text></g>
+  <g id="hint" pointer-events="none"><g id="hintBlock" opacity=".85"><rect x="-37" y="-37" width="74" height="74" rx="16" fill="#fff6e3" stroke="#ffb42a" stroke-width="3"/>
+    <text x="0" y="18" text-anchor="middle" font-size="50" font-weight="600" fill="#2f4f8f">c</text></g><g id="hintHand"><g transform="translate(6 10) scale(1.2)">${handArt}</g></g></g>
+  `;
+}
+build();
+
+/* ---- juice helpers --------------------------------------------------------- */
+function clientOf(x, y){
+  const m = svg.getScreenCTM(); if (!m) return {x: innerWidth / 2, y: innerHeight / 2};
+  const p = svg.createSVGPoint(); p.x = x; p.y = y; const q = p.matrixTransform(m); return {x: q.x, y: q.y};
+}
+function squash(el, cx, cy, amt = 0.15, ms = 460){
+  return tween(0, 1, ms, t => {
+    const k = Math.sin(t * Math.PI * 3) * (1 - t) * amt;
+    el.setAttribute('transform', `translate(${cx} ${cy}) scale(${(1 + k).toFixed(3)} ${(1 - k).toFixed(3)}) translate(${-cx} ${-cy})`);
+  }, x => x).then(() => el.removeAttribute('transform'));
+}
+const toot = () => { tone(523, 0.28, 'square', 0.05, 0); tone(659, 0.28, 'square', 0.05, 0); tone(523, 0.4, 'square', 0.05, 0.32); tone(784, 0.4, 'square', 0.04, 0.32); };
+const chuff = () => tone(120, 0.08, 'sawtooth', 0.025, 0, 60);
+/* Speak, but never wait longer than the cap (voices can be missing). */
+const speak = (text, o = {}, cap = 1400) => Promise.race([say(text, o), sleep(cap)]);
+
+/* ---- paint ------------------------------------------------------------------ */
+let MOOD = 'idle', moodT = 0;
+function setMood(m, secs = 0){ MOOD = m; moodT = secs; paintFace(); }
+function paintFace(){
+  const show = (id, on) => $(id).setAttribute('opacity', on ? 1 : 0);
+  show('eyeOpen', MOOD === 'idle' || MOOD === 'say' || MOOD === 'look');
+  show('eyeHappy', MOOD === 'cheer'); show('eyeSilly', MOOD === 'silly');
+  show('mSmile', MOOD === 'idle' || MOOD === 'look'); show('mOpen', MOOD === 'cheer'); show('mSilly', MOOD === 'silly'); show('mSay', MOOD === 'say');
+}
+function word(){ let w = ''; for (let i = 0; i < S.nCar; i++) { if (!S.cars[i]) break; w += S.cars[i]; } return w; }
+function filled(){ return S.cars.slice(0, S.nCar).filter(Boolean).length; }
+function paint(){
+  const w = word(), real = isWord(w) && w.length === filled() && S.lastRead === w;
+  for (let c = 0; c < 4; c++) {
+    const on = c < S.nCar, l = S.cars[c];
+    $('car' + c).setAttribute('opacity', on ? 1 : 0);
+    $('carHit' + c).style.display = on ? '' : 'none';
+    $('blk' + c).setAttribute('opacity', l ? 1 : 0);
+    $('slot' + c).setAttribute('opacity', on && !l ? 1 : 0);
+    $('blkT' + c).textContent = l;
+    $('blkR' + c).setAttribute('fill', real && l ? NOUN : '#fff6e3');
+    $('blkR' + c).setAttribute('stroke', real && l ? '#24508f' : '#d9b98a');
+    $('blkT' + c).setAttribute('fill', real && l ? '#fff' : (VOWELS.has(l) ? '#e0567a' : '#2f4f8f'));
+    $('carHit' + c).setAttribute('aria-label', `Carriage ${c + 1}: ${l ? 'letter ' + l : 'empty'}`);
+  }
+  $('addCarG').setAttribute('opacity', S.nCar === 3 ? 1 : 0);
+  $('addCar').style.display = S.nCar === 3 ? '' : 'none';
+  $('engine').setAttribute('transform', `translate(${S.nCar * CAR_W} 0)`);
+  $('engineHit').setAttribute('x', S.nCar * CAR_W);
+  placeTrain();
+  const made = S.made.slice(-5);
+  for (let k = 0; k < 5; k++) {
+    const w2 = made[k];
+    $('shelfPic' + k).innerHTML = w2 ? (PICTURES[w2] || WORD_ONLY) : '';
+    $('frame' + k).setAttribute('stroke-dasharray', w2 ? '' : '6 6');
+    $('frame' + k).setAttribute('fill-opacity', w2 ? 1 : 0.6);
+  }
+  paintFace();
+  paintTry();
+}
+let bob = 0;
+function placeTrain(){ $('train').setAttribute('transform', `translate(${f1(S.x0 + S.trip)} ${f1(bob)})`); }
+
+/* ---- reading the train: sounds one by one, then the blend -------------------- */
+async function readTrain(){
+  const w = word();
+  if (!w || S.busy) return;
+  S.busy = true; hintOff();
+  const ph = phonemes(w), real = isWord(w);
+  track('read', {word: w, real, sounds: ph});
+  setMood('say');
+  /* each sound: its carriage(s) hop, and the voice says the sound */
+  let ci = 0;
+  for (let k = 0; k < ph.length; k++) {
+    const n = ph[k].length, cars = Array.from({length: n}, (_, j) => ci + j); ci += n;
+    cars.forEach(c => { squash($('blkJ' + c), 0, 44, 0.22, 420); });
+    Play.sound('note', 392 + k * 98, 0.16);
+    const wait = Promise.all([speak(SOUND[ph[k]] || ph[k], {interrupt: k === 0}), sleep(reduced() ? 250 : 520)]);
+    await wait;
+  }
+  await sleep(reduced() ? 60 : 180);
+  /* the blend */
+  for (let c = 0; c < w.length; c++) setTimeout(() => squash($('blkJ' + c), 0, 44, 0.16, 380), reduced() ? 0 : c * 60);
+  S.lastRead = w;
+  if (real) {
+    setMood('cheer');
+    paint();
+    const blend = speak(w + '!', {interrupt: false, rate: 0.85}, 1600);
+    Play.sound('chime');
+    await showPicture(w);
+    await blend;
+    await sleep(reduced() ? 100 : 400);
+    toot();
+    await puffOff();
+    const first = !S.made.includes(w);
+    if (first) S.made.push(w);
+    hidePicture();
+    paint();
+    celebrate(w);
+    S.lastReal = w;
+  } else {
+    setMood('silly', 2.4);
+    Play.sound('boing');
+    showSilly();
+    await speak(w + '! A silly word!', {interrupt: false, rate: 0.9}, 1600);
+    await wobble();
+    await sleep(reduced() ? 100 : 500);
+    hidePicture();
+    paint();
+  }
+  S.busy = false;
+  setMood('idle');
+}
+/* A word can earn more than one discovery; they arrive one after another, each with its own voice line. */
+function celebrate(w){
+  const c = clientOf(500, 300);
+  const ids = ['first'];
+  if (ANIMALS.has(w)) ids.push('animal');
+  if (oneChange(S.lastReal, w)) ids.push('change');
+  if (S.made.some(m => rhymes(m, w))) ids.push('rhyme');
+  if (w.length === 4) ids.push('four');
+  if (new Set(S.made).size >= 5) ids.push('five');
+  const fresh = ids.filter(id => !found(id));
+  if (!fresh.length) { confetti(c.x, c.y, 40); say(pick(['Well done!', 'Yay!', 'Choo choo!', 'Great word!'])); return; }
+  fresh.forEach((id, k) => setTimeout(() => { discover(id, c); setTimeout(paintTry, 1200); }, k * 2600));
+}
+function pick(a){ return a[Math.floor(Math.random() * a.length)]; }
+async function showPicture(w){
+  $('popPic').innerHTML = PICTURES[w] || WORD_ONLY;
+  $('popWord').textContent = w;
+  $('popWord').setAttribute('fill', NOUN);
+  const P = $('pop'); P.setAttribute('opacity', 1);
+  await tween(0, 1, 620, k => P.setAttribute('transform', `translate(500 ${f1(lerp(300, 150, k))}) scale(${Math.max(0.01, k).toFixed(3)})`), ease.back);
+  squash($('popJ'), 0, 0, 0.1, 400);
+}
+function showSilly(){
+  $('popPic').innerHTML = SILLY; $('popWord').textContent = word(); $('popWord').setAttribute('fill', '#f29a1f');
+  const P = $('pop'); P.setAttribute('opacity', 1);
+  tween(0, 1, 420, k => P.setAttribute('transform', `translate(500 ${f1(lerp(300, 150, k))}) scale(${Math.max(0.01, k).toFixed(3)})`), ease.back);
+}
+function hidePicture(){ $('pop').setAttribute('opacity', 0); }
+async function wobble(){
+  const T = $('train');
+  await tween(0, 1, 700, k => { bob = Math.sin(k * Math.PI * 6) * (1 - k) * 8; placeTrain(); }, x => x);
+  bob = 0; placeTrain();
+}
+/* off it goes, round the world, and back */
+let moving = 0;
+async function puffOff(){
+  if (reduced()) { S.trip = 0; placeTrain(); return; }
+  moving = 1;
+  await tween(0, 1150, 1300, x => { S.trip = x; placeTrain(); }, t => t * t);
+  S.trip = -1150; placeTrain();
+  await tween(-1150, 0, 1300, x => { S.trip = x; placeTrain(); }, ease.out);
+  moving = 0;
+}
+
+/* ---- dragging letters -------------------------------------------------------- */
+let DRAGPOS = null, lastDragEnd = 0;
+function carAt(p){
+  for (let c = 0; c < S.nCar; c++) {
+    const x = S.x0 + c * CAR_W;
+    if (p.x > x - 10 && p.x < x + 142 && p.y > 210 && p.y < 440) return c;
+  }
+  return -1;
+}
+function showGhost(l, p){ $('ghostT').textContent = l; $('ghostT').setAttribute('fill', VOWELS.has(l) ? '#e0567a' : '#2f4f8f'); $('ghost').setAttribute('opacity', 1); $('ghost').setAttribute('transform', `translate(${f1(p.x)} ${f1(p.y)})`); }
+function flyGhostTo(x, y){
+  if (reduced()) { $('ghost').setAttribute('opacity', 0); return Promise.resolve(); }
+  const m = $('ghost').transform.baseVal.consolidate(); const x0 = m ? m.matrix.e : x, y0 = m ? m.matrix.f : y;
+  return tween(0, 1, 260, k => $('ghost').setAttribute('transform', `translate(${f1(lerp(x0, x, k))} ${f1(lerp(y0, y, k))}) scale(${(1 - 0.2 * k).toFixed(2)})`), ease.out)
+    .then(() => $('ghost').setAttribute('opacity', 0));
+}
+function wireSource(el, get, fromCar){
+  let p0 = null, t0 = 0, moved = 0, letter = '';
+  drag(el, svg, {
+    start(p){ if (S.busy) return false; hello(); letter = get(); if (!letter) return false; p0 = p; t0 = performance.now(); moved = 0; },
+    move(p){
+      moved = Math.max(moved, Math.hypot(p.x - p0.x, p.y - p0.y));
+      if (moved < 8) return;
+      if (DRAGPOS === null) { Play.sound('pop'); setMood('look'); if (fromCar != null) { S.cars[fromCar] = ''; S.lastRead = ''; paint(); } }
+      DRAGPOS = p; showGhost(letter, p);
+    },
+    end(p){
+      const wasDrag = DRAGPOS !== null; DRAGPOS = null; setMood('idle');
+      if (wasDrag) lastDragEnd = performance.now();
+      if (!wasDrag) { if (performance.now() - t0 < 800) tapLetter(letter, fromCar); return; }
+      const c = carAt(p);
+      if (c >= 0) {
+        if (fromCar != null && S.cars[c] && c !== fromCar) S.cars[fromCar] = S.cars[c];   /* swap */
+        S.cars[c] = letter; S.lastRead = ''; S.placed++;
+        $('ghost').setAttribute('opacity', 0);
+        Play.sound('snap');
+        paint();
+        squash($('blkJ' + c), 0, 44, 0.2, 420);
+        say(SOUND[letter], {interrupt: false});
+        track('place', {letter, car: c, word: word()});
+        afterChange();
+      } else {
+        const i = LETTERS.indexOf(letter), tp = tilePos(i);
+        flyGhostTo(tp.x + TILE / 2, tp.y + TILE / 2);
+        Play.sound(fromCar != null ? 'whoosh' : 'tick');
+        if (fromCar != null) { track('remove', {letter, car: fromCar}); afterChange(); }
+      }
+    },
+  });
+}
+function tapLetter(l, car){
+  if (!l) return;
+  Play.sound('note', 440 + LETTERS.indexOf(l) * 18, 0.12);
+  say(SOUND[l]);
+  if (car != null) squash($('blkJ' + car), 0, 44, 0.2, 420);
+  else squash($('tileJ-' + l), 0, 0, 0.18, 420);
+  track('letter', {letter: l, sound: SOUND[l]});
+}
+LETTERS.forEach(l => {
+  wireSource($('tile-' + l), () => l, null);
+  /* keyboard: Enter puts the letter in the first empty carriage */
+  $('tile-' + l).addEventListener('keydown', e => {
+    if (e.key !== 'Enter' && e.key !== ' ') return;
+    e.preventDefault(); if (S.busy) return;
+    const c = S.cars.slice(0, S.nCar).indexOf('');
+    if (c < 0) return tapLetter(l, null);
+    S.cars[c] = l; S.lastRead = ''; S.placed++; Play.sound('snap'); paint(); say(SOUND[l]); afterChange();
+  });
+});
+for (let c = 0; c < 4; c++) {
+  wireSource($('carHit' + c), () => S.cars[c], c);
+  $('carHit' + c).addEventListener('keydown', e => {
+    if ((e.key === 'Delete' || e.key === 'Backspace') && !S.busy && S.cars[c]) { S.cars[c] = ''; S.lastRead = ''; paint(); afterChange(); }
+  });
+}
+/* After every change: read the train when it is full, or as soon as it spells a word. */
+let autoT = 0;
+function afterChange(){
+  clearTimeout(autoT);
+  const w = word(), n = filled();
+  if (!w) return;
+  const full = n === S.nCar && w.length === n;
+  const spells = w.length === n && w.length >= 3 && isWord(w);
+  if (full || spells) autoT = setTimeout(readTrain, reduced() ? 150 : 450);
+}
+
+/* ---- the engine and the extra carriage --------------------------------------- */
+function tapEngine(){
+  hello();
+  if (S.busy) return;
+  squash($('engine'), S.nCar * CAR_W + 130, 400, 0.08, 420);
+  if (!word()) { toot(); say('Put some letters in my carriages!'); return; }
+  readTrain();
+}
+function setCars(n){
+  if (S.busy || n === S.nCar) return;
+  if (n === 3) S.cars[3] = '';
+  const from = S.x0, to = trainX0(n);
+  S.nCar = n; S.lastRead = '';
+  Play.sound(n === 4 ? 'snap' : 'whoosh');
+  if (n === 4) say('One more carriage! Can you make a longer word?');
+  paint();
+  tween(from, to, 380, x => { S.x0 = x; placeTrain(); }, ease.out).then(() => { S.x0 = to; placeTrain(); });
+  track('carriages', {n});
+}
+const onTap = (id, fn) => { $(id).addEventListener('click', fn); $(id).addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fn(); } }); };
+onTap('engineHit', tapEngine);
+onTap('addCar', () => setCars(4));
+/* tapping the fourth carriage while it is empty unhooks it */
+$('carHit3').addEventListener('click', () => { if (S.nCar === 4 && !S.cars[3] && !S.busy && performance.now() - lastDragEnd > 400) setCars(3); });
+
+/* ---- idle life: clouds, blinking, smoke, the hint ---------------------------- */
+let T = 0, blinkT = 2, puffT = 0, hintPhase = 'on';
+const puffs = [];
+function hintOff(){ hintPhase = 'off'; $('hint').setAttribute('opacity', 0); }
+function idle(dt){
+  T += dt;
+  if (moodT > 0) { moodT -= dt; if (moodT <= 0 && !S.busy) setMood('idle'); }
+  /* the engine looks at a letter being carried, or at its carriages */
+  const ex = S.x0 + S.trip + S.nCar * CAR_W + 173, ey = 338;
+  const tgt = DRAGPOS || {x: S.x0 + S.trip + 60, y: 300};
+  const dx = tgt.x - ex, dy = tgt.y - ey, L = Math.hypot(dx, dy) || 1;
+  $('pupils').setAttribute('transform', `translate(${(dx / L * 5).toFixed(1)} ${(dy / L * 5).toFixed(1)})`);
+  if (reduced()) { $('hint').setAttribute('opacity', 0); return; }
+  blinkT -= dt;
+  const lid = blinkT > 0 && blinkT < 0.13 ? 38 : 0;
+  $('lid1').setAttribute('height', lid); $('lid2').setAttribute('height', lid);
+  if (blinkT < 0) blinkT = 2 + Math.random() * 3;
+  /* clouds drift */
+  [[120, 90, 8], [760, 150, 5], [420, 60, 11]].forEach(([x, y, v], i) => {
+    const xx = ((x + T * v) % 1160) - 80;
+    $('cl' + i).setAttribute('transform', `translate(${f1(xx)} ${y})`);
+  });
+  /* the wheels turn when the train moves; the chimney puffs */
+  const spin = moving ? T * 600 : 0;
+  $$('.spokes').forEach(g => g.setAttribute('transform', `rotate(${f1(spin % 360)})`));
+  puffT -= dt;
+  if (puffT < 0) { puffT = moving ? 0.12 : 1.1; addPuff(); if (moving) chuff(); }
+  for (let i = puffs.length - 1; i >= 0; i--) {
+    const p = puffs[i]; p.t += dt;
+    const k = p.t / 1.6;
+    if (k >= 1) { p.el.remove(); puffs.splice(i, 1); continue; }
+    p.el.setAttribute('cx', f1(p.x - k * (moving ? 90 : 18))); p.el.setAttribute('cy', f1(p.y - k * 70)); p.el.setAttribute('r', f1(8 + k * 16)); p.el.setAttribute('opacity', (0.85 * (1 - k)).toFixed(2));
+  }
+  /* the hint: a hand carries a "c" from the shelf to the first carriage */
+  if (hintPhase === 'on') {
+    if (S.placed >= 3) { hintOff(); return; }
+    const c = S.cars.slice(0, S.nCar).indexOf(''); if (c < 0) return;
+    const a = tilePos(2), b = {x: S.x0 + c * CAR_W + 66 - 37, y: 252};
+    const k = (T * 0.45) % 1, e = ease.inOut(clamp(k / 0.8, 0, 1));
+    $('hint').setAttribute('transform', `translate(${f1(lerp(a.x, b.x, e) + 37)} ${f1(lerp(a.y, b.y, e) + 37)})`);
+    $('hint').setAttribute('opacity', k > 0.9 ? 0 : 1);
+  }
+}
+function addPuff(){
+  const c = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+  c.setAttribute('fill', '#fff');
+  $('puffs').appendChild(c);
+  puffs.push({el: c, t: 0, x: 207, y: 236});
+}
+const $$ = sel => Array.from(svg.querySelectorAll(sel));
+
+/* ---- the "try this" card ------------------------------------------------------- */
+const miniBlock = (x, y, l, blue) => `<rect x="${x - 15}" y="${y - 15}" width="30" height="30" rx="7" fill="${blue ? NOUN : '#fff6e3'}" stroke="${blue ? '#24508f' : '#d9b98a'}" stroke-width="2"/><text x="${x}" y="${y + 8}" text-anchor="middle" font-size="22" font-weight="600" fill="${blue ? '#fff' : VOWELS.has(l) ? '#e0567a' : '#2f4f8f'}">${l}</text>`;
+const TRY = {
+  first: {line: 'Drag letters into the train to make a word. Try c, a, t. Cat!', art: `${miniBlock(-52, 30, 'c')}${miniBlock(-18, 30, 'a')}${miniBlock(16, 30, 't')}<g transform="translate(46 -12) scale(.62)">${PICTURES.cat}</g>
+    <path d="M-50 -2 q30 -40 62 -24" fill="none" stroke="#ffb42a" stroke-width="3" stroke-dasharray="4 6"/>`},
+  animal: {line: 'Can you make an animal? A dog, a pig, a hen, a fox?', art: `<g transform="translate(-44 -8) scale(.55)">${PICTURES.dog}</g><g transform="translate(0 -8) scale(.55)">${PICTURES.pig}</g><g transform="translate(44 -8) scale(.55)">${PICTURES.hen}</g>
+    <text x="0" y="46" text-anchor="middle" font-size="22" font-weight="600" fill="#b5620a">?</text>`},
+  change: {line: 'Change just one letter. Cat can become bat!', art: `${miniBlock(-56, -14, 'c')}${miniBlock(-24, -14, 'a')}${miniBlock(8, -14, 't')}
+    <path d="M-56 4 v14" stroke="#ffb42a" stroke-width="4" stroke-linecap="round"/><path d="M-62 14 l6 7 l6 -7" fill="none" stroke="#ffb42a" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+    ${miniBlock(-56, 38, 'b')}${miniBlock(-24, 38, 'a')}${miniBlock(8, 38, 't')}<g transform="translate(52 12) scale(.5)">${PICTURES.bat}</g>`},
+  rhyme: {line: 'Make two words that sound the same at the end. Cat and hat!', art: `<g transform="translate(-40 -10) scale(.55)">${PICTURES.cat}</g><g transform="translate(40 -10) scale(.55)">${PICTURES.hat}</g>
+    <text x="-40" y="46" text-anchor="middle" font-size="22" font-weight="600" fill="#2f4f8f">c<tspan fill="#e0567a">at</tspan></text><text x="40" y="46" text-anchor="middle" font-size="22" font-weight="600" fill="#2f4f8f">h<tspan fill="#e0567a">at</tspan></text>`},
+  four: {line: 'Tap the dotted carriage to add one more. Then make a long word, like fish!', art: `${[0, 1, 2].map(i => `<rect x="${-72 + i * 34}" y="10" width="30" height="22" rx="5" fill="${CAR_COLS[i]}"/>`).join('')}
+    <rect x="30" y="10" width="30" height="22" rx="5" fill="#fff" stroke="#8a94a6" stroke-width="2" stroke-dasharray="4 4"/><path d="M45 14 v14 M38 21 h14" stroke="#8a94a6" stroke-width="3" stroke-linecap="round"/>
+    <g transform="translate(0 -24) scale(.5)">${PICTURES.fish}</g>`},
+  five: {line: 'Make five words! Watch them fill the frames at the top.', art: `${[0, 1, 2, 3, 4].map(i => `<rect x="${-74 + i * 30}" y="-14" width="26" height="26" rx="6" fill="${i < 3 ? '#fff' : 'none'}" stroke="#8a94a6" stroke-width="2" ${i < 3 ? '' : 'stroke-dasharray="4 4"'}/>`).join('')}
+    <g transform="translate(-61 -1) scale(.2)">${PICTURES.cat}</g><g transform="translate(-31 -1) scale(.2)">${PICTURES.sun}</g><g transform="translate(-1 -1) scale(.2)">${PICTURES.bus}</g>
+    <text x="0" y="44" text-anchor="middle" font-size="24" font-weight="600" fill="#b5620a">5</text>`},
+};
+const TRY_ORDER = ['first', 'animal', 'change', 'rhyme', 'four', 'five'];
+const currentTry = () => TRY_ORDER.find(g => !found(g)) || null;
+let shownTry;
+function paintTry(){
+  const g = currentTry();
+  if (g === shownTry) return;
+  shownTry = g;
+  $('tryArt').innerHTML = g ? TRY[g].art : WORD_ONLY;
+  if (!reduced()) $('tryCard').animate([{transform: 'scale(.9)'}, {transform: 'scale(1.04)'}, {transform: 'scale(1)'}], {duration: 450, easing: 'ease-out'});
+}
+function sayTry(){ const g = currentTry(); say(g ? TRY[g].line : 'You found everything! Keep making words.'); track('hear', {goal: g}); }
+$('tryCard').addEventListener('click', () => { spoke = true; sayTry(); });
+$('hear').addEventListener('click', () => { spoke = true; sayTry(); });
+let spoke = false;
+function hello(){ if (spoke) return; spoke = true; say('Choo choo! Put letters in my carriages, and I will read them to you!'); }
+svg.addEventListener('pointerdown', hello);
+
+/* ============================================================================
+   Start
+   ============================================================================ */
+findings($('finds'), [
+  {id: 'first',  icon: '🚂', label: 'First word',                  say: 'Your first word! The sounds joined up into a word.'},
+  {id: 'animal', icon: '🐾', label: 'An animal word',              say: 'An animal word!'},
+  {id: 'change', icon: '🔁', label: 'Change one letter, new word', say: 'You changed one letter, and made a new word!'},
+  {id: 'rhyme',  icon: '🎵', label: 'Rhyming words',               say: 'They rhyme! They sound the same at the end.'},
+  {id: 'four',   icon: '🐟', label: 'Four-letter word',            say: 'A long word, with four letters!'},
+  {id: 'five',   icon: '🖐️', label: '5 words made',                say: 'Five words! You are a word maker!'},
+], () => { say('You found them all! Sounds join up to make words.'); paintTry(); });
+paint();
+loop(dt => idle(dt));
+window.applyFeatures = () => paint();
+window.PG_STATE = () => ({nCar: S.nCar, cars: S.cars.slice(), word: word(), busy: S.busy, made: S.made.slice(), lastRead: S.lastRead, mood: MOOD, goal: currentTry()});
+window.PG_MODEL = {phonemes, isWord, hasPicture, rhymes, oneChange, soundsOf, SOUND, LETTERS, PICTURES: Object.keys(PICTURES), ANIMALS: [...ANIMALS]};
+</script>
+</body>
+</html>

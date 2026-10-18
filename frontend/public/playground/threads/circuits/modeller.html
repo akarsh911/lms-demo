@@ -1,0 +1,832 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ohm’s Law and the Circuit</title>
+<meta name="description" content="Class 9–10: wire resistors, lamps and nichrome wires in series and parallel. Ammeter and voltmeter readings come from solving the circuit you built; record them and the V–I graph draws itself. Then blow a fuse.">
+<link rel="icon" href="../../favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600&family=Inter:wght@400;500;600;700&family=Nunito:wght@500;700;800&family=Newsreader:opsz,wght@6..72,400;6..72,500&family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="../../play.css">
+<style>
+/* Only what this page needs beyond play.css. */
+.gate{position:absolute; left:0; width:65%; top:0; height:86%; display:grid; place-items:center; pointer-events:none}
+.gate span{background:rgba(29,35,39,.86); color:#fff; padding:10px 16px; border-radius:99px; font-weight:600; font-size:14px}
+.pg-stage{align-self:start; min-height:0}
+@media (max-width:1100px){ .pg-main.wide-side{grid-template-columns:1fr} }
+.slotHit{fill:transparent; cursor:pointer}
+.slotHit:hover{fill:rgba(48,87,201,.10); stroke:#3057c9; stroke-width:1.2; stroke-dasharray:4 4}
+body.locked .slotHit, body.locked .probe{pointer-events:none}
+.probe{cursor:grab} .probe.dragging{cursor:grabbing}
+.tools{display:grid; grid-template-columns:repeat(4,1fr); gap:5px}
+.tool{display:flex; flex-direction:column; align-items:center; gap:1px; padding:6px 3px 5px; border-radius:var(--radius-sm); border:1.5px solid var(--hair-2);
+  background:var(--card); cursor:pointer; font-size:11.5px; font-weight:600; color:var(--ink-2); line-height:1.1}
+.tool svg{width:34px; height:20px; background:#f5f6f9; border-radius:5px}
+.tool:hover{border-color:var(--ink-3)}
+.tool[aria-pressed="true"]{border-color:var(--accent); background:var(--accent-soft); color:var(--ink)}
+.tool:disabled{opacity:.45; cursor:default}
+.seg{display:flex; gap:4px; flex-wrap:wrap; align-items:center}
+.btn[aria-pressed="true"]{background:var(--accent-soft); border-color:var(--accent)}
+.note{font-size:12.5px; color:var(--ink-3); margin:6px 0 0}
+.why p{font-size:13.5px; margin-bottom:.5em}
+.warn{color:var(--bad); font-weight:600}
+.nums{width:100%; border-collapse:collapse; font-size:12.5px}
+.nums th{font-weight:600; color:var(--ink-3); text-align:right; padding:2px 4px; font-size:11.5px}
+.nums th:first-child, .nums td:first-child{text-align:left}
+.nums td{padding:3px 4px; text-align:right; font-family:var(--font-mono); font-variant-numeric:tabular-nums; border-top:1px solid var(--hair)}
+.nums td:first-child{font-family:var(--font)}
+.eq{font-family:var(--font-mono); font-size:13px; background:var(--sunk); border-radius:8px; padding:7px 10px; margin:8px 0 0}
+.insp label{font-size:12.5px; font-weight:600; color:var(--ink-2)}
+.insp .row{margin:6px 0}
+</style>
+</head>
+<body class="locked">
+<header class="pg-top"></header>
+
+<div class="pg-intro">
+  <h1>Ohm’s law and the circuit</h1>
+  <p>Build a circuit on the board from a battery, resistors, lamps, a nichrome wire, an ammeter, a plug key and a fuse. The page solves it the way
+     NCERT Class 10 Chapter 11 does, with Ohm’s law at every part and the currents meeting at every junction, so the ammeter, the voltmeter and the moving charge show what
+     <i>your</i> wiring does. Record readings and the V–I graph draws itself. Then make a fuse do its job.</p>
+</div>
+
+<main class="pg-main wide-side">
+  <section class="pg-stage" id="stageWrap">
+    <svg id="stage" viewBox="0 0 1000 700" role="img" aria-label="A circuit board, a V–I graph of your readings, a voltmeter and the table of readings"></svg>
+    <div class="gate" id="gate"><span>Make your prediction first →</span></div>
+  </section>
+
+  <aside class="pg-side">
+    <div id="poe"></div>
+
+    <div class="card" id="partsCard">
+      <div class="row" style="justify-content:space-between; margin-bottom:8px">
+        <div class="kicker" style="margin:0">Parts</div>
+        <select id="preset" aria-label="Start from a circuit in the book" disabled>
+          <option value="">Start from…</option>
+          <option value="ex117">Lamp and resistor in series (Example 11.7)</option>
+          <option value="ohm">Ohm’s law: nichrome wire XY (Activity 11.1)</option>
+          <option value="parallel">Three resistors in parallel (Example 11.8)</option>
+          <option value="mixed">Series and parallel together (Example 11.9)</option>
+          <option value="fuse">A 5 A fuse at home (Section 11.7)</option>
+          <option value="empty">An empty board</option>
+        </select>
+      </div>
+      <div class="tools" id="tools"></div>
+      <p class="note" id="toolNote"></p>
+    </div>
+
+    <div class="card insp" id="inspCard" hidden>
+      <div class="kicker" id="inspTitle">Selected</div>
+      <div id="insp"></div>
+    </div>
+
+    <div class="card" id="numCard">
+      <div class="kicker">The numbers</div>
+      <div id="nums"><p class="note" style="margin:0">The meters and numbers appear once you have made a prediction.</p></div>
+      <div class="row" style="margin-top:10px">
+        <button class="btn sm primary" id="btnRecord" disabled>Record this reading</button>
+        <button class="btn sm" id="btnClearRec" disabled>Clear table</button>
+      </div>
+    </div>
+
+    <div class="card why" id="whyCard" hidden>
+      <div class="kicker">What is happening</div>
+      <div id="why"></div>
+    </div>
+
+    <div class="card"><div class="kicker">To find</div><div id="finds"></div></div>
+  </aside>
+</main>
+
+<script src="../../play.js"></script>
+<script>
+'use strict';
+const {$, esc, clamp, fmt, drag, loop, sound, say, track, toast, predict, findings, discover, found,
+       shareState, sharedState, mount, reduced} = Play;
+mount({thread: 'circuits', band: 'modeller'});
+
+/* MODEL:start ==================================================================
+   Modified nodal analysis of whatever is wired. At every peg the currents in equal the
+   currents out; every resistive part obeys V = IR; every battery holds its terminals
+   1.5 V a cell apart (ideal cells, as NCERT assumes). The ammeter is a part with almost
+   no resistance; the voltmeter draws no current and reads the difference of potential
+   between the two pegs its probes touch.
+
+   Resistance of a wire: R = ρl/A. Resistivities from NCERT Table 11.2 (at 20 °C);
+   for the alloys the table's printed exponent is corrected to the measured values
+   (nichrome 1.00 × 10⁻⁶ Ω m, i.e. 100 × 10⁻⁸).
+
+   Heating: P = VI = I²R. A fuse wire heats as I², with a short time constant; it melts
+   once its current stays above 1.1 × its rating.
+   ============================================================================ */
+const R_WIRE = 1e-4, E_CELL = 1.5, V_MAINS = 220;
+const RHO = {nichrome: {name: 'nichrome', rho: 1.00e-6}, manganin: {name: 'manganin', rho: 44e-8},
+             constantan: {name: 'constantan', rho: 49e-8}, copper: {name: 'copper', rho: 1.62e-8}, tungsten: {name: 'tungsten', rho: 5.20e-8}};
+const wireR = (mat, l, d) => RHO[mat].rho * l / (Math.PI * d * d / 4);
+const APPL = {bulb: {name: '100 W bulb', P: 100}, iron: {name: '1000 W iron', P: 1000}, heater: {name: '2000 W heater', P: 2000}, kettle: {name: '1500 W kettle', P: 1500}};
+const applR = w => V_MAINS * V_MAINS / APPL[w].P;
+const FUSE_TAU = 0.4, FUSE_MELT = 1.1;
+
+function solveNet(n, els){
+  const par = Array.from({length: n}, (_, i) => i);
+  const find = i => par[i] === i ? i : (par[i] = find(par[i]));
+  const used = new Uint8Array(n);
+  for (const e of els) { used[e.a] = used[e.b] = 1; par[find(e.a)] = find(e.b); }
+  const gnd = new Map();
+  for (let i = 0; i < n; i++) if (used[i]) { const r = find(i); if (!gnd.has(r)) gnd.set(r, i); }
+  const idx = new Int32Array(n).fill(-1);
+  let m = 0;
+  for (let i = 0; i < n; i++) if (used[i] && gnd.get(find(i)) !== i) idx[i] = m++;
+  for (const e of els) if (e.t === 'V') e._k = m++;
+  const A = Array.from({length: m}, () => new Float64Array(m)), z = new Float64Array(m);
+  const add = (r, c, v) => { if (r >= 0 && c >= 0) A[r][c] += v; };
+  for (const e of els) {
+    const ia = idx[e.a], ib = idx[e.b];
+    if (e.t === 'R') { const g = 1 / e.R; add(ia, ia, g); add(ib, ib, g); add(ia, ib, -g); add(ib, ia, -g); }
+    else { const k = e._k; add(ia, k, 1); add(ib, k, -1); add(k, ib, 1); add(k, ia, -1); A[k][k] += e.r || 0; z[k] = e.E; }
+  }
+  let ok = true;
+  for (let c = 0; c < m; c++) {
+    let p = c, best = Math.abs(A[c][c]);
+    for (let r = c + 1; r < m; r++) if (Math.abs(A[r][c]) > best) { best = Math.abs(A[r][c]); p = r; }
+    if (best < 1e-13) { ok = false; continue; }
+    if (p !== c) { const t = A[p]; A[p] = A[c]; A[c] = t; const u = z[p]; z[p] = z[c]; z[c] = u; }
+    for (let r = c + 1; r < m; r++) {
+      const f = A[r][c] / A[c][c]; if (!f) continue;
+      for (let k = c; k < m; k++) A[r][k] -= f * A[c][k];
+      z[r] -= f * z[c];
+    }
+  }
+  const x = new Float64Array(m);
+  for (let r = m - 1; r >= 0; r--) {
+    let s = z[r];
+    for (let k = r + 1; k < m; k++) s -= A[r][k] * x[k];
+    x[r] = Math.abs(A[r][r]) < 1e-13 ? 0 : s / A[r][r];
+  }
+  const V = new Float64Array(n).fill(NaN);
+  for (let i = 0; i < n; i++) if (used[i]) V[i] = idx[i] < 0 ? 0 : x[idx[i]];
+  const I = els.map(e => e.t === 'R' ? (V[e.a] - V[e.b]) / e.R : x[e._k]);
+  return {V, I, ok, island: i => used[i] ? find(i) : -1};
+}
+/* resistance of a part (Infinity when it leaves a gap) */
+function partR(p){
+  switch (p.kind) {
+    case 'wire': case 'ammeter': return R_WIRE;
+    case 'key': return p.on ? R_WIRE : Infinity;
+    case 'fuse': return p.blown ? Infinity : R_WIRE;
+    case 'resistor': case 'lamp': return p.R;
+    case 'xy': return wireR(p.mat, p.l, p.d);
+    case 'appl': return applR(p.w);
+  }
+  return Infinity;
+}
+const SOURCES = {battery: p => E_CELL * p.cells, mains: () => V_MAINS};
+function solveBoard(parts, nNodes, ends){
+  const els = [];
+  for (const k in parts) {
+    const p = parts[k], [a, b] = ends(k);
+    if (SOURCES[p.kind]) { const E = SOURCES[p.kind](p); els.push(p.dir > 0 ? {k, t: 'V', a, b, E, r: 0, s: 1} : {k, t: 'V', a: b, b: a, E, r: 0, s: -1}); }
+    else { const R = partR(p); if (isFinite(R)) els.push({k, t: 'R', a, b, R, s: 1}); }
+  }
+  const res = solveNet(nNodes, els);
+  const cur = {};
+  for (const k in parts) cur[k] = 0;
+  els.forEach((e, i) => { cur[e.k] = e.s * res.I[i]; });
+  const drop = {};                                   // potential difference across each part, a minus b
+  for (const k in parts) { const [a, b] = ends(k); const d = res.V[a] - res.V[b]; drop[k] = isFinite(d) && res.island(a) === res.island(b) ? d : 0; }
+  return {V: res.V, cur, drop, ok: res.ok, island: res.island};
+}
+/* series and parallel, as NCERT writes them */
+const seriesR = Rs => Rs.reduce((s, r) => s + r, 0);
+const parallelR = Rs => 1 / Rs.reduce((s, r) => s + 1 / r, 0);
+/* a fuse's heating index relaxes towards (I / rating)²; it melts above FUSE_MELT² */
+const fuseStep = (h, I, rating, dt) => { const tgt = (I / rating) ** 2; return dt === Infinity ? tgt : tgt + (h - tgt) * Math.exp(-dt / FUSE_TAU); };
+/* MODEL:end */
+
+/* ============================================================================
+   The board
+   ============================================================================ */
+const C = 6, RW = 4, X0 = 70, Y0 = 80, DX = 110, DY = 112;
+const NN = C * RW;
+const node = (i, j) => j * C + i;
+const pos = n => ({x: X0 + (n % C) * DX, y: Y0 + Math.floor(n / C) * DY});
+const SLOTS = [];
+for (let j = 0; j < RW; j++) for (let i = 0; i < C - 1; i++) SLOTS.push(`h${i}_${j}`);
+for (let j = 0; j < RW - 1; j++) for (let i = 0; i < C; i++) SLOTS.push(`v${i}_${j}`);
+function ends(k){
+  const [i, j] = k.slice(1).split('_').map(Number);
+  return k[0] === 'h' ? [node(i, j), node(i + 1, j)] : [node(i, j), node(i, j + 1)];
+}
+function geo(k){
+  const [a, b] = ends(k), A = pos(a), B = pos(b), h = k[0] === 'h';
+  return {x1: A.x, y1: A.y, x2: B.x, y2: B.y, L: h ? DX : DY, ang: h ? 0 : 90, mx: (A.x + B.x) / 2, my: (A.y + B.y) / 2, h};
+}
+const LOADS = ['resistor', 'lamp', 'xy', 'appl'];
+
+/* ---- state --------------------------------------------------------------- */
+const S = {parts: {}, tool: 'hand', sel: null, probes: {red: node(2, 1), black: node(3, 1)}, rec: [], locked: false, count: 0};
+let SOL = null;
+const RVALS = [1, 2, 3, 4, 5, 8, 10, 12, 15, 20, 24, 30, 40, 60, 100];
+
+const PRESETS = {
+  ex117:    {parts: {h1_3: {kind: 'battery', cells: 4, dir: -1}, h2_3: {kind: 'wire'}, h3_3: {kind: 'key', on: true},
+                     v1_1: {kind: 'wire'}, v1_2: {kind: 'wire'}, h1_1: {kind: 'ammeter'}, h2_1: {kind: 'lamp', R: 20}, h3_1: {kind: 'wire'},
+                     v4_1: {kind: 'resistor', R: 4}, v4_2: {kind: 'wire'}}, probes: {red: node(2, 1), black: node(3, 1)},
+            note: 'Example 11.7: a 20 Ω lamp and a 4 Ω conductor on a 6 V battery.'},
+  ohm:      {parts: {h1_3: {kind: 'battery', cells: 1, dir: -1}, h2_3: {kind: 'wire'}, h3_3: {kind: 'key', on: true},
+                     v1_1: {kind: 'wire'}, v1_2: {kind: 'wire'}, h1_1: {kind: 'ammeter'}, h2_1: {kind: 'xy', mat: 'nichrome', l: 0.5, d: 0.3e-3}, h3_1: {kind: 'wire'},
+                     v4_1: {kind: 'wire'}, v4_2: {kind: 'wire'}}, probes: {red: node(2, 1), black: node(3, 1)},
+            note: 'Activity 11.1: record a reading, add a cell to the battery, record again.'},
+  parallel: {parts: {h0_3: {kind: 'battery', cells: 4, dir: -1}, h1_3: {kind: 'battery', cells: 4, dir: -1}, h2_3: {kind: 'ammeter'}, v3_2: {kind: 'key', on: true},
+                     v0_1: {kind: 'wire'}, v0_2: {kind: 'wire'}, h0_1: {kind: 'wire'}, h1_1: {kind: 'wire'}, h2_1: {kind: 'wire'},
+                     v1_1: {kind: 'resistor', R: 5}, v2_1: {kind: 'resistor', R: 10}, v3_1: {kind: 'resistor', R: 30},
+                     h1_2: {kind: 'wire'}, h2_2: {kind: 'wire'}},
+            probes: {red: node(3, 1), black: node(3, 2)}, note: 'Example 11.8: 5 Ω, 10 Ω and 30 Ω in parallel on 12 V.'},
+  mixed:    {parts: {h0_3: {kind: 'battery', cells: 4, dir: -1}, h1_3: {kind: 'battery', cells: 4, dir: -1}, h2_3: {kind: 'key', on: true}, h3_3: {kind: 'ammeter'}, v4_2: {kind: 'wire'},
+                     h0_0: {kind: 'wire'}, v0_0: {kind: 'wire'}, v0_1: {kind: 'wire'}, v0_2: {kind: 'wire'},
+                     h1_0: {kind: 'wire'}, v1_0: {kind: 'resistor', R: 10}, v2_0: {kind: 'resistor', R: 40},
+                     h1_1: {kind: 'wire'}, h2_1: {kind: 'wire'}, h3_1: {kind: 'wire'},
+                     v2_1: {kind: 'resistor', R: 30}, v3_1: {kind: 'resistor', R: 20}, v4_1: {kind: 'resistor', R: 60},
+                     h2_2: {kind: 'wire'}, h3_2: {kind: 'wire'}},
+            probes: {red: node(1, 0), black: node(1, 1)}, note: 'Example 11.9: (10 Ω ∥ 40 Ω) in series with (30 Ω ∥ 20 Ω ∥ 60 Ω), on 12 V.'},
+  fuse:     {parts: {h1_3: {kind: 'mains', dir: -1}, h2_3: {kind: 'fuse', rating: 5}, h3_3: {kind: 'wire'},
+                     v1_1: {kind: 'wire'}, v1_2: {kind: 'wire'}, h1_1: {kind: 'ammeter'}, h2_1: {kind: 'wire'}, h3_1: {kind: 'wire'},
+                     v4_1: {kind: 'appl', w: 'iron'}, v4_2: {kind: 'wire'}, h4_1: {kind: 'key', on: false}, v5_1: {kind: 'appl', w: 'heater'}, v5_2: {kind: 'wire'}, h4_3: {kind: 'wire'}},
+            probes: {red: node(4, 1), black: node(4, 2)}, note: 'A 1000 W iron on a 5 A fuse. Now close the key to add the 2000 W heater.'},
+  empty:    {parts: {}, probes: {red: node(1, 1), black: node(2, 1)}},
+};
+function loadPreset(name){
+  const pr = PRESETS[name]; if (!pr) return;
+  S.parts = {}; S.sel = null;
+  for (const k in pr.parts) if (pr.parts[k] && SLOTS.includes(k)) S.parts[k] = Object.assign({n: ++S.count}, pr.parts[k]);
+  S.probes = Object.assign({}, pr.probes);
+  for (const k of SLOTS) drawSlot(k);
+  FUSEH = {};
+  solve(); placeProbes();
+  if (pr.note && S.locked) toast(pr.note, 3600);
+}
+
+/* ============================================================================
+   Stage
+   ============================================================================ */
+const svg = $('stage');
+const GR = {x: 712, y: 70, w: 250, h: 300};           // V–I graph
+const VM = {x: 150, y: 590, r: 78};                    // voltmeter dial
+const TB = {x: 330, y: 470};                           // table of readings
+function build(){
+  let pegs = '', hits = '', guides = '', parts = '', dots = '';
+  for (let n = 0; n < NN; n++) { const p = pos(n); pegs += `<circle cx="${p.x}" cy="${p.y}" r="5.5" fill="#5b6472"/><circle cx="${p.x}" cy="${p.y}" r="2.4" fill="#e6e9ee"/>`; }
+  for (const k of SLOTS) {
+    const g = geo(k);
+    guides += `<line x1="${g.x1}" y1="${g.y1}" x2="${g.x2}" y2="${g.y2}" stroke="#aeb7c4" stroke-width="1.2" stroke-dasharray="2 6"/>`;
+    parts += `<g id="s_${k}" transform="translate(${g.x1} ${g.y1}) rotate(${g.ang})"></g>`;
+    dots += `<g id="d_${k}">${[0, 1, 2].map(() => `<circle r="3" fill="#ffd23f" stroke="#7a5a00" stroke-width=".8" opacity="0"/>`).join('')}</g>`;
+    const w = g.L - 24, t = 34;
+    hits += g.h ? `<rect class="slotHit" data-k="${k}" x="${g.x1 + 12}" y="${g.y1 - t / 2}" width="${w}" height="${t}" rx="7"/>`
+                : `<rect class="slotHit" data-k="${k}" x="${g.x1 - t / 2}" y="${g.y1 + 12}" width="${t}" height="${w}" rx="7"/>`;
+  }
+  svg.innerHTML = `
+  <defs>
+    <radialGradient id="gGlow"><stop offset="0" stop-color="#fff6b0" stop-opacity=".95"/><stop offset=".45" stop-color="#ffd84a" stop-opacity=".5"/><stop offset="1" stop-color="#ffc400" stop-opacity="0"/></radialGradient>
+    <linearGradient id="gCell" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3b3f46"/><stop offset=".45" stop-color="#1d2025"/><stop offset="1" stop-color="#2b2f35"/></linearGradient>
+    <pattern id="gridP" width="22" height="22" patternUnits="userSpaceOnUse"><path d="M22 0 H0 V22" fill="none" stroke="#e3e8f0" stroke-width="1"/></pattern>
+  </defs>
+  <rect x="0" y="0" width="1000" height="700" fill="#f3f4f7"/>
+  <rect x="16" y="16" width="664" height="436" rx="12" fill="#ffffff" stroke="#d5dbe5"/>
+  <rect x="16" y="16" width="664" height="436" rx="12" fill="url(#gridP)"/>
+  <text x="32" y="40" fill="#3a4556" font-size="12.5" font-weight="700" letter-spacing=".08em">CIRCUIT BOARD</text>
+  <text x="664" y="40" fill="#6a7686" font-size="11.5" text-anchor="end">Dots: charge moving at a speed ∝ the current</text>
+  <g>${guides}</g>
+  <g id="selG"></g>
+  <g id="parts">${parts}</g>
+  <g id="dots" pointer-events="none">${dots}</g>
+  <g pointer-events="none">${pegs}</g>
+  <g id="labels" pointer-events="none"></g>
+  <g id="hits">${hits}</g>
+  <g id="leads" pointer-events="none"></g>
+  <g id="probesG">
+    <circle id="probeRed" class="probe" r="11" fill="#d6453d" stroke="#fff" stroke-width="2.5"/>
+    <circle id="probeBlack" class="probe" r="11" fill="#1d2327" stroke="#fff" stroke-width="2.5"/>
+  </g>
+
+  <!-- V–I graph -->
+  <rect x="694" y="16" width="290" height="436" rx="12" fill="#ffffff" stroke="#d5dbe5"/>
+  <text x="710" y="40" fill="#3a4556" font-size="12.5" font-weight="700" letter-spacing=".08em">V–I GRAPH</text>
+  <g id="gAxes"></g>
+  <line id="gFit" stroke="#3057c9" stroke-width="2" stroke-dasharray="6 4" opacity="0"/>
+  <line id="gSel" stroke="#e0a100" stroke-width="1.6" opacity="0"/>
+  <g id="gPts"></g>
+  <circle id="gLive" r="6" fill="none" stroke="#d6453d" stroke-width="2.2" opacity="0"/>
+  <text id="gFitT" x="710" y="424" fill="#3057c9" font-size="12.5" font-weight="700"></text>
+  <text id="gSelT" x="710" y="442" fill="#a06f00" font-size="11.5" font-weight="600"></text>
+
+  <!-- voltmeter -->
+  <rect x="16" y="466" width="300" height="218" rx="12" fill="#ffffff" stroke="#d5dbe5"/>
+  <text x="32" y="490" fill="#3a4556" font-size="12.5" font-weight="700" letter-spacing=".08em">VOLTMETER</text>
+  <g id="vmDial"></g>
+  <text id="vmRead" x="${VM.x}" y="${VM.y + 26}" text-anchor="middle" font-size="22" font-weight="700" class="m" fill="#1d2327">—</text>
+  <text x="${VM.x}" y="${VM.y + 44}" text-anchor="middle" font-size="11" fill="#6a7686">red probe minus black probe</text>
+  <circle cx="${VM.x - 60}" cy="${VM.y + 70}" r="7" fill="#d6453d"/><circle cx="${VM.x + 60}" cy="${VM.y + 70}" r="7" fill="#1d2327"/>
+
+  <!-- table of readings -->
+  <rect x="330" y="466" width="654" height="218" rx="12" fill="#ffffff" stroke="#d5dbe5"/>
+  <text x="346" y="490" fill="#3a4556" font-size="12.5" font-weight="700" letter-spacing=".08em">YOUR READINGS (as in Activity 11.1)</text>
+  <g id="tbl"></g>
+  `;
+  let d = '';
+  for (let v = 0; v <= 10; v++) {
+    const a = Math.PI * (1 - v / 10);
+    d += `<line x1="${(VM.x + Math.cos(a) * (VM.r - 10)).toFixed(1)}" y1="${(VM.y - Math.sin(a) * (VM.r - 10)).toFixed(1)}" x2="${(VM.x + Math.cos(a) * VM.r).toFixed(1)}" y2="${(VM.y - Math.sin(a) * VM.r).toFixed(1)}" stroke="#6a7686" stroke-width="${v % 5 ? 1 : 2}"/>`;
+  }
+  $('vmDial').innerHTML = `<path d="M${VM.x - VM.r - 8} ${VM.y} A${VM.r + 8} ${VM.r + 8} 0 0 1 ${VM.x + VM.r + 8} ${VM.y}Z" fill="#f7f4ea" stroke="#c7ccd6"/>${d}` +
+    `<text id="vmScale" x="${VM.x + VM.r - 2}" y="${VM.y - 8}" text-anchor="end" font-size="10.5" fill="#6a7686"></text>` +
+    `<line id="vmNeedle" x1="${VM.x}" y1="${VM.y}" x2="${VM.x - VM.r + 6}" y2="${VM.y}" stroke="#d6453d" stroke-width="2.4" stroke-linecap="round"/><circle cx="${VM.x}" cy="${VM.y}" r="5" fill="#1d2327"/>`;
+}
+
+/* ---- part art ------------------------------------------------------------ */
+function leads(L, g1, g2, col = '#27456f'){
+  return `<line x1="0" y1="0" x2="${g1}" y2="0" stroke="${col}" stroke-width="3.2" stroke-linecap="round"/><line x1="${g2}" y1="0" x2="${L}" y2="0" stroke="${col}" stroke-width="3.2" stroke-linecap="round"/>`;
+}
+function bands(R){
+  const cols = ['#1d1d1d', '#7b4a24', '#d6453d', '#f29a1f', '#f2d31f', '#2f9e5b', '#3f7fd8', '#8a5cf6', '#8a94a6', '#fff'];
+  const e = Math.floor(Math.log10(R)), m = Math.round(R / 10 ** (e - 1));
+  return [Math.floor(m / 10) % 10, m % 10, e - 1 >= 0 ? e - 1 : 9].map(i => cols[i]);
+}
+function partArt(p, L){
+  const m = L / 2;
+  switch (p.kind) {
+    case 'wire': return `<line x1="0" y1="0" x2="${L}" y2="0" stroke="#27456f" stroke-width="3.2" stroke-linecap="round"/>`;
+    case 'battery': case 'mains': {
+      if (p.kind === 'mains') return leads(L, m - 26, m + 26) + `<rect x="${m - 26}" y="-15" width="52" height="30" rx="6" fill="#4a5568"/><path d="M${m - 14} 0 q7 -12 14 0 t14 0" fill="none" stroke="#ffd23f" stroke-width="2"/>` +
+        `<rect x="${p.dir > 0 ? m + 26 : m - 30}" y="-5" width="4" height="10" fill="#d6453d"/>`;
+      const n = p.cells, w = 17, tot = n * w + (n - 1) * 2;
+      let c = '';
+      for (let i = 0; i < n; i++) { const x = m - tot / 2 + i * (w + 2); c += `<rect x="${x}" y="-10" width="${w}" height="20" rx="3" fill="url(#gCell)"/><rect x="${p.dir > 0 ? x + w - 6 : x}" y="-10" width="6" height="20" fill="#f2b400"/>`; }
+      return leads(L, m - tot / 2, m + tot / 2) + c;
+    }
+    case 'resistor': { const b = bands(p.R);
+      return leads(L, m - 20, m + 20) + `<rect x="${m - 20}" y="-8" width="40" height="16" rx="7" fill="#e8d3a8" stroke="#b79a64"/>` +
+        b.map((c, i) => `<rect x="${m - 12 + i * 8}" y="-8" width="4" height="16" fill="${c}"/>`).join(''); }
+    case 'lamp':
+      return leads(L, m - 15, m + 15) + `<circle class="glow" cx="${m}" cy="0" r="26" fill="url(#gGlow)" opacity="0"/>` +
+        `<circle cx="${m}" cy="0" r="14" fill="#f4f8fb" stroke="#8a99a8" stroke-width="1.5"/><path class="fil" d="M${m - 9} -9 L${m + 9} 9 M${m - 9} 9 L${m + 9} -9" stroke="#6b5a4a" stroke-width="1.6"/>`;
+    case 'xy':
+      return leads(L, m - 30, m + 30) + `<rect x="${m - 34}" y="-9" width="68" height="18" rx="3" fill="#f1ead8" stroke="#c8b98f"/>` +
+        `<path d="M${m - 30} 0 ${Array.from({length: 12}, (_, i) => `L${(m - 27.5 + i * 5).toFixed(1)} ${i % 2 ? 3.5 : -3.5}`).join(' ')} L${m + 30} 0" fill="none" stroke="${p.mat === 'copper' ? '#c46b22' : '#7d8793'}" stroke-width="${p.d > 0.4e-3 ? 2.6 : 1.4}"/>`;
+    case 'ammeter':
+      return leads(L, m - 16, m + 16) + `<circle cx="${m}" cy="0" r="16" fill="#fff" stroke="#3057c9" stroke-width="2"/><text x="${m}" y="5" text-anchor="middle" font-size="15" font-weight="700" fill="#3057c9" transform="rotate(${-0} ${m} 0)" class="aLetter">A</text>`;
+    case 'key': {
+      return leads(L, m - 22, m + 22) + `<rect x="${m - 24}" y="-9" width="48" height="18" rx="3" fill="#caa96a" stroke="#9a7b3f"/>` +
+        (p.on ? `<rect x="${m - 7}" y="-17" width="14" height="22" rx="3" fill="#8a929c" stroke="#5b6472"/><rect x="${m - 10}" y="-20" width="20" height="6" rx="2" fill="#3a4556"/>`
+              : `<circle cx="${m}" cy="0" r="4" fill="#5b6472"/>`);
+    }
+    case 'fuse':
+      return leads(L, m - 24, m + 24) + `<rect x="${m - 24}" y="-8" width="48" height="16" rx="7" fill="#f4f1ea" stroke="#9aa3ad"/><rect x="${m - 26}" y="-9" width="8" height="18" rx="2" fill="#b8bec6"/><rect x="${m + 18}" y="-9" width="8" height="18" rx="2" fill="#b8bec6"/>` +
+        (p.blown ? `<path d="M${m - 17} 0 L${m - 5} 0 M${m + 5} 0 L${m + 17} 0" stroke="#5b4a3a" stroke-width="1.5"/><circle cx="${m - 4}" cy="0" r="2" fill="#5b4a3a"/><circle cx="${m + 4}" cy="0" r="2" fill="#5b4a3a"/><path d="M${m - 6} -4 q6 -8 12 0" fill="none" stroke="#999" stroke-width="1"/>`
+                 : `<line class="fw" x1="${m - 17}" y1="0" x2="${m + 17}" y2="0" stroke="#5b4a3a" stroke-width="1.5"/>`);
+    case 'appl':
+      return leads(L, m - 22, m + 22) + `<rect x="${m - 22}" y="-13" width="44" height="26" rx="5" fill="#eef1f6" stroke="#8a99a8"/><path class="coilA" d="M${m - 15} 0 ${Array.from({length: 7}, (_, i) => `L${m - 12 + i * 4} ${i % 2 ? 5 : -5}`).join(' ')} L${m + 15} 0" fill="none" stroke="#7d8793" stroke-width="1.6"/>`;
+  }
+  return '';
+}
+function side(g, off){ return g.h ? {x: g.mx, y: g.my + off} : {x: g.mx + off, y: g.my}; }
+function labelsFor(k, p){
+  const g = geo(k), out = [], t = (o, s, cls = '', col = '#3a4556', fs = 11) => { const c = side(g, o); out.push(`<text ${cls} x="${c.x}" y="${c.y + 4}" text-anchor="${g.h ? 'middle' : 'start'}" fill="${col}" font-size="${fs}" font-weight="600">${s}</text>`); };
+  const off = g.h ? 27 : 22;
+  if (p.kind === 'battery') t(off, `${fmt(E_CELL * p.cells, 1)} V`);
+  if (p.kind === 'mains') t(off, '220 V supply');
+  if (p.kind === 'resistor' || p.kind === 'lamp') t(off, `${p.R} Ω`);
+  if (p.kind === 'xy') t(off, `${RHO[p.mat].name} ${p.l} m`);
+  if (p.kind === 'ammeter') t(g.h ? 30 : 24, '', `class="aRead" data-k="${k}"`, '#3057c9', 12);
+  if (p.kind === 'key') t(off, p.on ? 'key in' : 'key out', '', p.on ? '#1f7a4a' : '#b3261e');
+  if (p.kind === 'fuse') t(off, p.blown ? `${p.rating} A — melted` : `${p.rating} A fuse`, '', p.blown ? '#b3261e' : '#3a4556');
+  if (p.kind === 'appl') t(off, APPL[p.w].name);
+  if (SOURCES[p.kind]) {  /* + and − at the terminals */
+    const plusAtB = p.dir > 0, w = p.kind === 'mains' ? 34 : (p.cells * 19) / 2 + 8;
+    const at = f => ({x: g.x1 + (g.x2 - g.x1) * f + (g.h ? 0 : -16), y: g.y1 + (g.y2 - g.y1) * f + (g.h ? -14 : 0)});
+    const pp = at(0.5 + (plusAtB ? 1 : -1) * w / g.L), mm = at(0.5 - (plusAtB ? 1 : -1) * w / g.L);
+    out.push(`<text x="${pp.x}" y="${pp.y + 5}" text-anchor="middle" fill="#b3261e" font-size="15" font-weight="700">+</text><text x="${mm.x}" y="${mm.y + 5}" text-anchor="middle" fill="#1d2327" font-size="15" font-weight="700">−</text>`);
+  }
+  return out.join('');
+}
+function drawSlot(k){ const p = S.parts[k]; $('s_' + k).innerHTML = p ? partArt(p, geo(k).L) : ''; }
+function drawLabels(){ $('labels').innerHTML = Object.keys(S.parts).map(k => labelsFor(k, S.parts[k])).join(''); }
+function drawSel(){
+  if (!S.sel || !S.parts[S.sel]) { $('selG').innerHTML = ''; return; }
+  const g = geo(S.sel), w = g.L - 14, t = 44;
+  $('selG').innerHTML = g.h ? `<rect x="${g.x1 + 7}" y="${g.y1 - t / 2}" width="${w}" height="${t}" rx="9" fill="#e1e8fb" stroke="#3057c9" stroke-width="1.5"/>`
+                            : `<rect x="${g.x1 - t / 2}" y="${g.y1 + 7}" width="${t}" height="${w}" rx="9" fill="#e1e8fb" stroke="#3057c9" stroke-width="1.5"/>`;
+}
+
+/* ============================================================================
+   Solve, measure, paint
+   ============================================================================ */
+let FUSEH = {};
+function solve(){
+  SOL = solveBoard(S.parts, NN, ends);
+  drawLabels(); drawSel();
+  paint(); paintNums(); paintWhy(); drawInspector(); check();
+}
+const ammeters = () => Object.keys(S.parts).filter(k => S.parts[k].kind === 'ammeter').sort((a, b) => S.parts[a].n - S.parts[b].n);
+const sources = () => Object.keys(S.parts).filter(k => SOURCES[S.parts[k].kind]);
+function voltmeter(){
+  const a = S.probes.red, b = S.probes.black, V = SOL.V;
+  if (!isFinite(V[a]) || !isFinite(V[b]) || SOL.island(a) !== SOL.island(b)) return 0;
+  return V[a] - V[b];
+}
+const shortCircuit = () => sources().some(k => Math.abs(SOL.cur[k]) > 100);
+function srcE(){ return sources().reduce((s, k) => s + SOURCES[S.parts[k].kind](S.parts[k]), 0); }
+function paint(){
+  for (const k in S.parts) {
+    const p = S.parts[k];
+    if (p.kind === 'lamp') {
+      const I = SOL.cur[k], P = I * I * p.R, b = clamp(P / 1.8, 0, 1.2);   // full glow at 1.8 W, the lamp of Example 11.7
+      const el = $('s_' + k);
+      el.querySelector('.glow').setAttribute('opacity', b > 0.03 ? clamp(0.35 + 0.65 * b, 0, 1).toFixed(2) : 0);
+      el.querySelector('.fil').setAttribute('stroke', b > 0.05 ? '#ff9d1a' : '#6b5a4a');
+    }
+    if (p.kind === 'appl') {
+      const I = SOL.cur[k]; $('s_' + k).querySelector('.coilA').setAttribute('stroke', Math.abs(I) > 0.01 ? '#e2562a' : '#7d8793');
+    }
+  }
+  for (const t of document.querySelectorAll('#labels .aRead')) t.textContent = fmt(Math.abs(SOL.cur[t.dataset.k]), 3) + ' A';
+  const v = voltmeter();
+  const sc = Math.abs(v) <= 3 ? 3 : Math.abs(v) <= 10 ? 10 : Math.abs(v) <= 30 ? 30 : 300;
+  $('vmScale').textContent = '0 – ' + sc + ' V';
+  const a = Math.PI * (1 - (S.locked ? clamp(Math.abs(v) / sc, 0, 1.02) : 0));
+  $('vmNeedle').setAttribute('x2', (VM.x + Math.cos(a) * (VM.r - 8)).toFixed(1)); $('vmNeedle').setAttribute('y2', (VM.y - Math.sin(a) * (VM.r - 8)).toFixed(1));
+  $('vmRead').textContent = S.locked ? fmt(v, 2) + ' V' : '—';
+  drawGraph(); drawTable();
+}
+function placeProbes(){
+  for (const [id, n] of [['probeRed', S.probes.red], ['probeBlack', S.probes.black]]) { const p = pos(n); $(id).setAttribute('cx', p.x + (id === 'probeRed' ? -7 : 7)); $(id).setAttribute('cy', p.y + 7); }
+  drawLeads();
+}
+function drawLeads(){
+  const r = {x: +$('probeRed').getAttribute('cx'), y: +$('probeRed').getAttribute('cy')}, b = {x: +$('probeBlack').getAttribute('cx'), y: +$('probeBlack').getAttribute('cy')};
+  const lead = (p, x, col) => `<path d="M${x} ${VM.y + 70} C${x} ${VM.y - 10}, ${p.x} ${p.y + 140}, ${p.x} ${p.y}" fill="none" stroke="${col}" stroke-width="2.2" opacity=".55"/>`;
+  $('leads').innerHTML = lead(r, VM.x - 60, '#d6453d') + lead(b, VM.x + 60, '#1d2327');
+}
+
+/* ---- the V–I graph: your readings, their best line through the origin, and the live point ---- */
+let GI = 0.5, GV = 6;
+function nice(x){ const e = 10 ** Math.floor(Math.log10(x)); for (const m of [1, 2, 2.5, 5, 10]) if (m * e >= x) return m * e; return 10 * e; }
+function fitThroughOrigin(rows){
+  let sxy = 0, sxx = 0;
+  for (const r of rows) { sxy += r.I * r.V; sxx += r.I * r.I; }
+  return sxx > 0 ? sxy / sxx : NaN;
+}
+function liveIV(){
+  const am = ammeters();
+  return {I: am.length ? Math.abs(SOL.cur[am[0]]) : NaN, V: Math.abs(voltmeter())};
+}
+function drawGraph(){
+  const live = liveIV(), rows = S.rec;
+  const maxI = Math.max(0.05, ...rows.map(r => r.I), isFinite(live.I) ? live.I : 0), maxV = Math.max(1, ...rows.map(r => r.V), live.V);
+  GI = nice(maxI * 1.15); GV = nice(maxV * 1.15);
+  const X = I => GR.x + I / GI * GR.w, Y = V => GR.y + GR.h - V / GV * GR.h;
+  let ax = `<rect x="${GR.x}" y="${GR.y}" width="${GR.w}" height="${GR.h}" fill="#fbfcfe" stroke="#e3e8f0"/>`;
+  for (let i = 0; i <= 5; i++) {
+    const x = GR.x + i / 5 * GR.w, y = GR.y + GR.h - i / 5 * GR.h;
+    ax += `<line x1="${x}" y1="${GR.y}" x2="${x}" y2="${GR.y + GR.h}" stroke="#eef1f6"/><line x1="${GR.x}" y1="${y}" x2="${GR.x + GR.w}" y2="${y}" stroke="#eef1f6"/>` +
+          `<text x="${x}" y="${GR.y + GR.h + 14}" font-size="10" fill="#6a7686" text-anchor="middle">${+(GI * i / 5).toPrecision(3)}</text>` +
+          `<text x="${GR.x - 5}" y="${y + 3.5}" font-size="10" fill="#6a7686" text-anchor="end">${+(GV * i / 5).toPrecision(3)}</text>`;
+  }
+  ax += `<text x="${GR.x + GR.w}" y="${GR.y + GR.h + 30}" font-size="11.5" fill="#3a4556" text-anchor="end" font-weight="600">current I (A)</text>` +
+        `<text x="${GR.x - 30}" y="${GR.y - 12}" font-size="11.5" fill="#3a4556" font-weight="600">V (volt)</text>`;
+  $('gAxes').innerHTML = ax;
+  $('gPts').innerHTML = rows.map(r => `<circle cx="${X(r.I).toFixed(1)}" cy="${Y(r.V).toFixed(1)}" r="5" fill="#3057c9"/>`).join('');
+  const lv = $('gLive');
+  if (S.locked && isFinite(live.I)) { lv.setAttribute('opacity', 1); lv.setAttribute('cx', X(live.I).toFixed(1)); lv.setAttribute('cy', Y(live.V).toFixed(1)); } else lv.setAttribute('opacity', 0);
+  const R = fitThroughOrigin(rows);
+  if (rows.length >= 2 && isFinite(R)) {
+    const Imax = Math.min(GI, GV / R);
+    $('gFit').setAttribute('x1', X(0)); $('gFit').setAttribute('y1', Y(0)); $('gFit').setAttribute('x2', X(Imax).toFixed(1)); $('gFit').setAttribute('y2', Y(R * Imax).toFixed(1)); $('gFit').setAttribute('opacity', 1);
+    $('gFitT').textContent = `Best line: slope V/I = ${fmt(R, 2)} Ω`;
+  } else { $('gFit').setAttribute('opacity', 0); $('gFitT').textContent = rows.length ? 'Record another reading to draw the line.' : S.locked ? 'Record readings to plot them.' : ''; }
+  /* the selected part's own V = IR line, so you can see a resistance as a slope */
+  const sp = S.sel && S.parts[S.sel];
+  if (S.locked && sp && LOADS.includes(sp.kind)) {
+    const Rs = partR(sp), Imax = Math.min(GI, GV / Rs);
+    $('gSel').setAttribute('x1', X(0)); $('gSel').setAttribute('y1', Y(0)); $('gSel').setAttribute('x2', X(Imax).toFixed(1)); $('gSel').setAttribute('y2', Y(Rs * Imax).toFixed(1)); $('gSel').setAttribute('opacity', 1);
+    $('gSelT').textContent = `Selected part: V = I × ${fmt(Rs, 2)} Ω`;
+  } else { $('gSel').setAttribute('opacity', 0); $('gSelT').textContent = ''; }
+}
+function drawTable(){
+  const cols = [[362, 'No.'], [430, 'Cells'], [540, 'Current I (A)'], [680, 'p.d. V (V)'], [820, 'V/I (Ω)']];
+  let s = cols.map(([x, t]) => `<text x="${x}" y="520" font-size="11.5" fill="#6a7686" font-weight="700">${t}</text>`).join('') + `<line x1="346" y1="528" x2="968" y2="528" stroke="#d5dbe5"/>`;
+  const rows = S.rec.slice(-6);
+  rows.forEach((r, i) => {
+    const y = 550 + i * 22, n = S.rec.length - rows.length + i + 1;
+    s += `<text x="362" y="${y}" font-size="12.5" fill="#3a4556" class="m">${n}</text><text x="430" y="${y}" font-size="12.5" fill="#3a4556" class="m">${r.cells}</text>` +
+         `<text x="540" y="${y}" font-size="12.5" fill="#3a4556" class="m">${fmt(r.I, 3)}</text><text x="680" y="${y}" font-size="12.5" fill="#3a4556" class="m">${fmt(r.V, 2)}</text>` +
+         `<text x="820" y="${y}" font-size="12.5" fill="#1d2327" class="m" font-weight="700">${r.I > 1e-9 ? fmt(r.V / r.I, 2) : '—'}</text>`;
+  });
+  if (!rows.length) s += `<text x="657" y="600" font-size="12.5" fill="#8a94a6" text-anchor="middle">${S.locked ? 'Press “Record this reading” to add a row. Change the battery and record again.' : ''}</text>`;
+  $('tbl').innerHTML = s;
+}
+
+/* ---- the numbers card ------------------------------------------------------ */
+const pname = (k) => { const p = S.parts[k]; return p.kind === 'resistor' ? `${p.R} Ω resistor` : p.kind === 'lamp' ? `${p.R} Ω lamp` : p.kind === 'xy' ? `${RHO[p.mat].name} wire` : p.kind === 'appl' ? APPL[p.w].name : p.kind; };
+function paintNums(){
+  if (!S.locked) return;
+  const loads = Object.keys(S.parts).filter(k => LOADS.includes(S.parts[k].kind));
+  const src = sources(), E = srcE(), Ib = src.length ? Math.abs(SOL.cur[src[0]]) : 0;
+  let h = '';
+  if (!SOL.ok) h += `<p class="warn">Two sources are joined straight across each other. Ideal batteries cannot share terminals like that; move one.</p>`;
+  if (shortCircuit()) h += `<p class="warn">Short circuit: the battery is joined across a path with almost no resistance.</p>`;
+  h += `<table class="nums"><tr><th>Part</th><th>R (Ω)</th><th>I (A)</th><th>V (V)</th><th>P = VI (W)</th></tr>`;
+  for (const k of loads) {
+    const R = partR(S.parts[k]), I = Math.abs(SOL.cur[k]), V = Math.abs(SOL.drop[k]);
+    h += `<tr><td>${esc(pname(k))}</td><td>${fmt(R, R < 10 ? 2 : 1)}</td><td>${fmt(I, 3)}</td><td>${fmt(V, 2)}</td><td>${fmt(V * I, 2)}</td></tr>`;
+  }
+  h += `</table>`;
+  if (src.length && Ib > 1e-9 && !shortCircuit()) {
+    const Req = E / Ib;
+    h += `<div class="eq">V = I R<sub>eq</sub> → ${fmt(E, 2)} V = ${fmt(Ib, 3)} A × ${fmt(Req, 2)} Ω</div>`;
+  } else if (src.length) h += `<div class="eq">No current: the circuit is open.</div>`;
+  $('nums').innerHTML = h;
+  $('btnRecord').disabled = !(ammeters().length && src.length);
+}
+function paintWhy(){
+  if (!S.locked) return;
+  $('whyCard').hidden = false;
+  const loads = Object.keys(S.parts).filter(k => LOADS.includes(S.parts[k].kind) && Math.abs(SOL.cur[k]) > 1e-7);
+  const src = sources(), E = srcE(), Ib = src.length ? Math.abs(SOL.cur[src[0]]) : 0, out = [];
+  if (!src.length) { $('why').innerHTML = '<p>There is no battery on the board, so there is no potential difference to drive a current.</p>'; return; }
+  if (shortCircuit()) out.push(`<p class="warn">The battery is short-circuited: ${fmt(Ib, 0)} A would flow through the wires. Heat H = I²Rt would melt the insulation. This is what a fuse is for.</p>`);
+  else if (Ib < 1e-9) {
+    const gap = Object.keys(S.parts).find(k => (S.parts[k].kind === 'key' && !S.parts[k].on) || (S.parts[k].kind === 'fuse' && S.parts[k].blown));
+    out.push(`<p><b>No current flows.</b> ${gap ? (S.parts[gap].kind === 'key' ? 'The plug key is out: the circuit is open.' : 'The fuse wire has melted: the circuit is open.') : 'There is no complete path from one terminal of the battery back to the other.'}</p>`);
+  } else {
+    const Is = loads.map(k => Math.abs(SOL.cur[k])), Vs = loads.map(k => Math.abs(SOL.drop[k])), Rs = loads.map(k => partR(S.parts[k]));
+    const allSameI = loads.length >= 2 && Is.every(i => Math.abs(i - Ib) < 1e-3 * Ib);
+    const allFullV = loads.length >= 2 && Vs.every(v => Math.abs(v - E) < 5e-3 * E);
+    if (allSameI) out.push(`<p><b>In series.</b> One path, so the same ${fmt(Ib, 3)} A flows through every part. The p.d. is shared: ${Vs.map(v => fmt(v, 2)).join(' + ')} = ${fmt(Vs.reduce((a, b) => a + b, 0), 2)} V. ` +
+      `So R<sub>s</sub> = ${Rs.map(r => fmt(r, 2)).join(' + ')} = ${fmt(seriesR(Rs), 2)} Ω, which is bigger than any one of them.</p>`);
+    else if (allFullV) out.push(`<p><b>In parallel.</b> Every part has the full ${fmt(E, 2)} V across it, so each takes I = V/R on its own: ${Is.map(i => fmt(i, 3)).join(' + ')} = ${fmt(Ib, 3)} A. ` +
+      `1/R<sub>p</sub> = ${Rs.map(r => '1/' + fmt(r, 0)).join(' + ')}, so R<sub>p</sub> = ${fmt(parallelR(Rs), 2)} Ω, smaller than the smallest.</p>`);
+    else out.push(`<p>A current of <b>${fmt(Ib, 3)} A</b> leaves the battery. It splits at junctions and joins again, and at every junction the currents in add up to the currents out.</p>`);
+    const hot = loads.slice().sort((a, b) => Math.abs(SOL.cur[b] * SOL.drop[b]) - Math.abs(SOL.cur[a] * SOL.drop[a]))[0];
+    if (hot) out.push(`<p>The ${esc(pname(hot))} turns the most energy into heat: P = I²R = ${fmt(SOL.cur[hot] ** 2, 4)} × ${fmt(partR(S.parts[hot]), 2)} = ${fmt(SOL.cur[hot] ** 2 * partR(S.parts[hot]), 2)} W, or ${fmt(SOL.cur[hot] ** 2 * partR(S.parts[hot]), 1)} joules every second.</p>`);
+  }
+  const fz = Object.keys(S.parts).find(k => S.parts[k].kind === 'fuse');
+  if (fz) { const f = S.parts[fz], I = Math.abs(SOL.cur[fz]);
+    out.push(f.blown ? `<p>The ${f.rating} A fuse has melted and broken the circuit. Replace it only after removing the cause.</p>` :
+      `<p>The fuse carries ${fmt(I, 2)} A, ${I > f.rating ? '<b>more than its rating: it is heating fast</b>' : `within its ${f.rating} A rating`}.</p>`); }
+  const am = ammeters();
+  if (am.length >= 2) out.push(`<p>The ammeters read ${am.map(k => fmt(Math.abs(SOL.cur[k]), 3) + ' A').join(' and ')}.</p>`);
+  $('why').innerHTML = out.join('');
+}
+
+/* ---- findings -------------------------------------------------------------- */
+function check(){
+  if (!S.locked) return;
+  const am = ammeters().map(k => Math.abs(SOL.cur[k])).filter(i => i > 1e-6);
+  const loads = Object.keys(S.parts).filter(k => LOADS.includes(S.parts[k].kind) && Math.abs(SOL.cur[k]) > 1e-7);
+  const src = sources(), E = srcE(), Ib = src.length ? Math.abs(SOL.cur[src[0]]) : 0;
+  if (am.length >= 2 && loads.length && Math.max(...am) - Math.min(...am) < 1e-3 * Math.max(...am)) { discover('same'); explainSame(am); }
+  if (Ib > 1e-6 && loads.length >= 2 && !shortCircuit()) {
+    const Is = loads.map(k => Math.abs(SOL.cur[k])), Vs = loads.map(k => Math.abs(SOL.drop[k]));
+    if (Is.every(i => Math.abs(i - Ib) < 1e-3 * Ib) && Math.abs(E / Ib - seriesR(loads.map(k => partR(S.parts[k])))) < 1e-2 * E / Ib) discover('series');
+    if (Vs.every(v => Math.abs(v - E) < 5e-3 * E) && Math.abs(Is.reduce((a, b) => a + b, 0) - Ib) < 1e-3 * Ib) discover('parallel');
+  }
+  const R = S.rec.filter(r => r.I > 1e-6);
+  if (R.length >= 3) {
+    const q = R.map(r => r.V / r.I), mean = q.reduce((a, b) => a + b, 0) / q.length, Vs = R.map(r => r.V);
+    if (q.every(x => Math.abs(x - mean) < 0.02 * mean) && Math.max(...Vs) >= 2 * Math.min(...Vs)) discover('ohm');
+  }
+  if (Object.values(S.parts).some(p => p.kind === 'fuse' && p.blown)) discover('fuse');
+}
+let SAME_DONE = false;
+function explainSame(am){
+  if (SAME_DONE || !POE || !POE.locked) return;
+  SAME_DONE = true;
+  const lamp = Object.keys(S.parts).find(k => LOADS.includes(S.parts[k].kind) && Math.abs(SOL.cur[k]) > 1e-7);
+  POE.explain(`Both ammeters read <b>${fmt(am[0], 3)} A</b>. In a series circuit the current is the same in every part (Activity 11.4): charge is not used up by the ${esc(pname(lamp))}. ` +
+    `What the ${esc(pname(lamp))} takes is <b>energy</b>: ${fmt(Math.abs(SOL.drop[lamp]), 2)} joules from every coulomb that passes, which is the ${fmt(Math.abs(SOL.drop[lamp]), 2)} V the voltmeter reads across it.`);
+}
+
+/* ============================================================================
+   Controls
+   ============================================================================ */
+const TOOLS = [
+  {id: 'hand', name: 'Select', note: 'Click a part to select it and change it. Click a plug key to put it in or take it out.',
+   ico: '<path d="M11 3 L11 18 L15 14 L18 20 L20.5 19 L17.5 13 L23 13Z" fill="#fff" stroke="#403a55" stroke-width="1.4" stroke-linejoin="round"/>'},
+  {id: 'wire', name: 'Wire', ico: '<line x1="3" y1="10" x2="31" y2="10" stroke="#27456f" stroke-width="3.5" stroke-linecap="round"/>'},
+  {id: 'battery', name: 'Battery', ico: '<rect x="4" y="4" width="12" height="12" rx="2" fill="#24272c"/><rect x="18" y="4" width="12" height="12" rx="2" fill="#24272c"/><rect x="12" y="4" width="4" height="12" fill="#f2b400"/><rect x="26" y="4" width="4" height="12" fill="#f2b400"/>'},
+  {id: 'resistor', name: 'Resistor', ico: '<rect x="8" y="5" width="18" height="10" rx="4" fill="#e8d3a8" stroke="#b79a64"/><rect x="12" y="5" width="2.5" height="10" fill="#7b4a24"/><rect x="17" y="5" width="2.5" height="10" fill="#1d1d1d"/><line x1="2" y1="10" x2="8" y2="10" stroke="#27456f" stroke-width="2"/><line x1="26" y1="10" x2="32" y2="10" stroke="#27456f" stroke-width="2"/>'},
+  {id: 'lamp', name: 'Lamp', ico: '<circle cx="17" cy="10" r="7.5" fill="#fff6c8" stroke="#8a99a8"/><path d="M12 5 L22 15 M12 15 L22 5" stroke="#6b5a4a" stroke-width="1.3"/>'},
+  {id: 'xy', name: 'Wire XY', ico: '<path d="M3 10 l3 -4 l3 8 l3 -8 l3 8 l3 -8 l3 8 l3 -8 l3 8 l3 -4" fill="none" stroke="#7d8793" stroke-width="1.5"/>'},
+  {id: 'ammeter', name: 'Ammeter', ico: '<circle cx="17" cy="10" r="8" fill="#fff" stroke="#3057c9" stroke-width="1.6"/><text x="17" y="14" text-anchor="middle" font-size="11" font-weight="700" fill="#3057c9">A</text>'},
+  {id: 'key', name: 'Plug key', ico: '<rect x="6" y="9" width="22" height="8" rx="2" fill="#caa96a"/><rect x="14" y="3" width="6" height="10" rx="1.5" fill="#8a929c"/>'},
+  {id: 'fuse', name: 'Fuse', ico: '<rect x="7" y="5" width="20" height="10" rx="5" fill="#f4f1ea" stroke="#9aa3ad"/><line x1="10" y1="10" x2="24" y2="10" stroke="#5b4a3a" stroke-width="1.2"/>'},
+  {id: 'appl', name: 'Appliance', ico: '<rect x="8" y="3" width="18" height="14" rx="3" fill="#eef1f6" stroke="#8a99a8"/><path d="M11 10 l2 -3 l2 6 l2 -6 l2 6 l2 -6 l2 3" fill="none" stroke="#e2562a" stroke-width="1.2"/>'},
+  {id: 'mains', name: '220 V', ico: '<rect x="7" y="3" width="20" height="14" rx="3" fill="#4a5568"/><path d="M11 10 q3 -6 6 0 t6 0" fill="none" stroke="#ffd23f" stroke-width="1.6"/>'},
+  {id: 'erase', name: 'Remove', note: 'Click a part to take it off the board.', ico: '<path d="M10 4 L24 16 M24 4 L10 16" stroke="#d6453d" stroke-width="2.4" stroke-linecap="round"/>'},
+];
+function buildTools(){ $('tools').innerHTML = TOOLS.map(t => `<button class="tool" data-tool="${t.id}" aria-pressed="${S.tool === t.id}" disabled><svg viewBox="0 0 34 20" aria-hidden="true">${t.ico}</svg>${t.name}</button>`).join(''); }
+function setTool(id){
+  S.tool = id;
+  for (const b of document.querySelectorAll('.tool')) b.setAttribute('aria-pressed', b.dataset.tool === id);
+  const t = TOOLS.find(t => t.id === id);
+  $('toolNote').textContent = t.note || `Click the space between two pegs to put a ${t.name.toLowerCase()} there. Drag the red and black probes onto pegs to measure a p.d.`;
+}
+function clickSlot(k){
+  if (!S.locked) return;
+  const p = S.parts[k];
+  if (S.tool === 'hand') {
+    if (!p) { S.sel = null; drawSel(); drawInspector(); return; }
+    if (p.kind === 'key') { p.on = !p.on; sound('snap'); drawSlot(k); track('key', {on: p.on}); }
+    S.sel = k; solve(); return;
+  }
+  if (S.tool === 'erase') { if (p) { delete S.parts[k]; if (S.sel === k) S.sel = null; sound('pop'); drawSlot(k); solve(); track('remove', {key: k}); } return; }
+  const np = {kind: S.tool, n: ++S.count};
+  if (S.tool === 'battery') { np.cells = p && p.kind === 'battery' ? p.cells : 2; np.dir = p && SOURCES[p.kind] ? p.dir : -1; }
+  if (S.tool === 'mains') np.dir = p && SOURCES[p.kind] ? p.dir : -1;
+  if (S.tool === 'resistor') np.R = 10;
+  if (S.tool === 'lamp') np.R = 20;
+  if (S.tool === 'xy') Object.assign(np, {mat: 'nichrome', l: 0.5, d: 0.3e-3});
+  if (S.tool === 'key') np.on = true;
+  if (S.tool === 'fuse') np.rating = 5;
+  if (S.tool === 'appl') np.w = 'iron';
+  S.parts[k] = np; S.sel = k;
+  sound('pop'); drawSlot(k); solve();
+  track('place', {kind: S.tool, key: k});
+}
+/* The inspector: the selected part's own settings. */
+function drawInspector(){
+  const k = S.sel, p = k && S.parts[k];
+  $('inspCard').hidden = !(S.locked && p && p.kind !== 'wire');
+  if ($('inspCard').hidden) return;
+  const opt = (arr, cur, lab = x => x) => arr.map(v => `<option value="${v}" ${String(v) === String(cur) ? 'selected' : ''}>${lab(v)}</option>`).join('');
+  let h = '';
+  const turn = `<button class="btn sm" data-act="flip">Turn round (swap + and −)</button>`;
+  switch (p.kind) {
+    case 'battery': $('inspTitle').textContent = 'Battery';
+      h = `<div class="row"><label>Cells of 1.5 V</label><span class="seg">${[1, 2, 3, 4].map(n => `<button class="btn sm" data-cells="${n}" aria-pressed="${p.cells === n}">${n}</button>`).join('')}</span></div><div class="row">${turn}</div>`; break;
+    case 'mains': $('inspTitle').textContent = '220 V supply'; h = `<p class="note" style="margin:0">Treated as a steady 220 V, as in the book’s examples.</p><div class="row">${turn}</div>`; break;
+    case 'resistor': case 'lamp': $('inspTitle').textContent = p.kind === 'lamp' ? 'Lamp' : 'Resistor';
+      h = `<div class="row"><label for="iR">Resistance</label><select id="iR" data-prop="R">${opt(RVALS, p.R, v => v + ' Ω')}</select></div>`; break;
+    case 'xy': $('inspTitle').textContent = 'Wire XY';
+      h = `<div class="row"><label for="iMat">Material</label><select id="iMat" data-prop="mat">${opt(Object.keys(RHO), p.mat, m => RHO[m].name)}</select></div>` +
+          `<div class="row"><label>Length</label><span class="seg">${[0.5, 1].map(l => `<button class="btn sm" data-len="${l}" aria-pressed="${p.l === l}">${l} m</button>`).join('')}</span></div>` +
+          `<div class="row"><label>Thickness</label><span class="seg">${[0.3e-3, 0.6e-3].map(d => `<button class="btn sm" data-dia="${d}" aria-pressed="${p.d === d}">${d * 1000} mm</button>`).join('')}</span></div>` +
+          `<p class="note" style="margin:0">R = ρl/A = ${RHO[p.mat].rho.toExponential(2)} × ${p.l} ÷ ${(Math.PI * p.d * p.d / 4).toExponential(2)} = <b>${fmt(partR(p), 3)} Ω</b></p>`; break;
+    case 'ammeter': $('inspTitle').textContent = 'Ammeter';
+      h = `<p class="note" style="margin:0">Reads ${fmt(Math.abs(SOL.cur[k]), 3)} A. An ammeter always goes <b>in series</b>: the current it measures has to pass through it.</p>`; break;
+    case 'key': $('inspTitle').textContent = 'Plug key'; h = `<p class="note" style="margin:0">Click it on the board to put the plug in or take it out.</p>`; break;
+    case 'fuse': $('inspTitle').textContent = 'Fuse';
+      h = `<div class="row"><label for="iF">Rating</label><select id="iF" data-prop="rating">${opt([1, 2, 3, 5, 10, 15], p.rating, v => v + ' A')}</select>${p.blown ? '<button class="btn sm" data-act="mend">Fit a new fuse wire</button>' : ''}</div>`; break;
+    case 'appl': $('inspTitle').textContent = 'Appliance';
+      h = `<div class="row"><label for="iA">Which</label><select id="iA" data-prop="w">${opt(Object.keys(APPL), p.w, w => APPL[w].name)}</select></div><p class="note" style="margin:0">Rated at 220 V, so R = V²/P = ${fmt(applR(p.w), 1)} Ω.</p>`; break;
+  }
+  h += `<div class="row"><button class="btn sm" data-act="remove">Remove</button></div>`;
+  $('insp').innerHTML = h;
+}
+function changePart(fn, what){
+  const k = S.sel, p = S.parts[k]; if (!p) return;
+  const Ibefore = Math.abs(SOL.cur[k]), before = Object.assign({}, p);
+  fn(p); sound('tick'); drawSlot(k); solve();
+  track('change', {key: k, what});
+  /* double the length, half the current: only when nothing else about the wire changed */
+  if (p.kind === 'xy' && what === 'len' && Ibefore > 1e-6) {
+    const Iafter = Math.abs(SOL.cur[k]), want = before.l / p.l;
+    const others = Object.keys(S.parts).filter(q => LOADS.includes(S.parts[q].kind) && q !== k && Math.abs(SOL.cur[q]) > 1e-7);
+    if (!others.length && Math.abs(Iafter / Ibefore - want) < 0.03 * want && want !== 1) { LENGTH_NOTE = {Ibefore, Iafter, l0: before.l, l1: p.l}; discover('length'); }
+  }
+}
+let LENGTH_NOTE = null;
+$('insp').addEventListener('click', e => {
+  const t = e.target.closest('button'); if (!t) return;
+  if (t.dataset.cells) changePart(p => { p.cells = +t.dataset.cells; }, 'cells');
+  else if (t.dataset.len) changePart(p => { p.l = +t.dataset.len; }, 'len');
+  else if (t.dataset.dia) changePart(p => { p.d = +t.dataset.dia; }, 'dia');
+  else if (t.dataset.act === 'flip') changePart(p => { p.dir = -p.dir; }, 'flip');
+  else if (t.dataset.act === 'mend') { FUSEH[S.sel] = 0; changePart(p => { p.blown = false; }, 'mend'); }
+  else if (t.dataset.act === 'remove') { const k = S.sel; delete S.parts[k]; S.sel = null; drawSlot(k); solve(); }
+});
+$('insp').addEventListener('change', e => {
+  const t = e.target.closest('select'); if (!t) return;
+  const v = t.dataset.prop === 'mat' || t.dataset.prop === 'w' ? t.value : +t.value;
+  changePart(p => { p[t.dataset.prop] = v; }, t.dataset.prop);
+});
+$('tools').addEventListener('click', e => { const b = e.target.closest('.tool'); if (b && !b.disabled) { setTool(b.dataset.tool); sound('tick'); } });
+$('preset').addEventListener('change', e => { if (!e.target.value) return; loadPreset(e.target.value); track('preset', {name: e.target.value}); e.target.value = ''; });
+$('stage').addEventListener('click', e => { const h = e.target.closest('.slotHit'); if (h) clickSlot(h.dataset.k); });
+$('btnRecord').addEventListener('click', () => {
+  const live = liveIV();
+  if (!isFinite(live.I)) return;
+  const cells = sources().reduce((s, k) => s + (S.parts[k].kind === 'battery' ? S.parts[k].cells : 0), 0);
+  S.rec.push({cells, I: live.I, V: live.V});
+  sound('pop'); paint(); check(); track('record', {I: live.I, V: live.V});
+  $('btnClearRec').disabled = false;
+});
+$('btnClearRec').addEventListener('click', () => { S.rec = []; paint(); $('btnClearRec').disabled = true; });
+
+/* voltmeter probes: drag them onto any peg */
+function nearestPeg(p){
+  let best = 0, bd = 1e9;
+  for (let n = 0; n < NN; n++) { const q = pos(n), d = Math.hypot(q.x - p.x, q.y - p.y); if (d < bd) { bd = d; best = n; } }
+  return best;
+}
+function wireProbes(){ for (const [id, key] of [['probeRed', 'red'], ['probeBlack', 'black']]) {
+  drag($(id), svg, {
+    start(){ if (!S.locked) return false; },
+    move(p){ const x = clamp(p.x, 30, 666), y = clamp(p.y, 30, 440); $(id).setAttribute('cx', x); $(id).setAttribute('cy', y); drawLeads(); S.probes[key] = nearestPeg({x, y}); paint(); },
+    end(){ placeProbes(); paint(); paintWhy(); sound('tick'); track('probe', {probe: key, node: S.probes[key]}); },
+  });
+} }
+
+/* ============================================================================
+   The clock: moving charge and the fuse wire heating
+   ============================================================================ */
+let PHASE = {};
+function tick(dt){
+  if (!SOL) return;
+  let blew = false;
+  for (const k in S.parts) {
+    const p = S.parts[k];
+    if (p.kind !== 'fuse' || p.blown) continue;
+    FUSEH[k] = fuseStep(FUSEH[k] || 0, Math.abs(SOL.cur[k]), p.rating, reduced() ? Infinity : dt);
+    if (FUSEH[k] > FUSE_MELT * FUSE_MELT) { p.blown = true; blew = true; FUSE_NOTE = {I: Math.abs(SOL.cur[k]), rating: p.rating}; drawSlot(k); }
+    const fw = $('s_' + k).querySelector('.fw');
+    if (fw) fw.setAttribute('stroke', FUSEH[k] > 0.6 ? mix('#5b4a3a', '#ff5a1a', clamp((FUSEH[k] - 0.6) / 0.8, 0, 1)) : '#5b4a3a');
+  }
+  if (blew) { sound('oops'); solve(); }
+  for (const k of SLOTS) {
+    const g = $('d_' + k), I = S.parts[k] ? SOL.cur[k] : 0;
+    const on = S.locked && Math.abs(I) > 1e-6 && Math.abs(I) < 100;
+    if (!on) { if (g.dataset.on !== '0') { for (const c of g.children) c.setAttribute('opacity', 0); g.dataset.on = '0'; } continue; }
+    g.dataset.on = '1';
+    const G = geo(k), v = clamp(Math.abs(I) / 0.25 * 60, 6, 360) * Math.sign(I);
+    PHASE[k] = ((PHASE[k] || 0) + (reduced() ? 0 : v * dt / G.L)) % 1;
+    let i = 0;
+    for (const c of g.children) {
+      const f = ((PHASE[k] + i / 3) % 1 + 1) % 1; i++;
+      c.setAttribute('cx', (G.x1 + (G.x2 - G.x1) * f).toFixed(1)); c.setAttribute('cy', (G.y1 + (G.y2 - G.y1) * f).toFixed(1));
+      c.setAttribute('opacity', S.parts[k].kind !== 'wire' && f > 0.27 && f < 0.73 ? 0 : .95);   /* charge passes behind the part's body */
+    }
+  }
+}
+let FUSE_NOTE = null;
+function mix(a, b, t){
+  const pa = [1, 3, 5].map(i => parseInt(a.slice(i, i + 2), 16)), pb = [1, 3, 5].map(i => parseInt(b.slice(i, i + 2), 16));
+  return '#' + pa.map((v, i) => Math.round(v + (pb[i] - v) * t).toString(16).padStart(2, '0')).join('');
+}
+
+/* ============================================================================
+   Start
+   ============================================================================ */
+build(); wireProbes(); buildTools(); setTool('hand');
+findings($('finds'), [
+  {id: 'same',     icon: '=', label: 'The same current everywhere in series', hint: 'Put an ammeter on each side of the lamp'},
+  {id: 'ohm',      icon: '⟋', label: 'V/I stays the same: Ohm’s law',          hint: 'Record three readings with different cells'},
+  {id: 'series',   icon: '→', label: 'Resistances in series add',               hint: 'Two loads, one path'},
+  {id: 'parallel', icon: '⫴', label: 'Parallel: currents add, R falls',         hint: 'Two loads side by side'},
+  {id: 'length',   icon: '↔', label: 'Twice the length, half the current',      hint: 'Change the length of wire XY'},
+  {id: 'fuse',     icon: '⚡', label: 'A fuse melts and saves the circuit',      hint: 'Draw too much current'},
+], () => toast('All six found. That is Chapter 11, from Ohm’s law to the fuse.', 4200));
+
+const POE = predict($('poe'), {
+  id: 'ammeter-after',
+  q: 'In this circuit an ammeter before the lamp reads 0.250 A. What would a second ammeter, placed just <i>after</i> the lamp, read?',
+  options: [
+    {id: 'less', text: 'Less than 0.250 A, because the lamp uses up some of the current.'},
+    {id: 'same', text: 'Exactly 0.250 A.', right: true},
+    {id: 'more', text: 'More than 0.250 A.'},
+    {id: 'zero', text: 'Zero: all the current is used up in the lamp.'},
+  ],
+  onLock(){
+    S.locked = true; lockControls(false);
+    say('Now find out. Choose the ammeter and put it just after the lamp.');
+    solve(); placeProbes();
+    toast('Pick <b>Ammeter</b>, then click the wire just after the lamp.', 3600);
+  },
+});
+function lockControls(lock){
+  document.body.classList.toggle('locked', lock);
+  for (const b of document.querySelectorAll('.tool')) b.disabled = lock;
+  $('preset').disabled = lock;
+  $('gate').hidden = !lock;
+}
+const shared = sharedState();
+if (shared && shared.parts) {
+  for (const k in shared.parts) if (SLOTS.includes(k)) S.parts[k] = shared.parts[k];
+  S.count = Object.keys(S.parts).length + 1;
+  if (shared.probes) S.probes = shared.probes;
+  for (const k of SLOTS) drawSlot(k);
+  solve(); placeProbes();
+} else loadPreset('ex117');
+shareState(() => ({parts: S.parts, probes: S.probes}));
+lockControls(!POE.locked);
+if (!Play.FF('predict')) { S.locked = true; lockControls(false); solve(); }
+loop(tick);
+window.applyFeatures = () => solve();
+window.PG_STATE = () => JSON.parse(JSON.stringify(Object.assign({}, S, {cur: SOL && SOL.cur, drop: SOL && SOL.drop, vm: SOL ? voltmeter() : 0})));
+window.PG_MODEL = {solveNet, solveBoard: parts => solveBoard(parts, NN, ends), wireR, applR, seriesR, parallelR, fuseStep, partR, PRESETS, ends, node};
+</script>
+</body>
+</html>

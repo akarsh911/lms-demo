@@ -1,0 +1,383 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Reading a journey from its graph</title>
+<meta name="description" content="Class 7, Curiosity Ch 8: drag a distance-time graph and watch a real vehicle replay exactly the journey it describes — steeper means faster, flat means stopped.">
+<link rel="icon" href="../../favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600&family=Inter:wght@400;500;600;700&family=Nunito:wght@500;700;800&family=Newsreader:opsz,wght@6..72,400;6..72,500&family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="../../play.css">
+<style>
+/* Only what this page needs beyond play.css — the same look as motion/tinkerer.html. */
+.pg-stage{background:#fbfaf5}
+.gate{position:absolute; inset:0 0 68px 0; display:flex; align-items:flex-end; justify-content:center; padding-bottom:14px; pointer-events:none}
+.gate span{background:rgba(24,34,20,.84); color:#fff; padding:10px 16px; border-radius:99px; font-weight:600; font-size:14px; text-align:center}
+.raceBar{display:flex; align-items:center; justify-content:space-between; gap:10px; padding:10px 14px; border-top:1px solid var(--hair); background:var(--sunk); flex-wrap:wrap}
+.hint{font-size:12.5px; color:var(--ink-3); margin:6px 0 0}
+table.log{width:100%; border-collapse:collapse; font-size:12px; font-variant-numeric:tabular-nums}
+table.log th{font-size:10.5px; text-transform:uppercase; letter-spacing:.04em; color:var(--ink-3); font-weight:700; text-align:right; padding:3px 4px; border-bottom:1px solid var(--hair)}
+table.log td{text-align:right; padding:3px 4px; border-bottom:1px solid var(--hair)}
+table.log th:first-child, table.log td:first-child{text-align:left}
+.empty{font-size:13px; color:var(--ink-3)}
+.hit{cursor:ns-resize}
+.hit:focus{outline:none}
+.hit.locked{cursor:default; opacity:.45}
+.legrow{display:flex; justify-content:space-between; font-size:12.5px; padding:3px 0; border-bottom:1px dashed var(--hair)}
+.legrow b{font-variant-numeric:tabular-nums}
+.legrow.now{background:var(--accent-soft); border-radius:6px; padding:3px 6px; margin:0 -6px}
+@media (max-width:1180px) and (min-width:981px){ .pg-main.wide-side{grid-template-columns:minmax(0,1fr) 340px} }
+</style>
+</head>
+<body>
+<header class="pg-top"></header>
+
+<div class="pg-intro">
+  <h1>Reading a journey from its graph</h1>
+  <p>This time you don't set the speeds and watch the graph appear — you draw the graph first, by dragging its six
+     points, and the vehicle plays back exactly the journey those points describe. A steep stretch means it covered a
+     lot of distance quickly: fast. A flat stretch means the distance isn't changing at all: stopped. Play the journey
+     at your own pace — pause it, slow it, or step through it minute by minute.</p>
+</div>
+
+<main class="pg-main wide-side">
+  <section class="pg-stage" id="stageWrap">
+    <svg id="stage" viewBox="0 0 1000 620" role="img" aria-label="A distance-time graph with six draggable points, a speedometer and odometer, and a road below on which a vehicle replays the journey the graph describes"></svg>
+    <div class="gate" id="gate"><span>Make your prediction first →</span></div>
+    <div class="raceBar">
+      <button class="btn primary" id="btnPlay2" disabled>Play the journey</button>
+      <button class="btn sm" id="btnX" disabled title="Table 8.3, Train X">Load Train X</button>
+      <button class="btn sm" id="btnY" disabled title="Table 8.3, Train Y">Load Train Y</button>
+      <div id="clockMount"></div>
+    </div>
+  </section>
+
+  <aside class="pg-side">
+    <div id="poe"></div>
+
+    <div class="card">
+      <div class="kicker">Legs of the journey</div>
+      <div id="legList"></div>
+      <p class="hint">Drag any of the six points on the graph up or down. Each point can't pass its neighbours — the
+        vehicle only ever moves forward or stands still, never backward.</p>
+    </div>
+
+    <div class="card">
+      <div class="kicker">Table 8.3, replayed · your runs</div>
+      <div id="runTable"><p class="empty">Play the journey to record a run.</p></div>
+    </div>
+
+    <div class="card"><div class="kicker">To find</div><div id="finds"></div></div>
+  </aside>
+</main>
+
+<script src="../../play.js"></script>
+<script>
+'use strict';
+const {$, esc, clamp, fmt, clock, sound, track, toast, predict, findings, discover, found,
+       shareState, sharedState, mount, reduced, drag, svgPoint} = Play;
+mount({thread: 'motion', band: 'tinkerer', part: 'speed'});
+
+/* MODEL:start ==================================================================
+   Nothing here plays a stored animation of "the answer". The learner's six points ARE the
+   model: cumulative distance (km) at 10-minute marks from 10:00 to 11:00, exactly the grid
+   Table 8.3 uses. Between two points the vehicle is taken to move at that leg's own constant
+   speed (its slope) — piecewise-linear, the same shape Table 8.3's data has. Everything else —
+   the vehicle's position, the speedometer, the odometer, each leg's speed, the average speed —
+   is read straight off those six numbers, never off a lookup table of outcomes.
+   ============================================================================ */
+const YMAX = 180;                                   // km, same scale as motion/tinkerer.html's track
+const TMIN = [0, 10, 20, 30, 40, 50, 60];            // minutes past 10:00, Table 8.3's own grid
+const legSpeed = (pts, i) => (pts[i + 1] - pts[i]) * 6;                 // km per 10 min -> km/h
+const speedsOf = pts => [0, 1, 2, 3, 4, 5].map(i => legSpeed(pts, i));
+const totalDistance = pts => pts[6];
+const avgSpeed = pts => totalDistance(pts) / 1;                        // 60 min = 1 h, always
+function distAt(pts, tMin){
+  tMin = clamp(tMin, 0, 60);
+  const i = clamp(Math.floor(tMin / 10 - 1e-9), 0, 5);
+  const t0 = i * 10, frac = (tMin - t0) / 10;
+  return pts[i] + (pts[i + 1] - pts[i]) * frac;
+}
+/* the book's own speed/distance/time relations (Examples 8.1-8.3), used only for the test —
+   the page itself always measures speed from the graph, never plugs a formula into an answer. */
+const bookSpeed = (distKm, timeH) => distKm / timeH;
+const bookDistance = (speedKmh, timeH) => speedKmh * timeH;
+const bookTime = (distKm, speedKmh) => distKm / speedKmh;
+/* MODEL:end */
+
+const TRAIN_X = [0, 20, 40, 60, 80, 100, 120];       // Table 8.3, Train X (uniform)
+const TRAIN_Y = [0, 20, 35, 50, 75, 95, 120];        // Table 8.3, Train Y (non-uniform)
+const DEFAULT_PTS = [0, 15, 40, 70, 100, 115, 115];  // like Fig 8.11: slow start, speeds up, steady, slows, halts
+
+const GR = {x0: 90, x1: 680, yTop: 56, yBot: 366};
+const RD = {x0: 90, x1: 680, y: 460};
+const SPD = {cx: 830, cy: 210, r: 110};
+const gx = t => GR.x0 + t / 60 * (GR.x1 - GR.x0);
+const gy = d => GR.yBot - d / YMAX * (GR.yBot - GR.yTop);
+const rx = d => RD.x0 + d / YMAX * (RD.x1 - RD.x0);
+
+const S = {
+  locked: false, pts: DEFAULT_PTS.slice(), playT: null, playing: false, arrived: false,
+  runs: [],
+};
+const shared = sharedState();
+if (shared && Array.isArray(shared.pts) && shared.pts.length === 7) S.pts = shared.pts.map(v => clamp(Math.round(+v / 5) * 5, 0, YMAX));
+shareState(() => ({pts: S.pts}));
+
+/* ============================================================================
+   Stage
+   ============================================================================ */
+const svg = $('stage');
+const set = (id, attrs) => { const el = $(id); for (const k in attrs) el.setAttribute(k, attrs[k]); return el; };
+
+function build(){
+  let gAxis = '';
+  for (let d = 0; d <= YMAX; d += 20) {
+    const y = gy(d);
+    gAxis += `<line x1="${GR.x0}" y1="${y.toFixed(1)}" x2="${GR.x1}" y2="${y.toFixed(1)}" stroke="#ece9df"/><text x="${GR.x0 - 8}" y="${(y + 4).toFixed(1)}" font-size="11" fill="#7c878c" text-anchor="end">${d}</text>`;
+  }
+  let gTicks = '';
+  for (let i = 0; i < TMIN.length; i++) gTicks += `<text x="${gx(TMIN[i]).toFixed(1)}" y="${GR.yBot + 20}" font-size="11" fill="#7c878c" text-anchor="middle">${TMIN[i] === 60 ? '11:00' : '10:' + String(TMIN[i]).padStart(2, '0')}</text>`;
+  let rTicks = '';
+  for (let d = 0; d <= YMAX; d += 20) rTicks += `<line x1="${rx(d).toFixed(1)}" y1="${RD.y - 26}" x2="${rx(d).toFixed(1)}" y2="${RD.y - 20}" stroke="#9aa39a"/><text x="${rx(d).toFixed(1)}" y="${RD.y - 32}" font-size="10.5" fill="#7c878c" text-anchor="middle">${d}</text>`;
+  let spdTicks = '', spdArcPts = '';
+  for (let v = 0; v <= 200; v += 20) {
+    const ang = -225 + v / 200 * 270;
+    const rad = ang * Math.PI / 180;
+    const x1 = SPD.cx + Math.cos(rad) * (SPD.r - 10), y1 = SPD.cy + Math.sin(rad) * (SPD.r - 10);
+    const x2 = SPD.cx + Math.cos(rad) * SPD.r, y2 = SPD.cy + Math.sin(rad) * SPD.r;
+    const xt = SPD.cx + Math.cos(rad) * (SPD.r - 26), yt = SPD.cy + Math.sin(rad) * (SPD.r - 26);
+    spdTicks += `<line x1="${x1.toFixed(1)}" y1="${y1.toFixed(1)}" x2="${x2.toFixed(1)}" y2="${y2.toFixed(1)}" stroke="#5b666b" stroke-width="2"/>
+      <text x="${xt.toFixed(1)}" y="${(yt + 4).toFixed(1)}" font-size="10.5" fill="#7c878c" text-anchor="middle">${v}</text>`;
+  }
+  for (let a = -225; a <= 45.001; a += 4.5) { const r = a * Math.PI / 180; spdArcPts += `${SPD.cx + Math.cos(r) * SPD.r},${SPD.cy + Math.sin(r) * SPD.r} `; }
+
+  svg.innerHTML = `
+  <defs>
+    <linearGradient id="gRoad" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#7c8890"/><stop offset="1" stop-color="#5b656c"/></linearGradient>
+  </defs>
+  <rect x="0" y="0" width="1000" height="620" fill="#fbfaf5"/>
+
+  <text x="${GR.x0}" y="30" font-size="13" font-weight="700" fill="#4a555b" letter-spacing=".06em">DISTANCE AGAINST TIME · DRAG THE POINTS</text>
+  ${gAxis}
+  <line x1="${GR.x0}" y1="${GR.yBot}" x2="${GR.x1}" y2="${GR.yBot}" stroke="#9aa39a"/>
+  <line x1="${GR.x0}" y1="${GR.yTop}" x2="${GR.x0}" y2="${GR.yBot}" stroke="#9aa39a"/>
+  ${gTicks}
+  <text x="${GR.x0 - 8}" y="${GR.yTop - 10}" font-size="11" fill="#7c878c" text-anchor="middle">km</text>
+  <path id="journeyPath" fill="none" stroke="#c7c2b0" stroke-width="3" stroke-linejoin="round"/>
+  <path id="legActive" fill="none" stroke="#2f7de1" stroke-width="5" stroke-linejoin="round" opacity="0"/>
+  <g id="legLabels"></g>
+  <g id="knots"></g>
+  <circle id="marker" r="6" fill="#d6453d" stroke="#fff" stroke-width="1.5" pointer-events="none"/>
+
+  <text x="${SPD.cx}" y="${SPD.cy - SPD.r - 18}" font-size="13" font-weight="700" fill="#4a555b" text-anchor="middle" letter-spacing=".05em">SPEEDOMETER</text>
+  <polyline points="${spdArcPts}" fill="none" stroke="#dfdccf" stroke-width="10"/>
+  ${spdTicks}
+  <text x="${SPD.cx}" y="${SPD.cy + 18}" font-size="10.5" fill="#7c878c" text-anchor="middle">km/h</text>
+  <line id="needle" x1="${SPD.cx}" y1="${SPD.cy}" stroke="#d6453d" stroke-width="4" stroke-linecap="round"/>
+  <circle cx="${SPD.cx}" cy="${SPD.cy}" r="7" fill="#39434a"/>
+  <text id="speedNow" x="${SPD.cx}" y="${SPD.cy + 52}" font-size="24" font-weight="700" text-anchor="middle" class="m" fill="#1d2327">0 km/h</text>
+  <text x="${SPD.cx}" y="${SPD.cy + 90}" font-size="11" fill="#7c878c" text-anchor="middle" letter-spacing=".05em">ODOMETER</text>
+  <text id="odo" x="${SPD.cx}" y="${SPD.cy + 112}" font-size="18" font-weight="700" text-anchor="middle" class="m" fill="#1d2327">0.0 km</text>
+  <text id="clockRead" x="${SPD.cx}" y="${SPD.cy + 138}" font-size="13" fill="#4a555b" text-anchor="middle" class="m">10:00 AM</text>
+
+  <text x="${RD.x0}" y="${RD.y - 40}" font-size="12" fill="#7c878c">the same distance, along the road</text>
+  <rect x="${RD.x0 - 20}" y="${RD.y}" width="${RD.x1 - RD.x0 + 40}" height="30" fill="url(#gRoad)"/>
+  <line x1="${RD.x0 - 20}" y1="${RD.y + 15}" x2="${RD.x1 + 20}" y2="${RD.y + 15}" stroke="#e8e4d8" stroke-width="2" stroke-dasharray="14 10"/>
+  ${rTicks}
+  <g id="carG">
+    <rect x="-30" y="-26" width="60" height="24" rx="6" fill="#2f7de1" stroke="#1d5aa8" stroke-width="1.5"/>
+    <rect x="-20" y="-40" width="34" height="16" rx="5" fill="#bfe0ff" stroke="#1d5aa8" stroke-width="1.5"/>
+    <circle cx="-16" cy="0" r="7" fill="#2a2f33"/><circle cx="16" cy="0" r="7" fill="#2a2f33"/>
+  </g>
+  <text id="avgLine" x="${RD.x0}" y="${RD.y + 60}" font-size="13.5" font-weight="600" fill="#1d2327"></text>`;
+
+  const knots = $('knots');
+  for (let i = 0; i < TMIN.length; i++) {
+    const c = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+    c.setAttribute('id', 'knot' + i); c.setAttribute('r', i === 0 ? '6' : '9');
+    c.setAttribute('fill', i === 0 ? '#7c878c' : '#fff'); c.setAttribute('stroke', '#2f7de1'); c.setAttribute('stroke-width', '2.5');
+    if (i > 0) { c.classList.add('hit'); c.setAttribute('tabindex', '0'); c.setAttribute('role', 'slider'); c.setAttribute('aria-label', `Distance at 10:${String(TMIN[i]).padStart(2, '0')}`); }
+    knots.appendChild(c);
+  }
+  let labs = '';
+  for (let i = 0; i < 6; i++) labs += `<text id="legLab${i}" font-size="11.5" font-weight="700" text-anchor="middle"></text>`;
+  $('legLabels').innerHTML = labs;
+}
+
+function pathD(pts){
+  return TMIN.map((t, i) => (i ? 'L' : 'M') + gx(t).toFixed(1) + ' ' + gy(pts[i]).toFixed(1)).join('');
+}
+function paintGraph(){
+  set('journeyPath', {d: pathD(S.pts)});
+  for (let i = 0; i < TMIN.length; i++) set('knot' + i, {cx: gx(TMIN[i]).toFixed(1), cy: gy(S.pts[i]).toFixed(1)});
+  const sp = speedsOf(S.pts);
+  for (let i = 0; i < 6; i++) {
+    const mx = (gx(TMIN[i]) + gx(TMIN[i + 1])) / 2, my = (gy(S.pts[i]) + gy(S.pts[i + 1])) / 2 - 10;
+    set('legLab' + i, {x: mx.toFixed(1), y: my.toFixed(1), fill: sp[i] === 0 ? '#b0302a' : '#1d6fa5'});
+    $('legLab' + i).textContent = sp[i] === 0 ? 'stopped' : sp[i] + ' km/h';
+  }
+  legList();
+}
+function legList(){
+  const sp = speedsOf(S.pts);
+  const activeLeg = S.playT == null ? -1 : clamp(Math.floor(S.playT / 10 - 1e-9), 0, 5);
+  $('legList').innerHTML = sp.map((v, i) => `<div class="legrow${i === activeLeg ? ' now' : ''}"><span>10:${String(TMIN[i]).padStart(2, '0')} – ${TMIN[i + 1] === 60 ? '11:00' : '10:' + String(TMIN[i + 1]).padStart(2, '0')}</span><b>${v === 0 ? 'stopped' : v + ' km/h'}</b></div>`).join('');
+}
+function paintPlay(){
+  const t = S.playT == null ? 0 : S.playT;
+  const d = distAt(S.pts, t);
+  set('marker', {cx: gx(t).toFixed(1), cy: gy(d).toFixed(1)});
+  set('carG', {transform: `translate(${rx(d).toFixed(1)} ${RD.y + 15})`});
+  const i = clamp(Math.floor(t / 10 - 1e-9), 0, 5);
+  const sp = S.playT == null ? 0 : legSpeed(S.pts, i);
+  const ang = (-225 + clamp(sp, 0, 200) / 200 * 270) * Math.PI / 180;
+  set('needle', {x2: (SPD.cx + Math.cos(ang) * (SPD.r - 22)).toFixed(1), y2: (SPD.cy + Math.sin(ang) * (SPD.r - 22)).toFixed(1)});
+  $('speedNow').textContent = fmt(sp, 0) + ' km/h';
+  $('odo').textContent = fmt(d, 1) + ' km';
+  const mins = Math.floor(t + 1e-9);
+  $('clockRead').textContent = (t >= 60 ? '11:00' : '10:' + String(mins).padStart(2, '0')) + ' AM';
+  if (S.playT != null) {
+    set('legActive', {d: 'M' + gx(TMIN[i]).toFixed(1) + ' ' + gy(S.pts[i]).toFixed(1) + ' L' + gx(TMIN[i + 1]).toFixed(1) + ' ' + gy(S.pts[i + 1]).toFixed(1), opacity: 1});
+  } else set('legActive', {opacity: 0});
+  legList();
+  $('avgLine').textContent = S.arrived ? `Arrived. Total distance ${fmt(totalDistance(S.pts), 0)} km in 1 h — average speed ${fmt(avgSpeed(S.pts), 0)} km/h.` : '';
+}
+function runTable(){
+  if (!S.runs.length) { $('runTable').innerHTML = '<p class="empty">Play the journey to record a run.</p>'; return; }
+  $('runTable').innerHTML = `<table class="log"><tr><th>#</th><th>Legs (km/h)</th><th>Distance</th><th>Avg speed</th></tr>` +
+    S.runs.slice(-5).map(r => `<tr><td>${r.n}</td><td>${r.speeds.join(', ')}</td><td>${fmt(r.dist, 0)} km</td><td><b>${fmt(r.avg, 0)} km/h</b></td></tr>`).join('') + '</table>';
+}
+function paint(){
+  paintGraph(); paintPlay();
+  $('btnPlay2').disabled = !S.locked || S.playing;
+  $('btnX').disabled = !S.locked || S.playing;
+  $('btnY').disabled = !S.locked || S.playing;
+  document.querySelectorAll('#knots .hit').forEach(k => k.classList.toggle('locked', !S.locked || S.playing));
+}
+
+/* ============================================================================
+   Play.clock drives the replay: pause, slow it down, or step it minute by minute.
+   dt arrives already scaled by the chosen speed; 1 model-second = 2 journey-minutes.
+   ============================================================================ */
+const SPEED_BEAT = 0.5;           // one Step = 0.5 model-second = 1 journey-minute
+const MIN_PER_SEC = 2;
+const clk = clock({mount: $('clockMount'), step: SPEED_BEAT, onTick: dt => tick(dt)});
+window.PG_CLOCK = clk;
+
+function startPlay(){
+  S.playT = 0; S.playing = true; S.arrived = false;
+  sound('whoosh'); track('play', {pts: S.pts.slice()});
+  paint();
+}
+function tick(dtScaled){
+  if (!S.playing || dtScaled <= 0) return;
+  S.playT = clamp(S.playT + dtScaled * MIN_PER_SEC, 0, 60);
+  if (S.playT >= 60) finishPlay();
+  paint();
+}
+let poeExplained = false;
+function finishPlay(){
+  S.playing = false; S.arrived = true;
+  sound('chime');
+  const sp = speedsOf(S.pts);
+  S.runs.push({n: S.runs.length + 1, speeds: sp, dist: totalDistance(S.pts), avg: avgSpeed(S.pts)});
+  runTable();
+  track('arrived', {speeds: sp, avg: avgSpeed(S.pts)});
+  checkFindings(sp);
+  if (!poeExplained) {
+    poeExplained = true;
+    const flatLeg = sp[5];
+    POE.explain(`On this graph the last leg, 10:50 to 11:00, is flat: the distance stayed at ${fmt(S.pts[6], 0)} km the whole time. The model's own speedometer read <b>${flatLeg} km/h</b> there — the vehicle was standing still.`);
+  }
+  paint();
+}
+function checkFindings(sp){
+  const uniform = sp.every(v => Math.abs(v - sp[0]) < 1e-6);
+  const nonuniform = !uniform;
+  const anyFlat = sp.some(v => v === 0);
+  if (uniform && sp[0] > 0) discover('uniform');
+  if (nonuniform) discover('nonuniform');
+  if (anyFlat) discover('flat');
+  const isPreset = [DEFAULT_PTS, TRAIN_X, TRAIN_Y].some(p => p.every((v, i) => v === S.pts[i]));
+  if (!isPreset) discover('ownjourney');
+  const avg = avgSpeed(S.pts);
+  if (nonuniform && sp.some(v => v > 0 && Math.abs(v - avg) / avg > 0.2)) discover('avgvsleg');
+}
+
+/* ============================================================================
+   Dragging the six points
+   ============================================================================ */
+function snap(v){ return clamp(Math.round(v / 5) * 5, 0, YMAX); }
+/* attach drag once the knots exist (after build()) */
+function wireDrag(){
+  for (let i = 1; i < TMIN.length; i++) {
+    const idx = i;
+    const setFrom = p => {
+      if (!S.locked || S.playing) return;
+      const lo = S.pts[idx - 1], hi = idx < 6 ? S.pts[idx + 1] : YMAX;
+      const v = clamp(snap(YMAX - (p.y - GR.yTop) / (GR.yBot - GR.yTop) * YMAX), lo, hi);
+      if (v !== S.pts[idx]) { S.pts[idx] = v; S.arrived = false; sound('tick'); paint(); }
+    };
+    drag($('knot' + idx), svg, {
+      start(p){ if (!S.locked || S.playing) return false; setFrom(p); },
+      move: setFrom,
+      end(){ track('dragPoint', {i: idx, v: S.pts[idx]}); },
+    });
+  }
+}
+/* attach keyboard control once knots exist */
+function wireKeys(){
+  for (let i = 1; i < TMIN.length; i++) {
+    $('knot' + i).addEventListener('keydown', e => {
+      const d = {ArrowUp: 5, ArrowRight: 5, ArrowDown: -5, ArrowLeft: -5}[e.key];
+      if (!d || !S.locked || S.playing) return;
+      e.preventDefault();
+      const lo = S.pts[i - 1], hi = i < 6 ? S.pts[i + 1] : YMAX;
+      S.pts[i] = clamp(S.pts[i] + d, lo, hi); S.arrived = false; paint();
+    });
+  }
+}
+
+/* ============================================================================
+   Controls, findings, predict, start
+   ============================================================================ */
+build();
+wireDrag();
+wireKeys();
+$('btnPlay2').addEventListener('click', startPlay);
+$('btnX').addEventListener('click', () => { S.pts = TRAIN_X.slice(); S.arrived = false; sound('pop'); track('preset', {name: 'trainX'}); paint(); });
+$('btnY').addEventListener('click', () => { S.pts = TRAIN_Y.slice(); S.arrived = false; sound('pop'); track('preset', {name: 'trainY'}); paint(); });
+
+findings($('finds'), [
+  {id: 'uniform',    icon: '═', label: 'Equal distances in equal times: a straight line', hint: 'Load Train X, or draw one yourself'},
+  {id: 'nonuniform', icon: '〰', label: 'Unequal distances: a bent line',                  hint: 'Play a journey with two different speeds'},
+  {id: 'flat',       icon: '▭', label: 'A flat stretch means standing still',              hint: 'Play a journey with a flat leg'},
+  {id: 'ownjourney', icon: '✎', label: 'A journey only you have drawn',                    hint: 'Drag a point and play your own graph'},
+  {id: 'avgvsleg',   icon: '≈', label: "Average speed isn't any one leg's speed",          hint: 'Play a non-uniform journey and compare'},
+], () => toast('All five found. You read the whole story of a journey off six numbers.', 4200));
+
+const POE = predict($('poe'), {
+  id: 'flat-graph',
+  q: 'This is a train’s distance–time graph for one hour. Between 10:50 and 11:00 the line is flat — the distance does not change. What is the train doing then?',
+  options: [
+    {id: 'const', text: 'Moving at a steady, constant speed.'},
+    {id: 'stop',  text: 'Standing still.', right: true},
+    {id: 'back',  text: 'Moving backwards, toward the start.'},
+    {id: 'fast',  text: 'Moving at its fastest speed of the whole journey.'},
+  ],
+  onLock(){ S.locked = true; $('gate').hidden = true; sound('snap'); paint(); },
+});
+$('gate').hidden = !!POE.locked;
+if (!Play.FF('predict')) S.locked = true;
+runTable();
+paint();
+window.applyFeatures = () => paint();
+window.PG_STATE = () => JSON.parse(JSON.stringify({locked: S.locked, pts: S.pts, playT: S.playT, playing: S.playing, arrived: S.arrived, runs: S.runs}));
+window.PG_MODEL = {legSpeed, speedsOf, totalDistance, avgSpeed, distAt, bookSpeed, bookDistance, bookTime, TRAIN_X, TRAIN_Y, DEFAULT_PTS, YMAX, TMIN};
+window.SPEED_BEAT = SPEED_BEAT;
+window.MIN_PER_SEC = MIN_PER_SEC;
+</script>
+</body>
+</html>

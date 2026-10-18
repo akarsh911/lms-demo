@@ -1,0 +1,352 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Straight Lines</title>
+<meta name="description" content="Class 11: drag two points and a whole line follows — its slope, every form of its equation, the angle it makes with a second line, and the distance of any point from it, all computed live, and all broken on purpose when the line turns vertical.">
+<link rel="icon" href="../../favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600&family=Inter:wght@400;500;600;700&family=Nunito:wght@500;700;800&family=Newsreader:opsz,wght@6..72,400;6..72,500&family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="../../play.css">
+<style>
+/* Only what this page needs beyond play.css. */
+.gate{position:absolute; left:0; right:0; top:0; height:100%; display:grid; place-items:center; pointer-events:none}
+.gate span{background:rgba(29,35,39,.86); color:#fff; padding:10px 16px; border-radius:99px; font-weight:600; font-size:14px}
+.pg-stage{align-self:start; min-height:0}
+.leftcol{display:flex; flex-direction:column; gap:12px; min-width:0}
+.leftcol > .pg-stage{align-self:stretch}
+#l1aHit,#l1bHit,#l2aHit,#l2bHit,#qHit{cursor:grab}
+#l1aHit.dragging,#l1bHit.dragging,#l2aHit.dragging,#l2bHit.dragging,#qHit.dragging{cursor:grabbing}
+.why p{font-size:13.5px; margin-bottom:.5em}
+.note{font-size:12.5px; color:var(--ink-3); margin:6px 0 0}
+.below{display:grid; grid-template-columns:1fr 1fr; gap:12px; align-items:start}
+.below:has(#whyCard[hidden]){grid-template-columns:1fr}
+@media (max-width:1200px){ .pg-main.wide-side{grid-template-columns:minmax(0,1fr) 340px} .below{grid-template-columns:1fr} }
+svg text.m{font-family:var(--font-mono)}
+svg text.serif{font-family:"Newsreader",Georgia,serif}
+.row{display:flex; gap:8px; flex-wrap:wrap}
+</style>
+</head>
+<body>
+<header class="pg-top"></header>
+
+<div class="pg-intro">
+  <h1>Straight lines</h1>
+  <p>Two rungs up from Orienting Yourself: the same distance formula, run on points that now define a whole line rather than a segment.
+     Drag either point on Line 1 and every form of its equation is re-derived on the spot — slope, point-slope, two-point, slope-intercept,
+     general and normal. Add a second line to measure the angle between them, and a loose point to measure its distance from Line 1.
+     Then push Line 1 to vertical and watch which forms survive.</p>
+  <div class="syl">CBSE Class 11 &middot; Ch 9 Straight Lines</div>
+</div>
+
+<main class="pg-main wide-side">
+  <div class="leftcol">
+  <section class="pg-stage" id="stageWrap">
+    <svg id="stage" viewBox="0 0 900 680" role="img" aria-label="A coordinate grid with two draggable lines, a loose point, and a panel of every form of the first line's equation"></svg>
+    <div class="gate" id="gate"><span>Make your prediction first &rarr;</span></div>
+  </section>
+
+  <div class="below">
+    <div class="card why" id="whyCard" hidden>
+      <div class="kicker">What the model says</div>
+      <div id="why"></div>
+    </div>
+    <div class="card"><div class="kicker">To find</div><div id="finds"></div></div>
+  </div>
+  </div>
+
+  <aside class="pg-side">
+    <div id="poe"></div>
+
+    <div class="card" id="ctlCard">
+      <div class="kicker">Set the law yourself</div>
+      <div class="row">
+        <button class="btn sm" id="btnVert">Snap Line 1 to vertical</button>
+      </div>
+      <div class="row" style="margin-top:6px">
+        <button class="btn sm" id="btnPerp">Snap Line 2 &perp; to Line 1</button>
+        <button class="btn sm" id="btnPara">Snap Line 2 &parallel; to Line 1</button>
+      </div>
+      <div class="row" style="margin-top:6px">
+        <button class="btn sm" id="btnReset">&#8630; Reset</button>
+      </div>
+      <p class="note">Or just drag the points: two purple for Line 1, two teal for Line 2, one amber loose point Q.</p>
+    </div>
+  </aside>
+</main>
+
+<script src="../../play.js"></script>
+<script>
+'use strict';
+const {$, esc, clamp, fmt, drag, sound, say, track, toast, predict, findings, discover, found,
+       shareState, sharedState, mount, reduced} = Play;
+mount({thread: 'coordinates', band: 'theorist'});
+
+/* MODEL:start ==================================================================
+   A line is two points, A(x1,y1) and B(x2,y2). Nothing about its equation is
+   stored: every form below is derived from A and B alone, each time they move.
+     slope            m = (y2-y1)/(x2-x1)                      — undefined if x2=x1
+     point-slope      y - y1 = m(x - x1)
+     two-point        (y-y1)/(y2-y1) = (x-x1)/(x2-x1)
+     slope-intercept  y = m x + c,  c = y1 - m x1
+     general form     A'x + B'y + C' = 0,  A' = y2-y1,  B' = x1-x2,  C' = -(A' x1 + B' y1)
+       (this is just the two-point form cleared of fractions, so it exists even when
+       the slope does not)
+     normal form      x cos w + y sin w = p, with p >= 0 the distance from the origin,
+       found by dividing the general form by +-sqrt(A'^2+B'^2), choosing the sign that
+       makes p positive
+     distance of a point (x0,y0) from the line   |A' x0 + B' y0 + C'| / sqrt(A'^2+B'^2)
+     angle between two lines, from their direction vectors d1, d2:
+       cos(theta) = |d1 . d2| / (|d1| |d2|)                    — the acute angle between them
+   ============================================================================ */
+function lineOf(a, b){
+  const dx = b.x - a.x, dy = b.y - a.y;
+  const Ac = dy, Bc = -dx, Cc = -(Ac * a.x + Bc * a.y);
+  const R = Math.hypot(Ac, Bc) || 1e-9;
+  const sgn = Cc <= 0 ? 1 : -1;
+  return {a, b, dx, dy, m: dx === 0 ? null : dy / dx, Ac, Bc, Cc, R,
+    cosw: sgn * Ac / R, sinw: sgn * Bc / R, p: -sgn * Cc / R};
+}
+const distToLine = (L, q) => Math.abs(L.Ac * q.x + L.Bc * q.y + L.Cc) / L.R;
+const footOf = (L, q) => { const k = (L.Ac * q.x + L.Bc * q.y + L.Cc) / (L.Ac * L.Ac + L.Bc * L.Bc); return {x: q.x - k * L.Ac, y: q.y - k * L.Bc}; };
+function angleBetween(L1, L2){
+  const dot = L1.dx * L2.dx + L1.dy * L2.dy, m1 = Math.hypot(L1.dx, L1.dy), m2 = Math.hypot(L2.dx, L2.dy);
+  return Math.acos(clamp(Math.abs(dot) / (m1 * m2), -1, 1)) * 180 / Math.PI;
+}
+/* Clip an infinite line (through a, direction d) to a box: Liang-Barsky. */
+function clipToBox(a, d, box){
+  let tmin = -1e9, tmax = 1e9;
+  const bound = (p0, dd, lo, hi) => {
+    if (Math.abs(dd) < 1e-9) return p0 >= lo - 1e-6 && p0 <= hi + 1e-6;
+    let t0 = (lo - p0) / dd, t1 = (hi - p0) / dd; if (t0 > t1) { const s = t0; t0 = t1; t1 = s; }
+    tmin = Math.max(tmin, t0); tmax = Math.min(tmax, t1); return tmin <= tmax;
+  };
+  if (!bound(a.x, d.x, box.x0, box.x1) || !bound(a.y, d.y, box.y0, box.y1)) return null;
+  return {p0: {x: a.x + tmin * d.x, y: a.y + tmin * d.y}, p1: {x: a.x + tmax * d.x, y: a.y + tmax * d.y}};
+}
+/* MODEL:end */
+
+/* ---- state: plain data ------------------------------------------------------ */
+const DEFAULT = {L1a: {x: -4, y: -3}, L1b: {x: 3, y: 3}, L2a: {x: -3, y: 3}, L2b: {x: 4, y: -2}, Q: {x: 5, y: -4}};
+const S = {L1a: {...DEFAULT.L1a}, L1b: {...DEFAULT.L1b}, L2a: {...DEFAULT.L2a}, L2b: {...DEFAULT.L2b}, Q: {...DEFAULT.Q}, locked: false};
+const shared = sharedState();
+if (shared) for (const k of ['L1a', 'L1b', 'L2a', 'L2b', 'Q']) if (shared[k] && isFinite(+shared[k].x) && isFinite(+shared[k].y)) S[k] = {x: +shared[k].x, y: +shared[k].y};
+shareState(() => ({L1a: S.L1a, L1b: S.L1b, L2a: S.L2a, L2b: S.L2b, Q: S.Q}));
+
+/* ============================================================================
+   The stage: the same square grid as Orienting Yourself, one rung up.
+   ============================================================================ */
+const svg = $('stage');
+const GX0 = 50, GX1 = 650, GY0 = 40, GY1 = 640, DOM = 10, SC = (GX1 - GX0) / (2 * DOM);
+const BOX = {x0: -DOM, x1: DOM, y0: -DOM, y1: DOM};
+const gx = x => GX0 + (x + DOM) * SC, gy = y => GY1 - (y + DOM) * SC;
+const rawx = X => (X - GX0) / SC - DOM, rawy = Y => (GY1 - Y) / SC - DOM;
+const snap = v => clamp(Math.round(v * 2) / 2, -DOM, DOM);
+const NX0 = 672, NW = 208;
+const C1 = '#6a3fc2', C2 = '#1f8a70', CQ = '#c9821f';
+
+function build(){
+  let grid = '';
+  for (let i = -DOM; i <= DOM; i++) {
+    const major = i % 5 === 0;
+    grid += `<line x1="${gx(i)}" y1="${GY0}" x2="${gx(i)}" y2="${GY1}" stroke="${major ? '#d3cfc2' : '#ece8dd'}"/>`;
+    grid += `<line x1="${GX0}" y1="${gy(i)}" x2="${GX1}" y2="${gy(i)}" stroke="${major ? '#d3cfc2' : '#ece8dd'}"/>`;
+    if (major && i !== 0) { grid += `<text x="${gx(i)}" y="${gy(0) + 16}" text-anchor="middle" fill="#8a8478" font-size="10.5" class="m">${i}</text>`;
+      grid += `<text x="${gx(0) - 8}" y="${gy(i) + 4}" text-anchor="end" fill="#8a8478" font-size="10.5" class="m">${i}</text>`; }
+  }
+  svg.innerHTML = `
+  <rect x="0" y="0" width="900" height="680" fill="#fbfaf6"/>
+  <text x="20" y="22" fill="#4a555b" font-size="12" font-weight="700" letter-spacing=".08em">THE GRID</text>
+  <text x="118" y="22" fill="#8a8478" font-size="10.5">one unit per grid step</text>
+  <g id="grid">${grid}</g>
+  <line x1="${GX0}" y1="${gy(0)}" x2="${GX1}" y2="${gy(0)}" stroke="#9b968a" stroke-width="1.4"/>
+  <line x1="${gx(0)}" y1="${GY0}" x2="${gx(0)}" y2="${GY1}" stroke="#9b968a" stroke-width="1.4"/>
+  <text x="${GX1 + 4}" y="${gy(0) + 4}" fill="#6b665a" font-size="12" font-weight="700">x</text>
+  <text x="${gx(0) - 4}" y="${GY0 - 6}" fill="#6b665a" font-size="12" font-weight="700" text-anchor="end">y</text>
+  <rect x="${GX0}" y="${GY0}" width="${GX1 - GX0}" height="${GY1 - GY0}" fill="none" stroke="#c9c4b6"/>
+  <circle id="origin" r="3.4" fill="#6b665a"/>
+
+  <line id="lineFrom0" stroke="${C1}" stroke-width="1.1" stroke-dasharray="3 3" opacity="0"/>
+  <circle id="footO" r="4.5" fill="${C1}" opacity="0"/>
+  <line id="lineFromQ" stroke="${CQ}" stroke-width="1.1" stroke-dasharray="3 3" opacity="0"/>
+  <circle id="footQ" r="4.5" fill="${CQ}" opacity="0"/>
+
+  <line id="l1line" stroke="${C1}" stroke-width="2.4"/>
+  <line id="l2line" stroke="${C2}" stroke-width="2.2"/>
+
+  <g id="l1a"><circle r="8.5" fill="${C1}" stroke="#fff" stroke-width="2"/></g>
+  <g id="l1b"><circle r="8.5" fill="${C1}" stroke="#fff" stroke-width="2"/></g>
+  <g id="l2a"><circle r="8" fill="${C2}" stroke="#fff" stroke-width="2"/></g>
+  <g id="l2b"><circle r="8" fill="${C2}" stroke="#fff" stroke-width="2"/></g>
+  <g id="q"><circle r="8.5" fill="${CQ}" stroke="#fff" stroke-width="2"/></g>
+  <text id="labQ" font-size="12" font-weight="700" fill="${CQ}"></text>
+
+  <rect id="l1aHit" width="28" height="28" fill="transparent" tabindex="0" role="slider" aria-label="Line 1, point A"/>
+  <rect id="l1bHit" width="28" height="28" fill="transparent" tabindex="0" role="slider" aria-label="Line 1, point B"/>
+  <rect id="l2aHit" width="26" height="26" fill="transparent" tabindex="0" role="slider" aria-label="Line 2, point C"/>
+  <rect id="l2bHit" width="26" height="26" fill="transparent" tabindex="0" role="slider" aria-label="Line 2, point D"/>
+  <rect id="qHit" width="28" height="28" fill="transparent" tabindex="0" role="slider" aria-label="Loose point Q"/>
+
+  <line x1="660" y1="30" x2="660" y2="650" stroke="#e2ded2"/>
+  <text x="${NX0}" y="22" fill="#4a555b" font-size="12" font-weight="700" letter-spacing=".08em">COMPUTED</text>
+  <g id="numsPanel" font-size="11.5"></g>
+  `;
+}
+
+/* ---- render -------------------------------------------------------------- */
+function ptLabel(p){ return `(${fmt(p.x, 1)}, ${fmt(p.y, 1)})`; }
+function render(){
+  const L1 = lineOf(S.L1a, S.L1b), L2 = lineOf(S.L2a, S.L2b);
+  const seg1 = clipToBox(S.L1a, {x: L1.dx, y: L1.dy}, BOX), seg2 = clipToBox(S.L2a, {x: L2.dx, y: L2.dy}, BOX);
+  if (seg1) { $('l1line').setAttribute('x1', gx(seg1.p0.x)); $('l1line').setAttribute('y1', gy(seg1.p0.y)); $('l1line').setAttribute('x2', gx(seg1.p1.x)); $('l1line').setAttribute('y2', gy(seg1.p1.y)); }
+  if (seg2) { $('l2line').setAttribute('x1', gx(seg2.p0.x)); $('l2line').setAttribute('y1', gy(seg2.p0.y)); $('l2line').setAttribute('x2', gx(seg2.p1.x)); $('l2line').setAttribute('y2', gy(seg2.p1.y)); }
+
+  for (const [id, p] of [['l1a', S.L1a], ['l1b', S.L1b], ['l2a', S.L2a], ['l2b', S.L2b], ['q', S.Q]]) $(id).setAttribute('transform', `translate(${gx(p.x)},${gy(p.y)})`);
+  for (const [id, p] of [['l1aHit', S.L1a], ['l1bHit', S.L1b], ['l2aHit', S.L2a], ['l2bHit', S.L2b], ['qHit', S.Q]]) { $(id).setAttribute('x', gx(p.x) - 14); $(id).setAttribute('y', gy(p.y) - 14); }
+  $('labQ').setAttribute('x', gx(S.Q.x) + 12); $('labQ').setAttribute('y', gy(S.Q.y) - 14); $('labQ').textContent = 'Q' + ptLabel(S.Q);
+
+  const F0 = footOf(L1, {x: 0, y: 0}), p0 = L1.p;
+  $('lineFrom0').setAttribute('x1', gx(0)); $('lineFrom0').setAttribute('y1', gy(0)); $('lineFrom0').setAttribute('x2', gx(F0.x)); $('lineFrom0').setAttribute('y2', gy(F0.y));
+  $('footO').setAttribute('cx', gx(F0.x)); $('footO').setAttribute('cy', gy(F0.y));
+  const showP = p0 > 0.4; $('lineFrom0').setAttribute('opacity', showP ? 0.9 : 0); $('footO').setAttribute('opacity', showP ? 1 : 0);
+
+  const FQ = footOf(L1, S.Q), dQ = distToLine(L1, S.Q);
+  $('lineFromQ').setAttribute('x1', gx(S.Q.x)); $('lineFromQ').setAttribute('y1', gy(S.Q.y)); $('lineFromQ').setAttribute('x2', gx(FQ.x)); $('lineFromQ').setAttribute('y2', gy(FQ.y));
+  $('footQ').setAttribute('cx', gx(FQ.x)); $('footQ').setAttribute('cy', gy(FQ.y));
+  const showQ = dQ > 0.35; $('lineFromQ').setAttribute('opacity', showQ ? 0.9 : 0); $('footQ').setAttribute('opacity', showQ ? 1 : 0);
+
+  const theta = angleBetween(L1, L2);
+  const dot1 = L1.dx * L2.dx + L1.dy * L2.dy, cross1 = L1.dx * L2.dy - L1.dy * L2.dx;
+  const m1m2 = L1.m == null || L2.m == null ? null : L1.m * L2.m;
+
+  paintNumbers(L1, L2, theta, dQ, F0, p0);
+  if (S.locked) {
+    paintWhy(L1, theta, dQ);
+    if (L1.m != null && L1.m !== 0) discover('slope');
+    if (Math.abs(L1.dx) < 0.2) discover('verticalBreaks');
+    const mag1 = Math.hypot(L1.dx, L1.dy), mag2 = Math.hypot(L2.dx, L2.dy);
+    if (Math.abs(dot1) < 0.035 * mag1 * mag2) discover('perpendicular');
+    if (Math.abs(cross1) < 0.035 * mag1 * mag2 && dQOffLine(L1, S.L2a)) discover('parallel');
+    if (showQ) discover('distance');
+    if (showP) discover('normalOrigin');
+  }
+}
+function dQOffLine(L, p){ return distToLine(L, p) > 0.35; }
+function degLab(d){ return d.toFixed(1) + '°'; }
+function paintNumbers(L1, L2, theta, dQ, F0, p0){
+  const row = (label, val, y) => `<text x="${NX0}" y="${y}" fill="#7c878c" font-size="10.8">${label}</text><text x="${NX0 + NW}" y="${y}" fill="#1d2327" font-weight="700" text-anchor="end" class="m" font-size="11.5">${val}</text>`;
+  const head = (t, y) => `<text x="${NX0}" y="${y}" fill="#6a3fc2" font-size="10.5" font-weight="700" letter-spacing=".05em">${t}</text>`;
+  let y = 56, rows = [];
+  rows.push(head('LINE 1', y)); y += 18;
+  rows.push(row('A, B', ptLabel(S.L1a) + '  ' + ptLabel(S.L1b), y)); y += 18;
+  rows.push(row('slope m₁', L1.m == null ? 'undefined' : fmt(L1.m, 2), y)); y += 18;
+  rows.push(`<text x="${NX0}" y="${y}" fill="#6b665a" font-size="11" class="m">y−y₁ = m(x−x₁)</text>`); y += 16;
+  rows.push(row('point-slope c', L1.m == null ? '—' : fmt(S.L1a.y - L1.m * S.L1a.x, 2), y)); y += 16;
+  rows.push(row('slope-intercept', L1.m == null ? 'no such form' : `y = ${fmt(L1.m, 2)}x + ${fmt(S.L1a.y - L1.m * S.L1a.x, 2)}`, y)); y += 18;
+  rows.push(row('general', `${fmt(L1.Ac, 1)}x + ${fmt(L1.Bc, 1)}y + ${fmt(L1.Cc, 1)} = 0`, y)); y += 18;
+  rows.push(row('normal, ω', degLab(Math.atan2(L1.sinw, L1.cosw) * 180 / Math.PI), y)); y += 16;
+  rows.push(row('normal, p', fmt(L1.p, 2), y)); y += 22;
+  rows.push(head('LINE 2', y)); y += 18;
+  rows.push(row('C, D', ptLabel(S.L2a) + '  ' + ptLabel(S.L2b), y)); y += 18;
+  rows.push(row('slope m₂', L2.m == null ? 'undefined' : fmt(L2.m, 2), y)); y += 22;
+  rows.push(head('ANGLE AND DISTANCE', y)); y += 18;
+  rows.push(row('between the lines', degLab(theta), y)); y += 18;
+  rows.push(row('m₁·m₂', (L1.m == null || L2.m == null) ? '—' : fmt(L1.m * L2.m, 2), y)); y += 18;
+  rows.push(row('Q ' + ptLabel(S.Q), '', y)); y += 18;
+  rows.push(row('distance, Q to Line 1', fmt(dQ, 2), y)); y += 18;
+  rows.push(row('distance, O to Line 1', fmt(L1.p, 2), y));
+  $('numsPanel').innerHTML = rows.join('');
+}
+function paintWhy(L1, theta, dQ){
+  $('whyCard').hidden = false;
+  let p;
+  if (Math.abs(L1.dx) < 0.2) p = `With x₁ and x₂ almost equal, m = (y₂-y₁)/(x₂-x₁) is dividing by (almost) nothing: the slope, point-slope and
+    slope-intercept forms all break. The general form ${fmt(L1.Ac, 1)}x + ${fmt(L1.Bc, 1)}y + ${fmt(L1.Cc, 1)} = 0 never needed the slope, so it survives untouched.`;
+  else p = `Line 1 has slope <b>${fmt(L1.m, 2)}</b>. Its general form is <b>${fmt(L1.Ac, 1)}x + ${fmt(L1.Bc, 1)}y + ${fmt(L1.Cc, 1)} = 0</b>, and the angle it makes
+    with Line 2 right now is <b>${degLab(theta)}</b>. The loose point Q sits <b>${fmt(dQ, 2)}</b> units from Line 1, measured along the perpendicular you can see dashed on the grid.`;
+  $('why').innerHTML = `<p>${p}</p>`;
+}
+
+/* ---- dragging --------------------------------------------------------------- */
+build();
+function dragPoint(hitId, set){
+  drag($(hitId), svg, {
+    start(){ if (!S.locked) return false; },
+    move(p){ set({x: snap(rawx(p.x)), y: snap(rawy(p.y))}); render(); },
+  });
+}
+dragPoint('l1aHit', v => S.L1a = v); dragPoint('l1bHit', v => S.L1b = v);
+dragPoint('l2aHit', v => S.L2a = v); dragPoint('l2bHit', v => S.L2b = v);
+dragPoint('qHit', v => S.Q = v);
+
+/* ---- set the law yourself: exact, computed snaps -------------------------- */
+$('btnVert').addEventListener('click', () => {
+  if (!S.locked) return;
+  S.L1b = {x: S.L1a.x, y: clamp(S.L1a.y + 6, -DOM, DOM)};
+  sound('snap'); track('snapVertical'); render();
+});
+$('btnPerp').addEventListener('click', () => {
+  if (!S.locked) return;
+  const L1 = lineOf(S.L1a, S.L1b), len = 6, m = Math.hypot(L1.dx, L1.dy) || 1;
+  const ux = -L1.dy / m, uy = L1.dx / m;
+  S.L2b = {x: clamp(S.L2a.x + ux * len, -DOM, DOM), y: clamp(S.L2a.y + uy * len, -DOM, DOM)};
+  sound('snap'); track('snapPerp'); render();
+});
+$('btnPara').addEventListener('click', () => {
+  if (!S.locked) return;
+  const L1 = lineOf(S.L1a, S.L1b), len = 6, m = Math.hypot(L1.dx, L1.dy) || 1;
+  const ux = L1.dx / m, uy = L1.dy / m;
+  S.L2b = {x: clamp(S.L2a.x + ux * len, -DOM, DOM), y: clamp(S.L2a.y + uy * len, -DOM, DOM)};
+  sound('snap'); track('snapPara'); render();
+});
+$('btnReset').addEventListener('click', () => {
+  if (!S.locked) return;
+  S.L1a = {...DEFAULT.L1a}; S.L1b = {...DEFAULT.L1b}; S.L2a = {...DEFAULT.L2a}; S.L2b = {...DEFAULT.L2b}; S.Q = {...DEFAULT.Q};
+  sound('tick'); track('reset'); render();
+});
+
+function lockControls(lock){
+  for (const id of ['l1aHit', 'l1bHit', 'l2aHit', 'l2bHit', 'qHit']) $(id).style.pointerEvents = lock ? 'none' : '';
+  for (const id of ['btnVert', 'btnPerp', 'btnPara', 'btnReset']) $(id).disabled = lock;
+  $('gate').hidden = !lock;
+}
+
+/* ============================================================================
+   Start
+   ============================================================================ */
+findings($('finds'), [
+  {id: 'slope',          icon: '↗️', label: 'Slope from rise over run', hint: 'Drag Line 1 off the axes'},
+  {id: 'verticalBreaks', icon: '⚠️', label: 'A vertical line breaks the slope', hint: 'Snap Line 1 to vertical'},
+  {id: 'perpendicular',  icon: '⟂', label: 'Perpendicular: m₁·m₂ = −1', hint: 'Snap Line 2 perpendicular to Line 1'},
+  {id: 'parallel',       icon: '∥', label: 'Parallel lines, equal slope', hint: 'Snap Line 2 parallel to Line 1'},
+  {id: 'distance',       icon: '📏', label: 'Distance of a point from a line', hint: 'Drag Q away from Line 1'},
+  {id: 'normalOrigin',   icon: '🎯', label: 'The normal form’s p', hint: 'Move Line 1 off the origin'},
+], () => toast('All six. Every form of a line is the same two points, written differently.', 4800));
+
+const POE = predict($('poe'), {
+  id: 'vertical-slope',
+  q: 'You drag Line 1 until it is a perfectly vertical line. What happens to its slope, m = (y₂−y₁)/(x₂−x₁)?',
+  options: [
+    {id: 'zero', text: 'It becomes 0'},
+    {id: 'one', text: 'It becomes 1'},
+    {id: 'undef', text: 'It becomes undefined — you would be dividing by zero', right: true},
+    {id: 'same', text: 'It stays whatever it was before'},
+  ],
+  onLock(){
+    S.locked = true;
+    lockControls(false);
+    say('Try the buttons, or drag the points yourself.');
+    render();
+  },
+});
+lockControls(!POE.locked);
+if (!Play.FF('predict')) S.locked = true;
+render();
+
+window.PG_STATE = () => ({L1a: {...S.L1a}, L1b: {...S.L1b}, L2a: {...S.L2a}, L2b: {...S.L2b}, Q: {...S.Q}, locked: S.locked,
+  found: Play.EVENTS.filter(e => e.type === 'finding').map(e => e.id)});
+window.PG_MODEL = {lineOf, distToLine, footOf, angleBetween, clipToBox};
+</script>
+</body>
+</html>

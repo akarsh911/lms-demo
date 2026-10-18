@@ -1,0 +1,760 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Share It Fairly</title>
+<meta name="description" content="Class 1–2: cut a roti with a swipe and share it with your friends. They can tell if a piece is smaller.">
+<link rel="icon" href="../../favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600&family=Inter:wght@400;500;600;700&family=Nunito:wght@500;700;800&display=swap">
+<link rel="stylesheet" href="../../play.css">
+<style>
+.pg-main.tiny-main{grid-template-columns:minmax(0,1fr) 250px; padding-top:12px; padding-bottom:12px}
+.tiny-main .pg-stage{align-self:start; min-height:0}
+.pg-intro{display:flex; align-items:baseline; gap:18px; flex-wrap:wrap; padding-top:12px}
+.pg-intro p{margin:0}
+.pg-intro .syl{font-size:14px; font-weight:700; color:var(--ink-3); background:var(--sunk); padding:3px 12px; border-radius:99px}
+#stage{background:#ffefd6}
+.piece{cursor:grab}
+.piece.dragging{cursor:grabbing}
+#cutZone{cursor:crosshair}
+.seatHit, .btnHit{cursor:pointer}
+svg [tabindex]:focus{outline:none}
+svg [tabindex]:focus-visible{outline:none; stroke:#ff7a2f; stroke-width:4; stroke-dasharray:8 8}
+.fade{transition:opacity .35s}
+.hear{width:100%; min-height:76px; font-size:24px; font-family:var(--font-head); border-radius:var(--radius)}
+.hear .ic{font-size:30px}
+.try{padding:10px; text-align:center; cursor:pointer; border:2px solid var(--hair-2); transition:transform .2s var(--spring)}
+.try:hover{border-color:var(--accent)}
+.try:active{transform:scale(.97)}
+.try svg{display:block; width:100%; height:auto}
+.try .kicker{margin:2px 0 0}
+@media (max-width:980px){ .pg-main.tiny-main{grid-template-columns:1fr} }
+</style>
+</head>
+<body>
+<header class="pg-top"></header>
+
+<div class="pg-intro">
+  <h1>Share it fairly</h1>
+  <p>Cut the roti so every friend gets the same.</p>
+  <p class="syl">Class 1–2 maths: sharing equally, halves</p>
+</div>
+
+<main class="pg-main tiny-main">
+  <section class="pg-stage" id="stageWrap">
+    <svg id="stage" viewBox="0 0 1000 660" role="img" aria-label="Animal friends at a table with plates, and a roti on a board. Swipe across the roti to cut it, then drag pieces to the plates."></svg>
+  </section>
+
+  <aside class="pg-side">
+    <button class="btn primary hear" id="hear" aria-label="Hear what to do"><span class="ic">🔊</span> Hear it</button>
+    <button class="card try" id="tryCard" aria-label="What to try next. Tap to hear it."><svg id="tryArt" viewBox="-80 -55 160 110"></svg><div class="kicker">Try this</div></button>
+    <div class="card"><h3>⭐ Found</h3><div id="finds"></div></div>
+  </aside>
+</main>
+
+<script src="../../play.js"></script>
+<script>
+'use strict';
+const {$, clamp, lerp, loop, tween, sleep, sound, tone, say, track, confetti, findings, discover, found,
+       shareState, sharedState, mount, reduced, drag, svgPoint, mulberry32, ease} = Play;
+mount({thread: 'fractions', band: 'tiny'});
+
+/* MODEL:start ==================================================================
+   Sharing is geometry. The roti is a disc (a 96-sided polygon), a laddoo is a small
+   disc. A cut is a straight line: every piece the knife passes through is split into
+   two convex polygons (clipped by the two half-planes of the line), and each piece's
+   size is its real area by the shoelace formula. Nothing is snapped: an uneven cut
+   gives uneven pieces.
+
+   A friend's share is the total area on their plate, as a fraction of one whole
+   (one roti, or one laddoo). Friends compare their share with the biggest share:
+   within 8% of it is "the same" (a 6-year-old's eye cannot see less), anything
+   smaller gets a "hey!".
+   ============================================================================ */
+const TAU = Math.PI * 2;
+const FAIR = 0.92;                   // smaller than 92% of the biggest share is "a lot less"
+function disc(cx, cy, r, n = 96){ const p = []; for (let i = 0; i < n; i++) p.push([cx + r * Math.cos(i / n * TAU), cy + r * Math.sin(i / n * TAU)]); return p; }
+function area(poly){ let s = 0; for (let i = 0; i < poly.length; i++) { const a = poly[i], b = poly[(i + 1) % poly.length]; s += a[0] * b[1] - b[0] * a[1]; } return Math.abs(s) / 2; }
+function centroid(poly){
+  let s = 0, x = 0, y = 0;
+  for (let i = 0; i < poly.length; i++) { const a = poly[i], b = poly[(i + 1) % poly.length], c = a[0] * b[1] - b[0] * a[1]; s += c; x += (a[0] + b[0]) * c; y += (a[1] + b[1]) * c; }
+  return Math.abs(s) < 1e-9 ? poly[0].slice() : [x / (3 * s), y / (3 * s)];
+}
+const sideOf = (a, b, p) => (b[0] - a[0]) * (p[1] - a[1]) - (b[1] - a[1]) * (p[0] - a[0]);
+/* Sutherland–Hodgman against one half-plane of the line a→b (sign +1 or −1). */
+function clipHalf(poly, a, b, sign){
+  const out = [];
+  for (let i = 0; i < poly.length; i++) {
+    const P = poly[i], Q = poly[(i + 1) % poly.length];
+    const sp = sign * sideOf(a, b, P), sq = sign * sideOf(a, b, Q);
+    if (sp >= 0) out.push(P);
+    if ((sp >= 0) !== (sq >= 0)) { const t = sp / (sp - sq); out.push([P[0] + (Q[0] - P[0]) * t, P[1] + (Q[1] - P[1]) * t]); }
+  }
+  return out;
+}
+function inside(poly, p){
+  let c = false;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const a = poly[i], b = poly[j];
+    if ((a[1] > p[1]) !== (b[1] > p[1]) && p[0] < (b[0] - a[0]) * (p[1] - a[1]) / (b[1] - a[1]) + a[0]) c = !c;
+  }
+  return c;
+}
+const segX = (p, q, r, s) => { const d1 = sideOf(p, q, r), d2 = sideOf(p, q, s), d3 = sideOf(r, s, p), d4 = sideOf(r, s, q); return (d1 > 0) !== (d2 > 0) && (d3 > 0) !== (d4 > 0); };
+/* Does the knife's stroke a→b actually pass through this piece? */
+function segCrosses(poly, a, b){
+  if (inside(poly, a) || inside(poly, b)) return true;
+  for (let i = 0; i < poly.length; i++) if (segX(a, b, poly[i], poly[(i + 1) % poly.length])) return true;
+  return false;
+}
+/* Split a piece along the line through a and b. Returns [piece] if the line misses it
+   or would only shave off a crumb smaller than minArea. */
+function splitPoly(poly, a, b, minArea = 0){
+  const p1 = clipHalf(poly, a, b, 1), p2 = clipHalf(poly, a, b, -1);
+  if (p1.length < 3 || p2.length < 3 || area(p1) <= minArea || area(p2) <= minArea) return [poly];
+  return [p1, p2];
+}
+function fairness(shares){ const m = Math.max(...shares); return m > 0 ? Math.min(...shares) / m : 0; }
+/* How each friend feels, from the sizes on the plates alone. */
+function moods(shares, boardEmpty){
+  const m = Math.max(...shares);
+  if (!(m > 0)) return shares.map(() => 'wait');
+  const party = boardEmpty && fairness(shares) >= FAIR;
+  return shares.map(s => s < FAIR * m ? 'hey' : party ? 'party' : 'happy');
+}
+/* The word for a piece, from its size: half, quarter, third, whole — or just "a piece". */
+function sizeName(frac){
+  const near = (v, t, tol = 0.06) => Math.abs(v - t) <= tol * t;
+  return near(frac, 1, 0.02) ? 'whole' : near(frac, 1 / 2) ? 'half' : near(frac, 1 / 3) ? 'third' : near(frac, 1 / 4) ? 'quarter' : 'piece';
+}
+/* Laddoos: everyone has the same whole number, and exactly one whole laddoo is left. */
+function oneLeftOver(shares, board){
+  if (shares.length < 2 || board.length !== 1 || Math.abs(board[0] - 1) > 0.01) return false;
+  const n = Math.round(shares[0]);
+  return n >= 1 && shares.every(s => Math.abs(s - n) < 0.01);
+}
+/* The width of a slice at distance d·R from the centre, as a fraction of the disc (for the tests). */
+function sliceFraction(d){ const th = 2 * Math.acos(d); return (th - Math.sin(th)) / TAU; }
+/* MODEL:end */
+
+/* ---- the world ------------------------------------------------------------ */
+const BOARD = {x: 500, y: 494, r: 152}, ROTI_R = 126, LAD_R = 34;
+const SEATS = [125, 375, 625, 875].map(x => ({x, y: 112, px: x, py: 270}));
+const PLATE_R = 72, ROTI_S = 0.5, LAD_S = 0.55;
+const FRIENDS = [
+  {name: 'Bunny', col: '#fbf6f1', line: '#cdbfb2', inner: '#ffc2cf', pitch: 1.55},
+  {name: 'Bear',  col: '#b77d4b', line: '#7f5230', inner: '#e8bb8e', pitch: 0.75},
+  {name: 'Kitty', col: '#f7a54a', line: '#b86d1f', inner: '#ffd6a3', pitch: 1.35},
+  {name: 'Ellie', col: '#a9bedc', line: '#6f86a8', inner: '#f2c6d6', pitch: 1.0},
+];
+const LAD_SLOTS = [];
+for (let r = 0; r < 3; r++) for (let c = 0; c < 3; c++) LAD_SLOTS.push([BOARD.x + (c - 1) * 82, BOARD.y + (r - 1) * 80]);
+
+/* ---- state: plain data ----------------------------------------------------- */
+const S = {mode: 'roti', nLaddoo: 7, seated: [true, true, false, false], pieces: [], nextId: 1, cuts: 0, gave: 0, whole: 1, busy: false};
+const shared = sharedState();
+if (shared) {
+  if (Array.isArray(shared.seated) && shared.seated.length === 4) S.seated = shared.seated.map(Boolean);
+  if (S.seated.filter(Boolean).length < 2) S.seated = [true, true, false, false];
+  if (shared.mode === 'laddoo') S.mode = 'laddoo';
+  if ([6, 7, 8].includes(+shared.nLaddoo)) S.nLaddoo = +shared.nLaddoo;
+}
+shareState(() => ({mode: S.mode, nLaddoo: S.nLaddoo, seated: S.seated}));
+
+/* ============================================================================
+   The stage: drawn once, then only patched. Pieces are the one thing created on
+   the fly — when the knife makes them — and never moved between layers.
+   ============================================================================ */
+const svg = $('stage');
+const f1 = n => (+n).toFixed(1);
+const pathD = poly => 'M' + poly.map(p => f1(p[0]) + ' ' + f1(p[1])).join('L') + 'Z';
+
+function friendArt(i){
+  const F = FRIENDS[i];
+  const ears = [
+    `<ellipse cx="-19" cy="-62" rx="13" ry="38" fill="${F.col}" stroke="${F.line}" stroke-width="3" transform="rotate(-10 -19 -62)"/><ellipse cx="-19" cy="-60" rx="6" ry="26" fill="${F.inner}" transform="rotate(-10 -19 -62)"/>
+     <ellipse cx="19" cy="-62" rx="13" ry="38" fill="${F.col}" stroke="${F.line}" stroke-width="3" transform="rotate(12 19 -62)"/><ellipse cx="19" cy="-60" rx="6" ry="26" fill="${F.inner}" transform="rotate(12 19 -62)"/>`,
+    `<circle cx="-34" cy="-34" r="17" fill="${F.col}" stroke="${F.line}" stroke-width="3"/><circle cx="-34" cy="-34" r="9" fill="${F.inner}"/>
+     <circle cx="34" cy="-34" r="17" fill="${F.col}" stroke="${F.line}" stroke-width="3"/><circle cx="34" cy="-34" r="9" fill="${F.inner}"/>`,
+    `<path d="M-40 -18 L-34 -58 L-10 -40 Z M40 -18 L34 -58 L10 -40 Z" fill="${F.col}" stroke="${F.line}" stroke-width="3" stroke-linejoin="round"/>
+     <path d="M-32 -26 L-30 -48 L-17 -38 Z M32 -26 L30 -48 L17 -38 Z" fill="${F.inner}"/>`,
+    `<ellipse cx="-50" cy="0" rx="30" ry="36" fill="${F.col}" stroke="${F.line}" stroke-width="3"/><ellipse cx="-50" cy="2" rx="18" ry="24" fill="${F.inner}"/>
+     <ellipse cx="50" cy="0" rx="30" ry="36" fill="${F.col}" stroke="${F.line}" stroke-width="3"/><ellipse cx="50" cy="2" rx="18" ry="24" fill="${F.inner}"/>`,
+  ][i];
+  const extra = [
+    `<path d="M-4 8 L4 8 L0 13 Z" fill="#f08aa0"/>`,
+    `<ellipse cx="0" cy="16" rx="18" ry="13" fill="#e8c9a0"/><ellipse cx="0" cy="8" rx="6" ry="4.5" fill="#3a2a1a"/>`,
+    `<path d="M-4 8 L4 8 L0 13 Z" fill="#e0567a"/><g stroke="${F.line}" stroke-width="2" stroke-linecap="round"><path d="M-14 14 L-36 10 M-14 18 L-36 20 M14 14 L36 10 M14 18 L36 20"/></g>`,
+    `<path d="M-7 4 Q-9 30 -2 42 Q6 52 16 44" fill="none" stroke="${F.line}" stroke-width="15" stroke-linecap="round"/><path d="M-7 4 Q-9 30 -2 42 Q6 52 16 44" fill="none" stroke="${F.col}" stroke-width="10" stroke-linecap="round"/>`,
+  ][i];
+  const mx = i === 3 ? -20 : 0, my = i === 3 ? 4 : i === 1 ? 6 : 0;
+  return `
+    <ellipse cx="0" cy="80" rx="54" ry="44" fill="${F.col}" stroke="${F.line}" stroke-width="3"/>
+    <ellipse cx="0" cy="84" rx="30" ry="30" fill="${F.inner}" opacity=".55"/>
+    ${ears}
+    <circle cx="0" cy="0" r="47" fill="${F.col}" stroke="${F.line}" stroke-width="3"/>
+    <ellipse cx="-29" cy="12" rx="9" ry="6" fill="#ff8aa0" opacity=".5"/><ellipse cx="29" cy="12" rx="9" ry="6" fill="#ff8aa0" opacity=".5"/>
+    <g id="eN${i}"><g id="blink${i}"><circle cx="-16" cy="-8" r="8.5" fill="#fff"/><circle cx="16" cy="-8" r="8.5" fill="#fff"/>
+      <g id="look${i}"><circle cx="-16" cy="-8" r="5.5" fill="#2a1d12"/><circle cx="16" cy="-8" r="5.5" fill="#2a1d12"/><circle cx="-14" cy="-10" r="1.9" fill="#fff"/><circle cx="18" cy="-10" r="1.9" fill="#fff"/></g></g></g>
+    <g id="eW${i}" opacity="0"><circle cx="-16" cy="-8" r="10" fill="#fff" stroke="#2a1d12" stroke-width="2"/><circle cx="16" cy="-8" r="10" fill="#fff" stroke="#2a1d12" stroke-width="2"/>
+      <g id="lookW${i}"><circle cx="-16" cy="-8" r="5.5" fill="#2a1d12"/><circle cx="16" cy="-8" r="5.5" fill="#2a1d12"/><circle cx="-14" cy="-10" r="1.8" fill="#fff"/><circle cx="18" cy="-10" r="1.8" fill="#fff"/></g></g>
+    <g id="eH${i}" opacity="0" fill="none" stroke="#2a1d12" stroke-width="3.5" stroke-linecap="round"><path d="M-23 -6 q7 -10 14 0 M9 -6 q7 -10 14 0"/></g>
+    <g id="eA${i}" opacity="0"><circle cx="-16" cy="-6" r="5.5" fill="#2a1d12"/><circle cx="16" cy="-6" r="5.5" fill="#2a1d12"/>
+      <path d="M-27 -24 L-7 -16 M27 -24 L7 -16" stroke="#2a1d12" stroke-width="4" stroke-linecap="round"/></g>
+    ${extra}
+    <g transform="translate(${mx} ${my})">
+      <path id="mS${i}" d="M-10 20 q10 10 20 0" fill="none" stroke="#2a1d12" stroke-width="3" stroke-linecap="round"/>
+      <g id="mG${i}" opacity="0"><path d="M-14 18 q14 22 28 0 Z" fill="#7a2a1a" stroke="#2a1d12" stroke-width="2.5" stroke-linejoin="round"/><ellipse cx="0" cy="27" rx="6" ry="3.5" fill="#ff7a8a"/></g>
+      <g id="mP${i}" opacity="0"><path d="M-9 26 q9 -9 18 0" fill="none" stroke="#2a1d12" stroke-width="3" stroke-linecap="round"/>
+        <circle cx="-22" cy="18" r="7" fill="#ff8aa0" opacity=".7"/><circle cx="22" cy="18" r="7" fill="#ff8aa0" opacity=".7"/></g>
+      <ellipse id="mO${i}" cx="0" cy="22" rx="5" ry="6" fill="#7a2a1a" opacity="0"/>
+    </g>
+    <g id="hey${i}" opacity="0" class="fade">
+      <path d="M34 -86 h72 a18 18 0 0 1 18 18 v12 a18 18 0 0 1 -18 18 h-44 l-16 14 l2 -14 h-14 a18 18 0 0 1 -18 -18 v-12 a18 18 0 0 1 18 -18 Z" fill="#fff" stroke="#f29a1f" stroke-width="3"/>
+      <text x="78" y="-52" text-anchor="middle" font-family="Fredoka, Nunito, sans-serif" font-size="27" font-weight="600" fill="#e0567a">Hey!</text>
+    </g>
+    <g id="love${i}" opacity="0" class="fade" fill="#e0567a">
+      <path d="M-58 -52 c-6 -8 -18 -2 -12 8 l12 12 l12 -12 c6 -10 -6 -16 -12 -8 Z"/>
+      <path d="M58 -64 c-5 -6 -14 -2 -9 6 l9 9 l9 -9 c5 -8 -4 -12 -9 -6 Z"/>
+    </g>`;
+}
+const pawsArt = i => { const F = FRIENDS[i]; return `<ellipse cx="-32" cy="0" rx="15" ry="11" fill="${F.col}" stroke="${F.line}" stroke-width="3"/><ellipse cx="32" cy="0" rx="15" ry="11" fill="${F.col}" stroke="${F.line}" stroke-width="3"/>`; };
+const chairArt = `<rect x="-52" y="-34" width="104" height="150" rx="22" fill="#c98a4b" stroke="#9b6431" stroke-width="4"/>
+  <rect x="-36" y="-18" width="72" height="12" rx="6" fill="#dca06a"/><rect x="-36" y="6" width="72" height="12" rx="6" fill="#dca06a"/>`;
+const knifeArt = `<path d="M-70 0 Q-72 -14 -56 -16 L20 -16 L20 6 L-56 6 Q-68 6 -70 0 Z" fill="#dfe6ee" stroke="#8793a3" stroke-width="3" stroke-linejoin="round"/>
+  <path d="M-58 -9 L14 -9" stroke="#fff" stroke-width="3" stroke-linecap="round" opacity=".8"/>
+  <rect x="18" y="-14" width="62" height="22" rx="10" fill="#b36b32" stroke="#7f4a1f" stroke-width="3"/><circle cx="38" cy="-3" r="3" fill="#ffd9a8"/><circle cx="60" cy="-3" r="3" fill="#ffd9a8"/>`;
+const handArt = `<path d="M-6 0 L-6 -34 Q-6 -42 1 -42 Q8 -42 8 -34 L8 -14 L20 -14 Q30 -14 30 -4 L30 16 Q30 30 16 30 L2 30 Q-12 30 -16 18 L-24 4 Q-27 -3 -20 -5 Q-14 -6 -10 2 Z" fill="#fff" stroke="#3a2a1a" stroke-width="3" stroke-linejoin="round"/>`;
+const miniRoti = (r = 26) => `<circle r="${r}" fill="url(#rotiPat)" stroke="#b77a33" stroke-width="3"/>`;
+const miniLad = (x, y, r = 12) => `<circle cx="${x}" cy="${y}" r="${r}" fill="url(#ladPat)" stroke="#c66f10" stroke-width="2.5"/>`;
+
+function build(){
+  const rnd = mulberry32(5);
+  let crumbs = '', specks = '';
+  for (let i = 0; i < 22; i++) specks += `<circle cx="${f1(rnd() * 90)}" cy="${f1(rnd() * 90)}" r="${f1(rnd() * 2 + 1)}" fill="${i % 3 ? '#9a5a1f' : '#7a3f10'}" opacity="${(rnd() * .45 + .25).toFixed(2)}"/>`;
+  for (let i = 0; i < 4; i++) specks += `<circle cx="${f1(rnd() * 90)}" cy="${f1(rnd() * 90)}" r="${f1(rnd() * 5 + 5)}" fill="#c98a3b" opacity=".28"/>`;
+  let bunting = '';
+  const cols = ['#e0567a', '#ffb400', '#2f9e5b', '#3f7fd8', '#ff7a2f'];
+  for (let i = 0; i < 16; i++) { const x = i * 66 - 10, y = 18 + 10 * Math.sin(i / 15 * Math.PI); bunting += `<path d="M${x} ${f1(y)} L${x + 60} ${f1(y + 3)} L${x + 30} ${f1(y + 40)} Z" fill="${cols[i % 5]}" opacity=".85"/>`; }
+  svg.innerHTML = `
+  <defs>
+    <pattern id="rotiPat" width="90" height="90" patternUnits="userSpaceOnUse"><rect width="90" height="90" fill="#e8b865"/><circle cx="45" cy="45" r="40" fill="#edc278" opacity=".6"/>${specks}</pattern>
+    <pattern id="ladPat" width="14" height="14" patternUnits="userSpaceOnUse"><rect width="14" height="14" fill="#f5a623"/><circle cx="3" cy="4" r="2.2" fill="#fbc463"/><circle cx="10" cy="10" r="2.4" fill="#e08a12"/><circle cx="11" cy="3" r="1.4" fill="#fff3d0"/></pattern>
+    <radialGradient id="gBoard" cx="45%" cy="40%"><stop offset="0" stop-color="#e2ac72"/><stop offset="1" stop-color="#c58549"/></radialGradient>
+    <pattern id="cloth" width="48" height="48" patternUnits="userSpaceOnUse"><rect width="48" height="48" fill="#fff4e3"/><rect width="24" height="24" fill="#ffe0e6" opacity=".7"/><rect x="24" y="24" width="24" height="24" fill="#ffe0e6" opacity=".7"/></pattern>
+    <filter id="pieceShadow" x="-20%" y="-20%" width="140%" height="140%"><feDropShadow dx="0" dy="3" stdDeviation="2.5" flood-color="#6b3a10" flood-opacity=".3"/></filter>
+    <radialGradient id="wallGlow" cx="50%" cy="0%" r="70%"><stop offset="0" stop-color="#fff8ea"/><stop offset="1" stop-color="#ffe6c4"/></radialGradient>
+    <filter id="soft" x="-20%" y="-20%" width="140%" height="140%"><feDropShadow dx="0" dy="4" stdDeviation="4" flood-color="#6b3a10" flood-opacity=".22"/></filter>
+  </defs>
+  <rect width="1000" height="660" fill="url(#wallGlow)"/>
+  <g fill="#f7d9ae" opacity=".55">${Array.from({length: 60}, (_, k) => `<circle cx="${(k % 15) * 70 + (Math.floor(k / 15) % 2) * 35 + 12}" cy="${60 + Math.floor(k / 15) * 38}" r="4"/>`).join('')}</g>
+  <g>${bunting}</g>
+  <path d="M-10 18 Q500 36 1010 18" fill="none" stroke="#b36b32" stroke-width="3"/>
+
+  <!-- seats: an empty chair, or a friend -->
+  ${SEATS.map((s, i) => `
+    <g transform="translate(${s.x} ${s.y})">
+      <g id="chair${i}">${chairArt}</g>
+      <g id="invite${i}" class="fade"><circle cx="0" cy="18" r="30" fill="#fff" opacity=".7" stroke="#9b6431" stroke-width="3" stroke-dasharray="6 6"/>
+        <path d="M0 4 v28 M-14 18 h28" stroke="#9b6431" stroke-width="5" stroke-linecap="round"/></g>
+      <g id="friendPos${i}"><g id="friendJuice${i}">${friendArt(i)}</g></g>
+    </g>`).join('')}
+
+  <!-- the table -->
+  <rect x="0" y="202" width="1000" height="150" fill="#d99a5b"/>
+  <rect x="0" y="202" width="1000" height="12" fill="#e9b27a"/>
+  <rect x="0" y="340" width="1000" height="14" fill="#a86a33"/>
+  ${SEATS.map((s, i) => `<g id="paws${i}" transform="translate(${s.x} 208)">${pawsArt(i)}</g>`).join('')}
+  ${SEATS.map((s, i) => `<g id="plate${i}" filter="url(#soft)"><g id="plateJuice${i}"><circle cx="${s.px}" cy="${s.py}" r="${PLATE_R}" fill="#fff"/>
+    <circle cx="${s.px}" cy="${s.py}" r="${PLATE_R - 12}" fill="none" stroke="#bfe0f5" stroke-width="5"/></g></g>`).join('')}
+
+  <!-- the cloth and the board -->
+  <rect x="0" y="354" width="1000" height="306" fill="url(#cloth)"/>
+  <circle cx="${BOARD.x}" cy="${BOARD.y + 8}" r="${BOARD.r}" fill="#a86a33"/>
+  <circle id="board" cx="${BOARD.x}" cy="${BOARD.y}" r="${BOARD.r}" fill="url(#gBoard)" stroke="#a86a33" stroke-width="4"/>
+  <circle cx="${BOARD.x}" cy="${BOARD.y}" r="${BOARD.r - 16}" fill="none" stroke="#d69a5e" stroke-width="3" opacity=".7"/>
+
+  <!-- the knife, resting: a picture of the tool -->
+  <g id="knifeRest" transform="translate(880 400) rotate(-8)">${knifeArt}</g>
+
+  <!-- mode buttons: a fresh roti, or a plate of laddoos -->
+  <g filter="url(#soft)">
+    <circle id="btnRotiBg" cx="96" cy="430" r="58" fill="#fff" stroke="#ff7a2f" stroke-width="5"/>
+    <g transform="translate(96 430)">${miniRoti(34)}<path d="M-12 -44 l4 -10 l4 10 l10 4 l-10 4 l-4 10 l-4 -10 l-10 -4 Z" fill="#ffb400" transform="translate(40 4)"/></g>
+    <circle id="btnLadBg" cx="96" cy="575" r="58" fill="#fff" stroke="#e8d4bb" stroke-width="5"/>
+    <g>${miniLad(80, 562)}${miniLad(108, 566)}${miniLad(94, 590)}${miniLad(70, 590, 11)}${miniLad(118, 592, 11)}</g>
+  </g>
+  <g id="counts" opacity="0" class="fade">
+    ${[6, 7, 8].map((n, k) => `<g filter="url(#soft)"><circle id="cntBg${n}" cx="880" cy="${472 + k * 68}" r="32" fill="#fff" stroke="#e8d4bb" stroke-width="4"/>
+      <text x="880" y="${482 + k * 68}" text-anchor="middle" font-family="Fredoka, Nunito, sans-serif" font-size="30" font-weight="600" fill="#c66f10">${n}</text></g>`).join('')}
+  </g>
+
+  <!-- the pieces, then the knife in the hand and the drag ghost on top -->
+  <rect id="cutZone" x="220" y="344" width="560" height="316" fill="transparent" role="application" aria-label="The cutting board: swipe across to cut"/>
+  <g id="steam" pointer-events="none" fill="none" stroke="#fff" stroke-width="7" stroke-linecap="round">
+    ${[-40, 0, 40].map((x, k) => `<path id="steam${k}" d="M${BOARD.x + x} ${BOARD.y - 40} q14 -18 0 -36 q-14 -18 0 -36"/>`).join('')}</g>
+  <g id="pieces" filter="url(#pieceShadow)"></g>
+  <g id="fx" pointer-events="none"></g>
+  <line id="cutLine" stroke="#fff" stroke-width="5" stroke-dasharray="10 9" stroke-linecap="round" opacity="0" pointer-events="none"/>
+  <path id="ghost" opacity="0" pointer-events="none" stroke-width="3" filter="url(#soft)"/>
+  <g id="knife" opacity="0" pointer-events="none"><g id="knifeRot">${knifeArt}</g></g>
+  <g id="hint" pointer-events="none">
+    <line id="hintLine" stroke="#fff" stroke-width="6" stroke-dasharray="4 14" stroke-linecap="round"/>
+    <g id="hintHand"><g transform="scale(1.3)">${handArt}</g></g>
+  </g>
+
+  <!-- hit targets that never move -->
+  ${SEATS.map((s, i) => `<rect class="seatHit" id="seat${i}" x="${s.x - 78}" y="24" width="156" height="166" rx="30" fill="transparent" role="button" tabindex="0" aria-label="Seat ${i + 1}: tap to invite or send home a friend"/>`).join('')}
+  <circle class="btnHit" id="btnRoti" cx="96" cy="430" r="60" fill="transparent" role="button" tabindex="0" aria-label="A fresh roti"/>
+  <circle class="btnHit" id="btnLaddoo" cx="96" cy="575" r="60" fill="transparent" role="button" tabindex="0" aria-label="A plate of laddoos"/>
+  ${[6, 7, 8].map((n, k) => `<circle class="btnHit" id="cnt${n}" cx="880" cy="${472 + k * 68}" r="34" fill="transparent" role="button" tabindex="0" aria-label="${n} laddoos" style="display:none"/>`).join('')}
+  `;
+}
+build();
+
+/* ---- pieces ---------------------------------------------------------------- */
+function wholeArea(){ return S.mode === 'roti' ? area(disc(0, 0, ROTI_R)) : area(disc(0, 0, LAD_R, 48)); }
+function makePiece(poly, origin){
+  const p = {id: S.nextId++, poly, origin, where: 'board'};
+  const el = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+  el.id = 'pc' + p.id; el.setAttribute('class', 'piece');
+  el.setAttribute('fill', S.mode === 'roti' ? 'url(#rotiPat)' : 'url(#ladPat)');
+  el.setAttribute('stroke', S.mode === 'roti' ? '#b77a33' : '#c66f10');
+  el.setAttribute('stroke-width', 3); el.setAttribute('stroke-linejoin', 'round');
+  $('pieces').appendChild(el);
+  wirePiece(el, p);
+  S.pieces.push(p);
+  return p;
+}
+const EL = p => $('pc' + p.id);
+const frac = p => area(p.poly) / S.whole;
+function fresh(mode){
+  for (const p of S.pieces) { const el = EL(p); if (el) el.remove(); }
+  S.pieces = []; S.mode = mode; S.whole = wholeArea();
+  if (mode === 'roti') makePiece(disc(BOARD.x, BOARD.y, ROTI_R), 'roti');
+  else for (let i = 0; i < S.nLaddoo; i++) makePiece(disc(LAD_SLOTS[i][0], LAD_SLOTS[i][1], LAD_R, 48), 'l' + i);
+  lastMoods = null; saidFair = false;
+  paint();
+}
+/* Where a piece is drawn: on the board where it is; on a plate, shrunk, keeping the
+   roti pieces in their real places relative to each other (so two quarters look like
+   a half), laddoos in a little grid. */
+function plateTransforms(){
+  const out = new Map();
+  for (let i = 0; i < 4; i++) {
+    const on = S.pieces.filter(p => p.where === i);
+    if (!on.length) continue;
+    const s = SEATS[i];
+    if (S.mode === 'roti') {
+      let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
+      for (const p of on) for (const q of p.poly) { x0 = Math.min(x0, q[0]); y0 = Math.min(y0, q[1]); x1 = Math.max(x1, q[0]); y1 = Math.max(y1, q[1]); }
+      const ax = (x0 + x1) / 2, ay = (y0 + y1) / 2;
+      for (const p of on) out.set(p.id, `translate(${s.px} ${s.py}) scale(${ROTI_S}) translate(${f1(-ax)} ${f1(-ay)})`);
+    } else {
+      on.forEach((p, k) => {
+        const c = centroid(p.poly), col = k % 3, row = Math.floor(k / 3);
+        const rows = Math.ceil(on.length / 3), cols = Math.min(3, on.length);
+        const ox = (col - (cols - 1) / 2) * 42, oy = (row - (rows - 1) / 2) * 40;
+        out.set(p.id, `translate(${f1(s.px + ox)} ${f1(s.py + oy)}) scale(${LAD_S}) translate(${f1(-c[0])} ${f1(-c[1])})`);
+      });
+    }
+  }
+  return out;
+}
+
+/* ---- paint ------------------------------------------------------------------ */
+let lastMoods = null, saidFair = false;
+function shares(){ return [0, 1, 2, 3].map(i => S.pieces.filter(p => p.where === i).reduce((a, p) => a + frac(p), 0)); }
+function seatedIdx(){ return [0, 1, 2, 3].filter(i => S.seated[i]); }
+function paint(){
+  const tf = plateTransforms();
+  for (const p of S.pieces) {
+    const el = EL(p); if (!el) continue;
+    el.setAttribute('d', pathD(p.poly));
+    if (p.where === 'board') el.removeAttribute('transform'); else el.setAttribute('transform', tf.get(p.id));
+    el.setAttribute('aria-label', 'A ' + (sizeName(frac(p)) === 'piece' ? 'piece' : sizeName(frac(p))) + (S.mode === 'roti' ? ' of roti' : ' laddoo'));
+  }
+  for (let i = 0; i < 4; i++) {
+    if (!$('friendPos' + i).dataset.anim) $('friendPos' + i).setAttribute('opacity', S.seated[i] ? 1 : 0);
+    $('paws' + i).setAttribute('opacity', S.seated[i] ? 1 : 0);
+    $('plate' + i).setAttribute('opacity', S.seated[i] ? 1 : 0.35);
+    $('invite' + i).setAttribute('opacity', S.seated[i] ? 0 : 1);
+  }
+  $('btnRotiBg').setAttribute('stroke', S.mode === 'roti' ? '#ff7a2f' : '#e8d4bb');
+  $('btnLadBg').setAttribute('stroke', S.mode === 'laddoo' ? '#ff7a2f' : '#e8d4bb');
+  $('counts').setAttribute('opacity', S.mode === 'laddoo' ? 1 : 0);
+  for (const n of [6, 7, 8]) { $('cnt' + n).style.display = S.mode === 'laddoo' ? '' : 'none'; $('cntBg' + n).setAttribute('stroke', S.nLaddoo === n ? '#ff7a2f' : '#e8d4bb'); }
+  paintMoods();
+  paintTry();
+}
+function setFace(i, mood){
+  const show = (id, on) => $(id + i).setAttribute('opacity', on ? 1 : 0);
+  show('eN', mood === 'idle'); show('eW', mood === 'wait'); show('eH', mood === 'happy' || mood === 'party'); show('eA', mood === 'hey');
+  show('mS', mood === 'idle' || mood === 'happy'); show('mG', mood === 'party'); show('mP', mood === 'hey'); show('mO', mood === 'wait');
+  show('hey', mood === 'hey'); show('love', mood === 'party');
+}
+function currentMoods(){
+  const idx = seatedIdx(), sh = shares();
+  const board = S.pieces.filter(p => p.where === 'board');
+  const ms = moods(idx.map(i => sh[i]), board.length === 0);
+  const out = [null, null, null, null];
+  idx.forEach((i, k) => out[i] = ms[k] === 'wait' ? (S.cuts || S.mode === 'laddoo' ? 'wait' : 'idle') : ms[k]);
+  return out;
+}
+function paintMoods(){
+  const m = currentMoods();
+  for (let i = 0; i < 4; i++) if (m[i]) setFace(i, m[i]);
+}
+
+/* After every change of plates: the friends react, and the model is checked for discoveries. */
+function react(changedPlate){
+  const m = currentMoods(), idx = seatedIdx(), sh = shares();
+  const prev = lastMoods || [];
+  lastMoods = m;
+  paintMoods();
+  /* a friend who has just been short-changed says so, in their own voice */
+  const newHey = idx.find(i => m[i] === 'hey' && prev[i] !== 'hey');
+  if (newHey != null) { Play.sound('oops'); bounce(newHey, 0.1); say('Hey! Mine is smaller!', {pitch: FRIENDS[newHey].pitch}); }
+  if (idx.every(i => m[i] === 'party')) {
+    idx.forEach((i, k) => setTimeout(() => bounce(i, 0.16), k * 90));
+    const c = clientOf(BOARD.x, 200);
+    if (!discover('happy', c)) { if (!saidFair) { Play.sound('tada'); confetti(c.x, c.y, 50); say('Yummy! Everyone got the same.'); } }
+    saidFair = true;
+  } else if (changedPlate != null && m[changedPlate] !== 'hey') { bounce(changedPlate, 0.08); }
+  /* discoveries */
+  const board = S.pieces.filter(p => p.where === 'board');
+  if (S.mode === 'roti' && idx.length === 3 && board.length === 0 && idx.every(i => Math.abs(sh[i] - 1 / 3) <= 0.067))
+    discover('three', clientOf(SEATS[idx[1]].px, SEATS[idx[1]].py));
+  if (S.mode === 'laddoo' && oneLeftOver(idx.map(i => sh[i]), board.map(frac))) {
+    const c = centroid(board[0].poly);
+    if (discover('leftover', clientOf(c[0], c[1]))) setTimeout(() => say('Can you cut it in half? Swipe across it!'), 3600);
+  }
+}
+function checkCuts(){
+  if (S.mode !== 'roti') return;
+  const fr = S.pieces.map(frac);
+  if (fr.length === 2 && fr.every(f => Math.abs(f - 0.5) <= 0.04)) discover('halves', clientOf(BOARD.x, BOARD.y));
+  if (fr.length === 4 && fr.every(f => Math.abs(f - 0.25) <= 0.025)) discover('quarters', clientOf(BOARD.x, BOARD.y));
+}
+
+/* ---- juice ---------------------------------------------------------------- */
+function clientOf(x, y){
+  const m = svg.getScreenCTM(); if (!m) return {x: innerWidth / 2, y: innerHeight / 2};
+  const p = svg.createSVGPoint(); p.x = x; p.y = y; const q = p.matrixTransform(m); return {x: q.x, y: q.y};
+}
+function squash(el, cx, cy, amt = 0.15, ms = 480){
+  return tween(0, 1, ms, t => {
+    const k = Math.sin(t * Math.PI * 3) * (1 - t) * amt;
+    el.setAttribute('transform', `translate(${cx} ${cy}) scale(${(1 + k).toFixed(3)} ${(1 - k).toFixed(3)}) translate(${-cx} ${-cy})`);
+  }, x => x).then(() => el.removeAttribute('transform'));
+}
+const bounce = (i, amt = 0.12) => squash($('friendJuice' + i), 0, 60, amt, 520);
+function crumbs(a, b){
+  if (reduced()) return;
+  const fx = $('fx'), n = 14;
+  for (let i = 0; i < n; i++) {
+    const t = Math.random(), x = a[0] + (b[0] - a[0]) * t, y = a[1] + (b[1] - a[1]) * t;
+    const c = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+    c.setAttribute('r', (Math.random() * 3 + 2).toFixed(1)); c.setAttribute('fill', S.mode === 'roti' ? '#c98a3b' : '#f5a623');
+    fx.appendChild(c);
+    const vx = (Math.random() - .5) * 90, vy = -Math.random() * 90 - 20;
+    tween(0, 1, 600, k => { c.setAttribute('cx', f1(x + vx * k)); c.setAttribute('cy', f1(y + vy * k + 160 * k * k)); c.setAttribute('opacity', (1 - k).toFixed(2)); }, v => v)
+      .then(() => c.remove());
+  }
+}
+
+/* ---- the knife: swipe across the board -------------------------------------- */
+let cutFrom = null;
+drag($('cutZone'), svg, {
+  start(p){ if (S.busy) return false; hello(); cutFrom = [p.x, p.y]; showKnife(p, p); },
+  move(p){
+    KNIFEPOS = p;
+    showKnife({x: cutFrom[0], y: cutFrom[1]}, p);
+    const L = $('cutLine');
+    L.setAttribute('x1', cutFrom[0]); L.setAttribute('y1', cutFrom[1]); L.setAttribute('x2', p.x); L.setAttribute('y2', p.y);
+    L.setAttribute('opacity', Math.hypot(p.x - cutFrom[0], p.y - cutFrom[1]) > 20 ? 0.9 : 0);
+  },
+  end(p){
+    KNIFEPOS = null;
+    $('cutLine').setAttribute('opacity', 0); $('knife').setAttribute('opacity', 0); $('knifeRest').setAttribute('opacity', 1);
+    const a = cutFrom, b = [p.x, p.y]; cutFrom = null;
+    if (Math.hypot(b[0] - a[0], b[1] - a[1]) < 50) return;
+    doCut(a, b);
+  },
+});
+function showKnife(a, p){
+  $('knifeRest').setAttribute('opacity', 0.25);
+  const ang = Math.atan2(p.y - a.y, p.x - a.x) * 180 / Math.PI;
+  $('knife').setAttribute('opacity', 1);
+  $('knife').setAttribute('transform', `translate(${f1(p.x)} ${f1(p.y)})`);
+  $('knifeRot').setAttribute('transform', `rotate(${f1(Math.abs(ang) > 90 ? ang : ang + 180)}) translate(58 0)`);
+}
+function doCut(a, b){
+  const minArea = 0.004 * S.whole;
+  let cutAny = false, halvedLaddoo = null;
+  const board = S.pieces.filter(p => p.where === 'board');
+  const n = [-(b[1] - a[1]), b[0] - a[0]], nl = Math.hypot(n[0], n[1]) || 1;
+  for (const p of board) {
+    if (!segCrosses(p.poly, a, b)) continue;
+    const parts = splitPoly(p.poly, a, b, minArea);
+    if (parts.length < 2) continue;
+    cutAny = true;
+    const wasWhole = Math.abs(frac(p) - 1) < 0.01;
+    EL(p).remove(); S.pieces = S.pieces.filter(q => q !== p);
+    /* nudge the two halves apart a little, so the cut shows */
+    const made = parts.map(poly => {
+      const s = Math.sign(sideOf(a, b, centroid(poly))) || 1;
+      return makePiece(poly.map(q => [q[0] + s * 5 * n[0] / nl, q[1] + s * 5 * n[1] / nl]), p.origin);
+    });
+    if (S.mode === 'laddoo' && wasWhole) halvedLaddoo = made;
+  }
+  if (!cutAny) { Play.sound('boing'); return; }
+  S.cuts++;
+  Play.sound('snap'); setTimeout(() => Play.sound('tick'), 70);
+  crumbs(a, b);
+  squash($('board'), BOARD.x, BOARD.y, 0.03, 300);
+  paint();
+  track('cut', {pieces: S.pieces.filter(p => p.where === 'board').map(p => +frac(p).toFixed(3))});
+  if (halvedLaddoo && halvedLaddoo.length === 2 && halvedLaddoo.every(p => Math.abs(frac(p) - 0.5) <= 0.05)) {
+    const c = centroid(halvedLaddoo[0].poly);
+    discover('halfLaddoo', clientOf(c[0], c[1]));
+  }
+  checkCuts();
+  const cnt = S.pieces.filter(p => p.where === 'board').length;
+  if (!Play.EVENTS.some(e => e.type === 'finding' && Date.now() - e.t < 300)) {
+    say(cnt <= 10 ? ['', 'One piece', 'Two pieces!', 'Three pieces!', 'Four pieces!', 'Five pieces!', 'Six pieces!', 'Seven pieces!', 'Eight pieces!', 'Nine pieces!', 'Ten pieces!'][cnt] : 'Lots of pieces!');
+  }
+  if (S.cuts === 1) setTimeout(() => { if (!S.gave) say('Now give the pieces to your friends. Drag a piece onto a plate.'); }, 3200);
+}
+
+/* ---- pieces: drag to a plate, or tap to hear its name ----------------------- */
+function wirePiece(el, p){
+  let from = null, grab = null, t0 = 0, moved = 0;
+  drag(el, svg, {
+    start(q){
+      if (S.busy) return false;
+      hello();
+      from = q; t0 = performance.now(); moved = 0;
+      const c = centroid(p.poly);
+      grab = p.where === 'board' ? [c[0] - q.x, c[1] - q.y] : [0, 0];
+      const g = $('ghost');
+      g.setAttribute('d', pathD(p.poly)); g.setAttribute('fill', el.getAttribute('fill')); g.setAttribute('stroke', el.getAttribute('stroke'));
+      g.setAttribute('transform', `translate(${f1(q.x + grab[0] - c[0])} ${f1(q.y + grab[1] - c[1])})`);
+      g.setAttribute('opacity', 0);
+      Play.sound('pop');
+    },
+    move(q){
+      moved = Math.max(moved, Math.hypot(q.x - from.x, q.y - from.y));
+      if (moved < 6) return;
+      const c = centroid(p.poly), g = $('ghost');
+      g.setAttribute('opacity', 1); el.setAttribute('opacity', 0); DRAGPOS = q;
+      g.setAttribute('transform', `translate(${f1(q.x + grab[0] - c[0])} ${f1(q.y + grab[1] - c[1])})`);
+    },
+    end(q){
+      DRAGPOS = null;
+      $('ghost').setAttribute('opacity', 0); el.setAttribute('opacity', 1);
+      if (moved < 6 && performance.now() - t0 < 700) return tapPiece(p);
+      drop(p, q, grab);
+    },
+  });
+}
+function tapPiece(p){
+  const nm = sizeName(frac(p));
+  const words = S.mode === 'roti'
+    ? {whole: 'A whole roti!', half: 'Half! One half of the roti.', quarter: 'A quarter! One of four.', third: 'One of three same pieces!', piece: 'A piece of roti.'}
+    : {whole: 'One laddoo!', half: 'Half a laddoo!', quarter: 'A quarter of a laddoo!', third: 'A small bit of laddoo!', piece: 'A bit of laddoo.'};
+  say(words[nm]);
+  const c = p.where === 'board' ? centroid(p.poly) : [SEATS[p.where].px, SEATS[p.where].py];
+  squash(EL(p), c[0], c[1], 0.1, 380).then(() => paint());
+  track('tapPiece', {name: nm, frac: +frac(p).toFixed(3)});
+}
+function drop(p, q, grab){
+  const plate = seatedIdx().find(i => Math.hypot(q.x - SEATS[i].px, q.y - SEATS[i].py) < PLATE_R + 28);
+  if (plate != null) {
+    const was = p.where;
+    p.where = plate;
+    Play.sound('pop'); setTimeout(() => Play.sound('note', 660 + plate * 90, 0.12), 60);
+    squash($('plateJuice' + plate), SEATS[plate].px, SEATS[plate].py, 0.08, 360);
+    S.gave++;
+    hideHintSoon();
+    paint();
+    track('give', {plate, frac: +frac(p).toFixed(3)});
+    react(plate);
+    return;
+  }
+  const onBoard = Math.hypot(q.x - BOARD.x, q.y - BOARD.y) < BOARD.r + 30 || (q.y > 356 && q.x > 220 && q.x < 780);
+  if (onBoard) {
+    const c = centroid(p.poly), dx = q.x + grab[0] - c[0], dy = q.y + grab[1] - c[1];
+    /* keep it on the cloth */
+    const nc = [clamp(c[0] + dx, 250, 750), clamp(c[1] + dy, 380, 630)];
+    p.poly = p.poly.map(v => [v[0] + nc[0] - c[0], v[1] + nc[1] - c[1]]);
+    const wasPlate = p.where !== 'board';
+    p.where = 'board';
+    Play.sound('tick');
+    paint();
+    if (wasPlate) react(null);
+    return;
+  }
+  Play.sound('boing');   /* dropped somewhere else: it hops back */
+  paint();
+}
+
+/* ---- seats ------------------------------------------------------------------ */
+function tapSeat(i){
+  hello();
+  const n = seatedIdx().length;
+  if (S.seated[i]) {
+    if (n <= 2) { bounce(i, 0.18); Play.sound('boing'); say(FRIENDS[i].name + ' wants to stay!', {pitch: FRIENDS[i].pitch}); return; }
+    /* going home: their pieces go back on the board, where they came from */
+    for (const p of S.pieces) if (p.where === i) p.where = 'board';
+    S.seated[i] = false;
+    sinkFriend(i, false);
+    Play.sound('whoosh'); say('Bye bye, ' + FRIENDS[i].name + '!');
+  } else {
+    if (n >= 4) return;
+    S.seated[i] = true;
+    sinkFriend(i, true);
+    Play.sound('boing'); say(FRIENDS[i].name + ' is here! Now there are ' + ['', 'one', 'two', 'three', 'four'][n + 1] + ' friends.', {pitch: FRIENDS[i].pitch});
+  }
+  track('seat', {seat: i, seated: S.seated[i], friends: seatedIdx().length});
+  lastMoods = null; saidFair = false;
+  paint();
+  react(null);
+}
+function sinkFriend(i, up){
+  const g = $('friendPos' + i);
+  if (reduced()) { g.removeAttribute('transform'); return; }
+  const a = up ? 130 : 0, b = up ? 0 : 130;
+  g.setAttribute('opacity', 1); g.dataset.anim = '1';
+  tween(a, b, up ? 520 : 380, y => g.setAttribute('transform', `translate(0 ${f1(y)})`), up ? ease.back : ease.inOut)
+    .then(() => { g.removeAttribute('transform'); delete g.dataset.anim; paint(); });
+}
+SEATS.forEach((_, i) => {
+  $('seat' + i).addEventListener('click', () => tapSeat(i));
+  $('seat' + i).addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); tapSeat(i); } });
+});
+
+/* ---- mode buttons ----------------------------------------------------------- */
+function pickRoti(){ hello(); fresh('roti'); Play.sound('pop'); say('A fresh roti! Swipe across it to cut it.'); track('mode', {mode: 'roti'}); }
+function pickLaddoo(){ hello(); fresh('laddoo'); Play.sound('pop'); say(['', '', '', '', '', '', 'Six', 'Seven', 'Eight'][S.nLaddoo] + ' laddoos! Share them so everyone gets the same.'); track('mode', {mode: 'laddoo', n: S.nLaddoo}); }
+function pickCount(n){ S.nLaddoo = n; pickLaddoo(); }
+const onTap = (id, fn) => { $(id).addEventListener('click', fn); $(id).addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fn(); } }); };
+onTap('btnRoti', pickRoti);
+onTap('btnLaddoo', pickLaddoo);
+[6, 7, 8].forEach(n => onTap('cnt' + n, () => pickCount(n)));
+
+/* ---- the hint hand and the "try this" card ---------------------------------- */
+let hintPhase = 'cut', T = 0;
+function hideHintSoon(){ hintPhase = 'off'; $('hint').setAttribute('opacity', 0); }
+const blinkT = [1.2, 2.6, 0.7, 3.1];
+function eyes(dt){
+  const drag = DRAGPOS || KNIFEPOS;
+  let tgt = drag;
+  if (!tgt) { const pb = S.pieces.find(p => p.where === 'board'); tgt = pb ? {x: centroid(pb.poly)[0], y: centroid(pb.poly)[1]} : {x: BOARD.x, y: BOARD.y}; }
+  for (let i = 0; i < 4; i++) {
+    const dx = tgt.x - SEATS[i].x, dy = tgt.y - SEATS[i].y, L = Math.hypot(dx, dy) || 1;
+    const tf = `translate(${(dx / L * 3.2).toFixed(2)} ${(dy / L * 2.6).toFixed(2)})`;
+    $('look' + i).setAttribute('transform', tf); $('lookW' + i).setAttribute('transform', tf);
+    if (reduced()) continue;
+    blinkT[i] -= dt;
+    const shut = blinkT[i] > 0 && blinkT[i] < 0.13;
+    $('blink' + i).setAttribute('transform', shut ? 'translate(0 -8) scale(1 0.12) translate(0 8)' : '');
+    if (blinkT[i] < 0) blinkT[i] = 2 + Math.random() * 3.5;
+  }
+  const hot = S.mode === 'roti' && S.pieces.some(p => p.where === 'board') && !reduced();
+  $('steam').setAttribute('opacity', hot ? 1 : 0);
+  if (hot) for (let k = 0; k < 3; k++) {
+    const ph = (T * 0.45 + k / 3) % 1;
+    $('steam' + k).setAttribute('transform', `translate(${(Math.sin(T * 2 + k) * 4).toFixed(1)} ${(-ph * 60).toFixed(1)})`);
+    $('steam' + k).setAttribute('opacity', (Math.sin(ph * Math.PI) * 0.55).toFixed(2));
+  }
+}
+let DRAGPOS = null, KNIFEPOS = null;
+function idle(dt){
+  T += dt;
+  eyes(dt);
+  if (hintPhase === 'cut' && S.cuts) hintPhase = 'give';
+  if (hintPhase === 'off' || reduced()) { $('hint').setAttribute('opacity', hintPhase === 'off' ? 0 : 1); if (hintPhase === 'off') return; }
+  const k = (T * 0.5) % 1, e = ease.inOut(clamp(k / 0.8, 0, 1));
+  let a, b;
+  if (hintPhase === 'cut') { a = [330, BOARD.y - 20]; b = [680, BOARD.y - 20]; }
+  else { const pb = S.pieces.find(p => p.where === 'board'); if (!pb) return; a = centroid(pb.poly); const s = SEATS[seatedIdx()[0]]; b = [s.px, s.py]; }
+  const x = lerp(a[0], b[0], reduced() ? 0.5 : e), y = lerp(a[1], b[1], reduced() ? 0.5 : e);
+  $('hintHand').setAttribute('transform', `translate(${f1(x - 4)} ${f1(y + 4)})`);
+  $('hintLine').setAttribute('x1', a[0]); $('hintLine').setAttribute('y1', a[1]); $('hintLine').setAttribute('x2', x); $('hintLine').setAttribute('y2', y);
+  $('hint').setAttribute('opacity', k > 0.92 ? 0 : 0.95);
+}
+
+const TRY = {
+  halves: {line: 'Cut the roti into two pieces the same size. Two halves!', art: `
+    <g transform="translate(-26 0)"><path d="M-4 -40 A40 40 0 0 0 -4 40 Z" fill="url(#rotiPatT)" stroke="#b77a33" stroke-width="3"/><path d="M4 -40 A40 40 0 0 1 4 40 Z" fill="url(#rotiPatT)" stroke="#b77a33" stroke-width="3"/></g>
+    <text x="44" y="12" text-anchor="middle" font-family="Fredoka, sans-serif" font-size="36" font-weight="600" fill="#e0567a">2</text>`},
+  happy: {line: 'Give the pieces to your friends so everyone gets the same. Make them all happy!', art: `
+    ${[-44, 0, 44].map(x => `<g transform="translate(${x} 0)"><circle r="19" fill="#ffd36b" stroke="#c98a3b" stroke-width="3"/><path d="M-9 -3 q4 -6 8 0 M1 -3 q4 -6 8 0" stroke="#3a2a1a" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+      <path d="M-8 5 q8 9 16 0" stroke="#3a2a1a" stroke-width="2.5" fill="none" stroke-linecap="round"/></g>`).join('')}
+    <path d="M0 -44 c-5 -7 -15 -2 -10 7 l10 10 l10 -10 c5 -9 -5 -14 -10 -7 Z" fill="#e0567a"/>`},
+  quarters: {line: 'Cut the roti into four pieces, all the same. Four quarters!', art: `
+    <g transform="translate(-26 0)">${[[1, 1], [-1, 1], [-1, -1], [1, -1]].map(([sx, sy], k) => `<path transform="translate(${sx * 3} ${sy * 3})" d="M0 0 L${40 * sx} 0 A40 40 0 0 ${sx * sy > 0 ? 1 : 0} 0 ${40 * sy} Z" fill="url(#rotiPatT)" stroke="#b77a33" stroke-width="3"/>`).join('')}</g>
+    <text x="44" y="12" text-anchor="middle" font-family="Fredoka, sans-serif" font-size="36" font-weight="600" fill="#e0567a">4</text>`},
+  three: {line: 'Invite one more friend. Tap an empty chair! Then share the roti so all three get the same. It is tricky!', art: `
+    ${[-46, 0, 46].map(x => `<g transform="translate(${x} -18)"><circle r="17" fill="#ffd36b" stroke="#c98a3b" stroke-width="3"/><circle cx="-6" cy="-2" r="2.5" fill="#3a2a1a"/><circle cx="6" cy="-2" r="2.5" fill="#3a2a1a"/></g>`).join('')}
+    ${[-46, 0, 46].map(x => `<ellipse cx="${x}" cy="26" rx="20" ry="11" fill="#fff" stroke="#bfe0f5" stroke-width="3"/><path d="M${x - 11} 24 h22 v-4 a11 5 0 0 0 -22 0 Z" fill="url(#rotiPatT)"/>`).join('')}`},
+  leftover: {line: 'Tap the laddoo button. Give the laddoos out one by one, the same for everyone. Is one left over?', art: `
+    ${[[-46, -18], [-22, -18], [22, -18], [46, -18], [-46, 16], [-22, 16], [22, 16], [46, 16]].map(([x, y]) => miniLadT(x, y)).join('')}
+    <path d="M-34 -2 v0" /><text x="0" y="46" text-anchor="middle" font-family="Fredoka, sans-serif" font-size="22" font-weight="600" fill="#c66f10">+1?</text>`},
+  halfLaddoo: {line: 'Swipe across one laddoo to cut it in half.', art: `
+    <g><path d="M-6 -30 A30 30 0 0 0 -6 30 Z" fill="url(#ladPatT)" stroke="#c66f10" stroke-width="3"/><path d="M6 -30 A30 30 0 0 1 6 30 Z" fill="url(#ladPatT)" stroke="#c66f10" stroke-width="3"/></g>
+    <path d="M0 -46 L0 46" stroke="#8793a3" stroke-width="4" stroke-dasharray="6 6" stroke-linecap="round"/>`},
+};
+function miniLadT(x, y){ return `<circle cx="${x}" cy="${y}" r="11" fill="url(#ladPatT)" stroke="#c66f10" stroke-width="2.5"/>`; }
+const TRY_ORDER = ['halves', 'happy', 'quarters', 'three', 'leftover', 'halfLaddoo'];
+const currentTry = () => TRY_ORDER.find(g => !found(g)) || null;
+let shownTry;
+function paintTry(){
+  const g = currentTry();
+  if (g === shownTry) return;
+  shownTry = g;
+  const defs = `<defs><pattern id="rotiPatT" width="20" height="20" patternUnits="userSpaceOnUse"><rect width="20" height="20" fill="#e8b865"/><circle cx="5" cy="6" r="1.8" fill="#9a5a1f" opacity=".6"/><circle cx="14" cy="14" r="2" fill="#9a5a1f" opacity=".5"/></pattern>
+    <pattern id="ladPatT" width="10" height="10" patternUnits="userSpaceOnUse"><rect width="10" height="10" fill="#f5a623"/><circle cx="3" cy="3" r="1.6" fill="#fbc463"/><circle cx="7" cy="7" r="1.8" fill="#e08a12"/></pattern></defs>`;
+  $('tryArt').innerHTML = defs + (g ? TRY[g].art : `<path d="M0 -40 L12 -12 L42 -10 L18 8 L26 38 L0 22 L-26 38 L-18 8 L-42 -10 L-12 -12 Z" fill="#ffc53d" stroke="#f29a1f" stroke-width="3" stroke-linejoin="round"/>`);
+  if (!reduced()) $('tryCard').animate([{transform: 'scale(.9)'}, {transform: 'scale(1.04)'}, {transform: 'scale(1)'}], {duration: 450, easing: 'ease-out'});
+}
+function sayTry(){
+  const g = currentTry();
+  say(g ? TRY[g].line : 'You found everything! Keep sharing.');
+  track('hear', {goal: g});
+}
+$('tryCard').addEventListener('click', () => { spoke = true; sayTry(); });
+$('hear').addEventListener('click', () => { spoke = true; sayTry(); });
+
+let spoke = false;
+function hello(){ if (spoke) return; spoke = true; say('Let’s share the roti with our friends! Swipe across the roti to cut it.'); }
+svg.addEventListener('pointerdown', hello);
+
+/* ============================================================================
+   Start
+   ============================================================================ */
+findings($('finds'), [
+  {id: 'halves',     icon: '🌓', label: 'Two halves',       say: 'Two halves! Two pieces, the same size. Each one is a half.'},
+  {id: 'happy',      icon: '😊', label: 'Everyone’s happy', say: 'Yummy! Everyone got the same. That is fair!'},
+  {id: 'quarters',   icon: '🍕', label: 'Four quarters',    say: 'Four quarters! Four pieces, all the same. Each one is a quarter.'},
+  {id: 'three',      icon: '🥉', label: 'Fair for three',   say: 'Fair for three! Three friends, and the same for everyone. That is tricky, and you did it!'},
+  {id: 'leftover',   icon: '🟠', label: 'One left over',    say: 'One left over! What shall we do?'},
+  {id: 'halfLaddoo', icon: '✂️', label: 'Half a laddoo',    say: 'Half a laddoo! Two halves make one whole laddoo.'},
+], () => { say('You found them all! Fair shares are the same size.'); paintTry(); });
+fresh(S.mode);
+loop(dt => idle(dt));
+window.applyFeatures = () => paint();
+window.PG_STATE = () => ({
+  mode: S.mode, nLaddoo: S.nLaddoo, seated: S.seated.slice(), cuts: S.cuts, gave: S.gave,
+  pieces: S.pieces.map(p => ({id: p.id, where: p.where, frac: frac(p), name: sizeName(frac(p)), c: centroid(p.poly)})),
+  shares: shares(), moods: currentMoods(), goal: currentTry(),
+});
+window.PG_MODEL = {disc, area, centroid, splitPoly, segCrosses, clipHalf, fairness, moods, sizeName, oneLeftOver, sliceFraction,
+  BOARD, ROTI_R, LAD_R, SEATS, PLATE_R, FAIR};
+</script>
+</body>
+</html>

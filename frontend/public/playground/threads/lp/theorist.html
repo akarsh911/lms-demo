@@ -1,0 +1,557 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Feasible Region</title>
+<meta name="description" content="Class 12: draw the constraints of a linear programming problem as half-planes, slide the objective line across the feasible region, and find the best corner with the corner point method; then make the region unbounded or empty and see what survives.">
+<link rel="icon" href="../../favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600&family=Inter:wght@400;500;600;700&family=Nunito:wght@500;700;800&family=Newsreader:opsz,wght@6..72,400;6..72,500&family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="../../play.css">
+<style>
+.pg-stage{align-self:start; min-height:0}
+svg text.m{font-family:var(--font-mono)}
+svg text.serif{font-family:"Newsreader",Georgia,serif}
+.gate{position:absolute; inset:0; display:grid; place-items:center; pointer-events:none}
+.gate span{background:rgba(29,35,39,.85); color:#fff; padding:10px 16px; border-radius:99px; font-weight:600; font-size:14px}
+.chips{display:flex; flex-wrap:wrap; gap:6px; margin:4px 0 8px}
+.chip{border:1px solid var(--hair-2); background:var(--card); border-radius:99px; padding:4px 11px; font-size:13px; cursor:pointer; font-weight:600; color:var(--ink-2)}
+.chip[aria-pressed="true"]{background:var(--accent-soft); border-color:var(--accent); color:var(--ink)}
+.chip:disabled{opacity:.45; cursor:default}
+.note{font-size:12.5px; color:var(--ink-3); margin:6px 0 0}
+.why p{font-size:13.5px; margin-bottom:.55em}
+.eqrow{display:flex; align-items:center; gap:5px; flex-wrap:nowrap; margin:5px 0; font-family:var(--font-mono); font-size:13px; color:var(--ink-2)}
+.eqrow input{width:58px; font:inherit; font-family:var(--font-mono); padding:3px 5px; border:1px solid var(--hair-2); border-radius:6px; background:var(--card); color:var(--ink); text-align:right}
+.eqrow input:disabled, .eqrow button:disabled{opacity:.5}
+.eqrow .op{min-width:34px; font:inherit; font-family:var(--font-mono); font-weight:600; border:1px solid var(--hair-2); border-radius:6px; background:var(--sunk); color:var(--ink); padding:3px 4px; cursor:pointer}
+.eqrow .del{border:none; background:none; color:var(--ink-3); cursor:pointer; font-size:16px; padding:0 4px}
+.eqrow .sw{display:inline-block; width:10px; height:10px; border-radius:2px; flex:none}
+.eqrow.fixed{color:var(--ink-3)}
+.eqrow b{font-weight:600}
+.hand{cursor:move}
+@media (max-width:1180px) and (min-width:981px){ .pg-main.wide-side{grid-template-columns:minmax(0,1fr) 360px} }
+</style>
+</head>
+<body>
+<header class="pg-top"></header>
+
+<div class="pg-intro">
+  <h1>The feasible region</h1>
+  <p>Every constraint of a linear programming problem is a straight line that cuts the plane in two, and the points that obey all of them form the feasible region.
+     Slide the objective line Z = ax + by across it and watch where it leaves: that is the best plan. Check it with the book's corner point method, then move the constraints yourself:
+     make two corners tie, open the region up so it runs off forever, or squeeze it until nothing is feasible at all.</p>
+</div>
+
+<main class="pg-main wide-side">
+  <section class="pg-stage" id="stageWrap">
+    <svg id="stage" viewBox="0 0 1000 660" role="img" aria-label="The constraint lines, the shaded feasible region, the objective line and the corner point table"></svg>
+    <div class="gate" id="gate"><span>Make your prediction first →</span></div>
+  </section>
+
+  <aside class="pg-side">
+    <div id="poe"></div>
+
+    <div class="card">
+      <div class="kicker">The problem (NCERT Class 12, Ch 12)</div>
+      <div class="chips" id="prChips"></div>
+      <div class="kicker" style="margin-top:8px">Objective</div>
+      <div class="eqrow"><span>Z =</span><input id="pIn" type="number" step="any" aria-label="coefficient of x"><span>x +</span><input id="qIn" type="number" step="any" aria-label="coefficient of y"><span>y</span></div>
+      <div class="chips" id="goalChips">
+        <button class="chip" data-goal="max">Maximise</button>
+        <button class="chip" data-goal="min">Minimise</button>
+      </div>
+      <div class="kicker" style="margin-top:8px">Subject to</div>
+      <div id="cons"></div>
+      <div class="eqrow fixed"><span class="sw" style="background:#9aa3a8"></span><span>x ≥ 0, y ≥ 0 (non-negative constraints)</span></div>
+      <div class="row" style="margin-top:8px"><button class="btn sm" id="addBtn">Add a constraint</button><button class="btn sm" id="fitBtn">Fit the view</button></div>
+      <p class="note">Drag a line's handle to slide it parallel; drag the dashed Z line to change Z.</p>
+    </div>
+
+    <div class="card why" id="whyCard" hidden>
+      <div class="kicker">What the model says</div>
+      <div id="why"></div>
+    </div>
+
+    <div class="card"><div class="kicker">To find</div><div id="finds"></div></div>
+  </aside>
+</main>
+
+<script src="../../play.js"></script>
+<script>
+'use strict';
+const {$, esc, clamp, sound, track, toast, predict, findings, discover, found,
+       shareState, sharedState, mount} = Play;
+mount({thread: 'lp', band: 'theorist'});
+
+/* MODEL:start ==================================================================
+   Graphical method (NCERT Class 12, Ch 12).
+   1. Each constraint a·x + b·y ≤ c (or ≥ c) is a half-plane. The feasible region is found by
+      CLIPPING: start from the square 0 ≤ x, y ≤ 10⁶ (the non-negative constraints, with a far
+      fence) and cut it by every half-plane in turn (Sutherland–Hodgman). What is left is a
+      convex polygon, or nothing (infeasible).
+   2. Corner points are the polygon's vertices that are not on the far fence. If any vertex is
+      on the fence the region is UNBOUNDED.
+   3. Corner point method: Z is evaluated at every corner; M and m are the largest and smallest.
+      Bounded: they are the maximum and minimum. Unbounded (step 3(ii)): M is the maximum only
+      if the open half-plane Z > M misses the region, which is tested by evaluating Z at every
+      vertex of the fenced polygon, fence vertices included. Likewise for m.
+   4. The objective line Z = z₀ is slid by the learner; the model reports whether it crosses the
+      region, and where it last touches it.
+   ============================================================================ */
+const BIG = 1e6;
+function clipHalf(poly, a, b, c){
+  const out = [], n = poly.length, tol = 1e-9 * (Math.abs(c) + Math.abs(a) * BIG + Math.abs(b) * BIG + 1) * 1e-3;
+  for (let i = 0; i < n; i++) {
+    const P = poly[i], Q = poly[(i + 1) % n];
+    const fp = a * P[0] + b * P[1] - c, fq = a * Q[0] + b * Q[1] - c;
+    if (fp <= tol) out.push(P);
+    if ((fp < -tol && fq > tol) || (fp > tol && fq < -tol)) { const t = fp / (fp - fq); out.push([P[0] + t * (Q[0] - P[0]), P[1] + t * (Q[1] - P[1])]); }
+  }
+  const d = [];
+  for (const p of out) { const q = d[d.length - 1]; if (!q || Math.hypot(p[0] - q[0], p[1] - q[1]) > 1e-7) d.push(p); }
+  if (d.length > 1 && Math.hypot(d[0][0] - d[d.length - 1][0], d[0][1] - d[d.length - 1][1]) <= 1e-7) d.pop();
+  return d;
+}
+const asLE = k => k.op === '>=' ? [-k.a, -k.b, -k.c] : [k.a, k.b, k.c];
+const tidy = v => { const r = Math.round(v * 1e6) / 1e6; return Math.abs(r - v) < 1e-7 ? (Object.is(r, -0) ? 0 : r) : v; };
+function region(cons){
+  let poly = [[0, 0], [BIG, 0], [BIG, BIG], [0, BIG]];
+  for (const k of cons) { if (!poly.length) break; const [a, b, c] = asLE(k); if (a === 0 && b === 0) { if (0 > c) poly = []; continue; } poly = clipHalf(poly, a, b, c); }
+  if (poly.length < 3) return {poly: [], empty: true, bounded: true, corners: []};
+  poly = poly.map(p => [tidy(p[0]), tidy(p[1])]);
+  const far = p => p[0] >= BIG / 2 || p[1] >= BIG / 2;
+  let corners = poly.filter(p => !far(p));
+  /* label as the book does: anticlockwise, from O if the origin is a corner, else the lowest corner on the left */
+  let s = corners.findIndex(p => p[0] === 0 && p[1] === 0);
+  if (s < 0) { s = 0; corners.forEach((p, i) => { const q = corners[s]; if (p[0] < q[0] - 1e-9 || (Math.abs(p[0] - q[0]) <= 1e-9 && p[1] < q[1])) s = i; }); }
+  corners = corners.slice(s).concat(corners.slice(0, s));
+  return {poly, empty: false, bounded: !poly.some(far), corners};
+}
+function solve(P){
+  const R = region(P.cons), Z = p => P.p * p[0] + P.q * p[1];
+  if (R.empty) return Object.assign(R, {table: [], M: null, m: null, max: {exists: false}, min: {exists: false}});
+  let letter = 0;
+  const table = R.corners.map(p => ({x: p[0], y: p[1], z: tidy(Z(p)), name: p[0] === 0 && p[1] === 0 ? 'O' : 'ABCDEFGHIJKLMN'[letter++]}));
+  const zs = table.map(t => t.z), M = Math.max(...zs), m = Math.min(...zs);
+  const all = R.poly.map(Z), eps = 1e-9 * (Math.abs(M) + Math.abs(m) + 1);
+  const hiAll = Math.max(...all), loAll = Math.min(...all);
+  const max = {exists: R.bounded || hiAll <= M + eps, value: M, at: table.filter(t => Math.abs(t.z - M) <= eps)};
+  const min = {exists: R.bounded || loAll >= m - eps, value: m, at: table.filter(t => Math.abs(t.z - m) <= eps)};
+  return Object.assign(R, {table, M, m, max, min, zHi: hiAll, zLo: loAll});
+}
+/* Where the line Z = z0 meets the region: nothing, a segment, or a single point. */
+function lineMeets(P, sol, z0){
+  if (sol.empty) return {hit: false};
+  const eps = 1e-9 * (Math.abs(sol.zHi) + Math.abs(sol.zLo) + 1);
+  if (z0 > sol.zHi + eps || z0 < sol.zLo - eps) return {hit: false};
+  const onEdge = sol.table.filter(t => Math.abs(t.z - z0) <= eps);
+  const last = Math.abs(z0 - sol.zHi) <= eps || Math.abs(z0 - sol.zLo) <= eps;
+  return {hit: true, last, touch: onEdge};
+}
+/* MODEL:end */
+
+const PROBLEMS = {
+  dealer: {label: 'Furniture dealer', src: '§12.2: tables x, chairs y', p: 250, q: 75, goal: 'max', view: [70, 110],
+    cons: [{a: 5, b: 1, op: '<=', c: 100, name: 'money'}, {a: 1, b: 1, op: '<=', c: 60, name: 'storage'}]},
+  ex1: {label: 'Example 1', src: 'Example 1', p: 4, q: 1, goal: 'max', view: [60, 100],
+    cons: [{a: 1, b: 1, op: '<=', c: 50}, {a: 3, b: 1, op: '<=', c: 90}]},
+  ex2: {label: 'Example 2', src: 'Example 2', p: 200, q: 500, goal: 'min', view: [12, 8],
+    cons: [{a: 1, b: 2, op: '>=', c: 10}, {a: 3, b: 4, op: '<=', c: 24}]},
+  ex3: {label: 'Example 3', src: 'Example 3', p: 3, q: 9, goal: 'max', view: [40, 30],
+    cons: [{a: 1, b: 3, op: '<=', c: 60}, {a: 1, b: 1, op: '>=', c: 10}, {a: 1, b: -1, op: '<=', c: 0}]},
+  ex4: {label: 'Example 4', src: 'Example 4', p: -50, q: 20, goal: 'min', view: [12, 12],
+    cons: [{a: 2, b: -1, op: '>=', c: -5}, {a: 3, b: 1, op: '>=', c: 3}, {a: 2, b: -3, op: '<=', c: 12}]},
+  q4: {label: 'Ex. 12.1 Q4', src: 'Exercise 12.1, Q4', p: 3, q: 5, goal: 'min', view: [5, 3.5],
+    cons: [{a: 1, b: 3, op: '>=', c: 3}, {a: 1, b: 1, op: '>=', c: 2}]},
+  ex5: {label: 'Example 5', src: 'Example 5', p: 3, q: 2, goal: 'min', view: [10, 10],
+    cons: [{a: 1, b: 1, op: '>=', c: 8}, {a: 3, b: 5, op: '<=', c: 15}]},
+};
+const PR_ORDER = ['dealer', 'ex1', 'ex2', 'ex3', 'ex4', 'q4', 'ex5'];
+const INK = '#1d2327', FAINT = '#7c878c', HUE = '#2f855a', GRID = '#eeebe2', ZC = '#6a3fc2';
+const LINE = ['#c05621', '#3057c9', '#b83280', '#0f7c86', '#8a6d1f', '#5a4fcf'];
+const nf = v => { if (v == null || !Number.isFinite(v)) return '—'; const r = Math.round(v * 100) / 100; return (Math.abs(r - Math.round(r)) < 1e-9 ? String(Math.round(r)) : String(r)).replace('-', '−'); };
+const term = (k, v, first) => { if (k === 0) return ''; const s = k < 0 ? (first ? '−' : ' − ') : (first ? '' : ' + '); const a = Math.abs(k); return s + (a === 1 ? '' : nf(a)) + v; };
+const lin = (a, b) => { const t = term(a, 'x', true) + term(b, 'y', a === 0); return t || '0'; };
+const consText = k => `${lin(k.a, k.b)} ${k.op === '<=' ? '≤' : '≥'} ${nf(k.c)}`;
+
+/* ---- state ---------------------------------------------------------------- */
+const S = {pr: 'dealer', p: 250, q: 75, goal: 'max', cons: [], view: [70, 110], z0: 0, locked: false, touched: false, edited: false, base: null, slid: false};
+function load(id){
+  const P = PROBLEMS[id];
+  S.pr = id; S.p = P.p; S.q = P.q; S.goal = P.goal; S.view = P.view.slice();
+  S.cons = P.cons.map(k => ({a: k.a, b: k.b, op: k.op, c: k.c}));
+  S.edited = false;
+  const sol = solve(S), best = sol[S.goal];
+  S.base = best && best.exists ? best.at.map(t => [t.x, t.y]) : null;
+  S.z0 = startZ();
+}
+function startZ(){ const f = S.goal === 'max' ? 0.12 : 0.75; return Math.round(S.p * f * S.view[0] + S.q * f * S.view[1]); }
+load('dealer');
+const shared = sharedState();
+if (shared && PROBLEMS[shared.pr]) {
+  load(shared.pr);
+  if (Array.isArray(shared.cons) && shared.cons.length <= 6 && shared.cons.every(k => [k.a, k.b, k.c].every(Number.isFinite) && ['<=', '>='].includes(k.op))) S.cons = shared.cons.map(k => ({a: k.a, b: k.b, op: k.op, c: k.c}));
+  if (Number.isFinite(shared.p)) S.p = shared.p;
+  if (Number.isFinite(shared.q)) S.q = shared.q;
+  if (['max', 'min'].includes(shared.goal)) S.goal = shared.goal;
+  if (Number.isFinite(shared.z0)) S.z0 = shared.z0;
+}
+shareState(() => ({pr: S.pr, p: S.p, q: S.q, goal: S.goal, cons: S.cons, z0: S.z0}));
+
+/* ---- stage geometry ------------------------------------------------------- */
+const sv = $('stage');
+const PL = {x: 70, y: 60, w: 540, h: 540};
+const V = () => ({x0: -0.07 * S.view[0], x1: S.view[0], y0: -0.07 * S.view[1], y1: S.view[1]});
+const X = x => { const v = V(); return PL.x + (x - v.x0) / (v.x1 - v.x0) * PL.w; };
+const Y = y => { const v = V(); return PL.y + PL.h - (y - v.y0) / (v.y1 - v.y0) * PL.h; };
+const UX = px => { const v = V(); return v.x0 + (px - PL.x) / PL.w * (v.x1 - v.x0); };
+const UY = py => { const v = V(); return v.y0 + (PL.y + PL.h - py) / PL.h * (v.y1 - v.y0); };
+/* the part of a·x + b·y = c inside the view */
+function segIn(a, b, c){
+  const v = V();
+  let poly = [[v.x0, v.y0], [v.x1, v.y0], [v.x1, v.y1], [v.x0, v.y1]];
+  const pts = [];
+  for (let i = 0; i < 4; i++) {
+    const P = poly[i], Q = poly[(i + 1) % 4], fp = a * P[0] + b * P[1] - c, fq = a * Q[0] + b * Q[1] - c;
+    if (fp === 0) pts.push(P);
+    if (fp * fq < 0) { const t = fp / (fp - fq); pts.push([P[0] + t * (Q[0] - P[0]), P[1] + t * (Q[1] - P[1])]); }
+  }
+  if (pts.length < 2) return null;
+  let best = [pts[0], pts[1]], d = -1;
+  for (const p of pts) for (const q of pts) { const e = Math.hypot(X(p[0]) - X(q[0]), Y(p[1]) - Y(q[1])); if (e > d) { d = e; best = [p, q]; } }
+  return best;
+}
+/* a handle on the line: a point of the visible segment kept off the edges, away from corners and other handles */
+function handleOn(a, b, c, t0, avoid = []){
+  const s = segIn(a, b, c); if (!s) return null;
+  const [P, Q] = s, A = [X(P[0]), Y(P[1])], B = [X(Q[0]), Y(Q[1])], L2 = (B[0] - A[0]) ** 2 + (B[1] - A[1]) ** 2;
+  if (L2 < 1) return null;
+  const m = Math.min(0.45, 22 / Math.sqrt(L2)), at = t => ({x: A[0] + t * (B[0] - A[0]), y: A[1] + t * (B[1] - A[1])});
+  for (const d of [0, 0.12, -0.12, 0.24, -0.24, 0.36, -0.36]) {
+    const t = clamp(t0 + d, m, 1 - m), h = at(t);
+    if (avoid.every(q => Math.hypot(q.x - h.x, q.y - h.y) > 34)) return h;
+  }
+  return at(clamp(t0, m, 1 - m));
+}
+function viewPoly(){ const v = V(); return [[v.x0, v.y0], [v.x1, v.y0], [v.x1, v.y1], [v.x0, v.y1]]; }
+
+function build(){
+  sv.innerHTML = `
+  <rect x="0" y="0" width="1000" height="660" fill="#fbfaf7"/>
+  <text x="${PL.x}" y="38" font-size="19" fill="${INK}" class="serif" id="title"></text>
+  <rect x="${PL.x}" y="${PL.y}" width="${PL.w}" height="${PL.h}" fill="#fff" stroke="#e3dfd3"/>
+  <defs><clipPath id="clipP"><rect x="${PL.x}" y="${PL.y}" width="${PL.w}" height="${PL.h}"/></clipPath>
+    <pattern id="hatch" width="8" height="8" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2="8" stroke="#d6453d" stroke-width="1" opacity=".22"/></pattern></defs>
+  <g id="grid"></g>
+  <g clip-path="url(#clipP)">
+    <g id="bad"></g>
+    <path id="feas" fill="${HUE}" fill-opacity=".2" stroke="${HUE}" stroke-width="2.4" stroke-linejoin="round"/>
+    <g id="lines"></g>
+    <line id="zLine" stroke="${ZC}" stroke-width="2.4" stroke-dasharray="9 6"/>
+    <line id="zHit" stroke="${ZC}" stroke-width="6" stroke-linecap="round"/>
+  </g>
+  <g id="cornersG"></g>
+  <text id="empty" x="${PL.x + PL.w / 2}" y="${PL.y + 40}" font-size="15" font-weight="600" fill="#b83227" text-anchor="middle"></text>
+  <g id="handles"></g>
+  <circle class="hand" id="hZ" r="10" fill="${ZC}" stroke="#fff" stroke-width="3"/>
+  <text id="zTag" font-size="13" font-weight="600" fill="${ZC}" class="m"></text>
+
+  <text x="650" y="88" font-size="19" fill="${INK}" class="serif">Corner point method</text>
+  <text x="650" y="110" font-size="12.5" fill="${FAINT}" id="tSub"></text>
+  <g id="table"></g>
+  <g id="verdict"></g>`;
+}
+function paintGrid(){
+  const v = V(); let g = '';
+  const ticks = (a, b) => { const raw = (b - a) / 7, p = Math.pow(10, Math.floor(Math.log10(raw))), st = [1, 2, 5, 10].map(m => m * p).find(s => s >= raw); const o = []; for (let t = 0; t <= b + 1e-9; t += st) o.push(+t.toFixed(9)); return o; };
+  for (const x of ticks(0, v.x1)) g += `<line x1="${X(x)}" y1="${PL.y}" x2="${X(x)}" y2="${PL.y + PL.h}" stroke="${x === 0 ? INK : GRID}" stroke-width="${x === 0 ? 1.2 : 1}"/><text x="${X(x)}" y="${PL.y + PL.h + 17}" font-size="11.5" text-anchor="middle" fill="${FAINT}" class="m">${nf(x)}</text>`;
+  for (const y of ticks(0, v.y1)) g += `<line x1="${PL.x}" y1="${Y(y)}" x2="${PL.x + PL.w}" y2="${Y(y)}" stroke="${y === 0 ? INK : GRID}" stroke-width="${y === 0 ? 1.2 : 1}"/>` + (y ? `<text x="${PL.x - 7}" y="${Y(y) + 4}" font-size="11.5" text-anchor="end" fill="${FAINT}" class="m">${nf(y)}</text>` : '');
+  g += `<text x="${PL.x + PL.w - 6}" y="${Y(0) - 8}" font-size="15" text-anchor="end" fill="${INK}" class="serif" font-style="italic">x</text><text x="${X(0) + 8}" y="${PL.y + 18}" font-size="15" fill="${INK}" class="serif" font-style="italic">y</text>`;
+  $('grid').innerHTML = g;
+}
+const polyPath = poly => poly.map((p, i) => (i ? 'L' : 'M') + X(p[0]).toFixed(1) + ' ' + Y(p[1]).toFixed(1)).join('') + 'Z';
+function paint(){
+  const sol = solve(S), P = PROBLEMS[S.pr];
+  paintGrid();
+  $('title').textContent = `${S.goal === 'max' ? 'Maximise' : 'Minimise'} Z = ${lin(S.p, S.q)}   ·   ${P.src}`;
+  /* each constraint's forbidden side, hatched; its line; its handle */
+  let bad = '', ln = '', hs = '';
+  const avoid = sol.table.map(t => ({x: X(t.x), y: Y(t.y)}));
+  S.cons.forEach((k, i) => {
+    const [a, b, c] = asLE(k), col = LINE[i % LINE.length];
+    const out = clipHalf(viewPoly(), -a, -b, -c);
+    if (out.length >= 3) bad += `<path d="${polyPath(out)}" fill="url(#hatch)"/>`;
+    const s = segIn(k.a, k.b, k.c);
+    if (s) ln += `<line x1="${X(s[0][0])}" y1="${Y(s[0][1])}" x2="${X(s[1][0])}" y2="${Y(s[1][1])}" stroke="${col}" stroke-width="2"/>`;
+    const h = handleOn(k.a, k.b, k.c, 0.3 + 0.13 * i, avoid);
+    if (h) avoid.push(h);
+    if (h) hs += `<g class="hand" data-h="${i}" transform="translate(${h.x.toFixed(1)} ${h.y.toFixed(1)})"><rect x="-8" y="-8" width="16" height="16" rx="3" transform="rotate(45)" fill="${col}" stroke="#fff" stroke-width="2.5"/>` +
+      `<text x="14" y="-10" font-size="12.5" font-weight="600" fill="${col}" class="m" style="paint-order:stroke" stroke="#fff" stroke-width="4">${esc(consText(k))}</text></g>`;
+  });
+  $('bad').innerHTML = bad; $('lines').innerHTML = ln; $('handles').innerHTML = hs;
+  wireHandles();
+  /* the feasible region, as seen through the view */
+  if (!sol.empty) {
+    let vis = sol.poly;
+    for (const [a, b, c] of [[-1, 0, -V().x0], [1, 0, V().x1], [0, -1, -V().y0], [0, 1, V().y1]]) vis = clipHalf(vis, a, b, c);
+    $('feas').setAttribute('d', vis.length >= 3 ? polyPath(vis) : '');
+  } else $('feas').setAttribute('d', '');
+  $('empty').textContent = sol.empty ? 'No point satisfies every constraint: no feasible region.' : '';
+  /* corners */
+  let cg = '';
+  if (S.locked) for (const t of sol.table) {
+    const best = S.slid && sol[S.goal].exists && sol[S.goal].at.includes(t);
+    cg += `<circle cx="${X(t.x)}" cy="${Y(t.y)}" r="${best ? 7 : 5}" fill="${best ? ZC : '#fff'}" stroke="${best ? '#fff' : HUE}" stroke-width="2.5"/>` +
+      `<text x="${X(t.x) + 9}" y="${Y(t.y) - 9}" font-size="13" font-weight="700" fill="${INK}" style="paint-order:stroke" stroke="#fbfaf7" stroke-width="4">${t.name}</text>`;
+  }
+  $('cornersG').innerHTML = cg;
+  /* the objective line */
+  const zs = segIn(S.p, S.q, S.z0), zh = handleOn(S.p, S.q, S.z0, 0.2, avoid);
+  const showZ = S.locked && zs && (S.p || S.q);
+  for (const id of ['zLine', 'zHit']) {
+    const el = $(id); el.style.display = showZ ? '' : 'none';
+    if (showZ) { el.setAttribute('x1', X(zs[0][0])); el.setAttribute('y1', Y(zs[0][1])); el.setAttribute('x2', X(zs[1][0])); el.setAttribute('y2', Y(zs[1][1])); }
+  }
+  const meet = lineMeets(S, sol, S.z0);
+  $('zHit').setAttribute('opacity', 0);
+  if (showZ && meet.hit && !sol.empty) {
+    /* the part of the Z line inside the region, drawn solid */
+    const s = segInPoly(sol.poly, S.p, S.q, S.z0);
+    if (s) { $('zHit').setAttribute('opacity', 0.9); $('zHit').setAttribute('x1', X(s[0][0])); $('zHit').setAttribute('y1', Y(s[0][1])); $('zHit').setAttribute('x2', X(s[1][0])); $('zHit').setAttribute('y2', Y(s[1][1])); }
+  }
+  $('hZ').style.display = showZ && zh ? '' : 'none';
+  if (zh) { $('hZ').setAttribute('cx', zh.x); $('hZ').setAttribute('cy', zh.y); }
+  $('zTag').style.display = showZ && zh ? '' : 'none';
+  if (zh) { $('zTag').setAttribute('x', clamp(zh.x + 14, PL.x + 4, PL.x + PL.w - 110)); $('zTag').setAttribute('y', clamp(zh.y + 26, PL.y + 16, PL.y + PL.h - 6)); $('zTag').textContent = `Z = ${nf(S.z0)}`; }
+  paintTable(sol, meet);
+  paintSide();
+  paintWhy(sol);
+  check(sol, meet);
+}
+/* the segment of the line inside a convex polygon */
+function segInPoly(poly, a, b, c){
+  const pts = [], n = poly.length, eps = 1e-9 * (Math.abs(c) + 1);
+  for (let i = 0; i < n; i++) {
+    const P = poly[i], Q = poly[(i + 1) % n], fp = a * P[0] + b * P[1] - c, fq = a * Q[0] + b * Q[1] - c;
+    if (Math.abs(fp) <= eps) pts.push(P);
+    else if (fp * fq < 0 && Math.abs(fq) > eps) { const t = fp / (fp - fq); pts.push([P[0] + t * (Q[0] - P[0]), P[1] + t * (Q[1] - P[1])]); }
+  }
+  if (!pts.length) return null;
+  let best = [pts[0], pts[0]], d = -1;
+  for (const p of pts) for (const q of pts) { const e = Math.hypot(p[0] - q[0], p[1] - q[1]); if (e > d) { d = e; best = [p, q]; } }
+  return best;
+}
+function paintTable(sol, meet){
+  let t = '';
+  if (!S.locked) { $('table').innerHTML = `<text x="650" y="150" font-size="14" fill="${FAINT}">The table appears once you have predicted.</text>`; $('verdict').innerHTML = ''; $('tSub').textContent = ''; return; }
+  $('tSub').textContent = sol.empty ? 'no corner points' : `${sol.table.length} corner points; Z = ${lin(S.p, S.q)} at each`;
+  const y0 = 146;
+  t += `<text x="650" y="${y0}" font-size="12" font-weight="700" fill="${FAINT}">CORNER</text><text x="820" y="${y0}" font-size="12" font-weight="700" fill="${FAINT}" text-anchor="middle">(x, y)</text><text x="975" y="${y0}" font-size="12" font-weight="700" fill="${FAINT}" text-anchor="end">Z</text>` +
+       `<line x1="650" y1="${y0 + 8}" x2="975" y2="${y0 + 8}" stroke="#d8d3c4"/>`;
+  sol.table.forEach((r, i) => {
+    const y = y0 + 32 + i * 28, isM = r.z === sol.M, ism = r.z === sol.m;
+    const best = S.slid && sol[S.goal].exists && sol[S.goal].at.includes(r), onZ = meet.hit && meet.touch.includes(r);
+    if (best) t += `<rect x="644" y="${y - 19}" width="337" height="26" rx="5" fill="${ZC}" fill-opacity=".12"/>`;
+    t += `<text x="654" y="${y}" font-size="14" font-weight="700" fill="${INK}">${r.name}</text>` +
+      `<text x="820" y="${y}" font-size="14" fill="${INK}" text-anchor="middle" class="m">(${nf(r.x)}, ${nf(r.y)})</text>` +
+      `<text x="975" y="${y}" font-size="14" font-weight="${best ? 700 : 400}" fill="${best ? ZC : INK}" text-anchor="end" class="m">${nf(r.z)}</text>` +
+      (S.slid && (isM || ism) ? `<text x="690" y="${y}" font-size="11" fill="${FAINT}">${isM && ism ? 'M = m' : isM ? 'largest, M' : 'smallest, m'}</text>` : '') +
+      (onZ ? `<circle cx="${X(r.x)}" cy="${Y(r.y)}" r="12" fill="none" stroke="${ZC}" stroke-width="2"/>` : '');
+  });
+  $('table').innerHTML = t;
+  /* the verdict, following the book's steps */
+  const yv = y0 + 60 + Math.max(sol.table.length, 1) * 28;
+  const lines = [];
+  if (!S.slid) { $('verdict').innerHTML = `<text x="650" y="${yv}" font-size="14" fill="${FAINT}">Slide the dashed Z line to its last point.</text>` +
+    `<text x="650" y="${yv + 26}" font-size="13" fill="${FAINT}">${esc(zLineText(sol, meet))}</text>`; return; }
+  if (sol.empty) lines.push(['The constraints have no common point.', '#b83227'], ['No feasible region, so no solution.', '#b83227']);
+  else {
+    lines.push([sol.bounded ? 'The region is bounded.' : 'The region is unbounded: it runs off the page.', INK]);
+    const g = sol[S.goal], word = S.goal === 'max' ? 'maximum' : 'minimum';
+    if (g.exists) {
+      lines.push([`${word[0].toUpperCase() + word.slice(1)} Z = ${nf(g.value)} at ${g.at.map(r => `${r.name}(${nf(r.x)}, ${nf(r.y)})`).join(' and ')}`, ZC]);
+      if (g.at.length > 1) lines.push([`and at every point of the edge between them.`, ZC]);
+      if (!sol.bounded) lines.push([`Z ${S.goal === 'max' ? '>' : '<'} ${nf(g.value)} misses the region, so it holds.`, FAINT]);
+    } else {
+      lines.push([`Z ${S.goal === 'max' ? '>' : '<'} ${nf(S.goal === 'max' ? sol.M : sol.m)} still meets the region:`, '#b83227'], [`Z has no ${word} value.`, '#b83227']);
+    }
+  }
+  $('verdict').innerHTML = lines.map((l, i) => `<text x="650" y="${yv + i * 24}" font-size="14" font-weight="${i ? 600 : 400}" fill="${l[1]}">${esc(l[0])}</text>`).join('') +
+    `<text x="650" y="${yv + lines.length * 24 + 26}" font-size="13" fill="${FAINT}">${esc(zLineText(sol, meet))}</text>`;
+}
+function zLineText(sol, meet){
+  if (sol.empty) return '';
+  if (!meet.hit) return `The line Z = ${nf(S.z0)} misses the region.`;
+  if (meet.last && meet.touch.length === 1) return `Z = ${nf(S.z0)} touches the region only at ${meet.touch[0].name}.`;
+  if (meet.last && meet.touch.length > 1) return `Z = ${nf(S.z0)} lies along the edge ${meet.touch.map(r => r.name).join('')}.`;
+  return `Z = ${nf(S.z0)} cuts across the region: it can slide further.`;
+}
+function paintSide(){
+  $('cons').innerHTML = S.cons.map((k, i) => `<div class="eqrow" data-i="${i}"><span class="sw" style="background:${LINE[i % LINE.length]}"></span>` +
+    `<input data-f="a" type="number" step="any" value="${k.a}" aria-label="coefficient of x in constraint ${i + 1}"><span>x +</span>` +
+    `<input data-f="b" type="number" step="any" value="${k.b}" aria-label="coefficient of y in constraint ${i + 1}"><span>y</span>` +
+    `<button class="op" data-op="${i}" title="Flip the inequality">${k.op === '<=' ? '≤' : '≥'}</button>` +
+    `<input data-f="c" type="number" step="any" value="${k.c}" aria-label="right-hand side of constraint ${i + 1}">` +
+    `<button class="del" data-del="${i}" title="Remove this constraint" aria-label="Remove constraint ${i + 1}">×</button></div>`).join('');
+  const ae = document.activeElement;
+  if (ae !== $('pIn')) $('pIn').value = S.p;
+  if (ae !== $('qIn')) $('qIn').value = S.q;
+  for (const b of document.querySelectorAll('#prChips .chip')) b.setAttribute('aria-pressed', b.dataset.pr === S.pr);
+  for (const b of document.querySelectorAll('#goalChips .chip')) b.setAttribute('aria-pressed', b.dataset.goal === S.goal);
+  lockCtl();
+}
+
+/* ============================================================================
+   Narrator, findings, explanation
+   ============================================================================ */
+let EXPL = false;
+function paintWhy(sol){
+  $('whyCard').hidden = !S.locked;
+  if (!S.locked) return;
+  const g = sol[S.goal];
+  $('why').innerHTML = `<p>Z = ${esc(lin(S.p, S.q))} is the same on every point of a line, and the lines for different Z are parallel. Sliding the line one way raises Z; the best feasible plan is the last point of the region the line meets on its way out.</p>` +
+    `<p>A region cut out by straight lines is a convex polygon, so the line always leaves it at a corner, or along a whole edge when the line is parallel to that edge. That is why checking the ${sol.table.length || 'few'} corner points is enough${g && g.exists ? '' : ' when an optimum exists at all'}.</p>`;
+}
+function check(sol, meet){
+  if (!S.locked || !S.touched) return;
+  const g = sol[S.goal];
+  if (sol.empty) discover('infeasible');
+  if (!sol.empty && !sol.bounded && !g.exists) discover('unbounded');
+  if (!sol.empty && !sol.bounded && g.exists) discover('unboundedOk');
+  if (!sol.empty && g.exists && g.at.length > 1) discover('multiple');
+  if (!sol.empty && g.exists && meet.hit && meet.last && meet.touch.length === 1 && Math.abs(S.z0 - g.value) <= 1e-9 * (Math.abs(g.value) + 1)) {
+    discover('corner');
+    if (!EXPL) {
+      EXPL = true;
+      const r = g.at[0];
+      CTL.explain(`The model slid Z = ${esc(lin(S.p, S.q))} out to <b>${nf(g.value)}</b>, where it touches the region at the single point <b>${r.name}(${nf(r.x)}, ${nf(r.y)})</b>, a corner. ` +
+        `Any larger Z misses the region entirely. The corner point table agrees: ${sol.table.map(t => `${t.name} ${nf(t.z)}`).join(', ')}.` +
+        (S.pr === 'dealer' && !S.edited ? ' The dealer should buy 10 tables and 50 chairs, for a profit of Rs 6250.' : ''));
+    }
+  }
+  if (S.edited && S.base && !sol.empty && sol.bounded && g.exists) {
+    const same = g.at.length === S.base.length && g.at.every(r => S.base.some(p => Math.abs(p[0] - r.x) < 1e-9 && Math.abs(p[1] - r.y) < 1e-9));
+    if (!same) discover('shift');
+  }
+}
+
+/* ============================================================================
+   Controls
+   ============================================================================ */
+build();
+$('prChips').innerHTML = PR_ORDER.map(id => `<button class="chip" data-pr="${id}">${PROBLEMS[id].label}</button>`).join('');
+$('prChips').addEventListener('click', e => {
+  const b = e.target.closest('[data-pr]'); if (!b || b.disabled) return;
+  load(b.dataset.pr); S.touched = true; sound('tick'); paint(); track('problem', {id: S.pr});
+});
+$('goalChips').addEventListener('click', e => {
+  const b = e.target.closest('[data-goal]'); if (!b || b.disabled) return;
+  S.goal = b.dataset.goal; S.touched = true; sound('tick'); paint(); track('goal', {goal: S.goal});
+});
+const numIn = v => { const x = parseFloat(v); return Number.isFinite(x) ? x : null; };
+$('pIn').addEventListener('input', e => { const v = numIn(e.target.value); if (v == null) return; S.p = v; S.touched = true; paint(); });
+$('qIn').addEventListener('input', e => { const v = numIn(e.target.value); if (v == null) return; S.q = v; S.touched = true; paint(); });
+for (const id of ['pIn', 'qIn']) $(id).addEventListener('change', () => track('objective', {p: S.p, q: S.q}));
+$('cons').addEventListener('input', e => {
+  const inp = e.target.closest('input[data-f]'); if (!inp) return;
+  const i = +inp.closest('[data-i]').dataset.i, v = numIn(inp.value); if (v == null) return;
+  S.cons[i][inp.dataset.f] = v; S.touched = true; S.edited = true;
+  repaintKeepFocus(inp);
+});
+$('cons').addEventListener('change', e => { const inp = e.target.closest('input[data-f]'); if (inp) track('constraint', {i: +inp.closest('[data-i]').dataset.i, cons: S.cons}); });
+$('cons').addEventListener('click', e => {
+  const op = e.target.closest('[data-op]'), del = e.target.closest('[data-del]');
+  if (op && !op.disabled) { const k = S.cons[+op.dataset.op]; k.op = k.op === '<=' ? '>=' : '<='; S.touched = true; S.edited = true; sound('tick'); paint(); track('flip', {i: +op.dataset.op}); }
+  if (del && !del.disabled) { S.cons.splice(+del.dataset.del, 1); S.touched = true; S.edited = true; sound('tick'); paint(); track('remove', {i: +del.dataset.del}); }
+});
+/* typing into a row: repaint everything, then put the caret back where it was */
+function repaintKeepFocus(inp){
+  const i = inp.closest('[data-i]').dataset.i, f = inp.dataset.f, pos = inp.selectionStart, val = inp.value;
+  paint();
+  const again = document.querySelector(`#cons [data-i="${i}"] input[data-f="${f}"]`);
+  if (again) { again.value = val; again.focus(); try { again.setSelectionRange(pos, pos); } catch (e) {} }
+}
+$('addBtn').addEventListener('click', () => {
+  if (S.cons.length >= 6) { toast('Six constraints is plenty for a picture.'); return; }
+  const c = Math.round(0.7 * Math.min(S.view[0], S.view[1]));
+  S.cons.push({a: 1, b: 1, op: '<=', c}); S.touched = true; S.edited = true; sound('pop'); paint(); track('add', {});
+});
+$('fitBtn').addEventListener('click', () => {
+  const sol = solve(S), pts = sol.table.map(t => [t.x, t.y]).concat(S.cons.flatMap(k => [k.a ? [k.c / k.a, 0] : null, k.b ? [0, k.c / k.b] : null].filter(p => p && p[0] >= 0 && p[1] >= 0)));
+  if (!pts.length) return;
+  const mx = Math.max(1, ...pts.map(p => p[0])), my = Math.max(1, ...pts.map(p => p[1]));
+  S.view = [nice(mx * 1.2), nice(my * 1.2)]; sound('tick'); paint(); track('fit', {view: S.view});
+});
+const nice = v => { const p = Math.pow(10, Math.floor(Math.log10(v))); return [1, 1.2, 1.5, 2, 2.5, 3, 4, 5, 6, 7, 8, 10].map(m => m * p).find(s => s >= v); };
+/* snapping: coefficients' right-hand sides to a step that suits the view */
+const cStep = () => { const s = Math.max(S.view[0], S.view[1]); return s <= 6 ? 0.25 : s <= 20 ? 0.5 : s <= 120 ? 1 : 5; };
+let dragI = null;
+function wireHandles(){
+  for (const g of document.querySelectorAll('#handles [data-h]')) {
+    if (g.dataset.wired) continue; g.dataset.wired = '1';
+    g.addEventListener('pointerdown', e => {
+      if (!S.locked || e.button !== 0) return;
+      dragI = +g.dataset.h; try { sv.setPointerCapture(e.pointerId); } catch (_) {} e.preventDefault();
+    });
+  }
+}
+/* handle drags are captured by the stage itself, because the handles are rebuilt as they move */
+sv.addEventListener('pointermove', e => {
+  if (dragI == null) return;
+  const p = Play.svgPoint(sv, e), k = S.cons[dragI]; if (!k) return;
+  const st = cStep(), c = Math.round((k.a * UX(p.x) + k.b * UY(p.y)) / st) * st;
+  if (c !== k.c) { k.c = +c.toFixed(6); S.touched = true; S.edited = true; paint(); }
+});
+const endDrag = () => { if (dragI != null) { track('slide', {i: dragI, c: S.cons[dragI] && S.cons[dragI].c}); dragI = null; } };
+sv.addEventListener('pointerup', endDrag); sv.addEventListener('pointercancel', endDrag);
+Play.drag($('hZ'), sv, {
+  start(){ if (!S.locked) return false; },
+  move(p){
+    let z = S.p * UX(p.x) + S.q * UY(p.y);
+    /* snap onto a corner's value when close, so the line can sit exactly on a corner */
+    const sol = solve(S), v = V(), zc = [[v.x0, v.y0], [v.x1, v.y0], [v.x1, v.y1], [v.x0, v.y1]].map(q => S.p * q[0] + S.q * q[1]);
+    const tol = 0.02 * (Math.max(...zc) - Math.min(...zc));
+    let best = null; for (const r of sol.table) if (Math.abs(r.z - z) < tol && (best == null || Math.abs(r.z - z) < Math.abs(best - z))) best = r.z;
+    z = best != null ? best : Math.round(z);
+    if (z !== S.z0) { S.z0 = z; S.touched = true; paint(); }
+  },
+  end(){ if (!S.slid) { S.slid = true; paint(); } track('zslide', {z: S.z0}); },
+});
+function lockCtl(){
+  for (const el of document.querySelectorAll('.pg-side input, #cons button, #addBtn, #fitBtn, #goalChips .chip, #prChips .chip')) el.disabled = !S.locked;
+  $('hZ').style.pointerEvents = S.locked ? '' : 'none';
+  for (const g of document.querySelectorAll('#handles [data-h]')) g.style.pointerEvents = S.locked ? '' : 'none';
+  $('gate').hidden = S.locked;
+}
+
+/* ============================================================================
+   Start
+   ============================================================================ */
+findings($('finds'), [
+  {id: 'corner',      icon: '◆', label: 'The best plan is at a corner', hint: 'Slide the Z line to the last point it touches'},
+  {id: 'multiple',    icon: '▬', label: 'A tie: a whole edge of best points', hint: 'Make Z parallel to an edge'},
+  {id: 'shift',       icon: '↗', label: 'Move a constraint, the best corner moves', hint: 'Slide a constraint line'},
+  {id: 'unbounded',   icon: '∞', label: 'Unbounded, and no optimum', hint: 'A region that runs off forever'},
+  {id: 'unboundedOk', icon: '⊻', label: 'Unbounded, yet an optimum exists', hint: 'Minimise over an open region'},
+  {id: 'infeasible',  icon: '∅', label: 'No feasible region at all', hint: 'Constraints that cannot all hold'},
+], () => toast('All six: corners, ties, and the two ways a problem can have no answer.', 4200));
+const CTL = predict($('poe'), {
+  id: 'last-touch',
+  q: 'The dealer slides the profit line Z = 250x + 75y outwards across the feasible region. Where is the last point of the region it touches?',
+  options: [
+    {id: 'inside', text: 'A point in the middle of the region.'},
+    {id: 'edge',   text: 'The middle of one of its edges.'},
+    {id: 'corner', text: 'A corner of the region.', right: true},
+    {id: 'xy',     text: 'Wherever the dealer buys as many tables as chairs.'},
+  ],
+  onLock(){ S.locked = true; paint(); },
+});
+if (!Play.FF('predict')) S.locked = true;
+paint();
+window.applyFeatures = () => paint();
+window.PG_STATE = () => JSON.parse(JSON.stringify(S));
+window.PG_MODEL = {clipHalf, region, solve, lineMeets, PROBLEMS};
+</script>
+</body>
+</html>

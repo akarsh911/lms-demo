@@ -1,0 +1,307 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Grandmother's Quilt</title>
+<meta name="description" content="Class 5: reshape Grandmother's quilt without using any more lace, and rearrange Adrit's milk cans — does the area change?">
+<link rel="icon" href="../../favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600&family=Inter:wght@400;500;600;700&family=Nunito:wght@500;700;800&family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="../../play.css">
+<style>
+/* Only what this page needs beyond play.css. */
+.pg-stage{min-height:0}
+.tabs{display:flex; gap:4px; padding:10px 12px 0; border-bottom:1px solid var(--hair); background:var(--card); flex-wrap:wrap}
+.tab{border:1px solid transparent; border-bottom:none; background:none; padding:8px 14px; border-radius:10px 10px 0 0; cursor:pointer;
+  font-family:"Fredoka",var(--font-head); font-size:16px; color:var(--ink-3); margin-bottom:-1px}
+.tab[aria-selected="true"]{background:var(--card); border-color:var(--hair); color:var(--ink); border-bottom:1px solid var(--card)}
+.big{font-family:"Fredoka",var(--font-head); font-size:21px; font-weight:600; line-height:1.25}
+.note{font-size:12.5px; color:var(--ink-3); margin:6px 0 0}
+.say{font-size:14px; margin:6px 0 0; padding:8px 10px; border-radius:var(--radius-sm); background:var(--sunk)}
+#tileHit{cursor:pointer}
+.hdl{cursor:grab} .hdl.dragging{cursor:grabbing}
+.stepBtn{min-height:36px; min-width:36px; border-radius:99px; border:1px solid var(--hair-2); background:var(--card); font-size:18px; font-weight:700; cursor:pointer; color:var(--ink)}
+.stepBtn:disabled{opacity:.4; cursor:default}
+.stepRow{display:flex; align-items:center; gap:10px; margin:6px 0}
+.stepRow .n{min-width:28px; text-align:center; font-weight:700; font-variant-numeric:tabular-nums}
+svg text{pointer-events:none}
+</style>
+</head>
+<body>
+<header class="pg-top"></header>
+
+<div class="pg-intro">
+  <h1>Grandmother's quilt</h1>
+  <p>Same lace, different quilt: does the area change? Help Preetha reshape the quilt, then help Adrit rearrange the milk cans on the dairy farm.</p>
+</div>
+
+<main class="pg-main wide-side">
+  <section class="pg-stage" id="stageWrap">
+    <div class="tabs" role="tablist">
+      <button class="tab" role="tab" id="tabQuilt" aria-selected="true">Grandmother's quilt</button>
+      <button class="tab" role="tab" id="tabFarm" aria-selected="false">The dairy farm</button>
+    </div>
+    <svg id="stageQ" viewBox="0 0 1000 560" role="img" aria-label="A quilt with a fixed length of lace round its edge. Drag its corner to reshape it."></svg>
+    <svg id="stageF" viewBox="0 0 1000 560" role="img" aria-label="Rows of milk cans on the dairy farm. Change the rows and columns, or halve one and double the other."></svg>
+  </section>
+
+  <aside class="pg-side">
+    <div id="poe"></div>
+
+    <div class="card" id="cardQ">
+      <div class="kicker">Grandmother's quilt</div>
+      <div class="big num" id="qBig">6 patches wide, 6 patches tall</div>
+      <p class="note">Drag the quilt's bottom-right corner. Grandmother only has 24 units of lace, and every quilt uses every bit of it.</p>
+      <p class="say" id="qSay"></p>
+      <div class="row" style="margin-top:8px"><button class="btn sm" id="qReset">Back to the square</button></div>
+    </div>
+
+    <div class="card" id="cardF" hidden>
+      <div class="kicker">The dairy farm</div>
+      <div class="big num" id="fBig">4 rows of 6 cans</div>
+      <div class="stepRow"><span>Rows</span><button class="stepBtn" id="rMinus">–</button><span class="n" id="rNum">4</span><button class="stepBtn" id="rPlus">+</button></div>
+      <div class="stepRow"><span>Columns</span><button class="stepBtn" id="cMinus">–</button><span class="n" id="cNum">6</span><button class="stepBtn" id="cPlus">+</button></div>
+      <div class="row" style="margin-top:6px">
+        <button class="btn sm" id="halveRDoubleC">Halve rows, double columns</button>
+        <button class="btn sm" id="doubleRHalveC">Double rows, halve columns</button>
+      </div>
+      <p class="say" id="fSay"></p>
+      <div class="row" style="margin-top:6px"><button class="btn sm" id="fReset">Back to 4 × 6</button></div>
+    </div>
+
+    <div class="card"><div class="kicker">To find</div><div id="finds"></div></div>
+  </aside>
+</main>
+
+<script src="../../play.js"></script>
+<script>
+'use strict';
+const {$, esc, clamp, fmt, drag, sound, say, track, toast, predict, findings, discover, found,
+       shareState, sharedState, mount, svgPoint} = Play;
+mount({thread: 'area', band: 'explorer'});
+
+/* MODEL:start ==================================================================
+   Two small, honest counts. Nothing is looked up.
+
+   1. Grandmother's quilt (Maths Mela 5, Ch 11 "Grandmother's Quilt"). A loop of
+      lace of fixed length P = 24 units goes round the quilt's edge, so for any
+      rectangle length l, breadth b = P/2 − l. The area (the patches inside) is
+      l × b, counted on the grid — it is NOT fixed, even though the lace is.
+      A square (l = b) always covers the most; a long, thin rectangle the least.
+   2. The dairy farm (Maths Mela 5, Ch 6 "The Dairy Farm", "Doubling and
+      Halving"). Packets arranged in r rows of c each total r × c. Halving one
+      factor and doubling the other (r × c = (r/2) × (2c)) leaves the total
+      unchanged — the same packets, in a different rectangle.
+   ============================================================================ */
+const PERIM = 24;
+const bOf = l => PERIM / 2 - l;                              // breadth for a given length, fixed lace
+const quiltArea = l => l * bOf(l);
+const farmArea = (r, c) => r * c;
+/* MODEL:end */
+
+const INK = '#1d2327', PINK = '#c2569b', ORANGE = '#e8890c', TILE = '#f7d6e8', TILE2 = '#e7a8cb';
+
+/* ---- state -------------------------------------------------------------------- */
+const S = {tab: 'quilt', lockedQ: false,
+  l: 6, triedL: {6: true},
+  r: 4, c: 6, farm24: {'4,6': true}, halved: false};
+const shared = sharedState();
+if (shared) {
+  if (['quilt', 'farm'].includes(shared.tab)) S.tab = shared.tab;
+  if (shared.l) S.l = clamp(+shared.l | 0, 1, 11);
+  if (shared.r) { S.r = clamp(+shared.r | 0, 1, 12); S.c = clamp(+shared.c | 0, 1, 12); }
+}
+shareState(() => ({tab: S.tab, l: S.l, r: S.r, c: S.c}));
+
+/* ============================================================================
+   Tab 1: Grandmother's quilt
+   ============================================================================ */
+const svgQ = $('stageQ');
+const GX = 60, GY = 90, CELL = 34;
+const GR = {x: 660, y: 120, w: 300, h: 300};
+function buildQ(){
+  let grid = '';
+  for (let i = 0; i <= 11; i++) grid += `<line x1="${GX + i * CELL}" y1="${GY}" x2="${GX + i * CELL}" y2="${GY + 11 * CELL}"/>`;
+  for (let j = 0; j <= 11; j++) grid += `<line x1="${GX}" y1="${GY + j * CELL}" x2="${GX + 11 * CELL}" y2="${GY + j * CELL}"/>`;
+  svgQ.innerHTML = `
+  <rect x="0" y="0" width="1000" height="560" fill="#fbfaf6"/>
+  <text x="30" y="40" font-size="13" font-weight="700" letter-spacing=".08em" fill="#4a555b">SQUARED PAPER · 1 SQUARE = 1 PATCH</text>
+  <g stroke="#dcd6c6" stroke-width="1">${grid}</g>
+  <g id="patches"></g>
+  <rect id="laceRect" fill="none" stroke="${ORANGE}" stroke-width="6" stroke-linejoin="round"/>
+  <circle id="hCorner" class="hdl" r="14" fill="${ORANGE}" stroke="#fff" stroke-width="3"/>
+  <text id="qLen" text-anchor="middle" font-size="13" font-weight="600" fill="#4a555b"></text>
+  <text id="qBr" font-size="13" font-weight="600" fill="#4a555b"></text>
+  <text x="${GR.x}" y="40" font-size="13" font-weight="700" letter-spacing=".08em" fill="#4a555b">PATCHES INSIDE, FOR EACH QUILT YOU TRY</text>
+  <text x="${GR.x}" y="60" font-size="12" fill="#7c878c">The lace is always 24 units. The patches inside are not.</text>
+  <line x1="${GR.x}" y1="${GR.y + GR.h}" x2="${GR.x + GR.w}" y2="${GR.y + GR.h}" stroke="#9aa3a6"/>
+  <line x1="${GR.x}" y1="${GR.y}" x2="${GR.x}" y2="${GR.y + GR.h}" stroke="#9aa3a6"/>
+  ${Array.from({length: 11}, (_, i) => i + 1).map(l => `<text x="${qgx(l)}" y="${GR.y + GR.h + 18}" text-anchor="middle" font-size="11.5" fill="#4a555b">${l}</text>`).join('')}
+  <text x="${GR.x + GR.w / 2}" y="${GR.y + GR.h + 38}" text-anchor="middle" font-size="12.5" font-weight="600" fill="#4a555b">length you chose (units)</text>
+  <text x="${GR.x - 44}" y="${GR.y - 12}" font-size="12.5" font-weight="600" fill="#4a555b">patches</text>
+  <g id="qBars"></g>
+  `;
+}
+const qgx = l => GR.x + 12 + (l - 1) / 10 * (GR.w - 24);
+const qgy = a => GR.y + GR.h - a / 36 * GR.h;
+function paintQ(){
+  const l = S.l, b = bOf(l), area = quiltArea(l);
+  let p = '';
+  for (let i = 0; i < l; i++) for (let j = 0; j < b; j++) {
+    const dark = (i + j) % 2 === 0;
+    p += `<rect x="${GX + i * CELL + 2}" y="${GY + j * CELL + 2}" width="${CELL - 4}" height="${CELL - 4}" rx="3" fill="${dark ? TILE2 : TILE}"/>`;
+  }
+  $('patches').innerHTML = p;
+  $('laceRect').setAttribute('x', GX); $('laceRect').setAttribute('y', GY);
+  $('laceRect').setAttribute('width', l * CELL); $('laceRect').setAttribute('height', b * CELL);
+  $('hCorner').setAttribute('cx', GX + l * CELL); $('hCorner').setAttribute('cy', GY + b * CELL);
+  $('qLen').setAttribute('x', GX + l * CELL / 2); $('qLen').setAttribute('y', GY + b * CELL + 26); $('qLen').textContent = `${l} long`;
+  $('qBr').setAttribute('x', GX + l * CELL + 20); $('qBr').setAttribute('y', GY + b * CELL / 2 + 4); $('qBr').textContent = `${b} tall`;
+  $('qBig').textContent = `${l} patches wide, ${b} patches tall`;
+  const bars = Object.keys(S.triedL).map(k => +k).sort((x, y) => x - y).map(k => {
+    const a = quiltArea(k), cur = k === l;
+    return `<rect x="${qgx(k) - 12}" y="${qgy(a)}" width="24" height="${GR.y + GR.h - qgy(a)}" rx="3" fill="${cur ? PINK : TILE2}"/>` +
+      `<text x="${qgx(k)}" y="${qgy(a) - 6}" text-anchor="middle" font-size="11" font-weight="700" fill="${cur ? PINK : '#7c878c'}">${a}</text>`;
+  }).join('');
+  $('qBars').innerHTML = bars;
+  $('qSay').textContent = `24 units of lace, arranged ${l} by ${b}: that covers ${area} patches (${l} × ${b}). ` +
+    (l === 6 ? 'A square! No other shape from this lace covers more.' : l === 1 || l === 11 ? 'As thin as this lace allows — hardly any patches.' : 'Try the square in the middle, or the thinnest ends.');
+}
+function setL(l){
+  l = clamp(Math.round(l), 1, 11);
+  if (l === S.l) return;
+  S.l = l; S.triedL[l] = true;
+  paintQ();
+  if (l === 6) discover('biggest');
+  if (l === 1 || l === 11) discover('thinnest');
+  if (Object.keys(S.triedL).length >= 4) discover('explored');
+  track('quilt', {l, b: bOf(l), area: quiltArea(l)});
+}
+buildQ();
+drag($('hCorner'), svgQ, {
+  move(p){ setL((p.x - GX) / CELL); },
+});
+$('qReset').addEventListener('click', () => { sound('tick'); setL(6); });
+
+/* ============================================================================
+   Tab 2: The dairy farm
+   ============================================================================ */
+const svgF = $('stageF');
+const FX = 40, FY = 90, FBOXW = 520, FBOXH = 400, FCOLS = 12, FROWS = 12;
+function buildF(){
+  svgF.innerHTML = `
+  <rect x="0" y="0" width="1000" height="560" fill="#fbfaf6"/>
+  <text x="30" y="40" font-size="13" font-weight="700" letter-spacing=".08em" fill="#4a555b">MILK CANS, IN ROWS AND COLUMNS</text>
+  <g id="cans"></g>
+  <text id="fEq" x="30" y="522" font-size="20" font-weight="600" fill="${INK}" font-family="Fredoka, Inter, sans-serif"></text>
+  <line x1="620" y1="30" x2="620" y2="530" stroke="#e2ded2"/>
+  <text x="650" y="40" font-size="13" font-weight="700" letter-spacing=".08em" fill="#4a555b">EVERY WAY TO MAKE 24 CANS</text>
+  <text x="650" y="60" font-size="12" fill="#7c878c">Each rectangle you try is marked, at its rows and columns.</text>
+  <g id="fGrid"></g>
+  <g id="fPts"></g>
+  `;
+}
+const fgx = c => 660 + (c - 1) * (300 / 23);
+const fgy = r => 470 - (r - 1) * (380 / 23);
+function paintF(){
+  const r = S.r, c = S.c, area = farmArea(r, c);
+  const cell = Math.min(FBOXW / c, FBOXH / r, 74);
+  let cans = '';
+  for (let i = 0; i < r; i++) for (let j = 0; j < c; j++) {
+    const x = FX + j * cell, y = FY + i * cell, w = cell * 0.82;
+    cans += `<g transform="translate(${x} ${y})">
+      <rect x="${cell * 0.09}" y="${cell * 0.22}" width="${w}" height="${cell * 0.7}" rx="${cell * 0.09}" fill="${(i + j) % 2 ? TILE2 : PINK}"/>
+      <rect x="${cell * 0.2}" y="${cell * 0.08}" width="${w * 0.6}" height="${cell * 0.18}" rx="${cell * 0.06}" fill="#8a5a2b"/>
+    </g>`;
+  }
+  $('cans').innerHTML = cans;
+  $('fEq').textContent = `${r} rows × ${c} columns = ${area} cans`;
+  $('fBig').textContent = `${r} row${r === 1 ? '' : 's'} of ${c} can${c === 1 ? '' : 's'}`;
+  $('rNum').textContent = r; $('cNum').textContent = c;
+  $('rMinus').disabled = r <= 1; $('rPlus').disabled = r >= FROWS;
+  $('cMinus').disabled = c <= 1; $('cPlus').disabled = c >= FCOLS;
+  $('halveRDoubleC').disabled = !(r % 2 === 0 && c * 2 <= FCOLS);
+  $('doubleRHalveC').disabled = !(c % 2 === 0 && r * 2 <= FROWS);
+  /* the grid of every (rows, columns) pair that makes 24, and which ones we've tried */
+  let grid = '', pts = '';
+  for (let cc = 1; cc <= FCOLS; cc++) grid += `<line x1="${fgx(cc)}" y1="${fgy(1)}" x2="${fgx(cc)}" y2="${fgy(FROWS)}" stroke="#ece8dc"/>`;
+  for (let rr = 1; rr <= FROWS; rr++) grid += `<line x1="${fgx(1)}" y1="${fgy(rr)}" x2="${fgx(FCOLS)}" y2="${fgy(rr)}" stroke="#ece8dc"/>`;
+  grid += `<line x1="${fgx(1)}" y1="${fgy(1)}" x2="${fgx(FCOLS)}" y2="${fgy(1)}" stroke="#9aa3a6"/><line x1="${fgx(1)}" y1="${fgy(1)}" x2="${fgx(1)}" y2="${fgy(FROWS)}" stroke="#9aa3a6"/>`;
+  for (let rr = 1; rr <= FROWS; rr++) if (24 % rr === 0 && 24 / rr <= FCOLS) {
+    const cc = 24 / rr, k = rr + ',' + cc, tried = S.farm24[k], cur = rr === r && cc === c;
+    pts += `<circle cx="${fgx(cc)}" cy="${fgy(rr)}" r="${cur ? 9 : 6}" fill="${tried ? PINK : '#fff'}" stroke="${PINK}" stroke-width="2"/>`;
+  }
+  $('fGrid').innerHTML = grid;
+  $('fPts').innerHTML = pts;
+  $('fSay').textContent = S.halved ? `${r} × ${c} is still 24 — halving one side and doubling the other never changes the total.`
+    : `${r} rows of ${c}: ${r} × ${c} = ${area} cans.`;
+}
+function setRC(r, c, opts = {}){
+  r = clamp(Math.round(r), 1, FROWS); c = clamp(Math.round(c), 1, FCOLS);
+  if (r === S.r && c === S.c) return;
+  S.r = r; S.c = c;
+  const k = r + ',' + c;
+  if (farmArea(r, c) === 24) {
+    const isNew = !S.farm24[k];
+    S.farm24[k] = true;
+    if (isNew && Object.keys(S.farm24).length >= 3) discover('newrectangle');
+  }
+  if (opts.transform) { S.halved = true; discover('doublehalve'); }
+  paintF();
+  track('farm', {r, c, area: farmArea(r, c)});
+}
+$('rMinus').addEventListener('click', () => { sound('tick'); setRC(S.r - 1, S.c); });
+$('rPlus').addEventListener('click', () => { sound('tick'); setRC(S.r + 1, S.c); });
+$('cMinus').addEventListener('click', () => { sound('tick'); setRC(S.r, S.c - 1); });
+$('cPlus').addEventListener('click', () => { sound('tick'); setRC(S.r, S.c + 1); });
+$('halveRDoubleC').addEventListener('click', () => { if ($('halveRDoubleC').disabled) return; sound('snap'); setRC(S.r / 2, S.c * 2, {transform: true}); });
+$('doubleRHalveC').addEventListener('click', () => { if ($('doubleRHalveC').disabled) return; sound('snap'); setRC(S.r * 2, S.c / 2, {transform: true}); });
+$('fReset').addEventListener('click', () => { sound('tick'); S.halved = false; setRC(4, 6); paintF(); });
+
+/* ============================================================================
+   Wiring
+   ============================================================================ */
+buildF();
+function setTab(t){
+  S.tab = t;
+  $('tabQuilt').setAttribute('aria-selected', t === 'quilt'); $('tabFarm').setAttribute('aria-selected', t === 'farm');
+  $('stageQ').toggleAttribute('hidden', t !== 'quilt'); $('stageF').toggleAttribute('hidden', t !== 'farm');
+  $('cardQ').hidden = t !== 'quilt'; $('cardF').hidden = t !== 'farm';
+  if (t === 'quilt') paintQ(); else paintF();
+  track('tab', {tab: t});
+}
+$('tabQuilt').addEventListener('click', () => { sound('tick'); setTab('quilt'); });
+$('tabFarm').addEventListener('click', () => { sound('tick'); setTab('farm'); });
+
+/* ============================================================================
+   Start
+   ============================================================================ */
+findings($('finds'), [
+  {id: 'biggest',     icon: '◻', label: 'The square holds the most', hint: 'Make the quilt a square', say: 'A square covers more than any other rectangle with the same lace!'},
+  {id: 'thinnest',    icon: '▭', label: 'A thin quilt holds the least', hint: 'Make the quilt as long and thin as you can', say: 'So thin, so few patches — with the very same lace.'},
+  {id: 'explored',    icon: '✂', label: 'Tried four different quilts', hint: 'Try several lengths', say: 'Same lace, four different quilts, four different areas.'},
+  {id: 'doublehalve', icon: '⇄', label: 'Halve one, double the other', hint: 'Try the halve-and-double buttons on the dairy farm', say: 'Halve the rows, double the columns — the same 24 cans!'},
+  {id: 'newrectangle',icon: '▦', label: 'A third way to make 24', hint: 'Use the steppers to find another rows × columns pair', say: 'Another rectangle, still 24 cans.'},
+], () => say('You found every way to grow this thread!'));
+
+const POE = predict($('poe'), {
+  id: 'quilt-shape',
+  q: 'Preetha makes the quilt longer and thinner, using the very same lace. What happens to the number of patches inside?',
+  confidence: false,
+  options: [
+    {id: 'more', text: 'More patches fit inside.'},
+    {id: 'fewer', text: 'Fewer patches fit inside.', right: true},
+    {id: 'same', text: 'The same number of patches, because the lace has not changed.'},
+  ],
+  onLock(){ say('Drag the quilt’s corner and watch the patches on the graph.'); },
+});
+
+say('Grandmother has 24 units of lace. Help Preetha shape her quilt, then help Adrit arrange the milk cans.');
+setTab('quilt');
+window.applyFeatures = () => setTab(S.tab);
+window.PG_STATE = () => JSON.parse(JSON.stringify(S));
+window.PG_MODEL = {PERIM, bOf, quiltArea, farmArea};
+</script>
+</body>
+</html>

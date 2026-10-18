@@ -1,0 +1,398 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Orienting Yourself</title>
+<meta name="description" content="Class 9-10: drop two points on a floor-plan grid. Their distance comes from Pythagoras on the triangle they make, a third point divides the segment by the section formula, and a fourth is tested for lying on the same line.">
+<link rel="icon" href="../../favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600&family=Inter:wght@400;500;600;700&family=Nunito:wght@500;700;800&family=Newsreader:opsz,wght@6..72,400;6..72,500&family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="../../play.css">
+<style>
+/* Only what this page needs beyond play.css. */
+.gate{position:absolute; left:0; right:0; top:0; height:100%; display:grid; place-items:center; pointer-events:none}
+.gate span{background:rgba(29,35,39,.86); color:#fff; padding:10px 16px; border-radius:99px; font-weight:600; font-size:14px}
+.pg-stage{align-self:start; min-height:0}
+.leftcol{display:flex; flex-direction:column; gap:12px; min-width:0}
+.leftcol > .pg-stage{align-self:stretch}
+#aHit,#bHit,#cHit{cursor:grab} #aHit.dragging,#bHit.dragging,#cHit.dragging{cursor:grabbing}
+#pHit{cursor:ew-resize} #pHit.dragging{cursor:grabbing}
+.seg{display:grid; grid-auto-flow:column; grid-auto-columns:1fr; gap:4px; background:var(--sunk); padding:4px; border-radius:var(--radius-sm); margin-bottom:8px}
+.seg button{border:0; background:transparent; border-radius:7px; min-height:32px; font-weight:600; font-size:12.5px; cursor:pointer; color:var(--ink-2)}
+.seg button[aria-pressed="true"]{background:var(--card); color:var(--ink); box-shadow:var(--shadow)}
+.ratioRow{display:grid; grid-template-columns:repeat(5,1fr); gap:4px; margin:6px 0}
+.ratioRow button{min-height:30px; border-radius:8px; border:1.5px solid var(--hair-2); background:var(--card); cursor:pointer; font-weight:700; font-size:12px; color:var(--ink-2)}
+.ratioRow button[aria-pressed="true"]{border-color:var(--accent); color:var(--ink); box-shadow:0 0 0 2px var(--accent-soft)}
+.why p{font-size:13.5px; margin-bottom:.5em}
+.note{font-size:12.5px; color:var(--ink-3); margin:6px 0 0}
+.below{display:grid; grid-template-columns:1fr 1fr; gap:12px; align-items:start}
+.below:has(#whyCard[hidden]){grid-template-columns:1fr}
+@media (max-width:1200px){ .pg-main.wide-side{grid-template-columns:minmax(0,1fr) 340px} .below{grid-template-columns:1fr} }
+svg text.m{font-family:var(--font-mono)}
+</style>
+</head>
+<body>
+<header class="pg-top"></header>
+
+<div class="pg-intro">
+  <h1>Orienting yourself</h1>
+  <p>Two points on a grid are all it takes. Drag <b>A</b> and <b>B</b> to any grid crossing and the model does the rest: their distance, worked out
+     the same way you would with a set square and Pythagoras; a third point that divides the segment in a ratio you choose; and a fourth point,
+     tested for whether it sits on the very same line. Nothing here is looked up — every number below is computed from where you put the points.</p>
+  <div class="syl">CBSE Class 9 &middot; Ch 1 Orienting Yourself &middot; CBSE Class 10 &middot; Ch 7 Coordinate Geometry</div>
+</div>
+
+<main class="pg-main wide-side">
+  <div class="leftcol">
+  <section class="pg-stage" id="stageWrap">
+    <svg id="stage" viewBox="0 0 900 680" role="img" aria-label="A coordinate grid with two draggable points, their distance, a point dividing the segment, and a third point tested for lying on the line"></svg>
+    <div class="gate" id="gate"><span>Make your prediction first &rarr;</span></div>
+  </section>
+
+  <div class="below">
+    <div class="card why" id="whyCard" hidden>
+      <div class="kicker">What the model says</div>
+      <div id="why"></div>
+    </div>
+    <div class="card"><div class="kicker">To find</div><div id="finds"></div></div>
+  </div>
+  </div>
+
+  <aside class="pg-side">
+    <div id="poe"></div>
+
+    <div class="card" id="tabCard">
+      <div class="seg" id="tabSeg">
+        <button data-tab="distance" aria-pressed="true">Distance</button>
+        <button data-tab="section" aria-pressed="false">Divide it</button>
+        <button data-tab="collinear" aria-pressed="false">On the line?</button>
+      </div>
+      <p class="note" id="tabNote">Drag A and B anywhere on the grid.</p>
+    </div>
+
+    <div class="card" id="ratioCard" hidden>
+      <div class="kicker">Ratio AP : PB</div>
+      <div class="ratioRow" id="ratioRow">
+        <button data-m="1" data-n="1">1:1</button>
+        <button data-m="1" data-n="2">1:2</button>
+        <button data-m="2" data-n="1">2:1</button>
+        <button data-m="1" data-n="3">1:3</button>
+        <button data-m="3" data-n="1">3:1</button>
+      </div>
+      <p class="note">Or drag P itself along the segment.</p>
+    </div>
+  </aside>
+</main>
+
+<script src="../../play.js"></script>
+<script>
+'use strict';
+const {$, esc, clamp, fmt, drag, sound, say, track, toast, predict, findings, discover, found,
+       shareState, sharedState, mount, reduced} = Play;
+mount({thread: 'coordinates', band: 'modeller'});
+
+/* MODEL:start ==================================================================
+   Two points A(x1,y1) and B(x2,y2) on the Cartesian plane.
+     distance   AB = sqrt((x2-x1)^2 + (y2-y1)^2)                — Pythagoras on the
+       right triangle whose legs are the horizontal run (x2-x1) and vertical
+       rise (y2-y1).
+     section formula (internal division, ratio m:n from A)
+       P = ( (m*x2 + n*x1)/(m+n), (m*y2 + n*y1)/(m+n) )
+     collinearity, by the area of the triangle A,B,C:
+       Area = 1/2 * | x1(y2-y3) + x2(y3-y1) + x3(y1-y2) |
+       Three points are collinear exactly when that area is 0.
+   Every quantity below is this arithmetic run on whatever A, B and C the
+   learner actually placed — nothing is stored per pair of points.
+   ============================================================================ */
+const dist = (a, b) => Math.hypot(b.x - a.x, b.y - a.y);
+const section = (a, b, m, n) => ({x: (m * b.x + n * a.x) / (m + n), y: (m * b.y + n * a.y) / (m + n)});
+const triArea = (a, b, c) => 0.5 * Math.abs(a.x * (b.y - c.y) + b.x * (c.y - a.y) + c.x * (a.y - b.y));
+/* The nearest small-integer ratio to a fraction t = AP/AB, if there is a close one. */
+function niceRatio(t){
+  let best = null, bestErr = 0.015;
+  for (let n = 1; n <= 9; n++) for (let m = 1; m <= 9; m++) {
+    const err = Math.abs(t - m / (m + n));
+    if (err < bestErr) { bestErr = err; best = {m, n}; }
+  }
+  return best;
+}
+/* MODEL:end */
+
+/* ---- state: plain data ------------------------------------------------------ */
+const S = {tab: 'distance', A: {x: 1, y: 1}, B: {x: 4, y: 5}, C: {x: -6, y: 2}, t: 0.5, locked: false};
+const QUAD_SEEN = new Set();
+const shared = sharedState();
+if (shared) {
+  for (const k of ['A', 'B', 'C']) if (shared[k] && isFinite(+shared[k].x) && isFinite(+shared[k].y)) S[k] = {x: +shared[k].x, y: +shared[k].y};
+  if (isFinite(+shared.t)) S.t = clamp(+shared.t, 0, 1);
+  if (['distance', 'section', 'collinear'].includes(shared.tab)) S.tab = shared.tab;
+}
+shareState(() => ({tab: S.tab, A: S.A, B: S.B, C: S.C, t: S.t}));
+
+/* ============================================================================
+   The stage: a square Cartesian grid, plus a computed-numbers panel, built
+   once and then patched.
+   ============================================================================ */
+const svg = $('stage');
+const GX0 = 50, GX1 = 650, GY0 = 40, GY1 = 640, DOM = 10, SC = (GX1 - GX0) / (2 * DOM);
+const gx = x => GX0 + (x + DOM) * SC, gy = y => GY1 - (y + DOM) * SC;
+const rawx = X => (X - GX0) / SC - DOM, rawy = Y => (GY1 - Y) / SC - DOM;
+const invx = X => clamp(Math.round(rawx(X)), -DOM, DOM), invy = Y => clamp(Math.round(rawy(Y)), -DOM, DOM);
+const NX0 = 672, NY0 = 40, NW = 208;
+const COL = {a: '#3057c9', b: '#1f8a70', p: '#c9821f', c: '#8a5cf6'};
+
+function build(){
+  let grid = '';
+  for (let i = -DOM; i <= DOM; i++) {
+    const major = i % 5 === 0;
+    grid += `<line x1="${gx(i)}" y1="${GY0}" x2="${gx(i)}" y2="${GY1}" stroke="${major ? '#d3cfc2' : '#ece8dd'}"/>`;
+    grid += `<line x1="${GX0}" y1="${gy(i)}" x2="${GX1}" y2="${gy(i)}" stroke="${major ? '#d3cfc2' : '#ece8dd'}"/>`;
+    if (major && i !== 0) { grid += `<text x="${gx(i)}" y="${gy(0) + 16}" text-anchor="middle" fill="#8a8478" font-size="10.5" class="m">${i}</text>`;
+      grid += `<text x="${gx(0) - 8}" y="${gy(i) + 4}" text-anchor="end" fill="#8a8478" font-size="10.5" class="m">${i}</text>`; }
+  }
+  svg.innerHTML = `
+  <rect x="0" y="0" width="900" height="680" fill="#fbfaf6"/>
+  <text x="20" y="22" fill="#4a555b" font-size="12" font-weight="700" letter-spacing=".08em">THE GRID</text>
+  <g id="grid">${grid}</g>
+  <line x1="${GX0}" y1="${gy(0)}" x2="${GX1}" y2="${gy(0)}" stroke="#9b968a" stroke-width="1.4"/>
+  <line x1="${gx(0)}" y1="${GY0}" x2="${gx(0)}" y2="${GY1}" stroke="#9b968a" stroke-width="1.4"/>
+  <text x="${GX1 + 4}" y="${gy(0) + 4}" fill="#6b665a" font-size="12" font-weight="700">x</text>
+  <text x="${gx(0) - 4}" y="${GY0 - 6}" fill="#6b665a" font-size="12" font-weight="700" text-anchor="end">y</text>
+  <rect x="${GX0}" y="${GY0}" width="${GX1 - GX0}" height="${GY1 - GY0}" fill="none" stroke="#c9c4b6"/>
+
+  <line id="segAB" stroke="#8a8478" stroke-width="1.6"/>
+  <path id="legs" fill="none" stroke="#b9b4a6" stroke-width="1.6" stroke-dasharray="5 4"/>
+  <text id="dxLab" font-size="12" font-weight="700" fill="#6b665a" text-anchor="middle"></text>
+  <text id="dyLab" font-size="12" font-weight="700" fill="#6b665a" text-anchor="middle"></text>
+
+  <line id="extLine" stroke="${COL.b}" stroke-width="1.1" stroke-dasharray="3 3" opacity="0"/>
+  <path id="triFill" fill="${COL.c}" opacity="0"/>
+
+  <line id="apSeg" stroke="${COL.a}" stroke-width="4" stroke-linecap="round" opacity="0"/>
+  <line id="pbSeg" stroke="${COL.b}" stroke-width="4" stroke-linecap="round" opacity="0"/>
+
+  <g id="ptC" opacity="0"><circle r="9" fill="${COL.c}" stroke="#fff" stroke-width="2"/></g>
+  <g id="ptP" opacity="0"><circle r="8" fill="${COL.p}" stroke="#fff" stroke-width="2"/></g>
+  <g id="ptA"><circle r="9" fill="${COL.a}" stroke="#fff" stroke-width="2"/></g>
+  <g id="ptB"><circle r="9" fill="${COL.b}" stroke="#fff" stroke-width="2"/></g>
+  <text id="labA" font-size="12.5" font-weight="700" fill="${COL.a}"></text>
+  <text id="labB" font-size="12.5" font-weight="700" fill="${COL.b}"></text>
+  <text id="labC" font-size="12.5" font-weight="700" fill="${COL.c}"></text>
+  <text id="labP" font-size="12.5" font-weight="700" fill="${COL.p}"></text>
+
+  <rect id="cHit" width="26" height="26" fill="transparent" opacity="0" tabindex="0" role="slider" aria-label="Third point C"/>
+  <rect id="pHit" width="26" height="26" fill="transparent" opacity="0" tabindex="0" role="slider" aria-label="Dividing point P"/>
+  <rect id="aHit" width="30" height="30" fill="transparent" tabindex="0" role="slider" aria-label="Point A"/>
+  <rect id="bHit" width="30" height="30" fill="transparent" tabindex="0" role="slider" aria-label="Point B"/>
+
+  <line x1="660" y1="30" x2="660" y2="650" stroke="#e2ded2"/>
+  <text x="${NX0}" y="22" fill="#4a555b" font-size="12" font-weight="700" letter-spacing=".08em">COMPUTED</text>
+  <g id="numsPanel" font-size="13"></g>
+  `;
+}
+
+/* ---- render: one model, three linked views (grid, panel, and — for the
+   ratio — a slider that drives the same value the drag on the grid does) --- */
+function ptLabel(p){ return `(${fmt(p.x, 0)}, ${fmt(p.y, 0)})`; }
+function quadOf(p){ if (p.x === 0 || p.y === 0) return null; return (p.x > 0 ? 'R' : 'L') + (p.y > 0 ? 'U' : 'D'); }
+function render(){
+  const A = S.A, B = S.B, C = S.C;
+  const pA = {x: gx(A.x), y: gy(A.y)}, pB = {x: gx(B.x), y: gy(B.y)};
+  $('segAB').setAttribute('x1', pA.x); $('segAB').setAttribute('y1', pA.y);
+  $('segAB').setAttribute('x2', pB.x); $('segAB').setAttribute('y2', pB.y);
+  for (const [id, p] of [['ptA', pA], ['ptB', pB]]) { $(id).setAttribute('transform', `translate(${p.x},${p.y})`); }
+  for (const [id, p] of [['aHit', pA], ['bHit', pB]]) { $(id).setAttribute('x', p.x - 15); $(id).setAttribute('y', p.y - 15); }
+  $('labA').setAttribute('x', pA.x - 14); $('labA').setAttribute('y', pA.y - 16); $('labA').textContent = 'A' + ptLabel(A);
+  $('labB').setAttribute('x', pB.x + 14); $('labB').setAttribute('y', pB.y - 16); $('labB').textContent = 'B' + ptLabel(B);
+  $('labA').setAttribute('text-anchor', A.x > B.x ? 'start' : 'end');
+  $('labB').setAttribute('text-anchor', B.x >= A.x ? 'start' : 'end');
+
+  const dx = B.x - A.x, dy = B.y - A.y, d = dist(A, B);
+  const corner = {x: gx(B.x), y: gy(A.y)};
+  $('legs').setAttribute('d', dx === 0 || dy === 0 ? '' : `M${pA.x} ${pA.y} L${corner.x} ${corner.y} L${pB.x} ${pB.y}`);
+  $('dxLab').setAttribute('x', (pA.x + corner.x) / 2); $('dxLab').setAttribute('y', corner.y + (A.y > B.y ? -8 : 18));
+  $('dxLab').textContent = dx === 0 ? '' : `${Math.abs(dx)}`;
+  $('dyLab').setAttribute('x', corner.x + (A.x > B.x ? -18 : 10)); $('dyLab').setAttribute('y', (corner.y + pB.y) / 2 + 4);
+  $('dyLab').textContent = dy === 0 ? '' : `${Math.abs(dy)}`;
+
+  const wantP = S.tab === 'section', wantC = S.tab === 'collinear';
+  $('ptP').setAttribute('opacity', wantP ? 1 : 0); $('apSeg').setAttribute('opacity', wantP ? 1 : 0); $('pbSeg').setAttribute('opacity', wantP ? 1 : 0);
+  $('pHit').setAttribute('opacity', 0); $('pHit').style.pointerEvents = wantP ? '' : 'none';
+  $('legs').setAttribute('opacity', S.tab === 'distance' ? 1 : 0.25); $('dxLab').setAttribute('opacity', S.tab === 'distance' ? 1 : 0); $('dyLab').setAttribute('opacity', S.tab === 'distance' ? 1 : 0);
+  $('ratioCard').hidden = !wantP;
+  $('ptC').setAttribute('opacity', wantC ? 1 : 0); $('extLine').setAttribute('opacity', wantC ? 0.6 : 0); $('triFill').setAttribute('opacity', 0);
+  $('cHit').style.pointerEvents = wantC ? '' : 'none';
+  $('labC').setAttribute('opacity', wantC ? 1 : 0); $('labP').setAttribute('opacity', wantP ? 1 : 0);
+
+  let P = null, area = null;
+  if (wantP) {
+    /* t = AP/AB; the section formula is run on the equivalent ratio m:n = t:(1-t) */
+    P = section(A, B, S.t, 1 - S.t);
+    const pp = {x: gx(P.x), y: gy(P.y)};
+    $('ptP').setAttribute('transform', `translate(${pp.x},${pp.y})`);
+    $('pHit').setAttribute('x', pp.x - 13); $('pHit').setAttribute('y', pp.y - 13);
+    $('apSeg').setAttribute('x1', pA.x); $('apSeg').setAttribute('y1', pA.y); $('apSeg').setAttribute('x2', pp.x); $('apSeg').setAttribute('y2', pp.y);
+    $('pbSeg').setAttribute('x1', pp.x); $('pbSeg').setAttribute('y1', pp.y); $('pbSeg').setAttribute('x2', pB.x); $('pbSeg').setAttribute('y2', pB.y);
+    $('labP').setAttribute('x', pp.x); $('labP').setAttribute('y', pp.y - 16); $('labP').setAttribute('text-anchor', 'middle');
+    $('labP').textContent = `P(${fmt(P.x, 2)}, ${fmt(P.y, 2)})`;
+  }
+  if (wantC) {
+    const pc = {x: gx(C.x), y: gy(C.y)};
+    $('ptC').setAttribute('transform', `translate(${pc.x},${pc.y})`);
+    $('cHit').setAttribute('x', pc.x - 13); $('cHit').setAttribute('y', pc.y - 13);
+    $('labC').setAttribute('x', pc.x + 14); $('labC').setAttribute('y', pc.y - 16); $('labC').textContent = 'C' + ptLabel(C);
+    area = triArea(A, B, C);
+    const collinear = area < 0.02;
+    /* extend the line A-B right across the grid, for the eye */
+    const ext = dx === 0 ? {x1: pA.x, y1: GY0, x2: pA.x, y2: GY1} : (() => {
+      const k = dy / (dx || 1e-9);
+      const yAt = xv => A.y + k * (xv - A.x);
+      return {x1: gx(-DOM), y1: gy(clamp(yAt(-DOM), -DOM * 3, DOM * 3)), x2: gx(DOM), y2: gy(clamp(yAt(DOM), -DOM * 3, DOM * 3))};
+    })();
+    $('extLine').setAttribute('x1', ext.x1); $('extLine').setAttribute('y1', ext.y1); $('extLine').setAttribute('x2', ext.x2); $('extLine').setAttribute('y2', ext.y2);
+    $('extLine').setAttribute('stroke', collinear ? '#2f9e5b' : COL.b);
+    $('extLine').setAttribute('stroke-dasharray', collinear ? '0' : '3 3');
+    $('extLine').setAttribute('stroke-width', collinear ? 2.6 : 1.1);
+    if (!collinear) $('triFill').setAttribute('opacity', 0.14);
+    $('triFill').setAttribute('d', `M${pA.x} ${pA.y} L${pB.x} ${pB.y} L${pc.x} ${pc.y} Z`);
+    if (S.locked && collinear && dist(A, C) > 0.4 && dist(B, C) > 0.4) discover('collinear');
+  }
+
+  if (S.locked) {
+    for (const p of [A, B, C]) { const q = quadOf(p); if (q) QUAD_SEEN.add(q); }
+    if (QUAD_SEEN.size >= 4) discover('quadrant');
+    if (S.tab === 'distance' && dx !== 0 && dy !== 0) discover('pythagoras');
+    if (S.tab === 'distance' && (dx === 0 || dy === 0) && d > 0.4) discover('axisAligned');
+    if (S.tab === 'section') {
+      if (Math.abs(S.t - 0.5) < 0.02) discover('midpoint');
+      if (niceRatio(S.t) && Math.abs(S.t - 0.5) > 0.12) discover('offCenterRatio');
+    }
+  }
+
+  paintNumbers(A, B, C, dx, dy, d, P, area);
+  if (S.locked) paintWhy(dx, dy, d, P, area);
+}
+
+function paintNumbers(A, B, C, dx, dy, d, P, area){
+  const y0 = 60, lh = 22; let rows = [];
+  const row = (label, val, y) => `<text x="${NX0}" y="${y}" fill="#7c878c" font-size="11.5">${label}</text><text x="${NX0 + NW}" y="${y}" fill="#1d2327" font-weight="700" text-anchor="end" class="m">${val}</text>`;
+  let y = y0;
+  rows.push(row('A =', ptLabel(A), y)); y += lh;
+  rows.push(row('B =', ptLabel(B), y)); y += lh + 6;
+  if (S.tab === 'distance') {
+    rows.push(row('Δx = x₂ − x₁', fmt(dx, 0), y)); y += lh;
+    rows.push(row('Δy = y₂ − y₁', fmt(dy, 0), y)); y += lh + 4;
+    rows.push(`<text x="${NX0}" y="${y}" fill="#6b665a" font-size="11" class="m">AB = √(Δx²+Δy²)</text>`); y += 18;
+    rows.push(`<text x="${NX0}" y="${y}" fill="#6b665a" font-size="11" class="m">= √(${fmt(dx * dx, 0)}+${fmt(dy * dy, 0)})</text>`); y += 20;
+    rows.push(row('AB =', fmt(d, 2) + ' units', y)); y += lh;
+  } else if (S.tab === 'section' && P) {
+    const nr = niceRatio(S.t);
+    rows.push(row('AP : PB', nr ? `${nr.m} : ${nr.n}` : `${fmt(S.t, 2)} : ${fmt(1 - S.t, 2)}`, y)); y += lh + 4;
+    rows.push(`<text x="${NX0}" y="${y}" fill="#6b665a" font-size="10.5" class="m">P = (mx₂+nx₁, my₂+ny₁)/(m+n)</text>`); y += 20;
+    rows.push(row('P =', ptLabel(P), y)); y += lh;
+    rows.push(row('AP =', fmt(dist(A, P), 2), y)); y += lh;
+    rows.push(row('PB =', fmt(dist(P, B), 2), y)); y += lh;
+  } else if (S.tab === 'collinear') {
+    rows.push(row('C =', ptLabel(C), y)); y += lh + 4;
+    rows.push(`<text x="${NX0}" y="${y}" fill="#6b665a" font-size="10.5" class="m">Area = ½|x₁(y₂−y₃)+…|</text>`); y += 20;
+    rows.push(row('Area of △ABC =', fmt(area, 2), y)); y += lh;
+    rows.push(`<text x="${NX0}" y="${y}" fill="${area < 0.02 ? '#2f9e5b' : '#7c878c'}" font-weight="700" font-size="12.5">${area < 0.02 ? 'On the same line!' : 'Not on the line: a triangle.'}</text>`);
+  }
+  $('numsPanel').innerHTML = rows.join('');
+}
+function paintWhy(dx, dy, d, P, area){
+  $('whyCard').hidden = false;
+  let p;
+  if (S.tab === 'distance') p = `Drop a perpendicular from B down to A's row and you get a right triangle with legs <b>${fmt(Math.abs(dx), 0)}</b> and
+    <b>${fmt(Math.abs(dy), 0)}</b>. Pythagoras' theorem says the hypotenuse &mdash; the distance AB &mdash; is the square root of the sum of their squares:
+    <b>${fmt(d, 2)}</b> units.`;
+  else if (S.tab === 'section' && P) p = `P sits on the segment so that AP is <b>${fmt(dist(S.A, P), 2)}</b> and PB is <b>${fmt(dist(P, S.B), 2)}</b>. The section
+    formula builds P's coordinates as a weighted average of A and B, weighted by how far P is from the far end &mdash; move P and both weights change together.`;
+  else p = `The area of triangle ABC works out to <b>${fmt(area, 2)}</b>. ${area < 0.02 ? 'A triangle with no area at all is not a triangle: the three points must lie on one line.' : 'Because that is not zero, C is off the line through A and B — you can see the sliver of triangle it makes.'}`;
+  $('why').innerHTML = `<p>${p}</p>`;
+}
+
+/* ---- dragging: the grid points, and P along the segment -------------------- */
+build();
+function dragPoint(hitId, get, set){
+  drag($(hitId), svg, {
+    start(){ if (!S.locked) return false; },
+    move(p){ set({x: invx(p.x), y: invy(p.y)}); render(); },
+  });
+}
+dragPoint('aHit', () => S.A, v => S.A = v);
+dragPoint('bHit', () => S.B, v => S.B = v);
+dragPoint('cHit', () => S.C, v => S.C = v);
+drag($('pHit'), svg, {
+  start(){ if (!S.locked || S.tab !== 'section') return false; },
+  move(p){
+    const A = S.A, B = S.B, abx = B.x - A.x, aby = B.y - A.y, len2 = abx * abx + aby * aby || 1e-9;
+    const rx = rawx(p.x), ry = rawy(p.y);
+    S.t = clamp(((rx - A.x) * abx + (ry - A.y) * aby) / len2, 0, 1);
+    for (const b of $$('#ratioRow button')) b.setAttribute('aria-pressed', 'false');
+    render();
+  },
+});
+
+/* ---- tabs and the ratio quick-picks ---------------------------------------- */
+function $$(sel){ return Array.from(document.querySelectorAll(sel)); }
+$('tabSeg').addEventListener('click', e => {
+  const b = e.target.closest('[data-tab]'); if (!b || !S.locked) return;
+  S.tab = b.dataset.tab;
+  for (const x of $$('#tabSeg button')) x.setAttribute('aria-pressed', x === b);
+  $('tabNote').textContent = S.tab === 'distance' ? 'Drag A and B anywhere on the grid.' : S.tab === 'section' ? 'Pick a ratio, or drag P along the segment.' : 'Drag C to find a point on the line through A and B.';
+  sound('tick'); track('tab', {tab: S.tab}); render();
+});
+$('ratioRow').addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b || !S.locked) return;
+  const m = +b.dataset.m, n = +b.dataset.n;
+  S.t = m / (m + n);
+  for (const x of $$('#ratioRow button')) x.setAttribute('aria-pressed', x === b);
+  sound('tick'); track('ratio', {m, n}); render();
+});
+
+function lockControls(lock){
+  for (const id of ['aHit', 'bHit']) $(id).style.pointerEvents = lock ? 'none' : '';
+  for (const b of $$('#tabSeg button, #ratioRow button')) b.disabled = lock;
+  $('gate').hidden = !lock;
+}
+
+/* ============================================================================
+   Start
+   ============================================================================ */
+findings($('finds'), [
+  {id: 'pythagoras',     icon: '📏', label: 'Distance by Pythagoras', hint: 'Drag A or B so they are not in line'},
+  {id: 'axisAligned',    icon: '↔️', label: 'A distance with only one leg', hint: 'Line A and B up in a row or a column'},
+  {id: 'midpoint',       icon: '⚖️', label: 'The exact midpoint', hint: 'Divide the segment 1 : 1'},
+  {id: 'offCenterRatio', icon: '🪢', label: 'A point off the middle', hint: 'Try a ratio like 1 : 2'},
+  {id: 'collinear',      icon: '📍', label: 'Three points, one line', hint: 'Find a spot for C exactly on the line through A and B'},
+  {id: 'quadrant',       icon: '🧭', label: 'All four quadrants', hint: 'Visit every combination of positive and negative'},
+], () => toast('All six. A point, a distance and a line are all just arithmetic on coordinates.', 4800));
+
+const POE = predict($('poe'), {
+  id: 'dist345',
+  q: 'A is at (1, 1) and B is at (4, 5). Without measuring, how far apart do you think they are?',
+  options: [
+    {id: '3', text: '3 units'},
+    {id: '4', text: '4 units'},
+    {id: '5', text: '5 units', right: true},
+    {id: '7', text: '7 units'},
+  ],
+  onLock(){
+    S.locked = true;
+    lockControls(false);
+    say('Now drag A or B anywhere on the grid, and try dividing the segment or testing a third point.');
+    render();
+  },
+});
+lockControls(!POE.locked);
+if (!Play.FF('predict')) S.locked = true;
+render();
+
+window.PG_STATE = () => ({tab: S.tab, A: Object.assign({}, S.A), B: Object.assign({}, S.B), C: Object.assign({}, S.C), t: S.t, locked: S.locked,
+  found: Play.EVENTS.filter(e => e.type === 'finding').map(e => e.id)});
+window.PG_MODEL = {dist, section, triArea, niceRatio};
+</script>
+</body>
+</html>

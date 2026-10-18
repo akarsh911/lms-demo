@@ -1,0 +1,661 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bits, Gates and Memory</title>
+<meta name="description" content="Class 11 Computer Science: count in binary on a row of bits, convert to octal and hexadecimal by the book's division and grouping methods, add two numbers through a chain of full adders, and wire logic gates yourself until the truth tables prove De Morgan's law and build an adder.">
+<link rel="icon" href="../../favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600&family=Inter:wght@400;500;600;700&family=Nunito:wght@500;700;800&family=Newsreader:opsz,wght@6..72,400;6..72,500&family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="../../play.css">
+<style>
+.pg-stage{align-self:start; min-height:0}
+svg text.m{font-family:var(--font-mono)}
+svg text.serif{font-family:"Newsreader",Georgia,serif}
+.tabs{display:flex; gap:4px; padding:10px 12px 0; border-bottom:1px solid var(--hair); background:var(--card)}
+.tab{border:1px solid transparent; border-bottom:none; background:none; padding:8px 14px; border-radius:8px 8px 0 0; cursor:pointer;
+  font-family:"Newsreader",Georgia,serif; font-size:17px; color:var(--ink-3); margin-bottom:-1px}
+.tab[aria-selected="true"]{background:var(--card); border-color:var(--hair); color:var(--ink); border-bottom:1px solid var(--card)}
+.gate{position:absolute; left:0; right:0; top:48px; bottom:0; display:grid; place-items:center; pointer-events:none}
+.gate span{background:rgba(29,35,39,.85); color:#fff; padding:10px 16px; border-radius:99px; font-weight:600; font-size:14px}
+.chips{display:flex; flex-wrap:wrap; gap:6px; margin:4px 0 8px}
+.chip{border:1px solid var(--hair-2); background:var(--card); border-radius:99px; padding:4px 11px; font-size:13px; cursor:pointer; font-weight:600; color:var(--ink-2)}
+.chip.m{font-family:var(--font-mono)}
+.chip[aria-pressed="true"]{background:var(--accent-soft); border-color:var(--accent); color:var(--ink)}
+.chip:disabled{opacity:.45; cursor:default}
+.readout{display:grid; grid-template-columns:auto 1fr; gap:3px 12px; font-size:13px; align-items:baseline; margin-top:8px}
+.readout span{color:var(--ink-2)}
+.readout b{font-family:var(--font-mono); font-weight:600; font-size:12.5px; font-variant-numeric:tabular-nums; text-align:right; overflow-wrap:anywhere}
+.note{font-size:12.5px; color:var(--ink-3); margin:6px 0 0}
+.why p{font-size:13.5px; margin-bottom:.55em}
+.inrow{display:flex; gap:6px; align-items:center; margin:6px 0; font-size:13px; color:var(--ink-2)}
+.inrow input, .inrow select{font:inherit; font-family:var(--font-mono); padding:4px 6px; border:1px solid var(--hair-2); border-radius:6px; background:var(--card); color:var(--ink)}
+.inrow input{width:92px; text-align:right}
+table.tt{width:100%; border-collapse:collapse; font-family:var(--font-mono); font-size:13px; margin-top:6px; font-variant-numeric:tabular-nums}
+table.tt th{font-family:var(--font); font-size:12px; font-weight:700; color:var(--ink-3); padding:3px 6px; border-bottom:1px solid var(--hair); text-align:center}
+table.tt td{text-align:center; padding:2px 6px}
+table.tt td.out{font-weight:700}
+table.tt th.sep, table.tt td.sep{border-left:1px solid var(--hair)}
+table.tt tr.now td{background:var(--accent-soft)}
+.pal{display:grid; grid-template-columns:repeat(3, 1fr); gap:6px; margin:6px 0}
+.pal .btn{font-family:var(--font-mono); font-weight:600}
+svg .click{cursor:pointer}
+@media (max-width:1180px) and (min-width:981px){ .pg-main.wide-side{grid-template-columns:minmax(0,1fr) 340px} }
+</style>
+</head>
+<body>
+<header class="pg-top"></header>
+
+<div class="pg-intro">
+  <h1>Bits, gates and memory</h1>
+  <p>A computer keeps everything as bits. Switch bits on and off to count, convert what you have made to octal and hexadecimal the way the book does,
+     and add two numbers through a chain of full adders, watching the carries ripple. Then wire logic gates yourself: the truth table is worked out
+     from your wiring, so it can prove De Morgan's law, build XOR from simpler gates, and grow into the half and full adders the counter runs on.</p>
+</div>
+
+<main class="pg-main wide-side">
+  <section class="pg-stage" id="stageWrap">
+    <div class="tabs" role="tablist">
+      <button class="tab" role="tab" id="tabN" aria-selected="true">Binary</button>
+      <button class="tab" role="tab" id="tabG" aria-selected="false">Gates</button>
+    </div>
+    <svg id="stageN" viewBox="0 0 1000 640" role="img" aria-label="A row of bits, its conversion to octal and hexadecimal, and two binary numbers added by full adders"></svg>
+    <svg id="stageG" viewBox="0 0 1000 640" role="img" aria-label="A logic circuit you wire from switches through gates to two output lamps" hidden></svg>
+    <div class="gate" id="gate"><span>Make your prediction first →</span></div>
+  </section>
+
+  <aside class="pg-side">
+    <div id="poeN"></div>
+    <div id="poeG" hidden></div>
+
+    <div class="card" id="cardN">
+      <div class="kicker">The number X</div>
+      <div class="chips" id="wChips">
+        <button class="chip" data-w="4">4 bits (nibble)</button>
+        <button class="chip" data-w="7">7 bits (ASCII)</button>
+        <button class="chip" data-w="8">8 bits (byte)</button>
+      </div>
+      <div class="inrow"><button class="btn sm" id="decBtn">− 1</button><button class="btn sm" id="incBtn">+ 1</button>
+        <span style="margin-left:auto">decimal</span><input id="xIn" type="number" min="0" step="1" aria-label="X in decimal"></div>
+      <div class="kicker" style="margin-top:8px">Convert by the book's method</div>
+      <div class="chips" id="bChips">
+        <button class="chip" data-b="2">base 2</button>
+        <button class="chip" data-b="8">base 8</button>
+        <button class="chip" data-b="16">base 16</button>
+      </div>
+      <p class="note">Click a bit to switch it. Click a bit of Y, in the adder, to change what is added.</p>
+    </div>
+
+    <div class="card" id="memCard">
+      <div class="kicker">Units of memory (NCERT Table 1.1)</div>
+      <div class="inrow"><input id="memN" type="number" min="0" step="1" value="4" aria-label="how many"><select id="memU" aria-label="unit"></select></div>
+      <div class="readout" id="memOut"></div>
+    </div>
+
+    <div class="card" id="cardG" hidden>
+      <div class="kicker">Add a gate</div>
+      <div class="pal" id="pal"></div>
+      <div class="row"><button class="chip" id="threeBtn" aria-pressed="false">Carry in C</button><button class="btn sm" id="clearG">Clear the board</button></div>
+      <p class="note">To wire: click an output dot (a switch or a gate's right side), then an input dot. Click a wired input dot to cut its wire.</p>
+      <div class="kicker" style="margin-top:10px">Truth table, worked out from your wiring</div>
+      <div id="tt"></div>
+      <div class="readout" id="expr"></div>
+    </div>
+
+    <div class="card why" id="whyCard" hidden>
+      <div class="kicker">What the model says</div>
+      <div id="why"></div>
+    </div>
+
+    <div class="card"><div class="kicker">To find</div><div id="finds"></div></div>
+  </aside>
+</main>
+
+<script src="../../play.js"></script>
+<script>
+'use strict';
+const {$, esc, clamp, sound, track, toast, predict, findings, discover, found,
+       shareState, sharedState, mount, reduced, tween} = Play;
+mount({thread: 'computing', band: 'theorist'});
+
+/* MODEL:start ==================================================================
+   1. Number systems (NCERT Class 11 CS, Ch 2). A number is its bits. Decimal to base b is the
+      book's repeated division: divide by b, note the remainder, repeat on the quotient until it
+      is 0, read the remainders bottom to top. Binary to octal / hexadecimal is grouping 3 or 4
+      bits from the right. Nothing calls toString(b): the page does the arithmetic.
+   2. Logic gates. A circuit is a netlist: each gate input and each output lamp is wired to one
+      source (a switch or a gate's output). It is evaluated by following wires back from the
+      lamp; an unwired input gives "no value", and a loop is reported. The truth table is the
+      circuit evaluated at every combination of the switches.
+   3. The adder. A full adder is itself a netlist of gates (sum = A ⊕ B ⊕ C, carry = AB + C(A ⊕ B));
+      adding two numbers runs that netlist once per column, right to left, each column's carry
+      out becoming the next column's carry in. +1 on the counter is this adder with Y = 1, and
+      a carry out of the top column is lost: overflow.
+   4. Memory units (Ch 1, Table 1.1): 4 bits = 1 nibble, 8 bits = 1 byte, and each unit from KB
+      up is 1024 of the one before. Counted with BigInt, so nothing is rounded.
+   ============================================================================ */
+const DIG = '0123456789ABCDEF';
+function toBase(n, b){
+  const steps = [];
+  if (n === 0) return {digits: '0', steps: [{n: 0, q: 0, r: 0}]};
+  let v = n;
+  while (v > 0) { const q = Math.floor(v / b), r = v - q * b; steps.push({n: v, q, r}); v = q; }
+  return {digits: steps.map(s => DIG[s.r]).reverse().join(''), steps};
+}
+function fromBase(str, b){
+  let v = 0; const s = String(str).toUpperCase();
+  for (let i = 0; i < s.length; i++) { const d = DIG.indexOf(s[i]); if (d < 0 || d >= b) return NaN; v += d * Math.pow(b, s.length - 1 - i); }
+  return v;
+}
+const bitsOf = (n, w) => Array.from({length: w}, (_, k) => (Math.floor(n / Math.pow(2, k)) % 2));   // bits[k] is 2^k
+const valOf = bits => bits.reduce((s, b, k) => s + b * Math.pow(2, k), 0);
+/* binary to octal / hex by grouping from the right */
+function groupBits(bits, g){
+  const out = [];
+  for (let k = 0; k < bits.length; k += g) { const grp = bits.slice(k, k + g); while (grp.length < g) grp.push(0); out.push({lo: k, hi: k + g - 1, bits: grp.slice().reverse().join(''), digit: DIG[valOf(grp)]}); }
+  return out;
+}
+const GATES = {
+  AND:  {n: 2, f: (a, b) => a & b},
+  OR:   {n: 2, f: (a, b) => a | b},
+  NOT:  {n: 1, f: a => 1 - a},
+  NAND: {n: 2, f: (a, b) => 1 - (a & b)},
+  NOR:  {n: 2, f: (a, b) => 1 - (a | b)},
+  XOR:  {n: 2, f: (a, b) => a ^ b},
+};
+/* evaluate(circ, ins): circ = {gates: [{id, type}], wires: {'g1.0': 'A', 'Y1': 'g1', …}} */
+function evaluate(circ, ins){
+  const memo = {}, loop = {v: false}, visiting = new Set();
+  const byId = Object.fromEntries(circ.gates.map(g => [g.id, g]));
+  function src(s){
+    if (s == null) return null;
+    if (s in ins) return ins[s];
+    const g = byId[s]; if (!g) return null;
+    if (s in memo) return memo[s];
+    if (visiting.has(s)) { loop.v = true; return null; }
+    visiting.add(s);
+    const vals = Array.from({length: GATES[g.type].n}, (_, i) => src(circ.wires[s + '.' + i]));
+    const v = vals.some(x => x == null) ? null : GATES[g.type].f(...vals);
+    visiting.delete(s); memo[s] = v; return v;
+  }
+  const Y1 = src(circ.wires.Y1), Y2 = src(circ.wires.Y2);
+  for (const g of circ.gates) src(g.id);
+  return {Y1, Y2, gates: memo, loop: loop.v};
+}
+function truthTable(circ, three){
+  const names = three ? ['A', 'B', 'C'] : ['A', 'B'], rows = [];
+  for (let m = 0; m < (1 << names.length); m++) {
+    const ins = {}; names.forEach((nm, i) => { ins[nm] = (m >> (names.length - 1 - i)) & 1; });
+    if (!three) ins.C = null;
+    const r = evaluate(circ, ins);
+    rows.push(Object.assign({}, ins, {Y1: r.Y1, Y2: r.Y2, loop: r.loop}));
+  }
+  return rows;
+}
+const col = (rows, k) => rows.map(r => r[k]).join('');
+/* the full adder, as a netlist of the same gates */
+const FULL_ADDER = {gates: [{id: 'x1', type: 'XOR'}, {id: 'x2', type: 'XOR'}, {id: 'a1', type: 'AND'}, {id: 'a2', type: 'AND'}, {id: 'o1', type: 'OR'}],
+  wires: {'x1.0': 'A', 'x1.1': 'B', 'x2.0': 'x1', 'x2.1': 'C', 'a1.0': 'A', 'a1.1': 'B', 'a2.0': 'x1', 'a2.1': 'C', 'o1.0': 'a1', 'o1.1': 'a2', Y1: 'x2', Y2: 'o1'}};
+function addBits(xb, yb, cin = 0){
+  const w = xb.length, sum = [], carry = [cin];            // carry[k] goes INTO column k
+  for (let k = 0; k < w; k++) { const r = evaluate(FULL_ADDER, {A: xb[k], B: yb[k], C: carry[k]}); sum.push(r.Y1); carry.push(r.Y2); }
+  return {sum, carry, cout: carry[w], value: valOf(sum)};
+}
+/* the longest run of columns a carry travels through */
+function rippleLength(carry){ let best = 0, run = 0; for (let k = 1; k < carry.length; k++) { if (carry[k]) { run++; best = Math.max(best, run); } else run = 0; } return best; }
+const UNITS = [['bit', 1n], ['nibble', 4n], ['byte', 8n], ['KB', 8n * 1024n], ['MB', 8n * 1024n ** 2n], ['GB', 8n * 1024n ** 3n], ['TB', 8n * 1024n ** 4n], ['PB', 8n * 1024n ** 5n]];
+function memBits(n, unit){ const u = UNITS.find(x => x[0] === unit); return u ? BigInt(n) * u[1] : null; }
+/* MODEL:end */
+
+const INK = '#1d2327', FAINT = '#7c878c', HUE = '#4c51bf', ON = '#4c51bf', OFF = '#e9e6dc', WOFF = '#b5bcc0', AMB = '#e29a1c', GRID = '#eeebe2';
+const SUB = {'0': '₀', '1': '₁', '2': '₂', '6': '₆', '8': '₈'};
+const sub = s => String(s).split('').map(c => SUB[c] || c).join('');
+const group3 = s => s.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+
+/* ---- state ---------------------------------------------------------------- */
+const S = {tab: 'N', w: 8, x: 13, y: 1, base: 2, rip: 8, lastCout: 0, overflowed: false,
+           circ: {gates: [], wires: {}}, next: 1, arm: null, ins: {A: 0, B: 0, C: 0}, three: false,
+           locked: {N: false, G: false}, touched: {N: false, G: false}};
+const shared = sharedState();
+if (shared) {
+  if (['N', 'G'].includes(shared.tab)) S.tab = shared.tab;
+  if ([4, 7, 8].includes(shared.w)) S.w = shared.w;
+  if (Number.isInteger(shared.x)) S.x = clamp(shared.x, 0, Math.pow(2, S.w) - 1);
+  if (Number.isInteger(shared.y)) S.y = clamp(shared.y, 0, Math.pow(2, S.w) - 1);
+  if ([2, 8, 16].includes(shared.base)) S.base = shared.base;
+  if (shared.circ && Array.isArray(shared.circ.gates) && shared.circ.gates.length <= 9 && shared.circ.gates.every(g => GATES[g.type] && /^g\d+$/.test(g.id) && Number.isInteger(g.slot))) {
+    S.circ = {gates: shared.circ.gates.map(g => ({id: g.id, type: g.type, slot: g.slot})), wires: Object.assign({}, shared.circ.wires || {})};
+    S.next = 1 + Math.max(0, ...S.circ.gates.map(g => +g.id.slice(1)));
+  }
+  if (typeof shared.three === 'boolean') S.three = shared.three;
+}
+shareState(() => ({tab: S.tab, w: S.w, x: S.x, y: S.y, base: S.base, circ: S.circ, three: S.three}));
+const maxV = () => Math.pow(2, S.w) - 1;
+
+/* ============================================================================
+   Stage 1: binary
+   ============================================================================ */
+const sN = $('stageN');
+const LW = 56, LX1 = 960;                                    // lamps: right edge, width
+const lampX = k => LX1 - (k + 1) * LW;                       // left x of bit k (2^k)
+const AW = 50, AX1 = 960, ay = {c: 318, x: 362, y: 420, s: 500};
+const addX = k => AX1 - (k + 1) * AW;
+function buildN(){
+  sN.innerHTML = `
+  <rect x="0" y="0" width="1000" height="640" fill="#fbfaf7"/>
+  <text x="40" y="40" font-size="19" fill="${INK}" class="serif">X, bit by bit</text>
+  <g id="nLamps"></g>
+  <g id="nGroups"></g>
+  <g id="nRead"></g>
+  <line x1="40" y1="258" x2="960" y2="258" stroke="#e3dfd3"/>
+  <text x="40" y="292" font-size="19" fill="${INK}" class="serif" id="ladT"></text>
+  <g id="nLadder"></g>
+  <text x="${addX(7) - 60}" y="292" font-size="19" fill="${INK}" class="serif">X + Y, one full adder per column</text>
+  <g id="nAdd"></g>`;
+}
+function lampsSVG(bits, x, y, w, h, kind, colOn){
+  return bits.map((b, k) => `<g class="click" data-${kind}="${k}"><rect x="${x(k) + 3}" y="${y}" width="${w - 6}" height="${h}" rx="7" fill="${b ? colOn : OFF}" stroke="${b ? colOn : '#d3cebf'}"/>` +
+    `<text x="${x(k) + w / 2}" y="${y + h / 2 + 7}" font-size="${h > 40 ? 22 : 17}" font-weight="600" text-anchor="middle" fill="${b ? '#fff' : '#8a939a'}" class="m">${b}</text></g>`).join('');
+}
+function paintN(){
+  const w = S.w, xb = bitsOf(S.x, w), show = S.locked.N;
+  let L = lampsSVG(xb, lampX, 70, LW, 56, 'bit', ON);
+  xb.forEach((_, k) => { L += `<text x="${lampX(k) + LW / 2}" y="146" font-size="11.5" text-anchor="middle" fill="${FAINT}" class="m">${Math.pow(2, k)}</text>`; });
+  L += `<text x="${lampX(w - 1) - 12}" y="104" font-size="13" text-anchor="end" fill="${FAINT}">place value →</text>`;
+  $('nLamps').innerHTML = L;
+  /* grouping for octal / hex */
+  let G = '';
+  const g = S.base === 8 ? 3 : S.base === 16 ? 4 : 0;
+  if (g && show) for (const grp of groupBits(xb, g)) {
+    const xa = lampX(Math.min(grp.hi, w - 1)) + 6, xz = lampX(grp.lo) + LW - 6, yy = 164;
+    const pad = grp.hi >= w;
+    G += `<path d="M${xa} ${yy}v8h${xz - xa}v-8" fill="none" stroke="${AMB}" stroke-width="2"/>` +
+      `<text x="${(xa + xz) / 2}" y="${yy + 32}" font-size="20" font-weight="700" text-anchor="middle" fill="${AMB}" class="m">${grp.digit}</text>` +
+      (pad ? `<text x="${(xa + xz) / 2}" y="${yy + 50}" font-size="10.5" text-anchor="middle" fill="${FAINT}">padded ${grp.bits}</text>` : '');
+  }
+  $('nGroups').innerHTML = G;
+  /* readouts */
+  const b2 = toBase(S.x, 2).digits, b8 = toBase(S.x, 8).digits, b16 = toBase(S.x, 16).digits;
+  const ch = S.x >= 32 && S.x <= 126 ? String.fromCharCode(S.x) : null;
+  $('nRead').innerHTML = `<text x="40" y="92" font-size="30" font-weight="600" fill="${INK}" class="m">(${S.x})${sub(10)}</text>` +
+    (show ? `<text x="40" y="128" font-size="16" fill="${INK}" class="m">= (${b2})${sub(2)}</text>` +
+      `<text x="40" y="154" font-size="16" fill="${INK}" class="m">= (${b8})${sub(8)} = (${b16})${sub(16)}</text>` +
+      `<text x="40" y="186" font-size="13.5" fill="${FAINT}">${ch ? `ASCII ${S.x} is the character “${esc(ch)}”` : S.x < 32 ? 'ASCII codes below 32 are control characters' : 'beyond 7-bit ASCII'}</text>` +
+      `<text x="40" y="210" font-size="13.5" fill="${FAINT}">${w} bits count ${Math.pow(2, w)} patterns: 0 to ${maxV()}</text>` +
+      (S.overflowed ? `<text x="40" y="234" font-size="13.5" font-weight="600" fill="#c0392b">Overflow: the carry fell off the top bit.</text>` : '') : '');
+  /* the division ladder */
+  const B = S.base, st = toBase(S.x, B).steps;
+  $('ladT').textContent = `(${S.x})${sub(10)} to base ${B}, by repeated division`;
+  let D = '';
+  if (show) {
+    D += `<text x="60" y="322" font-size="12" font-weight="700" fill="${FAINT}">DIVIDE</text><text x="250" y="322" font-size="12" font-weight="700" fill="${FAINT}">REMAINDER</text>`;
+    const rows = st.slice(0, 9);
+    rows.forEach((s, i) => {
+      const y = 350 + i * 27;
+      D += `<text x="60" y="${y}" font-size="15" fill="${INK}" class="m">${B} │ ${s.n}</text><text x="200" y="${y}" font-size="13" fill="${FAINT}" class="m">→ ${s.q}</text>` +
+        `<text x="270" y="${y}" font-size="16" font-weight="700" fill="${AMB}" class="m" text-anchor="middle">${DIG[s.r]}</text>`;
+    });
+    const yb = 350 + (rows.length - 1) * 27;
+    if (rows.length > 1) D += `<path d="M300 ${yb}V${350 - 14}" stroke="${AMB}" stroke-width="2" fill="none"/><path d="M294 ${350 - 6}l6 -10l6 10" fill="${AMB}"/>`;
+    D += `<text x="60" y="${yb + 36}" font-size="13" fill="${FAINT}">read the remainders upwards:</text><text x="60" y="${yb + 60}" font-size="18" font-weight="700" fill="${INK}" class="m">(${S.x})${sub(10)} = (${toBase(S.x, B).digits})${B === 16 ? sub(16) : sub(B)}</text>`;
+  }
+  $('nLadder').innerHTML = D;
+  /* the adder */
+  const yb2 = bitsOf(S.y, w), R = addBits(xb, yb2);
+  let A = '';
+  A += `<text x="${addX(w - 1) - 20}" y="${ay.c + 5}" font-size="12.5" text-anchor="end" fill="${FAINT}">carry</text>` +
+       `<text x="${addX(w - 1) - 20}" y="${ay.x + 28}" font-size="16" font-weight="600" text-anchor="end" fill="${INK}">X</text>` +
+       `<text x="${addX(w - 1) - 20}" y="${ay.y + 28}" font-size="16" font-weight="600" text-anchor="end" fill="${INK}">+ Y</text>` +
+       `<text x="${addX(w - 1) - 20}" y="${ay.s + 28}" font-size="16" font-weight="600" text-anchor="end" fill="${INK}">=</text>`;
+  if (show) {
+    for (let k = 1; k < w; k++) {
+      const c = R.carry[k], vis = k <= S.rip, cx = addX(k) + AW / 2;
+      A += `<circle cx="${cx}" cy="${ay.c}" r="9" fill="${vis && c ? AMB : '#fff'}" stroke="${vis && c ? AMB : '#cfc9b8'}" stroke-width="2"/>`;
+      if (vis && c && k < w) A += `<path d="M${addX(k - 1) + 8} ${ay.c}H${cx + 12}" stroke="${AMB}" stroke-width="1.6" opacity=".6"/>`;
+    }
+  }
+  A += lampsSVG(xb, addX, ay.x, AW, 44, 'ax', ON) + lampsSVG(yb2, addX, ay.y, AW, 44, 'ybit', '#2f9e5b');
+  A += `<line x1="${addX(w - 1) - 60}" y1="${ay.s - 14}" x2="${AX1}" y2="${ay.s - 14}" stroke="${INK}" stroke-width="1.5"/>`;
+  if (show) {
+    const sb = R.sum.map((b, k) => (k < S.rip ? b : null));
+    A += sb.map((b, k) => `<rect x="${addX(k) + 3}" y="${ay.s}" width="${AW - 6}" height="44" rx="7" fill="${b ? AMB : b === 0 ? OFF : '#fff'}" stroke="${b ? AMB : '#d3cebf'}"/>` +
+      `<text x="${addX(k) + AW / 2}" y="${ay.s + 29}" font-size="17" font-weight="600" text-anchor="middle" fill="${b ? '#fff' : '#8a939a'}" class="m">${b == null ? '' : b}</text>`).join('');
+    const co = S.rip >= w ? R.cout : null;
+    A += `<rect x="${addX(w - 1) - 60 + 3}" y="${ay.s}" width="${AW - 6}" height="44" rx="22" fill="${co ? '#c0392b' : '#fff'}" stroke="${co ? '#c0392b' : '#d3cebf'}" stroke-dasharray="${co ? '' : '4 3'}"/>` +
+      `<text x="${addX(w - 1) - 60 + AW / 2}" y="${ay.s + 29}" font-size="16" font-weight="700" text-anchor="middle" fill="${co ? '#fff' : '#b0b6ba'}" class="m">${co == null ? '' : co}</text>` +
+      `<text x="${addX(w - 1) - 60 + AW / 2}" y="${ay.s + 62}" font-size="11" text-anchor="middle" fill="${FAINT}">carry out</text>`;
+    A += `<text x="${addX(w - 1) - 60}" y="${ay.s + 96}" font-size="14" fill="${INK}" class="m">${S.x} + ${S.y} = ${S.x + S.y}` +
+      (R.cout ? `, but ${w} bits keep only ${R.value}` : ` = (${R.sum.slice().reverse().join('')})${sub(2)}`) + `</text>` +
+      `<text x="${addX(w - 1) - 60}" y="${ay.s + 120}" font-size="12.5" fill="${FAINT}">longest carry chain: ${rippleLength(R.carry)} column${rippleLength(R.carry) === 1 ? '' : 's'}</text>`;
+  }
+  $('nAdd').innerHTML = A;
+  /* side */
+  for (const b of document.querySelectorAll('#wChips .chip')) b.setAttribute('aria-pressed', +b.dataset.w === S.w);
+  for (const b of document.querySelectorAll('#bChips .chip')) b.setAttribute('aria-pressed', +b.dataset.b === S.base);
+  if (document.activeElement !== $('xIn')) $('xIn').value = S.x;
+  $('xIn').max = maxV();
+}
+/* ripple the carries across, column by column */
+let ripT = 0;
+function ripple(){
+  const tok = ++ripT;
+  if (reduced()) { S.rip = S.w; return; }
+  S.rip = 0;
+  tween(0, S.w, 90 * S.w, v => { if (tok !== ripT) return; const r = Math.floor(v + 1e-9); if (r !== S.rip) { S.rip = r; if (S.tab === 'N') paintN(); } }, t => t);
+}
+function paintMem(){
+  const n = Math.max(0, Math.floor(+$('memN').value || 0)), u = $('memU').value, bits = memBits(n, u);
+  if (bits == null) { $('memOut').innerHTML = ''; return; }
+  const bytes = bits / 8n, i = UNITS.findIndex(x => x[0] === u);
+  let chain = '';
+  if (i >= 3) chain = `1 ${u} = ${['1024 bytes', '1024 KB', '1024 MB', '1024 GB', '1024 TB'][i - 3]} = 2^${10 * (i - 2)} bytes`;
+  $('memOut').innerHTML = `<span>bits</span><b>${group3(bits.toString())}</b><span>bytes</span><b>${bits % 8n ? '—' : group3(bytes.toString())}</b>` +
+    (chain ? `<span>because</span><b>${chain}</b>` : `<span>because</span><b>${u === 'byte' ? '1 byte = 8 bits = 2 nibbles' : u === 'nibble' ? '1 nibble = 4 bits' : 'a bit is one 0 or 1'}</b>`);
+}
+
+/* ============================================================================
+   Stage 2: gates
+   ============================================================================ */
+const sG = $('stageG');
+const SLOT = [];
+for (let r = 0; r < 3; r++) for (let c = 0; c < 3; c++) SLOT.push({x: 250 + c * 195, y: 150 + r * 165});
+const GW = 92, GH = 64;
+const IN_POS = {A: {x: 60, y: 150}, B: {x: 60, y: 315}, C: {x: 60, y: 480}};
+const OUT_POS = {Y1: {x: 915, y: 232}, Y2: {x: 915, y: 398}};
+const srcPort = id => IN_POS[id] ? {x: IN_POS[id].x + 86, y: IN_POS[id].y} : (() => { const g = S.circ.gates.find(q => q.id === id); const s = SLOT[g.slot]; return {x: s.x + GW + 14, y: s.y}; })();
+function dstPort(key){
+  if (OUT_POS[key]) return {x: OUT_POS[key].x - 50, y: OUT_POS[key].y};
+  const [id, i] = key.split('.'), g = S.circ.gates.find(q => q.id === id), s = SLOT[g.slot];
+  return GATES[g.type].n === 1 ? {x: s.x - 12, y: s.y} : {x: s.x - 12, y: s.y + (+i ? 17 : -17)};
+}
+function gateShape(type, x, y){
+  const t = y - GH / 2, b = y + GH / 2, inv = /^N|NOT/.test(type) && type !== 'NOT' || type === 'NOT';
+  let d;
+  if (type === 'AND' || type === 'NAND') d = `M${x} ${t}H${x + 44}A${GH / 2} ${GH / 2} 0 0 1 ${x + 44} ${b}H${x}Z`;
+  else if (type === 'NOT') d = `M${x + 8} ${t + 6}L${x + 74} ${y}L${x + 8} ${b - 6}Z`;
+  else d = `M${x} ${t}Q${x + 50} ${t} ${x + 80} ${y}Q${x + 50} ${b} ${x} ${b}Q${x + 16} ${y} ${x} ${t}Z`;
+  let s = `<path d="${d}" fill="#fff" stroke="${INK}" stroke-width="2"/>`;
+  if (type === 'XOR') s += `<path d="M${x - 9} ${t}Q${x + 7} ${y} ${x - 9} ${b}" fill="none" stroke="${INK}" stroke-width="2"/>`;
+  const tip = type === 'AND' || type === 'NAND' ? x + 44 + GH / 2 : type === 'NOT' ? x + 74 : x + 80;
+  if (inv) s += `<circle cx="${tip + 5}" cy="${y}" r="5" fill="#fff" stroke="${INK}" stroke-width="2"/>`;
+  s += `<line x1="${inv ? tip + 10 : tip}" y1="${y}" x2="${x + GW + 14}" y2="${y}" stroke="${INK}" stroke-width="2"/>`;
+  return s;
+}
+function buildG(){
+  sG.innerHTML = `
+  <rect x="0" y="0" width="1000" height="640" fill="#fbfaf7"/>
+  <text x="40" y="44" font-size="19" fill="${INK}" class="serif">Wire it yourself</text>
+  <text x="40" y="68" font-size="12.5" fill="${FAINT}" id="gHint"></text>
+  <g id="gSlots"></g>
+  <g id="gWires"></g>
+  <g id="gGates"></g>
+  <g id="gIO"></g>
+  <text id="gLoop" x="500" y="610" font-size="14" font-weight="600" fill="#c0392b" text-anchor="middle"></text>`;
+}
+function wirePath(a, b){ const dx = Math.max(40, Math.abs(b.x - a.x) * 0.5); return `M${a.x} ${a.y}C${a.x + dx} ${a.y} ${b.x - dx} ${b.y} ${b.x} ${b.y}`; }
+function paintG(){
+  const three = S.three, ins = {A: S.ins.A, B: S.ins.B, C: three ? S.ins.C : null}, ev = evaluate(S.circ, ins), show = S.locked.G;
+  const vOf = s => s in ins ? ins[s] : ev.gates[s];
+  /* empty slots */
+  const used = new Set(S.circ.gates.map(g => g.slot));
+  $('gSlots').innerHTML = SLOT.map((s, i) => used.has(i) ? '' : `<rect x="${s.x - 4}" y="${s.y - GH / 2 - 4}" width="${GW + 8}" height="${GH + 8}" rx="10" fill="none" stroke="${GRID}" stroke-width="1.5" stroke-dasharray="5 5"/>`).join('');
+  /* wires */
+  let W = '';
+  for (const [dst, src] of Object.entries(S.circ.wires)) {
+    if (!srcExists(src) || !dstExists(dst)) continue;
+    const v = vOf(src), a = srcPort(src), b = dstPort(dst);
+    W += `<path d="${wirePath(a, b)}" fill="none" stroke="${v === 1 ? ON : v === 0 ? WOFF : '#d8a0a0'}" stroke-width="${v === 1 ? 3.6 : 2.4}" ${v == null ? 'stroke-dasharray="5 4"' : ''}/>`;
+  }
+  $('gWires').innerHTML = W;
+  /* gates */
+  let G = '';
+  for (const g of S.circ.gates) {
+    const s = SLOT[g.slot], v = ev.gates[g.id];
+    G += `<g data-gate="${g.id}">${gateShape(g.type, s.x, s.y)}` +
+      `<text x="${s.x + (g.type === 'NOT' ? 30 : 34)}" y="${s.y + 5}" font-size="13" font-weight="700" text-anchor="middle" fill="${INK}" class="m">${g.type}</text>` +
+      `<g class="click" data-del="${g.id}"><circle cx="${s.x + GW + 2}" cy="${s.y - GH / 2 - 4}" r="9" fill="#fff" stroke="#cfc9b8"/><text x="${s.x + GW + 2}" y="${s.y - GH / 2}" font-size="13" text-anchor="middle" fill="${FAINT}">×</text></g>`;
+    for (let i = 0; i < GATES[g.type].n; i++) {
+      const p = dstPort(g.id + '.' + i), wired = !!S.circ.wires[g.id + '.' + i];
+      G += `<line x1="${p.x}" y1="${p.y}" x2="${s.x + (g.type === 'NOT' ? 8 : 4)}" y2="${p.y}" stroke="${INK}" stroke-width="2"/>` +
+        `<circle class="click" data-in="${g.id}.${i}" cx="${p.x}" cy="${p.y}" r="8" fill="${wired ? INK : '#fff'}" stroke="${INK}" stroke-width="2"/>`;
+    }
+    const o = srcPort(g.id);
+    G += `<circle class="click" data-out="${g.id}" cx="${o.x}" cy="${o.y}" r="9" fill="${S.arm === g.id ? AMB : v === 1 ? ON : '#fff'}" stroke="${S.arm === g.id ? AMB : INK}" stroke-width="2.5"/></g>`;
+  }
+  $('gGates').innerHTML = G;
+  /* switches and lamps */
+  let IO = '';
+  for (const k of ['A', 'B', 'C']) {
+    const p = IN_POS[k], on = ins[k] === 1, act = k !== 'C' || three;
+    if (!act) { IO += `<text x="${p.x}" y="${p.y + 5}" font-size="13" fill="#b6bcc0">C (off)</text>`; continue; }
+    IO += `<g class="click" data-sw="${k}"><rect x="${p.x - 20}" y="${p.y - 22}" width="92" height="44" rx="22" fill="${on ? ON : OFF}" stroke="${on ? ON : '#cfc9b8'}"/>` +
+      `<circle cx="${on ? p.x + 50 : p.x + 2}" cy="${p.y}" r="16" fill="#fff" stroke="#cfc9b8"/>` +
+      `<text x="${on ? p.x + 6 : p.x + 46}" y="${p.y + 6}" font-size="16" font-weight="700" text-anchor="middle" fill="${on ? '#fff' : '#8a939a'}" class="m">${k}=${on ? 1 : 0}</text></g>`;
+    const o = srcPort(k);
+    IO += `<circle class="click" data-out="${k}" cx="${o.x}" cy="${o.y}" r="9" fill="${S.arm === k ? AMB : on ? ON : '#fff'}" stroke="${S.arm === k ? AMB : INK}" stroke-width="2.5"/>`;
+  }
+  for (const k of ['Y1', 'Y2']) {
+    const p = OUT_POS[k], v = ev[k], wired = !!S.circ.wires[k];
+    IO += `<line x1="${p.x - 50}" y1="${p.y}" x2="${p.x - 26}" y2="${p.y}" stroke="${INK}" stroke-width="2"/>` +
+      `<circle cx="${p.x}" cy="${p.y}" r="26" fill="${v === 1 ? AMB : v === 0 ? OFF : '#fff'}" stroke="${v === 1 ? AMB : '#cfc9b8'}" stroke-width="2.5" ${v == null ? 'stroke-dasharray="4 3"' : ''}/>` +
+      `<text x="${p.x}" y="${p.y + 6}" font-size="15" font-weight="700" text-anchor="middle" fill="${v === 1 ? '#fff' : '#8a939a'}" class="m">${v == null ? '?' : v}</text>` +
+      `<text x="${p.x}" y="${p.y + 48}" font-size="13" font-weight="700" text-anchor="middle" fill="${INK}">${k}</text>` +
+      `<circle class="click" data-in="${k}" cx="${p.x - 50}" cy="${p.y}" r="8" fill="${wired ? INK : '#fff'}" stroke="${INK}" stroke-width="2"/>`;
+  }
+  $('gIO').innerHTML = IO;
+  $('gHint').textContent = !show ? 'Lock in a prediction to start wiring.' : S.arm ? `Wiring from ${S.arm}: now click an input dot.` : S.circ.gates.length ? 'Click an output dot, then an input dot.' : 'Add gates from the panel, then wire them.';
+  $('gLoop').textContent = ev.loop ? 'A loop: a gate feeds itself, so its value is never settled.' : '';
+  /* truth table */
+  if (show) {
+    const rows = truthTable(S.circ, three), nm = three ? ['A', 'B', 'C'] : ['A', 'B'];
+    const cur = rows.findIndex(r => nm.every(k => r[k] === ins[k]));
+    $('tt').innerHTML = `<table class="tt"><tr>${nm.map(k => `<th>${k}</th>`).join('')}<th class="sep">Y1</th><th>Y2</th></tr>` +
+      rows.map((r, i) => `<tr class="${i === cur ? 'now' : ''}">${nm.map(k => `<td>${r[k]}</td>`).join('')}<td class="sep out">${r.Y1 == null ? '·' : r.Y1}</td><td class="out">${r.Y2 == null ? '·' : r.Y2}</td></tr>`).join('') + `</table>`;
+    $('expr').innerHTML = `<span>Y1</span><b>${esc(exprOf(S.circ.wires.Y1))}</b><span>Y2</span><b>${esc(exprOf(S.circ.wires.Y2))}</b>`;
+  } else { $('tt').innerHTML = ''; $('expr').innerHTML = ''; }
+  $('threeBtn').setAttribute('aria-pressed', three);
+}
+const srcExists = s => s in IN_POS ? (s !== 'C' || S.three) : S.circ.gates.some(g => g.id === s);
+const dstExists = d => d in OUT_POS || S.circ.gates.some(g => g.id === d.split('.')[0]);
+/* the Boolean expression the wiring spells, read back from a lamp */
+function exprOf(s, depth = 0){
+  if (s == null) return 'not wired';
+  if (s in IN_POS) return s;
+  const g = S.circ.gates.find(q => q.id === s); if (!g || depth > 8) return '…';
+  const a = GATES[g.type].n === 1 ? [S.circ.wires[s + '.0']] : [S.circ.wires[s + '.0'], S.circ.wires[s + '.1']];
+  const part = x => { const e = exprOf(x, depth + 1); return /\s/.test(e) && e !== 'not wired' ? `(${e})` : e === 'not wired' ? '?' : e; };
+  const op = {AND: '·', OR: '+', XOR: '⊕', NAND: '·', NOR: '+'}[g.type];
+  if (g.type === 'NOT') return `NOT ${part(a[0])}`;
+  const core = `${part(a[0])} ${op} ${part(a[1])}`;
+  return g.type === 'NAND' || g.type === 'NOR' ? `NOT (${core})` : core;
+}
+
+/* ============================================================================
+   Narrator, findings, explanations
+   ============================================================================ */
+const EXPL = {N: false, G: false};
+function paintWhy(){
+  const locked = S.locked[S.tab];
+  $('whyCard').hidden = !locked;
+  if (!locked) return;
+  if (S.tab === 'N') $('why').innerHTML = `<p>Each bit is worth twice the one to its right, so ${S.w} bits can show ${Math.pow(2, S.w)} different patterns, 0 to ${maxV()}. Dividing by 2 again and again peels the bits off from the right; dividing by 8 or 16 peels off octal or hexadecimal digits, which is the same as reading the bits in groups of 3 or 4, because 8 = 2³ and 16 = 2⁴.</p>` +
+    `<p>Adding works column by column exactly as in decimal, but a column overflows at 2 instead of 10. The carry out of one full adder is the carry in of the next, and a carry out of the top column has nowhere to go.</p>`;
+  else $('why').innerHTML = `<p>A gate only ever looks at its inputs, so the whole circuit is decided by following the wires back from each lamp. Every row of the truth table is one setting of the switches; two circuits are the same function exactly when their columns match in every row.</p>` +
+    `<p>De Morgan's laws say NOT (A · B) = (NOT A) + (NOT B) and NOT (A + B) = (NOT A) · (NOT B). XOR is “one or the other but not both”, (A + B) · NOT (A · B); a half adder is XOR for the sum and AND for the carry.</p>`;
+}
+function checkN(){
+  if (!S.locked.N || !S.touched.N) return;
+  if (S.x === 122) discover('conv122');
+  if (S.x === 65 && S.w === 7) discover('ascii');
+  const R = addBits(bitsOf(S.x, S.w), bitsOf(S.y, S.w));
+  if (rippleLength(R.carry) >= 6) discover('ripple');
+}
+const XOR2 = '0110', AND2 = '0001', NAND2 = '1110', NOR2 = '1000', SUM3 = '01101001', CAR3 = '00010111';
+function rootType(s){ const g = S.circ.gates.find(q => q.id === s); return g ? g.type : null; }
+function checkG(){
+  if (!S.locked.G || !S.touched.G) return;
+  const rows = truthTable(S.circ, S.three), y1 = col(rows, 'Y1'), y2 = col(rows, 'Y2');
+  const types = new Set(S.circ.gates.map(g => g.type));
+  if (!S.three) {
+    if (y1 === XOR2 && !types.has('XOR')) discover('xor');
+    if (y1 === XOR2 && y2 === AND2) discover('half');
+    const t1 = rootType(S.circ.wires.Y1), t2 = rootType(S.circ.wires.Y2);
+    const dm = (y1 === NAND2 && y2 === NAND2 && (t1 === 'OR') !== (t2 === 'OR')) || (y1 === NOR2 && y2 === NOR2 && (t1 === 'AND') !== (t2 === 'AND'));
+    if (dm) {
+      discover('demorgan');
+      if (!EXPL.G) {
+        EXPL.G = true;
+        POEG.explain(`Your two circuits, <b>${esc(exprOf(S.circ.wires.Y1))}</b> and <b>${esc(exprOf(S.circ.wires.Y2))}</b>, were evaluated at all four settings of A and B. ` +
+          `Their columns are identical: ${y1} and ${y2}. So NOT (A · B) = (NOT A) + (NOT B): negating an AND turns it into an OR of the negations. (NOT A) · (NOT B) would give ${NOR2} instead, which is NOT (A + B).`);
+      }
+    }
+  } else if (y1 === SUM3 && y2 === CAR3) discover('full');
+}
+
+/* ============================================================================
+   Paint and controls
+   ============================================================================ */
+buildN(); buildG();
+$('memU').innerHTML = UNITS.map(u => `<option value="${u[0]}"${u[0] === 'GB' ? ' selected' : ''}>${u[0]}</option>`).join('');
+$('pal').innerHTML = Object.keys(GATES).map(t => `<button class="btn sm" data-add="${t}">${t}</button>`).join('');
+function paint(){
+  for (const k of ['N', 'G']) {
+    const on = S.tab === k;
+    $('tab' + k).setAttribute('aria-selected', on); $('stage' + k).toggleAttribute('hidden', !on);
+    $('card' + k).hidden = !on; $('poe' + k).hidden = !on;
+  }
+  $('memCard').hidden = S.tab !== 'N';
+  $('gate').hidden = S.locked[S.tab];
+  if (S.tab === 'N') { paintN(); checkN(); paintMem(); } else { paintG(); checkG(); }
+  paintWhy();
+}
+for (const k of ['N', 'G']) $('tab' + k).addEventListener('click', () => { S.tab = k; sound('tick'); paint(); track('tab', {tab: k}); });
+
+function setX(v, how){
+  S.x = clamp(Math.round(v), 0, maxV()); S.touched.N = true; ripple(); paint(); track('x', {x: S.x, how});
+}
+sN.addEventListener('click', e => {
+  if (!S.locked.N) return;
+  const b = e.target.closest('[data-bit],[data-ax]'), y = e.target.closest('[data-ybit]');
+  if (b) { const k = +(b.dataset.bit != null ? b.dataset.bit : b.dataset.ax); S.overflowed = false; sound('tick'); setX(S.x ^ (1 << k), 'bit'); }
+  else if (y) { const k = +y.dataset.ybit; S.y = S.y ^ (1 << k); S.touched.N = true; sound('tick'); ripple(); paint(); track('y', {y: S.y}); }
+});
+$('incBtn').addEventListener('click', () => {
+  if (!S.locked.N) return;
+  const R = addBits(bitsOf(S.x, S.w), bitsOf(1, S.w));
+  S.overflowed = !!R.cout; S.lastCout = R.cout;
+  sound(R.cout ? 'boing' : 'tick');
+  setX(R.value, 'inc');
+  if (R.cout) {
+    discover('overflow');
+    if (!EXPL.N) {
+      EXPL.N = true;
+      POEN.explain(`The model added 1 through ${S.w} full adders. Every column was 1 + 1, so every column wrote <b>0</b> and passed a carry left, until the carry came out of the top column with no bit to land in. ` +
+        `The register now reads ${'0'.repeat(S.w)} = 0: ${Math.pow(2, S.w) - 1} + 1 = ${Math.pow(2, S.w)} needs ${S.w + 1} bits. That lost carry is an <b>overflow</b>.`);
+    }
+  }
+});
+$('decBtn').addEventListener('click', () => { if (!S.locked.N) return; S.overflowed = false; sound('tick'); setX(S.x === 0 ? maxV() : S.x - 1, 'dec'); });
+$('xIn').addEventListener('input', e => { const v = parseInt(e.target.value, 10); if (!Number.isFinite(v) || !S.locked.N) return; S.overflowed = false; setX(v, 'typed'); });
+$('wChips').addEventListener('click', e => {
+  const b = e.target.closest('[data-w]'); if (!b || b.disabled) return;
+  S.w = +b.dataset.w; S.x = S.x % Math.pow(2, S.w); S.y = S.y % Math.pow(2, S.w); S.overflowed = false; S.touched.N = true; sound('tick'); ripple(); paint(); track('width', {w: S.w});
+});
+$('bChips').addEventListener('click', e => {
+  const b = e.target.closest('[data-b]'); if (!b || b.disabled) return;
+  S.base = +b.dataset.b; S.touched.N = true; sound('tick'); paint(); track('base', {b: S.base});
+});
+$('memN').addEventListener('input', paintMem); $('memU').addEventListener('change', () => { paintMem(); track('memory', {n: +$('memN').value, u: $('memU').value}); });
+
+sG.addEventListener('click', e => {
+  if (!S.locked.G) return;
+  const sw = e.target.closest('[data-sw]'), out = e.target.closest('[data-out]'), inp = e.target.closest('[data-in]'), del = e.target.closest('[data-del]');
+  if (del) { removeGate(del.dataset.del); sound('tick'); }
+  else if (sw) { const k = sw.dataset.sw; S.ins[k] = 1 - S.ins[k]; sound('tick'); }
+  else if (out) { S.arm = S.arm === out.dataset.out ? null : out.dataset.out; sound('tick'); }
+  else if (inp) {
+    const key = inp.dataset.in;
+    if (S.arm) {
+      const gid = key.split('.')[0];
+      if (S.arm === gid) { toast('A gate cannot take its own output as an input here.'); S.arm = null; }
+      else { S.circ.wires[key] = S.arm; S.arm = null; sound('snap'); track('wire', {to: key, from: S.circ.wires[key]}); }
+    } else if (S.circ.wires[key]) { delete S.circ.wires[key]; sound('tick'); track('cut', {at: key}); }
+  } else S.arm = null;
+  S.touched.G = true; paint();
+});
+function removeGate(id){
+  S.circ.gates = S.circ.gates.filter(g => g.id !== id);
+  for (const [d, s] of Object.entries(S.circ.wires)) if (s === id || d.split('.')[0] === id) delete S.circ.wires[d];
+  if (S.arm === id) S.arm = null;
+  track('remove', {id});
+}
+$('pal').addEventListener('click', e => {
+  const b = e.target.closest('[data-add]'); if (!b || b.disabled) return;
+  const used = new Set(S.circ.gates.map(g => g.slot)), slot = SLOT.findIndex((_, i) => !used.has(i));
+  if (slot < 0) { toast('The board is full: remove a gate first.'); return; }
+  const id = 'g' + S.next++;
+  S.circ.gates.push({id, type: b.dataset.add, slot}); S.touched.G = true; sound('pop'); paint(); track('gate', {type: b.dataset.add, id});
+});
+$('threeBtn').addEventListener('click', () => {
+  if (!S.locked.G) return;
+  S.three = !S.three;
+  if (!S.three) { for (const [d, s] of Object.entries(S.circ.wires)) if (s === 'C') delete S.circ.wires[d]; if (S.arm === 'C') S.arm = null; }
+  S.touched.G = true; sound('tick'); paint(); track('carryIn', {on: S.three});
+});
+$('clearG').addEventListener('click', () => { S.circ = {gates: [], wires: {}}; S.arm = null; S.touched.G = true; sound('whoosh'); paint(); track('clear'); });
+
+function lockCtl(){
+  const L = S.locked;
+  for (const el of document.querySelectorAll('#wChips .chip, #bChips .chip')) el.disabled = !L.N;
+  for (const id of ['incBtn', 'decBtn', 'xIn']) $(id).disabled = !L.N;
+  for (const el of document.querySelectorAll('#pal .btn')) el.disabled = !L.G;
+  $('threeBtn').disabled = !L.G; $('clearG').disabled = !L.G;
+}
+
+/* ============================================================================
+   Start
+   ============================================================================ */
+findings($('finds'), [
+  {id: 'conv122',  icon: '÷', label: '(122)₁₀ = (1111010)₂ = (172)₈ = (7A)₁₆', hint: 'Make the book’s number 122'},
+  {id: 'ascii',    icon: 'A', label: '“A” is 65 = 1000001 in 7-bit ASCII', hint: 'Seven bits, the code for A'},
+  {id: 'overflow', icon: '↺', label: 'Overflow: all ones plus one is zero', hint: 'Count past the top'},
+  {id: 'ripple',   icon: '⇠', label: 'A carry that ripples six columns', hint: 'Add so that carries run on'},
+  {id: 'demorgan', icon: '¬', label: 'De Morgan: NOT (A · B) = NOT A + NOT B', hint: 'Build both sides and compare'},
+  {id: 'xor',      icon: '⊕', label: 'XOR from AND, OR and NOT', hint: 'No XOR gate allowed'},
+  {id: 'half',     icon: '½', label: 'A half adder: sum and carry', hint: 'Two outputs, two inputs'},
+  {id: 'full',     icon: '∑', label: 'A full adder, with a carry in', hint: 'Three inputs'},
+], () => toast('All eight: from a single bit to the adder that counts.', 4200));
+
+const POEN = predict($('poeN'), {
+  id: 'overflow',
+  q: 'An 8-bit register shows 11111111. You add 1. What does it show?',
+  options: [
+    {id: 'nine',  text: '100000000: it grows a ninth bit.'},
+    {id: 'zero',  text: '00000000, and a carry is lost off the end.', right: true},
+    {id: 'stuck', text: '11111111: it cannot go any higher, so it stays.'},
+    {id: 'minus', text: '11111110.'},
+  ],
+  onLock(){ S.locked.N = true; lockCtl(); ripple(); paint(); },
+});
+const POEG = predict($('poeG'), {
+  id: 'demorgan',
+  q: 'Which of these is always the same as NOT (A AND B)?',
+  options: [
+    {id: 'and', text: '(NOT A) AND (NOT B)'},
+    {id: 'or',  text: '(NOT A) OR (NOT B)', right: true},
+    {id: 'mix', text: '(NOT A) OR B'},
+    {id: 'none', text: 'Nothing simpler: it has to stay as it is.'},
+  ],
+  onLock(){ S.locked.G = true; lockCtl(); paint(); },
+});
+lockCtl();
+if (!Play.FF('predict')) { S.locked = {N: true, G: true}; lockCtl(); }
+S.rip = S.w;
+paint();
+window.applyFeatures = () => paint();
+window.PG_STATE = () => JSON.parse(JSON.stringify(S));
+window.PG_MODEL = {toBase, fromBase, bitsOf, valOf, groupBits, GATES, evaluate, truthTable, FULL_ADDER, addBits, rippleLength, memBits, UNITS};
+</script>
+</body>
+</html>

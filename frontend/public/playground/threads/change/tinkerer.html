@@ -1,0 +1,504 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Physical Or Chemical</title>
+<meta name="description" content="Class 7–8: sort everyday changes into physical and chemical with a particle view, find out that reversible is a different question from chemical, then heat iron and sulfur to turn a mixture into a compound.">
+<link rel="icon" href="../../favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600&family=Inter:wght@400;500;600;700&family=Newsreader:opsz,wght@6..72,400;6..72,500&family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="../../play.css">
+<style>
+.pg-stage{min-height:0}
+.tabs{display:flex; gap:4px; padding:10px 12px 0; border-bottom:1px solid var(--hair); background:var(--card); flex-wrap:wrap}
+.tab{border:1px solid transparent; border-bottom:none; background:none; padding:8px 14px; border-radius:10px 10px 0 0; cursor:pointer;
+  font-weight:600; font-size:14.5px; color:var(--ink-3); margin-bottom:-1px; font-family:var(--font-head)}
+.tab[aria-selected="true"]{background:var(--card); color:var(--ink); border-color:var(--hair); border-bottom:1px solid var(--card)}
+.gate{position:absolute; left:0; right:0; top:48px; bottom:0; display:grid; place-items:center; pointer-events:none}
+.gate span{background:rgba(29,35,39,.86); color:#fff; padding:10px 16px; border-radius:99px; font-weight:600; font-size:14px; text-align:center}
+.chips{display:flex; flex-wrap:wrap; gap:6px; margin:4px 0}
+.chip{border:1px solid var(--hair-2); background:var(--card); border-radius:99px; padding:7px 12px; font-size:12.8px; cursor:pointer; font-weight:600; color:var(--ink-2); text-align:left}
+.chip[aria-pressed="true"]{background:var(--accent-soft); border-color:var(--accent); color:var(--ink)}
+.chip:disabled{opacity:.45; cursor:default}
+.sechead{font-size:11.5px; letter-spacing:.06em; text-transform:uppercase; font-weight:700; color:var(--ink-3); margin:10px 0 4px}
+.sechead:first-child{margin-top:0}
+.why p{font-size:13.5px; margin:0 0 .5em}
+.why b{color:var(--ink)}
+.note{font-size:12px; color:var(--ink-3); margin:6px 0 0}
+.kbadge{display:inline-block; padding:2px 10px; border-radius:99px; font-size:11.5px; font-weight:800; letter-spacing:.03em}
+.kbadge.physical{background:#dff1ec; color:#1f7a68}
+.kbadge.chemical{background:#fde6e3; color:#b23a2f}
+.kbadge.both{background:#fff1d9; color:#b56a00}
+</style>
+</head>
+<body>
+<header class="pg-top"></header>
+
+<div class="pg-intro">
+  <h1>Physical or chemical?</h1>
+  <p>Melt, tear, rust, burn: watch the particles underneath each change. If they are the same particles, just rearranged, it is a
+     physical change. If new particles appear, it is a chemical change — and that is a different question from whether the change
+     can be undone. Then heat iron and sulfur together and turn a mixture into a compound.</p>
+</div>
+
+<main class="pg-main wide-side">
+  <section class="pg-stage" id="stageWrap">
+    <div class="tabs" role="tablist">
+      <button class="tab" role="tab" id="tabSort" aria-selected="true">🔬 Sort the change</button>
+      <button class="tab" role="tab" id="tabFeS" aria-selected="false">🧲 Iron and sulfur</button>
+    </div>
+    <svg id="stage" viewBox="0 0 1000 620" role="img" aria-label="A particle view of a change, before and after, or a watch glass of iron filings and sulfur being tested with a magnet and heated"></svg>
+    <div class="gate" id="gate"><span>Make your prediction first →</span></div>
+  </section>
+
+  <aside class="pg-side">
+    <div id="poe"></div>
+
+    <div class="card" id="sortCard">
+      <div class="sechead">Physical, chemical, or both?</div>
+      <div class="chips" id="chipsA"></div>
+      <div class="sechead">Can you get it back?</div>
+      <div class="chips" id="chipsB"></div>
+      <p class="note">Click a change to see the particles, and the book's own explanation.</p>
+    </div>
+
+    <div class="card" id="fesCard" hidden>
+      <div class="sechead">Iron filings and sulfur powder</div>
+      <p style="font-size:13px;margin:0 0 8px">5.6 g of iron filings + 3.2 g of sulfur powder — shown here as 8 particles of each
+        (that is the same 1&nbsp;:&nbsp;1 ratio: iron and sulfur combine atom for atom in FeS).</p>
+      <div class="row">
+        <button class="btn" id="btnMagnet">🧲 Test with a magnet</button>
+        <button class="btn" id="btnHeat">🔥 Heat it</button>
+      </div>
+      <p class="note" id="fesNote">Sample A: iron filings and sulfur powder, just mixed.</p>
+    </div>
+
+    <div class="card why" id="whyCard" hidden>
+      <div class="kicker">What is happening</div>
+      <div id="why"></div>
+    </div>
+
+    <div class="card"><div class="kicker">To find</div><div id="finds"></div></div>
+  </aside>
+</main>
+
+<script src="../../play.js"></script>
+<script>
+'use strict';
+const {$, esc, clamp, fmt, mulberry32, tween, sound, say, track, toast, predict, findings, discover, found,
+       shareState, sharedState, mount, reduced} = Play;
+mount({thread: 'change', band: 'tinkerer'});
+
+/* MODEL:start ================================================================
+   A small particle model shared by every station on this page.
+
+   parseFormula turns a chemical formula into element counts, so every
+   molecule drawn on the stage is built from real atoms, not a picture of one.
+   Each "change" is either a PARTICLE REARRANGEMENT (physical: the same set of
+   particles, just moved) or a REAL REACTION (chemical: a balanced equation
+   whose atom counts the page checks, so a new kind of particle is not just
+   named — it is counted in and counted out). Rusting is 4 Fe + 3 O2 -> 2 Fe2O3;
+   burning magnesium is 2 Mg + O2 -> 2 MgO, exactly as the Class 7 book writes
+   it; the vinegar-and-soda gas is tested, as the book does, by turning
+   limewater milky: Ca(OH)2 + CO2 -> CaCO3 + H2O.
+   ============================================================================ */
+function parseFormula(f){
+  let i = 0;
+  function group(){
+    const counts = {};
+    while (i < f.length && f[i] !== ')') {
+      if (f[i] === '(') {
+        i++; const inner = group(); i++; // skip ')'
+        let num = ''; while (i < f.length && /[0-9]/.test(f[i])) num += f[i++];
+        const mult = num ? +num : 1;
+        for (const el in inner) counts[el] = (counts[el] || 0) + inner[el] * mult;
+      } else {
+        let el = f[i++];
+        while (i < f.length && /[a-z]/.test(f[i])) el += f[i++];
+        let num = ''; while (i < f.length && /[0-9]/.test(f[i])) num += f[i++];
+        counts[el] = (counts[el] || 0) + (num ? +num : 1);
+      }
+    }
+    return counts;
+  }
+  return group();
+}
+/* Total atoms of each element across a list of {f, n} molecules — the real
+   conservation check: it sums what is actually there, it does not assume it. */
+function tallyOf(list){
+  const t = {};
+  for (const it of list) { const c = parseFormula(it.f); for (const el in c) t[el] = (t[el] || 0) + c[el] * it.n; }
+  return t;
+}
+function sameTally(a, b){
+  const els = new Set([...Object.keys(a), ...Object.keys(b)]);
+  for (const el of els) if ((a[el] || 0) !== (b[el] || 0)) return false;
+  return true;
+}
+/* A jagged cut of a rectangle or ellipse into `n` pieces. Every piece's area is
+   measured with the shoelace formula, and the pieces' areas always sum to the
+   whole: nothing is invented, the model just cuts what it drew. */
+function shoelace(pts){ let s = 0; for (let i = 0; i < pts.length; i++) { const [x1, y1] = pts[i], [x2, y2] = pts[(i + 1) % pts.length]; s += x1 * y2 - x2 * y1; } return Math.abs(s) / 2; }
+function outline(shape, cx, cy, w, h, N = 48){
+  const pts = [];
+  for (let i = 0; i < N; i++) {
+    const a = 2 * Math.PI * i / N;
+    if (shape === 'ellipse') pts.push([cx + w / 2 * Math.cos(a), cy + h / 2 * Math.sin(a)]);
+    else { // rounded-rectangle-ish walk for a paper sheet
+      const t = i / N; const per = 2 * (w + h); const d = t * per;
+      let x, y;
+      if (d < w) { x = cx - w / 2 + d; y = cy - h / 2; }
+      else if (d < w + h) { x = cx + w / 2; y = cy - h / 2 + (d - w); }
+      else if (d < 2 * w + h) { x = cx + w / 2 - (d - w - h); y = cy + h / 2; }
+      else { x = cx - w / 2; y = cy + h / 2 - (d - 2 * w - h); }
+      pts.push([x, y]);
+    }
+  }
+  return pts;
+}
+function cutPieces(shape, cx, cy, w, h, n, seed){
+  const rnd = mulberry32(seed);
+  const N = 64;
+  const ring = outline(shape, cx, cy, w, h, N);
+  const whole = shoelace(ring);
+  if (n <= 1) return [{pts: ring, area: whole}];
+  /* n-1 straight cuts from the centre to points already ON the shape's own outline, so the
+     wedges exactly partition it: their areas are measured, and they always sum to the whole. */
+  let idx = new Set(); while (idx.size < n) idx.add(Math.floor(rnd() * N));
+  const cuts = [...idx].sort((a, b) => a - b);
+  const pieces = [];
+  for (let k = 0; k < n; k++) {
+    const i0 = cuts[k], i1 = k + 1 < n ? cuts[k + 1] : cuts[0] + N;
+    const pts = [[cx, cy]];
+    for (let i = i0; i <= i1; i++) pts.push(ring[i % N]);
+    pieces.push({pts, area: shoelace(pts)});
+  }
+  return pieces;
+}
+/* MODEL:end */
+
+/* ---- data: what the book says about each change --------------------------- */
+const ATOM = {
+  H:  {r: 8,  fill: '#f5f2ea', stroke: '#b9c3c7', text: '#4a555b'},
+  O:  {r: 12, fill: '#e0564a', stroke: '#a83a30', text: '#fff'},
+  Mg: {r: 13, fill: '#c7ccd1', stroke: '#8a9096', text: '#33383c'},
+  Fe: {r: 13, fill: '#a9784a', stroke: '#6e4d2a', text: '#fff'},
+  S:  {r: 12, fill: '#e8c34a', stroke: '#b8941f', text: '#4a3c0a'},
+  Ca: {r: 13, fill: '#9fb3c8', stroke: '#6f8399', text: '#1d2327'},
+  C:  {r: 10, fill: '#3a3f44', stroke: '#1d2327', text: '#fff'},
+};
+const SPECIAL = {Wax: {fill: '#e8c34a', stroke: '#b8941f', text: '#4a3c0a', r: 15}};
+const SUB = {0: '₀', 1: '₁', 2: '₂', 3: '₃', 4: '₄', 5: '₅', 6: '₆', 7: '₇', 8: '₈', 9: '₉'};
+const subFormula = f => f.replace(/[0-9]/g, d => SUB[d]);
+function glyphAtoms(formula){
+  if (SPECIAL[formula]) return [Object.assign({el: formula, cx: 0, cy: 0}, SPECIAL[formula])];
+  const counts = parseFormula(formula);
+  const atoms = []; for (const el in counts) for (let i = 0; i < counts[el]; i++) atoms.push(el);
+  const n = atoms.length, R = n <= 1 ? 0 : 9 + n * 2.2;
+  return atoms.map((el, i) => {
+    const ang = (2 * Math.PI * i / n) - Math.PI / 2, a = ATOM[el];
+    return {el, cx: n <= 1 ? 0 : R * Math.cos(ang), cy: n <= 1 ? 0 : R * Math.sin(ang), r: a.r, fill: a.fill, stroke: a.stroke, text: a.text};
+  });
+}
+function drawGlyph(gx, gy, formula, label){
+  const atoms = glyphAtoms(formula);
+  let s = `<g transform="translate(${gx.toFixed(1)} ${gy.toFixed(1)})">`;
+  for (const a of atoms) s += `<circle cx="${a.cx.toFixed(1)}" cy="${a.cy.toFixed(1)}" r="${a.r}" fill="${a.fill}" stroke="${a.stroke}" stroke-width="1.4"/>` +
+    `<text x="${a.cx.toFixed(1)}" y="${(a.cy + 3.5).toFixed(1)}" font-size="9" font-weight="700" text-anchor="middle" fill="${a.text}">${esc(a.el)}</text>`;
+  const maxY = Math.max(...atoms.map(a => a.cy + a.r), 10);
+  if (label !== false) s += `<text x="0" y="${(maxY + 15).toFixed(1)}" font-size="12" text-anchor="middle" fill="#4a555b" font-weight="700">${esc(subFormula(formula))}</text>`;
+  return s + '</g>';
+}
+const ITEMS_A = [
+  {id: 'tearpaper', label: 'Tear a sheet of paper', kind: 'physical', view: 'split', shape: 'rect',
+    reason: 'Every piece is still paper — the material has not changed, only its size and shape. No new substance formed: a physical change (Activity 5.2).'},
+  {id: 'melt', label: 'Melt an ice cube', kind: 'physical', view: 'water', before: 'solid', after: 'liquid',
+    reason: 'Solid water becomes liquid water: the same H₂O particles, just able to slide past each other. Freeze it and you have ice again — a physical change.'},
+  {id: 'rust', label: 'Leave an iron nail out in the rain', kind: 'chemical', view: 'reaction',
+    before: [{f: 'Fe', n: 4}, {f: 'O2', n: 3}], after: [{f: 'Fe2O3', n: 2}],
+    reason: 'Iron atoms combine with oxygen from the air to make a new brown substance, iron oxide — rust. A dry nail, or one kept away from air, does not rust: it needs both air and water.'},
+  {id: 'mg', label: 'Burn a magnesium ribbon', kind: 'chemical', view: 'reaction',
+    before: [{f: 'Mg', n: 2}, {f: 'O2', n: 1}], after: [{f: 'MgO', n: 2}],
+    reason: 'Magnesium + Oxygen → Magnesium oxide + Heat + Light, exactly as the book writes it. A new white powder forms, with heat and light: a chemical change.'},
+  {id: 'vinegarsoda', label: 'Mix vinegar and baking soda', kind: 'chemical', view: 'reaction',
+    before: [{f: 'Ca(OH)2', n: 1}, {f: 'CO2', n: 1}], after: [{f: 'CaCO3', n: 1}, {f: 'H2O', n: 1}],
+    reason: 'Bubbles of carbon dioxide fizz off. Passed into limewater, the book’s own test: Calcium hydroxide + Carbon dioxide → Calcium carbonate + Water, and the limewater turns milky — a new solid has formed.'},
+  {id: 'candle', label: 'Burn a candle', kind: 'both', view: 'candle',
+    reason: 'The wax first melts and evaporates — still wax, a physical change. Then the wax vapour burns to carbon dioxide and water — new substances, a chemical change. Faraday used exactly this candle to teach both at once.'},
+];
+const ITEMS_B = [
+  {id: 'meltIce', label: 'Melting ice cubes', reversible: true, view: 'water', before: 'solid', after: 'liquid',
+    note: 'Freeze it again and you have ice: this physical change reverses (Table 5.2).'},
+  {id: 'chopVeg', label: 'Chopping vegetables', reversible: false, view: 'split', shape: 'ellipse',
+    note: 'The pieces cannot be put back together into the whole vegetable: this physical change does not reverse.'},
+  {id: 'boilWater', label: 'Boiling water', reversible: true, view: 'water', before: 'liquid', after: 'gas',
+    note: 'Condense the steam and you have water again: this physical change reverses too — same as melting, a different physical change.'},
+  {id: 'popcorn', label: 'Making popcorn from corn', reversible: false, view: 'icons', beforeIcon: '🌽', afterIcon: '🍿',
+    note: 'A popped kernel cannot be turned back into a corn kernel: this change does not reverse. (Physical or chemical is a separate question — the book does not classify this one, only whether it reverses.)'},
+];
+const FES = {feMass: 5.6, sMass: 3.2, feMolar: 56, sMolar: 32};
+
+/* ---- state: plain data ------------------------------------------------------ */
+const S = {tab: 'sort', selected: null, locked: false, fes: {heated: false, testedA: false, testedB: false}};
+shareState(() => ({tab: S.tab, selected: S.selected, locked: S.locked, fes: S.fes}));
+const shared = sharedState();
+if (shared) Object.assign(S, {tab: shared.tab || 'sort', selected: shared.selected || null, locked: !!shared.locked, fes: shared.fes || S.fes});
+
+/* ============================================================================
+   Zones on the stage: BEFORE on the left, AFTER on the right, one geometry
+   reused by every station so the ladder feels like one bench.
+   ============================================================================ */
+const svg = $('stage');
+const Z = {beforeX: 40, afterX: 560, y: 100, w: 400, h: 320};
+function zoneFrame(){
+  return `<rect x="${Z.beforeX}" y="${Z.y - 34}" width="${Z.w}" height="${Z.h + 34}" rx="10" fill="#fff" stroke="#e2ded2"/>
+  <rect x="${Z.afterX}" y="${Z.y - 34}" width="${Z.w}" height="${Z.h + 34}" rx="10" fill="#fff" stroke="#e2ded2"/>
+  <text x="${Z.beforeX + 14}" y="${Z.y - 12}" font-size="12" font-weight="700" letter-spacing=".06em" fill="#7c878c">BEFORE</text>
+  <text x="${Z.afterX + 14}" y="${Z.y - 12}" font-size="12" font-weight="700" letter-spacing=".06em" fill="#7c878c">AFTER</text>
+  <line x1="${Z.beforeX + Z.w + 20}" y1="${Z.y + Z.h / 2 - 34}" x2="${Z.afterX - 20}" y2="${Z.y + Z.h / 2 - 34}" stroke="#c8b892" stroke-width="3" marker-end="url(#mArrow)"/>`;
+}
+function gridPos(i, n, x0, y0, w, h){
+  const cols = n <= 2 ? n : n <= 4 ? 2 : 3;
+  const rows = Math.ceil(n / cols);
+  const cx = x0 + w / (cols + 1) * ((i % cols) + 1);
+  const cy = y0 + h / (rows + 1) * (Math.floor(i / cols) + 1);
+  return {cx, cy};
+}
+function reactionZone(x0, list){
+  const items = []; for (const it of list) for (let i = 0; i < it.n; i++) items.push(it.f);
+  let s = '';
+  items.forEach((f, i) => { const p = gridPos(i, items.length, x0, Z.y - 10, Z.w, Z.h - 10); s += drawGlyph(p.cx, p.cy, f); });
+  return s;
+}
+function waterZone(x0, state, seed){
+  const rnd = mulberry32(seed);
+  const n = 9; let s = '';
+  for (let i = 0; i < n; i++) {
+    let cx, cy;
+    if (state === 'solid') { cx = x0 + 70 + (i % 3) * 90; cy = Z.y + 40 + Math.floor(i / 3) * 90; }
+    else if (state === 'liquid') { cx = x0 + 60 + rnd() * (Z.w - 120); cy = Z.y + 210 + rnd() * 90; }
+    else { cx = x0 + 30 + rnd() * (Z.w - 60); cy = Z.y - 20 + rnd() * (Z.h - 10); }
+    s += `<g transform="translate(${cx.toFixed(1)} ${cy.toFixed(1)})">
+      <circle r="9" fill="#e0564a" stroke="#a83a30" stroke-width="1.2"/>
+      <circle cx="-9" cy="6" r="5.5" fill="#f5f2ea" stroke="#b9c3c7"/>
+      <circle cx="9" cy="6" r="5.5" fill="#f5f2ea" stroke="#b9c3c7"/>
+      </g>`;
+    if (state === 'gas') s += `<line x1="${cx.toFixed(1)}" y1="${(cy + 12).toFixed(1)}" x2="${cx.toFixed(1)}" y2="${(cy + 24).toFixed(1)}" stroke="#cfe0ee" stroke-width="1.6" stroke-dasharray="2 3"/>`;
+  }
+  const lab = state === 'solid' ? 'Ice: H₂O locked in a lattice' : state === 'liquid' ? 'Water: H₂O free to flow' : 'Steam: H₂O spread far apart';
+  s += `<text x="${x0 + Z.w / 2}" y="${Z.y + Z.h + 6}" text-anchor="middle" font-size="12" fill="#4a555b" font-weight="600">${lab}</text>`;
+  return s;
+}
+function splitZone(x0, shape, n, seed){
+  const cx = x0 + Z.w / 2, cy = Z.y + Z.h / 2 - 12, w = Math.min(Z.w, 260), h = Math.min(Z.h, 220);
+  const pieces = cutPieces(shape, cx, cy, w, h, n, seed);
+  const cols = ['#e8dcc0', '#e6d4a8', '#e2cd94', '#dcc384', '#d8bd7a'];
+  let s = '';
+  pieces.forEach((p, i) => {
+    if (n > 1) {
+      /* pull pieces slightly apart so a "torn" or "chopped" result reads clearly */
+      const mx = p.pts.reduce((a, q) => a + q[0], 0) / p.pts.length, my = p.pts.reduce((a, q) => a + q[1], 0) / p.pts.length;
+      const dx = (mx - cx) * 0.18, dy = (my - cy) * 0.18;
+      const d = p.pts.map((q, j) => `${j ? 'L' : 'M'}${(q[0] + dx).toFixed(1)} ${(q[1] + dy).toFixed(1)}`).join('') + 'Z';
+      s += `<path d="${d}" fill="${cols[i % cols.length]}" stroke="#a9895a" stroke-width="1.3"/>`;
+    } else {
+      const d = p.pts.map((q, j) => `${j ? 'L' : 'M'}${q[0].toFixed(1)} ${q[1].toFixed(1)}`).join('') + 'Z';
+      s += `<path d="${d}" fill="${cols[0]}" stroke="#a9895a" stroke-width="1.3"/>`;
+    }
+  });
+  const total = pieces.reduce((a, p) => a + p.area, 0);
+  s += `<text x="${x0 + Z.w / 2}" y="${Z.y + Z.h + 6}" text-anchor="middle" font-size="12" fill="#4a555b" font-weight="600">${n === 1 ? 'One whole piece' : n + ' pieces'} · total area ${fmt(total, 0)} px²</text>`;
+  return s;
+}
+function iconZone(x0, icon, label){
+  return `<text x="${x0 + Z.w / 2}" y="${Z.y + Z.h / 2 - 10}" text-anchor="middle" font-size="86">${icon}</text>
+    <text x="${x0 + Z.w / 2}" y="${Z.y + Z.h + 6}" text-anchor="middle" font-size="12" fill="#4a555b" font-weight="600">${esc(label)}</text>`;
+}
+
+function paintSort(){
+  const item = ITEMS_A.find(i => i.id === S.selected) || ITEMS_B.find(i => i.id === S.selected);
+  let front, back, tally = '';
+  if (!item) {
+    front = `<text x="500" y="${Z.y + Z.h / 2}" text-anchor="middle" font-size="15" fill="#7c878c">Pick a change from the list to see its particles.</text>`;
+    back = '';
+  } else if (item.view === 'reaction') {
+    front = reactionZone(Z.beforeX, item.before) + reactionZone(Z.afterX, item.after);
+    const tb = tallyOf(item.before), ta = tallyOf(item.after), els = Object.keys(tb);
+    tally = els.map(el => `${el}: ${tb[el]} → ${ta[el] || 0}${(ta[el] || 0) === tb[el] ? ' ✓' : ''}`).join('   ');
+  } else if (item.view === 'water') {
+    front = waterZone(Z.beforeX, item.before, 11) + waterZone(Z.afterX, item.after, 12);
+  } else if (item.view === 'split') {
+    front = splitZone(Z.beforeX, item.shape, 1, 3) + splitZone(Z.afterX, item.shape, item.id === 'chopVeg' ? 6 : 5, 7);
+  } else if (item.view === 'icons') {
+    front = iconZone(Z.beforeX, item.beforeIcon, 'Before') + iconZone(Z.afterX, item.afterIcon, 'After');
+  } else if (item.view === 'candle') {
+    front = iconZone(Z.beforeX, '🕯️', 'Solid wax — melts, evaporates (physical)') +
+      reactionZone(Z.afterX, [{f: 'CO2', n: 1}, {f: 'H2O', n: 1}]) +
+      `<text x="${Z.afterX + Z.w / 2}" y="${Z.y + Z.h + 6}" text-anchor="middle" font-size="12" font-weight="600" fill="#4a555b">Wax vapour + Oxygen → this, + heat + light (chemical)</text>`;
+  }
+  let reveal = '';
+  if (item) {
+    const kindLab = item.kind ? item.kind.toUpperCase() + ' CHANGE' : (item.reversible ? 'REVERSES' : 'DOES NOT REVERSE');
+    reveal = `<text x="500" y="30" text-anchor="middle" font-size="15" font-weight="800" fill="${item.kind === 'chemical' || item.reversible === false ? '#b23a2f' : item.kind === 'both' ? '#b56a00' : '#1f7a68'}">${esc(item.label)} — ${esc(kindLab)}</text>`;
+  } else reveal = `<text x="500" y="30" text-anchor="middle" font-size="14" fill="#7c878c">The particle bench</text>`;
+  svg.innerHTML = `
+    <defs><marker id="mArrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="#c8b892"/></marker></defs>
+    <rect x="0" y="0" width="1000" height="620" fill="#fbfaf6"/>
+    <rect x="0" y="560" width="1000" height="60" fill="#e8dcc0"/>
+    <rect x="0" y="560" width="1000" height="6" fill="#d8c290"/>
+    ${reveal}
+    ${zoneFrame()}
+    ${front}
+    ${tally ? `<text x="500" y="${Z.y + Z.h + 32}" text-anchor="middle" font-size="13" font-family="JetBrains Mono, monospace" fill="#1d2327">${esc(tally)}</text>
+      <text x="500" y="${Z.y + Z.h + 52}" text-anchor="middle" font-size="11.5" fill="#7c878c">atoms counted before → after: nothing is created or destroyed</text>` : ''}
+  `;
+  $('why').innerHTML = item ? `<p>${item.reason || item.note}</p>` : '<p>Click a change to see why.</p>';
+  $('whyCard').hidden = !item;
+}
+
+/* ---- the iron and sulfur station ------------------------------------------- */
+function atomCircle(cx, cy, el){
+  const a = ATOM[el];
+  return `<circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="${a.r}" fill="${a.fill}" stroke="${a.stroke}" stroke-width="1.3"/>` +
+    `<text x="${cx.toFixed(1)}" y="${(cy + 3.5).toFixed(1)}" font-size="9" font-weight="700" text-anchor="middle" fill="${a.text}">${el}</text>`;
+}
+/* Real particles, placed so none overlap: rejection sampling against every atom already down. */
+function scatter(n, rnd, avoid, bounds, minD){
+  const pts = [];
+  for (let i = 0; i < n; i++) {
+    let p, tries = 0;
+    do { p = {x: bounds.x0 + rnd() * bounds.w, y: bounds.y0 + rnd() * bounds.h}; tries++; }
+    while (tries < 60 && avoid.concat(pts).some(q => Math.hypot(q.x - p.x, q.y - p.y) < minD));
+    pts.push(p);
+  }
+  return pts;
+}
+function paintFeS(){
+  const n = 8, rnd = mulberry32(41);
+  const bounds = {x0: 190, y0: 160, w: 300, h: 260};
+  const fePts0 = scatter(n, rnd, [], bounds, 32);
+  const sPts = scatter(n, rnd, fePts0, bounds, 32);
+  const MAG = {x: 700, y: 300};
+  const fePts = (!S.fes.heated && S.fes.testedA)
+    ? Array.from({length: n}, (_, i) => ({x: 600 + (i % 2) * 32, y: 220 + Math.floor(i / 2) * 40}))
+    : fePts0;
+  let g = '';
+  if (!S.fes.heated) {
+    sPts.forEach(p => g += atomCircle(p.x, p.y, 'S'));
+    fePts.forEach(p => g += atomCircle(p.x, p.y, 'Fe'));
+  } else {
+    for (let i = 0; i < n; i++) { const p = gridPos(i, n, 160, 150, 380, 260); g += drawGlyph(p.cx, p.cy, 'FeS', false); }
+  }
+  const magnet = S.fes.testedA || S.fes.testedB ? `<g transform="translate(${MAG.x} ${MAG.y})">
+      <rect x="-26" y="-14" width="52" height="60" rx="8" fill="#4a555b"/>
+      <rect x="-26" y="-14" width="52" height="20" rx="8" fill="#d6453d"/>
+      <text x="0" y="42" text-anchor="middle" font-size="11" font-weight="700" fill="#4a555b">magnet</text>
+    </g>${!S.fes.heated ? `<text x="500" y="70" text-anchor="middle" font-size="13" font-weight="700" fill="#1f7a68">Iron jumps to the magnet — sulfur is left behind. Separable: a mixture.</text>`
+      : `<text x="500" y="70" text-anchor="middle" font-size="13" font-weight="700" fill="#b23a2f">Nothing moves. Iron sulfide is not attracted — a new substance: a compound.</text>`}` : '';
+  svg.innerHTML = `
+    <rect x="0" y="0" width="1000" height="620" fill="#fbfaf6"/>
+    <rect x="0" y="560" width="1000" height="60" fill="#e8dcc0"/><rect x="0" y="560" width="1000" height="6" fill="#d8c290"/>
+    <text x="500" y="30" text-anchor="middle" font-size="15" font-weight="800" fill="${S.fes.heated ? '#b23a2f' : '#1f7a68'}">${S.fes.heated ? 'Sample B — iron sulfide (FeS), heated' : 'Sample A — iron filings and sulfur, just mixed'}</text>
+    <ellipse cx="360" cy="330" rx="240" ry="180" fill="${S.fes.heated ? '#2a2a2a' : '#ffffff'}" fill-opacity="${S.fes.heated ? '0.06' : '1'}" stroke="#c9c2ab" stroke-width="3"/>
+    ${g}
+    ${magnet}
+    <text x="500" y="590" text-anchor="middle" font-size="12.5" fill="#4a555b" font-weight="600">${S.fes.heated ? 'Every Fe is now bonded to one S: FeS, a compound with its own new properties.' : 'Fe and S sit side by side, unchanged: a mixture, separable by a magnet.'}</text>
+  `;
+  $('fesNote').textContent = S.fes.heated
+    ? 'Sample B: the black mass, ground up. Iron sulfide does not respond to a magnet, and it is no longer the two starting substances.'
+    : 'Sample A: iron filings and sulfur powder, just mixed. You can still see (and separate) both.';
+  $('btnHeat').disabled = S.fes.heated;
+}
+
+function paint(){
+  $('gate').hidden = S.locked;
+  $('sortCard').hidden = S.tab !== 'sort';
+  $('fesCard').hidden = S.tab !== 'fes';
+  $$('.chip').forEach(c => c.disabled = !S.locked);
+  $('btnMagnet').disabled = !S.locked;
+  $('btnHeat').disabled = !S.locked || S.fes.heated;
+  if (S.tab === 'sort') paintSort(); else paintFeS();
+  check();
+}
+const $$ = Play.$$;
+
+/* ---- chips ------------------------------------------------------------------ */
+function chip(item, group){
+  const b = document.createElement('button');
+  b.className = 'chip'; b.type = 'button'; b.dataset.id = item.id;
+  b.textContent = item.label;
+  b.addEventListener('click', () => { if (!S.locked) return; S.selected = item.id; sound('tick'); markSel(group); paint(); track('select', {id: item.id}); });
+  return b;
+}
+function markSel(){ $$('.chip').forEach(c => c.setAttribute('aria-pressed', c.dataset.id === S.selected)); }
+ITEMS_A.forEach(it => $('chipsA').appendChild(chip(it, 'A')));
+ITEMS_B.forEach(it => $('chipsB').appendChild(chip(it, 'B')));
+
+/* ---- tabs --------------------------------------------------------------------- */
+function setTab(t){ S.tab = t; $('tabSort').setAttribute('aria-selected', t === 'sort'); $('tabFeS').setAttribute('aria-selected', t === 'fes'); sound('pop'); paint(); track('tab', {tab: t}); }
+$('tabSort').addEventListener('click', () => setTab('sort'));
+$('tabFeS').addEventListener('click', () => setTab('fes'));
+
+/* ---- iron & sulfur controls ---------------------------------------------------- */
+$('btnMagnet').addEventListener('click', () => {
+  if (!S.locked) return;
+  sound('boing');
+  if (S.fes.heated) S.fes.testedB = true; else S.fes.testedA = true;
+  paint();
+  track('magnet', {heated: S.fes.heated});
+});
+$('btnHeat').addEventListener('click', () => {
+  if (!S.locked || S.fes.heated) return;
+  S.fes.heated = true; sound('whoosh'); paint(); track('heat');
+});
+
+/* ---- findings ---------------------------------------------------------------- */
+function check(){
+  const item = ITEMS_A.find(i => i.id === S.selected);
+  if (item) {
+    if (item.kind === 'physical') discover('physical');
+    if (item.kind === 'chemical') discover('chemical');
+    if (item.kind === 'both') discover('both');
+  }
+  const b = ITEMS_B.find(i => i.id === S.selected);
+  if (b) { if (b.reversible) discover('reversible'); else discover('irreversible'); }
+  if (S.fes.testedA) discover('mixture');
+  if (S.fes.testedB) discover('compound');
+}
+
+/* ============================================================================
+   Start
+   ============================================================================ */
+findings($('finds'), [
+  {id: 'physical', icon: '💧', label: 'A physical change: same particles, rearranged', hint: 'Try melting or tearing'},
+  {id: 'chemical', icon: '🔥', label: 'A chemical change: new particles appear', hint: 'Try rust, magnesium, or the vinegar and soda'},
+  {id: 'both', icon: '🕯️', label: 'Both at once, in one candle', hint: 'Try burning a candle'},
+  {id: 'reversible', icon: '↺', label: 'A change that reverses', hint: 'Check "Can you get it back?"'},
+  {id: 'irreversible', icon: '✕', label: 'A physical change that does not reverse', hint: 'Not every physical change comes back'},
+  {id: 'mixture', icon: '🧲', label: 'Iron and sulfur, still separable: a mixture', hint: 'Test Sample A with the magnet'},
+  {id: 'compound', icon: '⛓️', label: 'Iron sulfide, a new compound', hint: 'Heat it, then test again'},
+], () => toast('All seven found — you can tell a physical change from a chemical one, and both from reversible.', 4200));
+
+const POE = predict($('poe'), {
+  id: 'vinegar-soda',
+  q: 'You add baking soda to vinegar. It fizzes fast and bubbles pour out. Is this a physical change or a chemical change?',
+  options: [
+    {id: 'phys', text: 'A physical change — nothing new is really made, it just looks different.'},
+    {id: 'chem', text: 'A chemical change — a new gas, carbon dioxide, is formed.', right: true},
+    {id: 'weigh', text: "Can't tell without weighing it."},
+    {id: 'heat', text: 'Only a chemical change if it also gets hot.'},
+  ],
+  onLock(){
+    S.locked = true;
+    say('Now try every change on the bench, and watch its particles.');
+    paint();
+  },
+});
+if (!Play.FF('predict')) S.locked = true;
+paint();
+window.PG_STATE = () => JSON.parse(JSON.stringify(S));
+window.PG_MODEL = {parseFormula, tallyOf, sameTally, cutPieces, ITEMS_A, ITEMS_B, FES};
+</script>
+</body>
+</html>

@@ -1,0 +1,898 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Waves, Tides and Currents</title>
+<meta name="description" content="Class 11: place the Moon and set the law of the tide-raising force, then measure spring and neap tides at a harbour; follow water particles in circles as a wind-made wave runs up a beach and breaks; and solve for an ocean gyre whose current hugs the western side.">
+<link rel="icon" href="../../favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600&family=Inter:wght@400;500;600;700&family=Nunito:wght@500;700;800&family=Newsreader:opsz,wght@6..72,400;6..72,500&family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="../../play.css">
+<style>
+/* Only what this page needs beyond play.css. */
+.pg-stage{min-height:0; background:#f4f7f9}
+.gate{position:absolute; left:0; right:0; top:0; height:62%; display:grid; place-items:center; pointer-events:none}
+.gate span{background:rgba(14,30,52,.86); color:#fff; padding:10px 16px; border-radius:99px; font-weight:600; font-size:14px}
+.seg{display:grid; grid-auto-flow:column; grid-auto-columns:1fr; gap:4px; background:var(--sunk); padding:4px; border-radius:var(--radius-sm)}
+.seg button{border:0; background:transparent; border-radius:7px; min-height:30px; font-weight:600; font-size:12.5px; cursor:pointer; color:var(--ink-2); padding:0 6px; line-height:1.2}
+.seg button[aria-pressed="true"]{background:var(--card); color:var(--ink); box-shadow:var(--shadow)}
+.seg button:disabled{opacity:.5; cursor:default}
+.ctl{grid-template-columns:124px 1fr 90px; margin:2px 0}
+.ctl label{font-size:12.5px; line-height:1.2}
+.ctl output{font-family:var(--font-mono); font-size:12px; font-weight:600; min-width:0}
+.sub{font-size:11px; letter-spacing:.07em; text-transform:uppercase; font-weight:700; color:var(--ink-3); margin:12px 0 4px}
+.note{font-size:12.5px; color:var(--ink-3); margin:6px 0 0}
+.tog[aria-pressed="true"]{background:var(--accent-soft); border-color:var(--accent)}
+.clock{font-family:var(--font-mono); font-size:15px; font-weight:600}
+.why p{font-size:13.5px; margin-bottom:.55em}
+.why .mono{font-size:12.5px}
+svg text.m{font-family:var(--font-mono)}
+svg text.serif{font-family:"Newsreader",Georgia,serif}
+#moonHit{cursor:grab} #moonHit.dragging{cursor:grabbing}
+#buoyHit{cursor:ew-resize}
+#gaugeHit{cursor:ew-resize}
+</style>
+</head>
+<body>
+<header class="pg-top"></header>
+
+<div class="pg-intro">
+  <h1>Waves, tides and currents</h1>
+  <p>Three models of moving ocean water. <b>Tides:</b> the Moon and the Sun each stretch the ocean, and you set the law that says how strongly;
+     a harbour gauge measures what the sea does. <b>Waves:</b> the wind makes a wave, and linear wave theory carries it to a beach, where you follow the water itself.
+     <b>Currents:</b> the wind drives an ocean basin and the Coriolis force turns it; the page solves for the flow.</p>
+</div>
+
+<main class="pg-main">
+  <section class="pg-stage" id="stageWrap">
+    <svg id="stage" viewBox="0 0 1000 700" role="img" aria-label="Tides seen from above the North Pole with a harbour gauge; or a wave running up a beach with its water particles; or an ocean gyre"></svg>
+    <div class="gate" id="gate"><span>Make your prediction first →</span></div>
+  </section>
+
+  <aside class="pg-side">
+    <div id="poe"></div>
+
+    <div class="card" id="ctlCard">
+      <div class="seg" role="group" aria-label="Which model">
+        <button id="tabTide" aria-pressed="true">Tides</button>
+        <button id="tabWave" aria-pressed="false">Waves</button>
+        <button id="tabCur" aria-pressed="false">Currents</button>
+      </div>
+
+      <div id="grpTide">
+        <div class="sub">Set the law: tide-raising force ∝ M / dⁿ</div>
+        <div class="ctl"><label for="nExp">Exponent n</label><input type="range" id="nExp" min="2" max="3" step="0.05" value="3"><output id="nExpOut">3.00</output></div>
+        <div class="sub">The sky</div>
+        <div class="ctl"><label for="dMoon">Moon’s distance</label><input type="range" id="dMoon" min="356500" max="406700" step="100" value="384400"><output id="dMoonOut">384,400 km</output></div>
+        <div class="ctl"><label for="dSun">Sun’s distance</label><input type="range" id="dSun" min="147.1" max="152.1" step="0.1" value="149.6"><output id="dSunOut">149.6 M km</output></div>
+        <div class="ctl"><label for="decl">Moon’s declination</label><input type="range" id="decl" min="0" max="28.5" step="0.5" value="0"><output id="declOut">0°</output></div>
+        <div class="sub">The harbour</div>
+        <div class="ctl"><label for="lat">Latitude</label><input type="range" id="lat" min="0" max="70" step="1" value="0"><output id="latOut">0°</output></div>
+        <div class="seg" role="group" aria-label="Coast">
+          <button id="coIsle" aria-pressed="true">Mid-ocean island</button>
+          <button id="coShelf" aria-pressed="false">Wide shelf</button>
+          <button id="coBay" aria-pressed="false">Funnel bay</button>
+        </div>
+        <div class="row" style="justify-content:space-between; margin-top:10px">
+          <div><div class="kicker" style="margin:0">Time</div><div class="clock" id="clock">day 0, 00:00</div></div>
+          <div class="row" style="gap:6px"><button class="btn sm" id="btnRun">▶ Run</button><button class="btn sm tog" id="btnForces" aria-pressed="false">Show forces</button></div>
+        </div>
+        <p class="note">Drag the Moon round its orbit. Drag along the gauge graph to move through the month.</p>
+      </div>
+
+      <div id="grpWave" hidden>
+        <div class="sub">The wind that makes the wave</div>
+        <div class="ctl"><label for="wind">Wind speed</label><input type="range" id="wind" min="4" max="25" step="1" value="10"><output id="windOut">10 m/s</output></div>
+        <div class="ctl"><label for="fetch">Fetch (distance it blows over)</label><input type="range" id="fetch" min="10" max="1500" step="10" value="100"><output id="fetchOut">100 km</output></div>
+        <p class="note">Drag the yellow buoy along the section to measure the wave anywhere.</p>
+      </div>
+
+      <div id="grpCur" hidden>
+        <div class="sub">The winds over the ocean</div>
+        <div class="ctl"><label for="tau">Wind strength</label><input type="range" id="tau" min="0" max="2" step="0.1" value="1"><output id="tauOut">1.0</output></div>
+        <div class="sub">Set the law: how fast Coriolis grows towards the pole</div>
+        <div class="ctl"><label for="beta">β (Coriolis change)</label><input type="range" id="beta" min="0" max="30" step="1" value="20"><output id="betaOut">20</output></div>
+        <div class="seg" role="group" aria-label="Hemisphere" style="margin-top:6px">
+          <button id="hemN" aria-pressed="true">Northern hemisphere</button>
+          <button id="hemS" aria-pressed="false">Southern hemisphere</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="card why" id="whyCard">
+      <div class="kicker">What the model measured</div>
+      <div id="why"><p class="note" style="margin:0">The measurements appear once you have made a prediction.</p></div>
+    </div>
+
+    <div class="card"><div class="kicker">To find</div><div id="finds"></div></div>
+  </aside>
+</main>
+
+<script src="../../play.js"></script>
+<script>
+'use strict';
+const {$, esc, clamp, fmt, drag, loop, sound, say, track, toast, predict, findings, discover, found,
+       shareState, sharedState, mount, reduced, svgPoint} = Play;
+mount({thread: 'oceans', band: 'theorist'});
+
+/* MODEL:start ==================================================================
+   1. TIDES — the equilibrium tide. A body of mass M at distance d pulls the
+   near side of the Earth harder than the far side. What is left after the
+   Earth's own orbital motion (the book's "centrifugal force") is the
+   tide-raising force, ∝ M R / d³, which raises the sea by
+      h = A (3 cos²ψ − 1) / 2,   A = (M / M_earth) (R / d)³ R,
+   where ψ is the body's angle from the harbour's overhead point. Moon and Sun
+   add. The exponent 3 is the law you can change: with n = 2 the tide would
+   follow the pull itself. The Earth turns once in 24 h relative to the Sun;
+   the Moon goes round the Sun–Earth line once in 29.53 days.
+   A harbour's coast multiplies the open-ocean tide (a modelling assumption,
+   chosen so a funnel bay gives the book's 15–16 m for the Bay of Fundy).
+
+   2. WAVES — linear (Airy) wave theory. The wind of speed U over a fetch F
+   makes waves of height H and period T (JONSWAP fetch-limited formulas,
+   capped at a fully developed sea). Each depth h has its own wavelength from
+   ω² = g k tanh(k h). Water particles move in ellipses that are circles in
+   deep water and flatten near the bottom. Energy flux is conserved as the
+   wave slows (shoaling), so it grows until H ≈ 0.78 h, when it breaks.
+
+   3. CURRENTS — Stommel's ocean. The stream function ψ of the wind-driven
+   circulation obeys  r ∇²ψ + β ∂ψ/∂x = curl τ  in a closed basin, with trade
+   winds in the low latitudes and westerlies in the high. β is how fast the
+   Coriolis parameter grows towards the pole. The page solves it on a grid by
+   over-relaxation; the test checks it against Stommel's exact solution.
+   ============================================================================ */
+const R_E = 6.371e6, M_E = 5.972e24, M_MOON = 7.342e22, M_SUN = 1.989e30, D_MOON0 = 384400e3, D_SUN0 = 149.6e9;
+const A_MOON0 = (M_MOON / M_E) * Math.pow(R_E / D_MOON0, 3) * R_E;     // 0.357 m
+const SYNODIC_H = 29.5306 * 24, SOLAR_DAY_H = 24;
+const COAST = {isle: 1, shelf: 3, bay: 20};
+const D2R = Math.PI / 180;
+/* amplitudes of the two tides under the law n (the Moon's amplitude at its mean distance is fixed at the real value) */
+function amplitudes(p){
+  const A_m = A_MOON0 * Math.pow(D_MOON0 / (p.dMoon * 1e3), p.n);
+  const A_s = A_MOON0 * (M_SUN / M_MOON) * Math.pow(D_MOON0 / (p.dSun * 1e9), p.n);
+  return {A_m, A_s};
+}
+/* where things are at hour t: angles in the frame where the Sun is fixed on the left */
+function sky(p, t){
+  return {moon: p.moon0 + 2 * Math.PI * t / SYNODIC_H, sun: Math.PI, town: p.town0 + 2 * Math.PI * t / SOLAR_DAY_H};
+}
+const legendre = c => (3 * c * c - 1) / 2;
+/* sea level at the harbour at hour t (m), and each body's share */
+function tideAt(p, t){
+  const s = sky(p, t), {A_m, A_s} = amplitudes(p), lat = p.lat * D2R, dec = p.decl * D2R, k = COAST[p.coast];
+  const cm = Math.sin(lat) * Math.sin(dec) + Math.cos(lat) * Math.cos(dec) * Math.cos(s.town - s.moon);
+  const cs = Math.cos(lat) * Math.cos(s.town - s.sun);
+  const hm = k * A_m * legendre(cm), hs = k * A_s * legendre(cs);
+  return {h: hm + hs, hm, hs};
+}
+/* the sea's surface round the equator in the picture (for a harbour on the equator and the Moon over it) */
+function bulge(p, t, phi){
+  const s = sky(p, t), {A_m, A_s} = amplitudes(p);
+  return A_m * legendre(Math.cos(phi - s.moon) * Math.cos(p.decl * D2R)) + A_s * legendre(Math.cos(phi - s.sun));
+}
+/* the tidal day (24 h 50 min) around t: its range; and the high waters of three tidal days around it */
+function tidalDay(p, t){
+  const dt = 0.05, day = 24.84, half = 1.5 * day;
+  let hi = -1e9, lo = 1e9; const highs = [];
+  let prev2 = tideAt(p, t - half - 2 * dt).h, prev = tideAt(p, t - half - dt).h;
+  for (let u = t - half; u < t + half; u += dt) {
+    const h = tideAt(p, u).h;
+    if (Math.abs(u - t) <= day / 2) { hi = Math.max(hi, h); lo = Math.min(lo, h); }
+    if (prev > prev2 && prev >= h) highs.push({t: u - dt, h: prev});
+    prev2 = prev; prev = h;
+  }
+  const near = highs.filter(q => Math.abs(q.t - t) <= day / 2 + 6.3).slice(0, 2);
+  return {range: hi - lo, hi, lo, highs: near, all: highs, perDay: highs.length / 3};
+}
+/* the Moon's angle from the Sun–Earth line: 0 new moon, 180 full */
+function phaseDeg(p, t){ const s = sky(p, t); return (((s.moon - s.sun) / D2R) % 360 + 360) % 360; }
+/* the tide-raising acceleration (m/s²) of a body at a point on the Earth's surface (unit vector u), in the plane:
+   the pull there minus the pull at the Earth's centre (which the Earth's motion cancels: the "centrifugal" term) */
+function tideForce(M, d, u){
+  const G = 6.674e-11;
+  const bx = d, by = 0, px = R_E * u[0], py = R_E * u[1];
+  const rx = bx - px, ry = by - py, r = Math.hypot(rx, ry);
+  const pull = [G * M * rx / (r * r * r), G * M * ry / (r * r * r)];
+  const cent = [-G * M / (d * d), 0];
+  return {pull, cent, net: [pull[0] + cent[0], pull[1] + cent[1]]};
+}
+
+/* ---- 2. waves -------------------------------------------------------------- */
+const g = 9.81;
+function windWave(U, Fkm){
+  const F = Fkm * 1e3, X = g * F / (U * U);
+  let H = 0.0016 * U * U / g * Math.sqrt(X), T = 0.286 * U / g * Math.cbrt(X);
+  const Hpm = 0.243 * U * U / g, Tpm = 2 * Math.PI * U / (0.877 * g);
+  const developed = H >= Hpm || T >= Tpm;
+  return {H: Math.min(H, Hpm), T: Math.min(T, Tpm), developed};
+}
+/* wavenumber from ω² = g k tanh(k h) (Newton's method) */
+function waveK(T, h){
+  const w = 2 * Math.PI / T; let k = w * w / g;
+  if (h < 1e-3) return Infinity;
+  k = Math.max(k, w / Math.sqrt(g * h));
+  for (let i = 0; i < 40; i++) { const th = Math.tanh(k * h), f = g * k * th - w * w, df = g * th + g * k * h * (1 - th * th); const dk = f / df; k -= dk; if (Math.abs(dk) < 1e-12 * k) break; }
+  return k;
+}
+function waveLocal(T, h){
+  const k = waveK(T, h), w = 2 * Math.PI / T, c = w / k, L = 2 * Math.PI / k;
+  const kh = k * h, n = 0.5 * (1 + (kh > 20 ? 0 : 2 * kh / Math.sinh(2 * kh)));
+  return {k, L, c, cg: n * c, kh};
+}
+/* the beach: 60 m deep offshore, a sloping floor to the shore */
+const SEC = {len: 420, shelfEnd: 140, deep: 60, shore: 405};
+function depthAt(x){ if (x <= SEC.shelfEnd) return SEC.deep; if (x >= SEC.shore) return 0; return SEC.deep * Math.pow((SEC.shore - x) / (SEC.shore - SEC.shelfEnd), 1.15); }
+/* the wave along the section: local wavelength, speed, height (shoaling), and where it breaks */
+function waveSection(H0, T){
+  const deep = waveLocal(T, 4000), pts = []; let phase = 0, broken = false, xb = null;
+  const dx = 1;
+  for (let x = 0; x <= SEC.len; x += dx) {
+    const h = depthAt(x);
+    if (h <= 0.05) { pts.push({x, h, k: 0, L: 0, c: 0, H: 0, phase, broken: true}); continue; }
+    const w = waveLocal(T, h);
+    let H = H0 * Math.sqrt(deep.cg / w.cg);
+    if (!broken && H >= 0.78 * h) { broken = true; xb = x; }
+    if (broken) H = Math.min(H, 0.78 * h);
+    pts.push({x, h, k: w.k, L: w.L, c: w.c, H, phase, broken, kh: w.kh});
+    phase += w.k * dx;
+  }
+  return {pts, deep, xb};
+}
+/* a water particle resting at depth z0 (negative) where the wave has local values: its displacement */
+function particle(H, k, h, z0, theta){
+  const a = H / 2, s = Math.sinh(k * h);
+  const hx = a * Math.cosh(k * (z0 + h)) / s, hz = a * Math.sinh(k * (z0 + h)) / s;
+  return {dx: -hx * Math.sin(theta), dz: hz * Math.cos(theta), ax: hx, az: hz};
+}
+
+/* ---- 3. currents: Stommel's basin ------------------------------------------ */
+const NX = 60, NY = 40, LAM = 1.5;
+function solveGyre(beta, tau, sgn){
+  const dx = LAM / NX, dy = 1 / NY, psi = new Float64Array((NX + 1) * (NY + 1));
+  if (tau === 0) return {psi, iters: 0};
+  const f = j => -sgn * tau * Math.PI * Math.sin(Math.PI * j * dy);
+  const a = 2 / (dx * dx) + 2 / (dy * dy), w = 1.85;
+  let it = 0;
+  for (; it < 6000; it++) {
+    let md = 0;
+    for (let j = 1; j < NY; j++) for (let i = 1; i < NX; i++) {
+      const k = j * (NX + 1) + i, E = psi[k + 1], W = psi[k - 1], N = psi[k + NX + 1], S = psi[k - NX - 1];
+      const nv = ((E + W) / (dx * dx) + (N + S) / (dy * dy) + beta * (E - W) / (2 * dx) - f(j)) / a;
+      const d = nv - psi[k]; psi[k] += w * d; if (Math.abs(d) > md) md = Math.abs(d);
+    }
+    if (md < 1e-10) break;
+  }
+  return {psi, iters: it};
+}
+/* Stommel's exact solution for the same basin (the test checks the grid against it) */
+function stommelExact(x, y, beta, tau, sgn){
+  const k = Math.PI, s = Math.sqrt(beta * beta + 4 * k * k), m1 = (-beta + s) / 2, m2 = (-beta - s) / 2;
+  const p = (1 - Math.exp(m2 * LAM)) / (Math.exp(m1 * LAM) - Math.exp(m2 * LAM)), q = 1 - p;
+  return sgn * tau / Math.PI * (1 - p * Math.exp(m1 * x) - q * Math.exp(m2 * x)) * Math.sin(Math.PI * y);
+}
+/* velocity (u east, v north) anywhere, by interpolating the grid's ψ */
+function velocity(G, x, y){
+  const dx = LAM / NX, dy = 1 / NY;
+  const ps = (X, Y) => { const i = clamp(X / dx, 0, NX - 1e-6), j = clamp(Y / dy, 0, NY - 1e-6), i0 = Math.floor(i), j0 = Math.floor(j), fx = i - i0, fy = j - j0, P = G.psi, W = NX + 1;
+    return P[j0 * W + i0] * (1 - fx) * (1 - fy) + P[j0 * W + i0 + 1] * fx * (1 - fy) + P[(j0 + 1) * W + i0] * (1 - fx) * fy + P[(j0 + 1) * W + i0 + 1] * fx * fy; };
+  const e = 0.004;
+  return {u: -(ps(x, y + e) - ps(x, y - e)) / (2 * e), v: (ps(x + e, y) - ps(x - e, y)) / (2 * e)};
+}
+/* the strongest northward and southward flow across the middle latitude: how lopsided is the gyre? */
+function asymmetry(G){
+  const j = NY / 2, W = NX + 1, dx = LAM / NX;
+  let vmax = -1e9, vmin = 1e9, iMax = 0, iMin = 0;
+  for (let i = 0; i < NX; i++) { const v = (G.psi[j * W + i + 1] - G.psi[j * W + i]) / dx; if (v > vmax) { vmax = v; iMax = i; } if (v < vmin) { vmin = v; iMin = i; } }
+  const west = iMax < iMin ? vmax : vmin, east = iMax < iMin ? vmin : vmax;
+  return {west, east, ratio: Math.abs(west) / Math.max(1e-12, Math.abs(east)), clockwise: west > 0};
+}
+/* MODEL:end */
+
+const INK = '#1d2327', FAINT = '#7c878c', MID = '#4a555b', HAIR = '#dfe6ea', PAPER = '#fbfdfe';
+const SEA = '#2c5282', SEA2 = '#3b6fb0', SEA3 = '#8ec0e8', MOONC = '#d9dde3';
+
+/* ---- state: plain data --------------------------------------------------- */
+const DEF = {n: 3, dMoon: 384400, dSun: 149.6, decl: 0, lat: 0, coast: 'isle', moon0: Math.PI * 0.62, town0: 0,
+             wind: 10, fetch: 100, tau: 1, beta: 20, hem: 'N'};
+const S = {tab: 'tide', par: Object.assign({}, DEF), t: 0, running: false, forces: false, locked: false,
+           spring: null, neap: null, buoy: 250, waveT: 0, deepWatch: 0, G: null, parts: [], hours: 0};
+const shared = sharedState();
+if (shared && shared.par) {
+  const P = shared.par;
+  for (const k of ['n', 'dMoon', 'dSun', 'decl', 'lat', 'moon0', 'wind', 'fetch', 'tau', 'beta']) if (isFinite(+P[k])) S.par[k] = +P[k];
+  if (COAST[P.coast]) S.par.coast = P.coast; if (P.hem === 'S') S.par.hem = 'S';
+  if (['tide', 'wave', 'cur'].includes(shared.tab)) S.tab = shared.tab;
+}
+shareState(() => ({tab: S.tab, par: Object.assign({}, S.par)}));
+
+/* ============================================================================
+   The stage: built once, then patched.
+   ============================================================================ */
+const svg = $('stage');
+const TV = {cx: 250, cy: 222, rE: 64, rOrb: 168};           // tide top view
+const HB = {x: 540, y: 40, w: 440, h: 360};                  // harbour
+const GG = {x: 70, y: 478, w: 880, h: 170};                  // gauge graph
+const DAYS = 30;
+const WS = {x: 20, y: 110, w: 960, h: 360, zTop: 150, pxm: 960 / SEC.len, pzm: 4.6};   // wave section
+const BS = {x: 124, y: 60, w: 560, h: 390};                   // basin
+function build(){
+  let stars = ''; const rnd = Play.mulberry32(3);
+  for (let i = 0; i < 60; i++) stars += `<circle cx="${(rnd() * 500).toFixed(1)}" cy="${(rnd() * 440).toFixed(1)}" r="${(rnd() * 1.1 + .3).toFixed(2)}" fill="#fff" opacity="${(rnd() * .5 + .2).toFixed(2)}"/>`;
+  let rays = ''; for (let i = 0; i < 9; i++) rays += `<line x1="6" y1="${40 + i * 45}" x2="60" y2="${40 + i * 45}" stroke="#ffd36b" stroke-width="2" opacity=".55" marker-end="url(#arrSun)"/>`;
+  let pts = ''; for (let i = 0; i < 12; i++) pts += `<g id="fa${i}"></g>`;
+  let wpart = ''; for (let n = 0; n < 7 * 5; n++) wpart += `<circle id="wp${n}" r="3.2" fill="#fff" stroke="#1d4f86" stroke-width="1"/>`;
+  svg.innerHTML = `
+  <defs>
+    <radialGradient id="gEarth" cx="40%" cy="38%"><stop offset="0" stop-color="#6fc1ff"/><stop offset=".7" stop-color="#2471c9"/><stop offset="1" stop-color="#174d93"/></radialGradient>
+    <radialGradient id="gMoon" cx="40%" cy="38%"><stop offset="0" stop-color="#f4f5f7"/><stop offset="1" stop-color="#b9bec6"/></radialGradient>
+    <linearGradient id="gSeaSec" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3f7fc4"/><stop offset="1" stop-color="#173c6b"/></linearGradient>
+    <linearGradient id="gHSky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#cfe6f7"/><stop offset="1" stop-color="#eef6fb"/></linearGradient>
+    <marker id="arrSun" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0L10 5L0 10z" fill="#ffd36b"/></marker>
+    <marker id="arrW" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto"><path d="M0 0L10 5L0 10z" fill="#1d2327"/></marker>
+    <marker id="arrP" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto"><path d="M0 0L10 5L0 10z" fill="#e8890c"/></marker>
+    <marker id="arrC" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto"><path d="M0 0L10 5L0 10z" fill="#9aa3a6"/></marker>
+    <marker id="arrN" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto"><path d="M0 0L10 5L0 10z" fill="#d6453d"/></marker>
+    <clipPath id="clipTV"><rect x="0" y="0" width="500" height="440"/></clipPath>
+    <clipPath id="clipHB"><rect x="${HB.x}" y="${HB.y}" width="${HB.w}" height="${HB.h}" rx="8"/></clipPath>
+    <clipPath id="clipWS"><rect x="${WS.x}" y="${WS.y}" width="${WS.w}" height="${WS.h}"/></clipPath>
+    <clipPath id="clipBS"><rect x="${BS.x}" y="${BS.y}" width="${BS.w}" height="${BS.h}"/></clipPath>
+  </defs>
+  <rect x="0" y="0" width="1000" height="700" fill="#f4f7f9"/>
+
+  <g id="viewTide">
+    <g clip-path="url(#clipTV)">
+      <rect x="0" y="0" width="500" height="440" fill="#0d1726"/>${stars}${rays}
+      <text x="16" y="26" fill="#ffd36b" font-size="12" font-weight="700" letter-spacing=".08em">SUNLIGHT</text>
+      <text id="exNote" x="${TV.cx}" y="428" fill="#9fb3c8" font-size="11.5" text-anchor="middle"></text>
+      <circle cx="${TV.cx}" cy="${TV.cy}" r="${TV.rOrb}" fill="none" stroke="#3d5573" stroke-width="1.4" stroke-dasharray="3 6"/>
+      <path id="ocean" fill="${SEA3}" opacity=".85"/>
+      <circle cx="${TV.cx}" cy="${TV.cy}" r="${TV.rE}" fill="url(#gEarth)"/>
+      <path id="nightE" fill="#050b16" opacity=".55"/>
+      <circle cx="${TV.cx}" cy="${TV.cy}" r="7" fill="#e8f1f8"/>
+      <g id="townG"><circle id="town" r="6" fill="#ffcf5a" stroke="#fff" stroke-width="1.6"/></g>
+      <g id="forceArrows">${pts}</g>
+      <g id="moonG"><circle id="moonBody" r="17" fill="url(#gMoon)"/><path id="moonDark" fill="#1a2433" opacity=".85"/></g>
+      <text id="moonLab" fill="#dce6f0" font-size="12" font-weight="600" text-anchor="middle"></text>
+      <circle id="moonHit" r="30" fill="transparent" tabindex="0" role="slider" aria-label="The Moon: drag it round its orbit"/>
+      <text id="phaseLab" x="16" y="410" fill="#dce6f0" font-size="13" font-weight="700"></text>
+      <g id="forceKey" font-size="11.5" visibility="hidden"><text x="490" y="26" fill="#f2b45a" text-anchor="end">orange: the Moon’s pull</text><text x="490" y="42" fill="#b9c3c7" text-anchor="end">grey: its pull on the Earth’s centre, reversed (“centrifugal”)</text><text x="490" y="58" fill="#ff7b72" text-anchor="end">red: what is left, drawn 23× larger</text></g>
+    </g>
+    <!-- harbour -->
+    <g clip-path="url(#clipHB)">
+      <rect x="${HB.x}" y="${HB.y}" width="${HB.w}" height="${HB.h}" fill="url(#gHSky)"/>
+      <rect id="hbWater" x="${HB.x}" width="${HB.w}" fill="${SEA2}"/>
+      <path id="hbWave" fill="${SEA2}"/>
+      <rect x="${HB.x + 300}" y="${HB.y + 60}" width="140" height="${HB.h}" fill="#a7a08f"/>
+      <rect x="${HB.x + 300}" y="${HB.y + 60}" width="140" height="8" fill="#8d8674"/>
+      <g id="pole"></g>
+      <g id="boat"><path d="M-34 0 L34 0 L24 14 L-24 14 Z" fill="#c0573a"/><rect x="-4" y="-40" width="3" height="40" fill="#6b4a2b"/><path d="M-1 -38 L26 -8 L-1 -8 Z" fill="#fffdf7"/></g>
+      <line id="hiMark" x1="${HB.x + 170}" x2="${HB.x + 300}" stroke="#d6453d" stroke-width="1.5" stroke-dasharray="4 3"/>
+      <line id="loMark" x1="${HB.x + 170}" x2="${HB.x + 300}" stroke="#d6453d" stroke-width="1.5" stroke-dasharray="4 3"/>
+      <text id="hiLab" x="${HB.x + 282}" font-size="11" fill="#b0332c" text-anchor="end" class="m"></text>
+      <text id="loLab" x="${HB.x + 282}" font-size="11" fill="#b0332c" text-anchor="end" class="m"></text>
+    </g>
+    <rect x="${HB.x}" y="${HB.y}" width="${HB.w}" height="${HB.h}" rx="8" fill="none" stroke="${HAIR}"/>
+    <text x="${HB.x}" y="26" font-size="13" font-weight="700" fill="${MID}" letter-spacing=".08em" id="hbTitle">THE HARBOUR</text>
+    <text id="hbNow" x="${HB.x + 14}" y="${HB.y + 24}" font-size="13" font-weight="700" fill="${INK}"></text>
+    <text id="hbNow2" x="${HB.x + 14}" y="${HB.y + 42}" font-size="12" fill="${MID}"></text>
+    <text id="hbRatio" x="${HB.x + 14}" y="${HB.y + 60}" font-size="12" fill="${MID}"></text>
+    <!-- gauge graph -->
+    <text x="${GG.x - 44}" y="${GG.y - 18}" font-size="13" font-weight="700" fill="${MID}" letter-spacing=".08em">TIDE GAUGE: SEA LEVEL AT THE HARBOUR FOR ${DAYS} DAYS (m)</text>
+    <g id="ggAxes"></g><path id="ggLine" fill="none" stroke="${SEA}" stroke-width="1.3"/><g id="ggMarks"></g>
+    <line id="ggNow" y1="${GG.y}" y2="${GG.y + GG.h}" stroke="${INK}" stroke-width="1.5"/>
+    <rect id="gaugeHit" x="${GG.x}" y="${GG.y}" width="${GG.w}" height="${GG.h}" fill="transparent"/>
+  </g>
+
+  <g id="viewWave" hidden>
+    <text x="20" y="28" font-size="13" font-weight="700" fill="${MID}" letter-spacing=".08em">A WAVE RUNS UP A BEACH</text>
+    <text id="wvWind" x="20" y="50" font-size="12.5" fill="${MID}"></text>
+    <g id="windArrows"></g>
+    <g clip-path="url(#clipWS)">
+      <rect x="${WS.x}" y="${WS.y}" width="${WS.w}" height="${WS.h}" fill="#e6f1f8"/>
+      <path id="wvWater" fill="url(#gSeaSec)"/>
+      <path id="wvFoam" fill="#ffffff" opacity=".85"/>
+      <path id="wvFloor" fill="#d8c08c" stroke="#b39a62" stroke-width="1.2"/>
+      <line id="wvHalfL" stroke="#ffd36b" stroke-width="1.4" stroke-dasharray="5 4"/>
+      <text id="wvHalfT" font-size="11" fill="#fff4c9" font-weight="600"></text>
+      <g id="wvOrbits"></g>
+      <g id="wvParts">${wpart}</g>
+      <g id="wvLabels"></g>
+      <g id="buoy"><line id="buoyLine" stroke="#ffcf5a" stroke-width="1.5" stroke-dasharray="3 3"/><circle id="buoyBody" r="8" fill="#ffcf5a" stroke="#6b4a00" stroke-width="1.5"/><path id="buoyTrace" fill="none" stroke="#ffcf5a" stroke-width="2"/></g>
+      <rect id="buoyHit" y="${WS.y}" width="36" height="${WS.h}" fill="transparent"/>
+    </g>
+    <g id="mag"><rect x="${WS.x + 8}" y="${WS.y + 8}" width="242" height="118" rx="8" fill="#fffdf7" stroke="${HAIR}"/>
+      <text x="${WS.x + 18}" y="${WS.y + 26}" font-size="11.5" font-weight="700" fill="${MID}">ORBITS UNDER THE BUOY, MAGNIFIED</text>
+      <g id="magOrb"></g></g>
+    <text x="${WS.x + WS.w - 6}" y="${WS.y + WS.h + 16}" font-size="11" fill="${FAINT}" text-anchor="end">shore →   vertical scale ×2.1</text>
+    <text x="${WS.x}" y="${WS.y + WS.h + 16}" font-size="11" fill="${FAINT}">← from the open sea</text>
+    <g id="wvNums"></g>
+  </g>
+
+  <g id="viewCur" hidden>
+    <text x="${BS.x - 70}" y="28" font-size="13" font-weight="700" fill="${MID}" letter-spacing=".08em" id="bsTitle"></text>
+    <rect x="${BS.x - 50}" y="${BS.y}" width="50" height="${BS.h}" fill="#d9ccaa"/><rect x="${BS.x + BS.w}" y="${BS.y}" width="50" height="${BS.h}" fill="#d9ccaa"/>
+    <text x="${BS.x - 25}" y="${BS.y + BS.h / 2}" font-size="11" fill="#5d5033" text-anchor="middle" transform="rotate(-90 ${BS.x - 25} ${BS.y + BS.h / 2})">east coast of a continent</text>
+    <text x="${BS.x + BS.w + 25}" y="${BS.y + BS.h / 2}" font-size="11" fill="#5d5033" text-anchor="middle" transform="rotate(90 ${BS.x + BS.w + 25} ${BS.y + BS.h / 2})">west coast of a continent</text>
+    <g font-size="11"><rect x="${BS.x}" y="${BS.y - 20}" width="12" height="4" fill="rgb(60,110,200)"/><text x="${BS.x + 16}" y="${BS.y - 14}" fill="${MID}">cold water</text><rect x="${BS.x + 90}" y="${BS.y - 20}" width="12" height="4" fill="rgb(214,69,61)"/><text x="${BS.x + 106}" y="${BS.y - 14}" fill="${MID}">warm water</text><text x="${BS.x + 190}" y="${BS.y - 14}" fill="${MID}">· longer streaks move faster</text></g>
+    <g clip-path="url(#clipBS)">
+      <rect x="${BS.x}" y="${BS.y}" width="${BS.w}" height="${BS.h}" fill="${SEA}"/>
+      <g id="bsCells"></g><g id="bsLines"></g><g id="bsParts"></g>
+    </g>
+    <g id="bsLat"></g>
+    <text x="760" y="28" font-size="13" font-weight="700" fill="${MID}" letter-spacing=".08em">THE WIND</text>
+    <g id="windProf"></g>
+    <text x="760" y="${BS.y + BS.h + 50}" font-size="13" font-weight="700" fill="${MID}" letter-spacing=".08em">ACROSS THE MIDDLE</text>
+    <g id="vProf"></g>
+    <g id="ekman"></g>
+    <g id="bsNums"></g>
+  </g>
+  <rect id="veil" x="0" y="0" width="1000" height="700" fill="#f4f7f9"/>
+  <text id="veilT" x="500" y="520" text-anchor="middle" font-size="15" fill="${FAINT}" font-weight="600">The harbour, the gauge and the other models open once you have made a prediction.</text>`;
+}
+
+/* ---- tides: paint --------------------------------------------------------- */
+const hm = t => { const d = Math.floor(t / 24), h = t - 24 * d, H = Math.floor(h), M = Math.floor((h - H) * 60); return `day ${d}, ${String(H).padStart(2, '0')}:${String(M).padStart(2, '0')}`; };
+const scr = (ang, r) => [TV.cx + r * Math.cos(ang), TV.cy - r * Math.sin(ang)];   // screen y is down; angles anticlockwise
+let GAUGE = null;
+function gaugeSeries(){
+  const p = S.par, key = JSON.stringify([p.n, p.dMoon, p.dSun, p.decl, p.lat, p.coast, p.moon0, p.town0]);
+  if (GAUGE && GAUGE.key === key) return GAUGE;
+  const pts = []; let mx = 0;
+  for (let t = 0; t <= DAYS * 24; t += 0.25) { const h = tideAt(p, t).h; pts.push([t, h]); mx = Math.max(mx, Math.abs(h)); }
+  GAUGE = {key, pts, mx}; return GAUGE;
+}
+function paintTide(){
+  const p = S.par, t = S.t, s = sky(p, t), amp = amplitudes(p);
+  /* the ocean shape: exaggerated so a metre shows */
+  const EXS = 30 * 0.52 / Math.max(0.52, amp.A_m + amp.A_s);          // pixels per metre of tide
+  let d = '';
+  for (let i = 0; i <= 120; i++) { const phi = i / 120 * 2 * Math.PI, r = TV.rE + 9 + bulge(p, t, phi) * EXS; const [x, y] = scr(phi, r); d += (i ? 'L' : 'M') + x.toFixed(1) + ' ' + y.toFixed(1); }
+  $('ocean').setAttribute('d', d + 'Z');
+  const ex = EXS * R_E / TV.rE;
+  $('exNote').textContent = `Seen from above the North Pole. The ocean’s bulge is drawn about ${ex >= 1e6 ? fmt(ex / 1e6, 0) + ' million' : Math.round(ex / 1000) * 1000} times too big.`;
+  /* night half (Sun on the left) */
+  $('nightE').setAttribute('d', `M${TV.cx} ${TV.cy - TV.rE} A${TV.rE} ${TV.rE} 0 0 1 ${TV.cx} ${TV.cy + TV.rE} Z`);
+  /* the Moon and its phase as seen from Earth: the lit half faces the Sun */
+  const [mx, my] = scr(s.moon, TV.rOrb);
+  $('moonBody').setAttribute('cx', mx); $('moonBody').setAttribute('cy', my);
+  $('moonDark').setAttribute('d', `M${mx} ${my - 17} A17 17 0 0 1 ${mx} ${my + 17} Z`);
+  $('moonHit').setAttribute('cx', mx); $('moonHit').setAttribute('cy', my);
+  $('moonLab').setAttribute('x', mx); $('moonLab').setAttribute('y', my + 34);
+  $('moonLab').textContent = `${Math.round(p.dMoon).toLocaleString('en-IN')} km`;
+  const [tx, ty] = scr(s.town, TV.rE - 4);
+  $('town').setAttribute('cx', tx); $('town').setAttribute('cy', ty);
+  const ph = phaseDeg(p, t);
+  const phName = ph < 15 || ph > 345 ? 'New moon: Sun, Moon and Earth in a line' : Math.abs(ph - 180) < 15 ? 'Full moon: Sun, Earth and Moon in a line' : Math.abs(ph - 90) < 15 ? 'First quarter: Moon at right angles to the Sun' : Math.abs(ph - 270) < 15 ? 'Last quarter: Moon at right angles to the Sun' : `Moon ${fmt(ph, 0)}° round from the Sun’s side`;
+  $('phaseLab').textContent = phName;
+  /* the forces, as in the book's Fig. 13.2 */
+  for (let i = 0; i < 12; i++) {
+    const el = $('fa' + i);
+    if (!S.forces) { el.innerHTML = ''; continue; }
+    const phi = i / 12 * 2 * Math.PI, rel = phi - s.moon, u = [Math.cos(rel), Math.sin(rel)];
+    const F = tideForce(M_MOON, p.dMoon * 1e3, u), K1 = 1.3e6, K = 3e7;
+    const rot = v => [v[0] * Math.cos(s.moon) - v[1] * Math.sin(s.moon), v[0] * Math.sin(s.moon) + v[1] * Math.cos(s.moon)];
+    const [x0, y0] = scr(phi, TV.rE);
+    const arrow = (v, col, mk, k) => { const w = rot(v); return `<line x1="${x0.toFixed(1)}" y1="${y0.toFixed(1)}" x2="${(x0 + w[0] * k).toFixed(1)}" y2="${(y0 - w[1] * k).toFixed(1)}" stroke="${col}" stroke-width="1.8" marker-end="url(#${mk})"/>`; };
+    el.innerHTML = (i % 3 === 0 ? arrow(F.pull, '#e8890c', 'arrP', K1) + arrow(F.cent, '#9aa3a6', 'arrC', K1) : '') + arrow(F.net, '#d6453d', 'arrN', K);
+  }
+  $('forceKey').setAttribute('visibility', S.forces ? 'visible' : 'hidden');
+  /* harbour */
+  const now = tideAt(p, t), day = tidalDay(p, t), G = gaugeSeries();
+  const SCL = Math.max(0.6, G.mx * 1.25), mid = HB.y + HB.h * 0.62, yH = h => mid - h / SCL * HB.h * 0.34;
+  const wy = yH(now.h);
+  $('hbWater').setAttribute('y', wy); $('hbWater').setAttribute('height', HB.y + HB.h - wy);
+  let wv = `M${HB.x} ${wy}`; for (let x = 0; x <= 300; x += 10) wv += ` L${HB.x + x} ${(wy + 2.5 * Math.sin(x / 18 + t * 3)).toFixed(1)}`;
+  $('hbWave').setAttribute('d', wv + ` L${HB.x + 300} ${wy + 8} L${HB.x} ${wy + 8}Z`);
+  $('boat').setAttribute('transform', `translate(${HB.x + 120} ${(wy - 4).toFixed(1)})`);
+  let pole = `<rect x="${HB.x + 286}" y="${HB.y + 70}" width="10" height="${HB.h - 80}" fill="#fffdf7" stroke="#8d8674"/>`;
+  const step = SCL > 8 ? 2 : SCL > 3 ? 1 : SCL > 1.2 ? 0.5 : 0.2;
+  for (let v = -Math.floor(SCL / step) * step; v <= SCL; v += step) { const y = yH(v); if (y < HB.y + 72 || y > HB.y + HB.h - 12) continue; pole += `<line x1="${HB.x + 286}" x2="${HB.x + 296}" y1="${y.toFixed(1)}" y2="${y.toFixed(1)}" stroke="#1d2327"/><text x="${HB.x + 300 + 6}" y="${(y + 4).toFixed(1)}" font-size="10.5" fill="#fffdf7" class="m">${fmt(v, step < 1 ? 1 : 0)}</text>`; }
+  $('pole').innerHTML = pole;
+  for (const [id, v, lab] of [['hi', day.hi, 'high water'], ['lo', day.lo, 'low water']]) { $(id + 'Mark').setAttribute('y1', yH(v)); $(id + 'Mark').setAttribute('y2', yH(v)); $(id + 'Lab').setAttribute('y', yH(v) - 4); $(id + 'Lab').textContent = `${lab} ${fmt(v, 2)} m`; }
+  const rising = tideAt(p, t + 0.1).h > now.h;
+  const coastName = {isle: 'A MID-OCEAN ISLAND', shelf: 'A HARBOUR ON A WIDE CONTINENTAL SHELF', bay: 'A FUNNEL-SHAPED BAY'}[p.coast];
+  $('hbTitle').textContent = `THE HARBOUR: ${coastName}, LATITUDE ${p.lat}°`;
+  $('hbNow').textContent = `${fmt(now.h, 2)} m and ${rising ? 'rising: the flow (flood)' : 'falling: the ebb'}`;
+  $('hbNow2').textContent = `range over this tidal day: ${fmt(day.range, 2)} m (${day.perDay < 1.5 ? 'one high tide' : 'two high tides'} a day)`;
+  $('hbRatio').textContent = `Sun’s tide ÷ Moon’s tide = ${fmt(amp.A_s / amp.A_m, amp.A_s / amp.A_m > 10 ? 0 : 2)}`;
+  /* gauge */
+  const yG = h => GG.y + GG.h / 2 - h / SCL * GG.h / 2, xG = tt => GG.x + tt / (DAYS * 24) * GG.w;
+  let ax = `<rect x="${GG.x}" y="${GG.y}" width="${GG.w}" height="${GG.h}" fill="${PAPER}" stroke="${HAIR}"/><line x1="${GG.x}" y1="${yG(0)}" x2="${GG.x + GG.w}" y2="${yG(0)}" stroke="#d8e1e6"/>`;
+  for (let dd = 0; dd <= DAYS; dd += 5) ax += `<text x="${xG(dd * 24)}" y="${GG.y + GG.h + 15}" font-size="10.5" fill="${FAINT}" text-anchor="middle" class="m">day ${dd}</text>`;
+  for (const v of [-SCL * 0.8, 0, SCL * 0.8]) ax += `<text x="${GG.x - 6}" y="${yG(v) + 4}" font-size="10.5" fill="${FAINT}" text-anchor="end" class="m">${fmt(v, SCL < 2 ? 2 : 1)}</text>`;
+  $('ggAxes').innerHTML = ax;
+  $('ggLine').setAttribute('d', G.pts.map((q, i) => (i ? 'L' : 'M') + xG(q[0]).toFixed(1) + ' ' + yG(q[1]).toFixed(1)).join(''));
+  /* spring and neap tides from the model's own sky: when the Moon is in line with the Sun, or square to it */
+  let mk = '';
+  for (let tt = 0; tt <= DAYS * 24; tt += 1) {
+    const a = phaseDeg(p, tt), b = phaseDeg(p, tt + 1);
+    for (const target of [0, 90, 180, 270]) {
+      const da = ((a - target + 540) % 360) - 180, db = ((b - target + 540) % 360) - 180;
+      if (da <= 0 && db > 0 && xG(tt) > GG.x + 22) { const spring = target % 180 === 0; mk += `<text x="${xG(tt)}" y="${GG.y + 13}" font-size="10.5" font-weight="700" fill="${spring ? '#b0332c' : '#3d5f95'}" text-anchor="middle">${spring ? 'spring' : 'neap'}</text>`; }
+    }
+  }
+  $('ggMarks').innerHTML = mk;
+  $('ggNow').setAttribute('x1', xG(t)); $('ggNow').setAttribute('x2', xG(t));
+  $('clock').textContent = hm(t);
+}
+
+/* ---- waves: paint --------------------------------------------------------- */
+let WAVE = null;
+function waveState(){
+  const p = S.par, key = p.wind + '|' + p.fetch;
+  if (WAVE && WAVE.key === key) return WAVE;
+  const w = windWave(p.wind, p.fetch), sec = waveSection(w.H, w.T);
+  WAVE = {key, w, sec}; return WAVE;
+}
+const wx = x => WS.x + x * WS.pxm, wz = z => WS.y + WS.zTop - z * WS.pzm;
+function paintWave(){
+  const {w, sec} = waveState(), T = w.T, om = 2 * Math.PI / T, t = S.waveT;
+  const pts = sec.pts;
+  /* water surface η = H/2 cos(phase − ωt) */
+  let top = '';
+  pts.forEach((q, i) => { const eta = q.h > 0.05 ? q.H / 2 * Math.cos(q.phase - om * t) : 0; top += (i ? 'L' : 'M') + wx(q.x).toFixed(1) + ' ' + wz(Math.max(eta, -q.h)).toFixed(1); });
+  const floor = pts.map((q, i) => (i ? 'L' : 'M') + wx(q.x).toFixed(1) + ' ' + wz(-q.h).toFixed(1)).join('');
+  $('wvWater').setAttribute('d', top + ` L${wx(SEC.len)} ${WS.y + WS.h} L${wx(0)} ${WS.y + WS.h}Z`);
+  $('wvFloor').setAttribute('d', floor + ` L${wx(SEC.len)} ${WS.y + WS.h + 5} L${wx(0)} ${WS.y + WS.h + 5}Z`);
+  /* foam in the surf zone */
+  if (sec.xb != null) {
+    let f = '';
+    pts.filter(q => q.x >= sec.xb && q.h > 0.05).forEach(q => { const eta = q.H / 2 * Math.cos(q.phase - om * t); if (Math.cos(q.phase - om * t) > 0.55) f += `M${wx(q.x).toFixed(1)} ${(wz(eta) - 2).toFixed(1)} h3 v4 h-3Z`; });
+    $('wvFoam').setAttribute('d', f);
+  } else $('wvFoam').setAttribute('d', '');
+  /* where the depth is half the wavelength: the wave begins to feel the floor */
+  const half = pts.find(q => q.h > 0 && q.h < q.L / 2);
+  if (half) { $('wvHalfL').setAttribute('x1', wx(half.x)); $('wvHalfL').setAttribute('x2', wx(half.x)); $('wvHalfL').setAttribute('y1', wz(3)); $('wvHalfL').setAttribute('y2', wz(-half.h)); $('wvHalfT').setAttribute('x', wx(half.x) + 5); $('wvHalfT').setAttribute('y', wz(-half.h) + 14 > WS.y + WS.h - 4 ? WS.y + WS.h - 6 : wz(-Math.min(half.h, 40)) - 4); $('wvHalfT').textContent = 'depth = half a wavelength'; }
+  /* particles: five depths in seven columns */
+  const cols = [30, 80, 150, 220, 280, 330, 370];
+  let orb = '', n = 0;
+  for (const cx of cols) {
+    const q = pts[Math.round(cx)]; if (!q || q.h < 0.5) { for (let r = 0; r < 5; r++) $('wp' + n++).setAttribute('visibility', 'hidden'); continue; }
+    for (let r = 0; r < 5; r++) {
+      const z0 = -q.h * (r + 0.4) / 5.2 * (r === 0 ? 0.3 : 1);
+      const P = particle(q.H, q.k, q.h, z0, q.phase - om * t), el = $('wp' + n++);
+      el.setAttribute('visibility', 'visible');
+      el.setAttribute('cx', (wx(q.x) + P.dx * WS.pxm).toFixed(1)); el.setAttribute('cy', wz(z0 + P.dz).toFixed(1));
+      orb += `<ellipse cx="${wx(q.x).toFixed(1)}" cy="${wz(z0).toFixed(1)}" rx="${Math.max(.3, P.ax * WS.pxm).toFixed(2)}" ry="${Math.max(.3, P.az * WS.pzm).toFixed(2)}" fill="none" stroke="#cfe6f7" stroke-width="1" opacity=".55"/>`;
+    }
+  }
+  $('wvOrbits').innerHTML = orb;
+  /* the buoy: it rides the surface, and traces its own path */
+  const bx = clamp(Math.round(S.buoy), 0, SEC.shore - 2), q = pts[bx];
+  const B = q.h > 0.05 ? particle(q.H, q.k, q.h, 0, q.phase - om * t) : {dx: 0, dz: 0, ax: 0, az: 0};
+  const bX = wx(q.x) + B.dx * WS.pxm, bZ = wz(B.dz);
+  $('buoyBody').setAttribute('cx', bX.toFixed(1)); $('buoyBody').setAttribute('cy', bZ.toFixed(1));
+  $('buoyLine').setAttribute('x1', wx(q.x)); $('buoyLine').setAttribute('x2', wx(q.x)); $('buoyLine').setAttribute('y1', WS.y + 4); $('buoyLine').setAttribute('y2', wz(-q.h));
+  $('buoyHit').setAttribute('x', wx(q.x) - 18);
+  $('buoyTrace').setAttribute('d', q.h > 0.05 ? `M${(wx(q.x) + B.ax * WS.pxm).toFixed(1)} ${wz(0).toFixed(1)} A${Math.max(.3, B.ax * WS.pxm).toFixed(2)} ${Math.max(.3, B.az * WS.pzm).toFixed(2)} 0 1 1 ${(wx(q.x) + B.ax * WS.pxm).toFixed(1)} ${(wz(0) + .01).toFixed(2)}` : '');
+  /* labels at the buoy: crest, trough, height, wavelength */
+  let lab = '';
+  if (q.h > 0.05 && q.L > 0) {
+    const Lpx = q.L * WS.pxm, crestX = (() => { let best = null; for (let x = Math.max(0, bx - q.L); x <= Math.min(SEC.len, bx + q.L); x++) { const r = pts[Math.round(x)]; if (r && r.h > 0.05 && Math.cos(r.phase - om * t) > 0.995 && (best == null || Math.abs(x - bx) < Math.abs(best - bx))) best = x; } return best; })();
+    if (crestX != null && !q.broken) {
+      const r = pts[Math.round(crestX)], cy = wz(r.H / 2), ty = wz(-r.H / 2);
+      lab += `<text x="${wx(crestX)}" y="${cy - 8}" font-size="11" fill="#0d2a44" text-anchor="middle" font-weight="700">crest</text>`;
+      if (crestX + r.L / 2 < SEC.len) lab += `<text x="${wx(crestX + r.L / 2)}" y="${ty + 16}" font-size="11" fill="#fff" text-anchor="middle" font-weight="700">trough</text>`;
+      if (Lpx > 50 && crestX + r.L < SEC.len) lab += `<line x1="${wx(crestX)}" y1="${cy - 22}" x2="${wx(crestX + r.L)}" y2="${cy - 22}" stroke="#0d2a44" stroke-width="1.2" marker-end="url(#arrW)"/><text x="${wx(crestX + r.L / 2)}" y="${cy - 27}" font-size="11" fill="#0d2a44" text-anchor="middle">wavelength ${fmt(r.L, 0)} m</text>`;
+    }
+  }
+  $('wvLabels').innerHTML = lab;
+  /* the magnifier: the orbits under the buoy, from the surface to the floor, all drawn at one scale */
+  let mg = '';
+  if (q.h > 0.05 && q.H > 0) {
+    const MX = WS.x + 8, MY = WS.y + 8, top = particle(q.H, q.k, q.h, 0, 0), sc = 22 / Math.max(top.ax, top.az);
+    for (let r = 0; r < 4; r++) {
+      const z0 = -q.h * r / 4, P = particle(q.H, q.k, q.h, z0, q.phase - om * t), cx = MX + 40 + r * 56, cy = MY + 74;
+      mg += `<ellipse cx="${cx}" cy="${cy}" rx="${Math.max(.5, P.ax * sc).toFixed(1)}" ry="${Math.max(.5, P.az * sc).toFixed(1)}" fill="none" stroke="#3b6fb0" stroke-width="1.4"/>` +
+            `<circle cx="${(cx + P.dx * sc).toFixed(1)}" cy="${(cy - P.dz * sc).toFixed(1)}" r="3.6" fill="#1d4f86"/>` +
+            `<text x="${cx}" y="${MY + 112}" font-size="10.5" fill="${FAINT}" text-anchor="middle">${r ? fmt(-z0, q.h < 12 ? 1 : 0) + ' m' : 'surface'}</text>`;
+    }
+  }
+  $('magOrb').innerHTML = mg;
+  /* wind */
+  $('wvWind').textContent = `Wind ${S.par.wind} m/s over ${S.par.fetch} km makes waves ${fmt(w.H, 2)} m high every ${fmt(w.T, 1)} s${w.developed ? ' (a fully developed sea: more fetch adds nothing)' : ''}.`;
+  let wa = ''; const nA = clamp(Math.round(S.par.wind / 3), 1, 8);
+  for (let i = 0; i < nA; i++) wa += `<line x1="${560 + i * 50}" y1="${86 + (i % 2) * 8}" x2="${596 + i * 50}" y2="${86 + (i % 2) * 8}" stroke="#7c878c" stroke-width="1.6" marker-end="url(#arrW)"/>`;
+  $('windArrows').innerHTML = wa;
+  /* numbers */
+  const L0 = sec.deep.L, c0 = sec.deep.c;
+  const row = (y, t2, c = MID, wt = 400) => `<text x="20" y="${y}" font-size="12.5" fill="${c}" font-weight="${wt}">${t2}</text>`;
+  const col = (x, y, t2, c = MID, wt = 400) => `<text x="${x}" y="${y}" font-size="12.5" fill="${c}" font-weight="${wt}">${t2}</text>`;
+  const Y = WS.y + WS.h + 44;
+  let s = row(Y, 'OUT IN DEEP WATER', MID, 700) + row(Y + 20, `period T = ${fmt(T, 1)} s,  frequency ${fmt(1 / T, 3)} per s`) + row(Y + 38, `wavelength L = gT²/2π = ${fmt(L0, 0)} m`) + row(Y + 56, `speed c = L/T = ${fmt(c0, 1)} m/s = ${fmt(c0 * 1.944, 0)} knots`) + row(Y + 74, `height H = ${fmt(w.H, 2)} m,  amplitude H/2 = ${fmt(w.H / 2, 2)} m`) + row(Y + 92, `steepness H/L = 1/${fmt(L0 / Math.max(w.H, 1e-6), 0)}`);
+  if (q.h > 0.05) {
+    s += col(480, Y, 'AT THE BUOY', MID, 700) + col(480, Y + 20, `depth ${fmt(q.h, 1)} m = ${fmt(q.h / q.L, 2)} of a wavelength`) + col(480, Y + 38, `wavelength ${fmt(q.L, 0)} m,  speed ${fmt(q.c, 1)} m/s (${fmt(100 * q.c / c0, 0)}% of deep)`) +
+         col(480, Y + 56, `height ${fmt(q.H, 2)} m (${fmt(q.H / Math.max(w.H, 1e-9), 2)}× deep),  H/depth = ${fmt(q.H / q.h, 2)}`) +
+         col(480, Y + 74, q.broken ? 'broken: the surf zone' : q.h < q.L / 2 ? 'feeling the floor: slower, taller, orbits flattened' : 'deep water: the orbits are circles', q.broken ? '#b0332c' : q.h < q.L / 2 ? '#8a5a00' : '#20774a', 700) +
+         col(480, Y + 92, `orbit at the surface: ${fmt(2 * B.ax, 2)} m across × ${fmt(2 * B.az, 2)} m high`);
+  } else s += col(480, Y, 'The buoy is on the sand.', MID, 700);
+  $('wvNums').innerHTML = s;
+}
+
+/* ---- currents: paint ------------------------------------------------------ */
+function gyre(){
+  const p = S.par, key = p.beta + '|' + p.tau + '|' + p.hem;
+  if (S.G && S.G.key === key) return S.G;
+  const G = solveGyre(p.beta, p.tau, p.hem === 'N' ? 1 : -1); G.key = key; G.asym = asymmetry(G); S.G = G;
+  seedParticles(); return G;
+}
+const bx = x => BS.x + x / LAM * BS.w, by = y => BS.y + BS.h - y * BS.h;
+/* the temperature water "wants" at each latitude: warm towards the equator */
+const teq = y => S.par.hem === 'N' ? 1 - y : y;
+function seedParticles(){
+  const rnd = Play.mulberry32(9); S.parts = [];
+  for (let i = 0; i < 380; i++) { const x = 0.02 + rnd() * (LAM - 0.04), y = 0.03 + rnd() * 0.94; S.parts.push({x, y, T: teq(y), age: rnd() * 8}); }
+}
+function stepParticles(dt){
+  const G = S.G; if (!G) return;
+  const sp = 0.035 / Math.max(0.2, Math.abs(S.par.tau));
+  for (const q of S.parts) {
+    const v1 = velocity(G, q.x, q.y), mx = q.x + v1.u * sp * dt / 2, my = q.y + v1.v * sp * dt / 2, v2 = velocity(G, mx, my);
+    q.x = clamp(q.x + v2.u * sp * dt, 0.004, LAM - 0.004); q.y = clamp(q.y + v2.v * sp * dt, 0.004, 0.996);
+    q.T += (teq(q.y) - q.T) * dt * 0.03; q.age += dt;
+  }
+}
+const tempCol = T => { const a = [60, 110, 200], b = [214, 69, 61], k = clamp(T, 0, 1); return `rgb(${a.map((v, i) => Math.round(v + (b[i] - v) * k)).join(',')})`; };
+function paintCur(){
+  const G = gyre(), p = S.par, W = NX + 1;
+  /* contours of ψ: the streamlines */
+  let mx = 1e-12; for (const v of G.psi) mx = Math.max(mx, Math.abs(v));
+  let lines = '';
+  if (p.tau > 0) for (const lev of [0.15, 0.3, 0.45, 0.6, 0.75, 0.9]) {
+    const L = lev * mx * Math.sign(G.psi[(NY / 2) * W + NX / 2] || 1);
+    let d = '';
+    for (let j = 0; j < NY; j++) for (let i = 0; i < NX; i++) {
+      const v = [G.psi[j * W + i], G.psi[j * W + i + 1], G.psi[(j + 1) * W + i + 1], G.psi[(j + 1) * W + i]];
+      const X = [i, i + 1, i + 1, i], Y = [j, j, j + 1, j + 1], cr = [];
+      for (let e = 0; e < 4; e++) { const a = v[e], b2 = v[(e + 1) % 4]; if ((a - L) * (b2 - L) < 0) { const f = (L - a) / (b2 - a); cr.push([X[e] + f * (X[(e + 1) % 4] - X[e]), Y[e] + f * (Y[(e + 1) % 4] - Y[e])]); } }
+      if (cr.length >= 2) d += `M${bx(cr[0][0] * LAM / NX).toFixed(1)} ${by(cr[0][1] / NY).toFixed(1)}L${bx(cr[1][0] * LAM / NX).toFixed(1)} ${by(cr[1][1] / NY).toFixed(1)}`;
+    }
+    lines += `<path d="${d}" fill="none" stroke="#9ec3e6" stroke-width="1.1" opacity="${0.35 + lev * 0.5}"/>`;
+  }
+  $('bsLines').innerHTML = lines;
+  $('bsParts').innerHTML = S.parts.map(q => { const v = velocity(G, q.x, q.y), sp = Math.hypot(v.u, v.v) || 1, L = clamp(2.5 + 6 * sp / Math.max(0.2, p.tau), 2.5, 22); return `<line x1="${bx(q.x).toFixed(1)}" y1="${by(q.y).toFixed(1)}" x2="${(bx(q.x) - v.u / sp * L).toFixed(1)}" y2="${(by(q.y) + v.v / sp * L).toFixed(1)}" stroke="${tempCol(q.T)}" stroke-width="2" stroke-linecap="round" opacity=".9"/>`; }).join('');
+  const N = p.hem === 'N';
+  $('bsTitle').textContent = `AN OCEAN BASIN, ${N ? '15°N TO 45°N' : '15°S TO 45°S'}`;
+  let lat = '';
+  for (let k = 0; k <= 3; k++) { const y = k / 3, la = N ? 15 + 30 * y : 45 - 30 * y; lat += `<text x="${BS.x - 56}" y="${by(y) + 4}" font-size="10.5" fill="${FAINT}" text-anchor="end" class="m">${fmt(la, 0)}°${N ? 'N' : 'S'}</text>`; }
+  $('bsLat').innerHTML = lat;
+  /* wind profile: trades near the equator blow west, westerlies near the pole blow east */
+  const WP = {x: 790, w: 170};
+  let wp = `<line x1="${WP.x + WP.w / 2}" y1="${BS.y}" x2="${WP.x + WP.w / 2}" y2="${BS.y + BS.h}" stroke="#cfd8dc"/>`;
+  for (let k = 0; k <= 8; k++) {
+    const y = (k + 0.5) / 9, tx = (N ? -1 : 1) * p.tau * Math.cos(Math.PI * y), len = tx * 60, Y = by(y);
+    if (Math.abs(len) > 3) wp += `<line x1="${WP.x + WP.w / 2}" y1="${Y}" x2="${WP.x + WP.w / 2 + len}" y2="${Y}" stroke="#4a555b" stroke-width="2" marker-end="url(#arrW)"/>`;
+  }
+  const eqY = N ? by(0) : by(1), poY = N ? by(1) : by(0);
+  wp += `<text x="${WP.x + WP.w / 2}" y="${eqY + (N ? 16 : -8)}" font-size="11" fill="${MID}" text-anchor="middle">trade winds (easterlies)</text><text x="${WP.x + WP.w / 2}" y="${poY + (N ? -8 : 16)}" font-size="11" fill="${MID}" text-anchor="middle">westerlies</text>`;
+  $('windProf').innerHTML = wp;
+  /* flow across the middle latitude */
+  const VP = {x: 770, y: BS.y + BS.h + 66, w: 200, h: 90}, j = NY / 2, dx = LAM / NX;
+  let vmax = 1e-12; const vs = []; for (let i = 0; i < NX; i++) { const v = (G.psi[j * W + i + 1] - G.psi[j * W + i]) / dx; vs.push(v); vmax = Math.max(vmax, Math.abs(v)); }
+  const yv = v => VP.y + VP.h / 2 - v / vmax * VP.h / 2;
+  let vp = `<rect x="${VP.x}" y="${VP.y}" width="${VP.w}" height="${VP.h}" fill="${PAPER}" stroke="${HAIR}"/><line x1="${VP.x}" y1="${yv(0)}" x2="${VP.x + VP.w}" y2="${yv(0)}" stroke="#d8e1e6"/>`;
+  vp += `<path d="${vs.map((v, i) => (i ? 'L' : 'M') + (VP.x + (i + .5) / NX * VP.w).toFixed(1) + ' ' + yv(v).toFixed(1)).join('')}" fill="none" stroke="${SEA}" stroke-width="2"/>`;
+  vp += `<text x="${VP.x}" y="${VP.y + VP.h + 14}" font-size="10.5" fill="${FAINT}">west</text><text x="${VP.x + VP.w}" y="${VP.y + VP.h + 14}" font-size="10.5" fill="${FAINT}" text-anchor="end">east</text><text x="${VP.x - 4}" y="${VP.y + 10}" font-size="10.5" fill="${FAINT}" text-anchor="end">north</text><text x="${VP.x - 4}" y="${VP.y + VP.h}" font-size="10.5" fill="${FAINT}" text-anchor="end">south</text>`;
+  $('vProf').innerHTML = vp;
+  /* Ekman: the surface water moves at an angle to the wind, to the right in the north, to the left in the south */
+  const EK = {x: 90, y: BS.y + BS.h + 66};
+  const ang = (N ? -45 : 45) * D2R;
+  $('ekman').innerHTML = `<text x="${EK.x - 70}" y="${EK.y - 22}" font-size="13" font-weight="700" fill="${MID}" letter-spacing=".08em">CORIOLIS TURNS THE WATER</text>` +
+    `<line x1="${EK.x}" y1="${EK.y + 40}" x2="${EK.x + 90}" y2="${EK.y + 40}" stroke="#4a555b" stroke-width="2.4" marker-end="url(#arrW)"/><text x="${EK.x + 96}" y="${EK.y + 44}" font-size="12" fill="${MID}">wind</text>` +
+    `<line x1="${EK.x}" y1="${EK.y + 40}" x2="${(EK.x + 70 * Math.cos(ang)).toFixed(1)}" y2="${(EK.y + 40 - 70 * Math.sin(ang)).toFixed(1)}" stroke="#3b6fb0" stroke-width="2.4" marker-end="url(#arrW)"/><text x="${(EK.x + 78 * Math.cos(ang)).toFixed(1)}" y="${(EK.y + 44 - 78 * Math.sin(ang)).toFixed(1)}" font-size="12" fill="#1d4f86">surface water</text>` +
+    `<text x="${EK.x + 190}" y="${EK.y + 30}" font-size="12" fill="${MID}">Coriolis force: to the ${N ? 'right' : 'left'} in the ${N ? 'northern' : 'southern'} hemisphere.</text>` +
+    `<text x="${EK.x + 190}" y="${EK.y + 48}" font-size="12" fill="${MID}">Winds and this turning pile water into a gyre that goes ${N ? 'clockwise' : 'anticlockwise'}.</text>`;
+  const A = G.asym;
+  const row = (y, t2, c = MID, wt = 400) => `<text x="760" y="${y}" font-size="12" fill="${c}" font-weight="${wt}">${t2}</text>`;
+  $('bsNums').innerHTML = p.tau === 0 ? row(BS.y + BS.h + 190, 'No wind: the ocean is still.', MID, 700) :
+    row(BS.y + BS.h + 190, `fastest near the west side: ${fmt(Math.abs(A.west), 2)}`, INK, 700) + row(BS.y + BS.h + 208, `fastest near the east side: ${fmt(Math.abs(A.east), 2)}`, INK, 700) + row(BS.y + BS.h + 226, `lopsidedness: ×${fmt(A.ratio, 1)}`, A.ratio > 3 ? '#b0332c' : '#3d5f95', 700);
+}
+
+/* ---- what the model measured ---------------------------------------------- */
+function paintWhy(){
+  if (!S.locked) return;
+  const p = S.par;
+  if (S.tab === 'tide') {
+    const amp = amplitudes(p), day = tidalDay(p, S.t), ph = phaseDeg(p, S.t);
+    let t = `<p class="mono">Moon: A = ${fmt(amp.A_m * 100, 1)} cm<br>Sun: A = ${fmt(amp.A_s * 100, amp.A_s > 10 ? 0 : 1)} cm<br>Sun ÷ Moon = (M☉/M☾)(d☾/d☉)ⁿ = ${fmt(amp.A_s / amp.A_m, amp.A_s / amp.A_m > 10 ? 0 : 3)}</p>`;
+    t += p.n < 2.95 ? `<p>With n = ${fmt(p.n, 2)} the tide follows the pull more than its difference across the Earth, and the Sun, far heavier, wins. The real tide is a difference, so it falls off as 1/d³, and the nearby Moon wins.</p>`
+      : `<p>The Moon’s tide is <b>${fmt(amp.A_m / amp.A_s, 2)} times</b> the Sun’s: it is so much nearer that the difference in its pull across the Earth is larger, though its pull is far weaker.</p>`;
+    if (S.spring) t += `<p>Measured at a spring tide: range <b>${fmt(S.spring.range, 2)} m</b>.` + (S.neap ? ` At a neap tide: <b>${fmt(S.neap.range, 2)} m</b>. So Moon ÷ Sun = (spring + neap) ÷ (spring − neap) = <b>${fmt((S.spring.range + S.neap.range) / (S.spring.range - S.neap.range), 2)}</b>.` : '') + '</p>';
+    if (day.perDay >= 1.5 && day.highs.length >= 2) { const a = day.highs[0].h, b = day.highs[1].h, gap = day.highs[1].t - day.highs[0].t; t += `<p>High tides ${fmt(Math.floor(gap), 0)} h ${fmt((gap % 1) * 60, 0)} min apart` + (unequal(day) ? `, and <b>unequal</b> (${fmt(a, 2)} m and ${fmt(b, 2)} m): a mixed tide.` : '.') + '</p>'; }
+    else if (day.perDay < 1.5) t += `<p><b>Only one high tide</b> in this tidal day: a diurnal tide.</p>`;
+    if (p.coast === 'bay') t += `<p>In the funnel bay the sea rises on average <b>${fmt(100 * day.range / 6.21, 0)} cm an hour</b> while the tide comes in.</p>`;
+    $('why').innerHTML = t;
+  } else if (S.tab === 'wave') {
+    const {w, sec} = waveState(), q = sec.pts[clamp(Math.round(S.buoy), 0, SEC.shore - 2)];
+    let t = `<p>The wind hands the sea waves ${fmt(w.H, 2)} m high, ${fmt(sec.deep.L, 0)} m long. The wave travels at ${fmt(sec.deep.c, 1)} m/s, but the water under it only goes round: <b>the energy moves, not the water</b>.</p>`;
+    t += q.h > 0.05 ? `<p>At the buoy the depth is ${fmt(q.h, 1)} m. ` + (q.broken ? `The wave has grown to ${fmt(q.H / q.h, 2)} of the depth: past about 0.78 it cannot hold its shape, and it breaks.` : q.h < q.L / 2 ? `That is less than half a wavelength (${fmt(q.L / 2, 0)} m), so the wave feels the floor: it slows to ${fmt(q.c, 1)} m/s, shortens, and grows taller.` : `That is more than half a wavelength, so the wave does not feel the floor at all.`) + `</p>` : '';
+    if (sec.xb != null) t += `<p>It breaks ${fmt(SEC.shore - sec.xb, 0)} m from the shore, in water ${fmt(depthAt(sec.xb), 1)} m deep.</p>`;
+    $('why').innerHTML = t;
+  } else {
+    const A = S.G ? S.G.asym : null;
+    if (!A || p.tau === 0) { $('why').innerHTML = '<p>Without wind nothing moves. Turn the wind up.</p>'; return; }
+    let t = `<p>The trade winds push water west in the low latitudes and the westerlies push it east in the high latitudes; the Coriolis force turns it, and the water piles up into a <b>${A.clockwise ? 'clockwise' : 'anticlockwise'} gyre</b>.</p>`;
+    t += p.beta > 0 ? `<p>Because the Coriolis force grows towards the pole (β = ${p.beta}), the gyre is lopsided: the flow near the western side is <b>${fmt(A.ratio, 1)} times</b> faster than near the eastern side. That fast current carries warm water ${A.clockwise ? 'north' : 'south'}, along the east coast of the continent; slow cold water returns along the west coast.</p>`
+      : `<p>With β = 0 the Coriolis force is the same everywhere, and the gyre is symmetric: no fast western current.</p>`;
+    $('why').innerHTML = t;
+  }
+}
+
+/* ---- findings -------------------------------------------------------------- */
+function check(){
+  if (!S.locked) return;
+  const p = S.par;
+  if (S.tab === 'tide') {
+    const ph = phaseDeg(p, S.t), day = tidalDay(p, S.t), amp = amplitudes(p);
+    const align = Math.min(ph, 360 - ph, Math.abs(ph - 180)) < 5, square = Math.min(Math.abs(ph - 90), Math.abs(ph - 270)) < 5;
+    const plain = p.n >= 2.99 && p.lat === 0 && p.decl === 0;
+    /* keep the biggest range seen at a spring tide and the smallest at a neap tide, for this coast */
+    if (align && plain && Math.abs(p.dMoon - 384400) < 3000) { if (!S.spring || S.spring.coast !== p.coast) { S.spring = {range: day.range, coast: p.coast}; S.neap = null; } else S.spring.range = Math.max(S.spring.range, day.range); discover('spring'); }
+    if (square && plain && Math.abs(p.dMoon - 384400) < 3000 && S.spring && S.spring.coast === p.coast) { S.neap = {range: S.neap ? Math.min(S.neap.range, day.range) : day.range}; discover('neap'); }
+    if (p.n <= 2.2 && amp.A_s / amp.A_m > 50) discover('cube');
+    if (align && p.n >= 2.99 && p.dMoon <= 360000) discover('perigee');
+    if (unequal(day)) discover('mixed');
+    maybeExplain();
+  } else if (S.tab === 'wave') {
+    const {w, sec} = waveState(), q = sec.pts[clamp(Math.round(S.buoy), 0, SEC.shore - 2)];
+    if (q.h > q.L / 2 && S.deepWatch >= w.T) discover('circle');
+    if (q.h > 0.05 && q.h < q.L / 2 && !q.broken && q.c < 0.85 * sec.deep.c && q.H > w.H) discover('shoal');
+    if (q.h > 0.05 && q.broken) discover('breaks');
+  } else {
+    const A = S.G && S.G.asym;
+    if (!A || p.tau === 0) return;
+    if (p.beta > 0 && A.ratio >= 3) discover('west');
+    if (p.beta === 0 && A.ratio < 1.2) discover('nobeta');
+    if (p.hem === 'S' && !A.clockwise) discover('south');
+  }
+}
+/* a mixed tide: successive high waters differ by more than a fifth of the day's range; a diurnal tide: only one */
+const unequal = day => day.perDay < 1.5 || day.all.some((q, i) => i > 0 && Math.abs(q.h - day.all[i - 1].h) > 0.2 * day.range);
+let EXPLAINED = false;
+function maybeExplain(){
+  if (EXPLAINED || !POE || !S.spring || !S.neap) return;
+  EXPLAINED = true;
+  const r = (S.spring.range + S.neap.range) / (S.spring.range - S.neap.range);
+  POE.explain(`The gauge measured a spring range of <b>${fmt(S.spring.range, 2)} m</b> (Sun and Moon in line) and a neap range of <b>${fmt(S.neap.range, 2)} m</b> (at right angles). ` +
+    `If the Moon’s tide is m and the Sun’s is s, spring = m + s and neap = m − s, so m ÷ s = <b>${fmt(r, 2)}</b>. The Sun pulls the Earth about ${fmt((M_SUN / D_SUN0 ** 2) / (M_MOON / D_MOON0 ** 2), 0)} times harder than the Moon does, but it is so far away that its pull hardly differs across the Earth: the tide comes from that difference, ∝ M/d³.`);
+}
+
+/* ============================================================================
+   Controls and running
+   ============================================================================ */
+build();
+function setTab(t){
+  S.tab = t;
+  for (const [id, k] of [['tabTide', 'tide'], ['tabWave', 'wave'], ['tabCur', 'cur']]) $(id).setAttribute('aria-pressed', t === k);
+  $('viewTide').toggleAttribute('hidden', t !== 'tide'); $('viewWave').toggleAttribute('hidden', t !== 'wave'); $('viewCur').toggleAttribute('hidden', t !== 'cur');
+  $('grpTide').toggleAttribute('hidden', t !== 'tide'); $('grpWave').toggleAttribute('hidden', t !== 'wave'); $('grpCur').toggleAttribute('hidden', t !== 'cur');
+  paint();
+}
+function paint(){
+  const p = S.par;
+  $('nExp').value = p.n; $('nExpOut').textContent = fmt(p.n, 2);
+  $('dMoon').value = p.dMoon; $('dMoonOut').textContent = Math.round(p.dMoon).toLocaleString('en-IN') + ' km';
+  $('dSun').value = p.dSun; $('dSunOut').textContent = fmt(p.dSun, 1) + ' M km';
+  $('decl').value = p.decl; $('declOut').textContent = fmt(p.decl, 1) + '°';
+  $('lat').value = p.lat; $('latOut').textContent = p.lat + '°';
+  for (const [id, k] of [['coIsle', 'isle'], ['coShelf', 'shelf'], ['coBay', 'bay']]) $(id).setAttribute('aria-pressed', p.coast === k);
+  $('wind').value = p.wind; $('windOut').textContent = p.wind + ' m/s';
+  $('fetch').value = p.fetch; $('fetchOut').textContent = p.fetch + ' km';
+  $('tau').value = p.tau; $('tauOut').textContent = fmt(p.tau, 1);
+  $('beta').value = p.beta; $('betaOut').textContent = p.beta;
+  $('hemN').setAttribute('aria-pressed', p.hem === 'N'); $('hemS').setAttribute('aria-pressed', p.hem === 'S');
+  if (S.tab === 'tide') paintTide(); else if (S.tab === 'wave') paintWave(); else paintCur();
+  paintWhy();
+  check();
+}
+/* one loop for whatever is showing: the month turning, the wave rolling, the gyre's water drifting */
+let LAST_WHY = 0;
+loop((dt, now) => {
+  if (!S.locked) return;
+  if (S.tab === 'tide' && S.running) {
+    const step = reduced() ? 6 : 10;              // hours per second
+    const before = Math.floor(S.t / (reduced() ? 3 : 0.25));
+    S.t = (S.t + dt * step) % (DAYS * 24);
+    if (Math.floor(S.t / (reduced() ? 3 : 0.25)) !== before || !reduced()) paint();
+  } else if (S.tab === 'wave') {
+    const {w, sec} = waveState(), q = sec.pts[clamp(Math.round(S.buoy), 0, SEC.shore - 2)];
+    S.waveT += dt * (reduced() ? 0 : 1);
+    if (reduced()) S.deepWatch += dt; else S.deepWatch = q.h > q.L / 2 ? S.deepWatch + dt : 0;
+    if (!reduced() || now - LAST_WHY > 0.5) { paintWave(); if (now - LAST_WHY > 0.5) { LAST_WHY = now; paintWhy(); check(); } }
+  } else if (S.tab === 'cur') {
+    if (!S.G) gyre();
+    stepParticles(dt * (reduced() ? 0 : 1));
+    if (!reduced()) paintCur();
+  }
+});
+function lockControls(lock){
+  for (const id of ['nExp', 'dMoon', 'dSun', 'decl', 'lat', 'coIsle', 'coShelf', 'coBay', 'btnRun', 'btnForces', 'tabWave', 'tabCur', 'wind', 'fetch', 'tau', 'beta', 'hemN', 'hemS']) $(id).disabled = lock;
+  for (const id of ['moonHit', 'gaugeHit', 'buoyHit']) $(id).style.pointerEvents = lock ? 'none' : '';
+  $('gate').hidden = !lock;
+}
+const setP = (k, v) => { S.par[k] = v; paint(); };
+$('nExp').addEventListener('input', e => setP('n', +e.target.value));
+$('dMoon').addEventListener('input', e => setP('dMoon', +e.target.value));
+$('dSun').addEventListener('input', e => setP('dSun', +e.target.value));
+$('decl').addEventListener('input', e => setP('decl', +e.target.value));
+$('lat').addEventListener('input', e => setP('lat', +e.target.value));
+$('wind').addEventListener('input', e => { setP('wind', +e.target.value); S.deepWatch = 0; });
+$('fetch').addEventListener('input', e => { setP('fetch', +e.target.value); S.deepWatch = 0; });
+$('tau').addEventListener('input', e => setP('tau', +e.target.value));
+$('beta').addEventListener('input', e => setP('beta', +e.target.value));
+for (const id of ['nExp', 'dMoon', 'dSun', 'decl', 'lat', 'wind', 'fetch', 'tau', 'beta']) $(id).addEventListener('change', e => track('set', {k: id, v: +e.target.value}));
+for (const [id, k] of [['coIsle', 'isle'], ['coShelf', 'shelf'], ['coBay', 'bay']]) $(id).addEventListener('click', () => { S.par.coast = k; sound('tick'); paint(); track('coast', {k}); });
+$('hemN').addEventListener('click', () => { S.par.hem = 'N'; sound('tick'); paint(); });
+$('hemS').addEventListener('click', () => { S.par.hem = 'S'; sound('tick'); paint(); });
+$('btnRun').addEventListener('click', () => { S.running = !S.running; $('btnRun').textContent = S.running ? '❚❚ Pause' : '▶ Run'; sound('tick'); });
+$('btnForces').addEventListener('click', () => { S.forces = !S.forces; $('btnForces').setAttribute('aria-pressed', S.forces); sound('tick'); paint(); });
+$('tabTide').addEventListener('click', () => { setTab('tide'); sound('tick'); });
+$('tabWave').addEventListener('click', () => { setTab('wave'); sound('tick'); });
+$('tabCur').addEventListener('click', () => { setTab('cur'); sound('tick'); });
+/* drag the Moon: its angle about the Earth sets where it is now in the month */
+drag($('moonHit'), svg, {
+  start(){ if (!S.locked) return false; S.running = false; $('btnRun').textContent = '▶ Run'; },
+  move(pt){ const ang = Math.atan2(-(pt.y - TV.cy), pt.x - TV.cx); S.par.moon0 = ang - 2 * Math.PI * S.t / SYNODIC_H; GAUGE = null; paint(); },
+  end(){ track('dragMoon', {phase: Math.round(phaseDeg(S.par, S.t))}); sound('pop'); },
+});
+drag($('gaugeHit'), svg, {
+  start(pt){ if (!S.locked) return false; S.running = false; $('btnRun').textContent = '▶ Run'; S.t = clamp((pt.x - GG.x) / GG.w, 0, 1) * DAYS * 24; paint(); },
+  move(pt){ S.t = clamp((pt.x - GG.x) / GG.w, 0, 1) * DAYS * 24; paint(); },
+  end(){ track('scrub', {t: Math.round(S.t)}); },
+});
+drag($('buoyHit'), svg, {
+  start(){ if (!S.locked) return false; },
+  move(pt){ S.buoy = clamp((pt.x - WS.x) / WS.pxm, 0, SEC.shore - 2); S.deepWatch = 0; paintWave(); paintWhy(); check(); },
+  end(){ track('buoy', {x: Math.round(S.buoy)}); },
+});
+
+findings($('finds'), [
+  {id: 'spring', icon: '⊕', label: 'Spring tide: Sun, Moon and Earth in a line', hint: 'Put the Moon in line with the Sun'},
+  {id: 'neap',   icon: '⊥', label: 'Neap tide: the Moon at right angles', hint: 'Then square it to the Sun'},
+  {id: 'cube',   icon: 'ⁿ', label: 'Break it: if tides followed the pull, the Sun would rule', hint: 'Change the exponent'},
+  {id: 'perigee', icon: '◉', label: 'A spring tide at perigee is the biggest', hint: 'Bring the Moon closer'},
+  {id: 'mixed',  icon: '≋', label: 'Unequal highs: mixed and diurnal tides', hint: 'Tilt the Moon’s path and move the harbour north'},
+  {id: 'circle', icon: '○', label: 'The wave moves on; the water only goes round', hint: 'Watch the buoy in deep water'},
+  {id: 'shoal',  icon: '↥', label: 'Shallow water slows the wave and makes it taller', hint: 'Move the buoy towards the beach'},
+  {id: 'breaks', icon: '≈', label: 'Too tall for the depth: it breaks', hint: 'Into the surf'},
+  {id: 'west',   icon: '⇈', label: 'A fast warm current hugs the western side', hint: 'Look at the gyre'},
+  {id: 'nobeta', icon: '◌', label: 'Break it: without β, no western current', hint: 'Set β to 0'},
+  {id: 'south',  icon: '↺', label: 'South of the equator the gyre turns the other way', hint: 'Cross the equator'},
+], () => toast('All eleven found. You have measured the ocean three ways.', 4200));
+
+const POE = predict($('poe'), {
+  id: 'oceans-sun-moon',
+  q: 'The Sun is 27 million times heavier than the Moon, and pulls the Earth about 180 times harder. Which raises the bigger tides?',
+  options: [
+    {id: 'sun',   text: 'The Sun, by far: it pulls far harder.'},
+    {id: 'moon',  text: 'The Moon, about twice as much as the Sun.', right: true},
+    {id: 'equal', text: 'About the same.'},
+    {id: 'none',  text: 'Only the Moon: the Sun raises no tide at all.'},
+  ],
+  onLock(){
+    S.locked = true;
+    lockControls(false);
+    $('veil').remove(); $('veilT').remove();
+    S.running = true; $('btnRun').textContent = '❚❚ Pause';
+    say('Now measure it. Drag the Moon in line with the Sun, then at right angles, and read the harbour gauge.');
+    toast('Drag the Moon in line with the Sun, then at right angles, and read the tidal range.', 4200);
+    paint();
+  },
+});
+setTab(S.tab);
+lockControls(!POE.locked);
+if (!Play.FF('predict')) S.locked = true;
+paint();
+window.PG_STATE = () => {
+  const p = S.par, day = tidalDay(p, S.t), amp = amplitudes(p), ws = waveState(), q = ws.sec.pts[clamp(Math.round(S.buoy), 0, SEC.shore - 2)];
+  return {tab: S.tab, par: Object.assign({}, p), t: S.t, running: S.running, locked: S.locked, phase: phaseDeg(p, S.t),
+    range: day.range, perDay: day.perDay, mixed: unequal(day), A_m: amp.A_m, A_s: amp.A_s, spring: S.spring, neap: S.neap,
+    wave: {H0: ws.w.H, T: ws.w.T, L0: ws.sec.deep.L, xb: ws.sec.xb, buoy: S.buoy, h: q.h, L: q.L, c: q.c, H: q.H, broken: q.broken},
+    gyre: S.G ? {ratio: S.G.asym.ratio, clockwise: S.G.asym.clockwise, iters: S.G.iters} : null};
+};
+window.PG_MODEL = {amplitudes, tideAt, tidalDay, phaseDeg, tideForce, windWave, waveK, waveLocal, waveSection, depthAt, particle,
+  solveGyre, stommelExact, velocity, asymmetry, NX, NY, LAM, A_MOON0, COAST, SEC};
+</script>
+</body>
+</html>

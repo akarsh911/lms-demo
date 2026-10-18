@@ -1,0 +1,421 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Diversity in the living world</title>
+<meta name="description" content="Class 6: drag real plants onto a sorting key. Each one is routed by the feature it actually has — its own drawn veins, roots or stem — not by a stored answer.">
+<link rel="icon" href="../../favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600&family=Inter:wght@400;500;600;700&family=Nunito:wght@500;700;800&family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="../../play.css">
+<style>
+.pg-stage{min-height:0}
+.tabs{display:flex; gap:4px; padding:10px 12px 0; border-bottom:1px solid var(--hair); background:var(--card); flex-wrap:wrap}
+.tab{border:1px solid transparent; border-bottom:none; background:none; padding:8px 14px; border-radius:10px 10px 0 0; cursor:pointer;
+  font-family:"Fredoka",var(--font-head); font-size:15px; color:var(--ink-3); margin-bottom:-1px}
+.tab[aria-selected="true"]{background:var(--card); border-color:var(--hair); color:var(--ink); border-bottom:1px solid var(--card)}
+.gate{position:absolute; left:0; right:0; top:50px; bottom:0; display:grid; place-items:center; pointer-events:none}
+.gate span{background:rgba(29,35,39,.85); color:#fff; padding:10px 16px; border-radius:99px; font-weight:600; font-size:14px}
+.big{font-family:"Fredoka",var(--font-head); font-size:17px; font-weight:600; line-height:1.3}
+.note{font-size:12.5px; color:var(--ink-3); margin:6px 0 0}
+.why p{font-size:14px; margin-bottom:.55em}
+.why b{color:var(--ink)}
+.pgPlant{cursor:grab}
+.pgPlant.sorted{cursor:default}
+.pgPlant.dragging{cursor:grabbing}
+svg text{pointer-events:none; font-family:"Inter",sans-serif; user-select:none}
+</style>
+</head>
+<body>
+<header class="pg-top"></header>
+
+<div class="pg-intro">
+  <h1>Diversity in the living world</h1>
+  <p>A branching key sorts a living thing by testing one of its real characters — not by knowing the answer in advance.
+     Pick a feature, then drag each plant onto where you think it belongs. The sorter looks at what is actually drawn
+     on that plant — its own veins, its own roots, its own stem — and settles it, or sends it back to look again.</p>
+</div>
+
+<main class="pg-main wide-side">
+  <section class="pg-stage" id="stageWrap">
+    <div class="tabs" role="tablist">
+      <button class="tab" role="tab" id="tabVenation" aria-selected="true">Leaf venation</button>
+      <button class="tab" role="tab" id="tabRoot" aria-selected="false">Root type</button>
+      <button class="tab" role="tab" id="tabStem" aria-selected="false">Stem</button>
+    </div>
+    <svg id="stage" viewBox="0 0 1000 560" role="img" aria-label="A tray of plants above two or three labelled bins; each plant is dragged onto a bin and the sorter checks its real feature."></svg>
+    <div class="gate" id="gate"><span>Make your prediction first →</span></div>
+  </section>
+
+  <aside class="pg-side">
+    <div id="poe"></div>
+
+    <div class="card" id="cardInfo">
+      <div class="kicker" id="roundKicker">Sorting by leaf venation</div>
+      <div class="big" id="roundBig"></div>
+      <p class="note" id="roundNote"></p>
+    </div>
+
+    <div class="card" id="patternCard" hidden>
+      <div class="kicker">The pattern</div>
+      <div id="patternBody"></div>
+    </div>
+
+    <div class="card why" id="whyCard">
+      <div class="kicker">What is happening</div>
+      <div id="why"></div>
+    </div>
+
+    <div class="card"><div class="kicker">To find</div><div id="finds"></div></div>
+  </aside>
+</main>
+
+<script src="../../play.js"></script>
+<script>
+'use strict';
+const {$, $$, esc, clamp, lerp, fmt, sound, say, track, toast, predict, findings, discover, found,
+       shareState, sharedState, mount, drag, svgPoint, reduced} = Play;
+mount({thread: 'classify', band: 'tinkerer'});
+
+/* MODEL:start ==================================================================
+   CBSE Class 6, Curiosity Ch 2 "Diversity in the Living World", §2.2.
+
+   Every plant below carries the features the chapter states for it, in the
+   chapter's own words:
+     - venation: hibiscus/reticulate (Fig 2.4a); banana, grass/parallel (2.4b,2.4c);
+       lemongrass, wheat/parallel; sadabahar, chickpea/reticulate (Table 2.4 and text).
+     - root: hibiscus/taproot; mustard/taproot (Fig 2.5a); grass/fibrous (Fig 2.5b);
+       lemongrass, wheat/fibrous; sadabahar, chickpea/taproot.
+     - stem category: mango/tree, rose/shrub, tomato/herb (Table 2.3, the chapter's
+       own worked examples); neem/tree and grass/herb follow from applying the
+       chapter's own definitions ("hard, thick, brown... branches high up" for a
+       tree; "small... soft, green stems" for an herb) to the stem the chapter
+       itself records for each in Table 2.1 (neem: hard and thick; grass: soft
+       and thin).
+
+   Sorting a plant is never a lookup of "which bin is Hibiscus in": routeBy(plant,
+   feature) reads plant[feature] — the plant's OWN stored character — the same
+   function for every plant and every feature. A drop is correct exactly when
+   the bin's key equals that value. The "pattern" panel is likewise computed,
+   never asserted: it counts, among the plants whose venation AND root are both
+   known, how many are (reticulate & taproot) or (parallel & fibrous) — the
+   chapter's own closing claim, checked against the chapter's own examples.
+   ============================================================================ */
+const PLANTS = [
+  {id: 'grass',      name: 'Grass',       venation: 'parallel',   root: 'fibrous', stem: 'herb',  habit: 'tuft',     flower: null},
+  {id: 'banana',     name: 'Banana',      venation: 'parallel',   root: null,       stem: null,    habit: 'tuft',     flower: null, big: true},
+  {id: 'wheat',      name: 'Wheat',       venation: 'parallel',   root: 'fibrous', stem: null,    habit: 'tuft',     flower: null},
+  {id: 'lemongrass', name: 'Lemongrass',  venation: 'parallel',   root: 'fibrous', stem: null,    habit: 'tuft',     flower: null},
+  {id: 'hibiscus',   name: 'Hibiscus',    venation: 'reticulate', root: 'taproot', stem: null,    habit: 'broad',    flower: '#c0392b'},
+  {id: 'sadabahar',  name: 'Sadabahar',   venation: 'reticulate', root: 'taproot', stem: null,     habit: 'broad',    flower: '#e07bb0'},
+  {id: 'chickpea',   name: 'Chickpea',    venation: 'reticulate', root: 'taproot', stem: null,    habit: 'broad',    flower: null},
+  {id: 'mustard',    name: 'Mustard',     venation: null,          root: 'taproot', stem: null,    habit: 'broad',    flower: '#e8c012'},
+  {id: 'mango',      name: 'Mango',       venation: null,          root: null,       stem: 'tree',  habit: 'tree',     flower: null},
+  {id: 'neem',       name: 'Neem',        venation: null,          root: null,       stem: 'tree',  habit: 'tree',     flower: null},
+  {id: 'rose',       name: 'Rose',        venation: null,          root: null,       stem: 'shrub', habit: 'shrub',    flower: '#c0392b'},
+  {id: 'tomato',     name: 'Tomato',      venation: null,          root: null,       stem: 'herb',  habit: 'herb',     flower: null, fruit: '#c0392b'},
+];
+const routeBy = (plant, feature) => plant[feature];
+function checkPattern(){
+  const both = PLANTS.filter(p => p.venation && p.root);
+  const matches = both.filter(p => (p.venation === 'reticulate' && p.root === 'taproot') || (p.venation === 'parallel' && p.root === 'fibrous'));
+  return {examined: both.length, matches: matches.length, plants: both};
+}
+const ROUNDS = {
+  venation: {feature: 'venation', label: 'leaf venation', bins: [
+    {key: 'reticulate', label: 'Reticulate', hint: 'a branching net of veins'},
+    {key: 'parallel',   label: 'Parallel',   hint: 'veins running side by side'}]},
+  root: {feature: 'root', label: 'root type', bins: [
+    {key: 'taproot', label: 'Taproot', hint: 'one thick main root'},
+    {key: 'fibrous', label: 'Fibrous', hint: 'a tuft of similar roots'}]},
+  stem: {feature: 'stem', label: 'stem', bins: [
+    {key: 'herb',  label: 'Herb',  hint: 'small, soft, green'},
+    {key: 'shrub', label: 'Shrub', hint: 'woody, branches low'},
+    {key: 'tree',  label: 'Tree',  hint: 'tall, hard, thick'}]},
+};
+/* MODEL:end */
+
+const INK = '#1d2327', SAND = '#fbfaf6', SOIL = '#8a6a44', GOOD = '#1f8a55', BAD = '#b5541f';
+
+/* ---- state -------------------------------------------------------------------- */
+const S = {round: 'venation', locked: false, sortedShown: {}, wrong: {venation: 0, root: 0, stem: 0}, lastWrong: null};
+['venation', 'root', 'stem'].forEach(r => { S.sortedShown[r] = {}; });
+const shared = sharedState();
+if (shared && ['venation', 'root', 'stem'].includes(shared.round)) S.round = shared.round;
+shareState(() => ({round: S.round}));
+
+const svg = $('stage');
+const GROUND_Y = 168;
+
+/* ---- little plant illustrations ------------------------------------------------ */
+function leafPath(x0, y0, dx, dy, w){
+  const tipX = x0 + dx, tipY = y0 + dy, len = Math.hypot(dx, dy) || 1;
+  const px = -dy / len, py = dx / len, hw = w / 2;
+  const c1x = x0 + dx * 0.5 + px * hw, c1y = y0 + dy * 0.5 + py * hw;
+  const c2x = x0 + dx * 0.5 - px * hw, c2y = y0 + dy * 0.5 - py * hw;
+  return {d: `M${x0.toFixed(1)} ${y0.toFixed(1)} Q${c1x.toFixed(1)} ${c1y.toFixed(1)} ${tipX.toFixed(1)} ${tipY.toFixed(1)} Q${c2x.toFixed(1)} ${c2y.toFixed(1)} ${x0.toFixed(1)} ${y0.toFixed(1)} Z`,
+          tipX, tipY, px, py};
+}
+function leaf(x0, y0, dx, dy, w, color, vein){
+  const L = leafPath(x0, y0, dx, dy, w);
+  let veins = '';
+  if (vein === 'parallel') {
+    for (let k = -1; k <= 1; k++) { const off = k * w * 0.32;
+      veins += `<line x1="${(x0 + L.px * off).toFixed(1)}" y1="${(y0 + L.py * off).toFixed(1)}" x2="${(L.tipX + L.px * off * 0.12).toFixed(1)}" y2="${(L.tipY + L.py * off * 0.12).toFixed(1)}" stroke="rgba(255,255,255,.65)" stroke-width="1.1"/>`; }
+  } else if (vein === 'reticulate') {
+    veins += `<line x1="${x0.toFixed(1)}" y1="${y0.toFixed(1)}" x2="${L.tipX.toFixed(1)}" y2="${L.tipY.toFixed(1)}" stroke="rgba(255,255,255,.7)" stroke-width="1.2"/>`;
+    for (const t of [0.35, 0.55, 0.75]) {
+      const mx = x0 + dx * t, my = y0 + dy * t;
+      for (const s of [1, -1]) veins += `<line x1="${mx.toFixed(1)}" y1="${my.toFixed(1)}" x2="${(mx + L.px * hwOf(w) * s * 0.8 + dx * 0.12).toFixed(1)}" y2="${(my + L.py * hwOf(w) * s * 0.8 + dy * 0.12).toFixed(1)}" stroke="rgba(255,255,255,.55)" stroke-width="1"/>`;
+    }
+  } else {
+    veins += `<line x1="${x0.toFixed(1)}" y1="${y0.toFixed(1)}" x2="${L.tipX.toFixed(1)}" y2="${L.tipY.toFixed(1)}" stroke="rgba(255,255,255,.45)" stroke-width="1"/>`;
+  }
+  return `<path d="${L.d}" fill="${color}" stroke="#234d23" stroke-width="1.1"/>${veins}`;
+}
+function hwOf(w){ return w / 2; }
+function tuftArt(vein, big){
+  const c1 = '#4a9a4f', c2 = '#3f8a44';
+  const spread = big ? [[-16, -96, 30], [10, -108, 34], [-2, -70, 24]] : [[-24, -66, 15], [-2, -80, 15], [22, -62, 15]];
+  return spread.map(([dx, dy, w], i) => leaf(0, 0, dx, dy, w, i % 2 ? c1 : c2, vein)).join('');
+}
+function broadArt(vein, flower){
+  let h = `<line x1="0" y1="0" x2="0" y2="-30" stroke="#4a7d3f" stroke-width="4"/>`;
+  h += leaf(0, -30, -26, -34, 22, '#3f8a44', vein);
+  h += leaf(0, -30, 28, -30, 22, '#4a9a4f', vein);
+  if (flower) h += `<circle cx="0" cy="-56" r="9" fill="${flower}"/><circle cx="0" cy="-56" r="3" fill="#ffe9a8"/>`;
+  return h;
+}
+function treeArt(){
+  return `<rect x="-6" y="-70" width="12" height="70" fill="#7a5230"/>
+    <circle cx="-16" cy="-78" r="30" fill="#3f8a44"/><circle cx="16" cy="-82" r="32" fill="#4a9a4f"/><circle cx="0" cy="-104" r="28" fill="#3f8a44"/>`;
+}
+function shrubArt(flower){
+  let h = '';
+  for (const [dx, w] of [[-14, 3], [0, 4], [15, 3]]) h += `<line x1="0" y1="0" x2="${dx}" y2="-46" stroke="#7a5230" stroke-width="${w}"/>`;
+  h += `<circle cx="-14" cy="-50" r="15" fill="#3f8a44"/><circle cx="15" cy="-52" r="16" fill="#4a9a4f"/><circle cx="0" cy="-62" r="14" fill="#3f8a44"/>`;
+  if (flower) h += `<circle cx="4" cy="-64" r="8" fill="${flower}"/><circle cx="4" cy="-64" r="2.6" fill="#ffe9a8"/>`;
+  return h;
+}
+function herbArt(fruit){
+  let h = `<line x1="0" y1="0" x2="0" y2="-34" stroke="#4a7d3f" stroke-width="4"/>`;
+  h += leaf(0, -20, -18, -18, 16, '#3f8a44', 'plain');
+  h += leaf(0, -30, 20, -16, 16, '#4a9a4f', 'plain');
+  if (fruit) h += `<circle cx="8" cy="-30" r="6" fill="${fruit}"/>`;
+  return h;
+}
+function rootArt(kind){
+  let h = `<rect x="-46" y="0" width="92" height="54" fill="${SOIL}" opacity=".28"/>
+    <line x1="-46" y1="0" x2="46" y2="0" stroke="#9a8560" stroke-width="1.6" stroke-dasharray="4 3"/>`;
+  if (kind === 'taproot') {
+    h += `<path d="M-3 0 C-4 18, -2 30, 0 50 C2 30, 4 18, 3 0 Z" fill="#c99a5b" stroke="#8a6a3a" stroke-width="1"/>`;
+    for (const [y, dx] of [[10, -12], [10, 12], [20, -9], [20, 9]]) h += `<line x1="0" y1="${y}" x2="${dx}" y2="${y + 6}" stroke="#8a6a3a" stroke-width="1.4"/>`;
+  } else {
+    const rs = [[-30, 40], [-18, 46], [-6, 48], [6, 48], [18, 46], [30, 40]];
+    rs.forEach(([dx, dy]) => { h += `<path d="M0 0 Q${dx * 0.5} ${dy * 0.5}, ${dx} ${dy}" fill="none" stroke="#c99a5b" stroke-width="2"/>`; });
+  }
+  return h;
+}
+function iconArt(p, mode){
+  if (mode === 'root') {
+    const above = p.habit === 'tuft' ? tuftArt('plain', false) : broadArt('plain', p.flower);
+    return `<g transform="scale(0.7)">${above}</g>${rootArt(p.root)}`;
+  }
+  if (mode === 'stem') {
+    if (p.habit === 'tree') return treeArt();
+    if (p.habit === 'shrub') return shrubArt(p.flower);
+    if (p.habit === 'tuft') return tuftArt('plain', false);
+    return herbArt(p.fruit);
+  }
+  /* venation */
+  if (p.habit === 'tuft') return tuftArt(p.venation, p.big);
+  return broadArt(p.venation, p.flower);
+}
+
+/* ---- layout -------------------------------------------------------------------- */
+function trayX(i, n){ return n > 1 ? lerp(120, 880, i / (n - 1)) : 500; }
+function binRects(n){
+  const top = 236, bot = 522, w = n === 3 ? 260 : 380, gap = n === 3 ? 36 : 56;
+  const total = n * w + (n - 1) * gap, left = (1000 - total) / 2;
+  return Array.from({length: n}, (_, i) => ({x: left + i * (w + gap), y: top, w, h: bot - top}));
+}
+function slotPoint(rect, k, n){
+  const cols = 2;
+  const col = k % cols, row = Math.floor(k / cols);
+  return {x: rect.x + rect.w * (col + 1) / (cols + 1), y: rect.y + 122 + row * 96};
+}
+
+let NODES = {};   /* id -> {el, home:{x,y}, cur:{x,y}, sortedIn:null|key} */
+
+function buildStage(){
+  const R = ROUNDS[S.round], plants = PLANTS.filter(p => p[R.feature] != null);
+  const bins = binRects(R.bins.length);
+  let html = `<rect x="0" y="0" width="1000" height="560" fill="${SAND}"/>
+    <text x="30" y="34" font-size="13" font-weight="700" letter-spacing=".08em" fill="#4a555b">DRAG EACH PLANT ONTO WHERE ITS OWN ${R.label.toUpperCase()} BELONGS</text>
+    <line x1="20" y1="${GROUND_Y + 4}" x2="980" y2="${GROUND_Y + 4}" stroke="#d8d0ba" stroke-width="1.4"/>
+    <g id="binsG">`;
+  R.bins.forEach((b, i) => { const r = bins[i];
+    html += `<rect x="${r.x}" y="${r.y}" width="${r.w}" height="${r.h}" rx="16" fill="#ffffff" stroke="#c9c2ac" stroke-width="2" stroke-dasharray="7 5"/>
+      <text x="${r.x + r.w / 2}" y="${r.y + 26}" text-anchor="middle" font-size="17" font-weight="700" fill="${INK}" font-family="Fredoka, Inter, sans-serif">${esc(b.label)}</text>
+      <text x="${r.x + r.w / 2}" y="${r.y + 44}" text-anchor="middle" font-size="12" fill="#6a7278">${esc(b.hint)}</text>`;
+  });
+  html += `</g><g id="plantsG">`;
+  plants.forEach((p, i) => {
+    const home = {x: trayX(i, plants.length), y: GROUND_Y};
+    NODES[p.id] = {home, cur: {x: home.x, y: home.y}, sortedIn: null};
+    html += `<g class="pgPlant" id="pl-${p.id}" transform="translate(${home.x},${home.y})" tabindex="0" aria-label="${esc(p.name)}">
+        <rect x="-46" y="-118" width="92" height="130" fill="transparent"/>
+        <g class="art">${iconArt(p, S.round)}</g>
+        <text x="0" y="16" text-anchor="middle" font-size="11.5" font-weight="700" fill="${INK}">${esc(p.name)}</text>
+      </g>`;
+  });
+  html += `</g><text id="cbInfo" x="30" y="546" font-size="13" font-weight="600" fill="${BAD}"></text>`;
+  svg.innerHTML = html;
+  plants.forEach(p => wireDrag(p));
+  /* restore anything already sorted in a previous visit to this round, quietly */
+  const already = S.sortedShown[S.round];
+  plants.forEach(p => { if (already[p.id]) placeQuiet(p, already[p.id]); });
+}
+function placeQuiet(p, key){
+  const R = ROUNDS[S.round], binIdx = R.bins.findIndex(b => b.key === key);
+  if (binIdx < 0) return;
+  const rect = binRects(R.bins.length)[binIdx];
+  const n = NODES[p.id], node = document.getElementById('pl-' + p.id);
+  const count = Object.values(NODES).filter(x => x.sortedIn === key).length;
+  const pos = slotPoint(rect, count, R.bins.length);
+  n.sortedIn = key; n.cur = pos;
+  node.setAttribute('transform', `translate(${pos.x.toFixed(1)},${pos.y.toFixed(1)})`);
+  const art = node.querySelector('.art'); if (art) art.setAttribute('transform', 'scale(0.6)');
+  node.classList.add('sorted');
+}
+function wireDrag(p){
+  const node = document.getElementById('pl-' + p.id);
+  let offset = {x: 0, y: 0};
+  drag(node, svg, {
+    start(pt){
+      if (!S.locked) return false;
+      const n = NODES[p.id];
+      if (n.sortedIn) return false;
+      offset = {x: pt.x - n.cur.x, y: pt.y - n.cur.y};
+      node.classList.add('dragging');
+      return true;
+    },
+    move(pt){
+      const n = NODES[p.id];
+      n.cur = {x: pt.x - offset.x, y: pt.y - offset.y};
+      node.setAttribute('transform', `translate(${n.cur.x.toFixed(1)},${n.cur.y.toFixed(1)})`);
+    },
+    end(pt){
+      node.classList.remove('dragging');
+      const n = NODES[p.id];
+      const R = ROUNDS[S.round], bins = binRects(R.bins.length);
+      const hit = bins.findIndex(r => pt.x >= r.x && pt.x <= r.x + r.w && pt.y >= r.y && pt.y <= r.y + r.h);
+      if (hit < 0) { snapHome(p); return; }
+      const key = R.bins[hit].key;
+      if (routeBy(p, R.feature) === key) settle(p, hit, key);
+      else { S.wrong[S.round]++; S.lastWrong = {p, key}; sound('oops'); snapHome(p); }
+      paintInfo();
+    },
+  });
+}
+function snapHome(p){
+  const n = NODES[p.id], node = document.getElementById('pl-' + p.id);
+  n.cur = {x: n.home.x, y: n.home.y};
+  node.setAttribute('transform', `translate(${n.cur.x},${n.cur.y})`);
+}
+function settle(p, binIndex, key){
+  const R = ROUNDS[S.round], rect = binRects(R.bins.length)[binIndex];
+  const n = NODES[p.id], node = document.getElementById('pl-' + p.id);
+  const already = Object.values(NODES).filter(x => x.sortedIn === key).length;
+  const pos = slotPoint(rect, already, R.bins.length);
+  n.sortedIn = key; n.cur = pos;
+  node.setAttribute('transform', `translate(${pos.x.toFixed(1)},${pos.y.toFixed(1)})`);
+  const art = node.querySelector('.art'); if (art) art.setAttribute('transform', 'scale(0.6)');
+  node.classList.add('sorted');
+  sound('pop'); S.lastWrong = null;
+  S.sortedShown[S.round][p.id] = key;
+  track('sort', {round: S.round, plant: p.id, bin: key});
+  const R2 = ROUNDS[S.round], plants = PLANTS.filter(x => x[R2.feature] != null);
+  const allDone = plants.every(x => NODES[x.id].sortedIn);
+  if (allDone) {
+    if (S.round === 'venation') discover('sortedVenation');
+    if (S.round === 'root') discover('sortedRoot');
+    if (S.round === 'stem') discover('sortedStem');
+    maybeShowPattern();
+  }
+}
+function maybeShowPattern(){
+  const vDone = Object.keys(S.sortedShown.venation).length === PLANTS.filter(p => p.venation).length;
+  const rDone = Object.keys(S.sortedShown.root).length === PLANTS.filter(p => p.root).length;
+  if (!vDone || !rDone) return;
+  const pat = checkPattern();
+  $('patternCard').hidden = false;
+  $('patternBody').innerHTML = `<p style="font-size:14px;margin-bottom:6px">Of the ${pat.examined} plants sorted for <b>both</b> venation and root:</p>
+    <div class="big" style="color:${pat.matches === pat.examined ? GOOD : INK}">${pat.matches} of ${pat.examined} follow the pattern</div>
+    <p class="note">Reticulate venation together with a taproot, or parallel venation together with fibrous roots — exactly what §2.2.1 of the chapter says is generally true.</p>`;
+  discover('patternFound');
+}
+
+/* ---- info / why ------------------------------------------------------------ */
+function paintInfo(){
+  const R = ROUNDS[S.round], plants = PLANTS.filter(p => p[R.feature] != null);
+  const done = plants.filter(p => NODES[p.id] && NODES[p.id].sortedIn).length;
+  $('roundKicker').textContent = 'Sorting by ' + R.label;
+  $('roundBig').textContent = `${done} of ${plants.length} sorted`;
+  const w = S.wrong[S.round];
+  $('roundNote').textContent = w ? `${w} plant${w > 1 ? 's were' : ' was'} sent back so far — the sorter checks the real feature, not a guess.` : 'Drag a plant onto the bin you think matches its own feature.';
+  const info = document.getElementById('cbInfo');
+  if (info) info.textContent = S.lastWrong ? `${S.lastWrong.p.name} went back to the tray — its ${R.label} is not "${R.bins.find(b => b.key === S.lastWrong.key).label.toLowerCase()}".` : '';
+  paintWhy();
+}
+function paintWhy(){
+  const R = ROUNDS[S.round];
+  let h = '';
+  if (!S.locked) h = '<p>Predict first, then drag the plants onto the key.</p>';
+  else if (S.lastWrong) h = `<p>The sorter looked at ${esc(S.lastWrong.p.name)}'s own ${R.label} — the one drawn on it — and it did not match that bin, so it went back.</p>`;
+  else h = `<p>Every drop is checked the same way: <code>routeBy(plant, '${R.feature}')</code> reads the plant's own stored value and compares it with the bin. There is no list of "which plant goes where" — only the plants' own features.</p>`;
+  $('why').innerHTML = h;
+}
+
+/* ---- wiring ------------------------------------------------------------------ */
+function setRound(r){
+  S.round = r;
+  $('tabVenation').setAttribute('aria-selected', r === 'venation');
+  $('tabRoot').setAttribute('aria-selected', r === 'root');
+  $('tabStem').setAttribute('aria-selected', r === 'stem');
+  $('gate').hidden = S.locked;
+  buildStage();
+  paintInfo();
+  track('round', {round: r});
+}
+$('tabVenation').addEventListener('click', () => { sound('tick'); setRound('venation'); });
+$('tabRoot').addEventListener('click', () => { sound('tick'); setRound('root'); });
+$('tabStem').addEventListener('click', () => { sound('tick'); setRound('stem'); });
+
+findings($('finds'), [
+  {id: 'sortedVenation', icon: '🍃', label: 'Every plant sorted by its own veins', hint: 'Finish the leaf venation key'},
+  {id: 'sortedRoot',     icon: '🌱', label: 'Every plant sorted by its own roots', hint: 'Finish the root type key'},
+  {id: 'sortedStem',     icon: '🌳', label: 'Every plant sorted by its own stem', hint: 'Finish the stem key'},
+  {id: 'patternFound',   icon: '🔗', label: 'Venation and root type go together', hint: 'Finish both the venation and root keys'},
+], () => say('Every one of these was decided by the plant\'s own drawn features, checked fresh each time.'));
+
+const POE = predict($('poe'), {
+  id: 'venation-root-link',
+  q: 'A plant\'s leaf has veins that branch out like a net, not straight lines. Based on the chapter\'s own examples (hibiscus, sadabahar, chickpea), what kind of root would you expect it to have?',
+  options: [
+    {id: 'fibrous', text: 'A fibrous root — a tuft of similar roots'},
+    {id: 'taproot', text: 'A taproot — one thick main root', right: true},
+    {id: 'none', text: 'No real root, just a holdfast'},
+    {id: 'cant', text: 'Impossible to say without digging it up'},
+  ],
+  onLock(){ S.locked = true; $('gate').hidden = true; say('Drag each plant onto the bin you think matches.'); buildStage(); paintInfo(); },
+});
+if (!Play.FF('predict')) S.locked = true;
+setRound(S.round);
+window.applyFeatures = () => setRound(S.round);
+window.PG_STATE = () => ({round: S.round, locked: S.locked, sortedShown: JSON.parse(JSON.stringify(S.sortedShown)), wrong: Object.assign({}, S.wrong)});
+window.PG_MODEL = {PLANTS, routeBy, checkPattern, ROUNDS};
+</script>
+</body>
+</html>

@@ -1,0 +1,444 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Making Ten</title>
+<meta name="description" content="Class 1: give Tina the ladybird her spots. Ten holes on her back fill one by one, and when the tenth lands the frame is full — then ten and some more land on her little one.">
+<link rel="icon" href="../../favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600&family=Inter:wght@400;500;600;700&family=Nunito:wght@500;700;800&display=swap">
+<link rel="stylesheet" href="../../play.css">
+<style>
+.pg-main.tiny-main{grid-template-columns:minmax(0,1fr) 250px; padding-top:12px; padding-bottom:12px}
+.tiny-main .pg-stage{align-self:start; min-height:0}
+.pg-intro{display:flex; align-items:baseline; gap:18px; flex-wrap:wrap; padding-top:12px}
+.pg-intro p{margin:0}
+#stage{background:#cfeeff}
+.hit{cursor:pointer}
+#fly, #board, #need, #ring, .noclick{pointer-events:none}
+svg [tabindex]:focus{outline:none}
+svg [tabindex]:focus-visible{outline:none; stroke:#ff7a2f; stroke-width:4; stroke-dasharray:8 8}
+.hear{width:100%; min-height:76px; font-size:24px; font-family:var(--font-head); border-radius:var(--radius)}
+.hear .ic{font-size:30px}
+.try{padding:10px; text-align:center; cursor:pointer; border:2px solid var(--hair-2); transition:transform .2s var(--spring)}
+.try:hover{border-color:var(--accent)}
+.try:active{transform:scale(.97)}
+.try svg{display:block; width:100%; height:auto}
+.try .kicker{margin:2px 0 0}
+@media (max-width:980px){ .pg-main.tiny-main{grid-template-columns:1fr} }
+</style>
+</head>
+<body>
+<header class="pg-top"></header>
+
+<div class="pg-intro">
+  <h1>The ladybird's ten</h1>
+  <p>Tap the berries. Ten spots fill Tina's back — then what?</p>
+</div>
+
+<main class="pg-main tiny-main">
+  <section class="pg-stage" id="stageWrap">
+    <svg id="stage" viewBox="0 0 1000 660" role="img" aria-label="A garden leaf. Tina the ladybird has ten empty holes on her back, in two rows of five. Her little one sits beside her. A berry bush grows on the left: tap it to give Tina a spot."></svg>
+  </section>
+
+  <aside class="pg-side">
+    <button class="btn primary hear" id="hear" aria-label="Hear what to do"><span class="ic">🔊</span> Hear it</button>
+    <button class="card try" id="tryCard" aria-label="What to try next. Tap to hear it."><svg id="tryArt" viewBox="-80 -55 160 110"></svg><div class="kicker">Try this</div></button>
+    <div class="card"><h3>⭐ Found</h3><div id="finds"></div></div>
+  </aside>
+</main>
+
+<script src="../../play.js"></script>
+<script>
+'use strict';
+const {$, clamp, loop, tween, sound, say, track, confetti, findings, discover, found,
+       shareState, sharedState, mount, reduced, mulberry32, ease} = Play;
+mount({thread: 'tenframe', band: 'tiny'});
+
+/* MODEL:start ==================================================================
+   Making ten (NCERT Joyful Mathematics, Class 1, Ch 4 "Making 10").
+
+   Tina's back is a ten-frame: two rows of five holes. Spots land in the holes in
+   order, so the number of spots IS the number of filled holes, and the number of
+   empty holes IS how many more are needed to make ten:
+
+       filled = min(n, 10)        empty = 10 - filled        (empty is the partner)
+
+   The tenth spot closes the frame: from then on the frame counts as one ten, and
+   further spots land on her little one, so 13 is seen as a full ten and three
+   loose — the way the chapter builds 10 to 20. Nothing here is a picture of an
+   answer: every number said is counted from the holes that are actually filled.
+   ============================================================================ */
+const CAP = 10;                       // holes on one ladybird
+const MAX = 19;                       // ten, and nine more
+const ROWS = 2, COLS = 5;
+const ONES = ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten',
+              'eleven', 'twelve', 'thirteen', 'fourteen', 'fifteen', 'sixteen', 'seventeen', 'eighteen', 'nineteen'];
+const numberName = n => ONES[n] || String(n);
+const filledOf = n => Math.min(n, CAP);
+const looseOf = n => Math.max(0, n - CAP);
+const partnerOf = n => CAP - filledOf(n);                  // how many more make ten
+const isFull = n => n >= CAP;
+/* Which hole a spot goes in: along the top row first, then the bottom. */
+const holeRow = i => Math.floor(i / COLS);
+const holeCol = i => i % COLS;
+/* What the count is called once there is a whole ten. */
+function tenAndSome(n){
+  if (n < CAP) return numberName(n);
+  if (n === CAP) return 'ten';
+  return 'ten and ' + numberName(n - CAP);
+}
+function sayCount(n){
+  if (n === 0) return 'Nothing! No spots at all.';
+  if (n < CAP) return numberName(n) + (n === 1 ? ' spot. ' : ' spots. ') +
+    numberName(partnerOf(n)) + (partnerOf(n) === 1 ? ' more hole to fill.' : ' more holes to fill.');
+  if (n === CAP) return 'Ten! Her back is full.';
+  return 'Ten and ' + numberName(n - CAP) + ' make ' + numberName(n) + '.';
+}
+/* MODEL:end */
+
+/* ---- the world (stage units) ------------------------------------------------ */
+const TINA = {x: 452, y: 318, rx: 205, ry: 168};
+const BABY = {x: 812, y: 452, rx: 104, ry: 86};
+const BUSH = {x: 116, y: 470};
+const SPOT_R = 33, BSPOT_R = 17;
+/* Hole centres, in the ladybird's own frame. */
+function holeAt(i, big){
+  const b = big ? TINA : BABY;
+  const dx = (big ? 72 : 36), dy = (big ? 62 : 32);
+  return {x: b.x + (holeCol(i) - (COLS - 1) / 2) * dx, y: b.y + (holeRow(i) - (ROWS - 1) / 2) * dy + (big ? 16 : 8)};
+}
+const rng = mulberry32(11);
+const GRASS = Array.from({length: 46}, () => ({x: rng() * 1000, y: 596 + rng() * 54, h: 14 + rng() * 20, f: rng() < .5}));
+const BERRIES = Array.from({length: 9}, (_, i) => ({x: BUSH.x - 52 + (i % 3) * 52 + (rng() * 12 - 6), y: BUSH.y - 66 + Math.floor(i / 3) * 50 + (rng() * 10 - 5)}));
+
+/* ---- state: plain data ----------------------------------------------------- */
+const S = {n: 0, flying: null, seen: new Set(), fullTimes: 0};
+const shared = sharedState();
+if (shared) S.n = clamp(Math.round(+shared.n || 0), 0, MAX);
+shareState(() => ({n: S.n}));
+
+/* ============================================================================
+   The stage: drawn once, then patched.
+   ============================================================================ */
+const svg = $('stage');
+const f1 = n => (+n).toFixed(1);
+const FONT = 'font-family="Fredoka, Nunito, sans-serif" font-weight="600"';
+const RED = '#e03b45', RED_D = '#a8232c', SHELL = '#2b2118';
+
+function ladybird(id, b, big){
+  const r = big ? SPOT_R : BSPOT_R;
+  const holes = Array.from({length: CAP}, (_, i) => {
+    const h = holeAt(i, big);
+    return `<g class="hole" data-hole="${i}" data-big="${big ? 1 : 0}">
+      <circle class="hdash" cx="${f1(h.x)}" cy="${f1(h.y)}" r="${r}" fill="#b81f2b" stroke="#fff"
+              stroke-width="${big ? 3.5 : 2}" stroke-dasharray="${big ? '8 7' : '4 4'}" stroke-opacity=".85"/>
+      <circle class="hdot" cx="${f1(h.x)}" cy="${f1(h.y)}" r="${r}" fill="${SHELL}" opacity="0"/>
+      <circle class="hgloss" cx="${f1(h.x - r * .32)}" cy="${f1(h.y - r * .36)}" r="${f1(r * .22)}" fill="#fff" opacity="0"/>
+    </g>`;
+  }).join('');
+  return `<g id="${id}">
+    <ellipse cx="${f1(b.x)}" cy="${f1(b.y + b.ry * .92)}" rx="${f1(b.rx * .86)}" ry="${f1(b.ry * .17)}" fill="#2f6b2a" opacity=".18"/>
+    <g id="${id}Ant" class="noclick">
+      <path d="M${f1(b.x - b.rx * .28)} ${f1(b.y - b.ry * .86)} q${f1(-b.rx * .16)} ${f1(-b.ry * .42)} ${f1(-b.rx * .34)} ${f1(-b.ry * .52)}"
+            fill="none" stroke="${SHELL}" stroke-width="${big ? 7 : 4}" stroke-linecap="round"/>
+      <circle cx="${f1(b.x - b.rx * .62)} " cy="${f1(b.y - b.ry * 1.38)}" r="${big ? 13 : 7}" fill="${SHELL}"/>
+      <path d="M${f1(b.x + b.rx * .28)} ${f1(b.y - b.ry * .86)} q${f1(b.rx * .16)} ${f1(-b.ry * .42)} ${f1(b.rx * .34)} ${f1(-b.ry * .52)}"
+            fill="none" stroke="${SHELL}" stroke-width="${big ? 7 : 4}" stroke-linecap="round"/>
+      <circle cx="${f1(b.x + b.rx * .62)}" cy="${f1(b.y - b.ry * 1.38)}" r="${big ? 13 : 7}" fill="${SHELL}"/>
+    </g>
+    <g id="${id}Legs" class="noclick" stroke="${SHELL}" stroke-width="${big ? 9 : 5}" stroke-linecap="round">
+      <path d="M${f1(b.x - b.rx * .78)} ${f1(b.y - b.ry * .18)} l${f1(-b.rx * .22)} ${f1(-b.ry * .12)}"/>
+      <path d="M${f1(b.x - b.rx * .86)} ${f1(b.y + b.ry * .22)} l${f1(-b.rx * .24)} ${f1(b.ry * .06)}"/>
+      <path d="M${f1(b.x - b.rx * .72)} ${f1(b.y + b.ry * .62)} l${f1(-b.rx * .2)} ${f1(b.ry * .22)}"/>
+      <path d="M${f1(b.x + b.rx * .78)} ${f1(b.y - b.ry * .18)} l${f1(b.rx * .22)} ${f1(-b.ry * .12)}"/>
+      <path d="M${f1(b.x + b.rx * .86)} ${f1(b.y + b.ry * .22)} l${f1(b.rx * .24)} ${f1(b.ry * .06)}"/>
+      <path d="M${f1(b.x + b.rx * .72)} ${f1(b.y + b.ry * .62)} l${f1(b.rx * .2)} ${f1(b.ry * .22)}"/>
+    </g>
+    <ellipse class="shellBody" cx="${f1(b.x)}" cy="${f1(b.y + b.ry * .1)}" rx="${f1(b.rx)}" ry="${f1(b.ry)}"
+             fill="${RED}" stroke="${RED_D}" stroke-width="${big ? 7 : 4}"/>
+    <path d="M${f1(b.x)} ${f1(b.y - b.ry * .5)} V${f1(b.y + b.ry * 1.06)}" stroke="${RED_D}" stroke-width="${big ? 7 : 4}" stroke-linecap="round"/>
+    <path d="M${f1(b.x - b.rx * .72)} ${f1(b.y - b.ry * .34)} q${f1(b.rx * .3)} ${f1(-b.ry * .2)} ${f1(b.rx * .56)} ${f1(-b.ry * .06)}"
+          fill="none" stroke="#fff" stroke-width="${big ? 10 : 6}" stroke-linecap="round" opacity=".33"/>
+    <ellipse id="${id}Hit" class="hit" cx="${f1(b.x)}" cy="${f1(b.y + b.ry * .1)}" rx="${f1(b.rx)}" ry="${f1(b.ry)}"
+             fill="transparent" tabindex="0" role="button" aria-label="${big ? 'Tina the ladybird. Tap to give her a spot.' : 'The little ladybird. Tap to give it a spot.'}"/>
+    ${holes}
+    <g class="noclick">
+    <ellipse cx="${f1(b.x)}" cy="${f1(b.y - b.ry * .74)}" rx="${f1(b.rx * .52)}" ry="${f1(b.ry * .44)}" fill="${SHELL}"/>
+    <circle cx="${f1(b.x - b.rx * .2)}" cy="${f1(b.y - b.ry * .82)}" r="${big ? 17 : 9}" fill="#fff"/>
+    <circle cx="${f1(b.x + b.rx * .2)}" cy="${f1(b.y - b.ry * .82)}" r="${big ? 17 : 9}" fill="#fff"/>
+    <circle id="${id}EyeL" cx="${f1(b.x - b.rx * .2)}" cy="${f1(b.y - b.ry * .8)}" r="${big ? 8 : 4.5}" fill="${SHELL}"/>
+    <circle id="${id}EyeR" cx="${f1(b.x + b.rx * .2)}" cy="${f1(b.y - b.ry * .8)}" r="${big ? 8 : 4.5}" fill="${SHELL}"/>
+    <path id="${id}Smile" d="M${f1(b.x - b.rx * .13)} ${f1(b.y - b.ry * .6)} q${f1(b.rx * .13)} ${f1(b.ry * .16)} ${f1(b.rx * .26)} 0"
+          fill="none" stroke="#fff" stroke-width="${big ? 5 : 3}" stroke-linecap="round"/>
+    </g>
+  </g>`;
+}
+
+function bushArt(){
+  const berries = BERRIES.map((b, i) => `<circle class="berry" data-berry="${i}" cx="${f1(b.x)}" cy="${f1(b.y)}" r="21"
+      fill="#d6274b" stroke="#96162f" stroke-width="3"/>
+    <circle cx="${f1(b.x - 6)}" cy="${f1(b.y - 7)}" r="5.5" fill="#fff" opacity=".55"/>`).join('');
+  return `<g id="bush">
+    <ellipse cx="${BUSH.x}" cy="${BUSH.y + 118}" rx="118" ry="22" fill="#2f6b2a" opacity=".18"/>
+    <path d="M${BUSH.x} ${BUSH.y + 120} V${BUSH.y + 30}" stroke="#7a5230" stroke-width="16" stroke-linecap="round"/>
+    <ellipse cx="${BUSH.x}" cy="${BUSH.y - 6}" rx="126" ry="106" fill="#3f9e4d"/>
+    <ellipse cx="${BUSH.x - 58}" cy="${BUSH.y + 34}" rx="72" ry="58" fill="#4fb35c"/>
+    <ellipse cx="${BUSH.x + 62}" cy="${BUSH.y + 28}" rx="66" ry="54" fill="#358c45"/>
+    ${berries}
+    <ellipse id="bushHit" class="hit" cx="${BUSH.x}" cy="${BUSH.y}" rx="132" ry="118" fill="transparent"
+             tabindex="0" role="button" aria-label="The berry bush. Tap a berry to give Tina a spot."/>
+  </g>`;
+}
+
+function build(){
+  svg.innerHTML = `
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#cfeeff"/><stop offset="1" stop-color="#eaf8ff"/></linearGradient>
+    <linearGradient id="leaf" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#8fd67f"/><stop offset="1" stop-color="#5fb254"/></linearGradient>
+  </defs>
+  <rect width="1000" height="660" fill="url(#sky)"/>
+  <circle cx="122" cy="92" r="50" fill="#ffd54a"/><circle cx="122" cy="92" r="70" fill="#ffd54a" opacity=".28"/>
+  <ellipse cx="352" cy="104" rx="78" ry="30" fill="#fff" opacity=".85"/><ellipse cx="402" cy="88" rx="54" ry="26" fill="#fff" opacity=".85"/>
+  <path d="M0 560 Q250 520 520 548 T1000 536 V660 H0 Z" fill="#6cbf59"/>
+  <path d="M0 596 Q250 566 520 590 T1000 578 V660 H0 Z" fill="#57a747"/>
+  <g stroke="#3f8d3a" stroke-width="7" stroke-linecap="round" opacity=".7">
+    ${GRASS.map(g => `<path d="M${f1(g.x)} ${f1(g.y + g.h)} q${g.f ? -9 : 9} ${f1(-g.h * .6)} ${g.f ? -4 : 4} ${f1(-g.h)}"/>`).join('')}
+  </g>
+  <g id="leafPad">
+    <path d="M150 470 Q430 330 880 430 Q930 470 880 512 Q430 600 150 512 Q118 491 150 470 Z" fill="url(#leaf)" stroke="#3f8d3a" stroke-width="6"/>
+    <path d="M170 492 Q470 452 880 470" fill="none" stroke="#3f8d3a" stroke-width="5" opacity=".6"/>
+  </g>
+  ${bushArt()}
+  ${ladybird('baby', BABY, false)}
+  ${ladybird('tina', TINA, true)}
+  <g id="ring" opacity="0">
+    <ellipse cx="${f1(TINA.x)}" cy="${f1(TINA.y + TINA.ry * .1)}" rx="${f1(TINA.rx + 22)}" ry="${f1(TINA.ry + 22)}"
+             fill="none" stroke="#ffc53d" stroke-width="12" stroke-dasharray="26 16" stroke-linecap="round"/>
+    <g transform="translate(${f1(TINA.x + TINA.rx + 4)} ${f1(TINA.y - TINA.ry * .72)})">
+      <circle r="46" fill="#ffc53d" stroke="#e09a12" stroke-width="5"/>
+      <text ${FONT} font-size="46" text-anchor="middle" y="16" fill="#6b4405">10</text>
+    </g>
+  </g>
+  <g id="fly" opacity="0"><circle r="21" fill="#d6274b" stroke="#96162f" stroke-width="3"/><circle cx="-6" cy="-7" r="5.5" fill="#fff" opacity=".55"/></g>
+  <g id="board" transform="translate(842 150)">
+    <rect x="-118" y="-78" width="236" height="156" rx="26" fill="#fffdf4" stroke="#c9a06a" stroke-width="6"/>
+    <text id="num" ${FONT} font-size="86" text-anchor="middle" y="14" fill="#8a5a1e">0</text>
+    <text id="word" ${FONT} font-size="25" text-anchor="middle" y="54" fill="#a5793f">nothing yet</text>
+  </g>
+  <g id="need" opacity="0">
+    <rect x="-116" y="-30" width="232" height="60" rx="30" fill="#fff5d6" stroke="#e0a63a" stroke-width="5"/>
+    <text id="needT" ${FONT} font-size="27" text-anchor="middle" y="10" fill="#8a5a1e">4 more</text>
+  </g>`;
+}
+
+/* ---- painting from the model ------------------------------------------------ */
+function paint(){
+  const n = S.n, filled = filledOf(n), loose = looseOf(n);
+  for (let i = 0; i < CAP; i++){
+    const g = svg.querySelector(`#tina [data-hole="${i}"]`);
+    const on = i < filled;
+    g.querySelector('.hdot').setAttribute('opacity', on ? '1' : '0');
+    g.querySelector('.hgloss').setAttribute('opacity', on ? '.28' : '0');
+    g.querySelector('.hdash').setAttribute('opacity', on ? '0' : '1');
+    g.classList.toggle('hit', true);
+    const b = svg.querySelector(`#baby [data-hole="${i}"]`);
+    const bon = i < loose;
+    b.querySelector('.hdot').setAttribute('opacity', bon ? '1' : '0');
+    b.querySelector('.hgloss').setAttribute('opacity', bon ? '.28' : '0');
+    b.querySelector('.hdash').setAttribute('opacity', bon ? '0' : (isFull(n) ? '1' : '.28'));
+  }
+  $('ring').setAttribute('opacity', isFull(n) ? '1' : '0');
+  $('num').textContent = String(n);
+  $('word').textContent = n === 0 ? 'nothing yet' : tenAndSome(n);
+  const need = partnerOf(n);
+  const showNeed = n > 0 && !isFull(n);
+  $('need').setAttribute('opacity', showNeed ? '1' : '0');
+  if (showNeed){
+    const h = holeAt(filled, true);
+    $('need').setAttribute('transform', `translate(${f1(clamp(h.x, 150, 850))} ${f1(TINA.y + TINA.ry + 58)})`);
+    $('needT').textContent = need === 1 ? '1 more hole' : need + ' more holes';
+  }
+  $('baby').setAttribute('opacity', '1');
+  svg.querySelectorAll('#baby .hdash').forEach(el => el.setAttribute('opacity', isFull(n) ? '1' : '.4'));
+  paintTry();
+}
+
+/* ---- a berry flying to its hole --------------------------------------------- */
+async function flyTo(from, to, back){
+  const g = $('fly');
+  g.setAttribute('opacity', '1');
+  await tween(0, 1, reduced() ? 0 : 250, t => {
+    const x = from.x + (to.x - from.x) * t;
+    const y = from.y + (to.y - from.y) * t - Math.sin(Math.PI * t) * (back ? 70 : 110);
+    g.setAttribute('transform', `translate(${f1(x)} ${f1(y)}) scale(${f1(1 - .35 * t)})`);
+  }, ease.out);
+  g.setAttribute('opacity', '0');
+}
+function wiggle(id){
+  if (reduced()) return;
+  const el = $(id);
+  el.animate([{transform: 'translateY(0)'}, {transform: 'translateY(-14px)'}, {transform: 'translateY(0)'}],
+             {duration: 420, easing: 'ease-out'});
+}
+
+/* ---- what the child does ----------------------------------------------------- */
+let busy = false, queued = 0;
+async function addOne(){
+  if (busy){                                        // a child taps faster than a berry flies
+    if (S.n + queued < MAX) queued++;
+    return;
+  }
+  if (S.n >= MAX){ queued = 0; sound('nope'); say('Nineteen already! Take some away first.', {pitch: 1.3}); return; }
+  busy = true;
+  const wasFull = isFull(S.n);
+  const big = !wasFull;
+  const idx = big ? filledOf(S.n) : looseOf(S.n);
+  const src = BERRIES[S.n % BERRIES.length];
+  await flyTo({x: src.x, y: src.y}, holeAt(idx, big), false);
+  S.n++;
+  if (S.n <= CAP) S.seen.add(S.n);
+  paint();
+  sound('pop');
+  wiggle(big ? 'tina' : 'baby');
+  track('count', {n: S.n});
+  announce();
+  busy = false;
+  if (queued > 0 && S.n < MAX){ queued--; addOne(); } else queued = 0;
+}
+async function removeAt(i, big){
+  if (busy) return;
+  const filled = filledOf(S.n), loose = looseOf(S.n);
+  if (big ? i >= filled : i >= loose) return;          // an empty hole: nothing to take away
+  if (big && loose > 0){                              // the ten stays whole while there are loose ones
+    sound('nope');
+    say('Take the loose spots off the little one first.', {pitch: 1.3});
+    wiggle('baby');
+    return;
+  }
+  busy = true;
+  const from = holeAt(big ? filled - 1 : loose - 1, big);
+  S.n--;
+  if (S.n <= CAP) S.seen.add(S.n);
+  paint();
+  await flyTo(from, {x: BERRIES[S.n % BERRIES.length].x, y: BERRIES[S.n % BERRIES.length].y}, true);
+  sound('tick');
+  track('count', {n: S.n});
+  announce();
+  busy = false;
+}
+
+/* ---- what Tina says, and what the child has found ---------------------------- */
+function announce(){
+  const n = S.n;
+  say(sayCount(n), {pitch: 1.3});
+  if (n === 5) discover('five', {x: TINA.x, y: TINA.y});
+  if (n === CAP){
+    S.fullTimes++;
+    discover('ten', {x: TINA.x, y: TINA.y});
+    if (S.fullTimes >= 2) discover('again', {x: TINA.x, y: TINA.y});
+    if (!reduced()) confetti(innerWidth / 2, innerHeight / 2, 70);
+  }
+  if (n > CAP) discover('more', {x: BABY.x, y: BABY.y});
+  if (n === MAX) discover('nineteen', {x: BABY.x, y: BABY.y});
+  if (n === 0 && S.seen.size > 1) discover('empty', {x: BUSH.x, y: BUSH.y});
+  if (S.seen.size >= 5) discover('pairs', {x: TINA.x, y: TINA.y});
+}
+
+svg.addEventListener('click', e => {
+  const hole = e.target.closest('[data-hole]');
+  if (hole){ removeAt(+hole.dataset.hole, hole.dataset.big === '1'); return; }
+  if (e.target.closest('#bush') || e.target.closest('#tinaHit') || e.target.closest('#babyHit')){ addOne(); return; }
+});
+svg.addEventListener('keydown', e => {
+  if (e.key !== 'Enter' && e.key !== ' ') return;
+  const t = e.target;
+  if (t.id === 'bushHit' || t.id === 'tinaHit' || t.id === 'babyHit'){ e.preventDefault(); addOne(); }
+});
+
+/* ---- "try this" -------------------------------------------------------------- */
+const miniFrame = (k) => {
+  let s = '';
+  for (let i = 0; i < CAP; i++){
+    const x = -60 + (i % COLS) * 30, y = -16 + Math.floor(i / COLS) * 32;
+    s += i < k ? `<circle cx="${x}" cy="${y}" r="12" fill="#2b2118"/>`
+               : `<circle cx="${x}" cy="${y}" r="12" fill="#fff" stroke="#a8232c" stroke-width="3" stroke-dasharray="5 5"/>`;
+  }
+  return s;
+};
+const TRY = {
+  start: {line: 'Tap a berry on the bush. A spot flies onto Tina\'s back.', art: miniFrame(1)},
+  ten:   {line: 'How many more holes must you fill to make ten?', art: miniFrame(6)},
+  more:  {line: 'Her back is full. Tap again — where does the next spot go?', art: miniFrame(10)},
+  take:  {line: 'Tap a spot to take it away again.', art: miniFrame(4)},
+};
+function currentTry(){
+  if (S.n === 0) return 'start';
+  if (!isFull(S.n)) return found('ten') ? 'take' : 'ten';
+  if (!found('more')) return 'more';
+  return found('empty') ? null : 'take';
+}
+let shownTry = '_';
+function paintTry(){
+  const g = currentTry();
+  if (g === shownTry) return;
+  shownTry = g;
+  $('tryArt').innerHTML = g ? TRY[g].art : `<path d="M0 -40 L12 -12 L42 -10 L18 8 L26 38 L0 22 L-26 38 L-18 8 L-42 -10 L-12 -12 Z" fill="#ffc53d" stroke="#f29a1f" stroke-width="3" stroke-linejoin="round"/>`;
+  if (!reduced()) $('tryCard').animate([{transform: 'scale(.9)'}, {transform: 'scale(1.04)'}, {transform: 'scale(1)'}], {duration: 450, easing: 'ease-out'});
+}
+function sayTry(){
+  const g = currentTry();
+  say(g ? TRY[g].line : 'You found everything! Ten fills her back, and then it is ten and some more.', {pitch: 1.3});
+  track('hear', {goal: g});
+}
+let spoke = false;
+$('tryCard').addEventListener('click', () => { spoke = true; sayTry(); });
+$('hear').addEventListener('click', () => { spoke = true; sayTry(); });
+
+/* ---- a little life ----------------------------------------------------------- */
+let blinkT = 2.4;
+loop(dt => {
+  if (reduced()) return;
+  blinkT -= dt;
+  if (blinkT > 0) return;
+  blinkT = 2.6 + Math.random() * 3.4;
+  for (const id of ['tinaEyeL', 'tinaEyeR', 'babyEyeL', 'babyEyeR']){
+    const el = $(id);
+    if (!el) continue;
+    el.animate([{transform: 'scaleY(1)'}, {transform: 'scaleY(.12)'}, {transform: 'scaleY(1)'}],
+               {duration: 220, easing: 'ease-in-out'});
+  }
+});
+
+/* ============================================================================
+   Start
+   ============================================================================ */
+findings($('finds'), [
+  {id: 'five',     icon: '🖐️', label: 'A full row of five', say: 'Five! The top row is full.'},
+  {id: 'ten',      icon: '🔟', label: 'Ten fills her back',  say: 'Ten! Every hole is filled.'},
+  {id: 'pairs',    icon: '🤝', label: 'Many ways to ten',    say: 'You tried lots of numbers. Each one needs its own partner to make ten.'},
+  {id: 'more',     icon: '➕', label: 'Ten and some more',   say: 'A whole ten, and some more on the little one.'},
+  {id: 'nineteen', icon: '🐞', label: 'Nineteen!',           say: 'Ten and nine make nineteen.'},
+  {id: 'again',    icon: '🔁', label: 'Ten again',           say: 'Ten again, from a different start.'},
+  {id: 'empty',    icon: '🫙', label: 'All the way back',    say: 'Every spot gone. Nothing left.'},
+], () => say('You found them all! Ten fills her back, and after that it is ten and some more.', {pitch: 1.3}));
+
+build();
+paint();
+setTimeout(() => {
+  if (spoke || S.n) return;
+  spoke = true;
+  say('Hello! I am Tina. My back has ten holes. Tap a berry and fill them!', {pitch: 1.3, interrupt: false});
+}, 1200);
+
+window.applyFeatures = () => paint();
+window.PG_STATE = () => ({n: S.n, filled: filledOf(S.n), loose: looseOf(S.n), need: partnerOf(S.n),
+                          full: isFull(S.n), seen: [...S.seen], goal: currentTry(),
+                          busy, queued, settled: !busy && queued === 0});
+window.PG_MODEL = {CAP, MAX, ROWS, COLS, numberName, filledOf, looseOf, partnerOf, isFull, tenAndSome,
+                   sayCount, holeRow, holeCol, holeAt, TINA, BABY, BUSH};
+</script>
+</body>
+</html>

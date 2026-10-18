@@ -1,0 +1,718 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Oceans and Life</title>
+<meta name="description" content="Class 9–10: dive a submersible from the continental shelf to a trench, with temperature, salinity and light graphs moving with you; work out why seas are saltier or fresher; and let the winds drive ocean currents that warm and cool the coasts.">
+<link rel="icon" href="../../favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600&family=Inter:wght@400;500;600;700&family=Nunito:wght@500;700;800&family=Newsreader:opsz,wght@6..72,400;6..72,500&family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="../../play.css">
+<style>
+/* Only what this page needs beyond play.css. */
+.pg-stage{background:#f4f6f8}
+.tabs{display:flex; gap:4px; padding:8px 10px; background:var(--card); border-bottom:1px solid var(--hair)}
+.tabs button{flex:1; border:1px solid transparent; background:var(--sunk); border-radius:8px; padding:7px 10px; font-weight:600; font-size:13.5px; cursor:pointer; color:var(--ink-2)}
+.tabs button[aria-pressed="true"]{background:var(--accent); color:#fff}
+.gate{position:absolute; left:0; right:0; top:52px; height:40%; display:grid; place-items:center; pointer-events:none}
+.gate span{background:rgba(20,28,45,.86); color:#fff; padding:10px 16px; border-radius:99px; font-weight:600; font-size:14px}
+.seg{display:flex; gap:3px; background:var(--sunk); border-radius:9px; padding:3px; margin:4px 0 8px}
+.seg button{flex:1; border:0; background:transparent; border-radius:7px; padding:6px 6px; font-weight:600; font-size:12.5px; cursor:pointer; color:var(--ink-2)}
+.seg button[aria-pressed="true"]{background:var(--card); color:var(--ink); box-shadow:var(--shadow)}
+.seg button:disabled{opacity:.5; cursor:default}
+.ctl{grid-template-columns:100px 1fr 80px; margin:3px 0}
+.ctl label{font-size:12.5px; line-height:1.2}
+.ctl output{font-size:13px}
+.readout{display:grid; grid-template-columns:1fr auto; gap:3px 12px; font-size:13.5px}
+.readout span{color:var(--ink-2)}
+.readout b{font-family:var(--font-mono); font-weight:600; font-size:13px; font-variant-numeric:tabular-nums; text-align:right}
+.readout .sep{grid-column:1/-1; height:1px; background:var(--hair); margin:3px 0}
+.hint{font-size:12.5px; color:var(--ink-3); margin:6px 0 0}
+.why p{font-size:14px; margin-bottom:.55em}
+.why b{color:var(--ink)}
+.chips{display:flex; flex-wrap:wrap; gap:5px; margin:4px 0 6px}
+.chips button{border:1px solid var(--hair-2); background:var(--card); border-radius:99px; padding:4px 10px; font-size:12.5px; font-weight:600; cursor:pointer; color:var(--ink-2)}
+.chips button[aria-pressed="true"]{background:var(--accent-soft); border-color:var(--accent); color:var(--ink)}
+.chips button:disabled{opacity:.5; cursor:default}
+.tog[aria-pressed="true"]{background:var(--accent-soft); border-color:var(--accent)}
+.runrow{display:flex; gap:6px; flex-wrap:wrap; align-items:center; margin-bottom:6px}
+.runrow .clock{margin-left:auto; font-family:var(--font-mono); font-size:13px; color:var(--ink-2)}
+#subHit, #boatHit{cursor:grab} .gHit{cursor:crosshair}
+</style>
+</head>
+<body>
+<header class="pg-top"></header>
+
+<div class="pg-intro">
+  <h1>Oceans and life</h1>
+  <p>Dive from the continental shelf to the bottom of a trench. The sea floor follows the depths and slopes in the book; the temperature, saltiness and light at every depth are worked out
+     from how the sea is heated from above and mixed by the wind, how evaporation, rain and rivers change its salt, and how quickly water swallows sunlight.
+     Then find out what makes one sea saltier than another, and let the winds drive the great ocean currents that warm some coasts and chill others.
+     (Anchored on NCERT Class 11 Geography, Chapters 12 and 13, since the Class 9 book’s Part 2 is not yet published.)</p>
+</div>
+
+<main class="pg-main wide-side">
+  <section class="pg-stage" id="stageWrap">
+    <div class="tabs" id="tabs">
+      <button data-tab="dive" aria-pressed="true">1 · Dive</button>
+      <button data-tab="salt" aria-pressed="false">2 · Salt</button>
+      <button data-tab="currents" aria-pressed="false">3 · Currents</button>
+    </div>
+    <svg id="stage" viewBox="0 0 1000 660" role="img" aria-label="An ocean floor profile with a submersible and graphs of temperature, salinity and light against depth; a sea basin with evaporation, rain and a river; and an ocean basin with wind-driven currents and sea-surface temperatures"></svg>
+    <div class="gate" id="gate"><span>Make your prediction first →</span></div>
+  </section>
+
+  <aside class="pg-side">
+    <div id="poe"></div>
+
+    <div class="card" id="ctlDive">
+      <div class="seg" id="zoomSeg">
+        <button data-z="1500" aria-pressed="true">Top 1,500 m</button>
+        <button data-z="11000" aria-pressed="false">All the way down</button>
+      </div>
+      <div class="ctl"><label for="lat">Latitude</label><input type="range" id="lat" min="0" max="80" step="1" value="0"><output id="latOut" class="num">0° N</output></div>
+      <div class="ctl"><label for="wind">Wind over the sea</label><input type="range" id="wind" min="0" max="20" step="1" value="12"><output id="windOut" class="num">12 m/s</output></div>
+      <div class="seg" id="waterSeg">
+        <button data-k="clear" aria-pressed="true">Clear open ocean</button>
+        <button data-k="muddy" aria-pressed="false">Muddy coastal water</button>
+      </div>
+      <p class="hint">Drag the submersible, or drag up and down on any graph.</p>
+      <div class="readout" style="margin-top:8px">
+        <span>Depth · zone</span><b id="dZ">—</b>
+        <span>Below you</span><b id="dFloor">—</b>
+        <span>Temperature</span><b id="dT">—</b>
+        <span>Salinity</span><b id="dS">—</b>
+        <span>Density</span><b id="dRho">—</b>
+        <span>Sunlight (surface = 100 %)</span><b id="dL">—</b>
+        <span>Pressure</span><b id="dP">—</b>
+      </div>
+    </div>
+
+    <div class="card" id="ctlSalt" hidden>
+      <div class="kicker">Choose a sea, or set its climate</div>
+      <div class="chips" id="presets"></div>
+      <div class="ctl"><label for="evap">Evaporation</label><input type="range" id="evap" min="0" max="2.5" step="0.05" value="1.2"><output id="evapOut" class="num">1.20 m/yr</output></div>
+      <div class="ctl"><label for="rainS">Rain</label><input type="range" id="rainS" min="0" max="3" step="0.05" value="1"><output id="rainSOut" class="num">1.00 m/yr</output></div>
+      <div class="ctl"><label for="river">River water</label><input type="range" id="river" min="0" max="4" step="0.05" value="0.2"><output id="riverOut" class="num">0.20 m/yr</output></div>
+      <div class="ctl"><label for="strait">Water swapped with the ocean</label><input type="range" id="strait" min="0" max="1" step="0.01" value="0.7"><output id="straitOut" class="num">7.5 m/yr</output></div>
+      <div class="runrow" style="margin-top:6px">
+        <button class="btn sm primary" id="sRun">▶ Run</button>
+        <button class="btn sm" id="sReset">Start at 35 ‰</button>
+        <span class="clock" id="sClock">0 years</span>
+      </div>
+      <div class="readout">
+        <span>Salinity of the sea now</span><b id="sNow">—</b>
+        <span>Where it is heading (steady)</span><b id="sSteady">—</b>
+        <span>Deep water flows through the strait</span><b id="sFlow">—</b>
+      </div>
+    </div>
+
+    <div class="card" id="ctlCur" hidden>
+      <div class="seg" id="hemiSeg">
+        <button data-h="N" aria-pressed="true">Northern hemisphere</button>
+        <button data-h="S" aria-pressed="false">Southern hemisphere</button>
+      </div>
+      <div class="row" style="margin:2px 0 4px"><button class="btn sm tog" id="betaBtn" aria-pressed="true">Coriolis stronger towards the poles: on</button></div>
+      <div class="ctl"><label for="windC">Strength of the winds</label><input type="range" id="windC" min="0.2" max="2" step="0.1" value="1"><output id="windCOut" class="num">×1.0</output></div>
+      <p class="hint">Drag the ship anywhere in the ocean.</p>
+      <div class="readout" style="margin-top:8px">
+        <span>Ship at</span><b id="cLat">—</b>
+        <span>Current (× mid-ocean speed)</span><b id="cV">—</b>
+        <span>Sea surface</span><b id="cT">—</b>
+        <span>Usual for this latitude</span><b id="cTe">—</b>
+        <span>Warm meets cold?</span><b id="cG">—</b>
+      </div>
+    </div>
+
+    <div class="card why" id="whyCard" hidden>
+      <div class="kicker">What is happening</div>
+      <div id="why"></div>
+    </div>
+
+    <div class="card"><div class="kicker">To find</div><div id="finds"></div></div>
+  </aside>
+</main>
+
+<script src="../../play.js"></script>
+<script>
+'use strict';
+const {$, $$, esc, clamp, fmt, drag, loop, sound, say, track, toast, predict, findings, discover, found,
+       shareState, sharedState, mount} = Play;
+mount({thread: 'oceans', band: 'modeller'});
+
+/* MODEL:start ==================================================================
+   Numbers from NCERT Class 11 Fundamentals of Physical Geography, Ch 12 “Water (Oceans)” and
+   Ch 13 “Movements of Ocean Water” (the Class 9 Part 2 chapter “Oceans and Life” is not yet out).
+   1. THE SEA FLOOR: shelf ~80 km wide to ~200 m; slope 2–5° down to 3,000 m; deep-sea plain
+      3,000–6,000 m; a seamount 3,000–4,500 m tall; a flat-topped guyot; a mid-ocean ridge with
+      peaks up to 2,500 m; a trench 3–5 km deeper than the plain.
+   2. TEMPERATURE: the surface is set by latitude (book: 27 °C at the equator, 22 °C at 20°,
+      14 °C at 40°, 0 °C near the poles). The wind stirs the top layer to one temperature, to a
+      depth that grows with wind speed (h = 10 m + 0.8·U²). Below that the warmth fades
+      exponentially (scale 300 m) into the cold deep water that sank near the poles (1.5 °C).
+   3. SALINITY at the surface rises with evaporation (strongest under the subtropical highs,
+      ~22°) and falls with rain (the equator, the westerlies) and melting ice (poles); deep water
+      is 34.7 ‰. DENSITY: ρ = 1027·(1 − 0.0002·(T − 10) + 0.00076·(S − 35)) kg/m³.
+   4. LIGHT fades as I = 100 %·e^(−k·z): k = 0.023 per m in clear ocean, 0.10 in muddy water.
+      Plants need 1 % of the surface light; animals can still see down to 10⁻¹⁰ of it.
+   5. A SEA'S SALT (a box): per square metre of sea, ocean water flows in (Qin, salinity 35 ‰),
+      rivers and rain add fresh water, evaporation removes fresh water, and the sea spills
+      out through its strait (Qout). Water: Qout = Qin + R + P − E; salt: H·dS/dt = Qin·35 − Qout·S.
+   6. CURRENTS (Stommel, 1948): the winds (trade winds, westerlies, polar easterlies) push on the
+      sea; the Coriolis effect, stronger nearer the poles, and friction balance them:
+      r∇²ψ + β·∂ψ/∂x = curl τ, with ψ = 0 on the coasts. Sea-surface temperature is carried by
+      those currents, relaxes to the latitude's usual value, and is cooled where the wind blows
+      off a coast (it drags the warm surface water away and cold water wells up, as the book says).
+   ============================================================================ */
+/* ---- 1. the sea floor: distance from the coast (km) → depth (m) ---- */
+const FLOOR = [[0, 0], [80, 200], [126, 3000], [200, 3900], [320, 4300], [345, 4300], [360, 700], [375, 4300], [450, 4500], [470, 4500], [482, 1300], [498, 1300], [510, 4500],
+  [680, 4800], [760, 4200], [830, 2600], [850, 2000], [862, 2600], [874, 2000], [900, 2700], [980, 4300], [1150, 5200], [1350, 5600], [1470, 5700], [1500, 8200], [1512, 10300], [1530, 7400], [1570, 3000], [1610, 800], [1640, 0]];
+function floorAt(x){ for (let i = 0; i < FLOOR.length - 1; i++) if (x <= FLOOR[i + 1][0]) { const [a, b] = FLOOR[i], [c, d] = FLOOR[i + 1]; return b + (d - b) * (x - a) / (c - a); } return 0; }
+function featureAt(x){
+  const z = floorAt(x);
+  if (x < 80) return 'continental shelf'; if (x < 130) return 'continental slope';
+  if (x > 335 && x < 385) return 'a seamount'; if (x > 468 && x < 512) return 'a guyot (flat-topped seamount)';
+  if (x > 760 && x < 980) return 'the mid-ocean ridge'; if (x > 1480 && x < 1545) return 'an ocean trench'; if (x >= 1545) return 'an island arc';
+  return 'the deep-sea plain';
+}
+/* ---- 2–4. the water column ---- */
+const TSURF = [[0, 27], [20, 22], [40, 14], [90, 0]];
+function surfaceT(lat){ lat = Math.abs(lat); for (let i = 0; i < TSURF.length - 1; i++) if (lat <= TSURF[i + 1][0]) { const [a, b] = TSURF[i], [c, d] = TSURF[i + 1]; return b + (d - b) * (lat - a) / (c - a); } return 0; }
+const COL = {Td: 1.5, dT: 300, Sd: 34.7, dS: 300, g0: 0.01};
+const mixDepth = U => 10 + 0.8 * U * U;
+function tempAt(lat, U, z){ const Ts = surfaceT(lat), h = mixDepth(U); return z <= h ? Ts : COL.Td + (Ts - COL.Td) * Math.exp(-(z - h) / COL.dT); }
+function surfaceS(lat){
+  const a = Math.abs(lat), evap = Math.exp(-(((a - 22) / 12) ** 2)), rain = Math.exp(-(((lat - 5) / 7) ** 2)) + 0.6 * Math.exp(-(((a - 50) / 10) ** 2)) + (a > 62 ? Math.min(1, (a - 62) / 8) : 0);
+  return 34.6 + 2.4 * evap - 1.6 * rain;
+}
+function salAt(lat, U, z){ const Ss = surfaceS(lat), h = mixDepth(U); return z <= h ? Ss : COL.Sd + (Ss - COL.Sd) * Math.exp(-(z - h) / COL.dS); }
+const densityOf = (T, S) => 1027 * (1 - 0.0002 * (T - 10) + 0.00076 * (S - 35));
+const LIGHTK = {clear: 0.023, muddy: 0.10};
+const lightAt = (k, z) => 100 * Math.exp(-k * z);                 // % of the surface light
+const sunlitDepth = k => Math.log(100) / k;                       // 1 % of the light: plants can grow
+const twilightDepth = k => Math.log(1e10) / k;                   // 10⁻¹⁰: the last light an eye can use
+const pressureAt = z => 1 + 1027 * 9.81 * z / 101325;            // atmospheres
+function thermocline(lat, U){   // from the top of the fast drop to where it falls below 1 °C per 100 m
+  const Ts = surfaceT(lat), h = mixDepth(U), g = (Ts - COL.Td) / COL.dT;
+  if (g <= COL.g0) return null;
+  return [h, h + COL.dT * Math.log(g / COL.g0)];
+}
+/* ---- 5. the salt box ---- */
+const SB = {S0: 35, H: 100};
+function saltFlows(p){ const Qin = Math.max(0, p.m + p.E - p.R - p.P); return {Qin, Qout: Qin + p.R + p.P - p.E}; }
+function saltSteady(p){ const f = saltFlows(p); return f.Qout <= 1e-9 ? Infinity : SB.S0 * f.Qin / f.Qout; }
+function saltStep(p, S, dt){ const f = saltFlows(p); return S + dt * (f.Qin * SB.S0 - Math.max(0, f.Qout) * S) / SB.H; }
+const straitM = s => 0.3 * Math.pow(100, s);                     // m/yr of ocean water let through, 0.3 … 30
+/* ---- 6. wind-driven currents ---- */
+const GY = {NX: 80, NY: 60, lat0: 15, lat1: 75, r: 1, beta: 40, Ly: 1.1};
+function gyres(o){
+  const {NX, NY} = GY, dx = 1 / (NX - 1), dy = GY.Ly / (NY - 1), beta = o.beta ? GY.beta : 0, w0 = o.wind ?? 1;
+  const lat = j => o.south ? -(GY.lat1 - (GY.lat1 - GY.lat0) * j / (NY - 1)) : GY.lat0 + (GY.lat1 - GY.lat0) * j / (NY - 1);   // j = 0: the southern edge
+  const tau = j => -Math.cos(Math.PI * (Math.abs(lat(j)) - 15) / 30) * w0;                // easterly trades, westerlies, polar easterlies
+  const curl = new Float64Array(NY); for (let j = 1; j < NY - 1; j++) curl[j] = -(tau(j + 1) - tau(j - 1)) / (2 * dy);
+  const psi = new Float64Array(NX * NY), I = (i, j) => j * NX + i;
+  const ax = GY.r / (dx * dx), ay = GY.r / (dy * dy), bx = beta / (2 * dx), diag = 2 * ax + 2 * ay;
+  for (let it = 0; it < 2000; it++) {
+    let md = 0;
+    for (let j = 1; j < NY - 1; j++) for (let i = 1; i < NX - 1; i++) {
+      const k = I(i, j), nv = (ax * (psi[k + 1] + psi[k - 1]) + ay * (psi[k + NX] + psi[k - NX]) + bx * (psi[k + 1] - psi[k - 1]) - curl[j]) / diag, d = nv - psi[k];
+      psi[k] += 1.85 * d; if (Math.abs(d) > md) md = Math.abs(d);
+    }
+    if (md < 1e-7) break;
+  }
+  const u = new Float64Array(NX * NY), v = new Float64Array(NX * NY);
+  for (let j = 1; j < NY - 1; j++) for (let i = 1; i < NX - 1; i++) { const k = I(i, j); u[k] = -(psi[k + NX] - psi[k - NX]) / (2 * dy); v[k] = (psi[k + 1] - psi[k - 1]) / (2 * dx); }
+  const G = {psi, u, v, lat, tau, curl, NX, NY, dx, dy, beta, south: !!o.south, wind: w0};
+  G.T = seaTemp(G);
+  return G;
+}
+function seaTemp(G){
+  const {NX, NY, dx, dy} = G, T = new Float64Array(NX * NY), I = (i, j) => j * NX + i;
+  let vmax = 0; for (let k = 0; k < NX * NY; k++) vmax = Math.max(vmax, Math.abs(G.u[k]), Math.abs(G.v[k]));
+  const sc = vmax ? 1.2 / vmax * Math.min(1.6, G.wind) : 0;
+  const teq = new Float64Array(NY); for (let j = 0; j < NY; j++) teq[j] = surfaceT(G.lat(j));
+  for (let j = 0; j < NY; j++) for (let i = 0; i < NX; i++) T[I(i, j)] = teq[j];
+  for (let it = 0; it < 1200; it++) for (let j = 0; j < NY; j++) {
+    const tw = G.tau(j);
+    for (let i = 0; i < NX; i++) {
+      const k = I(i, j), u = G.u[k] * sc, v = G.v[k] * sc;
+      const Tw = T[I(Math.max(0, i - 1), j)], Te = T[I(Math.min(NX - 1, i + 1), j)], Ts = T[I(i, Math.max(0, j - 1))], Tn = T[I(i, Math.min(NY - 1, j + 1))];
+      const dTdx = u > 0 ? (T[k] - Tw) / dx : (Te - T[k]) / dx, dTdy = v > 0 ? (T[k] - Ts) / dy : (Tn - T[k]) / dy;
+      const lap = (Tw + Te - 2 * T[k]) / (dx * dx) + (Ts + Tn - 2 * T[k]) / (dy * dy);
+      let up = 0; if (i >= NX - 3 && tw < 0) up = -tw; if (i <= 2 && tw > 0) up = tw;    // wind blowing off the coast: upwelling
+      T[k] += 0.0015 * (-u * dTdx - v * dTdy + 0.002 * lap + 2 * (teq[j] - T[k]) + 12 * up * (10 - T[k]) / 10);
+    }
+  }
+  return T;
+}
+/* MODEL:end */
+
+/* ---- state ---- */
+const S = {tab: 'dive', locked: false, zoom: 1500, lat: 0, wind: 12, water: 'clear', subX: 40, subZ: 20,
+           salt: {E: 1.2, P: 1.0, R: 0.2, s: 0.7}, sNow: 35, sT: 0, sRun: false, preset: null,
+           hemi: 'N', beta: true, windC: 1, boat: {x: 0.5, y: 0.5}};
+const shared = sharedState();
+if (shared) {
+  if (['dive', 'salt', 'currents'].includes(shared.tab)) S.tab = shared.tab;
+  if (shared.lat != null) S.lat = clamp(+shared.lat, 0, 80);
+  if (shared.wind != null) S.wind = clamp(+shared.wind, 0, 20);
+  if (shared.hemi === 'S') S.hemi = 'S';
+}
+shareState(() => ({tab: S.tab, lat: S.lat, wind: S.wind, hemi: S.hemi}));
+let GYR = null;
+
+/* ============================================================================
+   The stage
+   ============================================================================ */
+const svg = $('stage');
+const f1 = v => v.toFixed(1);
+const at = (el, o) => { for (const k in o) el.setAttribute(k, o[k]); return el; };
+/* tab 1: the profile. Horizontal: the shelf and slope are stretched (0–150 km over 150 px), the rest compressed. */
+const PR = {x0: 20, x1: 598, y0: 44, y1: 630};
+const xOf = km => km <= 150 ? PR.x0 + km : PR.x0 + 150 + (km - 150) / (1640 - 150) * (PR.x1 - PR.x0 - 150);
+const kmOf = px => px - PR.x0 <= 150 ? px - PR.x0 : 150 + (px - PR.x0 - 150) * (1640 - 150) / (PR.x1 - PR.x0 - 150);
+const yOf = z => PR.y0 + z / S.zoom * (PR.y1 - PR.y0);
+const zOf = y => clamp((y - PR.y0) / (PR.y1 - PR.y0) * S.zoom, 0, S.zoom);
+const GR = {T: [660, 755], S: [772, 867], L: [884, 979]};
+const gT = t => GR.T[0] + clamp(t / 30, 0, 1) * (GR.T[1] - GR.T[0]);
+const gS = s => GR.S[0] + clamp((s - 33) / 4.5, 0, 1) * (GR.S[1] - GR.S[0]);
+const gL = l => GR.L[0] + clamp((Math.log10(Math.max(l, 1e-12)) + 12) / 14, 0, 1) * (GR.L[1] - GR.L[0]);
+/* tab 3: the ocean basin */
+const BA = {x0: 150, x1: 850, y0: 60, y1: 590};
+const bx = f => BA.x0 + f * (BA.x1 - BA.x0), byj = j => BA.y1 - j / (GY.NY - 1) * (BA.y1 - BA.y0);
+
+function build(){
+  svg.innerHTML = `
+  <defs>
+    <linearGradient id="gSea" x1="0" y1="0" x2="0" y2="1"><stop id="sea0" offset="0" stop-color="#3f9ad0"/><stop id="sea1" offset="0.35" stop-color="#1d5a8a"/><stop offset="1" stop-color="#071a33"/></linearGradient>
+    <linearGradient id="gBasin" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#5fb0d8"/><stop offset="1" stop-color="#1f5f8c"/></linearGradient>
+    <clipPath id="clipPr"><rect x="${PR.x0}" y="${PR.y0}" width="${PR.x1 - PR.x0}" height="${PR.y1 - PR.y0}"/></clipPath>
+    <clipPath id="clipBasin"><rect x="${BA.x0}" y="${BA.y0}" width="${BA.x1 - BA.x0}" height="${BA.y1 - BA.y0}"/></clipPath>
+  </defs>
+  <g id="scDive">
+    <rect width="1000" height="660" fill="#fbfaf6"/>
+    <text x="${PR.x0}" y="30" fill="#4a555b" font-size="13" font-weight="700" letter-spacing=".08em">FROM THE COAST TO THE TRENCH</text>
+    <g clip-path="url(#clipPr)">
+      <rect x="${PR.x0}" y="${PR.y0}" width="${PR.x1 - PR.x0}" height="${PR.y1 - PR.y0}" fill="url(#gSea)"/>
+      <g id="zones"></g>
+      <g id="life"></g>
+      <path id="floor" fill="#6d5a45" stroke="#3d3025" stroke-width="1.2"/>
+      <g id="floorLabs" font-size="11" font-weight="600" fill="#ffffff" stroke="#2c241c" stroke-width="2.4" paint-order="stroke"></g>
+      <g id="sub"><ellipse rx="22" ry="11" fill="#f2b632" stroke="#8a5a0a" stroke-width="1.5"/><rect x="-6" y="-19" width="12" height="9" rx="2" fill="#f2b632" stroke="#8a5a0a" stroke-width="1.2"/><circle cx="9" cy="0" r="4.5" fill="#bfe4f7" stroke="#8a5a0a"/><path d="M-22 0 l-7 -5 l0 10z" fill="#8a5a0a"/><path id="beam" d="M26 0 L120 -30 L120 30Z" fill="#fff6c9" opacity=".25"/></g>
+      <line id="xhair" x1="${PR.x0}" x2="${GR.L[1]}" stroke="#ffffff" stroke-width="1" stroke-dasharray="3 4" opacity=".7" pointer-events="none"/>
+    </g>
+    <rect x="${PR.x0 - 2}" y="${PR.y0 - 6}" width="${PR.x1 - PR.x0 + 4}" height="6" fill="#bfe0f2"/>
+    <text x="${PR.x0 + 4}" y="${PR.y1 + 18}" fill="#7c878c" font-size="11">shelf and slope drawn wider than the rest · depths to scale</text>
+    <g id="zAxis" font-size="11" fill="#7c878c"></g>
+    <!-- graphs -->
+    <text x="${GR.T[0]}" y="30" fill="#b5352d" font-size="12" font-weight="700" letter-spacing=".06em">TEMPERATURE</text>
+    <text x="${GR.S[0]}" y="30" fill="#1f6a5a" font-size="12" font-weight="700" letter-spacing=".06em">SALINITY</text>
+    <text x="${GR.L[0]}" y="30" fill="#8a6a0a" font-size="12" font-weight="700" letter-spacing=".06em">SUNLIGHT</text>
+    <g id="grAxes"></g>
+    <rect id="thermoBand" x="${GR.T[0]}" width="${GR.T[1] - GR.T[0]}" fill="#d6453d" opacity=".1"/>
+    <text id="thermoLab" x="${GR.T[0] + 4}" fill="#9b2a24" font-size="10.5" font-weight="700"></text>
+    <path id="tC" fill="none" stroke="#d6453d" stroke-width="2.6"/>
+    <path id="sC" fill="none" stroke="#2a8a72" stroke-width="2.6"/>
+    <path id="lC" fill="none" stroke="#c9960c" stroke-width="2.6"/>
+    <circle id="tDot" r="5" fill="#d6453d" stroke="#fff" stroke-width="1.5"/><circle id="sDot" r="5" fill="#2a8a72" stroke="#fff" stroke-width="1.5"/><circle id="lDot" r="5" fill="#c9960c" stroke="#fff" stroke-width="1.5"/>
+    <rect class="gHit" id="gHit" x="${GR.T[0]}" y="${PR.y0}" width="${GR.L[1] - GR.T[0]}" height="${PR.y1 - PR.y0}" fill="transparent"/>
+    <circle id="subHit" r="26" fill="transparent" role="slider" aria-label="The submersible: drag it anywhere in the sea" tabindex="0"/>
+  </g>
+
+  <g id="scSalt" display="none">
+    <rect width="1000" height="660" fill="#fbfaf6"/>
+    <rect x="0" y="0" width="1000" height="250" fill="#e3f0f8"/>
+    <text x="30" y="30" fill="#4a555b" font-size="13" font-weight="700" letter-spacing=".08em">A SEA AND ITS STRAIT</text>
+    <circle cx="880" cy="70" r="30" fill="#f7c948"/>
+    <g id="evapG" stroke="#e39a2a" stroke-width="2.4" fill="none" stroke-linecap="round"></g>
+    <g id="rainG" stroke="#4a86b8" stroke-width="2" stroke-linecap="round"></g>
+    <path d="M520 110 q20 -30 60 -20 q20 -25 55 -5 q35 -5 40 25 q10 25 -20 28 h-120 q-35 -2 -15 -28z" fill="#ffffff" stroke="#c8d6e0" id="cloud"/>
+    <!-- the open ocean (left) and the sea (right) -->
+    <path d="M0 250 L330 250 L330 640 L0 640Z" fill="#2c6fa3"/>
+    <text x="30" y="290" fill="#ffffff" font-size="14" font-weight="700">OPEN OCEAN</text>
+    <text x="30" y="312" fill="#e3f0f8" font-size="12.5" class="num">35 ‰</text>
+    <path id="basin" d="M330 250 L960 250 L960 600 Q800 640 560 620 L380 560 L330 520Z" fill="#2c6fa3"/>
+    <path d="M330 250 L330 330 L360 330 L360 250" fill="#fbfaf6" opacity="0"/>
+    <path id="sill" d="M310 640 L310 470 Q340 440 370 470 L370 640Z" fill="#6d5a45"/>
+    <path id="land" d="M960 250 L1000 250 L1000 660 L0 660 L0 640 L310 640 L310 470 Q340 440 370 470 L380 560 L560 620 Q800 640 960 600Z" fill="#8a6f50"/>
+    <path id="riverP" d="M1000 236 C960 238 940 244 930 250" fill="none" stroke="#4a86b8" stroke-width="8" stroke-linecap="round"/>
+    <text x="930" y="226" text-anchor="end" fill="#1f4760" font-size="12" font-weight="600">river</text>
+    <g id="flowG" stroke-width="3.5" fill="none" stroke-linecap="round"></g>
+    <text id="basinLab" x="640" y="330" text-anchor="middle" fill="#ffffff" font-size="36" font-weight="700" class="num"></text>
+    <text id="basinSub" x="640" y="360" text-anchor="middle" fill="#e3f0f8" font-size="13"></text>
+    <g id="fishG"></g>
+    <!-- salinity against time -->
+    <g id="stAxes"></g><path id="stLine" fill="none" stroke="#2a8a72" stroke-width="2.4"/><path id="stGoal" fill="none" stroke="#2a8a72" stroke-width="1.2" stroke-dasharray="5 4"/>
+  </g>
+
+  <g id="scCur" display="none">
+    <rect width="1000" height="660" fill="#fbfaf6"/>
+    <text x="30" y="30" fill="#4a555b" font-size="13" font-weight="700" letter-spacing=".08em">AN OCEAN BETWEEN TWO CONTINENTS</text>
+    <text x="970" y="30" text-anchor="end" fill="#7c878c" font-size="11.5">about 6,000 km across</text>
+    <rect x="30" y="${BA.y0}" width="${BA.x0 - 30}" height="${BA.y1 - BA.y0}" fill="#d9c79c"/>
+    <rect x="${BA.x1}" y="${BA.y0}" width="${970 - BA.x1}" height="${BA.y1 - BA.y0}" fill="#d9c79c"/>
+    <image id="sstImg" x="${BA.x0}" y="${BA.y0}" width="${BA.x1 - BA.x0}" height="${BA.y1 - BA.y0}" preserveAspectRatio="none"/>
+    <g clip-path="url(#clipBasin)"><g id="streams" fill="none" stroke="#10324f" stroke-width="1.4" opacity=".75"></g><g id="arrowsC" fill="#10324f" opacity=".8"></g><path id="fishZone" fill="none" stroke="#ffffff" stroke-width="2" stroke-dasharray="4 4"/></g>
+    <g id="coastW"></g><g id="coastE"></g>
+    <g id="latAxis" font-size="11" fill="#5d6a70"></g>
+    <g id="windsG" font-size="11" fill="#4a555b" font-weight="600"></g>
+    <g id="curLabs" font-size="12" font-weight="700"></g>
+    <g id="boat"><path d="M-14 0 L14 0 L9 7 L-9 7Z" fill="#d6453d" stroke="#fff" stroke-width="1.2"/><rect x="-2" y="-14" width="2" height="14" fill="#1d2327"/><path d="M0 -14 L10 -6 L0 -4Z" fill="#fff"/></g>
+    <circle id="boatHit" r="20" fill="transparent" role="slider" aria-label="The ship: drag it round the ocean"/>
+    <g font-size="11.5" fill="#4a555b">
+      <text x="${BA.x0}" y="${BA.y1 + 22}">sea-surface temperature:</text>
+      <g id="sstKey"></g>
+      <text x="${BA.x0}" y="${BA.y1 + 44}">lines: the paths of the water (closer lines = faster)</text>
+      <text id="compLab" x="${BA.x1}" y="${BA.y1 + 44}" text-anchor="end" fill="#7c878c"></text>
+    </g>
+    <text id="curBusy" x="500" y="320" text-anchor="middle" fill="#ffffff" font-size="16" font-weight="700"></text>
+  </g>`;
+}
+
+/* ---- tab 1 ---- */
+const kNow = () => LIGHTK[S.water];
+function paintDiveStatic(){
+  /* the sea floor */
+  let d = `M${PR.x0} ${PR.y1 + 10}`;
+  for (let km = 0; km <= 1640; km += km < 150 ? 2 : 5) d += `L${f1(xOf(km))} ${f1(Math.min(PR.y1 + 10, yOf(floorAt(km))))}`;
+  d += `L${PR.x1} ${PR.y1 + 10}Z`;
+  $('floor').setAttribute('d', d);
+  const labs = [[40, 'shelf'], [103, 'slope'], [360, 'seamount'], [490, 'guyot'], [260, 'deep-sea plain'], [850, 'mid-ocean ridge'], [1512, 'trench'], [1600, 'island arc']];
+  $('floorLabs').innerHTML = labs.map(([km, t]) => { const z = floorAt(km); if (z > S.zoom * 0.97 && S.zoom < 2000 && km > 150) return '';
+    return `<text x="${f1(xOf(km))}" y="${f1(Math.min(PR.y1 - 6, yOf(z) + (t === 'trench' ? -8 : 16)))}" text-anchor="${km > 1550 ? 'end' : 'middle'}">${t}</text>`; }).join('');
+  let ax = ''; const step = S.zoom <= 1500 ? 250 : 2000;
+  for (let z = 0; z <= S.zoom; z += step) ax += `<line x1="${GR.T[0]}" x2="${GR.L[1]}" y1="${f1(yOf(z))}" y2="${f1(yOf(z))}" stroke="#ece8dd"/><text x="${GR.T[0] - 4}" y="${f1(yOf(z) + 4)}" text-anchor="end">${z >= 1000 ? fmt(z / 1000, z % 1000 ? 1 : 0) + ' km' : z + ' m'}</text>`;
+  $('zAxis').innerHTML = ax;
+  let g = '';
+  for (const t of [0, 10, 20, 30]) g += `<line x1="${f1(gT(t))}" x2="${f1(gT(t))}" y1="${PR.y0}" y2="${PR.y1}" stroke="#ece8dd"/><text x="${f1(gT(t))}" y="${PR.y1 + 14}" text-anchor="middle" fill="#b5352d" font-size="10.5">${t}°</text>`;
+  for (const s of [33, 35, 37]) g += `<line x1="${f1(gS(s))}" x2="${f1(gS(s))}" y1="${PR.y0}" y2="${PR.y1}" stroke="#ece8dd"/><text x="${f1(gS(s))}" y="${PR.y1 + 14}" text-anchor="middle" fill="#1f6a5a" font-size="10.5">${s}</text>`;
+  for (const [e, t] of [[2, '100%'], [-2, '1%'], [-10, '10⁻¹⁰']]) g += `<line x1="${f1(gL(10 ** e))}" x2="${f1(gL(10 ** e))}" y1="${PR.y0}" y2="${PR.y1}" stroke="#ece8dd"/><text x="${f1(gL(10 ** e))}" y="${PR.y1 + 14}" text-anchor="middle" fill="#8a6a0a" font-size="10.5">${t}</text>`;
+  g += `<text x="${GR.T[1]}" y="${PR.y1 + 28}" text-anchor="end" fill="#b5352d" font-size="10.5">°C</text><text x="${GR.S[1]}" y="${PR.y1 + 28}" text-anchor="end" fill="#1f6a5a" font-size="10.5">‰</text><text x="${GR.L[1]}" y="${PR.y1 + 28}" text-anchor="end" fill="#8a6a0a" font-size="10.5">of the surface</text>`;
+  $('grAxes').innerHTML = g;
+}
+function paintDive(){
+  const lat = S.lat, U = S.wind, k = kNow();
+  const zs = sunlitDepth(k), zt = twilightDepth(k);
+  /* zones, from the light */
+  const band = (z0, z1, fill, label, col) => { if (z0 >= S.zoom) return ''; const y0 = yOf(z0), y1 = yOf(Math.min(z1, S.zoom));
+    return `<rect x="${PR.x0}" y="${f1(y0)}" width="${PR.x1 - PR.x0}" height="${f1(y1 - y0)}" fill="${fill}"/>` + `<line x1="${PR.x0}" x2="${PR.x1}" y1="${f1(y1)}" y2="${f1(y1)}" stroke="#ffffff" stroke-dasharray="6 5" opacity="${z1 < S.zoom ? .55 : 0}"/>` +
+      (y1 - y0 > 16 ? `<text x="${PR.x1 - 8}" y="${f1(y0 + 15)}" text-anchor="end" fill="${col}" font-size="11.5" font-weight="700" letter-spacing=".05em">${label}</text>` : ''); };
+  $('zones').innerHTML = band(0, zs, 'rgba(120,200,240,.35)', 'SUNLIT ZONE', '#ffffff') + band(zs, zt, 'rgba(20,60,110,.25)', 'TWILIGHT ZONE', '#d6ecf8') + band(zt, 11000, 'rgba(0,0,20,.35)', 'MIDNIGHT ZONE', '#9fb6c9');
+  /* life, placed by the model: plankton only where there is light enough to grow, corals only on a warm, sunlit shelf */
+  let L = '';
+  const shelfT = tempAt(lat, U, 20);
+  for (let i = 0; i < 26; i++) { const x = PR.x0 + 20 + (i * 97) % (PR.x1 - PR.x0 - 40), z = (i * 37) % Math.max(10, Math.min(zs, 250)); if (z > zs) continue;
+    L += `<circle cx="${f1(x)}" cy="${f1(yOf(z + 8))}" r="2.2" fill="#9be08a" opacity=".85"/>`; }
+  if (shelfT >= 20 && zs > 30) for (let x = 12; x < 70; x += 9) { const z = floorAt(x); if (z < zs) L += `<path d="M${f1(xOf(x))} ${f1(yOf(z))} q-4 -10 0 -16 q4 6 0 16 M${f1(xOf(x) + 3)} ${f1(yOf(z))} q6 -8 3 -13" stroke="#ff7f6e" stroke-width="2.4" fill="none"/>`; }
+  const fish = (x, z, col, sz) => z < S.zoom ? `<g transform="translate(${f1(x)} ${f1(yOf(z))})"><path d="M0 0 q${sz} -${sz * 0.6} ${sz * 2} 0 q-${sz} ${sz * 0.6} -${sz * 2} 0z M${sz * 2} 0 l${sz * 0.7} -${sz * 0.5} l0 ${sz}z" fill="${col}"/></g>` : '';
+  L += fish(230, Math.min(60, zs * 0.5), '#ffd166', 8) + fish(300, Math.min(100, zs * 0.7), '#ffd166', 6) + fish(450, (zs + zt) / 2, '#b8c4ff', 7) + fish(520, zs + 120, '#b8c4ff', 5);
+  if (S.zoom > 2000) L += fish(380, 2500, '#6f7fa6', 9) + `<circle cx="${f1(xOf(866))}" cy="${f1(yOf(2150))}" r="4" fill="#e8552e" opacity=".8"/>` + fish(xOf(1200), 4800, '#6f7fa6', 6);
+  $('life').innerHTML = L;
+  /* graphs */
+  let tc = '', sc = '', lc = '';
+  for (let i = 0; i <= 220; i++) { const z = i / 220 * S.zoom, y = f1(yOf(z)); tc += (i ? 'L' : 'M') + f1(gT(tempAt(lat, U, z))) + ' ' + y; sc += (i ? 'L' : 'M') + f1(gS(salAt(lat, U, z))) + ' ' + y; lc += (i ? 'L' : 'M') + f1(gL(lightAt(k, z))) + ' ' + y; }
+  const show = S.locked;
+  for (const [id, d] of [['tC', tc], ['sC', sc], ['lC', lc]]) { $(id).setAttribute('d', d); $(id).setAttribute('opacity', show ? 1 : 0); }
+  const th = thermocline(lat, U);
+  if (th && show) { at($('thermoBand'), {y: f1(yOf(th[0])), height: f1(Math.max(0, yOf(Math.min(th[1], S.zoom)) - yOf(th[0])))}); at($('thermoLab'), {y: f1(yOf(th[0]) + 13)}); $('thermoLab').textContent = th[0] < S.zoom ? 'thermocline' : ''; }
+  else { at($('thermoBand'), {height: 0}); $('thermoLab').textContent = ''; }
+  /* the submersible */
+  const x = xOf(S.subX), y = yOf(Math.min(S.subZ, S.zoom));
+  $('sub').setAttribute('transform', `translate(${f1(x)} ${f1(y)})`);
+  $('beam').setAttribute('opacity', S.subZ > zs ? .35 : 0);
+  at($('subHit'), {cx: f1(x), cy: f1(y)}); $('subHit').style.pointerEvents = S.locked ? '' : 'none';
+  at($('xhair'), {y1: f1(y), y2: f1(y), x1: f1(x + 30)});
+  const z = S.subZ, T = tempAt(lat, U, z), Sa = salAt(lat, U, z), l = lightAt(k, z);
+  at($('tDot'), {cx: f1(gT(T)), cy: f1(y), opacity: show ? 1 : 0}); at($('sDot'), {cx: f1(gS(Sa)), cy: f1(y), opacity: show ? 1 : 0}); at($('lDot'), {cx: f1(gL(l)), cy: f1(y), opacity: show ? 1 : 0});
+  const zone = z < zs ? 'sunlit' : z < zt ? 'twilight' : 'midnight';
+  $('dZ').textContent = `${z >= 1000 ? fmt(z, 0) : fmt(z, 0)} m · ${zone}`;
+  $('dFloor').textContent = `${featureAt(S.subX)}, ${fmt(floorAt(S.subX), 0)} m`;
+  $('dT').textContent = show ? fmt(T, 1) + ' °C' : '—';
+  $('dS').textContent = show ? fmt(Sa, 2) + ' ‰' : '—';
+  $('dRho').textContent = show ? fmt(densityOf(T, Sa), 1) + ' kg/m³' : '—';
+  $('dL').textContent = show ? (l >= 0.01 ? fmt(l, l >= 1 ? 1 : 2) + ' %' : l.toExponential(0).replace('e', '×10^') + ' %') : '—';
+  $('dP').textContent = fmt(pressureAt(z), 0) + ' atmospheres';
+  $('latOut').textContent = S.lat + '° N'; $('windOut').textContent = S.wind + ' m/s';
+  checkDive();
+}
+function checkDive(){
+  if (!S.locked) return;
+  const z = S.subZ, k = kNow(), th = thermocline(S.lat, S.wind);
+  if (z > sunlitDepth(k) + 5) discover('sunlit');
+  if (th && S.lat <= 40 && z >= th[0] && z <= th[1]) discover('thermo');
+  if (z >= 2000 && S.lat <= 25 && tempAt(S.lat, S.wind, z) < 4) { discover('deepcold'); explainDive(); }
+  if (z >= 8000) discover('trench');
+}
+let EXPLAINED = false;
+function explainDive(){
+  if (EXPLAINED || !POE) return; EXPLAINED = true;
+  const lat = S.lat, U = S.wind, th = thermocline(lat, U);
+  POE.explain(`At ${lat}° the model's surface is ${fmt(surfaceT(lat), 0)} °C, but the wind stirs that warmth only ${fmt(mixDepth(U), 0)} m down. ` +
+    `Below that, through the thermocline (${fmt(th[0], 0)}–${fmt(th[1], 0)} m), it falls fast, and at 3,000 m it is <b>${fmt(tempAt(lat, U, 3000), 1)} °C</b>: water that sank near the poles and spread along the bottom.`);
+}
+function why(){
+  if (!S.locked) return;
+  let t = '';
+  if (S.tab === 'dive') {
+    const lat = S.lat, U = S.wind, k = kNow(), z = S.subZ, th = thermocline(lat, U), T = tempAt(lat, U, z);
+    t = `<p>At ${lat}° the sea surface is <b>${fmt(surfaceT(lat), 1)} °C</b>. The ${U} m/s wind stirs the top <b>${fmt(mixDepth(U), 0)} m</b> into one warm layer.</p>`;
+    t += th ? `<p>Below it the <b>thermocline</b>, ${fmt(th[0], 0)}–${fmt(th[1], 0)} m: the temperature drops fast, then settles near ${COL.Td} °C, the cold water that sank near the poles.</p>` : `<p>The surface is already almost as cold as the deep water: <b>one layer</b> from top to bottom, as in the polar seas.</p>`;
+    t += `<p>Half the light is gone by ${fmt(Math.log(2) / k, 0)} m. Below <b>${fmt(sunlitDepth(k), 0)} m</b> there is too little for plants to grow; below ${fmt(twilightDepth(k), 0)} m it is black.</p>`;
+    t += `<p>Here, ${fmt(z, 0)} m down, the water is ${fmt(T, 1)} °C and every square centimetre carries ${fmt(pressureAt(z), 0)} times the air's pressure.</p>`;
+  } else if (S.tab === 'salt') {
+    const p = saltParams(), f = saltFlows(p), st = saltSteady(p);
+    t = `<p>Per square metre of this sea, each year: evaporation takes <b>${fmt(p.E, 2)} m</b> of fresh water; rain adds ${fmt(p.P, 2)} m and rivers ${fmt(p.R, 2)} m.</p>`;
+    t += f.Qin > 0 ? `<p>To keep the sea level up, ${fmt(f.Qin, 2)} m of ocean water flows in, bringing its salt; ${fmt(f.Qout, 2)} m flows out, at the sea's own salinity. Salt in = salt out when the sea is at <b>${isFinite(st) ? fmt(st, 1) : '—'} ‰</b>.</p>`
+      : `<p>So much fresh water arrives that no ocean water flows in at all: the sea is flushed towards fresh water.</p>`;
+    t += st > SB.S0 + 0.3 ? `<p>Salty water is heavier, so it pours out along the bottom of the strait while lighter ocean water flows in on top.</p>` : st < SB.S0 - 0.3 ? `<p>Fresher water is lighter, so it spills out on top while ocean water creeps in underneath.</p>` : '';
+  } else if (GYR) {
+    const b = boatInfo();
+    t = `<p>The <b>trade winds</b> blow from the east near the tropics and the <b>westerlies</b> from the west further ${S.hemi === 'N' ? 'north' : 'south'}. Between them they spin the water into a huge loop, a <b>gyre</b>, turning ${S.hemi === 'N' ? 'clockwise' : 'anticlockwise'} — to the ${S.hemi === 'N' ? 'right' : 'left'} of the wind, as the Coriolis effect turns it.</p>`;
+    t += S.beta ? `<p>Because the Coriolis effect grows towards the poles, the return flow is squeezed against the <b>west side</b> of the ocean: a narrow, fast warm current there, and a slow, broad cold one in the east.</p>` : `<p>With the Coriolis effect the same everywhere, the gyre is <b>symmetric</b>: no fast western current.</p>`;
+    if (b) t += `<p>At the ship: the water is ${fmt(b.T, 1)} °C, ${b.T - b.Te >= 0 ? fmt(b.T - b.Te, 1) + ' °C warmer' : fmt(b.Te - b.T, 1) + ' °C colder'} than usual for ${fmt(Math.abs(b.lat), 0)}°${S.hemi}.</p>`;
+  }
+  $('why').innerHTML = t; $('whyCard').hidden = false;
+}
+
+/* ---- tab 2 ---- */
+const PRESETS = {
+  'Red Sea':        {E: 2.0, P: 0.02, R: 0, s: 0.79},
+  'Arabian Sea':    {E: 1.6, P: 0.6, R: 0.1, s: 0.92},
+  'Bay of Bengal':  {E: 1.2, P: 2.0, R: 1.6, s: 0.98},
+  'Mediterranean':  {E: 1.3, P: 0.5, R: 0.15, s: 0.70},
+  'Baltic Sea':     {E: 0.5, P: 0.6, R: 1.1, s: 0.36},
+};
+function saltParams(){ return {E: S.salt.E, P: S.salt.P, R: S.salt.R, m: straitM(S.salt.s)}; }
+const STL = {x0: 420, x1: 960, y0: 430, y1: 590, tmax: 200};
+function paintSalt(){
+  const p = saltParams(), f = saltFlows(p), st = saltSteady(p), s = S.sNow;
+  $('basinLab').textContent = fmt(s, 1) + ' ‰';
+  $('basinSub').textContent = s >= 40 ? 'very salty' : s > 37 ? 'saltier than the open ocean' : s >= 33 ? 'like the open ocean (33–37 ‰)' : s >= 24.7 ? 'fresher than the open ocean' : 'brackish (below 24.7 ‰)';
+  const col = s >= 35 ? `hsl(${200 - clamp(s - 35, 0, 8) * 4},${50 + clamp(s - 35, 0, 8) * 3}%,${38 - clamp(s - 35, 0, 8)}%)` : `hsl(${200 - (35 - s) * 1.2},${55}%,${38 + clamp(35 - s, 0, 30) * 0.8}%)`;
+  $('basin').setAttribute('fill', col);
+  $('evapG').innerHTML = Array.from({length: Math.round(p.E * 5)}, (_, i) => { const x = 460 + i * 45; return `<path d="M${x} 240 q-6 -12 0 -24 q6 -12 0 -24"/>`; }).join('');
+  $('rainG').innerHTML = Array.from({length: Math.round(p.P * 8)}, (_, i) => { const x = 540 + (i * 23) % 140, y = 150 + (i * 17) % 60; return `<line x1="${x}" y1="${y}" x2="${x - 4}" y2="${y + 14}"/>`; }).join('');
+  $('cloud').setAttribute('opacity', p.P > 0.05 ? 1 : 0.15);
+  $('riverP').setAttribute('stroke-width', f1(Math.max(0.5, p.R * 7)));
+  const dense = s > SB.S0 + 0.2, light = s < SB.S0 - 0.2, a = (x, y, dir, c) => `<path d="M${x - dir * 22} ${y} L${x + dir * 22} ${y} M${x + dir * 22} ${y} l${-dir * 9} -6 M${x + dir * 22} ${y} l${-dir * 9} 6" stroke="${c}"/>`;
+  $('flowG').innerHTML = f.Qin <= 0 ? a(340, 300, -1, '#bfe0f2') : dense ? a(340, 280, 1, '#bfe0f2') + a(340, 420, -1, '#e0b46a') : light ? a(340, 280, -1, '#bfe0f2') + a(340, 420, 1, '#1d4f78') : a(340, 280, 1, '#bfe0f2') + a(340, 420, -1, '#bfe0f2');
+  /* graph */
+  let ax = `<rect x="${STL.x0}" y="${STL.y0}" width="${STL.x1 - STL.x0}" height="${STL.y1 - STL.y0}" fill="#ffffff" opacity=".9" rx="6"/>`;
+  const sy = v => STL.y1 - 10 - clamp((v - 20) / 25, 0, 1) * (STL.y1 - STL.y0 - 20), sx = t => STL.x0 + 40 + t / STL.tmax * (STL.x1 - STL.x0 - 50);
+  for (const v of [20, 24.7, 30, 35, 40, 45]) ax += `<line x1="${STL.x0 + 40}" x2="${STL.x1 - 10}" y1="${f1(sy(v))}" y2="${f1(sy(v))}" stroke="${v === 35 ? '#9aa3a6' : v === 24.7 ? '#c9a96b' : '#eee'}" ${v === 24.7 ? 'stroke-dasharray="4 3"' : ''}/><text x="${STL.x0 + 34}" y="${f1(sy(v) + 4)}" text-anchor="end" fill="#7c878c" font-size="10.5">${v}</text>`;
+  ax += `<text x="${STL.x0 + 44}" y="${STL.y0 + 14}" fill="#4a555b" font-size="11.5" font-weight="700">SALINITY, ‰, OVER ${STL.tmax} YEARS</text><text x="${STL.x1 - 12}" y="${f1(sy(24.7) - 4)}" text-anchor="end" fill="#a07a2a" font-size="10">brackish below 24.7</text>`;
+  $('stAxes').innerHTML = ax;
+  $('stLine').setAttribute('d', SLOG.map((q, i) => (i ? 'L' : 'M') + f1(sx(q[0])) + ' ' + f1(sy(q[1]))).join(''));
+  $('stGoal').setAttribute('d', isFinite(st) ? `M${STL.x0 + 40} ${f1(sy(st))} L${STL.x1 - 10} ${f1(sy(st))}` : '');
+  $('sNow').textContent = fmt(s, 2) + ' ‰';
+  $('sSteady').textContent = isFinite(st) ? fmt(st, 1) + ' ‰' : 'dries out';
+  $('sFlow').textContent = f.Qin <= 0 ? 'no ocean water gets in' : dense ? 'out of the sea' : light ? 'into the sea' : 'hardly at all';
+  $('sClock').textContent = fmt(S.sT, 0) + ' years';
+  for (const [id, v, d, u] of [['evap', p.E, 2, ' m/yr'], ['rainS', p.P, 2, ' m/yr'], ['river', p.R, 2, ' m/yr']]) { $(id).value = v; $(id + 'Out').textContent = fmt(v, d) + u; }
+  $('strait').value = S.salt.s; $('straitOut').textContent = fmt(straitM(S.salt.s), 1) + ' m/yr';
+  for (const b of $('presets').children) b.setAttribute('aria-pressed', b.dataset.p === S.preset);
+}
+const SLOG = [[0, 35]];
+function checkSalt(){
+  if (!S.locked) return;
+  if (S.sNow >= 40) discover('red');
+  if (S.salt.R >= 1 && S.sNow < 33 && S.sNow > 24.7) discover('bay');
+}
+
+/* ---- tab 3 ---- */
+const sstCanvas = document.createElement('canvas'); sstCanvas.width = GY.NX; sstCanvas.height = GY.NY;
+const sstColor = t => { const a = clamp(t / 28, 0, 1); const stops = [[0, [58, 76, 192]], [0.35, [95, 170, 215]], [0.6, [236, 226, 170]], [0.8, [240, 150, 90]], [1, [200, 50, 50]]];
+  for (let i = 0; i < stops.length - 1; i++) if (a <= stops[i + 1][0]) { const [p, c] = stops[i], [q, d] = stops[i + 1], w = (a - p) / (q - p); return c.map((v, k) => Math.round(v + (d[k] - v) * w)); } return stops[4][1]; };
+function recomputeGyres(){
+  $('curBusy').textContent = 'The winds are setting the ocean moving…';
+  setTimeout(() => { GYR = gyres({south: S.hemi === 'S', beta: S.beta, wind: S.windC}); $('curBusy').textContent = ''; paintCurrentsStatic(); paintCurrents(); why(); }, 30);
+}
+function paintCurrentsStatic(){
+  const G = GYR, {NX, NY} = G, g = sstCanvas.getContext('2d'), img = g.createImageData(NX, NY);
+  for (let j = 0; j < NY; j++) for (let i = 0; i < NX; i++) { const c = sstColor(G.T[j * NX + i]), o = ((NY - 1 - j) * NX + i) * 4; img.data[o] = c[0]; img.data[o + 1] = c[1]; img.data[o + 2] = c[2]; img.data[o + 3] = 255; }
+  g.putImageData(img, 0, 0); $('sstImg').setAttribute('href', sstCanvas.toDataURL());
+  /* streamlines: contours of ψ by marching squares */
+  let pmax = 0; for (const v of G.psi) pmax = Math.max(pmax, Math.abs(v));
+  let paths = '';
+  const levels = [-0.85, -0.65, -0.45, -0.25, -0.1, 0.1, 0.25, 0.45, 0.65, 0.85].map(l => l * pmax);
+  const X = i => bx(i / (NX - 1)), Y = j => byj(j);
+  for (const L of levels) {
+    let d = '';
+    for (let j = 0; j < NY - 1; j++) for (let i = 0; i < NX - 1; i++) {
+      const a = G.psi[j * NX + i] - L, b = G.psi[j * NX + i + 1] - L, c = G.psi[(j + 1) * NX + i + 1] - L, e = G.psi[(j + 1) * NX + i] - L, pts = [];
+      if (a * b < 0) pts.push([X(i + a / (a - b)), Y(j)]); if (b * c < 0) pts.push([X(i + 1), Y(j + b / (b - c))]);
+      if (c * e < 0) pts.push([X(i + 1 - c / (c - e)), Y(j + 1)]); if (e * a < 0) pts.push([X(i), Y(j + 1 - e / (e - a))]);
+      if (pts.length >= 2) d += `M${f1(pts[0][0])} ${f1(pts[0][1])}L${f1(pts[1][0])} ${f1(pts[1][1])}`;
+    }
+    paths += `<path d="${d}"/>`;
+  }
+  $('streams').innerHTML = paths;
+  /* arrows along the flow */
+  let ar = ''; for (let j = 4; j < NY - 3; j += 6) for (let i = 2; i < NX - 2; i += 6) {
+    const k = j * NX + i, u = G.u[k], v = G.v[k], sp = Math.hypot(u, v); if (sp < 0.02 * pmax * 10) continue;
+    const ang = Math.atan2(-v, u), x = X(i), y = Y(j);
+    ar += `<path transform="translate(${f1(x)} ${f1(y)}) rotate(${f1(ang * 180 / Math.PI)})" d="M7 0 L-5 -4.5 L-2 0 L-5 4.5Z"/>`;
+  }
+  /* the western boundary layer is thin: add arrows there too */
+  for (let j = 4; j < NY - 3; j += 4) { const i = 2, k = j * NX + i, u = G.u[k], v = G.v[k]; if (Math.hypot(u, v) < 1e-6) continue; const ang = Math.atan2(-v, u);
+    ar += `<path transform="translate(${f1(X(i))} ${f1(Y(j))}) rotate(${f1(ang * 180 / Math.PI)})" d="M7 0 L-5 -4.5 L-2 0 L-5 4.5Z"/>`; }
+  $('arrowsC').innerHTML = ar;
+  /* the coasts: warm, wet or cool, dry, from the sea beside them */
+  const coast = (i, x0, w) => { let s = ''; for (let j = 0; j < NY; j += 2) { const lat = G.lat(j), an = G.T[j * NX + i] - surfaceT(lat), y = byj(j + 1), h = (BA.y1 - BA.y0) / (NY - 1) * 2;
+      const fill = Math.abs(lat) > 58 ? '#e9eef0' : an > 0.8 ? '#6aa84f' : an < -0.8 && Math.abs(lat) < 38 ? '#e7cf8f' : '#b7c79a';
+      s += `<rect x="${x0}" y="${f1(y)}" width="${w}" height="${f1(h + 0.5)}" fill="${fill}"/>`; } return s; };
+  $('coastW').innerHTML = coast(1, BA.x0 - 26, 26); $('coastE').innerHTML = coast(NX - 2, BA.x1, 26);
+  let la = ''; for (let lat = 15; lat <= 75; lat += 15) { const j = (lat - 15) / 60 * (NY - 1), y = byj(S.hemi === 'N' ? j : NY - 1 - j);
+    la += `<line x1="${BA.x0}" x2="${BA.x1}" y1="${f1(y)}" y2="${f1(y)}" stroke="#ffffff" stroke-dasharray="2 6" opacity=".5"/><text x="${BA.x0 - 32}" y="${f1(y + 4)}" text-anchor="end">${lat}°${S.hemi}</text>`; }
+  $('latAxis').innerHTML = la;
+  /* the winds, in words and arrows, at the right-hand edge */
+  const wind = (lat, txt, dir) => { const j = (lat - 15) / 60 * (NY - 1), y = byj(S.hemi === 'N' ? j : NY - 1 - j);
+    return `<text x="${BA.x1 + 34}" y="${f1(y - 6)}">${txt}</text><path d="M${BA.x1 + 34 + (dir > 0 ? 0 : 60)} ${f1(y + 4)} l${dir * 60} 0 m${-dir * 8} -5 l${dir * 8} 5 l${-dir * 8} 5" stroke="#4a555b" stroke-width="1.8" fill="none"/>`; };
+  $('windsG').innerHTML = wind(22, 'trade winds', -1) + wind(45, 'westerlies', 1) + wind(68, 'polar easterlies', -1);
+  /* labels on the currents, from the model: the fastest northward and southward flow along each side */
+  /* label each coast's current, warm or cold, in the subtropical and the subpolar belts, from the model's own temperatures */
+  const side = (i0, i1, l0, l1) => { let best = null; for (let j = 3; j < NY - 3; j++) { const la = Math.abs(G.lat(j)); if (la < l0 || la > l1) continue;
+    for (let i = i0; i <= i1; i++) { const k = j * NX + i, sp = Math.hypot(G.u[k], G.v[k]); if (!best || sp > best.sp) best = {i, j, sp, an: G.T[k] - surfaceT(G.lat(j))}; } } return best; };
+  const lab = (b, anchor, dx) => b && Math.abs(b.an) > 0.6 ? `<text x="${f1(bx(b.i / (NX - 1)) + dx)}" y="${f1(byj(b.j))}" text-anchor="${anchor}" fill="${b.an >= 0 ? '#9b1d1d' : '#12407a'}" stroke="#ffffff" stroke-width="3" paint-order="stroke">${b.an >= 0 ? 'warm' : 'cold'} current</text>` : '';
+  $('curLabs').innerHTML = lab(side(1, 4, 20, 40), 'start', 12) + lab(side(1, 4, 50, 68), 'start', 12) + lab(side(NX - 8, NX - 3, 15, 32), 'end', -12) + lab(side(NX - 8, NX - 3, 50, 68), 'end', -12);
+  /* fishing grounds: where the surface temperature changes fastest */
+  const gmax = gradMax(); let fz = '';
+  if (gmax) { const x = bx(gmax.i / (NX - 1)), y = byj(gmax.j); fz = `M${f1(x - 26)} ${f1(y)} a26 18 0 1 0 52 0 a26 18 0 1 0 -52 0`; }
+  $('fishZone').setAttribute('d', fz);
+  $('sstKey').innerHTML = [0, 5, 10, 15, 20, 25].map((t, i) => { const c = sstColor(t); return `<rect x="${BA.x0 + 150 + i * 46}" y="${BA.y1 + 12}" width="46" height="12" fill="rgb(${c.join(',')})"/><text x="${BA.x0 + 150 + i * 46}" y="${BA.y1 + 36}" font-size="10">${t}°</text>`; }).join('');
+  $('compLab').textContent = S.beta ? '' : 'Coriolis the same everywhere (not the real Earth)';
+}
+function gradAt(i, j){ const G = GYR, NX = G.NX; if (i < 1 || j < 1 || i > NX - 2 || j > G.NY - 2) return 0; const T = G.T;
+  return Math.hypot((T[j * NX + i + 1] - T[j * NX + i - 1]) / (2 * G.dx), (T[(j + 1) * NX + i] - T[(j - 1) * NX + i]) / (2 * G.dy)) / 60; }
+function gradMax(){ let best = null; for (let j = 2; j < GYR.NY - 2; j++) for (let i = 1; i < GYR.NX - 1; i++) { const lat = Math.abs(GYR.lat(j)); if (lat < 25 || lat > 60) continue; const g = gradAt(i, j) - Math.abs(dTeq(j)); if (!best || g > best.g) best = {i, j, g}; } return best; }
+function dTeq(j){ const G = GYR; return (surfaceT(G.lat(Math.min(G.NY - 1, j + 1))) - surfaceT(G.lat(Math.max(0, j - 1)))) / (2 * G.dy) / 60; }
+function boatInfo(){
+  if (!GYR) return null;
+  const G = GYR, i = clamp(Math.round(S.boat.x * (G.NX - 1)), 0, G.NX - 1), j = clamp(Math.round(S.boat.y * (G.NY - 1)), 0, G.NY - 1), k = j * G.NX + i;
+  let vmean = 0, n = 0; for (let jj = 5; jj < G.NY - 5; jj++) for (let ii = G.NX / 2 - 10; ii < G.NX / 2 + 10; ii++) { vmean += Math.hypot(G.u[jj * G.NX + ii], G.v[jj * G.NX + ii]); n++; }
+  const g = gradAt(i, j) - Math.abs(dTeq(j)), gm = gradMax();
+  return {i, j, lat: G.lat(j), T: G.T[k], Te: surfaceT(G.lat(j)), speed: Math.hypot(G.u[k], G.v[k]), rel: Math.hypot(G.u[k], G.v[k]) / (vmean / n), u: G.u[k], v: G.v[k], mix: gm ? g / gm.g : 0};
+}
+function paintCurrents(){
+  const x = bx(S.boat.x), y = byj(S.boat.y * (GY.NY - 1));
+  $('boat').setAttribute('transform', `translate(${f1(x)} ${f1(y)})`); at($('boatHit'), {cx: f1(x), cy: f1(y - 4)});
+  $('boatHit').style.pointerEvents = S.locked ? '' : 'none';
+  const b = boatInfo(); if (!b) return;
+  $('cLat').textContent = `${fmt(Math.abs(b.lat), 0)}° ${S.hemi}, ${b.i <= 5 ? 'west side' : b.i >= GY.NX - 6 ? 'east side' : 'mid-ocean'}`;
+  const dir = ['east', 'north-east', 'north', 'north-west', 'west', 'south-west', 'south', 'south-east'][((Math.round(Math.atan2(b.v, b.u) / (Math.PI / 4)) % 8) + 8) % 8];
+  $('cV').textContent = `${b.rel >= 3 ? 'fast' : b.rel >= 1.2 ? 'steady' : 'slow'}, to the ${dir} · ${fmt(b.rel, 1)}×`;
+  $('cT').textContent = fmt(b.T, 1) + ' °C'; $('cTe').textContent = fmt(b.Te, 1) + ' °C';
+  $('cG').textContent = b.mix > 0.7 ? 'yes: rich fishing' : b.mix > 0.35 ? 'a little' : 'no';
+  $('windCOut').textContent = '×' + fmt(S.windC, 1);
+  checkCurrents(b);
+}
+function checkCurrents(b){
+  if (!S.locked || !b) return;
+  const lat = Math.abs(b.lat);
+  if (S.beta && b.i <= 5 && b.rel >= 3) discover('west');
+  if (b.i <= 5 && lat >= 22 && lat <= 40 && b.T - b.Te >= 1.5) discover('warm');
+  if (b.i >= GY.NX - 6 && lat >= 15 && lat <= 32 && b.T - b.Te <= -1.5) discover('cold');
+  if (b.mix >= 0.7) discover('fish');
+}
+
+/* ============================================================================
+   Controls and the clock
+   ============================================================================ */
+build();
+function setTab(t){
+  S.tab = t;
+  for (const b of $('tabs').children) b.setAttribute('aria-pressed', b.dataset.tab === t);
+  $('scDive').setAttribute('display', t === 'dive' ? 'inline' : 'none'); $('scSalt').setAttribute('display', t === 'salt' ? 'inline' : 'none'); $('scCur').setAttribute('display', t === 'currents' ? 'inline' : 'none');
+  $('ctlDive').hidden = t !== 'dive'; $('ctlSalt').hidden = t !== 'salt'; $('ctlCur').hidden = t !== 'currents';
+  if (t === 'currents' && !GYR) recomputeGyres();
+  paint(); track('tab', {tab: t});
+}
+function paint(){ if (S.tab === 'dive') paintDive(); else if (S.tab === 'salt') paintSalt(); else if (GYR) paintCurrents(); why(); }
+$('tabs').addEventListener('click', e => { const b = e.target.closest('[data-tab]'); if (b) { sound('tick'); setTab(b.dataset.tab); } });
+$('zoomSeg').addEventListener('click', e => { const b = e.target.closest('[data-z]'); if (!b || b.disabled) return; S.zoom = +b.dataset.z; for (const x of $('zoomSeg').children) x.setAttribute('aria-pressed', +x.dataset.z === S.zoom); S.subZ = Math.min(S.subZ, S.zoom); sound('tick'); paintDiveStatic(); paint(); });
+$('waterSeg').addEventListener('click', e => { const b = e.target.closest('[data-k]'); if (!b || b.disabled) return; S.water = b.dataset.k; for (const x of $('waterSeg').children) x.setAttribute('aria-pressed', x.dataset.k === S.water); sound('tick'); paint(); track('water', {k: S.water}); });
+$('lat').addEventListener('input', e => { S.lat = +e.target.value; paint(); });
+$('lat').addEventListener('change', () => track('latitude', {lat: S.lat}));
+$('wind').addEventListener('input', e => { S.wind = +e.target.value; paint(); });
+$('wind').addEventListener('change', () => track('wind', {U: S.wind}));
+function moveSub(p){ const km = clamp(kmOf(p.x), 0, 1639); S.subX = km; S.subZ = clamp(zOf(p.y), 0, Math.max(0, floorAt(km) - 15)); paint(); }
+drag($('subHit'), svg, {start(){ if (!S.locked) return false; }, move: moveSub, end(){ track('dive', {km: Math.round(S.subX), z: Math.round(S.subZ)}); }});
+drag($('gHit'), svg, {start(p){ if (!S.locked) return false; S.subZ = clamp(zOf(p.y), 0, Math.max(0, floorAt(S.subX) - 15)); paint(); },
+  move(p){ S.subZ = clamp(zOf(p.y), 0, Math.max(0, floorAt(S.subX) - 15)); paint(); }, end(){ track('graphDepth', {z: Math.round(S.subZ)}); }});
+$('subHit').addEventListener('keydown', e => { const k = {ArrowDown: 1, ArrowUp: -1}[e.key]; if (!k || !S.locked) return; e.preventDefault(); S.subZ = clamp(S.subZ + k * (S.zoom > 2000 ? 100 : 10), 0, Math.max(0, floorAt(S.subX) - 15)); paint(); });
+
+$('presets').innerHTML = Object.keys(PRESETS).map(n => `<button data-p="${n}" aria-pressed="false">${n}</button>`).join('');
+$('presets').addEventListener('click', e => { const b = e.target.closest('[data-p]'); if (!b || !S.locked) return; S.preset = b.dataset.p; S.salt = Object.assign({}, PRESETS[S.preset]); sound('pop'); paint(); track('sea', {name: S.preset}); });
+for (const [id, key] of [['evap', 'E'], ['rainS', 'P'], ['river', 'R'], ['strait', 's']]) {
+  $(id).addEventListener('input', e => { S.salt[key] = +e.target.value; S.preset = null; paint(); });
+  $(id).addEventListener('change', () => track('saltClimate', Object.assign({}, S.salt)));
+}
+$('sRun').addEventListener('click', () => { S.sRun = !S.sRun; $('sRun').textContent = S.sRun ? '❚❚ Pause' : '▶ Run'; sound('tick'); });
+$('sReset').addEventListener('click', () => { S.sNow = 35; S.sT = 0; SLOG.length = 0; SLOG.push([0, 35]); sound('whoosh'); paint(); });
+
+$('hemiSeg').addEventListener('click', e => { const b = e.target.closest('[data-h]'); if (!b || b.disabled) return; S.hemi = b.dataset.h; for (const x of $('hemiSeg').children) x.setAttribute('aria-pressed', x.dataset.h === S.hemi); S.boat.y = 1 - S.boat.y; sound('tick'); recomputeGyres(); track('hemisphere', {h: S.hemi}); });
+$('betaBtn').addEventListener('click', () => { S.beta = !S.beta; $('betaBtn').setAttribute('aria-pressed', S.beta); $('betaBtn').textContent = 'Coriolis stronger towards the poles: ' + (S.beta ? 'on' : 'off'); sound('pop'); recomputeGyres(); track('beta', {on: S.beta}); });
+$('windC').addEventListener('input', e => { S.windC = +e.target.value; $('windCOut').textContent = '×' + fmt(S.windC, 1); });
+$('windC').addEventListener('change', () => { recomputeGyres(); track('windC', {w: S.windC}); });
+drag($('boatHit'), svg, {start(){ if (!S.locked || !GYR) return false; },
+  move(p){ S.boat.x = clamp((p.x - BA.x0) / (BA.x1 - BA.x0), 0.005, 0.995); S.boat.y = clamp((BA.y1 - p.y - 4) / (BA.y1 - BA.y0), 0.02, 0.98); paintCurrents(); },
+  end(){ why(); track('ship', {x: +S.boat.x.toFixed(2), y: +S.boat.y.toFixed(2)}); }});
+
+let FRAME = 0;
+loop(() => {
+  FRAME++;
+  if (!S.locked || S.tab !== 'salt' || !S.sRun) return;
+  const p = saltParams();
+  for (let k = 0; k < 2; k++) { S.sNow = Math.max(0, saltStep(p, S.sNow, 0.5)); S.sT += 0.5; }
+  if (S.sT > STL.tmax) { S.sT = 0; SLOG.length = 0; }
+  SLOG.push([S.sT, S.sNow]);
+  checkSalt(); paintSalt(); if (FRAME % 10 === 0) why();
+});
+
+function lockControls(lock){
+  for (const id of ['lat', 'wind', 'evap', 'rainS', 'river', 'strait', 'sRun', 'sReset', 'betaBtn', 'windC']) $(id).disabled = lock;
+  for (const b of $$('#zoomSeg button, #waterSeg button, #presets button, #hemiSeg button')) b.disabled = lock;
+  $('gate').hidden = !lock;
+}
+
+/* ============================================================================
+   Start
+   ============================================================================ */
+findings($('finds'), [
+  {id: 'sunlit',   icon: '☀', label: 'Sunlight runs out: no plants below ~200 m', hint: 'Dive below the light'},
+  {id: 'thermo',   icon: '⤓', label: 'The thermocline: warm water ends suddenly',  hint: 'Dive through the warm layer'},
+  {id: 'deepcold', icon: '❄', label: 'Near freezing at the bottom, even at the equator', hint: 'Dive deep in the tropics'},
+  {id: 'trench',   icon: '▼', label: 'The deepest place: an ocean trench',           hint: 'Go all the way down'},
+  {id: 'red',      icon: '◆', label: 'Saltier than 40 ‰: a hot, closed-in sea',       hint: 'Lots of evaporation, no rivers'},
+  {id: 'bay',      icon: '≈', label: 'Rivers make a sea fresher',                     hint: 'Pour in river water'},
+  {id: 'west',     icon: '⇡', label: 'The fastest current hugs the west side',        hint: 'Find the fastest water'},
+  {id: 'warm',     icon: '♨', label: 'A warm current along an east coast',            hint: 'Sail close to a coast'},
+  {id: 'cold',     icon: '☁', label: 'A cold current along a west coast',             hint: 'Sail along the other coast'},
+  {id: 'fish',     icon: '🐟', label: 'Fishing grounds where warm meets cold',         hint: 'Where do warm and cold waters meet?'},
+], () => toast('All ten found. From the sunlit surface to the trench, and round the whole ocean.', 4200));
+
+const POE = predict($('poe'), {
+  id: 'deep-temperature',
+  q: 'At the equator the sea surface is about 27 °C. What is the water like 3,000 m down?',
+  options: [
+    {id: 'same',  text: 'About 27 °C: the sea is the same all the way down.'},
+    {id: 'mild',  text: 'About 15 °C: a little cooler.'},
+    {id: 'cold',  text: 'Close to freezing: about 0–4 °C.', right: true},
+    {id: 'hot',   text: 'Hotter: it is heated from the Earth below.'},
+  ],
+  onLock(){ S.locked = true; lockControls(false); say('Now dive. Drag the submarine down, and watch the graphs.'); paint(); },
+});
+lockControls(!POE.locked);
+if (!Play.FF('predict')) S.locked = true;
+$('lat').value = S.lat; $('wind').value = S.wind;
+for (const x of $('hemiSeg').children) x.setAttribute('aria-pressed', x.dataset.h === S.hemi);
+paintDiveStatic();
+setTab(S.tab);
+window.PG_STATE = () => JSON.parse(JSON.stringify({tab: S.tab, locked: S.locked, zoom: S.zoom, lat: S.lat, wind: S.wind, water: S.water, subX: S.subX, subZ: S.subZ,
+  salt: S.salt, sNow: S.sNow, sT: S.sT, preset: S.preset, hemi: S.hemi, beta: S.beta, boat: S.boat, ready: !!GYR, info: boatInfo()}));
+window.PG_MODEL = {floorAt, featureAt, surfaceT, surfaceS, tempAt, salAt, mixDepth, thermocline, densityOf, lightAt, sunlitDepth, twilightDepth, pressureAt, LIGHTK,
+  saltFlows, saltSteady, saltStep, straitM, PRESETS, SB, gyres, GY};
+</script>
+</body>
+</html>

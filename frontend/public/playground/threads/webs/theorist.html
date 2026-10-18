@@ -1,0 +1,980 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Populations Grow</title>
+<meta name="description" content="Class 12: a culture of Paramecium where every birth and every death is drawn by the model. Set r and K, measure the J and the S, then break the law: breed once and crash, let a predator overhunt, put two competitors in one dish, and build age pyramids from birth and death rates.">
+<link rel="icon" href="../../favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600&family=Inter:wght@400;500;600;700&family=Nunito:wght@500;700;800&family=Newsreader:opsz,wght@6..72,400;6..72,500&family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="../../play.css">
+<style>
+/* Only what this page needs beyond play.css. */
+.pg-stage{min-height:0; background:#fbf7ec}
+@media (max-width:1180px) and (min-width:981px){ .pg-main{grid-template-columns:minmax(0,1fr) 330px} }
+.gate{position:absolute; left:42%; right:0; top:0; height:40%; display:grid; place-items:center; pointer-events:none}
+.gate span{background:rgba(24,34,20,.84); color:#fff; padding:10px 16px; border-radius:99px; font-weight:600; font-size:14px}
+.seg{display:grid; grid-auto-flow:column; grid-auto-columns:1fr; gap:4px; background:var(--sunk); padding:4px; border-radius:var(--radius-sm)}
+.seg button{border:0; background:transparent; border-radius:7px; min-height:30px; font-weight:600; font-size:12.5px; cursor:pointer; color:var(--ink-2); padding:0 6px; line-height:1.2}
+.seg button[aria-pressed="true"]{background:var(--card); color:var(--ink); box-shadow:var(--shadow)}
+.seg button:disabled{opacity:.5; cursor:default}
+.ctl{grid-template-columns:118px 1fr 64px; margin:2px 0}
+.ctl label{font-size:12.5px; line-height:1.2}
+.ctl output{font-family:var(--font-mono); font-size:12.5px; font-weight:600; min-width:0}
+.sub{font-size:11px; letter-spacing:.07em; text-transform:uppercase; font-weight:700; color:var(--ink-3); margin:12px 0 4px}
+.note{font-size:12.5px; color:var(--ink-3); margin:6px 0 0}
+.tog[aria-pressed="true"]{background:var(--accent-soft); border-color:var(--accent)}
+.clock{font-family:var(--font-mono); font-size:15px; font-weight:600}
+.why p{font-size:13.5px; margin-bottom:.55em}
+.why .mono{font-size:12.5px}
+svg text.m{font-family:var(--font-mono)}
+</style>
+</head>
+<body>
+<header class="pg-top"></header>
+
+<div class="pg-intro">
+  <h1>Populations grow</h1>
+  <p>A drop of pond water with a few <i>Paramecium</i> in it. Each day the model decides, one individual at a time, who divides and who dies,
+     and keeps the book’s own ledger: N<sub>t+1</sub> = N<sub>t</sub> + [(B + I) − (D + E)]. Set r and K yourself, measure the J and the S,
+     then break the law: breed once and crash, let a predator overhunt, put two competitors in one dish, and build age pyramids from birth and death rates.</p>
+</div>
+
+<main class="pg-main">
+  <section class="pg-stage" id="stageWrap">
+    <svg id="stage" viewBox="0 0 1000 800" role="img" aria-label="A culture dish of Paramecium with graphs of N against time, ln N against time and growth rate against N; or predator and prey; or an age pyramid"></svg>
+    <div class="gate" id="gate"><span>Make your prediction first →</span></div>
+  </section>
+
+  <aside class="pg-side">
+    <div id="poe"></div>
+
+    <div class="card" id="ctlCard">
+      <div class="seg" role="group" aria-label="Which tool">
+        <button id="toolGrow" aria-pressed="true">One population</button>
+        <button id="toolTwo" aria-pressed="false">Two species</button>
+        <button id="toolAge" aria-pressed="false">Age pyramid</button>
+      </div>
+
+      <div id="grpGrow">
+        <div class="sub">Set the law: dN/dt = rN(1 − N/K)</div>
+        <div class="ctl"><label for="gb">Births, b (per day)</label><input type="range" id="gb" min="0.1" max="3" step="0.05" value="0.8"><output id="gbOut">0.80</output></div>
+        <div class="ctl"><label for="gd">Deaths, d (per day)</label><input type="range" id="gd" min="0" max="1" step="0.05" value="0.1"><output id="gdOut">0.10</output></div>
+        <div class="ctl"><label for="gK">Food for, K</label><input type="range" id="gK" min="50" max="1000" step="10" value="500"><output id="gKOut">500</output></div>
+        <div class="ctl"><label for="gN0">Start with, N₀</label><input type="range" id="gN0" min="1" max="50" step="1" value="5"><output id="gN0Out">5</output></div>
+        <div class="ctl"><label for="gI">Arrive per day, I</label><input type="range" id="gI" min="0" max="5" step="0.5" value="0"><output id="gIOut">0</output></div>
+        <div class="seg" role="group" aria-label="Food" style="margin-top:6px">
+          <button id="foodLim" aria-pressed="true">Limited food</button>
+          <button id="foodUnl" aria-pressed="false">Unlimited food</button>
+        </div>
+        <div class="seg" role="group" aria-label="Breeding" style="margin-top:6px">
+          <button id="breedMany" aria-pressed="true">Breed many times</button>
+          <button id="breedOnce" aria-pressed="false">Breed once, then die</button>
+        </div>
+      </div>
+
+      <div id="grpTwo" hidden>
+        <div class="seg" role="group" aria-label="Interaction" style="margin-top:10px">
+          <button id="modePred" aria-pressed="true">Predator and prey (+ −)</button>
+          <button id="modeComp" aria-pressed="false">Competition (− −)</button>
+        </div>
+        <div id="grpPred">
+          <div class="ctl"><label for="pa">Frogs’ hunting, a</label><input type="range" id="pa" min="0.002" max="0.03" step="0.001" value="0.005"><output id="paOut">0.005</output></div>
+          <div class="ctl"><label for="pm">Frog deaths, m</label><input type="range" id="pm" min="0.1" max="1" step="0.05" value="0.5"><output id="pmOut">0.50</output></div>
+          <div class="ctl"><label for="pK">Grass for, K</label><input type="range" id="pK" min="1000" max="6000" step="100" value="3000"><output id="pKOut">3000</output></div>
+          <div class="row" style="margin-top:4px"><button class="btn sm tog" id="btnNoK" aria-pressed="false">Unlimited grass</button></div>
+        </div>
+        <div id="grpComp" hidden>
+          <div class="ctl"><label for="ca">Overlap in food, α</label><input type="range" id="ca" min="0" max="1.2" step="0.05" value="1"><output id="caOut">1.00</output></div>
+          <div class="ctl"><label for="cK2">K of <i>P. caudatum</i></label><input type="range" id="cK2" min="200" max="700" step="10" value="400"><output id="cK2Out">400</output></div>
+          <p class="note">α = 1: both eat exactly the same bacteria. Lower α is resource partitioning: feeding at different depths or times.</p>
+        </div>
+      </div>
+
+      <div id="grpAge" hidden>
+        <div class="sub">Birth and death rates</div>
+        <div class="ctl"><label for="aT">Children per woman</label><input type="range" id="aT" min="1" max="6" step="0.1" value="4.5"><output id="aTOut">4.5</output></div>
+        <div class="ctl"><label for="aE">Life expectancy</label><input type="range" id="aE" min="40" max="85" step="1" value="55"><output id="aEOut">55 y</output></div>
+      </div>
+
+      <div class="row" style="justify-content:space-between; margin-top:12px">
+        <div><div class="kicker" style="margin:0">Time</div><div class="clock" id="clock">day 0</div></div>
+        <div class="row" style="gap:6px">
+          <button class="btn sm" id="btnRun">❚❚ Pause</button>
+          <button class="btn sm tog" id="btnFast" aria-pressed="false">Fast ⏩</button>
+          <button class="btn sm" id="btnRestart">↺ Start again</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="card why" id="whyCard">
+      <div class="kicker">What the model measured</div>
+      <div id="why"><p class="note" style="margin:0">The measurements appear once you have made a prediction.</p></div>
+    </div>
+
+    <div class="card"><div class="kicker">To find</div><div id="finds"></div></div>
+  </aside>
+</main>
+
+<script src="../../play.js"></script>
+<script>
+'use strict';
+const {$, esc, clamp, fmt, loop, sound, say, track, toast, predict, findings, discover, found,
+       shareState, sharedState, mount, reduced, mulberry32} = Play;
+mount({thread: 'webs', band: 'theorist'});
+
+/* MODEL:start ==================================================================
+   Populations, as NCERT Class 12 Biology Ch 11 “Organisms and Populations” counts them.
+
+   1. ONE POPULATION, individual by individual. Every step of dt = 0.02 day, each of the N
+      Paramecium divides with probability b·dt and dies with probability μ·dt, where
+          μ = d                      with unlimited food, and
+          μ = d + (b − d)·N/K        with food for K (crowding raises the death rate).
+      I immigrants arrive at random (Poisson, I per day). The page keeps the book’s ledger,
+          N(t+1) = N(t) + [(B + I) − (D + E)]      (E = 0: the dish is closed),
+      and the expected change is exactly the book’s law, dN/dt = rN(1 − N/K), r = b − d.
+      Nothing is drawn from the formula: the J and the S come out of the counting.
+      “Breed once, then die” (like bamboo or Pacific salmon): generations do not overlap;
+      each parent leaves a Poisson number of offspring with mean e^{r(1 − N/K)} and dies.
+   2. TWO SPECIES, integrated with RK4 (dt = 0.01), a population below 1 is extinct.
+      Predation (+ −): dH/dt = rH(1 − H/K) − aHP,   dP/dt = e·aHP − mP.
+      Competition (− −), Gause’s two Paramecium:
+          dN₁/dt = r₁N₁(1 − (N₁ + αN₂)/K₁),   dN₂/dt = r₂N₂(1 − (N₂ + αN₁)/K₂).
+   3. AGE PYRAMID: a cohort projection in 5-year age classes. Deaths come from a life table
+      whose hazard is scaled to the chosen life expectancy; births from the women aged
+      15–49 at the chosen number of children per woman; 105 boys are born per 100 girls.
+   ============================================================================ */
+
+/* ---- 1. one population -------------------------------------------------------- */
+function poisson(lam, rnd){
+  if (lam <= 0) return 0;
+  if (lam > 40) return Math.max(0, Math.round(lam + Math.sqrt(lam) * gauss(rnd)));
+  const L = Math.exp(-lam); let k = 0, p = 1;
+  do { k++; p *= rnd(); } while (p > L);
+  return k - 1;
+}
+function gauss(rnd){ let u = 0, v = 0; while (u === 0) u = rnd(); v = rnd(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v); }
+function binom(n, p, rnd){
+  if (n <= 0 || p <= 0) return 0;
+  if (p >= 1) return n;
+  if (n < 60) { let k = 0; for (let i = 0; i < n; i++) if (rnd() < p) k++; return k; }
+  const m = n * p;
+  if (m < 20) return Math.min(n, poisson(m, rnd));
+  return clamp(Math.round(m + Math.sqrt(m * (1 - p)) * gauss(rnd)), 0, n);
+}
+const DT = 0.02, NMAX = 2e5;
+/* g = {N, t, b, d, K, I, limited, once, rnd, day: {B, D, I}} ; one step of the many-times model */
+function growStep(g){
+  const N = g.N, mu = g.limited ? g.d + (g.b - g.d) * N / g.K : g.d;
+  const B = binom(N, g.b * DT, g.rnd), D = binom(N, clamp(mu, 0, 1 / DT) * DT, g.rnd), I = poisson(g.I * DT, g.rnd);
+  g.N = Math.min(NMAX, N + B + I - D);
+  g.day.B += B; g.day.D += D; g.day.I += I;
+  g.t += DT;
+}
+/* one generation (a day) of the breed-once model */
+function generation(g){
+  const r = g.b - g.d, lam = Math.exp(g.limited ? r * (1 - g.N / g.K) : r);
+  const B = poisson(g.N * lam, g.rnd), I = poisson(g.I, g.rnd);
+  g.day.B += B; g.day.D += g.N; g.day.I += I;
+  g.N = Math.min(NMAX, B + I);
+  g.t += 1;
+}
+function makeGrowth(p, seed){
+  return {N: p.N0, t: 0, b: p.b, d: p.d, K: p.K, I: p.I, limited: p.limited, once: p.once, rnd: mulberry32(seed), day: {B: 0, D: 0, I: 0},
+          days: [{t: 0, N: p.N0, B: 0, D: 0, I: 0}], fine: [{t: 0, N: p.N0}]};
+}
+/* advance to the end of the next whole day, recording the day's ledger */
+function growDay(g){
+  const t1 = Math.round(g.t) + 1;
+  const N0 = g.N;
+  if (g.once) generation(g);
+  else { let k = 0; while (g.t < t1 - 1e-9) { growStep(g); if (++k % 5 === 0) g.fine.push({t: g.t, N: g.N}); } }
+  g.t = t1;
+  const rec = {t: t1, N: g.N, N0, B: g.day.B, D: g.day.D, I: g.day.I};
+  g.days.push(rec); if (g.once) g.fine.push({t: g.t, N: g.N});
+  g.day = {B: 0, D: 0, I: 0};
+  return rec;
+}
+/* the book's closed forms, for comparison only */
+const expN = (N0, r, t) => N0 * Math.exp(r * t);
+const logisticN = (N0, r, K, t) => K / (1 + (K - N0) / N0 * Math.exp(-r * t));
+/* least-squares slope of ln N against t: the measured r */
+function fitR(pts){
+  const q = pts.filter(p => p.N > 0);
+  if (q.length < 4) return null;
+  let n = q.length, sx = 0, sy = 0, sxx = 0, sxy = 0;
+  for (const p of q) { const y = Math.log(p.N); sx += p.t; sy += y; sxx += p.t * p.t; sxy += p.t * y; }
+  const den = n * sxx - sx * sx; if (!den) return null;
+  return {r: (n * sxy - sx * sy) / den, c: (sy * sxx - sx * sxy) / den, from: q[0].t, to: q[q.length - 1].t};
+}
+/* per-capita rates as the book defines them */
+const rate = (count, N) => count / N;
+
+/* ---- 2. two species --------------------------------------------------------------- */
+const PRED = {r: 1, e: 0.2};                    // grasshopper growth /month; share of eaten hoppers that becomes frog
+const COMP = {r1: 1.0, K1: 500, r2: 0.8};       // P. aurelia grows faster and fills more of the dish than P. caudatum
+function two(o, x){
+  if (o.mode === 'comp') {
+    const [a, b] = x;
+    return [COMP.r1 * a * (1 - (a + o.alpha * b) / COMP.K1), COMP.r2 * b * (1 - (b + o.alpha * a) / o.K2)];
+  }
+  const [H, P] = x;
+  return [PRED.r * H * (o.K ? 1 - H / o.K : 1) - o.a * H * P, PRED.e * o.a * H * P - o.m * P];
+}
+function twoStep(o, x, h){
+  const k1 = two(o, x), k2 = two(o, [x[0] + h / 2 * k1[0], x[1] + h / 2 * k1[1]]);
+  const k3 = two(o, [x[0] + h / 2 * k2[0], x[1] + h / 2 * k2[1]]), k4 = two(o, [x[0] + h * k3[0], x[1] + h * k3[1]]);
+  const y = [x[0] + h / 6 * (k1[0] + 2 * k2[0] + 2 * k3[0] + k4[0]), x[1] + h / 6 * (k1[1] + 2 * k2[1] + 2 * k3[1] + k4[1])];
+  for (let i = 0; i < 2; i++) if (y[i] < 1) y[i] = 0;       // fewer than one: the last one has gone
+  return y;
+}
+function runTwo(o, x, T, h = 0.01){ const out = [{t: 0, x: x.slice()}]; let t = 0; for (let n = Math.round(T / h), i = 1; i <= n; i++) { x = twoStep(o, x, h); t = i * h; if (i % 10 === 0) out.push({t, x: x.slice()}); } return out; }
+/* for Lotka–Volterra without a K, this is conserved along every orbit */
+const lvInvariant = (o, H, P) => PRED.e * o.a * H - o.m * Math.log(H) + o.a * P - PRED.r * Math.log(P);
+/* peaks of a sampled series (local maxima well above the neighbourhood) */
+function peaks(ser, k){
+  const out = [];
+  for (let i = 2; i < ser.length - 2; i++) { const v = ser[i].x[k]; if (v > ser[i - 1].x[k] && v >= ser[i + 1].x[k] && v > ser[i - 2].x[k] && v >= ser[i + 2].x[k]) out.push(ser[i].t); }
+  return out;
+}
+
+/* ---- 3. age pyramid ---------------------------------------------------------------- */
+const AGES = 17, STEP = 5, FEM = 1 / 2.05, ASFR_W = [0.08, 0.26, 0.28, 0.2, 0.12, 0.05, 0.01];   // share of a woman's children born at 15–19, 20–24, … 45–49
+const hazard0 = x => 0.0015 + 0.06 * Math.exp(-3 * x) + 0.00006 * Math.exp(0.095 * x);
+function lifeTable(k, male){
+  const h = 0.1, s = male ? 1.25 : 1;
+  const L = new Array(AGES).fill(0); let l = 1, e0 = 0;
+  for (let x = 0; x < 120; x += h) {
+    const l2 = l * Math.exp(-k * s * hazard0(x + h / 2) * h);
+    const py = (l + l2) / 2 * h;
+    e0 += py; L[Math.min(AGES - 1, Math.floor(x / STEP))] += py; l = l2;
+  }
+  return {L, e0};
+}
+/* the hazard scale that gives women this life expectancy (bisection) */
+function hazardScale(e0){
+  let lo = 0.01, hi = 60;
+  for (let i = 0; i < 60; i++) { const mid = Math.sqrt(lo * hi); if (lifeTable(mid).e0 > e0) lo = mid; else hi = mid; }
+  return Math.sqrt(lo * hi);
+}
+const LESLIE = new Map();
+function leslie(tfr, e0){
+  const key = tfr + '|' + e0; if (LESLIE.has(key)) return LESLIE.get(key);
+  const out = leslie0(tfr, e0); LESLIE.set(key, out); return out;
+}
+function leslie0(tfr, e0){
+  const k = hazardScale(e0), F = lifeTable(k, false).L, M = lifeTable(k, true).L;
+  const surv = L => L.map((v, i) => i < AGES - 2 ? L[i + 1] / v : i === AGES - 2 ? L[AGES - 1] / (L[AGES - 2] + L[AGES - 1]) : L[AGES - 1] / (L[AGES - 2] + L[AGES - 1]));
+  return {tfr, e0, k, sF: surv(F), sM: surv(M), bF: F[0] / STEP, bM: M[0] / STEP, e0F: lifeTable(k, false).e0, e0M: lifeTable(k, true).e0};
+}
+/* one 5-year step: pop = {f: [17], m: [17]} */
+function project(pop, Lm){
+  const f = new Array(AGES).fill(0), m = new Array(AGES).fill(0);
+  let births = 0;
+  for (let i = 0; i < 7; i++) births += STEP * (Lm.tfr * ASFR_W[i] / STEP) * pop.f[3 + i];
+  for (let i = AGES - 1; i >= 1; i--) {
+    if (i === AGES - 1) { f[i] = (pop.f[i - 1] + pop.f[i]) * Lm.sF[i]; m[i] = (pop.m[i - 1] + pop.m[i]) * Lm.sM[i]; }
+    else { f[i] = pop.f[i - 1] * Lm.sF[i - 1]; m[i] = pop.m[i - 1] * Lm.sM[i - 1]; }
+  }
+  f[0] = births * FEM * Lm.bF; m[0] = births * (1 - FEM) * Lm.bM;
+  return {f, m, births};
+}
+const total = p => p.f.reduce((a, b) => a + b, 0) + p.m.reduce((a, b) => a + b, 0);
+const band = (p, a, b) => { let s = 0; for (let i = a; i <= b; i++) s += p.f[i] + p.m[i]; return s; };
+/* The shape, read from the pyramid itself: the 0–14 base against the 15–29 block above it. */
+function shape(p){
+  const R = band(p, 0, 2) / band(p, 3, 5);
+  return {R, kind: R > 1.15 ? 'expanding' : R < 0.87 ? 'declining' : 'stable'};
+}
+/* a population that has lived under these rates for a long time, scaled to `size` million */
+function settled(tfr, e0, size){
+  const Lm = leslie(tfr, e0);
+  let p = {f: new Array(AGES).fill(1), m: new Array(AGES).fill(1)};
+  for (let i = 0; i < 60; i++) { p = project(p, Lm); const s = size / total(p); p.f = p.f.map(v => v * s); p.m = p.m.map(v => v * s); }
+  return p;
+}
+/* MODEL:end */
+
+/* ---- state: plain data --------------------------------------------------- */
+const DEF = {gb: 0.8, gd: 0.1, gK: 500, gN0: 5, gI: 0, pa: 0.005, pm: 0.5, pK: 3000, ca: 1, cK2: 400, aT: 4.5, aE: 55};
+const LIM = {gb: [0.1, 3], gd: [0, 1], gK: [50, 1000], gN0: [1, 50], gI: [0, 5], pa: [0.002, 0.03], pm: [0.1, 1], pK: [1000, 6000], ca: [0, 1.2], cK2: [200, 700], aT: [1, 6], aE: [40, 85]};
+const S = {tool: 'grow', par: Object.assign({}, DEF), limited: true, once: false, twoMode: 'pred', noK: false,
+  running: false, fast: false, locked: false, seed: 1, runs: 0, G: null, T: null, A: null, shapes: {}, gSteps: 0};
+const shared = sharedState();
+if (shared) {
+  if (['grow', 'two', 'age'].includes(shared.tool)) S.tool = shared.tool;
+  if (shared.par) for (const k in DEF) { const v = +shared.par[k]; if (isFinite(v)) S.par[k] = clamp(v, LIM[k][0], LIM[k][1]); }
+  S.limited = shared.limited !== false; S.once = !!shared.once; S.twoMode = shared.twoMode === 'comp' ? 'comp' : 'pred'; S.noK = !!shared.noK;
+}
+shareState(() => ({tool: S.tool, par: Object.assign({}, S.par), limited: S.limited, once: S.once, twoMode: S.twoMode, noK: S.noK}));
+const gPar = () => ({b: S.par.gb, d: S.par.gd, K: S.par.gK, N0: S.par.gN0, I: S.par.gI, limited: S.limited, once: S.once});
+const tPar = () => S.twoMode === 'comp' ? {mode: 'comp', alpha: S.par.ca, K2: S.par.cK2} : {mode: 'pred', a: S.par.pa, m: S.par.pm, K: S.noK ? 0 : S.par.pK};
+function newGrowth(){ S.runs++; S.G = makeGrowth(gPar(), 7919 * S.runs + 17); S.G.flags = {}; }
+function newTwo(){ S.T = {t: 0, x: S.twoMode === 'comp' ? [10, 10] : [800, 100], ser: [], h: 0.01}; S.T.ser.push({t: 0, x: S.T.x.slice()}); }
+function newAge(){ const p = settled(4.5, 55, 683); S.A = {year: 1981, pop: p, hist: [{year: 1981, tot: total(p)}], steps: 0, g: null}; }
+
+/* ============================================================================
+   The stage: built once, then patched.
+   ============================================================================ */
+const svg = $('stage');
+const INK = '#1d2327', FAINT = '#7c878c', HAIR = '#e6dfcc', PAPER = '#fffdf7';
+const COL = {para: '#3c8f7a', para2: '#d0782a', hopper: '#8fb22a', frog: '#1a9c8c', theory: '#6a3fc2', exp: '#c2569b', fem: '#c2569b', male: '#3f7fd8'};
+const DISH = {cx: 205, cy: 225, r: 172};
+const GN = {x: 470, y: 58, w: 500, h: 250};       // N against t
+const GL = {x: 470, y: 380, w: 220, h: 180};      // ln N against t
+const GH = {x: 750, y: 380, w: 220, h: 180};      // dN/dt against N
+const TS = {x: 470, y: 58, w: 500, h: 250};       // two species: time series
+const PP = {x: 470, y: 380, w: 250, h: 220};      // phase plane
+const PY = {x: 40, y: 64, w: 520, h: 510, cx: 300};   // pyramid (cx = the middle)
+const PT = {x: 640, y: 64, w: 330, h: 200};       // total population over time
+
+function build(){
+  const rnd = mulberry32(42);
+  /* fixed homes for up to 1500 drawn Paramecium, uniformly over the dish */
+  SLOTS = [];
+  for (let i = 0; i < 1500; i++) { const r = DISH.r * 0.93 * Math.sqrt(rnd()), a = rnd() * 2 * Math.PI; SLOTS.push({x: DISH.cx + r * Math.cos(a), y: DISH.cy + r * Math.sin(a), a: rnd() * 180, w: rnd()}); }
+  MEAD = [];
+  for (let i = 0; i < 240; i++) MEAD.push({x: 40 + rnd() * 340, y: 110 + rnd() * 280, f: rnd() < .5 ? -1 : 1, s: .8 + rnd() * .4});
+  svg.innerHTML = `
+  <defs>
+    <radialGradient id="gDish" cx="45%" cy="40%" r="70%"><stop offset="0" stop-color="#f4fbf6"/><stop offset="1" stop-color="#dcebe1"/></radialGradient>
+    <radialGradient id="gFood" cx="50%" cy="50%" r="50%"><stop offset="0" stop-color="#b9d98a" stop-opacity=".55"/><stop offset="1" stop-color="#9cc56a" stop-opacity=".25"/></radialGradient>
+    <clipPath id="clipGN"><rect x="${GN.x}" y="${GN.y - 4}" width="${GN.w + 2}" height="${GN.h + 6}"/></clipPath>
+    <clipPath id="clipGL"><rect x="${GL.x}" y="${GL.y}" width="${GL.w}" height="${GL.h}"/></clipPath>
+    <clipPath id="clipGH"><rect x="${GH.x}" y="${GH.y}" width="${GH.w}" height="${GH.h}"/></clipPath>
+    <clipPath id="clipPP"><rect x="${PP.x}" y="${PP.y}" width="${PP.w}" height="${PP.h}"/></clipPath>
+    <g id="sym-hopper"><path d="M-9 2 L-3 -5 L1 3 M-2 2 L-7 8 M4 2 L7 8" fill="none" stroke="#5f7d12" stroke-width="1.4" stroke-linecap="round"/>
+      <ellipse cx="0" cy="0" rx="10" ry="3.6" fill="#9cc22c"/><circle cx="8.5" cy="-1" r="2.6" fill="#86ab1e"/><circle cx="9.3" cy="-1.6" r=".8" fill="#243"/>
+      <path d="M9 -3 C11 -8 13 -9 15 -9" fill="none" stroke="#5f7d12" stroke-width=".9"/></g>
+    <g id="sym-frog"><path d="M-9 5 C-14 6 -14 9 -10 9 M9 5 C14 6 14 9 10 9" fill="none" stroke="#1f7a5a" stroke-width="2.2" stroke-linecap="round"/>
+      <ellipse cx="0" cy="2" rx="10" ry="7" fill="#3aa36b"/><circle cx="-5" cy="-4" r="3.4" fill="#3aa36b"/><circle cx="5" cy="-4" r="3.4" fill="#3aa36b"/>
+      <circle cx="-5" cy="-4.4" r="1.5" fill="#1b2a22"/><circle cx="5" cy="-4.4" r="1.5" fill="#1b2a22"/><ellipse cx="0" cy="4" rx="6" ry="3.2" fill="#b6dd8f"/>
+      <path d="M-4 0.5 Q0 2.5 4 0.5" fill="none" stroke="#1b2a22" stroke-width=".8"/></g>
+  </defs>
+  <rect x="0" y="0" width="1000" height="800" fill="#fbf7ec"/>
+
+  <!-- ONE POPULATION -->
+  <g id="growL">
+    <text x="30" y="34" font-size="13" font-weight="700" fill="#4a555b" letter-spacing=".08em">A DROP OF POND WATER</text>
+    <circle cx="${DISH.cx}" cy="${DISH.cy}" r="${DISH.r + 10}" fill="#eef3ee" stroke="#c9d6cc" stroke-width="2"/>
+    <circle cx="${DISH.cx}" cy="${DISH.cy}" r="${DISH.r}" fill="url(#gDish)"/>
+    <circle id="food" cx="${DISH.cx}" cy="${DISH.cy}" r="${DISH.r}" fill="url(#gFood)"/>
+    <path id="paras" fill="${COL.para}" opacity=".85"/>
+    <path id="parasNew" fill="#7fd0b8"/>
+    <text id="dishN" x="${DISH.cx}" y="${DISH.cy + DISH.r + 36}" font-size="15" font-weight="700" fill="${INK}" text-anchor="middle" class="m"></text>
+    <text id="dishNote" x="${DISH.cx}" y="${DISH.cy + DISH.r + 56}" font-size="12" fill="${FAINT}" text-anchor="middle"></text>
+    <text x="${GN.x - 40}" y="34" font-size="13" font-weight="700" fill="#4a555b" letter-spacing=".08em">N, COUNTED DAY BY DAY</text>
+    <g id="gnAxes"></g>
+    <g clip-path="url(#clipGN)"><path id="gnExp" fill="none" stroke="${COL.exp}" stroke-width="1.5" stroke-dasharray="2 4"/><path id="gnLog" fill="none" stroke="${COL.theory}" stroke-width="1.6" stroke-dasharray="6 4"/>
+      <line id="gnK" stroke="#9a8f76" stroke-dasharray="3 3"/><path id="gnLine" fill="none" stroke="${COL.para}" stroke-width="2.4" stroke-linejoin="round"/><g id="gnDots"></g></g>
+    <g id="gnKey" font-size="11.5"></g>
+    <text x="${GL.x - 40}" y="${GL.y - 24}" font-size="13" font-weight="700" fill="#4a555b" letter-spacing=".08em">ln N AGAINST t</text>
+    <g id="glAxes"></g><g clip-path="url(#clipGL)"><path id="glFit" fill="none" stroke="${COL.theory}" stroke-width="1.6"/><g id="glDots"></g></g>
+    <text id="glFitT" x="${GL.x + GL.w - 6}" y="${GL.y + GL.h - 8}" font-size="11.5" fill="${COL.theory}" class="m" text-anchor="end"></text>
+    <text x="${GH.x - 30}" y="${GH.y - 24}" font-size="13" font-weight="700" fill="#4a555b" letter-spacing=".08em">GROWTH PER DAY AGAINST N</text>
+    <g id="ghAxes"></g><g clip-path="url(#clipGH)"><path id="ghTheory" fill="none" stroke="${COL.theory}" stroke-width="1.5" stroke-dasharray="6 4"/><g id="ghDots"></g></g>
+    <text id="ghT" x="${GH.x + GH.w - 6}" y="${GH.y + GH.h - 8}" font-size="11.5" fill="${COL.theory}" class="m" text-anchor="end"></text>
+    <text x="30" y="508" font-size="13" font-weight="700" fill="#4a555b" letter-spacing=".08em">RATES ARE PER INDIVIDUAL</text>
+    <text x="30" y="532" font-size="12.5" fill="#4a555b">lotus pond: 8 new plants ÷ 20 = <tspan class="m" id="rLotus"></tspan> per lotus per year</text>
+    <text x="30" y="552" font-size="12.5" fill="#4a555b">fruit flies: 4 died ÷ 40 = <tspan class="m" id="rFly"></tspan> per fly per week</text>
+    <text id="rDish" x="30" y="578" font-size="12.5" fill="${INK}" font-weight="600"></text>
+    <text id="rDish2" x="30" y="597" font-size="12.5" fill="${INK}" font-weight="600"></text>
+    <line x1="20" y1="620" x2="980" y2="620" stroke="${HAIR}"/>
+    <text x="30" y="648" font-size="13" font-weight="700" fill="#4a555b" letter-spacing=".08em">THE BOOK’S LEDGER, FOR THE LAST DAY</text>
+    <text id="led1" x="30" y="680" font-size="16" fill="${INK}" class="m"></text>
+    <text id="led2" x="30" y="706" font-size="12.5" fill="#4a555b"></text>
+    <text id="led3" x="30" y="740" font-size="13" fill="${INK}" class="m"></text>
+    <text id="led4" x="30" y="764" font-size="13" fill="${INK}" class="m"></text>
+    <text id="led5" x="30" y="788" font-size="12.5" fill="${FAINT}"></text>
+  </g>
+
+  <!-- TWO SPECIES -->
+  <g id="twoL" style="display:none">
+    <text id="twoTitle" x="30" y="34" font-size="13" font-weight="700" fill="#4a555b" letter-spacing=".08em"></text>
+    <g id="meadow">
+      <rect x="24" y="52" width="372" height="370" rx="14" fill="#e6f0cf" stroke="#cbd9a9"/>
+      <path d="M24 300 C 120 280, 260 320, 396 290 L396 408 Q396 422 382 422 L38 422 Q24 422 24 408 Z" fill="#d7e7b3"/>
+      <g id="grassTufts"></g><g id="sprH"></g><g id="sprP"></g>
+    </g>
+    <g id="dish2" style="display:none">
+      <circle cx="${DISH.cx}" cy="${DISH.cy + 12}" r="${DISH.r + 10}" fill="#eef3ee" stroke="#c9d6cc" stroke-width="2"/>
+      <circle cx="${DISH.cx}" cy="${DISH.cy + 12}" r="${DISH.r}" fill="url(#gDish)"/>
+      <path id="parA" fill="${COL.para}" opacity=".9"/><path id="parB" fill="${COL.para2}" opacity=".9"/>
+    </g>
+    <g id="twoKey" font-size="13"></g>
+    <g id="interTable"></g>
+    <g id="tsAxes"></g><g clip-path="url(#clipGN)"><line id="tsEq0" stroke-dasharray="3 3" stroke-width="1"/><line id="tsEq1" stroke-dasharray="3 3" stroke-width="1"/><path id="ts0" fill="none" stroke-width="2.4"/><path id="ts1" fill="none" stroke-width="2.4"/></g>
+    <text id="ppTitle" x="${PP.x - 40}" y="${PP.y - 24}" font-size="13" font-weight="700" fill="#4a555b" letter-spacing=".08em"></text>
+    <g id="ppAxes"></g><g clip-path="url(#clipPP)"><path id="ppPath" fill="none" stroke="#5d6a70" stroke-width="1.8"/><g id="ppNull"></g><circle id="ppDot" r="5.5" fill="${INK}" stroke="#fff" stroke-width="2"/></g>
+    <g id="twoNums"></g>
+    <line x1="20" y1="650" x2="980" y2="650" stroke="${HAIR}"/>
+    <text id="twoEq1" x="30" y="684" font-size="14.5" fill="${INK}" class="m"></text>
+    <text id="twoEq2" x="30" y="712" font-size="14.5" fill="${INK}" class="m"></text>
+    <text id="twoEq3" x="30" y="748" font-size="12.5" fill="#4a555b"></text>
+    <text id="twoEq4" x="30" y="772" font-size="12.5" fill="#4a555b"></text>
+  </g>
+
+  <!-- AGE PYRAMID -->
+  <g id="ageL" style="display:none">
+    <text x="30" y="34" font-size="13" font-weight="700" fill="#4a555b" letter-spacing=".08em">AGE PYRAMID</text>
+    <text id="pyYear" x="${PY.cx}" y="34" font-size="15" font-weight="700" fill="${INK}" text-anchor="middle" class="m"></text>
+    <text x="${PY.cx - 60}" y="56" font-size="12" font-weight="700" fill="${COL.male}" text-anchor="end">males</text>
+    <text x="${PY.cx + 60}" y="56" font-size="12" font-weight="700" fill="${COL.fem}">females</text>
+    <g id="pyBands"></g><g id="pyBars"></g><g id="pyAxes"></g>
+    <text id="pyShape" x="${PY.cx}" y="${PY.y + PY.h + 58}" font-size="17" font-weight="700" text-anchor="middle"></text>
+    <text id="pyShape2" x="${PY.cx}" y="${PY.y + PY.h + 80}" font-size="12.5" fill="#4a555b" text-anchor="middle"></text>
+    <text x="${PT.x - 40}" y="34" font-size="13" font-weight="700" fill="#4a555b" letter-spacing=".08em">TOTAL, MILLIONS</text>
+    <g id="ptAxes"></g><path id="ptLine" fill="none" stroke="${INK}" stroke-width="2"/>
+    <g id="ageNums"></g>
+    <text x="${PT.x - 40}" y="560" font-size="13" font-weight="700" fill="#4a555b" letter-spacing=".08em">SHAPES YOU HAVE MADE</text>
+    <g id="shapeStrip"></g>
+  </g>
+  <rect id="veil" x="420" y="0" width="580" height="620" fill="#fbf7ec" opacity=".96"/>
+  <text id="veilT" x="720" y="300" text-anchor="middle" fill="${FAINT}" font-size="15" font-weight="600">The graphs appear once you have made a prediction.</text>`;
+  let tufts = '';
+  for (let i = 0; i < 70; i++) { const x = 34 + rnd() * 352, y = 70 + rnd() * 340, h = 6 + rnd() * 8;
+    tufts += `<path d="M${x.toFixed(1)} ${y.toFixed(1)} l-3 ${-h.toFixed(1)} M${x.toFixed(1)} ${y.toFixed(1)} l1 ${(-h * 1.2).toFixed(1)} M${x.toFixed(1)} ${y.toFixed(1)} l4 ${-h.toFixed(1)}" stroke="#8fb05a" stroke-width="1.4" fill="none" stroke-linecap="round"/>`; }
+  $('grassTufts').innerHTML = tufts;
+  $('sprH').innerHTML = MEAD.slice(0, 180).map((p, i) => `<use id="h${i}" href="#sym-hopper" transform="translate(${p.x.toFixed(1)} ${p.y.toFixed(1)}) scale(${(p.f * p.s * .85).toFixed(2)} ${(p.s * .85).toFixed(2)})" style="display:none"/>`).join('');
+  $('sprP').innerHTML = MEAD.slice(180, 240).map((p, i) => `<use id="p${i}" href="#sym-frog" transform="translate(${p.x.toFixed(1)} ${p.y.toFixed(1)}) scale(${(1.1 * p.s).toFixed(2)})" style="display:none"/>`).join('');
+}
+let SLOTS = [], MEAD = [];
+const ellPath = (x, y, a, rx = 5, ry = 2.2) => {
+  const c = Math.cos(a * Math.PI / 180), s = Math.sin(a * Math.PI / 180);
+  return `M${(x - rx * c).toFixed(1)} ${(y - rx * s).toFixed(1)}a${rx} ${ry} ${a.toFixed(0)} 1 0 ${(2 * rx * c).toFixed(1)} ${(2 * rx * s).toFixed(1)}a${rx} ${ry} ${a.toFixed(0)} 1 0 ${(-2 * rx * c).toFixed(1)} ${(-2 * rx * s).toFixed(1)}z`;
+};
+
+/* ---- one population: paint ------------------------------------------------------ */
+let GNX = 20, GNY = 600;
+function niceMax(v){ const p = Math.pow(10, Math.floor(Math.log10(Math.max(v, 1e-9)))); for (const m of [1, 2, 2.5, 5, 10]) if (m * p >= v) return m * p; return 10 * p; }
+const tick = v => v >= 1e5 ? (v / 1e3).toFixed(0) + 'k' : v >= 1e4 ? (v / 1e3).toFixed(0) + 'k' : String(+v.toFixed(2));
+function axes(R, xmax, ymax, xlab, ylab, xt, yt){
+  let a = `<rect x="${R.x}" y="${R.y}" width="${R.w}" height="${R.h}" fill="${PAPER}" stroke="${HAIR}"/>`;
+  for (let i = 0; i <= 4; i++) {
+    const v = ymax * i / 4, y = R.y + R.h - R.h * i / 4;
+    a += `<line x1="${R.x}" y1="${y}" x2="${R.x + R.w}" y2="${y}" stroke="#f0eadb"/><text x="${R.x - 6}" y="${y + 4}" font-size="11" fill="${FAINT}" text-anchor="end" class="m">${yt ? yt(v) : tick(v)}</text>`;
+  }
+  for (let i = 0; i <= 4; i++) {
+    const v = xmax * i / 4, x = R.x + R.w * i / 4;
+    a += `<line x1="${x}" y1="${R.y + R.h}" x2="${x}" y2="${R.y + R.h + 4}" stroke="#9aa3a6"/><text x="${x}" y="${R.y + R.h + 17}" font-size="11" fill="${FAINT}" text-anchor="middle" class="m">${xt ? xt(v) : tick(v)}</text>`;
+  }
+  a += `<text x="${R.x + R.w}" y="${R.y + R.h + 33}" font-size="11.5" fill="${FAINT}" text-anchor="end">${xlab}</text>`;
+  if (ylab) a += `<text x="${R.x + 4}" y="${R.y - 6}" font-size="11.5" fill="${FAINT}">${ylab}</text>`;
+  return a;
+}
+function paintGrow(){
+  const G = S.G, p = gPar(), r = p.b - p.d;
+  /* the dish */
+  const N = G.N, shown = Math.min(N, SLOTS.length);
+  let d = '', dn = '';
+  const last = G.days[G.days.length - 1];
+  const fresh = Math.min(shown, Math.round(shown * clamp(last.B / Math.max(1, N), 0, 1) * 0.5));
+  for (let i = 0; i < shown; i++) { const s = SLOTS[i], w = Math.sin(CLOCK * 0.6 + s.w * 9) * 3; (i >= shown - fresh ? (dn += ellPath(s.x + w, s.y, s.a + w * 6)) : (d += ellPath(s.x + w, s.y, s.a + w * 6))); }
+  $('paras').setAttribute('d', d); $('parasNew').setAttribute('d', dn);
+  $('food').setAttribute('opacity', p.limited ? clamp(1 - N / p.K, 0, 1).toFixed(2) : 1);
+  $('dishN').textContent = `N = ${N.toLocaleString('en-IN')}`;
+  $('dishNote').textContent = N > SLOTS.length ? `only the first ${SLOTS.length} are drawn` : p.limited ? (N < p.K ? `green: food left for ${Math.round(p.K - N)} more` : 'the food is all in use') : 'unlimited food';
+  $('rLotus').textContent = fmt(rate(8, 20), 1); $('rFly').textContent = fmt(rate(4, 40), 1);
+  if (!S.locked) { ['led1', 'led2', 'led3', 'led4', 'led5', 'rDish', 'rDish2'].forEach(id => $(id).textContent = ''); $('led1').textContent = `Day 0: N₀ = ${p.N0}`; return; }
+  /* N against t */
+  const days = G.days, tEnd = Math.max(GNX, G.t);
+  GNX = tEnd > GNX ? niceMax(tEnd) : GNX;
+  let nMax = 0; for (const q of G.fine) nMax = Math.max(nMax, q.N);
+  if (p.limited) nMax = Math.max(nMax, p.K * 1.1);
+  const want = niceMax(Math.max(nMax * 1.05, 20));
+  if (want !== GNY) GNY = want;
+  const gx = t => GN.x + t / GNX * GN.w, gy = v => GN.y + GN.h - v / GNY * GN.h;
+  $('gnAxes').innerHTML = axes(GN, GNX, GNY, p.once ? 'generations (days) →' : 'days →', 'N');
+  let line = ''; for (const q of G.fine) line += (line ? 'L' : 'M') + gx(q.t).toFixed(1) + ' ' + gy(q.N).toFixed(1);
+  $('gnLine').setAttribute('d', line);
+  $('gnDots').innerHTML = p.once ? days.map(q => `<circle cx="${gx(q.t).toFixed(1)}" cy="${gy(q.N).toFixed(1)}" r="3" fill="${COL.para}"/>`).join('') : '';
+  let le = '', ll = '';
+  for (let t = 0; t <= GNX + 1e-9; t += GNX / 120) {
+    const e = expN(p.N0, r, t); if (e < GNY * 3) le += (le ? 'L' : 'M') + gx(t).toFixed(1) + ' ' + gy(Math.min(e, GNY * 3)).toFixed(1);
+    if (p.limited && r > 0) ll += (ll ? 'L' : 'M') + gx(t).toFixed(1) + ' ' + gy(logisticN(p.N0, r, p.K, t)).toFixed(1);
+  }
+  $('gnExp').setAttribute('d', le); $('gnLog').setAttribute('d', p.once ? '' : ll);
+  const kl = $('gnK'); if (p.limited) { kl.setAttribute('x1', GN.x); kl.setAttribute('x2', GN.x + GN.w); kl.setAttribute('y1', gy(p.K)); kl.setAttribute('y2', gy(p.K)); kl.style.display = ''; } else kl.style.display = 'none';
+  $('gnKey').innerHTML = `<line x1="${GN.x + 200}" y1="${GN.y - 10}" x2="${GN.x + 220}" y2="${GN.y - 10}" stroke="${COL.para}" stroke-width="2.4"/><text x="${GN.x + 224}" y="${GN.y - 6}" fill="#4a555b">counted</text>` +
+    `<line x1="${GN.x + 290}" y1="${GN.y - 10}" x2="${GN.x + 310}" y2="${GN.y - 10}" stroke="${COL.exp}" stroke-width="1.5" stroke-dasharray="2 4"/><text x="${GN.x + 314}" y="${GN.y - 6}" fill="#4a555b">N₀e^(rt)</text>` +
+    (p.limited && !p.once ? `<line x1="${GN.x + 386}" y1="${GN.y - 10}" x2="${GN.x + 406}" y2="${GN.y - 10}" stroke="${COL.theory}" stroke-width="1.6" stroke-dasharray="6 4"/><text x="${GN.x + 410}" y="${GN.y - 6}" fill="#4a555b">logistic</text>` : '') +
+    (p.limited ? `<text x="${GN.x + GN.w - 4}" y="${gy(p.K) - 5}" fill="#9a8f76" text-anchor="end">K = ${p.K}</text>` : '');
+  /* ln N against t, with the fit */
+  const lnMax = Math.max(4, Math.ceil((Math.log(Math.max(nMax, 2)) + 0.5) / 4) * 4);
+  const lx = t => GL.x + t / GNX * GL.w, ly = v => GL.y + GL.h - v / lnMax * GL.h;
+  $('glAxes').innerHTML = axes(GL, GNX, lnMax, 'days →', 'ln N', null, v => v.toFixed(1));
+  $('glDots').innerHTML = days.filter(q => q.N > 0).map(q => `<circle cx="${lx(q.t).toFixed(1)}" cy="${ly(Math.log(q.N)).toFixed(1)}" r="2.6" fill="${COL.para}"/>`).join('');
+  const fit = measuredR(G, p);
+  if (fit) { $('glFit').setAttribute('d', `M${lx(fit.from)} ${ly(fit.c + fit.r * fit.from)} L${lx(fit.to)} ${ly(fit.c + fit.r * fit.to)}`); $('glFitT').textContent = `slope ${fmt(fit.r, 3)} /day`; }
+  else { $('glFit').setAttribute('d', ''); $('glFitT').textContent = ''; }
+  /* growth per day against N */
+  const gr = growthPerDay(G);
+  let gmax = 1; for (const q of gr) gmax = Math.max(gmax, Math.abs(q.g));
+  if (p.limited && r > 0 && !p.once) gmax = Math.max(gmax, r * p.K / 4);
+  const gM = niceMax(gmax * 1.1), nM = p.limited ? niceMax(p.K * 1.15) : niceMax(Math.max(nMax, 10));
+  const hx = v => GH.x + v / nM * GH.w, hy = v => GH.y + GH.h / 2 - v / gM * GH.h / 2;
+  $('ghAxes').innerHTML = `<rect x="${GH.x}" y="${GH.y}" width="${GH.w}" height="${GH.h}" fill="${PAPER}" stroke="${HAIR}"/><line x1="${GH.x}" y1="${hy(0)}" x2="${GH.x + GH.w}" y2="${hy(0)}" stroke="#b9b4a8"/>` +
+    [-1, 1].map(s => `<text x="${GH.x - 6}" y="${hy(s * gM) + 4}" font-size="11" fill="${FAINT}" text-anchor="end" class="m">${s > 0 ? '+' : '−'}${tick(gM)}</text>`).join('') +
+    [0, 0.5, 1].map(f => `<text x="${hx(f * nM)}" y="${GH.y + GH.h + 17}" font-size="11" fill="${FAINT}" text-anchor="middle" class="m">${tick(f * nM)}</text>`).join('') +
+    `<text x="${GH.x + GH.w}" y="${GH.y + GH.h + 33}" font-size="11.5" fill="${FAINT}" text-anchor="end">N →</text><text x="${GH.x + 4}" y="${GH.y - 6}" font-size="11.5" fill="${FAINT}">ΔN per day</text>`;
+  let th = '';
+  if (p.limited && r > 0 && !p.once) { for (let n = 0; n <= p.K * 1.15; n += p.K / 60) th += (th ? 'L' : 'M') + hx(n).toFixed(1) + ' ' + hy(r * n * (1 - n / p.K)).toFixed(1); }
+  else if (!p.limited && !p.once) th = `M${hx(0)} ${hy(0)} L${hx(nM)} ${hy(r * nM)}`;
+  $('ghTheory').setAttribute('d', th);
+  $('ghDots').innerHTML = gr.map(q => `<circle cx="${hx(q.N).toFixed(1)}" cy="${hy(q.g).toFixed(1)}" r="2.6" fill="${COL.para}"/>`).join('');
+  const top = fastest(G, p);
+  $('ghT').textContent = p.limited && !p.once && top ? `fastest at N = ${top.N} (${fmt(top.N / p.K, 2)}K)` : p.limited ? '' : 'a straight line: slope r';
+  /* the ledger */
+  const L = days[days.length - 1];
+  if (days.length > 1) {
+    $('led1').textContent = `N(${L.t}) = ${L.N0} + [(${L.B} + ${L.I}) − (${L.D} + 0)] = ${L.N}`;
+    $('led2').textContent = p.once ? `Day ${L.t}: every parent left its young and died (D = all ${L.N0}); B = young born, I = arrivals, E = 0 (a closed dish).`
+      : `Day ${L.t}: B = births (divisions), I = arrivals, D = deaths, E = 0 (a closed dish).`;
+    $('rDish').textContent = `this dish, day ${L.t}: births ${L.B} ÷ ${L.N0} = ${fmt(rate(L.B, Math.max(1, L.N0)), 2)}`;
+    $('rDish2').textContent = `deaths ${L.D} ÷ ${L.N0} = ${fmt(rate(L.D, Math.max(1, L.N0)), 2)} per individual per day`;
+  } else { $('led1').textContent = `Day 0: N₀ = ${p.N0}`; $('led2').textContent = 'Press Run: the model counts births and deaths one individual at a time.'; $('rDish').textContent = ''; $('rDish2').textContent = ''; }
+  const plateau = plateauMean(G, p);
+  $('led3').textContent = `r = b − d = ${fmt(p.b, 2)} − ${fmt(p.d, 2)} = ${fmt(r, 2)} /day` + (fit ? `     measured from ln N: ${fmt(fit.r, 3)} /day` : '') + (r > 0 && !p.once ? `     doubling time ln2/r = ${fmt(Math.LN2 / r, 2)} days` : '');
+  $('led4').textContent = p.limited ? `K = ${p.K}` + (plateau ? `     counted level over the last 5 days: ${fmt(plateau.mean, 0)} (${fmt(plateau.mean / p.K, 3)}K)` : '') + (top && !p.once ? `     fastest growth ${fmt(top.g, 1)}/day at N = ${top.N}; rK/4 = ${fmt(r * p.K / 4, 1)}` : '')
+    : `unlimited food: nothing slows the growth` + (G.N >= NMAX ? `  (stopped at ${NMAX.toLocaleString('en-IN')}: the dish is full)` : '');
+  $('led5').textContent = G.N === 0 && days.length > 1 ? `Extinct on day ${extinctDay(G)}: births and deaths are chance events, and with a handful of individuals a run of bad luck ends it.` : p.once && p.limited ? `Breeding once: each parent leaves on average e^(r(1 − N/K)) young, then dies.` : '';
+}
+/* measurements, all from the counted days */
+function measuredR(G, p){
+  const lim = p.limited ? p.K / 5 : Infinity;
+  const pts = []; for (const q of G.days) { if (q.N >= 5 && q.N < lim && q.N < NMAX) pts.push(q); else if (pts.length && q.N >= lim) break; }
+  if (pts.length < 4 || pts[pts.length - 1].t - pts[0].t < 3) return null;
+  return fitR(pts);
+}
+function growthPerDay(G){
+  const d = G.days, out = [];
+  for (let i = 1; i < d.length - 1; i++) out.push({t: d[i].t, N: d[i].N, g: (d[i + 1].N - d[i - 1].N) / 2});
+  return out;
+}
+function fastest(G, p){
+  const gr = growthPerDay(G); if (gr.length < 3) return null;
+  const sm = gr.map((q, i) => ({N: q.N, t: q.t, g: (gr[Math.max(0, i - 1)].g + q.g + gr[Math.min(gr.length - 1, i + 1)].g) / 3}));
+  let best = sm[0]; for (const q of sm) if (q.g > best.g) best = q;
+  return best;
+}
+function plateauMean(G, p){
+  const d = G.days; if (d.length < 8) return null;
+  const last = d.slice(-5); const mean = last.reduce((s, q) => s + q.N, 0) / 5;
+  return {mean, min: Math.min(...last.map(q => q.N)), max: Math.max(...last.map(q => q.N))};
+}
+const extinctDay = G => { const q = G.days.find(q => q.N === 0); return q ? q.t : '—'; };
+
+/* ---- two species: paint ------------------------------------------------------------- */
+function paintTwo(){
+  const o = tPar(), T = S.T, comp = o.mode === 'comp';
+  const [a, b] = T.x;
+  $('twoTitle').textContent = comp ? 'GAUSE’S DISH: TWO PARAMECIUM SPECIES' : 'A PATCH OF GRASS: GRASSHOPPERS AND FROGS';
+  $('meadow').style.display = comp ? 'none' : ''; $('dish2').style.display = comp ? '' : 'none';
+  const n0 = comp ? 'P. aurelia' : 'grasshoppers', n1 = comp ? 'P. caudatum' : 'frogs';
+  const c0 = comp ? COL.para : COL.hopper, c1 = comp ? COL.para2 : COL.frog;
+  if (comp) {
+    let dA = '', dB = ''; const nA = Math.min(700, Math.round(a / 1.2)), nB = Math.min(700, Math.round(b / 1.2));
+    for (let i = 0; i < nA; i++) { const s = SLOTS[i]; dA += ellPath(s.x, s.y + 12, s.a); }
+    for (let i = 0; i < nB; i++) { const s = SLOTS[1499 - i]; dB += ellPath(s.x, s.y + 12, s.a + 40, 5.5, 2.5); }
+    $('parA').setAttribute('d', dA); $('parB').setAttribute('d', dB);
+  } else {
+    const nh = a > 0 ? Math.max(1, Math.min(180, Math.round(a / 10))) : 0, np = b > 0 ? Math.max(1, Math.min(60, Math.round(b / 10))) : 0;
+    for (let i = 0; i < 180; i++) $('h' + i).style.display = i < nh ? '' : 'none';
+    for (let i = 0; i < 60; i++) $('p' + i).style.display = i < np ? '' : 'none';
+  }
+  $('twoKey').innerHTML = `<text x="30" y="452" fill="${c0}" font-weight="700" class="m">${esc(n0)}: ${Math.round(a).toLocaleString('en-IN')}</text>` +
+    `<text x="230" y="452" fill="${c1}" font-weight="700" class="m">${esc(n1)}: ${Math.round(b).toLocaleString('en-IN')}</text>` +
+    `<text x="30" y="474" font-size="11.5" fill="${FAINT}">${comp ? 'each oval: about one cell' : 'each animal drawn stands for 10'}</text>`;
+  const rows = [['Mutualism', '+', '+'], ['Competition', '−', '−'], ['Predation', '+', '−'], ['Parasitism', '+', '−'], ['Commensalism', '+', '0'], ['Amensalism', '−', '0']];
+  const on = comp ? 'Competition' : 'Predation';
+  $('interTable').innerHTML = `<text x="30" y="508" font-size="13" font-weight="700" fill="#4a555b" letter-spacing=".08em">NCERT TABLE 11.1</text>` +
+    `<text x="200" y="508" font-size="11.5" fill="${FAINT}" text-anchor="middle">A</text><text x="240" y="508" font-size="11.5" fill="${FAINT}" text-anchor="middle">B</text>` +
+    rows.map(([n, x, y], i) => { const Y = 530 + i * 18, hot = n === on;
+      return (hot ? `<rect x="24" y="${Y - 13}" width="236" height="17" rx="4" fill="#e3ecd0"/>` : '') +
+        `<text x="30" y="${Y}" font-size="12.5" fill="${hot ? INK : FAINT}" font-weight="${hot ? 700 : 400}">${n}</text><text x="200" y="${Y}" font-size="13" text-anchor="middle" fill="${hot ? INK : FAINT}" class="m">${x}</text><text x="240" y="${Y}" font-size="13" text-anchor="middle" fill="${hot ? INK : FAINT}" class="m">${y}</text>`; }).join('');
+  if (!S.locked) return;
+  /* time series */
+  const ser = T.ser, tMax = comp ? 60 : 60;
+  const tEnd = Math.max(tMax, T.t), t0 = tEnd - tMax;
+  let m0 = 1, m1 = 1; for (const q of ser) if (q.t >= t0) { m0 = Math.max(m0, q.x[0]); m1 = Math.max(m1, q.x[1]); }
+  const Y = niceMax(Math.max(m0, comp ? m1 : m1 * 4) * 1.05);
+  const tx = t => TS.x + (t - t0) / tMax * TS.w, ty = v => TS.y + TS.h - Math.min(v, Y * 1.1) / Y * TS.h;
+  const scale1 = comp ? 1 : 4;            // frogs drawn ×4 so both lines share the axes
+  $('tsAxes').innerHTML = axes(TS, tMax, Y, comp ? 'days →' : 'months →', comp ? 'cells' : 'grasshoppers (frogs ×4)', v => tick(v + t0));
+  let d0 = '', d1 = ''; for (const q of ser) if (q.t >= t0) { d0 += (d0 ? 'L' : 'M') + tx(q.t).toFixed(1) + ' ' + ty(q.x[0]).toFixed(1); d1 += (d1 ? 'L' : 'M') + tx(q.t).toFixed(1) + ' ' + ty(q.x[1] * scale1).toFixed(1); }
+  $('ts0').setAttribute('d', d0); $('ts0').setAttribute('stroke', c0); $('ts1').setAttribute('d', d1); $('ts1').setAttribute('stroke', c1);
+  const eq = equilibrium(o);
+  [0, 1].forEach(k => { const l = $('tsEq' + k); if (eq && eq[k] > 0) { const y = ty(eq[k] * (k ? scale1 : 1)); l.setAttribute('x1', TS.x); l.setAttribute('x2', TS.x + TS.w); l.setAttribute('y1', y); l.setAttribute('y2', y); l.setAttribute('stroke', k ? c1 : c0); l.style.display = ''; } else l.style.display = 'none'; });
+  /* phase plane */
+  $('ppTitle').textContent = comp ? 'P. CAUDATUM AGAINST P. AURELIA' : 'FROGS AGAINST GRASSHOPPERS';
+  let X0 = 1, X1 = 1; for (const q of ser) { X0 = Math.max(X0, q.x[0]); X1 = Math.max(X1, q.x[1]); }
+  if (eq) { X0 = Math.max(X0, eq[0] * 1.3); X1 = Math.max(X1, eq[1] * 1.3); }
+  if (comp) { X0 = Math.max(X0, COMP.K1); X1 = Math.max(X1, o.K2); }
+  const PX = niceMax(X0 * 1.05), PYm = niceMax(X1 * 1.05);
+  const px = v => PP.x + v / PX * PP.w, py = v => PP.y + PP.h - v / PYm * PP.h;
+  $('ppAxes').innerHTML = axes(PP, PX, PYm, comp ? 'P. aurelia →' : 'grasshoppers →', comp ? 'P. caudatum' : 'frogs');
+  let pd = ''; for (const q of ser) pd += (pd ? 'L' : 'M') + px(q.x[0]).toFixed(1) + ' ' + py(q.x[1]).toFixed(1);
+  $('ppPath').setAttribute('d', pd);
+  $('ppDot').setAttribute('cx', px(a)); $('ppDot').setAttribute('cy', py(b));
+  /* nullclines: where each population stops changing */
+  let nl = '';
+  if (comp) {
+    nl += `<line x1="${px(COMP.K1)}" y1="${py(0)}" x2="${px(0)}" y2="${py(o.alpha ? COMP.K1 / o.alpha : 1e9)}" stroke="${c0}" stroke-width="1.4" stroke-dasharray="6 4"/>`;
+    nl += `<line x1="${px(0)}" y1="${py(o.K2)}" x2="${px(o.alpha ? o.K2 / o.alpha : 1e9)}" y2="${py(0)}" stroke="${c1}" stroke-width="1.4" stroke-dasharray="6 4"/>`;
+  } else {
+    const Hs = o.m / (PRED.e * o.a);
+    nl += `<line x1="${px(Hs)}" y1="${PP.y}" x2="${px(Hs)}" y2="${PP.y + PP.h}" stroke="${c1}" stroke-width="1.4" stroke-dasharray="6 4"/>`;
+    nl += `<line x1="${px(0)}" y1="${py(PRED.r / o.a)}" x2="${px(o.K || 1e9)}" y2="${py(0)}" stroke="${c0}" stroke-width="1.4" stroke-dasharray="6 4"/>`;
+  }
+  if (eq && eq[0] > 0 && eq[1] > 0) nl += `<circle cx="${px(eq[0])}" cy="${py(eq[1])}" r="4" fill="none" stroke="${INK}" stroke-width="1.5"/>`;
+  $('ppNull').innerHTML = nl;
+  /* numbers */
+  const M = twoMeasure(o, T);
+  let nums = '';
+  const L = (y, t, c = INK, w = 400) => `<text x="${PP.x + PP.w + 26}" y="${y}" font-size="12.5" fill="${c}" font-weight="${w}">${t}</text>`;
+  nums += L(PP.y + 8, comp ? 'Where the dashed lines cross,' : 'Dashed: where each stops changing.', '#4a555b');
+  nums += L(PP.y + 26, comp ? 'both would stop changing.' : 'The ring marks where both stop.', '#4a555b');
+  if (comp) {
+    nums += L(PP.y + 60, `α = ${fmt(o.alpha, 2)}`, INK, 700);
+    nums += L(PP.y + 82, eq && eq[0] > 0 && eq[1] > 0 ? `coexist at ${Math.round(eq[0])} and ${Math.round(eq[1])}` : 'no crossing inside: one must go', eq && eq[0] > 0 && eq[1] > 0 ? '#20774a' : '#c62f2a', 600);
+    if (M.gone != null) nums += L(PP.y + 110, `${M.gone === 1 ? 'P. caudatum' : 'P. aurelia'} gone on day ${fmt(M.goneAt, 1)}`, '#c62f2a', 700);
+  } else {
+    nums += L(PP.y + 60, `balance: ${Math.round(eq[0])} hoppers, ${Math.round(Math.max(0, eq[1]))} frogs`, INK, 600);
+    if (M.period) nums += L(PP.y + 84, `period: ${fmt(M.period, 1)} months`, INK);
+    if (M.lag != null) nums += L(PP.y + 106, `frog peak ${fmt(M.lag, 1)} months after hoppers’`, COL.frog, 600);
+    if (M.gone != null) nums += L(PP.y + 130, `${M.gone === 0 ? 'grasshoppers' : 'frogs'} gone in month ${fmt(M.goneAt, 1)}`, '#c62f2a', 700);
+    if (M.gone === 0) nums += L(PP.y + 150, `then the frogs starve`, '#c62f2a');
+  }
+  $('twoNums').innerHTML = nums;
+  if (comp) {
+    $('twoEq1').textContent = `dN₁/dt = ${fmt(COMP.r1, 1)}·${Math.round(a)}·(1 − (${Math.round(a)} + ${fmt(o.alpha, 2)}·${Math.round(b)})/${COMP.K1}) = ${fmt(two(o, T.x)[0], 1)} /day`;
+    $('twoEq2').textContent = `dN₂/dt = ${fmt(COMP.r2, 1)}·${Math.round(b)}·(1 − (${Math.round(b)} + ${fmt(o.alpha, 2)}·${Math.round(a)})/${o.K2}) = ${fmt(two(o, T.x)[1], 1)} /day`;
+    $('twoEq3').textContent = `Each species is held back by its own numbers and by α times the other’s. Alone, P. aurelia would level at ${COMP.K1} and P. caudatum at ${o.K2}.`;
+    $('twoEq4').textContent = `Day ${fmt(T.t, 0)}.`;
+  } else {
+    const f = two(o, T.x);
+    $('twoEq1').textContent = `dH/dt = ${fmt(PRED.r, 1)}·${Math.round(a)}${o.K ? `·(1 − ${Math.round(a)}/${o.K})` : ''} − ${o.a}·${Math.round(a)}·${Math.round(b)} = ${fmt(f[0], 1)} /month`;
+    $('twoEq2').textContent = `dP/dt = ${PRED.e}·${o.a}·${Math.round(a)}·${Math.round(b)} − ${fmt(o.m, 2)}·${Math.round(b)} = ${fmt(f[1], 1)} /month`;
+    $('twoEq3').textContent = `Grasshoppers grow on the grass${o.K ? ` (room for ${o.K})` : ' (unlimited)'} and are eaten; frogs grow only from what they eat (a fifth of it becomes frog) and die at ${fmt(o.m, 2)} a month.`;
+    $('twoEq4').textContent = o.K ? '' : `Without a K the model keeps a quantity fixed along each ring: drift so far ${fmt(Math.abs(lvDrift(o, T)), 6)}.`;
+  }
+}
+function equilibrium(o){
+  if (o.mode === 'comp') {
+    const den = 1 - o.alpha * o.alpha; if (Math.abs(den) < 1e-9) return null;
+    return [(COMP.K1 - o.alpha * o.K2) / den, (o.K2 - o.alpha * COMP.K1) / den];
+  }
+  const H = o.m / (PRED.e * o.a); return [H, PRED.r / o.a * (o.K ? 1 - H / o.K : 1)];
+}
+function twoMeasure(o, T){
+  const ser = T.ser, M = {gone: null, goneAt: null, period: null, lag: null};
+  for (let i = 1; i < ser.length; i++) for (let k = 0; k < 2; k++) if (M.gone == null && ser[i].x[k] === 0 && ser[i - 1].x[k] > 0) { M.gone = k; M.goneAt = ser[i].t; }
+  if (o.mode === 'pred') {
+    const pH = peaks(ser, 0), pP = peaks(ser, 1);
+    if (pH.length >= 2) M.period = (pH[pH.length - 1] - pH[0]) / (pH.length - 1);
+    const lags = pH.map(t => { const q = pP.find(u => u > t); return q != null ? q - t : null; }).filter(v => v != null && (!M.period || v < M.period));
+    if (lags.length) M.lag = lags[lags.length - 1];
+    M.nPeaks = pH.length;
+  }
+  return M;
+}
+const lvDrift = (o, T) => T.inv0 == null || T.x[0] <= 0 || T.x[1] <= 0 ? 0 : (lvInvariant(o, T.x[0], T.x[1]) - T.inv0) / Math.abs(T.inv0);
+
+/* ---- age pyramid: paint ---------------------------------------------------------------- */
+function paintAge(){
+  const A = S.A, p = A.pop, Lm = leslie(S.par.aT, S.par.aE);
+  $('pyYear').textContent = `year ${A.year}`;
+  let mx = 0; for (let i = 0; i < AGES; i++) mx = Math.max(mx, p.f[i], p.m[i]);
+  const X = niceMax(mx * 1.05), half = PY.w / 2 - 34, rowH = PY.h / AGES;
+  const bx = v => v / X * half;
+  let bars = '', bands = '', ax = '';
+  const sh = shape(p);
+  const zone = [[0, 2, '#f1e9d0', 'pre-reproductive'], [3, 9, '#e6efe0', 'reproductive'], [10, 16, '#ece8f3', 'post-reproductive']];
+  for (const [a0, a1, c, lab] of zone) {
+    const y0 = PY.y + PY.h - (a1 + 1) * rowH, h = (a1 - a0 + 1) * rowH;
+    bands += `<rect x="${PY.x}" y="${y0}" width="${PY.w}" height="${h}" fill="${c}" opacity=".6"/><text x="${PY.x + PY.w - 4}" y="${y0 + 14}" font-size="11" fill="${FAINT}" text-anchor="end">${lab}</text>`;
+  }
+  for (let i = 0; i < AGES; i++) {
+    const y = PY.y + PY.h - (i + 1) * rowH + 1.5, h = rowH - 3;
+    bars += `<rect x="${PY.cx - 22 - bx(p.m[i])}" y="${y}" width="${bx(p.m[i])}" height="${h}" rx="2" fill="${COL.male}"/>`;
+    bars += `<rect x="${PY.cx + 22}" y="${y}" width="${bx(p.f[i])}" height="${h}" rx="2" fill="${COL.fem}"/>`;
+    bars += `<text x="${PY.cx}" y="${y + h / 2 + 4}" font-size="10.5" fill="#4a555b" text-anchor="middle" class="m">${i === AGES - 1 ? '80+' : i * 5}</text>`;
+  }
+  for (const f of [0, 0.5, 1]) { const v = X * f; ax += `<text x="${PY.cx + 22 + bx(v)}" y="${PY.y + PY.h + 16}" font-size="10.5" fill="${FAINT}" text-anchor="middle" class="m">${tick(v)}</text><text x="${PY.cx - 22 - bx(v)}" y="${PY.y + PY.h + 16}" font-size="10.5" fill="${FAINT}" text-anchor="middle" class="m">${tick(v)}</text>`; }
+  ax += `<text x="${PY.cx}" y="${PY.y + PY.h + 32}" font-size="11" fill="${FAINT}" text-anchor="middle">millions in each 5-year age group</text>`;
+  $('pyBands').innerHTML = bands; $('pyBars').innerHTML = bars; $('pyAxes').innerHTML = ax;
+  const colK = {expanding: '#20774a', stable: '#3d5f95', declining: '#c62f2a'}[sh.kind];
+  $('pyShape').textContent = sh.kind === 'expanding' ? 'Expanding: a wide base' : sh.kind === 'stable' ? 'Stable: a bell, straight-sided' : 'Declining: an urn, narrow at the base';
+  $('pyShape').setAttribute('fill', colK);
+  $('pyShape2').textContent = `children 0–14 ÷ young adults 15–29 = ${fmt(sh.R, 2)}` +
+    (A.g != null && sh.kind === 'declining' && A.g > 0.001 ? ' · still growing: the big generations born earlier are now the parents' :
+     A.g != null && sh.kind === 'expanding' && A.g < -0.001 ? ' · yet shrinking: few parents' : '');
+  /* total over time */
+  const H = A.hist; const y0 = 1981, yEnd = Math.max(2081, A.year);
+  let tm = 0; for (const q of H) tm = Math.max(tm, q.tot);
+  const TM = niceMax(tm * 1.1);
+  const tx = y => PT.x + (y - y0) / (yEnd - y0) * PT.w, ty = v => PT.y + PT.h - v / TM * PT.h;
+  $('ptAxes').innerHTML = axes(PT, yEnd - y0, TM, 'year →', '', v => String(Math.round(v + y0)));
+  $('ptLine').setAttribute('d', H.map((q, i) => (i ? 'L' : 'M') + tx(q.year).toFixed(1) + ' ' + ty(q.tot).toFixed(1)).join(''));
+  const g = A.g;
+  const n = (y, t, c = INK, w = 400, cls = '') => `<text x="${PT.x - 40}" y="${y}" font-size="13" fill="${c}" font-weight="${w}" ${cls}>${t}</text>`;
+  let s = '';
+  s += n(PT.y + PT.h + 60, `total ${fmt(total(p), 0)} million`, INK, 700);
+  s += n(PT.y + PT.h + 84, g == null ? 'press Run to go forward 5 years at a time' : `growing ${fmt(100 * g, 2)}% a year (r = ${fmt(g, 4)})`, g == null ? FAINT : g > 0.005 ? '#20774a' : g < -0.005 ? '#c62f2a' : '#3d5f95', 600);
+  s += n(PT.y + PT.h + 116, `women live ${fmt(Lm.e0F, 1)} years, men ${fmt(Lm.e0M, 1)}`, '#4a555b');
+  s += n(PT.y + PT.h + 138, `${fmt(S.par.aT, 1)} children per woman, 105 boys per 100 girls`, '#4a555b');
+  s += n(PT.y + PT.h + 160, `born in the last 5 years: ${A.births != null ? fmt(A.births, 0) + ' million' : '—'}`, '#4a555b');
+  s += n(PT.y + PT.h + 192, `India, 1981: r = 0.0205 (NCERT)`, FAINT);
+  $('ageNums').innerHTML = s;
+  /* the strip of shapes made */
+  let st = '';
+  ['expanding', 'stable', 'declining'].forEach((k, j) => {
+    const x = PT.x - 40 + j * 118, got = S.shapes[k];
+    st += `<rect x="${x}" y="575" width="106" height="150" rx="8" fill="${got ? '#fff' : '#f3efe2'}" stroke="${got ? '#cfc9b8' : HAIR}" stroke-dasharray="${got ? '' : '4 3'}"/>`;
+    if (got) {
+      const q = got.pop; let m2 = 0; for (let i = 0; i < AGES; i++) m2 = Math.max(m2, q.f[i], q.m[i]);
+      for (let i = 0; i < AGES; i++) { const w = q.f[i] / m2 * 44, wm = q.m[i] / m2 * 44, yy = 575 + 118 - (i + 1) * 6; st += `<rect x="${x + 53 - wm}" y="${yy}" width="${wm}" height="5" fill="${COL.male}"/><rect x="${x + 53}" y="${yy}" width="${w}" height="5" fill="${COL.fem}"/>`; }
+      st += `<text x="${x + 53}" y="${575 + 138}" font-size="11.5" font-weight="700" text-anchor="middle" fill="#4a555b">${k}</text>`;
+    } else st += `<text x="${x + 53}" y="${575 + 80}" font-size="11.5" text-anchor="middle" fill="${FAINT}">${k}?</text>`;
+  });
+  $('shapeStrip').innerHTML = st;
+}
+
+/* ============================================================================
+   Running
+   ============================================================================ */
+let CLOCK = 0, ACC = 0;
+function advance(dt){
+  if (S.tool === 'grow') {
+    const G = S.G; if (G.N === 0 || G.N >= NMAX || G.t >= (G.once ? 60 : 100)) { if (S.running) setRunning(false); return; }
+    const perSec = S.fast ? 12 : 3;                 // days per second
+    ACC += dt * perSec;
+    while (ACC >= 1) { ACC -= 1; growDay(G); S.gSteps++; checkGrow(); if (G.N === 0 || G.N >= NMAX) break; }
+  } else if (S.tool === 'two') {
+    const T = S.T, o = tPar(), perSec = S.fast ? 12 : 4;
+    const n = Math.max(1, Math.round(dt * perSec / T.h));
+    for (let i = 0; i < n; i++) { T.x = twoStep(o, T.x, T.h); T.t += T.h; if (Math.round(T.t / T.h) % 10 === 0) T.ser.push({t: T.t, x: T.x.slice()}); }
+    if (T.ser.length > 20000) T.ser.splice(0, T.ser.length - 20000);
+    checkTwo();
+  } else {
+    ACC += dt * (S.fast ? 6 : 1.5);                  // 5-year steps per second
+    while (ACC >= 1) { ACC -= 1; ageStep(); }
+  }
+}
+function ageStep(){
+  const A = S.A, Lm = leslie(S.par.aT, S.par.aE);
+  const before = total(A.pop), nx = project(A.pop, Lm);
+  A.pop = {f: nx.f, m: nx.m}; A.births = nx.births; A.year += STEP; A.steps++;
+  A.g = Math.log(total(A.pop) / before) / STEP;
+  A.hist.push({year: A.year, tot: total(A.pop)});
+  const sh = shape(A.pop);
+  if (!S.shapes[sh.kind]) { S.shapes[sh.kind] = {pop: {f: A.pop.f.slice(), m: A.pop.m.slice()}, year: A.year}; sound('tick'); }
+  if (S.shapes.expanding && S.shapes.stable && S.shapes.declining) discover('pyramids');
+  if (A.year >= 2281) setRunning(false);
+}
+function paint(){
+  const t = S.tool;
+  $('growL').style.display = t === 'grow' ? '' : 'none';
+  $('twoL').style.display = t === 'two' ? '' : 'none';
+  $('ageL').style.display = t === 'age' ? '' : 'none';
+  if (t === 'grow') paintGrow(); else if (t === 'two') paintTwo(); else paintAge();
+  $('clock').textContent = t === 'grow' ? `day ${Math.round(S.G.t)}` : t === 'two' ? `${S.twoMode === 'comp' ? 'day' : 'month'} ${fmt(S.T.t, 0)}` : `year ${S.A.year}`;
+}
+
+/* ---- findings, reached by the model's own state ----------------------------------------- */
+function checkGrow(){
+  const G = S.G, p = gPar(), r = p.b - p.d; if (!S.locked) return;
+  if (G.N === 0 && r > 0 && G.days.length > 1) discover('extinct');
+  if (p.once) {
+    const d = G.days;
+    if (p.limited && r >= 2.2 && d.length >= 16) {
+      const last = d.slice(-10).map(q => q.N);
+      if (Math.max(...last) - Math.min(...last) > 0.5 * p.K && Math.min(...last) > 0) discover('boom');
+    }
+    return;
+  }
+  if (!p.limited) {
+    const fit = measuredR(G, p);
+    if (fit && G.N >= 20 * p.N0 && G.N >= 200 && r > 0.2 && Math.abs(fit.r - r) <= 0.1 * r && p.I === 0) discover('jcurve');
+    return;
+  }
+  if (p.N0 < p.K / 5 && p.I === 0) {
+    const pl = plateauMean(G, p);
+    if (pl && pl.min > 0.8 * p.K && Math.abs(pl.mean - p.K) <= 0.1 * p.K) {
+      discover('scurve'); explainOnce();
+      const top = fastest(G, p);
+      if (top && top.N / p.K >= 0.3 && top.N / p.K <= 0.7) discover('half');
+    }
+  }
+}
+function checkTwo(){
+  if (!S.locked) return;
+  const o = tPar(), M = twoMeasure(o, S.T);
+  if (o.mode === 'pred') {
+    if (M.gone === 0 && S.T.x[1] === 0) discover('prudent');
+    if (M.gone == null && M.nPeaks >= 2 && M.lag > 0.3) discover('cycle');
+  } else if (M.gone != null && o.alpha >= 0.9) {
+    const w = 1 - M.gone; if (S.T.x[w] > 0.5 * (w ? o.K2 : COMP.K1)) discover('exclusion');
+  }
+}
+let EXPLAINED = false;
+function explainOnce(){
+  if (EXPLAINED || !POE || !POE.locked) return;
+  EXPLAINED = true;
+  const G = S.G, p = gPar(), r = p.b - p.d, top = fastest(G, p), pl = plateauMean(G, p), fit = measuredR(G, p);
+  POE.explain(`The model counted every division and death. From <b>${p.N0}</b> cells the culture grew almost as N₀e^(rt) while food was plentiful` +
+    (fit ? ` (ln N rose with slope <span class="mono">${fmt(fit.r, 2)}</span>/day; r = b − d = <span class="mono">${fmt(r, 2)}</span>)` : '') +
+    `. As N approached K the crowding raised the death rate, the daily gain peaked at <span class="mono">${top ? fmt(top.g, 0) : '—'}</span> a day around N = <b>${top ? top.N : '—'}</b> (about K/2) and then fell. ` +
+    `Over the last five days N averaged <b>${pl ? fmt(pl.mean, 0) : '—'}</b>, against K = ${p.K}: a sigmoid, the Verhulst–Pearl logistic curve.`);
+}
+
+/* ============================================================================
+   Controls
+   ============================================================================ */
+build();
+const OUT = {gb: v => v.toFixed(2), gd: v => v.toFixed(2), gK: v => String(v), gN0: v => String(v), gI: v => String(v),
+  pa: v => v.toFixed(3), pm: v => v.toFixed(2), pK: v => String(v), ca: v => v.toFixed(2), cK2: v => String(v), aT: v => v.toFixed(1), aE: v => v + ' y'};
+function syncControls(){
+  for (const k in OUT) { $(k).value = S.par[k]; $(k + 'Out').textContent = OUT[k](S.par[k]); }
+  $('toolGrow').setAttribute('aria-pressed', S.tool === 'grow'); $('toolTwo').setAttribute('aria-pressed', S.tool === 'two'); $('toolAge').setAttribute('aria-pressed', S.tool === 'age');
+  $('grpGrow').hidden = S.tool !== 'grow'; $('grpTwo').hidden = S.tool !== 'two'; $('grpAge').hidden = S.tool !== 'age';
+  $('foodLim').setAttribute('aria-pressed', S.limited); $('foodUnl').setAttribute('aria-pressed', !S.limited);
+  $('breedMany').setAttribute('aria-pressed', !S.once); $('breedOnce').setAttribute('aria-pressed', S.once);
+  $('modePred').setAttribute('aria-pressed', S.twoMode === 'pred'); $('modeComp').setAttribute('aria-pressed', S.twoMode === 'comp');
+  $('grpPred').hidden = S.twoMode !== 'pred'; $('grpComp').hidden = S.twoMode !== 'comp';
+  $('btnNoK').setAttribute('aria-pressed', S.noK); $('pK').disabled = S.noK || !S.locked;
+  $('btnFast').setAttribute('aria-pressed', S.fast);
+  $('gK').disabled = !S.limited || !S.locked;
+}
+function setRunning(on){ S.running = on; $('btnRun').textContent = on ? '❚❚ Pause' : '▶ Run'; }
+/* Growth settings take effect from a fresh start (a culture is set up, then watched); the
+   two-species and pyramid settings act on the populations as they are. */
+function restart(){
+  if (S.tool === 'grow') { newGrowth(); GNX = 20; }
+  else if (S.tool === 'two') { newTwo(); const o = tPar(); if (o.mode === 'pred' && !o.K) S.T.inv0 = lvInvariant(o, S.T.x[0], S.T.x[1]); }
+  else newAge();
+  ACC = 0; paint();
+}
+function setPar(k, v){
+  S.par[k] = clamp(v, LIM[k][0], LIM[k][1]);
+  $(k + 'Out').textContent = OUT[k](S.par[k]);
+  if (k[0] === 'g') { restart(); if (S.locked) setRunning(true); }
+  if (S.tool === 'two') { const o = tPar(); if (o.mode === 'pred' && !o.K && S.T.x[0] > 0 && S.T.x[1] > 0) S.T.inv0 = lvInvariant(o, S.T.x[0], S.T.x[1]); }
+  paint();
+}
+for (const k in OUT) {
+  $(k).addEventListener('input', e => setPar(k, +e.target.value));
+  $(k).addEventListener('change', () => track('set', {k, v: S.par[k]}));
+}
+function setTool(t){ S.tool = t; sound('tick'); syncControls(); ACC = 0; paint(); track('tool', {t}); }
+$('toolGrow').addEventListener('click', () => setTool('grow'));
+$('toolTwo').addEventListener('click', () => setTool('two'));
+$('toolAge').addEventListener('click', () => setTool('age'));
+const flip = (fn) => () => { fn(); sound('tick'); syncControls(); restart(); if (S.locked) setRunning(true); };
+$('foodLim').addEventListener('click', flip(() => S.limited = true));
+$('foodUnl').addEventListener('click', flip(() => S.limited = false));
+$('breedMany').addEventListener('click', flip(() => S.once = false));
+$('breedOnce').addEventListener('click', flip(() => S.once = true));
+$('modePred').addEventListener('click', flip(() => S.twoMode = 'pred'));
+$('modeComp').addEventListener('click', flip(() => S.twoMode = 'comp'));
+$('btnNoK').addEventListener('click', flip(() => S.noK = !S.noK));
+$('btnRun').addEventListener('click', () => { setRunning(!S.running); sound('tick'); track('run', {on: S.running}); });
+$('btnFast').addEventListener('click', () => { S.fast = !S.fast; sound('tick'); syncControls(); });
+$('btnRestart').addEventListener('click', () => { restart(); setRunning(true); sound('whoosh'); track('restart', {tool: S.tool}); });
+
+function lockControls(lock){
+  for (const el of document.querySelectorAll('#ctlCard button, #ctlCard input')) el.disabled = lock;
+  $('gate').hidden = !lock;
+  if (!lock) syncControls();
+}
+function paintWhy(){
+  if (!S.locked) return;
+  let t = '';
+  if (S.tool === 'grow') {
+    const G = S.G, p = gPar(), r = p.b - p.d, fit = measuredR(G, p);
+    t += `<p>Each day every <i>Paramecium</i> divides with chance <span class="mono">${fmt(p.b, 2)}</span> and dies with chance <span class="mono">${p.limited ? `${fmt(p.d, 2)} + ${fmt(r, 2)}·N/${p.K}` : fmt(p.d, 2)}</span>${p.limited ? ': the more crowded, the more die' : ''}.</p>`;
+    if (fit) t += `<p>Fitted from ln N: r = <span class="mono">${fmt(fit.r, 3)}</span> /day, against b − d = <span class="mono">${fmt(r, 2)}</span>.</p>`;
+    if (p.limited && !p.once) t += `<p>At N = K/2 = <span class="mono">${p.K / 2}</span> the law gives the fastest growth, rK/4 = <span class="mono">${fmt(r * p.K / 4, 1)}</span> a day.</p>`;
+    if (p.once) t += `<p>Breeding once: with r above 2 each crowded generation overshoots K and the next crashes.</p>`;
+  } else if (S.tool === 'two') {
+    const o = tPar(), M = twoMeasure(o, S.T);
+    if (o.mode === 'pred') {
+      t += `<p>More grasshoppers feed more frogs; more frogs eat more grasshoppers. The frogs’ peak comes after the grasshoppers’${M.lag != null ? `: <span class="mono">${fmt(M.lag, 1)}</span> months later here` : ''}.</p>`;
+      if (M.gone === 0) t += `<p><b>Too efficient.</b> At a = <span class="mono">${o.a}</span> the frogs ate every grasshopper, then had nothing to eat. Predators in nature are “prudent”.</p>`;
+    } else {
+      t += `<p>With α = <span class="mono">${fmt(o.alpha, 2)}</span> each cell of one species takes ${o.alpha >= 1 ? 'as much' : fmt(100 * o.alpha, 0) + '% as much'} of the other’s food as one of its own.</p>`;
+      const eq = equilibrium(o);
+      t += eq && eq[0] > 0 && eq[1] > 0 ? `<p>They can share the dish: the model settles at <span class="mono">${Math.round(eq[0])}</span> and <span class="mono">${Math.round(eq[1])}</span>.</p>` : `<p>Gause’s competitive exclusion: the weaker competitor cannot hold on.</p>`;
+    }
+  } else {
+    const A = S.A;
+    t += `<p>Every 5 years each age group moves up one bar, less those who die; the base is refilled by the births to women aged 15–49.</p>`;
+    t += `<p>Replacement is about <b>2.1</b> children per woman when nearly every girl lives to be a mother; fewer survivors need more.</p>`;
+    if (A.g != null) t += `<p>Now growing <span class="mono">${fmt(100 * A.g, 2)}%</span> a year.</p>`;
+  }
+  $('why').innerHTML = t;
+}
+
+/* ============================================================================
+   Start
+   ============================================================================ */
+findings($('finds'), [
+  {id: 'jcurve',    icon: 'J', label: 'Unlimited food: a J, and ln N is straight', hint: 'Give them all the food they want'},
+  {id: 'scurve',    icon: 'S', label: 'Limited food: an S that levels at K', hint: 'Let a small culture grow in limited food'},
+  {id: 'half',      icon: '½', label: 'Fastest growth at half of K',         hint: 'When does it grow fastest?'},
+  {id: 'extinct',   icon: '✕', label: 'A few can vanish by chance',          hint: 'Start with very few'},
+  {id: 'boom',      icon: '⚡', label: 'Breed once: overshoot and crash',     hint: 'Breed once, with a large r'},
+  {id: 'cycle',     icon: '↻', label: 'The predator’s peak follows the prey’s', hint: 'Two species: watch the cycles'},
+  {id: 'prudent',   icon: '☠', label: 'Too efficient a predator starves',    hint: 'Make the frogs better hunters'},
+  {id: 'exclusion', icon: '⊘', label: 'Competitive exclusion',               hint: 'Two species, same food'},
+  {id: 'pyramids',  icon: '△', label: 'Expanding, stable and declining pyramids', hint: 'Change the birth and death rates'},
+], () => toast('All nine. Every curve in the chapter, counted from births and deaths.', 4800));
+
+const POE = predict($('poe'), {
+  id: 'grow',
+  q: 'Five <i>Paramecium</i> are put in a drop of pond water with food for about 500. Plotted day by day, their number will…',
+  options: [
+    {id: 'j', text: 'rise faster and faster, without end'},
+    {id: 'line', text: 'rise by the same amount each day, in a straight line'},
+    {id: 's', text: 'rise faster and faster, then slow down and level off', right: true},
+    {id: 'crash', text: 'shoot up past 500, then crash to zero'},
+  ],
+  onLock(){
+    S.locked = true;
+    lockControls(false);
+    for (const id of ['veil', 'veilT']) $(id).remove();
+    say('Now watch the culture grow. Every division and every death is counted.');
+    setRunning(true);
+    paint(); paintWhy();
+  },
+});
+newGrowth(); newTwo(); newAge();
+lockControls(!POE.locked);
+if (!Play.FF('predict')) { S.locked = true; lockControls(false); }
+syncControls();
+paint();
+
+const RM = reduced();
+let whyT = 0, acc = 0;
+loop(dt => {
+  CLOCK += dt;
+  if (!S.running) { if (S.tool === 'grow' && !RM) { acc += dt; if (acc > 0.1) { acc = 0; paintGrow(); } } return; }
+  if (RM) { acc += dt; if (acc < 0.25) return; dt = acc; acc = 0; }
+  advance(dt);
+  paint();
+  whyT += dt; if (whyT > 0.5 || RM) { whyT = 0; paintWhy(); }
+});
+window.applyFeatures = () => paint();
+window.PG_STATE = () => {
+  const G = S.G, p = gPar(), fit = measuredR(G, p), top = fastest(G, p), pl = plateauMean(G, p), o = tPar(), M = twoMeasure(o, S.T);
+  return {tool: S.tool, par: Object.assign({}, S.par), limited: S.limited, once: S.once, twoMode: S.twoMode, noK: S.noK, running: S.running, locked: S.locked, fast: S.fast,
+    grow: {N: G.N, t: G.t, days: G.days.length, last: G.days[G.days.length - 1], fitR: fit ? fit.r : null, fastestN: top ? top.N : null, plateau: pl ? pl.mean : null, runs: S.runs},
+    two: {t: S.T.t, x: S.T.x.slice(), gone: M.gone, lag: M.lag, period: M.period, eq: equilibrium(o)},
+    age: {year: S.A.year, total: total(S.A.pop), g: S.A.g, shape: shape(S.A.pop), shapes: Object.keys(S.shapes)}};
+};
+window.PG_MODEL = {poisson, binom, makeGrowth, growDay, expN, logisticN, fitR, rate, two, twoStep, runTwo, lvInvariant, peaks, equilibrium: o => equilibrium(o),
+  PRED, COMP, lifeTable, hazardScale, leslie, project, total, shape, settled, band, mulberry32};
+</script>
+</body>
+</html>

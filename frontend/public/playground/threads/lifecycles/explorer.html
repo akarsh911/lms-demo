@@ -1,0 +1,411 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>From Tadpole to Frog</title>
+<meta name="description" content="Class 3–5: grow Hopper the frog from a clump of spawn to an adult frog. Slide through the days and change how warm the pond is.">
+<link rel="icon" href="../../favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600&family=Inter:wght@400;500;600;700&family=Nunito:wght@500;700;800&family=Newsreader:opsz,wght@6..72,400;6..72,500&family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="../../play.css">
+<style>
+/* Only what this page needs beyond play.css. */
+.temps{display:grid; grid-template-columns:repeat(3,1fr); gap:6px}
+.tempHint{font-size:12.5px; color:var(--ink-3); margin:6px 0 0}
+.temp{min-height:52px; border-radius:var(--radius-sm); border:2px solid var(--hair-2); background:var(--card); cursor:pointer; font-weight:700; font-size:15px; line-height:1.15}
+.temp small{display:block; font-weight:600; font-size:11px; color:var(--ink-3)}
+.temp[aria-pressed="true"]{border-color:var(--accent); background:var(--accent-soft)}
+.temp:disabled{opacity:.5; cursor:not-allowed}
+.missions{list-style:none; margin:0; padding:0; display:grid; gap:7px}
+.missions li{display:grid; grid-template-columns:26px 1fr; gap:8px; align-items:center; font-weight:700; font-size:14.5px; line-height:1.3; color:var(--ink-2)}
+.missions li i{width:24px; height:24px; border-radius:50%; border:2.5px dashed var(--hair-2); display:grid; place-items:center; font-style:normal; font-size:13px; color:#fff}
+.missions li.done{color:var(--ink)}
+.missions li.done i{border:none; background:var(--good); animation:tickPop .5s var(--spring)}
+.missions li.done span{text-decoration:line-through; text-decoration-color:var(--good); text-decoration-thickness:2px}
+@keyframes tickPop{0%{transform:scale(.3)}100%{transform:scale(1)}}
+.diary{font-size:14px; line-height:1.5}
+.diary b{color:var(--ink)}
+.diary .cite{font-size:12px; color:var(--ink-3); margin-top:6px}
+.bigday{font-family:"Fredoka",var(--font-head); font-size:26px; font-weight:600; line-height:1}
+.play{width:40px; min-width:40px; padding:0}
+</style>
+</head>
+<body>
+<header class="pg-top"></header>
+
+<div class="pg-intro">
+  <h1>From tadpole to frog</h1>
+  <p>Meet Hopper. He starts life as a clump of eggs at the edge of a pond. Slide through the days and watch him grow — and find out that a warm pond
+     grows a frog faster than a cold one.</p>
+</div>
+
+<main class="pg-main">
+  <section class="pg-stage" id="stageWrap">
+    <svg id="stage" viewBox="0 0 1000 640" role="img" aria-label="A pond. Hopper the frog grows from spawn to an adult frog as the days pass."></svg>
+  </section>
+
+  <aside class="pg-side">
+    <div id="poe"></div>
+
+    <div class="card">
+      <div class="kicker">Missions</div>
+      <ul class="missions" id="missions"></ul>
+    </div>
+
+    <div class="card">
+      <div class="row" style="justify-content:space-between;align-items:flex-end">
+        <div><div class="kicker">Day</div><div class="bigday num" id="dayOut">40</div></div>
+        <button class="btn play" id="btnPlay" aria-label="Let the days pass" title="Let the days pass">▶</button>
+      </div>
+      <div class="ctl"><label for="day">Days</label><input type="range" id="day" min="0" max="140" step="1" value="40"><output id="dayNum" class="num">40</output></div>
+      <div class="kicker" style="margin-top:6px">How warm is the pond?</div>
+      <div class="temps" id="temps">
+        <button class="temp" data-temp="cold" aria-pressed="false">❄️ Cold<small>slow</small></button>
+        <button class="temp" data-temp="mild" aria-pressed="true">🌤️ Just right<small>the book's pace</small></button>
+        <button class="temp" data-temp="warm" aria-pressed="false">☀️ Warm<small>fast</small></button>
+      </div>
+      <p class="tempHint" id="tempHint">Make your guess above first, then try changing the warmth.</p>
+    </div>
+
+    <div class="card">
+      <div class="kicker">Hopper's diary</div>
+      <div class="diary" id="diary"></div>
+    </div>
+
+    <div class="card"><div class="kicker">Discoveries</div><div id="finds"></div></div>
+  </aside>
+</main>
+
+<script src="../../play.js"></script>
+<script>
+'use strict';
+const {$, esc, clamp, fmt, loop, sound, say, track, toast, predict, findings, discover, found,
+       shareState, sharedState, mount, reduced} = Play;
+mount({thread: 'lifecycles', band: 'explorer'});
+
+/* MODEL:start ==================================================================
+   The life cycle of a frog (CBSE Class 6, Curiosity Ch 10 "Living Creatures":
+   Fig 10.8 gives the stages of a frog as spawn (Day 1) -> embryo (Day 3-4) ->
+   tadpole with a tail (Day 7-10) -> tadpole with legs (8-10 weeks) -> froglet
+   (12 weeks) -> adult frog (14 weeks). "The Frog" poem (Class 5 Santoor Ch 5,
+   the anchor for this page) is the tadpole-to-frog story this page draws: it
+   describes the tadpole ("a tiny fish-like thing"), the tongue-flick to catch
+   food, the webbed feet, and living "on land and water too".
+
+   Warmth speeding up or slowing down an amphibian's growth is a well known
+   general fact of biology (cold-blooded animals develop faster in warmer
+   water) — the chapter does not give numbers for it (it only asks, as an open
+   question, "design an experiment to check if temperature has an effect"), so
+   the three rates below (cold/mild/warm) are this page's own reasonable
+   choice, not numbers from the book. "Mild" is calibrated to the book's own
+   day/week markers.
+
+   Every stage boundary here is a day count from the book. Everything else —
+   how long the tail is, how big the legs are, how green Hopper looks, whether
+   he is underwater or sitting on the lily pad — is a smooth function of the
+   EFFECTIVE day (real days x the pond's warmth), not a lookup keyed by stage:
+   drag the slider one day at a time and Hopper changes a little at a time.
+   ============================================================================ */
+const STAGES = [
+  {id: 'spawn',    name: 'Spawn (egg mass)',   from: 0,   book: 'Day 1',       note: 'A jelly-like clump of eggs floats at the pond’s edge. This is called spawn.'},
+  {id: 'embryo',   name: 'Embryo',             from: 3,   book: 'Day 3–4',    note: 'Inside each egg, a tiny curled embryo is forming.'},
+  {id: 'tad-tail', name: 'Tadpole with a tail', from: 7,  book: 'Day 7–10',   note: 'Hopper hatches out. “As a tadpole, I swim with cheer, a tiny fish-like thing, so clear!”'},
+  {id: 'tad-legs', name: 'Tadpole with legs',  from: 56,  book: '8–10 weeks', note: 'Hind legs grow in, while the tail is still there for swimming.'},
+  {id: 'froglet',  name: 'Froglet',            from: 84,  book: '12 weeks',    note: 'Hopper looks like a little frog now, and starts sitting out of the water too.'},
+  {id: 'adult',    name: 'Adult frog',         from: 98,  book: '14 weeks',    note: '“I live on land and water too, in places damp with drops of dew.” Fully grown at last.'},
+];
+const RATE = {cold: 0.6, mild: 1.0, warm: 1.4};
+function stageIndex(effDay){ let i = 0; for (let k = 0; k < STAGES.length; k++) if (effDay >= STAGES[k].from) i = k; return i; }
+function effectiveDay(day, temp){ return day * (RATE[temp] || 1); }
+/* Continuous body shape from the effective day: never a lookup keyed by stage id. */
+function morphAt(effDay){
+  const seg = (a, b, v) => clamp((v - a) / (b - a), 0, 1);
+  return {
+    stage: stageIndex(effDay),
+    eggOpacity: 1 - seg(6, 8, effDay),
+    bodyOpacity: seg(6, 8, effDay),
+    tailLen: effDay < 7 ? 0 : effDay < 10 ? seg(7, 10, effDay) : effDay < 84 ? 1 : 1 - seg(84, 98, effDay),
+    hindLeg: seg(56, 84, effDay),
+    frontLeg: seg(70, 88, effDay),
+    green: seg(66, 98, effDay),
+    onPad: seg(82, 90, effDay),
+    bodyScale: 0.6 + 0.4 * seg(0, 98, effDay),
+  };
+}
+/* MODEL:end */
+
+function mix(a, b, t){
+  t = clamp(t, 0, 1);
+  const pa = [1, 3, 5].map(i => parseInt(a.slice(i, i + 2), 16)), pb = [1, 3, 5].map(i => parseInt(b.slice(i, i + 2), 16));
+  return '#' + pa.map((v, i) => Math.round(v + (pb[i] - v) * t).toString(16).padStart(2, '0')).join('');
+}
+
+/* ---- state: plain data --------------------------------------------------- */
+const S = {day: 0, temp: 'mild', locked: false, playing: false, touched: false};
+const shared = sharedState();
+if (shared) { S.day = clamp(+shared.day || 0, 0, 140); if (RATE[shared.temp]) S.temp = shared.temp; }
+shareState(() => ({day: Math.round(S.day), temp: S.temp}));
+
+/* ============================================================================
+   The pond: drawn once, then only patched.
+   ============================================================================ */
+const svg = $('stage');
+const WATER_Y = 300, POND_BOTTOM = 560, PAD = {x: 560, y: WATER_Y};
+const UNDER = {x: 560, y: 470};
+
+function reed(x, base, h, col){
+  let d = '';
+  for (let i = -1; i <= 1; i++) {
+    const sway = i * 14;
+    d += `<path d="M${x + i * 10} ${base} Q${x + i * 10 + sway * 0.6} ${base - h * 0.6} ${x + i * 10 + sway} ${base - h}" fill="none" stroke="${col}" stroke-width="7" stroke-linecap="round"/>`;
+  }
+  return `<g>${d}<ellipse cx="${x}" cy="${base - h - 4}" rx="7" ry="16" fill="#7a4a2a"/></g>`;
+}
+function lilyPad(x, y, r, flower){
+  let d = `<path d="M${x} ${y} L${x + r} ${y} A${r} ${r * 0.4} 0 1 1 ${x - r * 0.2} ${(y - r * 0.36).toFixed(1)} Z" fill="#2f9e5b"/>`;
+  d += `<ellipse cx="${x}" cy="${y}" rx="${r}" ry="${r * 0.4}" fill="none" stroke="#1f7a4a" stroke-width="1.5" opacity=".5"/>`;
+  if (flower) d += `<g transform="translate(${x - r * 0.35} ${y - r * 0.1})">${[0, 60, 120, 180, 240, 300].map(a => `<ellipse rx="9" ry="4.5" fill="#ff8fb3" transform="rotate(${a})"/>`).join('')}<circle r="4" fill="#ffd36b"/></g>`;
+  return `<g>${d}</g>`;
+}
+function build(){
+  const rnd = Play.mulberry32(5);
+  let clouds = '<g fill="#fff" opacity=".9"><path d="M120 70a24 24 0 0 1 44-11a19 19 0 0 1 32 13a15 15 0 0 1 0 30h-78a16 16 0 0 1 2-32z"/><path d="M760 46a20 20 0 0 1 37-9a16 16 0 0 1 28 11a12 12 0 0 1 0 25h-68a13 13 0 0 1 3-27z"/></g>';
+  let fish = '';
+  for (let i = 0; i < 3; i++) { const fx = 250 + i * 220, fy = 505 + (i % 2) * 20; fish += `<g opacity=".35" transform="translate(${fx} ${fy})"><path d="M-14 0 Q0 -8 14 0 Q0 8 -14 0Z" fill="#3a6ea5"/><path d="M-14 0 L-22 -6 L-22 6Z" fill="#3a6ea5"/></g>`; }
+  let plants = '';
+  for (let i = 0; i < 6; i++) { const px = 80 + i * 155; plants += `<path d="M${px} ${POND_BOTTOM} Q${px - 8} ${POND_BOTTOM - 40} ${px + 4} ${POND_BOTTOM - 70}" fill="none" stroke="#1f6b45" stroke-width="4" stroke-linecap="round" opacity=".55"/>`; }
+  svg.innerHTML = `
+  <defs>
+    <linearGradient id="gSky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#8fd0ff"/><stop offset="1" stop-color="#d9f0ff"/></linearGradient>
+    <linearGradient id="gWater" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#5aa8a0"/><stop offset=".35" stop-color="#2f7f83"/><stop offset="1" stop-color="#134f5c"/></linearGradient>
+    <radialGradient id="gSun" cx="45%" cy="40%"><stop offset="0" stop-color="#fff6c8"/><stop offset=".6" stop-color="#ffc53d"/><stop offset="1" stop-color="#f28a12"/></radialGradient>
+    <clipPath id="clipWater"><rect x="0" y="${WATER_Y}" width="1000" height="${POND_BOTTOM - WATER_Y}"/></clipPath>
+  </defs>
+  <rect width="1000" height="${WATER_Y}" fill="url(#gSky)"/>
+  ${clouds}
+  <circle cx="880" cy="80" r="34" fill="url(#gSun)"/>
+  <path d="M0 260 Q140 224 300 250 T620 240 T1000 252 L1000 300 L0 300Z" fill="#8fbf6a"/>
+  <path d="M0 260 Q140 224 300 250 T620 240 T1000 252" fill="none" stroke="#6fa84f" stroke-width="2" opacity=".6"/>
+  <!-- water -->
+  <rect x="0" y="${WATER_Y}" width="1000" height="${POND_BOTTOM - WATER_Y}" fill="url(#gWater)"/>
+  <g clip-path="url(#clipWater)" id="underLayer">${plants}${fish}<g id="bubbles"></g></g>
+  <!-- mud floor and bank -->
+  <path d="M0 ${POND_BOTTOM} Q160 ${POND_BOTTOM - 10} 320 ${POND_BOTTOM} T1000 ${POND_BOTTOM - 6} L1000 640 L0 640Z" fill="#6b4a2b"/>
+  <path d="M0 300 L0 ${POND_BOTTOM + 20} Q30 ${POND_BOTTOM - 30} 70 ${POND_BOTTOM - 90} Q100 ${POND_BOTTOM - 150} 150 ${WATER_Y - 40} L150 300Z" fill="#7fb069"/>
+  <!-- lily pads (decorative, behind Hopper's home pad) -->
+  <g opacity=".95">${lilyPad(230, WATER_Y + 6, 46, false)}${lilyPad(850, WATER_Y + 10, 40, false)}${lilyPad(730, WATER_Y - 4, 34, true)}</g>
+  <!-- reeds, framing both edges: drawn in front of the water so they occlude it -->
+  ${reed(70, POND_BOTTOM - 10, 220, '#3f8f52')}${reed(120, POND_BOTTOM - 20, 260, '#357a45')}
+  ${reed(930, POND_BOTTOM - 6, 200, '#3f8f52')}${reed(970, POND_BOTTOM - 16, 240, '#357a45')}
+  <!-- Hopper's own lily pad -->
+  <g id="homePad">${lilyPad(PAD.x, PAD.y + 4, 78, true)}</g>
+  <ellipse id="padShadow" cx="${PAD.x}" cy="${PAD.y + 4}" rx="40" ry="9" fill="#0a2a20" opacity="0"/>
+  <!-- Hopper -->
+  <g id="hopper">
+    <path id="tail" fill="#6b7d2c"/>
+    <path id="legBackFar" fill="none" stroke-linecap="round"/>
+    <g id="footBackFar"></g>
+    <ellipse id="body" rx="26" ry="20" />
+    <path id="legFrontFar" fill="none" stroke-linecap="round"/>
+    <g id="footFrontFar"></g>
+    <path id="legBackNear" fill="none" stroke-linecap="round"/>
+    <g id="footBackNear"></g>
+    <path id="legFrontNear" fill="none" stroke-linecap="round"/>
+    <g id="footFrontNear"></g>
+    <circle id="eyeL" r="6.5" fill="#f4e9c9"/><circle id="eyeR" r="6.5" fill="#f4e9c9"/>
+    <circle id="pupilL" r="3.2" fill="#1b2a3a"/><circle id="pupilR" r="3.2" fill="#1b2a3a"/>
+    <path id="mouth" fill="none" stroke="#1b2a3a" stroke-width="1.6" stroke-linecap="round"/>
+  </g>
+  <!-- eggs -->
+  <g id="eggs"></g>
+  <!-- water tint over anything underwater (looking through pond water) -->
+  <rect id="waterTint" x="0" y="${WATER_Y}" width="1000" height="${POND_BOTTOM - WATER_Y}" fill="#0f5a5c" opacity="0"/>
+  <text x="20" y="30" fill="#0d2a44" font-size="14" font-weight="700" letter-spacing=".06em" opacity=".8">HOPPER'S POND</text>
+  <g id="stageTag"><rect id="stageTagBox" x="0" y="0" rx="16" fill="#0d2a3a" opacity=".82"/><text id="stageTagT" y="19" fill="#fff" font-size="14" font-weight="700" text-anchor="middle"></text></g>
+  `;
+  let eg = '';
+  const rnd2 = Play.mulberry32(9);
+  for (let i = 0; i < 14; i++) { const a = i / 14 * Math.PI * 2, r = 12 + (i % 3) * 4; eg += `<circle cx="${(Math.cos(a) * r).toFixed(1)}" cy="${(Math.sin(a) * r * 0.6).toFixed(1)}" r="6.5" fill="#dff3ea" fill-opacity=".85" stroke="#bcdccb"/><circle cx="${(Math.cos(a) * r).toFixed(1)}" cy="${(Math.sin(a) * r * 0.6).toFixed(1)}" r="2.6" fill="#2b3a2f"/>`; }
+  $('eggs').innerHTML = `<g transform="translate(${UNDER.x} ${UNDER.y})">${eg}</g>`;
+}
+
+/* ---- paint: everything that depends on the state -------------------------- */
+/* A bent frog leg from the hip to a webbed foot; hind legs reach much farther
+   than front legs, the way a real frog's do. Returns the path AND the foot's
+   position, so a little webbed foot can be drawn there ("With webbed feet, I
+   swim with ease" — the poem). */
+function legLimb(hipX, hipY, len, side, hind){
+  if (len <= 0.02) return {d: '', foot: null};
+  const s = side < 0 ? -1 : 1;
+  const reach = hind ? 46 : 26, drop = hind ? 20 : 12;
+  const kx = hipX + s * reach * 0.55 * len, ky = hipY + drop * 0.5 * len;
+  const fx = hipX + s * reach * len, fy = hipY + drop * len;
+  return {d: `M${hipX} ${hipY} Q${kx.toFixed(1)} ${ky.toFixed(1)} ${fx.toFixed(1)} ${fy.toFixed(1)}`, foot: {x: fx, y: fy}, s};
+}
+function webFoot(foot, s, col){
+  if (!foot) return '';
+  const toes = [-1, 0, 1].map(i => `<line x1="${foot.x.toFixed(1)}" y1="${foot.y.toFixed(1)}" x2="${(foot.x + s * 7).toFixed(1)}" y2="${(foot.y + i * 4).toFixed(1)}" stroke="${col}" stroke-width="2.4" stroke-linecap="round"/>`).join('');
+  return `<circle cx="${foot.x.toFixed(1)}" cy="${foot.y.toFixed(1)}" r="4" fill="${col}"/>${toes}`;
+}
+function paint(){
+  const effDay = effectiveDay(S.day, S.temp);
+  const m = morphAt(effDay);
+  const st = STAGES[m.stage];
+  /* position: underwater while a tadpole, rising onto the lily pad from the froglet stage */
+  const hx = 560, hy = UNDER.y - (UNDER.y - PAD.y - 6) * m.onPad;
+  /* Bigger than the model's own 0.6-1.0 body-growth range so Hopper reads clearly at the
+     back of a classroom against a large pond. */
+  const scale = m.bodyScale * 1.45;
+  $('hopper').setAttribute('transform', `translate(${hx} ${hy.toFixed(1)}) scale(${scale.toFixed(2)})`);
+  $('eggs').setAttribute('opacity', m.eggOpacity.toFixed(2));
+  $('hopper').setAttribute('opacity', m.bodyOpacity.toFixed(2));
+  const bodyCol = mix('#6b7d2c', '#2f9e5b', m.green);
+  $('body').setAttribute('fill', bodyCol);
+  $('tail').setAttribute('fill', mix('#5c6e26', '#3f8f52', m.green));
+  const tailLen = m.tailLen;
+  $('tail').setAttribute('d', tailLen > 0.01 ? `M-24 0 Q${-24 - 40 * tailLen} ${-14 * tailLen} ${-24 - 60 * tailLen} 0 Q${-24 - 40 * tailLen} ${14 * tailLen} -24 0Z` : '');
+  const darkLeg = mix('#4f8a52', '#2f7d43', m.green), nearLeg = mix('#5c9c60', '#3f9e5b', m.green);
+  const lBF = legLimb(-16, 10, m.hindLeg, -1, true);
+  $('legBackFar').setAttribute('d', lBF.d); $('legBackFar').setAttribute('stroke', darkLeg); $('legBackFar').setAttribute('stroke-width', 9);
+  $('footBackFar').innerHTML = webFoot(lBF.foot, lBF.s, darkLeg);
+  const lFF = legLimb(-19, -6, m.frontLeg, -1, false);
+  $('legFrontFar').setAttribute('d', lFF.d); $('legFrontFar').setAttribute('stroke', darkLeg); $('legFrontFar').setAttribute('stroke-width', 6);
+  $('footFrontFar').innerHTML = webFoot(lFF.foot, lFF.s, darkLeg);
+  const lBN = legLimb(16, 12, m.hindLeg, 1, true);
+  $('legBackNear').setAttribute('d', lBN.d); $('legBackNear').setAttribute('stroke', nearLeg); $('legBackNear').setAttribute('stroke-width', 10);
+  $('footBackNear').innerHTML = webFoot(lBN.foot, lBN.s, nearLeg);
+  const lFN = legLimb(19, -4, m.frontLeg, 1, false);
+  $('legFrontNear').setAttribute('d', lFN.d); $('legFrontNear').setAttribute('stroke', nearLeg); $('legFrontNear').setAttribute('stroke-width', 6.5);
+  $('footFrontNear').innerHTML = webFoot(lFN.foot, lFN.s, nearLeg);
+  const eyeY = -14 - 4 * m.green;
+  $('eyeL').setAttribute('cx', -11); $('eyeL').setAttribute('cy', eyeY);
+  $('eyeR').setAttribute('cx', 11); $('eyeR').setAttribute('cy', eyeY);
+  $('pupilL').setAttribute('cx', -11); $('pupilL').setAttribute('cy', eyeY);
+  $('pupilR').setAttribute('cx', 11); $('pupilR').setAttribute('cy', eyeY);
+  $('mouth').setAttribute('d', `M-10 ${eyeY + 12} Q0 ${eyeY + 12 + 6 + 4 * m.green} 10 ${eyeY + 12}`);
+  $('padShadow').setAttribute('opacity', (m.onPad * 0.35).toFixed(2));
+  $('padShadow').setAttribute('cx', hx); $('padShadow').setAttribute('cy', PAD.y + 4);
+  $('waterTint').setAttribute('opacity', (0.28 * (1 - m.onPad)).toFixed(2));
+  const tag = st.name + ' · ' + st.book;
+  $('stageTagT').textContent = tag;
+  const tw = tag.length * 7.6 + 24;
+  $('stageTagBox').setAttribute('x', (500 - tw / 2).toFixed(0)); $('stageTagBox').setAttribute('y', 14);
+  $('stageTagBox').setAttribute('width', tw.toFixed(0)); $('stageTagBox').setAttribute('height', 28);
+  $('stageTagT').setAttribute('x', 500); $('stageTagT').setAttribute('y', 33);
+  $('dayOut').textContent = Math.round(S.day);
+  $('dayNum').textContent = Math.round(S.day);
+  $('day').value = Math.round(S.day);
+  for (const b of document.querySelectorAll('.temp')) b.setAttribute('aria-pressed', b.dataset.temp === S.temp);
+  paintDiary(st, effDay);
+  check(effDay, m);
+  renderMissions();
+}
+function paintDiary(st, effDay){
+  $('diary').innerHTML = `<p><b>${esc(st.name)}</b> — ${esc(st.book)} in the book.</p><p>${st.note}</p>
+    <p class="cite">Hopper is ${fmt(effDay, 0)} effective days grown, from ${Math.round(S.day)} real day${Math.round(S.day) === 1 ? '' : 's'} in a ${S.temp === 'mild' ? 'just-right' : S.temp} pond.</p>`;
+}
+
+/* ---- missions: a checklist that ticks itself when the model gets there ---- */
+const MISSIONS = [
+  {id: 'spawn',   text: 'Find Hopper as a clump of spawn'},
+  {id: 'hatch',   text: 'Watch Hopper hatch into a tadpole'},
+  {id: 'legs',    text: 'Grow Hopper’s hind legs'},
+  {id: 'froglet', text: 'See Hopper hop onto the lily pad'},
+  {id: 'adult',   text: 'Grow Hopper into an adult frog'},
+  {id: 'warmth',  text: 'Guess, then find: does a warm pond grow Hopper faster?'},
+];
+function renderMissions(){
+  $('missions').innerHTML = MISSIONS.map(m => {
+    const done = found(m.id);
+    return `<li class="${done ? 'done' : ''}"><i aria-hidden="true">${done ? '✓' : ''}</i><span>${esc(m.text)}</span></li>`;
+  }).join('');
+}
+
+/* ---- findings: reached by the model, never by a button -------------------- */
+function check(effDay, m){
+  if (!S.touched) return;
+  if (S.day <= 2) discover('spawn');
+  if (m.stage === 2) discover('hatch');
+  if (m.stage === 3) discover('legs');
+  if (m.stage === 4) discover('froglet');
+  if (m.stage === 5) discover('adult');
+  if (S.locked && S.temp === 'warm' && effDay >= 98 && S.day < 98) discover('warmth');
+}
+
+/* ============================================================================
+   Controls
+   ============================================================================ */
+build();
+let ANIM = null;
+function setPlaying(on){
+  S.playing = on;
+  $('btnPlay').textContent = on ? '❚❚' : '▶';
+  $('btnPlay').setAttribute('aria-label', on ? 'Pause' : 'Let the days pass');
+  if (ANIM) { ANIM.stop(); ANIM = null; }
+  if (on) ANIM = loop(dt => { S.day = clamp(S.day + dt * 12, 0, 140); if (S.day >= 140) setPlaying(false); paint(); });
+}
+$('btnPlay').addEventListener('click', () => { S.touched = true; setPlaying(!S.playing); sound('tick'); track('play', {on: S.playing}); });
+$('day').addEventListener('input', e => { S.touched = true; setPlaying(false); S.day = +e.target.value; paint(); });
+$('day').addEventListener('change', () => track('day', {day: Math.round(S.day)}));
+$('temps').addEventListener('click', e => {
+  const b = e.target.closest('[data-temp]'); if (!b || b.disabled) return;
+  S.temp = b.dataset.temp; sound('pop'); paint(); track('temp', {temp: S.temp});
+  say(S.temp === 'warm' ? 'A warm pond! Watch Hopper grow faster.' : S.temp === 'cold' ? 'Brrr, a cold pond. Hopper will grow slowly.' : 'A just-right pond, the pace in the book.');
+});
+function lockTemps(lock){
+  for (const b of document.querySelectorAll('.temp')) b.disabled = lock;
+  $('tempHint').hidden = !lock;
+}
+
+/* ============================================================================
+   Start
+   ============================================================================ */
+findings($('finds'), [
+  {id: 'spawn',   icon: '🥚', label: 'Spawn: a clump of eggs',      hint: 'Slide back to Day 0', say: 'Day one: a jelly clump of eggs, called spawn.'},
+  {id: 'hatch',   icon: '🐟', label: 'A tadpole hatches',           hint: 'Slide to about day 7', say: 'Hopper hatched! A tiny tail helps him swim.'},
+  {id: 'legs',    icon: '🦵', label: 'Hind legs grow in',           hint: 'Keep the days moving', say: 'Look, hind legs! The tail is still there too.'},
+  {id: 'froglet', icon: '🐸', label: 'A froglet, on the lily pad',  hint: 'Grow him past 12 weeks', say: 'A froglet now, sitting out of the water.'},
+  {id: 'adult',   icon: '🎉', label: 'A full-grown frog',           hint: 'Reach 14 weeks', say: 'Fully grown! Hopper lives on land and in water now.'},
+  {id: 'warmth',  icon: '☀️', label: 'A warm pond grows him faster', hint: 'Guess, then try a warm pond', say: 'A warm pond grew Hopper into a frog before the cold pond ever could.'},
+], () => toast('You raised Hopper from an egg to a frog! All six discoveries found.', 4200));
+
+const POE = predict($('poe'), {
+  id: 'warm-vs-cold-pond',
+  q: 'Two clumps of frog spawn hatch on the very same day. One pond is warm and sunny, the other is cold and shady. After ten weeks, which is more likely to already be a frog?',
+  options: [
+    {id: 'warm', text: 'The one in the warm pond', right: true},
+    {id: 'cold', text: 'The one in the cold pond'},
+    {id: 'same', text: 'Both, at exactly the same time'},
+    {id: 'cant', text: 'There is no way to tell'},
+  ],
+  confidence: false,
+  onLock(){
+    S.locked = true;
+    lockTemps(false);
+    say('Now try it yourself. Set the pond’s warmth and slide through the days.');
+    paint();
+  },
+});
+lockTemps(!POE.locked);
+if (!Play.FF('predict')) S.locked = true;
+
+/* Gentle life in the pond: bubbles rising from Hopper while he is a tadpole. */
+if (!reduced()) loop((dt, t) => {
+  const eff = effectiveDay(S.day, S.temp), m = morphAt(eff);
+  if (m.onPad > 0.9) { $('bubbles').innerHTML = ''; return; }
+  const n = 3, bub = [];
+  for (let i = 0; i < n; i++) {
+    const ph = (t * 0.4 + i / n) % 1;
+    bub.push(`<circle cx="${560 + (i - 1) * 14}" cy="${(UNDER.y + 10 - ph * 140).toFixed(1)}" r="${(2 + i % 2).toFixed(1)}" fill="#fff" opacity="${(0.5 * (1 - ph)).toFixed(2)}"/>`);
+  }
+  $('bubbles').innerHTML = bub.join('');
+});
+paint();
+say('Meet Hopper! Slide through the days and watch him grow from an egg to a frog.');
+window.applyFeatures = () => paint();
+window.PG_STATE = () => JSON.parse(JSON.stringify(S));
+window.PG_MODEL = {STAGES, RATE, stageIndex, effectiveDay, morphAt};
+</script>
+</body>
+</html>

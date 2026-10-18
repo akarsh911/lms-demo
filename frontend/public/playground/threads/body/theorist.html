@@ -1,0 +1,852 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Nerve Impulse</title>
+<meta name="description" content="Class 11–12: an axon whose sodium and potassium gates open by voltage (Hodgkin and Huxley's equations). Stimulate it, find the threshold, watch the impulse run and the synapse fire the next neuron.">
+<link rel="icon" href="../../favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600&family=Inter:wght@400;500;600;700&family=Nunito:wght@500;700;800&family=Newsreader:opsz,wght@6..72,400;6..72,500&family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="../../play.css">
+<style>
+/* Only what this page needs beyond play.css. */
+.gate{position:absolute; left:0; right:0; top:34%; height:40%; display:grid; place-items:center; pointer-events:none}
+.gate span{background:rgba(29,35,39,.86); color:#fff; padding:10px 16px; border-radius:99px; font-weight:600; font-size:14px}
+.pg-stage{align-self:start; min-height:0}
+.readout{display:grid; grid-template-columns:1fr auto; gap:2px 12px; font-size:13px; align-items:baseline}
+.readout span{color:var(--ink-2)}
+.readout b{font-family:var(--font-mono); font-weight:600; font-size:12.5px; font-variant-numeric:tabular-nums; text-align:right}
+.readout .sep{grid-column:1/-1; height:1px; background:var(--hair); margin:4px 0}
+.ctl{grid-template-columns:112px 1fr 92px; margin:2px 0}
+.ctl label{font-size:12.5px; line-height:1.2}
+.ctl output{font-family:var(--font-mono); font-size:12.5px; font-weight:600; min-width:0}
+.seg{display:grid; grid-auto-flow:column; grid-auto-columns:1fr; gap:4px; background:var(--sunk); padding:4px; border-radius:var(--radius-sm)}
+.seg button{border:0; background:transparent; border-radius:7px; min-height:30px; font-weight:600; font-size:13px; cursor:pointer; color:var(--ink-2)}
+.seg button[aria-pressed="true"]{background:var(--card); color:var(--ink); box-shadow:var(--shadow)}
+.seg button:disabled{opacity:.5; cursor:default}
+.btn[aria-pressed="true"]{background:var(--accent-soft); border-color:var(--accent)}
+.why p{font-size:13.5px; margin-bottom:.5em}
+.why .mono{font-size:12.5px}
+.note{font-size:12.5px; color:var(--ink-3); margin:6px 0 0}
+.veil{font-size:13px; color:var(--ink-3)}
+.fire{min-width:150px}
+svg text.m{font-family:var(--font-mono)}
+svg text.serif{font-family:"Newsreader",Georgia,serif}
+.leftcol{display:flex; flex-direction:column; gap:12px; min-width:0}
+.leftcol > .pg-stage{align-self:stretch}
+.below{display:grid; grid-template-columns:1fr 1fr; gap:12px; align-items:start}
+@media (max-width:1200px){ .pg-main.wide-side{grid-template-columns:minmax(0,1fr) 340px} .below{grid-template-columns:1fr} .ctl{grid-template-columns:92px 1fr 80px} }
+.eh{cursor:ew-resize} .eh.dragging{cursor:grabbing}
+</style>
+</head>
+<body>
+<header class="pg-top"></header>
+
+<div class="pg-intro">
+  <h1>The nerve impulse</h1>
+  <p>A length of axon whose membrane is live. Its sodium and potassium channels open and close by voltage, following the equations Hodgkin and Huxley
+     measured on the squid giant axon, and the current spreads along the fibre from patch to patch. Nothing here is a drawn spike: every impulse happens because the
+     channels opened. Find the threshold, fire it twice, change the ions, wrap it in myelin, and follow the impulse across a synapse.</p>
+  <div class="syl">CBSE Class 11 Biology · Ch 18 Neural Control and Coordination</div>
+</div>
+
+<main class="pg-main wide-side">
+  <div class="leftcol">
+  <section class="pg-stage" id="stageWrap">
+    <svg id="stage" viewBox="0 0 1000 720" role="img" aria-label="An axon with its membrane charges, sodium and potassium ions crossing, recording electrodes, an oscilloscope, a synapse, and plots of the impulse's height against stimulus and speed against diameter"></svg>
+    <div class="gate" id="gate"><span>Make your prediction first →</span></div>
+  </section>
+  <div class="below">
+    <div class="card why" id="whyCard" hidden>
+      <div class="kicker">What the model says</div>
+      <div id="why"></div>
+    </div>
+    <div class="card"><div class="kicker">To find</div><div id="finds"></div></div>
+  </div>
+  </div>
+
+  <aside class="pg-side">
+    <div id="poe"></div>
+
+    <div class="card" id="stimCard">
+      <div class="row" style="justify-content:space-between">
+        <div class="kicker" style="margin:0">Stimulate</div>
+        <div class="seg" id="speedSeg" style="min-width:170px"><button data-sp="slow" aria-pressed="true">Slow</button><button data-sp="fast" aria-pressed="false">Faster</button></div>
+      </div>
+      <div class="ctl"><label for="amp">Strength</label><input type="range" id="amp" min="0" max="300" step="5" value="40"><output id="ampOut">40 µA/cm²</output></div>
+      <div class="row" style="margin:4px 0">
+        <button class="btn sm" id="btnPair" aria-pressed="false" title="Give a second, identical pulse after a gap">+ A second pulse</button>
+      </div>
+      <div class="ctl" id="gapRow"><label for="gap">Gap between</label><input type="range" id="gap" min="1" max="15" step="0.5" value="6"><output id="gapOut">6 ms</output></div>
+      <div class="row" style="justify-content:space-between; margin-top:6px">
+        <button class="btn primary fire" id="btnFire">⚡ Stimulate</button>
+        <span class="note" style="margin:0">Each pulse lasts 0.5 ms.</span>
+      </div>
+    </div>
+
+    <div class="card" id="fibreCard">
+      <div class="kicker">The fibre</div>
+      <div class="ctl"><label for="dia">Diameter</label><input type="range" id="dia" min="0" max="8" step="1" value="8"><output id="diaOut">476 µm</output></div>
+      <div class="seg" id="myeSeg"><button data-my="0" aria-pressed="true">Bare axon</button><button data-my="1" aria-pressed="false">Myelinated</button></div>
+      <div class="ctl" style="margin-top:6px"><label for="temp">Temperature</label><input type="range" id="temp" min="5" max="35" step="0.5" value="18.5"><output id="tempOut">18.5 °C</output></div>
+      <p class="note" id="fibreNote">476 µm is the squid giant axon Hodgkin and Huxley used.</p>
+    </div>
+
+    <div class="card" id="lawCard">
+      <div class="kicker">Change the law: channels and ions</div>
+      <div class="ctl"><label for="na">Na⁺ channels</label><input type="range" id="na" min="0" max="100" step="5" value="100"><output id="naOut">100 %</output></div>
+      <div class="ctl"><label for="k">K⁺ channels</label><input type="range" id="k" min="0" max="100" step="5" value="100"><output id="kOut">100 %</output></div>
+      <div class="ctl"><label for="nao">Na⁺ outside</label><input type="range" id="nao" min="60" max="440" step="10" value="440"><output id="naoOut">440 mM</output></div>
+      <div class="ctl"><label for="ko">K⁺ outside</label><input type="range" id="ko" min="5" max="100" step="5" value="20"><output id="koOut">20 mM</output></div>
+      <div class="row" style="justify-content:space-between; margin-top:4px">
+        <button class="btn sm" id="btnReset">↺ Squid axon</button>
+        <span class="note" style="margin:0" id="nernstNote"></span>
+      </div>
+    </div>
+
+    <div class="card" id="synCard">
+      <div class="kicker">The synapse at the far end</div>
+      <div class="seg" id="synSeg"><button data-syn="exc" aria-pressed="true">Excitatory</button><button data-syn="inh" aria-pressed="false">Inhibitory</button></div>
+      <p class="note">Each impulse that reaches the knob releases a packet of transmitter. The next neuron fires only if it is pushed up to its threshold.</p>
+    </div>
+
+    <div class="card" id="measureCard">
+      <div class="kicker">Measured</div>
+      <div id="measureVeil" class="veil">The measurements appear once you have made a prediction.</div>
+      <div id="measure" hidden>
+        <div class="readout">
+          <span>Resting potential</span><b id="mRest">—</b>
+          <span>E<sub>Na</sub>, E<sub>K</sub> (Nernst)</span><b id="mE">—</b>
+          <span>Peak at A, last pulse</span><b id="mPeak">—</b>
+          <span>Threshold lies between</span><b id="mThr">—</b>
+          <i class="sep"></i>
+          <span>Speed, A to B</span><b id="mVel">—</b>
+          <span>Refractory: 2nd pulse fails at ≤</span><b id="mRef">—</b>
+          <i class="sep"></i>
+          <span>Next neuron, change in voltage</span><b id="mPsp">—</b>
+          <span>Synaptic delay</span><b id="mDelay">—</b>
+        </div>
+      </div>
+    </div>
+
+  </aside>
+</main>
+
+<script src="../../play.js"></script>
+<script>
+'use strict';
+const {$, esc, clamp, fmt, drag, loop, sound, say, track, toast, predict, findings, discover, found,
+       shareState, sharedState, mount, reduced, mulberry32} = Play;
+mount({thread: 'body', band: 'theorist'});
+
+/* MODEL:start ==================================================================
+   An axon as a cable of membrane patches, each obeying Hodgkin and Huxley (1952):
+       C dV/dt = − gNa·m³h·(V − E_Na) − gK·n⁴·(V − E_K) − gL·(V − E_L) + axial current + stimulus
+   The gates m, h, n relax towards voltage-dependent values at voltage-dependent rates (HH's own
+   α and β, in mV and ms), sped up by 3^((T − 6.3)/10) with temperature. E_Na and E_K come from the
+   Nernst equation, E = (RT/F)·ln(outside/inside), with the squid axon's concentrations. The patches
+   are joined by the axoplasm's resistance (35.4 Ω·cm), and the cable is solved implicitly each
+   step (DT = 0.01 ms), so the impulse travels only because current spreads to the next patch.
+   A myelinated fibre has nodes of Ranvier every 100 diameters, with channels packed 8 times denser;
+   between them the myelin cuts the membrane's capacitance and leak 200-fold, and has no channels.
+   At the far end, an impulse reaching the synaptic knob releases transmitter after 0.5 ms. The
+   transmitter opens receptor channels on the next neuron (conductance g·r, with dr/dt = α·T·(1−r) − β·r)
+   whose reversal is 0 mV (excitatory) or −80 mV (inhibitory). The next neuron's trigger zone is a
+   leaky membrane (τ = 10 ms) that fires when it reaches 13 mV above rest.
+   ============================================================================ */
+const FARADAY = 96485, RGAS = 8.314;
+const RTF = T => RGAS * (T + 273.15) / FARADAY * 1000;
+const nernst = (o, i, T) => RTF(T) * Math.log(o / i);
+const vtrap = (x, y) => Math.abs(x / y) < 1e-6 ? y * (1 - x / y / 2) : x / (Math.exp(x / y) - 1);
+const aM = V => 0.1 * vtrap(-(V + 40), 10), bM = V => 4 * Math.exp(-(V + 65) / 18);
+const aH = V => 0.07 * Math.exp(-(V + 65) / 20), bH = V => 1 / (1 + Math.exp(-(V + 35) / 10));
+const aN = V => 0.01 * vtrap(-(V + 55), 10), bN = V => 0.125 * Math.exp(-(V + 65) / 80);
+const DIAS = [1, 2, 5, 10, 20, 50, 100, 200, 476];
+const DEF = {d: 476, myelin: false, T: 18.5, na: 100, k: 100, Nao: 440, Nai: 50, Ko: 20, Ki: 400, syn: 'exc'};
+const HH = {gNa: 120, gK: 36, gL: 0.3, EL: -54.387, Ri: 35.4, Cm: 1, nodeNa: 8, myelinC: 1 / 200};
+const SYN = {thr: -20, delay: 0.5, perSpike: 6, q: 0.25, clear: 1.0, alpha: 2, beta: 0.3, gmax: 0.065, gInh: 0.2,
+             Eexc: 0, Einh: -80, Cpost: 1, gLpost: 0.1, thrPost: 13};
+const DT = 0.01, STIM_DUR = 0.5, SWEEP = 24, SPAN = 0.0146;
+function restOf(g, ENa, EK){
+  let V = -65;
+  for (let it = 0; it < 300; it++) {
+    const m = aM(V) / (aM(V) + bM(V)), h = aH(V) / (aH(V) + bH(V)), n = aN(V) / (aN(V) + bN(V));
+    const gna = g.gNa * m * m * m * h, gk = g.gK * n ** 4;
+    V += 0.5 * ((gna * ENa + gk * EK + HH.gL * HH.EL) / (gna + gk + HH.gL) - V);
+  }
+  return V;
+}
+function makeAxon(par){
+  const p = Object.assign({}, DEF, par), d = p.d * 1e-4, comps = [];
+  if (!p.myelin) {
+    const L = 6 * Math.sqrt(p.d / 476), N = 240, dx = L / N;           // about three impulse-lengths of fibre
+    for (let i = 0; i < N; i++) comps.push({x: (i + .5) * dx, dx, act: 1, cm: 1, node: false});
+  } else {
+    const inter = 100 * d, node = 1.5e-4, nIn = 50, sub = 4; let x = 0;
+    for (let k = 0; k <= nIn; k++) {
+      comps.push({x: x + node / 2, dx: node, act: HH.nodeNa, cm: 1, node: true}); x += node;
+      if (k === nIn) break;
+      for (let s = 0; s < sub; s++) { comps.push({x: x + inter / sub / 2, dx: inter / sub, act: 0, cm: HH.myelinC, node: false}); x += inter / sub; }
+    }
+  }
+  const N = comps.length, L = comps[N - 1].x + comps[N - 1].dx / 2;
+  const F = n => new Float64Array(n);
+  const A = {p, N, L, comps, t: 0, V: F(N), m: F(N), h: F(N), n: F(N), area: F(N), C: F(N), ga: F(Math.max(1, N - 1)), act: F(N), gm: F(N),
+             a: F(N), b: F(N), c: F(N), r: F(N), ina: F(N), ik: F(N), gna: F(N), gk: F(N)};
+  const r = d / 2;
+  for (let i = 0; i < N; i++) { A.area[i] = Math.PI * d * comps[i].dx; A.C[i] = A.area[i] * HH.Cm * comps[i].cm; A.act[i] = comps[i].act; A.gm[i] = comps[i].act ? 1 : HH.myelinC; }
+  for (let i = 0; i < N - 1; i++) A.ga[i] = Math.PI * r * r / (HH.Ri * (comps[i].dx + comps[i + 1].dx) / 2) * 1000;   // mS
+  retune(A);
+  const V0 = A.Vrest;
+  for (let i = 0; i < N; i++) { A.V[i] = V0; A.m[i] = aM(V0) / (aM(V0) + bM(V0)); A.h[i] = aH(V0) / (aH(V0) + bH(V0)); A.n[i] = aN(V0) / (aN(V0) + bN(V0)); }
+  A.post = {V: V0, tx: 0, r: 0, ves: 0, pending: [], armed: true, spikes: 0, released: 0, vmax: V0, vmin: V0,
+            arrive: [], lastRel: null, lastPostSpike: null, spikeT: null, isyn: 0};
+  return A;
+}
+function retune(A){
+  const p = A.p;
+  A.ENa = nernst(p.Nao, p.Nai, p.T); A.EK = nernst(p.Ko, p.Ki, p.T);
+  A.phi = Math.pow(3, (p.T - 6.3) / 10);
+  A.g = {gNa: HH.gNa * p.na / 100, gK: HH.gK * p.k / 100};
+  A.Vrest = restOf(A.g, A.ENa, A.EK);
+}
+function gates(A, i, k){
+  const v = A.V[i], am = aM(v), bm = bM(v), ah = aH(v), bh = bH(v), an = aN(v), bn = bN(v);
+  let s = am + bm; A.m[i] = am / s + (A.m[i] - am / s) * Math.exp(-s * k);
+  s = ah + bh; A.h[i] = ah / s + (A.h[i] - ah / s) * Math.exp(-s * k);
+  s = an + bn; A.n[i] = an / s + (A.n[i] - an / s) * Math.exp(-s * k);
+}
+/* One step of DT. stim = {i0, i1, amp µA/cm²} while a pulse is on. */
+function stepAxon(A, stim){
+  const k = DT * A.phi, N = A.N, V = A.V, g = A.g;
+  for (let i = 0; i < N; i++) if (A.act[i]) gates(A, i, k);
+  for (let i = 0; i < N; i++) {
+    const ar = A.area[i];
+    let G, GE;
+    if (A.act[i]) {
+      const gna = g.gNa * A.act[i] * A.m[i] ** 3 * A.h[i], gk = g.gK * A.act[i] * A.n[i] ** 4;
+      A.gna[i] = gna; A.gk[i] = gk;
+      A.ina[i] = gna * (V[i] - A.ENa); A.ik[i] = gk * (V[i] - A.EK);
+      G = (gna + gk + HH.gL * A.act[i]) * ar; GE = (gna * A.ENa + gk * A.EK + HH.gL * A.act[i] * HH.EL) * ar;
+    } else { const gl = HH.gL * A.gm[i] * ar; G = gl; GE = gl * A.Vrest; A.ina[i] = 0; A.ik[i] = 0; A.gna[i] = 0; A.gk[i] = 0; }
+    const Ist = stim && i >= stim.i0 && i <= stim.i1 ? stim.amp * ar * A.gm[i] : 0;
+    const Cd = A.C[i] / DT, gl = i > 0 ? A.ga[i - 1] : 0, gr = i < N - 1 ? A.ga[i] : 0;
+    A.a[i] = -gl; A.c[i] = -gr; A.b[i] = Cd + G + gl + gr; A.r[i] = Cd * V[i] + GE + Ist;
+  }
+  for (let i = 1; i < N; i++) { const w = A.a[i] / A.b[i - 1]; A.b[i] -= w * A.c[i - 1]; A.r[i] -= w * A.r[i - 1]; }
+  V[N - 1] = A.r[N - 1] / A.b[N - 1];
+  for (let i = N - 2; i >= 0; i--) V[i] = (A.r[i] - A.c[i] * V[i + 1]) / A.b[i];
+  stepSynapse(A);
+  A.t += DT;
+}
+function stepSynapse(A){
+  const S = A.post, Vt = A.V[A.N - 1], t = A.t, k = DT * A.phi / Math.pow(3, 1.22);   // synaptic rates are quoted at 18.5 °C
+  if (S.armed && Vt > SYN.thr) { S.armed = false; S.pending.push(t + SYN.delay); S.arrive.push(t); }
+  if (!S.armed && Vt < SYN.thr - 20) S.armed = true;
+  while (S.pending.length && S.pending[0] <= t) { S.pending.shift(); S.tx += SYN.perSpike * SYN.q; S.released += SYN.perSpike; S.lastRel = t; S.ves = 1; }
+  S.ves = Math.max(0, S.ves - DT / 0.6);
+  S.tx -= S.tx * (1 - Math.exp(-k / SYN.clear));
+  S.r += k * (SYN.alpha * S.tx * (1 - S.r) - SYN.beta * S.r);
+  const inh = A.p.syn === 'inh', E = inh ? SYN.Einh : SYN.Eexc, gs = (inh ? SYN.gInh : SYN.gmax) * S.r, v = S.V;
+  if (S.spikeT != null) {                           // the next neuron's own impulse, then its after-dip
+    const u = t - S.spikeT;
+    S.V = u < 0.3 ? 30 : u < 1.0 ? 30 - (u - 0.3) / 0.7 * 105 : A.Vrest - 8 * Math.exp(-(u - 1.0) / 3);
+    if (u > 4) S.spikeT = null;
+  } else {
+    S.V = (SYN.Cpost / DT * v + SYN.gLpost * A.Vrest + gs * E) / (SYN.Cpost / DT + SYN.gLpost + gs);
+    if (S.V >= A.Vrest + SYN.thrPost) { S.spikeT = t; S.spikes++; if (S.lastPostSpike == null) S.firstPost = t; S.lastPostSpike = t; S.V = 30; }
+  }
+  S.isyn = gs * (S.V - E);
+  S.vmax = Math.max(S.vmax, S.V); S.vmin = Math.min(S.vmin, S.V);
+}
+const nearestIdx = (A, f, nodeOnly) => { let best = 0, bd = 1e9; for (let i = 0; i < A.N; i++) { if (nodeOnly && !A.act[i]) continue; const dd = Math.abs(A.comps[i].x - f * A.L); if (dd < bd) { bd = dd; best = i; } } return best; };
+function stimSpan(A, f){ let i0 = A.N, i1 = -1; for (let i = 0; i < A.N; i++) if (Math.abs(A.comps[i].x / A.L - f) <= SPAN) { i0 = Math.min(i0, i); i1 = Math.max(i1, i); } if (i1 < 0) { i0 = i1 = nearestIdx(A, f); } return [i0, i1]; }
+/* A whole experiment, for tests: pulses [{t, amp}] at site f; electrodes at a and b. */
+function run(par, pulses, o = {}){
+  const A = makeAxon(par), [i0, i1] = stimSpan(A, o.site == null ? 0.05 : o.site);
+  const ia = nearestIdx(A, o.a == null ? 0.35 : o.a, A.p.myelin), ib = nearestIdx(A, o.b == null ? 0.75 : o.b, A.p.myelin);
+  const T = o.T || SWEEP, out = {peakA: -200, tA: null, tB: null, spikesA: 0, gNaPeakT: null, gKPeakT: null, ENa: A.ENa, EK: A.EK, Vrest: A.Vrest,
+    end0: -200, endN: -200, endSpikes: [0, 0]};
+  let aboveA = false, gnaMax = 0, gkMax = 0, up0 = false, upN = false;
+  for (let s = 0; s < T / DT; s++) {
+    const t = A.t; let st = null;
+    for (const pl of pulses) if (t >= pl.t && t < pl.t + STIM_DUR) st = {i0, i1, amp: pl.amp};
+    stepAxon(A, st);
+    const va = A.V[ia], vb = A.V[ib];
+    out.peakA = Math.max(out.peakA, va);
+    if (!aboveA && va > -20) { aboveA = true; out.spikesA++; if (out.tA == null) out.tA = A.t; }
+    if (aboveA && va < -40) aboveA = false;
+    if (out.tB == null && vb > -20) out.tB = A.t;
+    const v0 = A.V[0], vN = A.V[A.N - 1];
+    if (!up0 && v0 > -20) { up0 = true; out.endSpikes[0]++; } if (up0 && v0 < -40) up0 = false;
+    if (!upN && vN > -20) { upN = true; out.endSpikes[1]++; } if (upN && vN < -40) upN = false;
+    if (out.spikesA <= 1) { if (A.gna[ia] > gnaMax) { gnaMax = A.gna[ia]; out.gNaPeakT = A.t; } if (A.gk[ia] > gkMax) { gkMax = A.gk[ia]; out.gKPeakT = A.t; } }
+  }
+  out.v = out.tA != null && out.tB != null ? (A.comps[ib].x - A.comps[ia].x) / (out.tB - out.tA) * 10 : null;   // cm/ms → m/s
+  const P = A.post;
+  out.post = {spikes: P.spikes, dvMax: P.vmax - A.Vrest, dvMin: P.vmin - A.Vrest, released: P.released,
+              delay: P.firstPost != null ? P.firstPost - Math.max(...P.arrive.filter(a => a <= P.firstPost)) : null, arrive: P.arrive.slice()};
+  return out;
+}
+/* MODEL:end */
+
+/* ---- state: plain data --------------------------------------------------- */
+const TEXTBOOK = {dia: 8, myelin: false, T: 18.5, na: 100, k: 100, Nao: 440, Ko: 20, syn: 'exc'};
+const S = {par: Object.assign({}, TEXTBOOK), amp: 40, pair: false, gap: 6, speed: 'slow', locked: false,
+           ea: 0.35, eb: 0.75, es: 0.05, log: [], vel: [], sweep: null, sweeps: 0};
+const shared = sharedState();
+if (shared) {
+  if (shared.par) for (const k in TEXTBOOK) if (shared.par[k] != null) S.par[k] = shared.par[k];
+  for (const k of ['amp', 'gap', 'ea', 'eb', 'es']) if (isFinite(+shared[k])) S[k] = +shared[k];
+  S.pair = !!shared.pair;
+}
+S.par.dia = clamp(Math.round(S.par.dia), 0, DIAS.length - 1);
+if (S.par.myelin && DIAS[S.par.dia] > 20) S.par.myelin = false;
+shareState(() => ({par: Object.assign({}, S.par), amp: S.amp, pair: S.pair, gap: S.gap, ea: S.ea, eb: S.eb, es: S.es}));
+const modelPar = () => ({d: DIAS[S.par.dia], myelin: S.par.myelin, T: S.par.T, na: S.par.na, k: S.par.k, Nao: S.par.Nao, Ko: S.par.Ko, syn: S.par.syn});
+const lawKey = () => JSON.stringify([S.par.dia, S.par.myelin, S.par.T, S.par.na, S.par.k, S.par.Nao, S.par.Ko]);
+let AX = makeAxon(modelPar());
+
+/* ============================================================================
+   The stage: built once, then patched.
+   ============================================================================ */
+const svg = $('stage');
+const X0 = 60, X1 = 900, TY = 150, TH = 20;                // the axon: x range, centre line, half-thickness
+const VY = V => 118 - (clamp(V, -90, 60) + 90) / 150 * 84;  // the voltage profile above the axon
+const SC = {x: 60, w: 520, y0: 290, y1: 430, gy0: 452, gy1: 512};
+const SY = {x: 640, w: 330};
+const SR = {x: 72, y: 572, w: 360, h: 104};                // stimulus–response
+const VD = {x: 560, y: 572, w: 400, h: 104};               // speed–diameter
+const COL = {a: '#3f7fd8', b: '#2f9e5b', na: '#e08a12', k: '#7b5cd6', stim: '#e0567a', post: '#a0368f'};
+const xOf = f => X0 + f * (X1 - X0);
+const fOf = X => clamp((X - X0) / (X1 - X0), 0, 1);
+function vCol(V){
+  const t = clamp((V + 80) / 130, 0, 1), stops = [[0, [59, 63, 143]], [0.35, [110, 92, 200]], [0.65, [236, 120, 60]], [1, [255, 214, 107]]];
+  for (let i = 1; i < stops.length; i++) if (t <= stops[i][0]) { const [t0, c0] = stops[i - 1], [t1, c1] = stops[i], u = (t - t0) / (t1 - t0);
+    return `rgb(${c0.map((c, j) => Math.round(c + (c1[j] - c) * u)).join(',')})`; }
+  return 'rgb(255,214,107)';
+}
+const NSEG = 84, NSIGN = 30, NION = 160;
+function build(){
+  let segs = ''; for (let i = 0; i < NSEG; i++) { const x = X0 + i * (X1 - X0) / NSEG; segs += `<rect id="sg${i}" x="${x.toFixed(1)}" y="${TY - TH + 2}" width="${((X1 - X0) / NSEG + 0.6).toFixed(1)}" height="${2 * TH - 4}"/>`; }
+  let signs = ''; for (let i = 0; i < NSIGN; i++) { const x = X0 + (i + 0.5) * (X1 - X0) / NSIGN;
+    signs += `<text id="so${i}" x="${x.toFixed(1)}" y="${TY - TH - 5}" text-anchor="middle" font-size="12" font-weight="700" class="m">+</text>` +
+             `<text id="si${i}" x="${x.toFixed(1)}" y="${TY - TH + 13}" text-anchor="middle" font-size="11" font-weight="700" class="m">−</text>` +
+             `<text id="sb${i}" x="${x.toFixed(1)}" y="${TY + TH - 4}" text-anchor="middle" font-size="11" font-weight="700" class="m">−</text>` +
+             `<text id="su${i}" x="${x.toFixed(1)}" y="${TY + TH + 14}" text-anchor="middle" font-size="12" font-weight="700" class="m">+</text>`; }
+  let ions = ''; for (let i = 0; i < NION; i++) ions += `<g id="ion${i}" opacity="0"><circle r="4.2"/><text y="3" text-anchor="middle" font-size="6.5" font-weight="700" fill="#fff" class="m"></text></g>`;
+  let ves = ''; const rv = mulberry32(7);
+  for (let i = 0; i < 16; i++) { const a = rv() * Math.PI * 2, rr = 12 + rv() * 30; ves += `<circle id="ve${i}" cx="${(700 + Math.cos(a) * rr * 1.2).toFixed(1)}" cy="${(335 + Math.sin(a) * rr).toFixed(1)}" r="5.2" fill="#fff6d9" stroke="#e0a43a" stroke-width="1.2"/>`; }
+  let tx = ''; for (let i = 0; i < 40; i++) tx += `<circle id="tx${i}" r="1.9" fill="#e0567a" opacity="0"/>`;
+  let rec = ''; for (let i = 0; i < 6; i++) { const y = 296 + i * 15; rec += `<g id="rc${i}"><rect x="790" y="${y}" width="9" height="11" rx="2" fill="#c9b8ea"/><rect id="rg${i}" x="793" y="${y + 2}" width="3" height="7" fill="#4a3a78"/></g>`; }
+  svg.innerHTML = `
+  <defs>
+    <linearGradient id="gBg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fbfaf6"/><stop offset="1" stop-color="#f4f1ea"/></linearGradient>
+    <linearGradient id="gMy" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fffdf4"/><stop offset=".5" stop-color="#f3ead0"/><stop offset="1" stop-color="#e6d8b0"/></linearGradient>
+    <radialGradient id="gKnob" cx="40%" cy="40%" r="70%"><stop offset="0" stop-color="#f6dcee"/><stop offset="1" stop-color="#d9a6c8"/></radialGradient>
+    <clipPath id="clipAx"><rect x="${X0}" y="${TY - TH}" width="${X1 - X0}" height="${2 * TH}" rx="${TH}"/></clipPath>
+    <clipPath id="clipSc"><rect x="${SC.x}" y="${SC.y0 - 4}" width="${SC.w}" height="${SC.gy1 - SC.y0 + 8}"/></clipPath>
+  </defs>
+  <rect x="0" y="0" width="1000" height="720" fill="url(#gBg)"/>
+
+  <!-- the axon -->
+  <text x="20" y="22" fill="#4a555b" font-size="12" font-weight="700" letter-spacing=".08em">THE AXON</text>
+  <text id="axSub" x="120" y="22" fill="#7c878c" font-size="11"></text>
+  <g font-size="10.5" font-weight="600">
+    <circle cx="640" cy="18" r="4.2" fill="${COL.na}"/><text x="648" y="22" fill="#8a5a10">Na⁺ in</text>
+    <circle cx="704" cy="18" r="4.2" fill="${COL.k}"/><text x="712" y="22" fill="#4a3a78">K⁺ out</text>
+    <rect x="766" y="12" width="36" height="10" rx="3" fill="url(#gVbar)"/><text x="806" y="22" fill="#7c878c">−80 → +50 mV inside</text>
+  </g>
+  <linearGradient id="gVbar"><stop offset="0" stop-color="${vCol(-80)}"/><stop offset=".35" stop-color="${vCol(-34)}"/><stop offset=".65" stop-color="${vCol(4)}"/><stop offset="1" stop-color="${vCol(50)}"/></linearGradient>
+  <line x1="${X0}" y1="${VY(0)}" x2="${X1}" y2="${VY(0)}" stroke="#e2ded2" stroke-dasharray="3 3"/>
+  <text x="${X0 - 6}" y="${VY(0) + 4}" fill="#7c878c" font-size="9.5" text-anchor="end" class="m">0</text>
+  <text x="${X0 - 6}" y="${VY(-65) + 4}" fill="#7c878c" font-size="9.5" text-anchor="end" class="m">−65</text>
+  <text x="${X0 - 6}" y="${VY(40) + 4}" fill="#7c878c" font-size="9.5" text-anchor="end" class="m">+40</text>
+  <path id="vProf" fill="none" stroke="#a0368f" stroke-width="2" stroke-linejoin="round"/>
+  <text x="${X1 + 6}" y="${VY(-30)}" fill="#a0368f" font-size="10" font-weight="600">V inside</text>
+  <text x="${X1 + 6}" y="${VY(-30) + 12}" fill="#a0368f" font-size="10" font-weight="600">along it</text>
+  <g clip-path="url(#clipAx)"><rect x="${X0}" y="${TY - TH}" width="${X1 - X0}" height="${2 * TH}" fill="#6e5cc8"/><g id="segs">${segs}</g></g>
+  <rect x="${X0}" y="${TY - TH}" width="${X1 - X0}" height="${2 * TH}" rx="${TH}" fill="none" stroke="#6b4f86" stroke-width="2"/>
+  <g id="myelin"></g>
+  <path d="M${X1 - 2} ${TY - 8} C ${X1 + 14} ${TY - 8}, ${X1 + 18} ${TY - 22}, ${X1 + 36} ${TY - 20} C ${X1 + 58} ${TY - 18}, ${X1 + 58} ${TY + 18}, ${X1 + 36} ${TY + 20} C ${X1 + 18} ${TY + 22}, ${X1 + 14} ${TY + 8}, ${X1 - 2} ${TY + 8} Z" fill="url(#gKnob)" stroke="#8a4a7a" stroke-width="1.4"/>
+  <circle id="knobGlow" cx="${X1 + 34}" cy="${TY}" r="16" fill="#ffd36b" opacity="0"/>
+  <text x="${X1 + 34}" y="${TY + 40}" fill="#7a3a6a" font-size="10" text-anchor="middle" font-weight="600">knob</text>
+  <path d="M${X1 + 34} ${TY + 48} L ${X1 + 34} 258 L 760 258 L 760 272" fill="none" stroke="#d9a6c8" stroke-width="1.2" stroke-dasharray="3 3"/>
+  <g id="signs">${signs}</g>
+  <g id="ions">${ions}</g>
+  <text id="dirArrow" x="0" y="${TY + 5}" fill="#fff" font-size="16" font-weight="700" text-anchor="middle" opacity="0"></text>
+  <g id="scaleBar"></g>
+
+  <!-- electrodes: stimulator S, recorders A and B -->
+  <g id="elS"><line id="elSl" y1="${TY + TH + 1}" y2="${TY + 58}" stroke="${COL.stim}" stroke-width="2.4"/><rect id="elSb" y="${TY + 58}" width="24" height="18" rx="4" fill="${COL.stim}"/><text id="elSt" y="${TY + 71}" fill="#fff" font-size="11" font-weight="700" text-anchor="middle">S</text><path id="elSz" fill="#ffd36b" opacity="0"/></g>
+  <g id="elA"><line id="elAl" y1="${TY + TH + 1}" y2="${TY + 58}" stroke="${COL.a}" stroke-width="2"/><rect id="elAb" y="${TY + 58}" width="22" height="18" rx="4" fill="${COL.a}"/><text id="elAt" y="${TY + 71}" fill="#fff" font-size="11" font-weight="700" text-anchor="middle">A</text></g>
+  <g id="elB"><line id="elBl" y1="${TY + TH + 1}" y2="${TY + 58}" stroke="${COL.b}" stroke-width="2"/><rect id="elBb" y="${TY + 58}" width="22" height="18" rx="4" fill="${COL.b}"/><text id="elBt" y="${TY + 71}" fill="#fff" font-size="11" font-weight="700" text-anchor="middle">B</text></g>
+  <text x="${X0}" y="${TY + 92}" fill="#7c878c" font-size="10.5">Drag S (stimulator), A and B (recording electrodes) along the axon.</text>
+  <line x1="0" y1="244" x2="1000" y2="244" stroke="#e2ded2"/>
+
+  <!-- oscilloscope -->
+  <text x="20" y="266" fill="#4a555b" font-size="12" font-weight="700" letter-spacing=".08em">OSCILLOSCOPE</text>
+  <g font-size="10.5" font-weight="600">
+    <line x1="160" y1="262" x2="178" y2="262" stroke="${COL.a}" stroke-width="2.4"/><text x="182" y="266" fill="${COL.a}">V at A</text>
+    <line x1="230" y1="262" x2="248" y2="262" stroke="${COL.b}" stroke-width="2.4"/><text x="252" y="266" fill="${COL.b}">V at B</text>
+    <line x1="300" y1="262" x2="318" y2="262" stroke="${COL.na}" stroke-width="2"/><text x="322" y="266" fill="#8a5a10">g<tspan font-size="8" dy="2">Na</tspan><tspan dy="-2"> at A</tspan></text>
+    <line x1="382" y1="262" x2="400" y2="262" stroke="${COL.k}" stroke-width="2"/><text x="404" y="266" fill="#4a3a78">g<tspan font-size="8" dy="2">K</tspan><tspan dy="-2"> at A</tspan></text>
+  </g>
+  <g id="scAxes"></g>
+  <g clip-path="url(#clipSc)">
+    <path id="trA" fill="none" stroke="${COL.a}" stroke-width="2" stroke-linejoin="round"/>
+    <path id="trB" fill="none" stroke="${COL.b}" stroke-width="2" stroke-linejoin="round"/>
+    <path id="trNa" fill="none" stroke="${COL.na}" stroke-width="1.8"/>
+    <path id="trK" fill="none" stroke="${COL.k}" stroke-width="1.8"/>
+    <g id="stimMarks"></g>
+    <line id="scSweep" y1="${SC.y0}" y2="${SC.gy1}" stroke="#1d2327" stroke-width="1" opacity="0"/>
+  </g>
+  <text id="scNote" x="${SC.x + 8}" y="${SC.y0 + 14}" fill="#7c878c" font-size="11"></text>
+  <line x1="610" y1="252" x2="610" y2="530" stroke="#e2ded2"/>
+
+  <!-- the synapse -->
+  <text x="628" y="266" fill="#4a555b" font-size="12" font-weight="700" letter-spacing=".08em">THE SYNAPSE</text>
+  <path id="knobBig" d="M630 280 C 690 272, 770 280, 780 300 L 780 372 C 770 392, 690 398, 630 390 Z" fill="url(#gKnob)" stroke="#8a4a7a" stroke-width="1.4"/>
+  <g id="vesicles">${ves}</g>
+  <rect x="780" y="286" width="10" height="100" fill="#fbf3f8" opacity=".6"/>
+  <g id="txG">${tx}</g>
+  <path d="M790 284 L 972 284 L 972 392 L 790 392 Z" id="postBody" fill="#ece5fa" stroke="#6b4f86" stroke-width="1.4"/>
+  <g id="recs">${rec}</g>
+  <g id="postIons"></g>
+  <text x="705" y="410" fill="#7a3a6a" font-size="10" text-anchor="middle">synaptic knob</text>
+  <text x="785" y="410" fill="#7c878c" font-size="10" text-anchor="middle">cleft</text>
+  <text x="880" y="410" fill="#4a3a78" font-size="10" text-anchor="middle">next neuron</text>
+  <text id="synTag" x="880" y="306" fill="#4a3a78" font-size="11" text-anchor="middle" font-weight="700"></text>
+  <text id="synV" x="880" y="324" fill="#4a3a78" font-size="11" text-anchor="middle" class="m"></text>
+  <text id="synMsg" x="880" y="376" fill="#4a3a78" font-size="10.5" text-anchor="middle"></text>
+  <g id="postAxes"></g>
+  <path id="trPost" fill="none" stroke="${COL.post}" stroke-width="2" stroke-linejoin="round"/>
+  <line x1="0" y1="530" x2="1000" y2="530" stroke="#e2ded2"/>
+
+  <!-- the learner's measurements -->
+  <text x="20" y="552" fill="#4a555b" font-size="12" font-weight="700" letter-spacing=".08em">HEIGHT AT A AGAINST STIMULUS</text>
+  <g id="srAxes"></g><g id="srPts"></g>
+  <text id="srNote" x="${SR.x + SR.w}" y="552" fill="#7c878c" font-size="10.5" text-anchor="end"></text>
+  <line x1="490" y1="540" x2="490" y2="712" stroke="#e2ded2"/>
+  <text x="510" y="552" fill="#4a555b" font-size="12" font-weight="700" letter-spacing=".08em">SPEED AGAINST DIAMETER</text>
+  <g id="vdAxes"></g><path id="vdFit" fill="none" stroke="${COL.a}" stroke-width="1.2" stroke-dasharray="5 4"/><g id="vdPts"></g>
+  <text id="vdNote" x="${VD.x + VD.w}" y="552" fill="#7c878c" font-size="10.5" text-anchor="end"></text>
+
+  <rect id="veil" x="0" y="245" width="1000" height="475" fill="#fbfaf6" opacity=".95"/>
+  <text id="veilT" x="500" y="480" text-anchor="middle" fill="#7c878c" font-size="15" font-weight="600">The oscilloscope switches on once you have made a prediction.</text>
+
+  <!-- hit targets: a layer that never moves between parents -->
+  <rect id="hitS" class="eh" y="${TY + 52}" width="34" height="30" fill="transparent" tabindex="0" role="slider" aria-label="Stimulating electrode position"/>
+  <rect id="hitA" class="eh" y="${TY + 52}" width="32" height="30" fill="transparent" tabindex="0" role="slider" aria-label="Recording electrode A position"/>
+  <rect id="hitB" class="eh" y="${TY + 52}" width="32" height="30" fill="transparent" tabindex="0" role="slider" aria-label="Recording electrode B position"/>
+  `;
+}
+
+/* ---- axes ----------------------------------------------------------------- */
+const sx = t => SC.x + t / SWEEP * SC.w;
+const sv = V => SC.y1 - (clamp(V, -90, 60) + 90) / 150 * (SC.y1 - SC.y0);
+let GTOP = 40;
+const sg = g => SC.gy1 - clamp(g, 0, GTOP) / GTOP * (SC.gy1 - SC.gy0);
+const PY = {y0: 424, y1: 516};
+const pv = V => PY.y1 - (clamp(V, -90, 40) + 90) / 130 * (PY.y1 - PY.y0);
+const px = t => SY.x + t / SWEEP * SY.w;
+const srx = a => SR.x + a / 300 * SR.w, sry = V => SR.y + SR.h - (clamp(V, -80, 60) + 80) / 140 * SR.h;
+const LD = [Math.log10(0.7), Math.log10(700)], LV = [Math.log10(0.3), Math.log10(100)];
+const vdx = d => VD.x + (Math.log10(d) - LD[0]) / (LD[1] - LD[0]) * VD.w;
+const vdy = v => VD.y + VD.h - (Math.log10(clamp(v, 0.3, 100)) - LV[0]) / (LV[1] - LV[0]) * VD.h;
+function drawAxes(){
+  let a = `<rect x="${SC.x}" y="${SC.y0}" width="${SC.w}" height="${SC.y1 - SC.y0}" fill="#fff" stroke="#e2ded2"/>`;
+  for (const V of [-80, -40, 0, 40]) a += `<line x1="${SC.x}" y1="${sv(V)}" x2="${SC.x + SC.w}" y2="${sv(V)}" stroke="#f0ede4"/><text x="${SC.x - 6}" y="${sv(V) + 4}" fill="#7c878c" font-size="10" text-anchor="end" class="m">${V}</text>`;
+  a += `<text x="${SC.x - 36}" y="${SC.y0 - 4}" fill="#7c878c" font-size="10">mV</text>`;
+  a += `<rect x="${SC.x}" y="${SC.gy0}" width="${SC.w}" height="${SC.gy1 - SC.gy0}" fill="#fff" stroke="#e2ded2"/>`;
+  a += `<text x="${SC.x - 6}" y="${SC.gy0 + 9}" fill="#7c878c" font-size="10" text-anchor="end" class="m">${GTOP}</text><text x="${SC.x - 6}" y="${SC.gy1}" fill="#7c878c" font-size="10" text-anchor="end" class="m">0</text>`;
+  a += `<text x="${SC.x - 6}" y="${(SC.gy0 + SC.gy1) / 2 + 4}" fill="#7c878c" font-size="9" text-anchor="end">mS/cm²</text>`;
+  for (let t = 0; t <= SWEEP; t += 4) a += `<text x="${sx(t)}" y="${SC.gy1 + 13}" fill="#7c878c" font-size="10" text-anchor="middle" class="m">${t}</text>`;
+  a += `<text x="${SC.x + SC.w}" y="${SC.gy1 + 13}" fill="#7c878c" font-size="10" text-anchor="end" dx="-18">ms</text>`;
+  $('scAxes').innerHTML = a;
+  let p = `<rect x="${SY.x}" y="${PY.y0}" width="${SY.w}" height="${PY.y1 - PY.y0}" fill="#fff" stroke="#e2ded2"/>`;
+  p += `<line id="thrLine" x1="${SY.x}" x2="${SY.x + SY.w}" stroke="#a0368f" stroke-dasharray="4 3" opacity=".6"/><text id="thrLab" x="${SY.x + SY.w - 4}" fill="#a0368f" font-size="9.5" text-anchor="end">its threshold</text>`;
+  p += `<line id="restLine" x1="${SY.x}" x2="${SY.x + SY.w}" stroke="#d8d3c6"/>`;
+  p += `<text x="${SY.x + 4}" y="${PY.y0 + 11}" fill="#7c878c" font-size="10">V of the next neuron</text>`;
+  p += `<text x="${SY.x + SY.w}" y="${PY.y1 + 12}" fill="#7c878c" font-size="10" text-anchor="end">0 – ${SWEEP} ms</text>`;
+  $('postAxes').innerHTML = p;
+  let s = `<rect x="${SR.x}" y="${SR.y}" width="${SR.w}" height="${SR.h}" fill="#fff" stroke="#e2ded2"/>`;
+  for (const V of [-60, 0, 40]) s += `<line x1="${SR.x}" y1="${sry(V)}" x2="${SR.x + SR.w}" y2="${sry(V)}" stroke="#f0ede4"/><text x="${SR.x - 5}" y="${sry(V) + 4}" fill="#7c878c" font-size="10" text-anchor="end" class="m">${V}</text>`;
+  for (const A of [0, 100, 200, 300]) s += `<text x="${srx(A)}" y="${SR.y + SR.h + 13}" fill="#7c878c" font-size="10" text-anchor="middle" class="m">${A}</text>`;
+  s += `<text x="${SR.x + SR.w}" y="${SR.y + SR.h + 26}" fill="#7c878c" font-size="10" text-anchor="end">stimulus, µA/cm² →</text><text x="${SR.x - 5}" y="${SR.y + SR.h + 26}" fill="#7c878c" font-size="10" text-anchor="end">peak mV ↑</text>`;
+  s += `<line id="srThr" y1="${SR.y}" y2="${SR.y + SR.h}" stroke="#a0368f" stroke-dasharray="4 3" opacity="0"/>`;
+  $('srAxes').innerHTML = s;
+  let v = `<rect x="${VD.x}" y="${VD.y}" width="${VD.w}" height="${VD.h}" fill="#fff" stroke="#e2ded2"/>`;
+  for (const d of [1, 10, 100]) v += `<line x1="${vdx(d)}" y1="${VD.y}" x2="${vdx(d)}" y2="${VD.y + VD.h}" stroke="#f0ede4"/><text x="${vdx(d)}" y="${VD.y + VD.h + 13}" fill="#7c878c" font-size="10" text-anchor="middle" class="m">${d}</text>`;
+  for (const w of [1, 10, 100]) v += `<line x1="${VD.x}" y1="${vdy(w)}" x2="${VD.x + VD.w}" y2="${vdy(w)}" stroke="#f0ede4"/><text x="${VD.x - 5}" y="${vdy(w) + 4}" fill="#7c878c" font-size="10" text-anchor="end" class="m">${w}</text>`;
+  v += `<text x="${VD.x + VD.w}" y="${VD.y + VD.h + 26}" fill="#7c878c" font-size="10" text-anchor="end">diameter, µm (log) →</text><text x="${VD.x - 5}" y="${VD.y + VD.h + 26}" fill="#7c878c" font-size="10" text-anchor="end">m/s ↑</text>`;
+  v += `<g font-size="10" font-weight="600"><circle cx="${VD.x + 10}" cy="${VD.y + 10}" r="4" fill="${COL.a}"/><text x="${VD.x + 18}" y="${VD.y + 14}" fill="${COL.a}">bare</text><circle cx="${VD.x + 58}" cy="${VD.y + 10}" r="4" fill="#d9a441" stroke="#8a6a1a"/><text x="${VD.x + 66}" y="${VD.y + 14}" fill="#8a6a1a">myelinated</text></g>`;
+  $('vdAxes').innerHTML = v;
+}
+
+/* ---- the fibre picture ------------------------------------------------------ */
+function drawFibre(){
+  const A = AX;
+  let m = '';
+  if (A.p.myelin) {
+    /* sheaths between the nodes (the gaps are drawn wider than life so you can see them) */
+    const nodes = []; for (let i = 0; i < A.N; i++) if (A.comps[i].node) nodes.push(xOf(A.comps[i].x / A.L));
+    for (let k = 0; k < nodes.length - 1; k++) {
+      const a = nodes[k] + 2.2, b = nodes[k + 1] - 2.2;
+      m += `<rect x="${a.toFixed(1)}" y="${TY - TH - 5}" width="${(b - a).toFixed(1)}" height="${2 * TH + 10}" rx="6" fill="url(#gMy)" stroke="#cdb77f" stroke-width=".8" opacity=".62"/>`;
+    }
+  }
+  $('myelin').innerHTML = m;
+  const sm = A.p.myelin ? 'Schwann cells wrap it in myelin; the gaps are nodes of Ranvier' : 'bare membrane, channels all along';
+  $('axSub').textContent = `${DIAS[S.par.dia]} µm across, ${(A.L * 10).toFixed(A.L < 1 ? 1 : 0)} mm shown · ${sm}`;
+  /* a scale bar that fits */
+  const Lmm = A.L * 10, nice = [0.1, 0.2, 0.5, 1, 2, 5, 10, 20, 50].find(v => v / Lmm * (X1 - X0) >= 70) || 50;
+  const w = nice / Lmm * (X1 - X0);
+  $('scaleBar').innerHTML = `<line x1="${X1 - w}" y1="${TY + 88}" x2="${X1}" y2="${TY + 88}" stroke="#4a555b" stroke-width="2"/><line x1="${X1 - w}" y1="${TY + 84}" x2="${X1 - w}" y2="${TY + 92}" stroke="#4a555b"/><line x1="${X1}" y1="${TY + 84}" x2="${X1}" y2="${TY + 92}" stroke="#4a555b"/>` +
+    `<text x="${X1 - w / 2}" y="${TY + 81}" fill="#4a555b" font-size="10" text-anchor="middle" class="m">${nice >= 10 ? nice / 10 + ' cm' : nice + ' mm'}</text>`;
+}
+/* The picture follows the model: colour by V, charges by sign of V, ions by current. */
+const IONS = Array.from({length: NION}, () => ({on: false}));
+let ionRnd = mulberry32(11);
+function paintAxon(dtReal){
+  const A = AX, V = A.V;
+  const vAt = f => { const x = f * A.L; let i = clamp(Math.floor(x / A.L * A.N), 0, A.N - 1);
+    while (i > 0 && A.comps[i].x > x) i--; while (i < A.N - 1 && A.comps[i + 1].x < x) i++;
+    const c0 = A.comps[i], c1 = A.comps[Math.min(A.N - 1, i + 1)], u = c1 === c0 ? 0 : clamp((x - c0.x) / (c1.x - c0.x), 0, 1);
+    return V[i] + (V[Math.min(A.N - 1, i + 1)] - V[i]) * u; };
+  for (let i = 0; i < NSEG; i++) $('sg' + i).setAttribute('fill', vCol(vAt((i + .5) / NSEG)));
+  let d = ''; const n = 160;
+  for (let i = 0; i <= n; i++) { const f = i / n; d += (i ? 'L' : 'M') + xOf(f).toFixed(1) + ' ' + VY(vAt(f)).toFixed(1); }
+  $('vProf').setAttribute('d', d);
+  for (let i = 0; i < NSIGN; i++) {
+    const neg = vAt((i + .5) / NSIGN) < 0;               // inside negative: + outside, − inside (NCERT Fig. 18.2)
+    const o = neg ? '+' : '−', inn = neg ? '−' : '+', co = neg ? '#c0392b' : '#2f5fb0', ci = neg ? '#dfe4ff' : '#fff1c9';
+    for (const [id, s, c] of [['so', o, co], ['su', o, co], ['si', inn, ci], ['sb', inn, ci]]) { const e = $(id + i); if (e.textContent !== s) e.textContent = s; e.setAttribute('fill', c); }
+  }
+  /* ions: spawned where the model's currents flow, at a rate set by those currents */
+  const scale = S.speed === 'slow' ? 1 : 0.35;
+  if (dtReal > 0) for (let i = 0; i < A.N; i += A.p.myelin ? 1 : 3) {
+    if (!A.act[i]) continue;
+    const f = A.comps[i].x / A.L;
+    const inNa = -A.ina[i] / A.act[i], outK = A.ik[i] / A.act[i];        // per area of ordinary membrane; a node packs 8 times the channels
+    if (inNa > 40 && ionRnd() < inNa / 4000 * scale * (A.p.myelin ? 6 : 1)) spawnIon('na', f);
+    if (outK > 40 && ionRnd() < outK / 4000 * scale * (A.p.myelin ? 6 : 1)) spawnIon('k', f);
+  }
+  for (let j = 0; j < NION; j++) {
+    const q = IONS[j], el = $('ion' + j);
+    if (!q.on) continue;
+    q.u += dtReal / 0.6;
+    if (q.u >= 1) { q.on = false; el.setAttribute('opacity', 0); continue; }
+    const y = q.kind === 'na' ? (TY - TH - 18) + q.u * 36 : (TY + 4) - q.u * 36;
+    el.setAttribute('transform', `translate(${q.x.toFixed(1)} ${(y + q.side * (q.kind === 'na' ? 0 : 0)).toFixed(1)})`);
+    el.setAttribute('opacity', (Math.sin(Math.PI * q.u) * 0.95).toFixed(2));
+  }
+  /* the knob lights while the terminal is depolarised */
+  $('knobGlow').setAttribute('opacity', clamp((V[A.N - 1] + 40) / 80, 0, 0.8).toFixed(2));
+  /* direction arrows on moving fronts */
+}
+function spawnIon(kind, f){
+  const j = IONS.findIndex(q => !q.on); if (j < 0) return;
+  const q = IONS[j]; Object.assign(q, {on: true, kind, u: 0, x: xOf(f) + (ionRnd() - .5) * 8, side: ionRnd() < .5 ? -1 : 1});
+  const el = $('ion' + j);
+  el.firstChild.setAttribute('fill', kind === 'na' ? COL.na : COL.k);
+  el.lastChild.textContent = kind === 'na' ? 'Na' : 'K';
+}
+function placeElectrodes(){
+  const put = (L, f, w) => { const X = xOf(f);
+    $('el' + L + 'l').setAttribute('x1', X); $('el' + L + 'l').setAttribute('x2', X);
+    $('el' + L + 'b').setAttribute('x', X - w / 2); $('el' + L + 't').setAttribute('x', X);
+    $('hit' + L).setAttribute('x', X - 16); };
+  put('S', S.es, 24); put('A', S.ea, 22); put('B', S.eb, 22);
+  const X = xOf(S.es);
+  $('elSz').setAttribute('d', `M${X - 5} ${TY + 40} l6 -9 l-2 7 l6 -1 l-7 10 l2 -7 Z`);
+}
+
+/* ============================================================================
+   A sweep: one experiment of SWEEP ms, run in slow motion.
+   ============================================================================ */
+const REC = 0.05;
+function newSweep(){
+  AX = makeAxon(modelPar());
+  const [i0, i1] = stimSpan(AX, S.es);
+  const pulses = [{t: 1, amp: S.amp}]; if (S.pair) pulses.push({t: 1 + S.gap, amp: S.amp});
+  const my = AX.p.myelin;
+  const sw = {pulses, i0, i1, ia: nearestIdx(AX, S.ea, my), ib: nearestIdx(AX, S.eb, my), is: Math.round((i0 + i1) / 2),
+    rec: [], next: 0, done: false, peakA: -200, peakS: -200, spikesA: 0, spikesS: 0, upA: false, upS: false, tA: null, tB: null,
+    ends: [0, 0], up0: false, upN: false, key: lawKey(), amp: S.amp, pair: S.pair, gap: S.gap, es: S.es, syn: S.par.syn, Nao: S.par.Nao, Ko: S.par.Ko,
+    d: DIAS[S.par.dia], myelin: S.par.myelin, rest: AX.Vrest, gnaMax: 0, gkMax: 0};
+  S.sweep = sw; S.sweeps++;
+  drawFibre(); placeElectrodes();
+  return sw;
+}
+function stepSweep(sw, ms){
+  const A = AX, n = Math.round(ms / DT);
+  for (let s = 0; s < n && !sw.done; s++) {
+    const t = A.t; let st = null;
+    for (const pl of sw.pulses) if (t >= pl.t && t < pl.t + STIM_DUR) st = {i0: sw.i0, i1: sw.i1, amp: pl.amp};
+    stepAxon(A, st);
+    const va = A.V[sw.ia], vb = A.V[sw.ib], vs = A.V[sw.is];
+    sw.peakA = Math.max(sw.peakA, va); sw.peakS = Math.max(sw.peakS, vs);
+    if (!sw.upA && va > -20) { sw.upA = true; sw.spikesA++; if (sw.tA == null) sw.tA = A.t; } if (sw.upA && va < -40) sw.upA = false;
+    if (!sw.upS && vs > -20) { sw.upS = true; sw.spikesS++; } if (sw.upS && vs < -40) sw.upS = false;
+    if (sw.tB == null && vb > -20) sw.tB = A.t;
+    const v0 = A.V[0], vN = A.V[A.N - 1];
+    if (!sw.up0 && v0 > -20) { sw.up0 = true; sw.ends[0]++; } if (sw.up0 && v0 < -40) sw.up0 = false;
+    if (!sw.upN && vN > -20) { sw.upN = true; sw.ends[1]++; } if (sw.upN && vN < -40) sw.upN = false;
+    sw.gnaMax = Math.max(sw.gnaMax, A.gna[sw.ia]); sw.gkMax = Math.max(sw.gkMax, A.gk[sw.ia]);
+    if (A.t >= sw.next - 1e-9) { sw.rec.push({t: A.t, a: va, b: vb, gna: A.gna[sw.ia] / (A.act[sw.ia] || 1), gk: A.gk[sw.ia] / (A.act[sw.ia] || 1), post: A.post.V}); sw.next += REC; }
+    if (A.t >= SWEEP) finishSweep(sw);
+  }
+}
+function finishSweep(sw){
+  sw.done = true;
+  const A = AX, P = A.post;
+  const outside = sw.es < Math.min(S.ea, S.eb) - 0.02 || sw.es > Math.max(S.ea, S.eb) + 0.02;   // A and B both on the same side of S
+  sw.vel = outside && sw.tA != null && sw.tB != null && Math.abs(sw.tB - sw.tA) > 1e-6 ? Math.abs(A.comps[sw.ib].x - A.comps[sw.ia].x) / Math.abs(sw.tB - sw.tA) * 10 : null;
+  sw.post = {spikes: P.spikes, dvMax: P.vmax - A.Vrest, dvMin: P.vmin - A.Vrest, delay: P.firstPost != null ? P.firstPost - Math.max(...P.arrive.filter(a => a <= P.firstPost)) : null,
+             arrive: P.arrive.length, relDelay: P.lastRel != null && P.arrive.length ? SYN.delay : null};
+  const entry = {key: sw.key, amp: sw.amp, pair: sw.pair, gap: sw.gap, peakA: sw.peakA, peakS: sw.peakS, spikesA: sw.spikesA, spikesS: sw.spikesS,
+    rest: sw.rest, vel: sw.vel, ends: sw.ends.slice(), es: sw.es, syn: sw.syn, post: sw.post, Nao: sw.Nao, Ko: sw.Ko, d: sw.d, myelin: sw.myelin, n: S.sweeps};
+  S.log.push(entry); if (S.log.length > 80) S.log.shift();
+  if (sw.vel != null && sw.vel > 0 && sw.ib !== sw.ia) {
+    const old = S.vel.find(q => q.d === sw.d && q.myelin === sw.myelin && q.key === sw.key);
+    if (old) old.v = sw.vel; else S.vel.push({d: sw.d, myelin: sw.myelin, v: sw.vel, key: sw.key, T: S.par.T});
+  }
+  track('sweep', {amp: sw.amp, pair: sw.pair, gap: sw.gap, peakA: +sw.peakA.toFixed(1), vel: sw.vel && +sw.vel.toFixed(2)});
+  paintPlots(); paintMeasure(); check(entry); paintWhy(entry);
+  $('btnFire').disabled = !S.locked; $('btnFire').textContent = '⚡ Stimulate';
+}
+
+/* ---- scope, synapse and plots --------------------------------------------------- */
+function paintScope(){
+  const sw = S.sweep;
+  if (!sw) { for (const id of ['trA', 'trB', 'trNa', 'trK', 'trPost']) $(id).setAttribute('d', ''); $('stimMarks').innerHTML = ''; return; }
+  const r = sw.rec, P = (f, g) => { let d = ''; for (let i = 0; i < r.length; i++) d += (i ? 'L' : 'M') + f(r[i]).toFixed(1) + ' ' + g(r[i]).toFixed(1); return d; };
+  $('trA').setAttribute('d', P(q => sx(q.t), q => sv(q.a)));
+  $('trB').setAttribute('d', P(q => sx(q.t), q => sv(q.b)));
+  $('trNa').setAttribute('d', P(q => sx(q.t), q => sg(q.gna)));
+  $('trK').setAttribute('d', P(q => sx(q.t), q => sg(q.gk)));
+  $('trPost').setAttribute('d', P(q => px(q.t), q => pv(q.post)));
+  $('stimMarks').innerHTML = sw.pulses.map(p => `<rect x="${sx(p.t).toFixed(1)}" y="${SC.y1 - 8}" width="${Math.max(2, sx(p.t + STIM_DUR) - sx(p.t)).toFixed(1)}" height="8" fill="${COL.stim}"/>`).join('');
+  const last = r.length ? r[r.length - 1].t : 0;
+  $('scSweep').setAttribute('x1', sx(last)); $('scSweep').setAttribute('x2', sx(last)); $('scSweep').setAttribute('opacity', sw.done ? 0 : .3);
+  $('scNote').textContent = sw.done ? `${sw.d} µm${sw.myelin ? ', myelinated' : ''} · ${sw.amp} µA/cm²${sw.pair ? ` twice, ${sw.gap} ms apart` : ''}` : `running… ${fmt(last, 1)} ms`;
+}
+function paintSynapse(){
+  const A = AX, P = A.post;
+  const rel = P.lastRel != null ? A.t - P.lastRel : 99;
+  for (let i = 0; i < 16; i++) { const e = $('ve' + i), go = i < 6 && rel < 0.7;
+    e.setAttribute('transform', go ? `translate(${(rel / 0.7 * (772 - +e.getAttribute('cx'))).toFixed(1)} 0)` : '');
+    e.setAttribute('opacity', go ? (1 - rel / 0.7).toFixed(2) : 1); }
+  const nTx = Math.round(clamp(P.tx / 1.5, 0, 1) * 40), rv = mulberry32(3);
+  for (let i = 0; i < 40; i++) { const e = $('tx' + i); e.setAttribute('cx', (781 + rv() * 8).toFixed(1)); e.setAttribute('cy', (290 + rv() * 94).toFixed(1)); e.setAttribute('opacity', i < nTx ? .9 : 0); }
+  const inh = A.p.syn === 'inh';
+  for (let i = 0; i < 6; i++) { const g = $('rg' + i); g.setAttribute('height', (7 * (1 - clamp(P.r * 2.2, 0, 1))).toFixed(1)); g.setAttribute('fill', P.r > 0.05 ? (inh ? '#2f5fb0' : '#e0567a') : '#4a3a78'); }
+  $('postBody').setAttribute('fill', vCol(P.V)); $('postBody').setAttribute('fill-opacity', .35);
+  $('synTag').textContent = inh ? 'Inhibitory (E = −80 mV)' : 'Excitatory (E = 0 mV)';
+  $('synV').textContent = `V = ${fmt(P.V, 1)} mV (rest ${fmt(A.Vrest, 1)})`;
+  $('synMsg').textContent = P.spikeT != null ? 'It fires: a new impulse!' : P.r > 0.03 ? (inh ? 'pushed away from threshold' : 'depolarised, but is it enough?') : '';
+  const thrV = A.Vrest + SYN.thrPost;
+  $('thrLine').setAttribute('y1', pv(thrV)); $('thrLine').setAttribute('y2', pv(thrV)); $('thrLab').setAttribute('y', pv(thrV) - 3);
+  $('restLine').setAttribute('y1', pv(A.Vrest)); $('restLine').setAttribute('y2', pv(A.Vrest));
+}
+function sameLaw(){ const k = lawKey(); return S.log.filter(q => q.key === k && !q.pair); }
+function thresholdBracket(){
+  const L = sameLaw(); let lo = null, hi = null;
+  for (const q of L) { if (q.spikesS > 0) hi = hi == null ? q.amp : Math.min(hi, q.amp); else lo = lo == null ? q.amp : Math.max(lo, q.amp); }
+  return {lo, hi};
+}
+function paintPlots(){
+  const L = sameLaw();
+  $('srPts').innerHTML = L.map(q => `<circle cx="${srx(q.amp).toFixed(1)}" cy="${sry(q.peakA).toFixed(1)}" r="4.5" fill="${q.spikesA ? COL.a : '#fff'}" stroke="${COL.a}" stroke-width="1.6"><title>${q.amp} µA/cm²: peak ${q.peakA.toFixed(1)} mV</title></circle>`).join('');
+  const {lo, hi} = thresholdBracket();
+  if (lo != null && hi != null && hi > lo) { const X = srx((lo + hi) / 2); $('srThr').setAttribute('x1', X); $('srThr').setAttribute('x2', X); $('srThr').setAttribute('opacity', .7); }
+  else $('srThr').setAttribute('opacity', 0);
+  $('srNote').textContent = L.length ? `${L.length} single pulse${L.length > 1 ? 's' : ''}, this fibre` : 'each single pulse leaves a point';
+  const pts = S.vel.filter(q => Math.abs(q.T - S.par.T) < 0.01);
+  $('vdPts').innerHTML = pts.map(q => `<circle cx="${vdx(q.d).toFixed(1)}" cy="${vdy(q.v).toFixed(1)}" r="4.5" fill="${q.myelin ? '#d9a441' : COL.a}" stroke="${q.myelin ? '#8a6a1a' : '#fff'}" stroke-width="1.2"><title>${q.d} µm${q.myelin ? ' myelinated' : ''}: ${q.v.toFixed(2)} m/s</title></circle>`).join('');
+  const fit = slopeFit();
+  if (fit) { $('vdFit').setAttribute('d', `M${vdx(fit.d0).toFixed(1)} ${vdy(fit.v0).toFixed(1)} L ${vdx(fit.d1).toFixed(1)} ${vdy(fit.v1).toFixed(1)}`); $('vdNote').textContent = `bare fibres: v ∝ d^${fit.k.toFixed(2)}`; }
+  else { $('vdFit').setAttribute('d', ''); $('vdNote').textContent = pts.length ? 'measure bare fibres of two diameters to fit a slope' : 'each speed you measure leaves a point'; }
+}
+function slopeFit(){
+  const pts = S.vel.filter(q => !q.myelin && Math.abs(q.T - S.par.T) < 0.01); const ds = new Set(pts.map(q => q.d)); if (ds.size < 2) return null;
+  const X = pts.map(q => Math.log10(q.d)), Y = pts.map(q => Math.log10(q.v)), n = X.length, mx = X.reduce((a, b) => a + b) / n, my = Y.reduce((a, b) => a + b) / n;
+  let sxy = 0, sxx = 0; for (let i = 0; i < n; i++) { sxy += (X[i] - mx) * (Y[i] - my); sxx += (X[i] - mx) ** 2; }
+  const k = sxy / sxx, c = my - k * mx, d0 = Math.min(...pts.map(q => q.d)), d1 = Math.max(...pts.map(q => q.d));
+  return {k, d0, d1, v0: 10 ** (c + k * Math.log10(d0)), v1: 10 ** (c + k * Math.log10(d1))};
+}
+
+/* ---- side readouts ----------------------------------------------------------------- */
+function paintMeasure(){
+  const A = AX, last = S.log[S.log.length - 1];
+  $('nernstNote').textContent = `E_Na ${fmt(A.ENa, 1)}, E_K ${fmt(A.EK, 1)} mV`;
+  if (!S.locked) return;
+  $('mRest').textContent = fmt(A.Vrest, 1) + ' mV';
+  $('mE').textContent = `${fmt(A.ENa, 1)}, ${fmt(A.EK, 1)} mV`;
+  $('mPeak').textContent = last ? (last.spikesA ? fmt(last.peakA, 1) + ' mV' : `none (${fmt(last.peakA - last.rest, 1)} mV bump)`) : '—';
+  const {lo, hi} = thresholdBracket();
+  $('mThr').textContent = lo != null && hi != null && hi > lo ? `${lo} and ${hi} µA/cm²` : hi != null ? `below ${hi} µA/cm²` : lo != null ? `above ${lo} µA/cm²` : '—';
+  $('mVel').textContent = last && last.vel ? fmt(last.vel, last.vel < 10 ? 2 : 1) + ' m/s' : '—';
+  const k = lawKey(), pairs = S.log.filter(q => q.key === k && q.pair && q.spikesS >= 1);
+  const fails = pairs.filter(q => q.spikesA === 1).map(q => q.gap), oks = pairs.filter(q => q.spikesA >= 2).map(q => q.gap);
+  $('mRef').textContent = fails.length ? `${Math.max(...fails)} ms` + (oks.length ? ` (fires at ${Math.min(...oks)})` : '') : oks.length ? `fires at ${Math.min(...oks)} ms` : '—';
+  $('mPsp').textContent = last ? (last.post.spikes ? `fired ×${last.post.spikes}` : last.post.arrive ? `${last.post.dvMax > Math.abs(last.post.dvMin) ? '+' + fmt(last.post.dvMax, 1) : fmt(last.post.dvMin, 1)} mV` : 'no impulse arrived') : '—';
+  $('mDelay').textContent = last && last.post.arrive ? `${SYN.delay.toFixed(1)} ms to release` + (last.post.delay != null ? `, ${fmt(last.post.delay, 1)} ms to fire` : '') : '—';
+}
+function paintWhy(q){
+  if (!S.locked) return;
+  $('whyCard').hidden = false;
+  const A = AX; let t = '';
+  if (!q) { $('why').innerHTML = `<p>At rest the membrane is <span class="mono">${fmt(A.Vrest, 1)}</span> mV inside: mostly K⁺ channels are open, so V sits near E_K (<span class="mono">${fmt(A.EK, 1)}</span>). Press ⚡ to stimulate.</p>`; return; }
+  if (q.spikesS === 0) t += `<p><b>No impulse.</b> ${q.amp} µA/cm² raised the membrane under S by only <span class="mono">${fmt(q.peakS - q.rest, 1)}</span> mV. Too few Na⁺ gates opened to outrun the K⁺ leak, so the bump faded as it spread.</p>`;
+  else t += `<p><b>An impulse.</b> Na⁺ channels opened, Na⁺ rushed in and the inside went to <span class="mono">${fmt(q.peakA, 1)}</span> mV at A: the polarity reversed. g<sub>K</sub> rose later and brought it back down.</p>`;
+  if (q.vel) t += `<p>It reached B <span class="mono">${fmt(q.vel, q.vel < 10 ? 2 : 1)}</span> m/s after A (${q.myelin ? 'jumping node to node' : 'patch by patch'}).</p>`;
+  if (q.pair && q.spikesA === 1 && q.spikesS >= 1) t += `<p><b>The second pulse failed</b>, ${q.gap} ms after the first: the Na⁺ gates were still inactivated (h low) and g<sub>K</sub> was still high. The membrane was refractory.</p>`;
+  if (q.post.arrive) t += q.post.spikes ? `<p><b>The next neuron fired.</b> Transmitter from ${q.post.arrive} impulse${q.post.arrive > 1 ? 's' : ''} added up past its threshold.</p>`
+    : `<p>The next neuron moved <span class="mono">${fmt(q.syn === 'inh' ? q.post.dvMin : q.post.dvMax, 1)}</span> mV${q.syn === 'inh' ? ', further from firing' : '; it needed +' + SYN.thrPost + ' mV to fire'}.</p>`;
+  if (A.p.T >= 29 && q.spikesS === 0 && q.amp >= 100) t += `<p><b>Heat block.</b> At ${A.p.T} °C the K⁺ gates open so fast that they cancel the Na⁺ current before it can take off. This is where the squid's equations stop holding.</p>`;
+  $('why').innerHTML = t;
+}
+
+/* ---- findings: reached by the model, never by a button -------------------------------- */
+function check(q){
+  if (!S.locked) return;
+  if (!q.pair && q.spikesS === 0 && q.peakS - q.rest >= 3 && q.spikesA === 0) discover('fade');
+  const k = q.key, same = S.log.filter(r => r.key === k && !r.pair && r.spikesA === 1);
+  for (const a of same) for (const b of same) if (b.amp >= 1.5 * a.amp && Math.abs(b.peakA - a.peakA) <= 2) { discover('allnone'); maybeExplain(a, b); }
+  if (q.pair && q.spikesA === 1 && q.spikesS >= 1) discover('refractory');
+  if (q.spikesA >= 1 && q.Nao <= 300) { const ref = S.log.filter(r => r.spikesA >= 1 && r.Nao >= 400 && r.d === q.d && r.myelin === q.myelin);
+    if (ref.some(r => r.peakA - q.peakA >= 8)) discover('sodium'); }
+  if (!q.pair && q.es > 0.25 && q.es < 0.75 && q.ends[0] === 1 && q.ends[1] === 1) discover('oneway');
+  const my = S.vel.filter(r => r.myelin), bare = S.vel.filter(r => !r.myelin);
+  for (const m of my) for (const b of bare) if (m.d === b.d && m.v >= 5 * b.v) discover('myelin');
+  if (q.syn === 'exc' && q.post.spikes >= 1 && q.post.arrive >= 2) discover('summation');
+  if (q.syn === 'inh' && q.post.arrive >= 1 && q.post.dvMin <= -3) discover('inhibit');
+}
+let EXPLAINED = false;
+function maybeExplain(a, b){
+  if (EXPLAINED || !POE) return;
+  EXPLAINED = true;
+  POE.explain(`You stimulated at <b>${a.amp}</b> and then at <b>${b.amp}</b> µA/cm², ${fmt(b.amp / a.amp, 1)} times as strong. The impulse at A peaked at <span class="mono">${fmt(a.peakA, 1)}</span> and <span class="mono">${fmt(b.peakA, 1)}</span> mV` +
+    (a.vel && b.vel ? `, and travelled at <span class="mono">${fmt(a.vel, 1)}</span> and <span class="mono">${fmt(b.vel, 1)}</span> m/s` : '') + `. ` +
+    `Once the stimulus crosses threshold, the Na⁺ channels open each other: every patch that depolarises opens more gates and pulls the next patch up. The height is set by the membrane (how close V gets to E_Na, <span class="mono">${fmt(AX.ENa, 1)}</span> mV), not by the stimulus. That is <b>all or none</b>. A stronger stimulus signals by firing more often, not by bigger impulses.`);
+}
+
+/* ============================================================================
+   Controls
+   ============================================================================ */
+build(); drawAxes();
+const OUT = {amp: v => v + ' µA/cm²', gap: v => v + ' ms', dia: v => DIAS[v] + ' µm', temp: v => v + ' °C', na: v => v + ' %', k: v => v + ' %', nao: v => v + ' mM', ko: v => v + ' mM'};
+const MAP = {amp: ['S', 'amp'], gap: ['S', 'gap'], dia: ['par', 'dia'], temp: ['par', 'T'], na: ['par', 'na'], k: ['par', 'k'], nao: ['par', 'Nao'], ko: ['par', 'Ko']};
+const getV = id => { const [o, k] = MAP[id]; return o === 'S' ? S[k] : S.par[k]; };
+function syncControls(){
+  for (const id in OUT) { $(id).value = getV(id); $(id + 'Out').textContent = OUT[id](getV(id)); }
+  $('btnPair').setAttribute('aria-pressed', S.pair); $('gapRow').style.opacity = S.pair ? 1 : .45; $('gap').disabled = !S.pair || !S.locked;
+  for (const b of document.querySelectorAll('#myeSeg button')) { b.setAttribute('aria-pressed', (b.dataset.my === '1') === S.par.myelin); }
+  document.querySelector('#myeSeg [data-my="1"]').disabled = DIAS[S.par.dia] > 20 || !S.locked;
+  for (const b of document.querySelectorAll('#synSeg button')) b.setAttribute('aria-pressed', b.dataset.syn === S.par.syn);
+  for (const b of document.querySelectorAll('#speedSeg button')) b.setAttribute('aria-pressed', b.dataset.sp === S.speed);
+  const d = DIAS[S.par.dia];
+  $('fibreNote').textContent = d === 476 ? '476 µm is the squid giant axon Hodgkin and Huxley used.' : d > 20 ? 'Myelin is found only on fibres up to about 20 µm.' :
+    S.par.myelin ? 'A myelinated fibre, like those in your spinal and cranial nerves.' : d <= 2 ? 'A thin bare fibre, like the slow pain fibres in your skin.' : 'A bare fibre: the impulse must open channels all the way along.';
+}
+function lawChanged(){
+  if (S.sweep && !S.sweep.done) { S.sweep.done = true; $('btnFire').textContent = '⚡ Stimulate'; }
+  AX = makeAxon(modelPar()); drawFibre(); placeElectrodes(); paintAxon(0); paintSynapse(); paintPlots(); paintMeasure();
+}
+for (const id in OUT) {
+  $(id).addEventListener('input', e => {
+    const [o, k] = MAP[id], v = +e.target.value;
+    if (o === 'S') S[k] = v; else S.par[k] = v;
+    if (id === 'dia' && DIAS[v] > 20) S.par.myelin = false;
+    $(id + 'Out').textContent = OUT[id](v);
+    if (o === 'par') { syncControls(); lawChanged(); }
+  });
+  $(id).addEventListener('change', () => track('set', {k: id, v: getV(id)}));
+}
+$('btnPair').addEventListener('click', () => { S.pair = !S.pair; syncControls(); sound('tick'); });
+document.querySelectorAll('#myeSeg button').forEach(b => b.addEventListener('click', () => { if (b.disabled) return; S.par.myelin = b.dataset.my === '1'; syncControls(); lawChanged(); sound('tick'); }));
+document.querySelectorAll('#synSeg button').forEach(b => b.addEventListener('click', () => { S.par.syn = b.dataset.syn; AX.p.syn = S.par.syn; syncControls(); paintSynapse(); sound('tick'); }));
+document.querySelectorAll('#speedSeg button').forEach(b => b.addEventListener('click', () => { S.speed = b.dataset.sp; syncControls(); sound('tick'); }));
+$('btnReset').addEventListener('click', () => { S.par = Object.assign({}, TEXTBOOK, {syn: S.par.syn}); syncControls(); lawChanged(); sound('whoosh'); });
+$('btnFire').addEventListener('click', () => {
+  if (!S.locked) return;
+  newSweep(); sound('snap'); $('btnFire').textContent = '… running'; $('btnFire').disabled = true;
+});
+/* Electrodes: drag along the axon. */
+function electrodeDrag(L, key){
+  drag($('hit' + L), svg, {
+    start(){ if (!S.locked) return false; },
+    move(p){ S[key] = Math.round(fOf(p.x) * 200) / 200; placeElectrodes(); },
+    end(){ track('electrode', {which: L, at: S[key]}); },
+  });
+  $('hit' + L).addEventListener('keydown', e => { const d = {ArrowRight: 0.01, ArrowLeft: -0.01}[e.key]; if (!d || !S.locked) return; e.preventDefault(); S[key] = clamp(S[key] + d, 0, 1); placeElectrodes(); });
+}
+electrodeDrag('S', 'es'); electrodeDrag('A', 'ea'); electrodeDrag('B', 'eb');
+
+function lockControls(lock){
+  for (const id of ['amp', 'gap', 'dia', 'temp', 'na', 'k', 'nao', 'ko', 'btnPair', 'btnFire', 'btnReset']) $(id).disabled = lock;
+  document.querySelectorAll('#myeSeg button, #synSeg button').forEach(b => b.disabled = lock);
+  for (const L of ['S', 'A', 'B']) $('hit' + L).style.pointerEvents = lock ? 'none' : '';
+  $('gate').hidden = !lock;
+}
+
+/* ============================================================================
+   Start
+   ============================================================================ */
+findings($('finds'), [
+  {id: 'fade',       icon: '〰', label: 'Below threshold, it fades', hint: 'Try a weak stimulus'},
+  {id: 'allnone',    icon: '▮', label: 'All or none', hint: 'Compare a strong and a stronger stimulus'},
+  {id: 'refractory', icon: '⏸', label: 'Too soon: refractory', hint: 'Two pulses, close together'},
+  {id: 'sodium',     icon: 'Na', label: 'The peak follows sodium', hint: 'Take Na⁺ away from outside'},
+  {id: 'oneway',     icon: '↔', label: 'Both ways from the middle, never back', hint: 'Stimulate in the middle'},
+  {id: 'myelin',     icon: '⤳', label: 'Myelin makes it jump', hint: 'Compare bare and myelinated'},
+  {id: 'summation',  icon: 'Σ', label: 'Two impulses fire the next neuron', hint: 'Watch the synapse'},
+  {id: 'inhibit',    icon: '⊖', label: 'An inhibitory synapse', hint: 'Switch the synapse'},
+], () => toast('All eight. You have measured the nerve impulse the way Hodgkin and Huxley did.', 4800));
+
+const POE = predict($('poe'), {
+  id: 'allnone',
+  q: 'A stimulus is already strong enough to fire an impulse. You make it twice as strong. What happens to the impulse at electrode A?',
+  options: [
+    {id: 'taller', text: 'It is about twice as tall'},
+    {id: 'same',   text: 'It is the same height as before', right: true},
+    {id: 'faster', text: 'It travels about twice as fast'},
+    {id: 'two',    text: 'Two impulses travel instead of one'},
+  ],
+  onLock(){
+    S.locked = true;
+    lockControls(false); syncControls();
+    for (const id of ['veil', 'veilT']) $(id).remove();
+    $('measureVeil').hidden = true; $('measure').hidden = false;
+    say('Now find out. Stimulate the axon, then stimulate it harder.');
+    paintMeasure(); paintWhy(null); paintPlots();
+  },
+});
+lockControls(!POE.locked);
+if (!Play.FF('predict')) S.locked = true;
+syncControls(); drawFibre(); placeElectrodes(); paintAxon(0); paintSynapse(); paintMeasure(); paintPlots();
+
+/* The model runs in slow motion: 2.5 ms of axon time per second (or 20 when faster). Under reduced
+   motion it runs in quarter-second jumps. */
+const RM = reduced();
+let acc = 0;
+loop(dt => {
+  acc += dt;
+  if (RM && acc < 0.25) return;
+  const sw = S.sweep;
+  if (sw && !sw.done) { stepSweep(sw, acc * (S.speed === 'slow' ? 2.5 : 20)); paintScope(); paintSynapse(); if (!sw.done) paintMeasure(); }
+  paintAxon(RM ? 0.25 : acc);
+  acc = 0;
+});
+window.applyFeatures = () => paintPlots();
+window.PG_STATE = () => ({par: Object.assign({}, S.par), amp: S.amp, pair: S.pair, gap: S.gap, speed: S.speed, locked: S.locked, ea: S.ea, eb: S.eb, es: S.es,
+  running: !!(S.sweep && !S.sweep.done), sweeps: S.sweeps, rest: AX.Vrest, ENa: AX.ENa, EK: AX.EK, L: AX.L, N: AX.N,
+  log: S.log.map(q => ({amp: q.amp, pair: q.pair, gap: q.gap, peakA: q.peakA, spikesA: q.spikesA, spikesS: q.spikesS, vel: q.vel, ends: q.ends, es: q.es, syn: q.syn, post: q.post, Nao: q.Nao, d: q.d, myelin: q.myelin})),
+  vel: S.vel.map(q => ({d: q.d, myelin: q.myelin, v: q.v}))});
+window.PG_MODEL = {nernst, makeAxon, stepAxon, run, restOf, HH, SYN, DEF, DIAS, DT};
+</script>
+</body>
+</html>

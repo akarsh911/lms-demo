@@ -1,0 +1,432 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Shapes You Can Hold</title>
+<meta name="description" content="Class 2: send a ball, a box, a can and a party hat down a ramp — round parts roll, flat parts slide — then try to stack them on Bruno the bear's table.">
+<link rel="icon" href="../../favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600&family=Inter:wght@400;500;600;700&family=Nunito:wght@500;700;800&display=swap">
+<link rel="stylesheet" href="../../play.css">
+<style>
+.pg-main.tiny-main{grid-template-columns:minmax(0,1fr) 250px; padding-top:12px; padding-bottom:12px}
+.tiny-main .pg-stage{align-self:start; min-height:0}
+.pg-intro{display:flex; align-items:baseline; gap:18px; flex-wrap:wrap; padding-top:12px}
+.pg-intro p{margin:0}
+#stage{background:#dff0ff}
+.hit{cursor:pointer}
+svg [tabindex]:focus{outline:none}
+svg [tabindex]:focus-visible{outline:none; stroke:#ff7a2f; stroke-width:4; stroke-dasharray:8 8}
+.hear{width:100%; min-height:76px; font-size:24px; font-family:var(--font-head); border-radius:var(--radius)}
+.hear .ic{font-size:30px}
+.try{padding:10px; text-align:center; cursor:pointer; border:2px solid var(--hair-2); transition:transform .2s var(--spring)}
+.try:hover{border-color:var(--accent)}
+.try:active{transform:scale(.97)}
+.try svg{display:block; width:100%; height:auto}
+.try .kicker{margin:2px 0 0}
+@media (max-width:980px){ .pg-main.tiny-main{grid-template-columns:1fr} }
+</style>
+</head>
+<body>
+<header class="pg-top"></header>
+
+<div class="pg-intro">
+  <h1>Shapes you can hold</h1>
+  <p>Send the toys down the ramp, then try to stack them.</p>
+</div>
+
+<main class="pg-main tiny-main">
+  <section class="pg-stage" id="stageWrap">
+    <svg id="stage" viewBox="0 0 1000 660" role="img" aria-label="A toy shelf holding a ball, a box, a can and a party hat above a ramp. Tap a toy to send it down. Bruno the bear sits by a small table where toys can be stacked."></svg>
+  </section>
+
+  <aside class="pg-side">
+    <button class="btn primary hear" id="hear" aria-label="Hear what to do"><span class="ic">🔊</span> Hear it</button>
+    <button class="card try" id="tryCard" aria-label="What to try next. Tap to hear it."><svg id="tryArt" viewBox="-80 -55 160 110"></svg><div class="kicker">Try this</div></button>
+    <div class="card"><h3>⭐ Found</h3><div id="finds"></div></div>
+  </aside>
+</main>
+
+<script src="../../play.js"></script>
+<script>
+'use strict';
+const {$, clamp, lerp, loop, tween, sound, tone, say, track, confetti, findings, discover, found,
+       mount, reduced, mulberry32, ease} = Play;
+mount({thread: 'solids', band: 'tiny'});
+
+/* MODEL:start ==================================================================
+   Shapes Around Us (NCERT Joyful Mathematics, Class 2, Ch 2). Four toys — a ball
+   (sphere), a box (cuboid), a can (cylinder) and a party hat (cone) — each carry
+   the book's own count of flat faces, round (curved) parts and corners.
+
+   ROLLING: a shape with any round part rolls down the ramp; a shape with only
+   flat faces slides instead, keeping the ramp's own angle as it goes.
+       rolls(shape) = shape.curved > 0
+   STACKING: a shape can be set down on the table (or on top of another shape)
+   only if it has a flat bottom to rest on, AND — if something is already
+   there — that shape has a flat top to rest ON:
+       canPlace(shape, top) = (top === null || top.flatTop) && shape.flatBottom
+   A ball has no flat side at all, so it never stays. A party hat has a flat
+   base but a pointed top, so it can be placed but nothing will stay on IT.
+   Nothing here is a scripted outcome for "the ball" or "the hat" by name —
+   every toy is judged only by the numbers in its own row of the table.
+   ============================================================================ */
+const SHAPES = {
+  ball: {label: 'ball',      flat: 0, curved: 1, corners: 0, flatBottom: false, flatTop: false},
+  box:  {label: 'box',       flat: 6, curved: 0, corners: 8, flatBottom: true,  flatTop: true},
+  can:  {label: 'can',       flat: 2, curved: 1, corners: 0, flatBottom: true,  flatTop: true},
+  cone: {label: 'party hat', flat: 1, curved: 1, corners: 1, flatBottom: true,  flatTop: false},
+};
+const ORDER = ['ball', 'box', 'can', 'cone'];
+const rolls = k => SHAPES[k].curved > 0;
+const canPlace = (k, top) => (top == null || SHAPES[top].flatTop) && SHAPES[k].flatBottom;
+function joinAnd(bits){ return bits.length < 2 ? bits.join('') : bits.slice(0, -1).join(', ') + ' and ' + bits[bits.length - 1]; }
+function describeShape(k){
+  const s = SHAPES[k], bits = [];
+  bits.push(s.flat ? `${s.flat} flat face${s.flat === 1 ? '' : 's'}` : 'no flat faces');
+  if (s.curved) bits.push('a round part');
+  bits.push(s.corners ? `${s.corners} corner${s.corners === 1 ? '' : 's'}` : 'no corners');
+  const cap = t => t[0].toUpperCase() + t.slice(1);
+  return `A ${s.label}! ${cap(joinAnd(bits))}. It ${rolls(k) ? 'rolls' : 'slides'}!`;
+}
+/* MODEL:end */
+
+/* ---- the world (stage units) ------------------------------------------------
+   One continuous room: the shelf's bottom-right corner IS the ramp's top-left
+   corner (no gap to leap across), the ramp foot leads straight into the toys'
+   landing spot, and the stacking table sits right there too, with Bruno beside
+   it — "it rolled down, now stack it" all happens in one place. */
+const SHELF = {ball: {x: 95, y: 128}, box: {x: 195, y: 128}, can: {x: 295, y: 128}, cone: {x: 395, y: 128}};
+const SHELF_BOX = {x: 40, y: 80, w: 430, h: 90};          // bottom-right corner = the ramp's top
+const RAMP_TOP = {x: SHELF_BOX.x + SHELF_BOX.w, y: SHELF_BOX.y + SHELF_BOX.h};
+const FLOOR_Y = 460;
+const RAMP_BOT = {x: 640, y: FLOOR_Y};
+const RAMP_ANGLE = Math.atan2(RAMP_BOT.y - RAMP_TOP.y, RAMP_BOT.x - RAMP_TOP.x) * 180 / Math.PI;
+const LANDED = {ball: {x: 665, y: FLOOR_Y}, box: {x: 733, y: FLOOR_Y}, can: {x: 801, y: FLOOR_Y}, cone: {x: 869, y: FLOOR_Y}};
+const BEAR_SCALE = 0.42;
+const BEAR = {x: 940, y: FLOOR_Y - 132 * BEAR_SCALE};
+const STOOL = {x: 970, y: FLOOR_Y, top: FLOOR_Y - 60};
+const SCALE = {ball: 0.68, box: 0.65, can: 0.65, cone: 0.62};
+const ROT_TOTAL = {ball: 640, can: 560, cone: 500};       // degrees of roll over the ramp
+const stackY = i => STOOL.top - i * 50;
+
+/* ---- state: plain data ------------------------------------------------------- */
+const S = {phase: {ball: 'shelf', box: 'shelf', can: 'shelf', cone: 'shelf'}, stack: [], tripped: new Set(), busy: {}};
+
+/* ============================================================================
+   The stage: drawn once, then only patched.
+   ============================================================================ */
+const svg = $('stage');
+const f1 = n => (+n).toFixed(1);
+const FONT = 'font-family="Fredoka, Nunito, sans-serif" font-weight="600"';
+
+/* ---- toy art: each centred at (0,0) ------------------------------------------ */
+function ballArt(){
+  return `<circle r="46" fill="url(#gBall)" stroke="#c23b3b" stroke-width="3"/>
+    <path d="M-40 -18 A46 46 0 0 1 24 -40" fill="none" stroke="#ffe27a" stroke-width="11" stroke-linecap="round"/>
+    <path d="M-24 40 A46 46 0 0 1 40 18" fill="none" stroke="#5aa9e6" stroke-width="11" stroke-linecap="round"/>
+    <ellipse cx="-15" cy="-17" rx="14" ry="9" fill="#fff" opacity=".55"/>`;
+}
+function boxArt(){
+  return `<path d="M-34 -30 L34 -30 L34 30 L-34 30 Z" fill="#f2b84a" stroke="#a8672e" stroke-width="3" stroke-linejoin="round"/>
+    <path d="M-34 -30 L34 -30 L52 -44 L-16 -44 Z" fill="#ffd77a" stroke="#a8672e" stroke-width="3" stroke-linejoin="round"/>
+    <path d="M34 -30 L34 30 L52 16 L52 -44 Z" fill="#c98f2e" stroke="#a8672e" stroke-width="3" stroke-linejoin="round"/>
+    <rect x="-7" y="-30" width="14" height="60" fill="#e0567a"/>
+    <path d="M-7 -30 L-7 -44 L9 -44 L9 -30" fill="none" stroke="#e0567a" stroke-width="14" stroke-linejoin="round"/>
+    <path d="M-2 -46 q-16 -14 -2 -20 q6 8 2 20 Z M2 -46 q16 -14 2 -20 q-6 8 -2 20 Z" fill="#ff8aa0" stroke="#c2456a" stroke-width="2"/>`;
+}
+function canArt(){
+  return `<ellipse cy="35" rx="30" ry="10" fill="#3f8fb8" stroke="#276f92" stroke-width="3"/>
+    <rect x="-30" y="-35" width="60" height="70" fill="#5fb0d9" stroke="#276f92" stroke-width="3"/>
+    <rect x="-30" y="-6" width="60" height="16" fill="#ffd84a" stroke="#276f92" stroke-width="2"/>
+    <circle cx="-8" cy="2" r="3.4" fill="#c23b3b"/><circle cx="8" cy="2" r="3.4" fill="#c23b3b"/>
+    <ellipse cy="-35" rx="30" ry="10" fill="#8fd0ee" stroke="#276f92" stroke-width="3"/>
+    <ellipse cy="-35" rx="20" ry="6" fill="none" stroke="#c9edfb" stroke-width="2.5"/>`;
+}
+function coneArt(){
+  return `<ellipse cy="34" rx="36" ry="11" fill="#7f62cc" stroke="#5238a0" stroke-width="3"/>
+    <path d="M0 -56 L-34 34 A36 11 0 0 0 34 34 Z" fill="#a084e8" stroke="#5238a0" stroke-width="3" stroke-linejoin="round"/>
+    <path d="M0 -56 L-11 34" stroke="#ffe27a" stroke-width="9" stroke-linecap="round" opacity=".85"/>
+    <path d="M0 -56 L13 6" stroke="#ff8aa0" stroke-width="8" stroke-linecap="round" opacity=".85"/>
+    <circle cy="-58" r="12" fill="#fff6c8" stroke="#e8c04a" stroke-width="2.5"/>
+    <circle cx="-6" cy="-63" r="4.5" fill="#fff"/><circle cx="6" cy="-56" r="4" fill="#fff"/><circle cy="-49" r="4" fill="#fff"/>`;
+}
+const ART = {ball: ballArt, box: boxArt, can: canArt, cone: coneArt};
+
+function bearArt(){
+  return `<ellipse cx="-58" cy="42" rx="26" ry="34" fill="#c98a52" stroke="#8a5a2b" stroke-width="3"/>
+    <ellipse cx="58" cy="42" rx="26" ry="34" fill="#c98a52" stroke="#8a5a2b" stroke-width="3"/>
+    <ellipse cy="60" rx="72" ry="64" fill="#dba468" stroke="#8a5a2b" stroke-width="4"/>
+    <ellipse cy="78" rx="40" ry="34" fill="#f3d9ae"/>
+    <circle cx="-46" cy="-58" r="24" fill="#dba468" stroke="#8a5a2b" stroke-width="4"/>
+    <circle cx="46" cy="-58" r="24" fill="#dba468" stroke="#8a5a2b" stroke-width="4"/>
+    <circle cx="-46" cy="-58" r="11" fill="#f3d9ae"/><circle cx="46" cy="-58" r="11" fill="#f3d9ae"/>
+    <circle cy="-30" r="52" fill="#dba468" stroke="#8a5a2b" stroke-width="4"/>
+    <ellipse cy="-2" rx="26" ry="20" fill="#f3d9ae"/>
+    <g id="bEyeOpen"><circle cx="-17" cy="-34" r="7" fill="#3a2a1a"/><circle cx="17" cy="-34" r="7" fill="#3a2a1a"/>
+      <circle cx="-15" cy="-36" r="2.4" fill="#fff"/><circle cx="19" cy="-36" r="2.4" fill="#fff"/></g>
+    <path id="bLid" d="M-25 -34 Q-17 -26 -9 -34 M9 -34 Q17 -26 25 -34" stroke="#dba468" stroke-width="8" opacity="0"/>
+    <ellipse cy="-6" rx="10" ry="7" fill="#3a2a1a"/>
+    <path id="bMouth" d="M-16 6 Q0 16 16 6" stroke="#5a3a1f" stroke-width="3" fill="none" stroke-linecap="round"/>`;
+}
+
+function build(){
+  const r = mulberry32(4);
+  let clouds = '';
+  for (let i = 0; i < 3; i++) { const x = 60 + i * 340 + r() * 60, y = 60 + r() * 50, w = 44 + r() * 16;
+    clouds += `<g fill="#fff" opacity=".9"><ellipse cx="${f1(x)}" cy="${f1(y)}" rx="${f1(w)}" ry="${f1(w * .42)}"/><circle cx="${f1(x - w * .3)}" cy="${f1(y - w * .3)}" r="${f1(w * .38)}"/><circle cx="${f1(x + w * .3)}" cy="${f1(y - w * .3)}" r="${f1(w * .34)}"/></g>`; }
+  svg.innerHTML = `
+  <defs>
+    <linearGradient id="gSky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#bfe6ff"/><stop offset="1" stop-color="#eef8ff"/></linearGradient>
+    <linearGradient id="gFloor" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#e3b27a"/><stop offset="1" stop-color="#c98f52"/></linearGradient>
+    <radialGradient id="gBall" cx="38%" cy="34%"><stop offset="0" stop-color="#ff9f8a"/><stop offset="1" stop-color="#e2453d"/></radialGradient>
+    <filter id="soft" x="-30%" y="-30%" width="160%" height="160%"><feDropShadow dx="0" dy="4" stdDeviation="4" flood-color="#5a3a1f" flood-opacity=".22"/></filter>
+  </defs>
+  <rect width="1000" height="660" fill="url(#gSky)"/>
+  ${clouds}
+  <!-- the floor: a baseboard where the wall meets it, planks in perspective, a rug under the play area -->
+  <rect y="${FLOOR_Y}" width="1000" height="${660 - FLOOR_Y}" fill="url(#gFloor)"/>
+  <rect y="${FLOOR_Y - 6}" width="1000" height="6" fill="#8a5a2b"/>
+  <ellipse cx="830" cy="${FLOOR_Y + 90}" rx="215" ry="56" fill="#eadcb8" opacity=".55"/>
+  ${Array.from({length: 11}, (_, i) => `<line x1="${i * 100}" y1="${FLOOR_Y}" x2="${i * 100 - 38}" y2="660" stroke="#8a5a2b" stroke-width="2.5" opacity=".3"/>`).join('')}
+  ${[0.28, 0.6].map(k => `<line x1="0" y1="${f1(lerp(FLOOR_Y, 660, k))}" x2="1000" y2="${f1(lerp(FLOOR_Y, 660, k))}" stroke="#8a5a2b" stroke-width="2" opacity=".2"/>`).join('')}
+
+  <!-- the shelf, with the ramp built onto its right end: one wooden thing -->
+  <polygon points="${RAMP_TOP.x},${RAMP_TOP.y} ${RAMP_BOT.x},${RAMP_BOT.y} ${RAMP_TOP.x},${RAMP_BOT.y}" fill="#c9975a" stroke="#8a5a2b" stroke-width="4" stroke-linejoin="round" filter="url(#soft)"/>
+  ${[0.22, 0.44, 0.66, 0.88].map(k => `<line x1="${f1(lerp(RAMP_TOP.x, RAMP_BOT.x, k))}" y1="${f1(lerp(RAMP_TOP.y, RAMP_BOT.y, k))}" x2="${RAMP_TOP.x}" y2="${f1(lerp(RAMP_TOP.y, RAMP_BOT.y, k))}" stroke="#a8672e" stroke-width="2" opacity=".35"/>`).join('')}
+  <rect x="${SHELF_BOX.x}" y="${SHELF_BOX.y}" width="${SHELF_BOX.w}" height="${SHELF_BOX.h}" rx="14" fill="#c9975a" stroke="#8a5a2b" stroke-width="4" filter="url(#soft)"/>
+  ${[0.25, 0.5, 0.75].map(k => `<line x1="${SHELF_BOX.x + SHELF_BOX.w * k}" y1="${SHELF_BOX.y + 8}" x2="${SHELF_BOX.x + SHELF_BOX.w * k}" y2="${SHELF_BOX.y + SHELF_BOX.h}" stroke="#a8672e" stroke-width="3" opacity=".4"/>`).join('')}
+  <rect x="${SHELF_BOX.x}" y="${SHELF_BOX.y + SHELF_BOX.h - 14}" width="${SHELF_BOX.w}" height="14" fill="#a8672e"/>
+
+  <!-- the table, right where the toys land -->
+  <g filter="url(#soft)">
+    <rect x="${STOOL.x - 5}" y="${STOOL.top + 5}" width="10" height="${STOOL.y - STOOL.top - 5}" fill="#8a5a2b"/>
+    <rect x="${STOOL.x - 26}" y="${STOOL.top + 5}" width="10" height="${STOOL.y - STOOL.top - 5}" fill="#8a5a2b"/>
+    <rect x="${STOOL.x + 16}" y="${STOOL.top + 5}" width="10" height="${STOOL.y - STOOL.top - 5}" fill="#8a5a2b"/>
+    <ellipse cx="${STOOL.x}" cy="${STOOL.top}" rx="32" ry="10" fill="#dba468" stroke="#8a5a2b" stroke-width="3"/>
+  </g>
+
+  <!-- Bruno the bear, sitting right beside his table -->
+  <ellipse cx="${BEAR.x + 2}" cy="${FLOOR_Y - 2}" rx="${94 * BEAR_SCALE}" ry="${20 * BEAR_SCALE}" fill="#1d2327" opacity=".16"/>
+  <g id="bear" transform="translate(${BEAR.x} ${BEAR.y}) scale(${BEAR_SCALE})"><g id="bearJ">${bearArt()}</g></g>
+
+  <!-- Bruno's speech bubble, over empty sky -->
+  <g id="bBubble" opacity="0" pointer-events="none">
+    <path d="M655 96 h290 a18 18 0 0 1 18 18 v96 a18 18 0 0 1 -18 18 h-150 l-40 60 l-8 -60 h-92 a18 18 0 0 1 -18 -18 v-96 a18 18 0 0 1 18 -18 Z" fill="#fff" stroke="#8a5a2b" stroke-width="4"/>
+    <text id="bBubbleT" x="800" y="130" text-anchor="middle" ${FONT} font-size="19" fill="#5a3a1f"></text>
+    <text id="bBubbleT2" x="800" y="156" text-anchor="middle" ${FONT} font-size="19" fill="#5a3a1f"></text>
+    <text id="bBubbleT3" x="800" y="182" text-anchor="middle" ${FONT} font-size="19" fill="#5a3a1f"></text>
+  </g>
+
+  <!-- shadows (ground layer, never moves independently of its shape's base path) -->
+  <g id="shadows">${ORDER.map(k => `<ellipse id="shd-${k}" rx="40" ry="9" fill="#1d2327" opacity=".16"/>`).join('')}</g>
+
+  <!-- the toys: one persistent group each -->
+  <g id="toys">${ORDER.map(k => `<g id="shp-${k}"><g id="shpJ-${k}">${ART[k]()}</g></g>`).join('')}</g>
+
+  <!-- hit targets: fixed slots, never move mid-gesture -->
+  ${ORDER.map(k => `<circle id="shelfHit-${k}" class="hit" cx="${SHELF[k].x}" cy="${SHELF[k].y}" r="44" fill="transparent" role="button" tabindex="0" aria-label="The ${SHAPES[k].label} on the shelf. Tap to send it down the ramp."/>`).join('')}
+  ${ORDER.map(k => `<circle id="landedHit-${k}" class="hit" cx="${LANDED[k].x}" cy="${LANDED[k].y - 28}" r="30" fill="transparent" role="button" tabindex="0" aria-label="The ${SHAPES[k].label} on the floor. Tap to try stacking it on the table."/>`).join('')}
+  <circle id="bearHit" class="hit" cx="${BEAR.x}" cy="${BEAR.y + 5}" r="32" fill="transparent" role="button" tabindex="0" aria-label="Bruno the bear. Tap to bring all the toys back to the shelf."/>
+  `;
+}
+build();
+
+/* ---- positioning helpers ------------------------------------------------------ */
+function basePos(key, t){
+  const P = [SHELF[key], RAMP_TOP, RAMP_BOT, LANDED[key]], TT = [0, 0.16, 0.8, 1];
+  let i = 2; for (let j = 0; j < 3; j++) if (t <= TT[j + 1]) { i = j; break; }
+  const u = clamp((t - TT[i]) / (TT[i + 1] - TT[i] || 1), 0, 1);
+  return {x: lerp(P[i].x, P[i + 1].x, u), y: lerp(P[i].y, P[i + 1].y, u), seg: i, u};
+}
+function rampRot(key, t){
+  const TT = [0, 0.16, 0.8, 1];
+  if (t < TT[1]) return 0;
+  if (t <= TT[2]) { const u = (t - TT[1]) / (TT[2] - TT[1]); return rolls(key) ? u * ROT_TOTAL[key] : RAMP_ANGLE; }
+  const u = (t - TT[2]) / (TT[3] - TT[2]);
+  return rolls(key) ? ROT_TOTAL[key] : lerp(RAMP_ANGLE, 0, u);
+}
+function setToy(key, x, y, rot, scale, shadowX, shadowY){
+  $('shp-' + key).setAttribute('transform', `translate(${f1(x)} ${f1(y)}) rotate(${f1(rot)}) scale(${scale.toFixed(3)})`);
+  const sh = $('shd-' + key);
+  sh.setAttribute('cx', f1(shadowX == null ? x : shadowX));
+  sh.setAttribute('cy', f1((shadowY == null ? y : shadowY) + 40 * scale));
+  sh.setAttribute('rx', 38 * scale); sh.setAttribute('ry', 9 * scale);
+}
+const CUR = {};
+ORDER.forEach(k => { CUR[k] = {x: SHELF[k].x, y: SHELF[k].y, rot: 0, s: SCALE[k]}; setToy(k, SHELF[k].x, SHELF[k].y, 0, SCALE[k]); });
+
+/* ---- Bruno: face and bubble ---------------------------------------------------- */
+let blinkT = 0;
+function bubble(line1, line2, line3){
+  $('bBubbleT').textContent = line1 || '';
+  $('bBubbleT2').textContent = line2 || '';
+  $('bBubbleT3').textContent = line3 || '';
+  $('bBubble').setAttribute('opacity', 1);
+  clearTimeout(bubble.t); bubble.t = setTimeout(() => $('bBubble').setAttribute('opacity', 0), 3400);
+}
+function hop(el, h = 14, ms = 420){
+  if (reduced()) return Promise.resolve();
+  return tween(0, 1, ms, t => el.setAttribute('transform', `translate(0 ${f1(-Math.sin(t * Math.PI) * h)})`), v => v).then(() => el.removeAttribute('transform'));
+}
+function clientOf(x, y){
+  const m = svg.getScreenCTM(); if (!m) return {x: innerWidth / 2, y: innerHeight / 2};
+  const p = svg.createSVGPoint(); p.x = x; p.y = y; const q = p.matrixTransform(m); return {x: q.x, y: q.y};
+}
+
+/* ============================================================================
+   The moves.
+   ============================================================================ */
+async function sendDown(key){
+  hello();
+  if (S.phase[key] !== 'shelf' || S.busy[key]) return;
+  S.busy[key] = true; S.phase[key] = 'moving';
+  paint();
+  sound(rolls(key) ? 'pop' : 'whoosh');
+  await tween(0, 1, reduced() ? 0 : 1500, t => {
+    const b = basePos(key, t), rot = rampRot(key, t);
+    let y = b.y, shY = b.y;
+    if (b.seg === 0) { const lift = Math.sin(b.u * Math.PI) * 26; y -= lift; }
+    setToy(key, b.x, y, rot, CUR[key].s, b.x, shY);
+    CUR[key] = {x: b.x, y, rot, s: CUR[key].s};
+  }, ease.inOut);
+  sound(rolls(key) ? 'boing' : 'snap');
+  S.phase[key] = 'landed'; S.busy[key] = false;
+  const first = !S.tripped.has(key);
+  S.tripped.add(key);
+  const at = clientOf(LANDED[key].x, LANDED[key].y);
+  bubble(`A ${SHAPES[key].label}!`, `${SHAPES[key].flat} flat · ${SHAPES[key].curved} round`, `It ${rolls(key) ? 'ROLLED' : 'SLID'} down!`);
+  say(describeShape(key), {pitch: 1.25});
+  if (rolls(key)) discover('roller', at); else discover('slider', at);
+  if (ORDER.every(k => S.tripped.has(k))) discover('all_shapes', at);
+  paint();
+  track('ramp', {shape: key, rolled: rolls(key)});
+}
+
+async function tryStack(key){
+  hello();
+  if (S.phase[key] !== 'landed' || S.busy[key]) return;
+  S.busy[key] = true; paint();
+  const top = S.stack.length ? S.stack[S.stack.length - 1] : null;
+  const ok = canPlace(key, top);
+  const from = {x: LANDED[key].x, y: LANDED[key].y};
+  const to = ok ? {x: STOOL.x, y: stackY(S.stack.length)} : from;
+  sound(ok ? 'pop' : 'boing');
+  await tween(0, 1, reduced() ? 0 : 700, t => {
+    const x = lerp(from.x, to.x, t), y = lerp(from.y, to.y, t) - Math.sin(t * Math.PI) * 60;
+    const wobble = ok ? 0 : Math.sin(t * Math.PI * 5) * (1 - t) * 26;
+    setToy(key, x, y, wobble, CUR[key].s, lerp(from.x, to.x, t), lerp(from.y, to.y, t));
+  }, ease.inOut);
+  const at = clientOf(to.x, to.y);
+  if (ok) {
+    S.stack.push(key); S.phase[key] = 'stacked';
+    setToy(key, to.x, to.y, 0, CUR[key].s, to.x, to.y);
+    sound('snap');
+    bubble('Clunk!', `The ${SHAPES[key].label} stacks!`, top ? 'Stacked neatly.' : 'A good start!');
+    say(`Clunk! The ${SHAPES[key].label} stacks!`, {pitch: 1.25});
+    if (S.stack.length >= 3) discover('tower', at);
+  } else {
+    S.phase[key] = 'landed';
+    setToy(key, from.x, from.y, 0, CUR[key].s, from.x, from.y);
+    sound('oops');
+    const why = (top != null && !SHAPES[top].flatTop) ? 'No flat top to land on!' : 'No flat side at all!';
+    bubble('Whee!', `The ${SHAPES[key].label} rolls away!`, why);
+    say(`Whee! The ${SHAPES[key].label} can't stay there!`, {pitch: 1.25});
+    discover('topple', at);
+  }
+  S.busy[key] = false;
+  paint();
+  track('stack', {shape: key, ok, height: S.stack.length});
+}
+
+async function resetAll(){
+  hello();
+  if (!S.stack.length && ORDER.every(k => S.phase[k] === 'shelf')) { bubble('Tap a toy', 'on the shelf!', 'Round rolls, flat slides.'); say('Tap a toy on the shelf!', {pitch: 1.25}); return; }
+  sound('whoosh');
+  hop($('bearJ'), 18);
+  bubble('Back you go!', 'Let’s try again.');
+  say('Back to the shelf!', {pitch: 1.25});
+  const going = ORDER.filter(k => S.phase[k] !== 'shelf');
+  going.forEach((k, i) => {
+    S.phase[k] = 'shelf';
+    const from = Object.assign({}, CUR[k]);
+    setTimeout(() => {
+      if (reduced()) { setToy(k, SHELF[k].x, SHELF[k].y, 0, SCALE[k], SHELF[k].x, SHELF[k].y); CUR[k] = {x: SHELF[k].x, y: SHELF[k].y, rot: 0, s: SCALE[k]}; return; }
+      tween(0, 1, 520, t => {
+        const x = lerp(from.x, SHELF[k].x, t), y = lerp(from.y, SHELF[k].y, t) - Math.sin(t * Math.PI) * 40;
+        setToy(k, x, y, lerp(from.rot, 0, t), CUR[k].s, x, y);
+      }, ease.inOut).then(() => { CUR[k] = {x: SHELF[k].x, y: SHELF[k].y, rot: 0, s: SCALE[k]}; });
+    }, reduced() ? 0 : i * 90);
+  });
+  S.stack = [];
+  setTimeout(paint, reduced() ? 0 : 700);
+}
+
+/* ---- paint: hit targets follow the phase ------------------------------------- */
+function paint(){
+  ORDER.forEach(k => {
+    $('shelfHit-' + k).style.display = S.phase[k] === 'shelf' ? '' : 'none';
+    $('landedHit-' + k).style.display = S.phase[k] === 'landed' ? '' : 'none';
+  });
+  paintTry();
+}
+
+/* ============================================================================
+   Wiring
+   ============================================================================ */
+const onTap = (id, fn) => { $(id).addEventListener('click', fn); $(id).addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fn(); } }); };
+ORDER.forEach(k => { onTap('shelfHit-' + k, () => sendDown(k)); onTap('landedHit-' + k, () => tryStack(k)); });
+onTap('bearHit', resetAll);
+
+/* ---- idle: blinking ------------------------------------------------------------ */
+let T = 0;
+function idle(dt){
+  T += dt;
+  if (!reduced()) $('bLid').setAttribute('opacity', (T % 3.4) < 0.12 ? 1 : 0);
+}
+loop(idle);
+
+/* ---- the "Try this" card ----------------------------------------------------- */
+const T_ = (x, y, t, c = '#5a3a1f', fs = 22) => `<text x="${x}" y="${y}" text-anchor="middle" font-family="Fredoka, sans-serif" font-weight="600" font-size="${fs}" fill="${c}">${t}</text>`;
+const TRY = {
+  roller: {line: 'Tap the ball, the can or the party hat. Watch it roll down the ramp!', art: `<circle cx="-30" cy="10" r="22" fill="url(#gBall)"/><path d="M-30 -30 Q0 -10 30 30" fill="none" stroke="#8a5a2b" stroke-width="3" stroke-dasharray="4 6"/>${T_(30, -6, '↻')}`},
+  slider: {line: 'Tap the box. It has only flat faces, so it slides — it does not spin.', art: `<rect x="-46" y="0" width="34" height="26" fill="#f2b84a" stroke="#a8672e" stroke-width="3" transform="rotate(-20 -29 13)"/>${T_(10, 20, 'slide →')}`},
+  all_shapes: {line: 'Send every toy down the ramp: the ball, the box, the can and the party hat.', art: [-42, -14, 14, 42].map((x, i) => `<circle cx="${x}" cy="0" r="12" fill="${['#e2453d', '#f2b84a', '#5fb0d9', '#a084e8'][i]}"/>`).join('')},
+  tower: {line: 'The box and the can both have flat tops and flat bottoms. Stack three of them on Bruno’s table!', art: `<rect x="-20" y="10" width="40" height="18" fill="#5fb0d9"/><rect x="-20" y="-10" width="40" height="18" fill="#f2b84a"/><rect x="-20" y="-30" width="40" height="18" fill="#5fb0d9"/>`},
+  topple: {line: 'Try to stack the ball, or put something on top of the party hat’s point!', art: `<circle cx="0" cy="-10" r="18" fill="url(#gBall)"/>${T_(0, 24, 'plop!', '#c2412a')}`},
+};
+const TRY_ORDER = ['roller', 'slider', 'all_shapes', 'tower', 'topple'];
+const currentTry = () => TRY_ORDER.find(g => !found(g)) || null;
+let shownTry;
+function paintTry(){
+  const g = currentTry();
+  if (g === shownTry) return;
+  shownTry = g;
+  $('tryArt').innerHTML = g ? TRY[g].art : `<path d="M0 -40 L12 -12 L42 -10 L18 8 L26 38 L0 22 L-26 38 L-18 8 L-42 -10 L-12 -12 Z" fill="#ffc53d" stroke="#f29a1f" stroke-width="3" stroke-linejoin="round"/>`;
+  if (!reduced()) $('tryCard').animate([{transform: 'scale(.9)'}, {transform: 'scale(1.04)'}, {transform: 'scale(1)'}], {duration: 450, easing: 'ease-out'});
+}
+function sayTry(){ const g = currentTry(); say(g ? TRY[g].line : 'You found everything! Round rolls, flat slides.'); track('hear', {goal: g}); }
+let spoke = false;
+$('tryCard').addEventListener('click', () => { spoke = true; sayTry(); });
+$('hear').addEventListener('click', () => { spoke = true; sayTry(); });
+function hello(){ if (spoke) return; spoke = true; setTimeout(() => { if (!Play.EVENTS.some(e => e.type === 'finding' || e.type === 'ramp')) say('Tap a toy on the shelf to send it down the ramp!', {pitch: 1.25, interrupt: false}); }, 1200); }
+
+/* ============================================================================
+   Start
+   ============================================================================ */
+findings($('finds'), [
+  {id: 'roller',     icon: '🔵', label: 'Round parts roll',     say: 'It has a round part — it rolls!'},
+  {id: 'slider',     icon: '📦', label: 'Flat parts slide',     say: 'Only flat faces — it slides!'},
+  {id: 'all_shapes', icon: '🎯', label: 'Every toy tried',      say: 'Ball, box, can and hat — all sent down!'},
+  {id: 'tower',      icon: '🗼', label: 'A tall tower',         say: 'Flat tops and flat bottoms stack up tall!'},
+  {id: 'topple',     icon: '😄', label: 'Some toys won’t stack', say: 'No flat side — it just rolls away!'},
+], () => { say('You found them all! Round rolls, flat stacks.', {pitch: 1.25}); paintTry(); });
+paint();
+window.applyFeatures = () => paint();
+window.PG_STATE = () => ({phase: Object.assign({}, S.phase), stack: S.stack.slice(), tripped: [...S.tripped], goal: currentTry()});
+window.PG_MODEL = {SHAPES, ORDER, rolls, canPlace, describeShape};
+</script>
+</body>
+</html>

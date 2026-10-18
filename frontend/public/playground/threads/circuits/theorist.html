@@ -1,0 +1,850 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kirchhoff, Measured</title>
+<meta name="description" content="Class 11–12: a circuit solved by Kirchhoff's rules. Give a cell its own emf and internal resistance and read E and r off your graph; walk a loop and add the potential changes; balance a Wheatstone bridge by hand; watch electrons drift at a millimetre a second; and watch Ohm's law fail in a hot filament.">
+<link rel="icon" href="../../favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600&family=Inter:wght@400;500;600;700&family=Nunito:wght@500;700;800&family=Newsreader:opsz,wght@6..72,400;6..72,500&family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="../../play.css">
+<style>
+/* Only what this page needs beyond play.css. */
+.gate{position:absolute; left:0; width:69%; top:0; height:62%; display:grid; place-items:center; pointer-events:none}
+.gate span{background:rgba(29,35,39,.86); color:#fff; padding:10px 16px; border-radius:99px; font-weight:600; font-size:14px}
+.pg-stage{align-self:start; min-height:0}
+@media (max-width:1100px){ .pg-main.wide-side{grid-template-columns:1fr} }
+.slotHit{fill:transparent; cursor:pointer}
+.slotHit:hover{fill:rgba(106,63,194,.09); stroke:#6a3fc2; stroke-width:1.1; stroke-dasharray:4 4}
+.pegHit{fill:transparent; cursor:crosshair}
+.pegHit:hover{fill:rgba(106,63,194,.18)}
+body.locked .slotHit, body.locked .pegHit, body.locked .probe{pointer-events:none}
+.probe{cursor:grab} .probe.dragging{cursor:grabbing}
+.tools{display:grid; grid-template-columns:repeat(4,1fr); gap:5px}
+.tool{display:flex; flex-direction:column; align-items:center; gap:1px; padding:6px 3px 5px; border-radius:var(--radius-sm); border:1.5px solid var(--hair-2);
+  background:var(--card); cursor:pointer; font-size:11.5px; font-weight:600; color:var(--ink-2); line-height:1.1}
+.tool svg{width:34px; height:20px; background:#f6f5f2; border-radius:5px}
+.tool:hover{border-color:var(--ink-3)}
+.tool[aria-pressed="true"]{border-color:var(--accent); background:var(--accent-soft); color:var(--ink)}
+.tool:disabled{opacity:.45; cursor:default}
+.btn[aria-pressed="true"]{background:var(--accent-soft); border-color:var(--accent)}
+.note{font-size:12.5px; color:var(--ink-3); margin:6px 0 0}
+.why p{font-size:13.5px; margin-bottom:.5em}
+.warn{color:var(--bad); font-weight:600}
+.ctl{grid-template-columns:118px 1fr 74px; margin:3px 0}
+.ctl label{font-size:12.5px; line-height:1.2}
+.ctl output{font-family:var(--font-mono); font-size:12.5px; font-weight:600; min-width:0}
+.mono{font-family:var(--font-mono)}
+</style>
+</head>
+<body class="locked">
+<header class="pg-top"></header>
+
+<div class="pg-intro">
+  <h1>Kirchhoff, measured</h1>
+  <p>Every current on this board comes from Kirchhoff’s two rules, solved for whatever you wire: the currents into a junction equal the currents out,
+     and the potential changes round any closed loop add to zero. Give a cell its own emf and internal resistance and measure them back off your graph. Walk a loop
+     and add up the steps. Balance a Wheatstone bridge by hand. Then push the model: short a cell, heat a filament until Ohm’s law fails,
+     and look inside a wire to see how slowly the electrons actually move.</p>
+</div>
+
+<main class="pg-main wide-side">
+  <section class="pg-stage" id="stageWrap">
+    <svg id="stage" viewBox="0 0 1000 760" role="img" aria-label="A circuit board, a galvanometer, a voltmeter and a Kirchhoff checker, a view inside a wire, and a graph of your readings"></svg>
+    <div class="gate" id="gate"><span>Make your prediction first →</span></div>
+  </section>
+
+  <aside class="pg-side">
+    <div id="poe"></div>
+
+    <div class="card" id="partsCard">
+      <div class="row" style="justify-content:space-between; margin-bottom:8px">
+        <div class="kicker" style="margin:0">Parts and tools</div>
+        <select id="preset" aria-label="Start from a circuit in the book" disabled>
+          <option value="">Start from…</option>
+          <option value="cell">A cell with emf E and internal resistance r</option>
+          <option value="ex36">Kirchhoff’s network (Example 3.6)</option>
+          <option value="bridge">Wheatstone bridge (Example 3.7)</option>
+          <option value="lamp">A filament lamp: does Ohm’s law hold?</option>
+          <option value="drift">1.5 A in a thin copper wire (Example 3.1)</option>
+          <option value="empty">An empty board</option>
+        </select>
+      </div>
+      <div class="tools" id="tools"></div>
+      <p class="note" id="toolNote"></p>
+    </div>
+
+    <div class="card" id="inspCard" hidden>
+      <div class="kicker" id="inspTitle">Selected</div>
+      <div id="insp"></div>
+    </div>
+
+    <div class="card" id="measCard">
+      <div class="kicker">Measure</div>
+      <p class="note" style="margin:0 0 8px" id="measNote">Records the first ammeter and the voltmeter, as in a lab.</p>
+      <div class="row">
+        <button class="btn sm primary" id="btnRecord" disabled>Record (I, V)</button>
+        <button class="btn sm" id="btnClearRec" disabled>Clear</button>
+      </div>
+    </div>
+
+    <div class="card why" id="whyCard" hidden>
+      <div class="kicker">What the model says</div>
+      <div id="why"></div>
+    </div>
+
+    <div class="card"><div class="kicker">To find</div><div id="finds"></div></div>
+  </aside>
+</main>
+
+<script src="../../play.js"></script>
+<script>
+'use strict';
+const {$, esc, clamp, fmt, drag, loop, sound, say, track, toast, predict, findings, discover, found,
+       shareState, sharedState, mount, reduced} = Play;
+mount({thread: 'circuits', band: 'theorist'});
+
+/* MODEL:start ==================================================================
+   Kirchhoff's rules as a linear system (modified nodal analysis). Unknowns: the
+   potential of every peg, and the current through every cell. Equations: the
+   junction rule at every peg, and for every cell the loop-rule relation across it,
+       V(+) − V(−) = E − I r      (I flowing out of its + terminal).
+   A cell with r = 0 is an ideal source. Parts obey V = IR.
+
+   The filament lamp breaks Ohm's law on purpose: its resistance follows
+       R = R₀ [1 + α (T − T₀)],  α(tungsten) = 4.5 × 10⁻³ K⁻¹ (NCERT Table 3.1),
+   and T is set by the power it must radiate, I²R = k (T⁴ − T₀⁴). The circuit and the
+   filament temperature are solved together, by iteration, until both agree.
+
+   Drift: v_d = I / (n e A), with n = 8.5 × 10²⁸ m⁻³ for copper (Example 3.1).
+   ============================================================================ */
+const R_WIRE = 1e-6, E_CHARGE = 1.6e-19, N_CU = 8.5e28;   // wires and ammeters: as good as ideal
+const LAMP = {R0: 2.0, alpha: 4.5e-3, T0: 300, k: 4.227e-14};
+
+function solveNet(n, els){
+  const par = Array.from({length: n}, (_, i) => i);
+  const find = i => par[i] === i ? i : (par[i] = find(par[i]));
+  const used = new Uint8Array(n);
+  for (const e of els) { used[e.a] = used[e.b] = 1; par[find(e.a)] = find(e.b); }
+  const gnd = new Map();
+  for (let i = 0; i < n; i++) if (used[i]) { const r = find(i); if (!gnd.has(r)) gnd.set(r, i); }
+  const idx = new Int32Array(n).fill(-1);
+  let m = 0;
+  for (let i = 0; i < n; i++) if (used[i] && gnd.get(find(i)) !== i) idx[i] = m++;
+  for (const e of els) if (e.t === 'V') e._k = m++;
+  const A = Array.from({length: m}, () => new Float64Array(m)), z = new Float64Array(m);
+  const add = (r, c, v) => { if (r >= 0 && c >= 0) A[r][c] += v; };
+  for (const e of els) {
+    const ia = idx[e.a], ib = idx[e.b];
+    if (e.t === 'R') { const g = 1 / e.R; add(ia, ia, g); add(ib, ib, g); add(ia, ib, -g); add(ib, ia, -g); }
+    else { const k = e._k; add(ia, k, 1); add(ib, k, -1); add(k, ib, 1); add(k, ia, -1); A[k][k] += e.r || 0; z[k] = e.E; }
+  }
+  let ok = true;
+  for (let c = 0; c < m; c++) {
+    let p = c, best = Math.abs(A[c][c]);
+    for (let r = c + 1; r < m; r++) if (Math.abs(A[r][c]) > best) { best = Math.abs(A[r][c]); p = r; }
+    if (best < 1e-13) { ok = false; continue; }
+    if (p !== c) { const t = A[p]; A[p] = A[c]; A[c] = t; const u = z[p]; z[p] = z[c]; z[c] = u; }
+    for (let r = c + 1; r < m; r++) {
+      const f = A[r][c] / A[c][c]; if (!f) continue;
+      for (let k = c; k < m; k++) A[r][k] -= f * A[c][k];
+      z[r] -= f * z[c];
+    }
+  }
+  const x = new Float64Array(m);
+  for (let r = m - 1; r >= 0; r--) {
+    let s = z[r];
+    for (let k = r + 1; k < m; k++) s -= A[r][k] * x[k];
+    x[r] = Math.abs(A[r][r]) < 1e-13 ? 0 : s / A[r][r];
+  }
+  const V = new Float64Array(n).fill(NaN);
+  for (let i = 0; i < n; i++) if (used[i]) V[i] = idx[i] < 0 ? 0 : x[idx[i]];
+  const I = els.map(e => e.t === 'R' ? (V[e.a] - V[e.b]) / e.R : x[e._k]);
+  return {V, I, ok, island: i => used[i] ? find(i) : -1};
+}
+/* the filament: resistance at a temperature, and the temperature a power sustains */
+const lampR = T => LAMP.R0 * (1 + LAMP.alpha * (T - LAMP.T0));
+const lampT = P => Math.pow(Math.max(0, P) / LAMP.k + LAMP.T0 ** 4, 0.25);
+function partR(p, T){
+  switch (p.kind) {
+    case 'wire': case 'ammeter': return R_WIRE;
+    case 'switch': return p.on ? R_WIRE : Infinity;
+    case 'resistor': case 'rheostat': return Math.max(1e-4, p.R);
+    case 'galv': return p.Rg;
+    case 'lamp': return lampR(T == null ? LAMP.T0 : T);
+  }
+  return Infinity;
+}
+function solveBoard(parts, nNodes, ends){
+  const T = {};
+  for (const k in parts) if (parts[k].kind === 'lamp') T[k] = LAMP.T0;
+  let out = null;
+  for (let it = 0; it < 400; it++) {
+    const els = [];
+    for (const k in parts) {
+      const p = parts[k], [a, b] = ends(k);
+      if (p.kind === 'cell') els.push(p.dir > 0 ? {k, t: 'V', a, b, E: p.E, r: p.r, s: 1} : {k, t: 'V', a: b, b: a, E: p.E, r: p.r, s: -1});
+      else { const R = partR(p, T[k]); if (isFinite(R)) els.push({k, t: 'R', a, b, R, s: 1}); }
+    }
+    const res = solveNet(nNodes, els);
+    const cur = {};
+    for (const k in parts) cur[k] = 0;
+    els.forEach((e, i) => { cur[e.k] = e.s * res.I[i]; });
+    out = {V: res.V, cur, ok: res.ok, island: res.island, T: Object.assign({}, T), it};
+    /* filament temperature: damped fixed-point step towards the temperature this current sustains */
+    let worst = 0;
+    for (const k in T) {
+      const P = cur[k] * cur[k] * lampR(T[k]), Tn = lampT(P);
+      worst = Math.max(worst, Math.abs(Tn - T[k]));
+      T[k] = T[k] + 0.5 * (Tn - T[k]);
+    }
+    if (worst < 1e-6) break;
+  }
+  out.drop = {};
+  for (const k in parts) { const [a, b] = ends(k); const d = out.V[a] - out.V[b]; out.drop[k] = isFinite(d) && out.island(a) === out.island(b) ? d : 0; }
+  return out;
+}
+/* least-squares straight line V = a + bI */
+function fitLine(pts){
+  const n = pts.length; if (n < 2) return null;
+  let sx = 0, sy = 0, sxx = 0, sxy = 0, syy = 0;
+  for (const p of pts) { sx += p.I; sy += p.V; sxx += p.I * p.I; sxy += p.I * p.V; syy += p.V * p.V; }
+  const d = n * sxx - sx * sx; if (Math.abs(d) < 1e-18) return null;
+  const b = (n * sxy - sx * sy) / d, a = (sy - b * sx) / n;
+  const ssTot = syy - sy * sy / n, ssRes = pts.reduce((s, p) => s + (p.V - a - b * p.I) ** 2, 0);
+  return {a, b, r2: ssTot > 1e-18 ? 1 - ssRes / ssTot : 1};
+}
+const driftSpeed = (I, A) => Math.abs(I) / (N_CU * E_CHARGE * A);
+/* MODEL:end */
+
+/* ============================================================================
+   The board
+   ============================================================================ */
+const C = 7, RW = 5, X0 = 58, Y0 = 70, DX = 100, DY = 92;
+const NN = C * RW;
+const node = (i, j) => j * C + i;
+const pos = n => ({x: X0 + (n % C) * DX, y: Y0 + Math.floor(n / C) * DY});
+const pegName = n => `(${n % C}, ${Math.floor(n / C)})`;
+const SLOTS = [];
+for (let j = 0; j < RW; j++) for (let i = 0; i < C - 1; i++) SLOTS.push(`h${i}_${j}`);
+for (let j = 0; j < RW - 1; j++) for (let i = 0; i < C; i++) SLOTS.push(`v${i}_${j}`);
+function ends(k){
+  const [i, j] = k.slice(1).split('_').map(Number);
+  return k[0] === 'h' ? [node(i, j), node(i + 1, j)] : [node(i, j), node(i, j + 1)];
+}
+function geo(k){
+  const [a, b] = ends(k), A = pos(a), B = pos(b), h = k[0] === 'h';
+  return {x1: A.x, y1: A.y, x2: B.x, y2: B.y, L: h ? DX : DY, ang: h ? 0 : 90, mx: (A.x + B.x) / 2, my: (A.y + B.y) / 2, h};
+}
+const slotBetween = (u, v) => SLOTS.find(k => { const [a, b] = ends(k); return (a === u && b === v) || (a === v && b === u); });
+
+/* ---- state --------------------------------------------------------------- */
+const S = {parts: {}, tool: 'hand', sel: null, probes: {red: node(2, 4), black: node(3, 4)}, rec: [], walk: [], junction: null,
+           area: 1e-6, locked: false, count: 0};
+let SOL = null;
+
+const W = () => ({kind: 'wire'});
+const PRESETS = {
+  cell:   {parts: {h2_4: {kind: 'cell', E: 1.5, r: 0.5, dir: -1}, h3_4: {kind: 'ammeter'}, h4_4: {kind: 'switch', on: true},
+                   v2_1: W(), v2_2: W(), v2_3: W(), h2_1: W(), h3_1: {kind: 'rheostat', R: 10}, h4_1: W(), v5_1: W(), v5_2: W(), v5_3: W()},
+           probes: {red: node(2, 4), black: node(3, 4)}, sel: 'h3_1', note: 'The voltmeter is across the cell’s terminals. Change the rheostat and record.'},
+  ex36:   {parts: {h0_4: W(), v0_3: W(), v0_2: W(), v0_1: W(), v0_0: W(), h0_0: W(), h1_0: {kind: 'resistor', R: 4}, h2_0: W(),
+                   h3_0: W(), h4_0: {kind: 'resistor', R: 2}, h5_0: W(), v6_0: W(), v6_1: W(), v6_2: W(), v6_3: W(), h5_4: W(),
+                   h1_4: W(), h2_4: {kind: 'cell', E: 10, r: 1, dir: -1}, h3_4: W(), h4_4: W(),
+                   v3_0: {kind: 'cell', E: 5, r: 0, dir: -1}, v3_1: W(),
+                   h2_2: W(), h1_2: {kind: 'resistor', R: 4}, v1_2: W(), v1_3: W(),
+                   h3_2: W(), h4_2: {kind: 'resistor', R: 2}, v5_2: W(), v5_3: W()},
+           probes: {red: node(1, 4), black: node(5, 4)}, note: 'Example 3.6. A = bottom left, B = top, C = bottom right, D = the middle.'},
+  bridge: {parts: {v1_0: W(), h1_0: {kind: 'resistor', R: 100}, h2_0: W(), h3_0: {kind: 'resistor', R: 10}, h4_0: W(), v5_0: W(),
+                   v1_1: W(), h1_2: {kind: 'resistor', R: 60}, h2_2: W(), h3_2: {kind: 'resistor', R: 5}, h4_2: W(), v5_1: W(),
+                   v3_0: {kind: 'galv', Rg: 15}, v3_1: W(),
+                   h0_1: W(), v0_1: W(), v0_2: W(), v0_3: W(), h0_4: W(), h1_4: W(), h2_4: {kind: 'cell', E: 10, r: 0, dir: -1}, h3_4: {kind: 'switch', on: true},
+                   h4_4: W(), h5_4: W(), v6_3: W(), v6_2: W(), v6_1: W(), h5_1: W()},
+           probes: {red: node(3, 0), black: node(3, 2)}, sel: 'h3_2', note: 'Example 3.7: AB = 100 Ω, BC = 10 Ω, CD = 5 Ω, DA = 60 Ω. Balance it.'},
+  lamp:   {parts: {h2_4: {kind: 'cell', E: 6, r: 0, dir: -1}, h3_4: {kind: 'ammeter'}, h4_4: {kind: 'switch', on: true},
+                   v2_1: W(), v2_2: W(), v2_3: W(), h2_1: {kind: 'rheostat', R: 40}, h3_1: {kind: 'lamp'}, h4_1: W(), v5_1: W(), v5_2: W(), v5_3: W()},
+           probes: {red: node(3, 1), black: node(4, 1)}, sel: 'h2_1', note: 'The voltmeter is across the lamp. Turn the rheostat down step by step and record.'},
+  drift:  {parts: {h2_4: {kind: 'cell', E: 1.5, r: 0, dir: -1}, h3_4: {kind: 'ammeter'}, h4_4: {kind: 'switch', on: true},
+                   v2_1: W(), v2_2: W(), v2_3: W(), h2_1: W(), h3_1: {kind: 'resistor', R: 1}, h4_1: W(), v5_1: W(), v5_2: W(), v5_3: W()},
+           probes: {red: node(3, 1), black: node(4, 1)}, sel: 'h2_1', area: 1e-7, note: 'Example 3.1: 1.5 A in a copper wire of cross-section 1.0 × 10⁻⁷ m².'},
+  empty:  {parts: {}, probes: {red: node(1, 1), black: node(2, 1)}},
+};
+function loadPreset(name){
+  const pr = PRESETS[name]; if (!pr) return;
+  S.parts = {};
+  for (const k in pr.parts) S.parts[k] = Object.assign({n: ++S.count}, pr.parts[k]);
+  S.probes = Object.assign({}, pr.probes);
+  S.sel = pr.sel || null; S.walk = []; S.junction = null; S.rec = []; $('btnClearRec').disabled = true;
+  if (pr.area) S.area = pr.area;
+  for (const k of SLOTS) drawSlot(k);
+  solve(); placeProbes();
+  if (pr.note && S.locked) toast(pr.note, 3800);
+}
+
+/* ============================================================================
+   Stage
+   ============================================================================ */
+const svg = $('stage');
+const GV = {x: 844, y: 136, r: 66};                 // galvanometer
+const DR = {x: 30, y: 544, w: 446, h: 100};          // inside the wire
+const GRF = {x: 612, y: 546, w: 350, h: 150};        // graph
+function build(){
+  let pegs = '', hits = '', guides = '', parts = '', dots = '', pegHits = '';
+  for (let n = 0; n < NN; n++) { const p = pos(n);
+    pegs += `<circle cx="${p.x}" cy="${p.y}" r="4.6" fill="#5b5670"/><circle cx="${p.x}" cy="${p.y}" r="2" fill="#ecebf2"/>`;
+    pegHits += `<circle class="pegHit" data-n="${n}" cx="${p.x}" cy="${p.y}" r="11"/>`; }
+  for (const k of SLOTS) {
+    const g = geo(k);
+    guides += `<line x1="${g.x1}" y1="${g.y1}" x2="${g.x2}" y2="${g.y2}" stroke="#bdb8cc" stroke-width="1" stroke-dasharray="2 6"/>`;
+    parts += `<g id="s_${k}" transform="translate(${g.x1} ${g.y1}) rotate(${g.ang})"></g>`;
+    dots += `<g id="d_${k}">${[0, 1, 2].map(() => `<circle r="2.8" fill="#ffd23f" stroke="#6b5200" stroke-width=".7" opacity="0"/>`).join('')}</g>`;
+    const w = g.L - 26, t = 32;
+    hits += g.h ? `<rect class="slotHit" data-k="${k}" x="${g.x1 + 13}" y="${g.y1 - t / 2}" width="${w}" height="${t}" rx="7"/>`
+                : `<rect class="slotHit" data-k="${k}" x="${g.x1 - t / 2}" y="${g.y1 + 13}" width="${t}" height="${w}" rx="7"/>`;
+  }
+  let ticks = '';
+  for (let i = -4; i <= 4; i++) { const a = Math.PI / 2 - i / 4 * 1.05;
+    ticks += `<line x1="${(GV.x + Math.cos(a) * (GV.r - 9)).toFixed(1)}" y1="${(GV.y - Math.sin(a) * (GV.r - 9)).toFixed(1)}" x2="${(GV.x + Math.cos(a) * GV.r).toFixed(1)}" y2="${(GV.y - Math.sin(a) * GV.r).toFixed(1)}" stroke="#6a6680" stroke-width="${i ? 1 : 2}"/>`; }
+  svg.innerHTML = `
+  <defs>
+    <radialGradient id="gGlow"><stop offset="0" stop-color="#fff6b0" stop-opacity=".95"/><stop offset=".45" stop-color="#ffd84a" stop-opacity=".5"/><stop offset="1" stop-color="#ffc400" stop-opacity="0"/></radialGradient>
+    <linearGradient id="gCell" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3b3f46"/><stop offset=".45" stop-color="#1d2025"/><stop offset="1" stop-color="#2b2f35"/></linearGradient>
+    <linearGradient id="gCu" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f3c79a"/><stop offset=".5" stop-color="#e3a066"/><stop offset="1" stop-color="#c47a3e"/></linearGradient>
+    <clipPath id="clipDr"><rect x="${DR.x}" y="${DR.y}" width="${DR.w}" height="${DR.h}" rx="10"/></clipPath>
+  </defs>
+  <rect x="0" y="0" width="1000" height="760" fill="#f5f4f1"/>
+  <rect x="14" y="14" width="676" height="456" rx="10" fill="#ffffff" stroke="#dcd8e6"/>
+  <text x="30" y="38" fill="#403a55" font-size="12.5" font-weight="700" letter-spacing=".08em">CIRCUIT</text>
+  <text x="674" y="38" fill="#7a7590" font-size="11.5" text-anchor="end" id="modeHint"></text>
+  <g>${guides}</g>
+  <g id="selG"></g>
+  <g id="walkG" pointer-events="none"></g>
+  <g id="parts">${parts}</g>
+  <g id="dots" pointer-events="none">${dots}</g>
+  <g pointer-events="none">${pegs}</g>
+  <g id="labels" pointer-events="none"></g>
+  <g id="hits">${hits}${pegHits}</g>
+  <g id="leads" pointer-events="none"></g>
+  <circle id="probeRed" class="probe" r="10" fill="#d6453d" stroke="#fff" stroke-width="2.4"/>
+  <circle id="probeBlack" class="probe" r="10" fill="#1d2327" stroke="#fff" stroke-width="2.4"/>
+
+  <!-- meters and the Kirchhoff checker -->
+  <rect x="704" y="14" width="282" height="456" rx="10" fill="#ffffff" stroke="#dcd8e6"/>
+  <text x="720" y="38" fill="#403a55" font-size="12.5" font-weight="700" letter-spacing=".08em">GALVANOMETER</text>
+  <path d="M${GV.x - GV.r - 6} ${GV.y + 8} A${GV.r + 6} ${GV.r + 6} 0 0 1 ${GV.x + GV.r + 6} ${GV.y + 8}" fill="#f7f4ea" stroke="#c9c4d6"/>
+  ${ticks}
+  <text x="${GV.x}" y="${GV.y - GV.r + 24}" text-anchor="middle" font-size="10.5" fill="#6a6680" font-weight="700">0</text>
+  <line id="gvNeedle" x1="${GV.x}" y1="${GV.y}" x2="${GV.x}" y2="${GV.y - GV.r + 8}" stroke="#d6453d" stroke-width="2.2" stroke-linecap="round"/>
+  <circle cx="${GV.x}" cy="${GV.y}" r="5" fill="#403a55"/>
+  <text id="gvRead" x="${GV.x}" y="${GV.y + 28}" text-anchor="middle" class="m" font-size="15" font-weight="600" fill="#1d2327">—</text>
+  <line x1="720" y1="184" x2="970" y2="184" stroke="#eceaf2"/>
+  <text x="720" y="206" fill="#403a55" font-size="12.5" font-weight="700" letter-spacing=".08em">VOLTMETER</text>
+  <text id="vmRead" x="970" y="206" text-anchor="end" class="m" font-size="15" font-weight="600" fill="#1d2327">—</text>
+  <text x="720" y="224" fill="#7a7590" font-size="11">red probe minus black probe; draws no current</text>
+  <line x1="720" y1="236" x2="970" y2="236" stroke="#eceaf2"/>
+  <text x="720" y="258" fill="#403a55" font-size="12.5" font-weight="700" letter-spacing=".08em">KIRCHHOFF CHECK</text>
+  <g id="kc" font-size="12"></g>
+
+  <!-- inside the wire -->
+  <rect x="14" y="484" width="544" height="262" rx="10" fill="#ffffff" stroke="#dcd8e6"/>
+  <text x="30" y="508" fill="#403a55" font-size="12.5" font-weight="700" letter-spacing=".08em">INSIDE THE WIRE</text>
+  <text id="drSub" x="30" y="530" fill="#7a7590" font-size="11.5"></text>
+  <g clip-path="url(#clipDr)">
+    <rect x="${DR.x}" y="${DR.y}" width="${DR.w}" height="${DR.h}" fill="url(#gCu)"/>
+    <g id="ions"></g><g id="elec"></g>
+  </g>
+  <rect x="${DR.x}" y="${DR.y}" width="${DR.w}" height="${DR.h}" rx="10" fill="none" stroke="#a8683a"/>
+  <g id="drScale"></g>
+  <text id="drA" x="30" y="698" fill="#403a55" font-size="12.5" class="m"></text>
+  <text id="drB" x="30" y="716" fill="#403a55" font-size="12.5"></text>
+  <text id="drC" x="30" y="734" fill="#7a7590" font-size="11.5"></text>
+
+  <!-- graph -->
+  <rect x="572" y="484" width="414" height="262" rx="10" fill="#ffffff" stroke="#dcd8e6"/>
+  <text x="588" y="508" fill="#403a55" font-size="12.5" font-weight="700" letter-spacing=".08em">YOUR READINGS: V AGAINST I</text>
+  <g id="gAx"></g><line id="gFit" stroke="#6a3fc2" stroke-width="1.8" stroke-dasharray="6 4" opacity="0"/><g id="gPts"></g>
+  <circle id="gLive" r="5.5" fill="none" stroke="#d6453d" stroke-width="2" opacity="0"/>
+  <text id="gFitT" x="588" y="528" class="m" font-size="11.5" fill="#6a3fc2"></text>
+  `;
+  /* the copper lattice (fixed) and its free electrons */
+  let ions = '';
+  for (let y = DR.y + 12; y < DR.y + DR.h; y += 22) for (let x = DR.x + 10 + ((y / 22) % 2) * 11; x < DR.x + DR.w; x += 22) ions += `<circle cx="${x}" cy="${y}" r="4.2" fill="#b86f38" stroke="#8a4d22" stroke-width=".8"/>`;
+  $('ions').innerHTML = ions;
+  const rnd = Play.mulberry32(11);
+  ELEC = Array.from({length: 46}, () => ({x: rnd() * DR.w, y: 6 + rnd() * (DR.h - 12)}));
+  $('elec').innerHTML = ELEC.map(() => `<circle r="3" fill="#2f6fe0" stroke="#fff" stroke-width=".8"/>`).join('');
+  $('drScale').innerHTML = `<line x1="${DR.x}" y1="${DR.y + DR.h + 12}" x2="${DR.x + DR.w}" y2="${DR.y + DR.h + 12}" stroke="#7a7590"/>` +
+    `<line x1="${DR.x}" y1="${DR.y + DR.h + 8}" x2="${DR.x}" y2="${DR.y + DR.h + 16}" stroke="#7a7590"/><line x1="${DR.x + DR.w}" y1="${DR.y + DR.h + 8}" x2="${DR.x + DR.w}" y2="${DR.y + DR.h + 16}" stroke="#7a7590"/>` +
+    `<text x="${DR.x + DR.w / 2}" y="${DR.y + DR.h + 26}" text-anchor="middle" font-size="11" fill="#7a7590">1 mm of wire, in real time (the thermal jiggle is slowed a million times)</text>`;
+}
+let ELEC = [];
+
+/* ---- part art ------------------------------------------------------------ */
+function leads(L, g1, g2, col = '#3b3551'){
+  return `<line x1="0" y1="0" x2="${g1}" y2="0" stroke="${col}" stroke-width="2.8" stroke-linecap="round"/><line x1="${g2}" y1="0" x2="${L}" y2="0" stroke="${col}" stroke-width="2.8" stroke-linecap="round"/>`;
+}
+function partArt(p, L){
+  const m = L / 2;
+  switch (p.kind) {
+    case 'wire': return `<line x1="0" y1="0" x2="${L}" y2="0" stroke="#3b3551" stroke-width="2.8" stroke-linecap="round"/>`;
+    case 'cell': { const lo = p.dir > 0 ? m - 4 : m + 4, hi = p.dir > 0 ? m + 4 : m - 4;
+      return leads(L, m - 4, m + 4) + `<line x1="${hi}" y1="-15" x2="${hi}" y2="15" stroke="#3b3551" stroke-width="2.4"/><line x1="${lo}" y1="-8" x2="${lo}" y2="8" stroke="#3b3551" stroke-width="5"/>` +
+        (p.r > 0 ? `<rect x="${m + (p.dir > 0 ? -30 : 14)}" y="-5" width="16" height="10" fill="#fff" stroke="#8a84a0" stroke-width="1.2" stroke-dasharray="2 2"/>` : ''); }
+    case 'resistor': return leads(L, m - 18, m + 18) + `<path d="M${m - 18} 0 l3 -7 l6 14 l6 -14 l6 14 l6 -14 l6 14 l3 -7" fill="none" stroke="#3b3551" stroke-width="2"/>`;
+    case 'rheostat': return leads(L, m - 18, m + 18) + `<path d="M${m - 18} 0 l3 -7 l6 14 l6 -14 l6 14 l6 -14 l6 14 l3 -7" fill="none" stroke="#3b3551" stroke-width="2"/><path d="M${m - 14} 12 L${m + 14} -12 m-6 0 h6 v6" fill="none" stroke="#6a3fc2" stroke-width="1.8"/>`;
+    case 'lamp': return leads(L, m - 13, m + 13) + `<circle class="glow" cx="${m}" cy="0" r="24" fill="url(#gGlow)" opacity="0"/><circle cx="${m}" cy="0" r="13" fill="#fff" stroke="#3b3551" stroke-width="2"/><path class="fil" d="M${m - 9} -9 L${m + 9} 9 M${m - 9} 9 L${m + 9} -9" stroke="#3b3551" stroke-width="1.6"/>`;
+    case 'galv': return leads(L, m - 14, m + 14) + `<circle cx="${m}" cy="0" r="14" fill="#fff" stroke="#6a3fc2" stroke-width="2"/><line class="gn" x1="${m}" y1="0" x2="${m}" y2="-10" stroke="#d6453d" stroke-width="1.8"/>`;
+    case 'ammeter': return leads(L, m - 13, m + 13) + `<circle cx="${m}" cy="0" r="13" fill="#fff" stroke="#3057c9" stroke-width="2"/><circle cx="${m}" cy="0" r="2" fill="#3057c9"/>`;
+    case 'switch': return leads(L, m - 12, m + 12) + `<circle cx="${m - 12}" cy="0" r="2.6" fill="#3b3551"/><circle cx="${m + 12}" cy="0" r="2.6" fill="#3b3551"/>` +
+      (p.on ? `<line x1="${m - 12}" y1="0" x2="${m + 12}" y2="0" stroke="#3b3551" stroke-width="2.4"/>` : `<line x1="${m - 12}" y1="0" x2="${m + 9}" y2="-12" stroke="#3b3551" stroke-width="2.4"/>`);
+  }
+  return '';
+}
+function side(g, off){ return g.h ? {x: g.mx, y: g.my + off} : {x: g.mx + off, y: g.my}; }
+function labelsFor(k, p){
+  const g = geo(k), out = [];
+  const t = (s, o, extra = '', col = '#403a55') => { const c = side(g, o); out.push(`<text ${extra} x="${c.x}" y="${c.y + 4}" text-anchor="${g.h ? 'middle' : 'start'}" fill="${col}" font-size="11.5" class="m">${s}</text>`); };
+  const off = g.h ? 27 : 20;
+  if (p.kind === 'cell') {
+    t(`${fmt(p.E, 1)} V${p.r > 0 ? ', r ' + fmt(p.r, 2) : ''}`, off);
+    const plusAtB = p.dir > 0, c = side(g, g.h ? -20 : -20);
+    const px = g.h ? g.mx + (plusAtB ? 12 : -12) : c.x, py = g.h ? c.y : g.my + (plusAtB ? 12 : -12);
+    out.push(`<text x="${px}" y="${py + 5}" text-anchor="middle" fill="#b3261e" font-size="14" font-weight="700">+</text>`);
+  }
+  if (p.kind === 'resistor' || p.kind === 'rheostat') t(`${fmt(p.R, p.R < 10 ? 2 : 1)} Ω`, off);
+  if (p.kind === 'galv') t(`G ${fmt(p.Rg, 0)} Ω`, off);
+  if (p.kind === 'lamp') t('', off, `class="m lampT" data-k="${k}"`);
+  if (p.kind === 'ammeter') t('', off, `class="m aRead" data-k="${k}"`, '#3057c9');
+  return out.join('');
+}
+function drawSlot(k){ const p = S.parts[k]; $('s_' + k).innerHTML = p ? partArt(p, geo(k).L) : ''; }
+function drawLabels(){ $('labels').innerHTML = Object.keys(S.parts).map(k => labelsFor(k, S.parts[k])).join(''); }
+function drawSel(){
+  if (!S.sel || !S.parts[S.sel]) { $('selG').innerHTML = ''; return; }
+  const g = geo(S.sel), w = g.L - 14, t = 40;
+  $('selG').innerHTML = g.h ? `<rect x="${g.x1 + 7}" y="${g.y1 - t / 2}" width="${w}" height="${t}" rx="8" fill="#ece5fa" stroke="#6a3fc2" stroke-width="1.4"/>`
+                            : `<rect x="${g.x1 - t / 2}" y="${g.y1 + 7}" width="${t}" height="${w}" rx="8" fill="#ece5fa" stroke="#6a3fc2" stroke-width="1.4"/>`;
+}
+
+/* ============================================================================
+   Solve, measure, paint
+   ============================================================================ */
+function solve(){
+  SOL = solveBoard(S.parts, NN, ends);
+  drawLabels(); drawSel(); paint(); paintKC(); paintWhy(); drawInspector(); check();
+}
+const ofKind = kind => Object.keys(S.parts).filter(k => S.parts[k].kind === kind).sort((a, b) => S.parts[a].n - S.parts[b].n);
+function voltmeter(){
+  const a = S.probes.red, b = S.probes.black, V = SOL.V;
+  if (!isFinite(V[a]) || !isFinite(V[b]) || SOL.island(a) !== SOL.island(b)) return 0;
+  return V[a] - V[b];
+}
+const fmtI = I => Math.abs(I) >= 0.1 ? fmt(I, 3) + ' A' : Math.abs(I) >= 1e-4 ? fmt(I * 1000, 2) + ' mA' : fmt(I * 1e6, 2) + ' µA';
+function paint(){
+  for (const k in S.parts) {
+    const p = S.parts[k];
+    if (p.kind === 'lamp') {
+      const T = SOL.T[k] || LAMP.T0, el = $('s_' + k), hot = clamp((T - 900) / 1700, 0, 1);
+      el.querySelector('.glow').setAttribute('opacity', hot > 0.02 ? (0.3 + 0.7 * hot).toFixed(2) : 0);
+      el.querySelector('.fil').setAttribute('stroke', T > 900 ? mix('#b0402a', '#ffd23f', hot) : '#3b3551');
+    }
+    if (p.kind === 'galv') { const I = SOL.cur[k], d = galvDefl(I); $('s_' + k).querySelector('.gn').setAttribute('transform', `rotate(${(d * 50).toFixed(1)} ${geo(k).L / 2} 0)`); }
+  }
+  for (const t of document.querySelectorAll('#labels .aRead')) t.textContent = S.locked ? fmtI(Math.abs(SOL.cur[t.dataset.k])) : '';
+  for (const t of document.querySelectorAll('#labels .lampT')) { const k = t.dataset.k; t.textContent = S.locked ? `${fmt(SOL.T[k] || 300, 0)} K, ${fmt(partR(S.parts[k], SOL.T[k]), 1)} Ω` : 'lamp'; }
+  const g = ofKind('galv')[0], Ig = g ? SOL.cur[g] : 0, d = g && S.locked ? galvDefl(Ig) : 0, a = Math.PI / 2 - d * 1.05;
+  $('gvNeedle').setAttribute('x2', (GV.x + Math.cos(a) * (GV.r - 8)).toFixed(1)); $('gvNeedle').setAttribute('y2', (GV.y - Math.sin(a) * (GV.r - 8)).toFixed(1));
+  $('gvRead').textContent = !S.locked ? '—' : g ? fmtI(Ig) : 'no galvanometer on the board';
+  $('gvRead').setAttribute('font-size', g ? 15 : 11.5);
+  $('vmRead').textContent = S.locked ? fmt(voltmeter(), 3) + ' V' : '—';
+  const am = ofKind('ammeter');
+  $('btnRecord').disabled = !(S.locked && am.length);
+  drawGraph();
+}
+/* a null detector: deflection grows with log |I| from 0.1 µA to 10 mA */
+const galvDefl = I => Math.sign(I) * clamp(Math.log10(Math.abs(I) / 1e-7 + 1) / 5, 0, 1);
+function placeProbes(){
+  for (const [id, n] of [['probeRed', S.probes.red], ['probeBlack', S.probes.black]]) { const p = pos(n); $(id).setAttribute('cx', p.x + (id === 'probeRed' ? -8 : 8)); $(id).setAttribute('cy', p.y - 9); }
+  drawLeads();
+}
+function drawLeads(){
+  const r = {x: +$('probeRed').getAttribute('cx'), y: +$('probeRed').getAttribute('cy')}, b = {x: +$('probeBlack').getAttribute('cx'), y: +$('probeBlack').getAttribute('cy')};
+  const lead = (p, y0, col) => `<path d="M704 ${y0} C640 ${y0}, ${p.x + 40} ${p.y - 60}, ${p.x} ${p.y}" fill="none" stroke="${col}" stroke-width="1.8" opacity=".45"/>`;
+  $('leads').innerHTML = lead(r, 190, '#d6453d') + lead(b, 206, '#1d2327');
+}
+
+/* ---- the graph of recorded readings, with the least-squares line ---- */
+function nice(x){ const e = 10 ** Math.floor(Math.log10(x)); for (const m of [1, 2, 2.5, 5, 10]) if (m * e >= x) return m * e; return 10 * e; }
+function liveIV(){ const am = ofKind('ammeter')[0]; return {I: am ? Math.abs(SOL.cur[am]) : NaN, V: voltmeter()}; }
+function drawGraph(){
+  const rows = S.rec, live = S.locked ? liveIV() : {I: NaN, V: 0};
+  const IM = nice(Math.max(0.05, ...rows.map(r => r.I), isFinite(live.I) ? live.I : 0) * 1.1);
+  const VM = nice(Math.max(0.5, ...rows.map(r => Math.abs(r.V)), Math.abs(live.V)) * 1.1);
+  const X = I => GRF.x + I / IM * GRF.w, Y = V => GRF.y + GRF.h - V / VM * GRF.h;
+  let ax = '';
+  for (let i = 0; i <= 5; i++) {
+    const x = GRF.x + i / 5 * GRF.w, y = GRF.y + GRF.h - i / 5 * GRF.h;
+    ax += `<line x1="${x}" y1="${GRF.y}" x2="${x}" y2="${GRF.y + GRF.h}" stroke="#f0eef5"/><line x1="${GRF.x}" y1="${y}" x2="${GRF.x + GRF.w}" y2="${y}" stroke="#f0eef5"/>` +
+          `<text x="${x}" y="${GRF.y + GRF.h + 14}" font-size="10" fill="#7a7590" text-anchor="middle" class="m">${+(IM * i / 5).toPrecision(3)}</text>` +
+          `<text x="${GRF.x - 5}" y="${y + 3.5}" font-size="10" fill="#7a7590" text-anchor="end" class="m">${+(VM * i / 5).toPrecision(3)}</text>`;
+  }
+  ax += `<line x1="${GRF.x}" y1="${GRF.y + GRF.h}" x2="${GRF.x + GRF.w}" y2="${GRF.y + GRF.h}" stroke="#8a84a0"/><line x1="${GRF.x}" y1="${GRF.y}" x2="${GRF.x}" y2="${GRF.y + GRF.h}" stroke="#8a84a0"/>` +
+        `<text x="${GRF.x + GRF.w}" y="${GRF.y + GRF.h + 30}" font-size="11" fill="#403a55" text-anchor="end">I (A), from the first ammeter</text><text x="${GRF.x + 6}" y="${GRF.y + 10}" font-size="11" fill="#403a55">V (V)</text>`;
+  $('gAx').innerHTML = ax;
+  $('gPts').innerHTML = rows.map(r => `<circle cx="${X(r.I).toFixed(1)}" cy="${Y(r.V).toFixed(1)}" r="4.5" fill="#6a3fc2"/>`).join('');
+  const lv = $('gLive');
+  if (isFinite(live.I)) { lv.setAttribute('opacity', 1); lv.setAttribute('cx', X(live.I).toFixed(1)); lv.setAttribute('cy', clamp(Y(live.V), GRF.y - 4, GRF.y + GRF.h + 4).toFixed(1)); } else lv.setAttribute('opacity', 0);
+  const f = fitLine(rows);
+  if (f && rows.length >= 2) {
+    const x2 = IM, y1 = f.a, y2 = f.a + f.b * IM;
+    $('gFit').setAttribute('x1', X(0)); $('gFit').setAttribute('y1', Y(y1).toFixed(1)); $('gFit').setAttribute('x2', X(x2)); $('gFit').setAttribute('y2', Y(y2).toFixed(1)); $('gFit').setAttribute('opacity', 1);
+    $('gFitT').textContent = `V = ${fmt(f.a, 3)} ${f.b < 0 ? '−' : '+'} ${fmt(Math.abs(f.b), 3)} I   R² = ${f.r2.toFixed(4)}`;
+  } else { $('gFit').setAttribute('opacity', 0); $('gFitT').textContent = ''; }
+}
+
+/* ---- the Kirchhoff checker: a junction's currents, or a loop walked peg by peg ---- */
+function partsAt(n){ return Object.keys(S.parts).filter(k => { const [a, b] = ends(k); return (a === n || b === n) && isFinite(partR(S.parts[k])) || (S.parts[k].kind === 'cell' && (a === n || b === n)); }); }
+const pname = k => { const p = S.parts[k]; return p.kind === 'cell' ? `${fmt(p.E, 1)} V cell` : p.kind === 'resistor' ? `${fmt(p.R, 1)} Ω` : p.kind === 'rheostat' ? `rheostat ${fmt(p.R, 1)} Ω` : p.kind === 'galv' ? 'galvanometer' : p.kind; };
+function junctionData(n){
+  const ks = partsAt(n), rows = [];
+  let tin = 0, tout = 0;
+  for (const k of ks) {
+    const [a] = ends(k), I = SOL.cur[k] * (a === n ? -1 : 1);     // + means flowing INTO the peg
+    rows.push({k, I}); if (I > 0) tin += I; else tout -= I;
+  }
+  return {rows, tin, tout};
+}
+function paintKC(){
+  const L = [];
+  const line = (s, col = '#403a55', w = 400) => L.push(`<text x="720" y="${284 + L.length * 17}" fill="${col}" font-weight="${w}" class="m">${s}</text>`);
+  if (!S.locked) { $('kc').innerHTML = ''; return; }
+  if (S.tool === 'junction' && S.junction != null) {
+    const d = junctionData(S.junction);
+    line(`Junction at peg ${pegName(S.junction)}`, '#403a55', 700);
+    for (const r of d.rows.slice(0, 8)) line(`${r.I >= 0 ? 'in ' : 'out'} ${fmtI(Math.abs(r.I)).padStart(10)}  ${pname(r.k)}`, r.I >= 0 ? '#1f6f4a' : '#9a3a1a');
+    line(`Σ in  = ${fmtI(d.tin)}`, '#1f6f4a', 600); line(`Σ out = ${fmtI(d.tout)}`, '#9a3a1a', 600);
+    line(`difference ${Math.abs(d.tin - d.tout).toExponential(1)} A`, '#6a3fc2', 700);
+  } else if (S.tool === 'loop' && S.walk.length) {
+    line(`Walking from peg ${pegName(S.walk[0])}`, '#403a55', 700);
+    let sum = 0;
+    const steps = [];
+    for (let i = 1; i < S.walk.length; i++) { const u = S.walk[i - 1], v = S.walk[i], k = slotBetween(u, v), dV = SOL.V[v] - SOL.V[u]; sum += dV; steps.push({k, dV}); }
+    for (const s of steps.slice(-9)) { const z = Math.abs(s.dV) < 5e-4; line(`${(z ? ' ' : s.dV > 0 ? '+' : '−') + fmt(Math.abs(s.dV), 3).padStart(7)} V  ${pname(s.k)}`, z ? '#7a7590' : s.dV > 0 ? '#1f6f4a' : '#9a3a1a'); }
+    const closed = S.walk.length > 3 && S.walk[0] === S.walk[S.walk.length - 1];
+    line(`${closed ? 'Back at the start: ' : 'Running total: '}Σ ΔV = ${fmt(sum, 6)} V`, '#6a3fc2', 700);
+  } else {
+    L.push(`<text x="720" y="284" fill="#7a7590" font-size="11.5">Pick <tspan font-weight="700">Junction</tspan> and click a peg to add up</text>`,
+           `<text x="720" y="301" fill="#7a7590" font-size="11.5">its currents, or <tspan font-weight="700">Walk a loop</tspan> and click</text>`,
+           `<text x="720" y="318" fill="#7a7590" font-size="11.5">pegs round a closed loop.</text>`);
+  }
+  $('kc').innerHTML = L.join('');
+}
+function walkPath(){
+  $('walkG').innerHTML = S.tool === 'loop' && S.walk.length ? `<polyline points="${S.walk.map(n => { const p = pos(n); return p.x + ',' + p.y; }).join(' ')}" fill="none" stroke="#6a3fc2" stroke-width="9" stroke-linejoin="round" stroke-linecap="round" opacity=".22"/>` +
+    S.walk.map((n, i) => { const p = pos(n); return `<circle cx="${p.x}" cy="${p.y}" r="${i ? 6 : 8}" fill="#6a3fc2" opacity="${i ? .5 : .8}"/>`; }).join('') : '';
+  if (S.tool === 'junction' && S.junction != null) { const p = pos(S.junction); $('walkG').innerHTML = `<circle cx="${p.x}" cy="${p.y}" r="15" fill="#6a3fc2" opacity=".22"/>`; }
+}
+function clickPeg(n){
+  if (!S.locked) return;
+  if (S.tool === 'junction') {
+    S.junction = n; sound('tick'); walkPath(); paintKC(); track('junction', {peg: n});
+    const d = junctionData(n);
+    if (d.rows.length >= 3 && d.rows.filter(r => Math.abs(r.I) > 1e-6).length >= 3) discover('junction');
+    return;
+  }
+  if (S.tool === 'loop') {
+    const last = S.walk[S.walk.length - 1];
+    if (last == null) { S.walk = [n]; }
+    else {
+      const k = slotBetween(last, n);
+      const conducts = k && S.parts[k] && (S.parts[k].kind === 'cell' || isFinite(partR(S.parts[k])));
+      if (!conducts) { toast('Step to a neighbouring peg joined by a part.'); sound('oops'); return; }
+      S.walk.push(n);
+      if (S.walk.length > 40) S.walk.shift();
+    }
+    sound('tick'); walkPath(); paintKC();
+    const closed = S.walk.length > 3 && S.walk[0] === n;
+    if (closed) {
+      let sum = 0, anyCell = false, anyDrop = false;
+      for (let i = 1; i < S.walk.length; i++) { const u = S.walk[i - 1], v = S.walk[i], k = slotBetween(u, v), dV = SOL.V[v] - SOL.V[u]; sum += dV; if (S.parts[k].kind === 'cell') anyCell = true; if (Math.abs(dV) > 1e-3) anyDrop = true; }
+      if (anyCell && anyDrop && Math.abs(sum) < 1e-9) discover('loop');
+      track('loop', {steps: S.walk.length - 1, sum});
+      S.walkDone = true;
+    }
+  }
+}
+
+/* ---- the narrator ---------------------------------------------------------- */
+function paintWhy(){
+  if (!S.locked) return;
+  $('whyCard').hidden = false;
+  const out = [], cells = ofKind('cell');
+  if (!SOL.ok) out.push('<p class="warn">Two ideal cells (r = 0) are joined straight across each other: Kirchhoff’s loop rule then demands E₁ = E₂, which is false, so there is no solution. Give one of them some internal resistance.</p>');
+  for (const k of cells) {
+    const p = S.parts[k], I = SOL.cur[k] * (p.dir > 0 ? 1 : -1), Vt = Math.abs(SOL.drop[k]);
+    const sign = I >= 0 ? 'delivering' : 'being charged by';
+    out.push(`<p>The ${fmt(p.E, 2)} V cell is ${sign} ${fmtI(Math.abs(I))}. Its terminal p.d. is V = E − Ir = ${fmt(p.E, 3)} − ${fmt(I, 3)} × ${fmt(p.r, 2)} = <b>${fmt(p.E - I * p.r, 3)} V</b>` +
+      (p.r > 0 ? `; the other ${fmt(I * p.r, 3)} V is lost inside it, as heat ${fmt(I * I * p.r, 3)} W.` : '.') + `</p>`);
+    if (p.r > 0 && Math.abs(I) > 0.95 * p.E / p.r) out.push(`<p class="warn">This cell is short-circuited. The current is limited only by its own resistance: I<sub>max</sub> = E/r = ${fmt(p.E / p.r, 2)} A.</p>`);
+  }
+  const g = ofKind('galv')[0];
+  if (g) {
+    const Ig = SOL.cur[g];
+    out.push(Math.abs(Ig) < 1e-6 ? `<p><b>The bridge is balanced:</b> no current through the galvanometer, because B and D are at the same potential.</p>` :
+      `<p>The galvanometer carries ${fmtI(Ig)}, so B and D are at different potentials (${fmt(Math.abs(SOL.drop[g]), 4)} V apart). Change one arm until it reads zero.</p>`);
+  }
+  const lamp = ofKind('lamp')[0];
+  if (lamp) { const T = SOL.T[lamp]; out.push(`<p>The filament is at ${fmt(T, 0)} K, so its resistance is R₀[1 + α(T − T₀)] = ${fmt(partR(S.parts[lamp], T), 2)} Ω, ${fmt(partR(S.parts[lamp], T) / LAMP.R0, 1)}× its cold ${fmt(LAMP.R0, 1)} Ω.</p>`); }
+  if (!out.length) out.push('<p>Put a cell on the board to drive a current.</p>');
+  $('why').innerHTML = out.join('');
+}
+
+/* ---- findings ---------------------------------------------------------------- */
+function check(){
+  if (!S.locked) return;
+  for (const k of ofKind('cell')) { const p = S.parts[k]; if (p.r >= 0.05 && Math.abs(SOL.cur[k]) > 0.95 * p.E / p.r) discover('short'); }
+  const g = ofKind('galv')[0];
+  if (g && Math.abs(SOL.cur[g]) < 1e-6) {
+    const tot = Math.max(0, ...ofKind('cell').map(k => Math.abs(SOL.cur[k])));
+    if (tot > 1e-3) discover('bridge');
+  }
+  const cells = ofKind('cell'), f = fitLine(S.rec);
+  if (cells.length === 1 && S.rec.length >= 3 && f) {
+    const p = S.parts[cells[0]], spread = Math.max(...S.rec.map(r => r.I)) - Math.min(...S.rec.map(r => r.I));
+    if (p.r >= 0.1 && spread > 0.1 && Math.abs(f.a - p.E) < 0.01 * p.E && Math.abs(-f.b - p.r) < 0.03 * p.r && S.rec.every(r => r.src === cells[0])) { discover('emf'); explainEmf(f); }
+  }
+  if (S.rec.length >= 4 && S.rec.every(r => r.what === 'lamp')) {
+    const q = S.rec.filter(r => r.I > 1e-6).map(r => r.V / r.I);
+    if (q.length >= 4 && Math.max(...q) / Math.min(...q) > 1.5) discover('ohmfail');
+  }
+}
+function explainEmf(f){
+  if (!POE || POE.explained) return;
+  POE.explain(`Your readings fall on a straight line <b>V = ${fmt(f.a, 3)} − ${fmt(-f.b, 3)} I</b>. Where it meets the V axis (I = 0) is the emf, E = ${fmt(f.a, 3)} V; ` +
+    `its slope is −r, so r = ${fmt(-f.b, 3)} Ω. The more current you draw, the more of the emf is used up inside the cell, and the less appears at its terminals: V = E − Ir.`);
+}
+
+/* ============================================================================
+   Controls
+   ============================================================================ */
+const TOOLS = [
+  {id: 'hand', name: 'Select', note: 'Click a part to select it and set it. Click a switch to open or close it. Selecting a wire shows the electrons inside it.',
+   ico: '<path d="M11 3 L11 18 L15 14 L18 20 L20.5 19 L17.5 13 L23 13Z" fill="#fff" stroke="#403a55" stroke-width="1.4" stroke-linejoin="round"/>'},
+  {id: 'wire', name: 'Wire', ico: '<line x1="3" y1="10" x2="31" y2="10" stroke="#3b3551" stroke-width="3" stroke-linecap="round"/>'},
+  {id: 'cell', name: 'Cell', ico: '<line x1="2" y1="10" x2="14" y2="10" stroke="#3b3551" stroke-width="1.6"/><line x1="14" y1="3" x2="14" y2="17" stroke="#3b3551" stroke-width="1.8"/><line x1="19" y1="6" x2="19" y2="14" stroke="#3b3551" stroke-width="4"/><line x1="19" y1="10" x2="32" y2="10" stroke="#3b3551" stroke-width="1.6"/>'},
+  {id: 'resistor', name: 'Resistor', ico: '<path d="M2 10 h7 l2 -5 l4 10 l4 -10 l4 10 l2 -5 h7" fill="none" stroke="#3b3551" stroke-width="1.6"/>'},
+  {id: 'rheostat', name: 'Rheostat', ico: '<path d="M2 10 h7 l2 -5 l4 10 l4 -10 l4 10 l2 -5 h7" fill="none" stroke="#3b3551" stroke-width="1.6"/><path d="M10 17 L25 3" stroke="#6a3fc2" stroke-width="1.6"/>'},
+  {id: 'lamp', name: 'Lamp', ico: '<circle cx="17" cy="10" r="7.5" fill="#fff6c8" stroke="#3b3551"/><path d="M12 5 L22 15 M12 15 L22 5" stroke="#3b3551" stroke-width="1.3"/>'},
+  {id: 'galv', name: 'Galvano­meter', ico: '<circle cx="17" cy="10" r="8" fill="#fff" stroke="#6a3fc2" stroke-width="1.6"/><line x1="17" y1="10" x2="20" y2="4" stroke="#d6453d" stroke-width="1.5"/>'},
+  {id: 'ammeter', name: 'Ammeter', ico: '<circle cx="17" cy="10" r="8" fill="#fff" stroke="#3057c9" stroke-width="1.6"/><text x="17" y="14" text-anchor="middle" font-size="11" font-weight="700" fill="#3057c9">A</text>'},
+  {id: 'switch', name: 'Switch', ico: '<circle cx="8" cy="13" r="2.5" fill="#3b3551"/><circle cx="26" cy="13" r="2.5" fill="#3b3551"/><line x1="8" y1="13" x2="24" y2="5" stroke="#3b3551" stroke-width="2"/>'},
+  {id: 'junction', name: 'Junction', note: 'Click any peg: the currents in and out of it are added up.', ico: '<circle cx="17" cy="10" r="3.5" fill="#6a3fc2"/><path d="M3 10 H13 M21 10 H31 M17 6 V1" stroke="#3b3551" stroke-width="1.6"/><path d="M8 7 l3 3 l-3 3" fill="none" stroke="#1f6f4a" stroke-width="1.4"/>'},
+  {id: 'loop', name: 'Walk a loop', note: 'Click a peg to start, then click neighbouring pegs round a closed loop, back to where you began. Each step adds its change in potential.',
+   ico: '<rect x="7" y="3" width="20" height="14" rx="4" fill="none" stroke="#6a3fc2" stroke-width="1.8"/><path d="M24 1 l3 2 l-3 3" fill="none" stroke="#6a3fc2" stroke-width="1.5"/>'},
+  {id: 'erase', name: 'Remove', note: 'Click a part to take it off the board.', ico: '<path d="M10 4 L24 16 M24 4 L10 16" stroke="#d6453d" stroke-width="2.4" stroke-linecap="round"/>'},
+];
+function buildTools(){ $('tools').innerHTML = TOOLS.map(t => `<button class="tool" data-tool="${t.id}" aria-pressed="${S.tool === t.id}" disabled><svg viewBox="0 0 34 20" aria-hidden="true">${t.ico}</svg>${t.name}</button>`).join(''); }
+function setTool(id){
+  S.tool = id;
+  for (const b of document.querySelectorAll('.tool')) b.setAttribute('aria-pressed', b.dataset.tool === id);
+  const t = TOOLS.find(t => t.id === id);
+  $('toolNote').textContent = t.note || `Click the space between two pegs to put a ${t.name.toLowerCase().replace('­', '')} there. Drag the red and black probes onto pegs to measure a p.d.`;
+  if (id !== 'loop') S.walk = [];
+  if (id !== 'junction') S.junction = null;
+  $('modeHint').textContent = id === 'loop' ? 'Walking a loop: click pegs' : id === 'junction' ? 'Click a peg to check its junction' : '';
+  walkPath(); if (SOL) paintKC();
+}
+function clickSlot(k){
+  if (!S.locked) return;
+  const p = S.parts[k];
+  if (S.tool === 'hand' || S.tool === 'junction' || S.tool === 'loop') {
+    if (S.tool !== 'hand') return;
+    if (!p) { S.sel = null; drawSel(); drawInspector(); return; }
+    if (p.kind === 'switch') { p.on = !p.on; sound('snap'); drawSlot(k); track('switch', {on: p.on}); }
+    S.sel = k; sound('tick'); solve(); return;
+  }
+  if (S.tool === 'erase') { if (p) { delete S.parts[k]; if (S.sel === k) S.sel = null; sound('pop'); drawSlot(k); solve(); } return; }
+  const np = {kind: S.tool, n: ++S.count};
+  if (S.tool === 'cell') Object.assign(np, {E: 1.5, r: 0.5, dir: p && p.kind === 'cell' ? p.dir : -1});
+  if (S.tool === 'resistor') np.R = 10;
+  if (S.tool === 'rheostat') np.R = 10;
+  if (S.tool === 'galv') np.Rg = 15;
+  if (S.tool === 'switch') np.on = true;
+  S.parts[k] = np; S.sel = k;
+  sound('pop'); drawSlot(k); solve();
+  track('place', {kind: S.tool, key: k});
+}
+function drawInspector(){
+  const k = S.sel, p = k && S.parts[k];
+  $('inspCard').hidden = !(S.locked && p);
+  if ($('inspCard').hidden) { paintDriftText(); return; }
+  const rng = (id, lab, min, max, step, v, unit, prop) => `<div class="ctl"><label for="${id}">${lab}</label><input type="range" id="${id}" data-prop="${prop}" min="${min}" max="${max}" step="${step}" value="${v}"><output>${fmt(v, step < 0.1 ? 2 : 1)} ${unit}</output></div>`;
+  let h = '';
+  switch (p.kind) {
+    case 'cell': $('inspTitle').textContent = 'Cell';
+      h = rng('iE', 'emf E', 0.5, 12, 0.1, p.E, 'V', 'E') + rng('iR', 'internal r', 0, 5, 0.05, p.r, 'Ω', 'r') +
+          `<div class="row"><button class="btn sm" data-act="flip">Turn round</button></div>`; break;
+    case 'resistor': $('inspTitle').textContent = 'Resistor'; h = rng('iRes', 'R', 0.1, 200, 0.1, p.R, 'Ω', 'R'); break;
+    case 'rheostat': $('inspTitle').textContent = 'Rheostat'; h = rng('iRh', 'R', 0, 50, 0.5, p.R, 'Ω', 'R'); break;
+    case 'galv': $('inspTitle').textContent = 'Galvanometer'; h = rng('iG', 'resistance', 1, 100, 1, p.Rg, 'Ω', 'Rg') + `<p class="note" style="margin:0">Reads ${fmtI(SOL.cur[k])}.</p>`; break;
+    case 'lamp': $('inspTitle').textContent = 'Tungsten filament lamp';
+      h = `<p class="note" style="margin:0">Cold resistance R₀ = ${LAMP.R0} Ω at 300 K; α = 4.5 × 10⁻³ K⁻¹. Now ${fmt(SOL.T[k], 0)} K and ${fmt(partR(p, SOL.T[k]), 2)} Ω.</p>`; break;
+    case 'wire': $('inspTitle').textContent = 'Copper wire';
+      h = `<div class="ctl"><label for="iA">cross-section A</label><input type="range" id="iA" data-area="1" min="-8" max="-5" step="0.1" value="${Math.log10(S.area).toFixed(1)}"><output>${S.area.toExponential(1)} m²</output></div>` +
+          `<p class="note" style="margin:0">The view below shows the electrons inside this wire.</p>`; break;
+    case 'ammeter': $('inspTitle').textContent = 'Ammeter'; h = `<p class="note" style="margin:0">Reads ${fmtI(Math.abs(SOL.cur[k]))}; resistance taken as zero.</p>`; break;
+    case 'switch': $('inspTitle').textContent = 'Switch'; h = `<p class="note" style="margin:0">Click it on the board to open or close it.</p>`; break;
+  }
+  if (p.kind !== 'wire') h += `<p class="note" style="margin:6px 0 0">The view below shows the copper leads that carry this part’s current.</p>`;
+  h += `<div class="row" style="margin-top:6px"><button class="btn sm" data-act="remove">Remove</button></div>`;
+  $('insp').innerHTML = h;
+  paintDriftText();
+}
+$('insp').addEventListener('input', e => {
+  const t = e.target; if (t.type !== 'range') return;
+  if (t.dataset.area) { S.area = 10 ** +t.value; t.nextElementSibling.textContent = S.area.toExponential(1) + ' m²'; paintDriftText(); return; }
+  const p = S.parts[S.sel]; if (!p) return;
+  p[t.dataset.prop] = +t.value;
+  t.nextElementSibling.textContent = fmt(+t.value, +t.step < 0.1 ? 2 : 1) + ' ' + ({E: 'V', r: 'Ω', R: 'Ω', Rg: 'Ω'})[t.dataset.prop];
+  drawSlot(S.sel);
+  SOL = solveBoard(S.parts, NN, ends); drawLabels(); drawSel(); paint(); paintKC(); paintWhy(); check(); paintDriftText();
+});
+$('insp').addEventListener('change', e => { if (e.target.type === 'range') track('set', {key: S.sel, prop: e.target.dataset.prop || 'area', value: +e.target.value}); });
+$('insp').addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return;
+  if (b.dataset.act === 'flip') { S.parts[S.sel].dir *= -1; drawSlot(S.sel); solve(); }
+  if (b.dataset.act === 'remove') { const k = S.sel; delete S.parts[k]; S.sel = null; drawSlot(k); solve(); }
+});
+$('tools').addEventListener('click', e => { const b = e.target.closest('.tool'); if (b && !b.disabled) { setTool(b.dataset.tool); sound('tick'); } });
+$('preset').addEventListener('change', e => { if (!e.target.value) return; loadPreset(e.target.value); track('preset', {name: e.target.value}); e.target.value = ''; });
+$('stage').addEventListener('click', e => {
+  const h = e.target.closest('.slotHit'); if (h) return clickSlot(h.dataset.k);
+  const pg = e.target.closest('.pegHit'); if (pg) return clickPeg(+pg.dataset.n);
+});
+$('btnRecord').addEventListener('click', () => {
+  const live = liveIV(); if (!isFinite(live.I)) return;
+  const cells = ofKind('cell');
+  /* what the voltmeter is across: a lamp, or a cell's two terminals? */
+  const across = Object.keys(S.parts).find(k => { const [a, b] = ends(k); return (a === S.probes.red && b === S.probes.black) || (b === S.probes.red && a === S.probes.black); });
+  S.rec.push({I: live.I, V: live.V, src: cells.length === 1 ? cells[0] : null, what: across ? S.parts[across].kind : null});
+  sound('pop'); drawGraph(); check(); track('record', {I: live.I, V: live.V});
+  $('btnClearRec').disabled = false;
+});
+$('btnClearRec').addEventListener('click', () => { S.rec = []; drawGraph(); $('btnClearRec').disabled = true; });
+
+function nearestPeg(p){ let best = 0, bd = 1e9; for (let n = 0; n < NN; n++) { const q = pos(n), d = Math.hypot(q.x - p.x, q.y - p.y); if (d < bd) { bd = d; best = n; } } return best; }
+function wireProbes(){
+  for (const [id, key] of [['probeRed', 'red'], ['probeBlack', 'black']]) drag($(id), svg, {
+    start(){ if (!S.locked) return false; },
+    move(p){ const x = clamp(p.x, 24, 680), y = clamp(p.y, 24, 462); $(id).setAttribute('cx', x); $(id).setAttribute('cy', y); drawLeads(); S.probes[key] = nearestPeg({x, y}); paint(); },
+    end(){ placeProbes(); paint(); sound('tick'); track('probe', {probe: key, node: S.probes[key]}); },
+  });
+}
+
+/* ============================================================================
+   Inside the wire: electrons drifting at v_d = I/(neA), in real time
+   ============================================================================ */
+function driftCurrent(){ const k = S.sel; return k && S.parts[k] && SOL ? SOL.cur[k] : 0; }
+function paintDriftText(){
+  const k = S.sel, has = S.locked && k && S.parts[k];
+  const I = has ? driftCurrent() : 0, vd = driftSpeed(I, S.area);
+  $('drSub').textContent = !has ? 'Select a wire (or any part) to look inside the copper that carries its current.' :
+    `Copper, n = 8.5 × 10²⁸ electrons per m³, cross-section A = ${S.area.toExponential(1)} m²`;
+  $('drA').textContent = has ? `I = ${fmtI(Math.abs(I))}   v_d = I/(neA) = ${vd >= 1e-3 ? fmt(vd * 1000, 2) + ' mm/s' : fmt(vd * 1e6, 2) + ' µm/s'}` : '';
+  $('drB').textContent = has && vd > 0 ? `An electron takes ${dur(1 / vd)} to drift 1 m along this wire.` : has ? 'No current: the electrons only jiggle, with no drift.' : '';
+  $('drC').textContent = has && vd > 0 ? `The field that pushes them travels at about 3 × 10⁸ m/s: it crosses 1 m in 3.3 ns.` : '';
+  if (has && vd > 0 && vd < 1e-2 && Math.abs(I) >= 0.1) discover('drift');
+}
+const dur = s => s < 120 ? fmt(s, 0) + ' s' : s < 7200 ? fmt(s / 60, 0) + ' min' : s < 172800 ? fmt(s / 3600, 1) + ' h' : fmt(s / 86400, 1) + ' days';
+let DRIFT_T = 0;
+function tick(dt){
+  if (!SOL) return;
+  /* electrons: each jiggles (thermal) and all drift against the conventional current */
+  const I = S.locked && S.sel && S.parts[S.sel] ? driftCurrent() : 0;
+  const pxPerM = DR.w / 1e-3, vd = driftSpeed(I, S.area) * pxPerM * (reduced() ? 0 : 1);
+  const dirSel = S.sel && S.parts[S.sel] ? geo(S.sel) : null;
+  const sgn = -Math.sign(I);                 // electrons go against the current, which flows a → b along the part
+  const els = $('elec').children;
+  for (let i = 0; i < ELEC.length; i++) {
+    const e = ELEC[i];
+    if (!reduced()) { e.x += (Math.random() - 0.5) * 3; e.y += (Math.random() - 0.5) * 3; }
+    e.x += sgn * vd * dt;
+    e.x = ((e.x % DR.w) + DR.w) % DR.w; e.y = clamp(e.y, 5, DR.h - 5);
+    els[i].setAttribute('cx', (DR.x + e.x).toFixed(1)); els[i].setAttribute('cy', (DR.y + e.y).toFixed(1));
+  }
+  /* charge dots on the board */
+  for (const k of SLOTS) {
+    const g = $('d_' + k), Ik = S.parts[k] ? SOL.cur[k] : 0;
+    const on = S.locked && Math.abs(Ik) > 1e-6;
+    if (!on) { if (g.dataset.on !== '0') { for (const c of g.children) c.setAttribute('opacity', 0); g.dataset.on = '0'; } continue; }
+    g.dataset.on = '1';
+    const G = geo(k), v = clamp(Math.abs(Ik) / 0.5 * 50, 5, 300) * Math.sign(Ik);
+    PHASE[k] = ((PHASE[k] || 0) + (reduced() ? 0 : v * dt / G.L)) % 1;
+    let j = 0;
+    for (const c of g.children) {
+      const f = ((PHASE[k] + j / 3) % 1 + 1) % 1; j++;
+      c.setAttribute('cx', (G.x1 + (G.x2 - G.x1) * f).toFixed(1)); c.setAttribute('cy', (G.y1 + (G.y2 - G.y1) * f).toFixed(1));
+      c.setAttribute('opacity', S.parts[k].kind !== 'wire' && f > 0.27 && f < 0.73 ? 0 : .9);
+    }
+  }
+}
+let PHASE = {};
+function mix(a, b, t){
+  const pa = [1, 3, 5].map(i => parseInt(a.slice(i, i + 2), 16)), pb = [1, 3, 5].map(i => parseInt(b.slice(i, i + 2), 16));
+  return '#' + pa.map((v, i) => Math.round(v + (pb[i] - v) * t).toString(16).padStart(2, '0')).join('');
+}
+
+/* ============================================================================
+   Start
+   ============================================================================ */
+build(); wireProbes(); buildTools(); setTool('hand');
+findings($('finds'), [
+  {id: 'emf',      icon: 'E', label: 'E and r read off the graph',          hint: 'Record a cell’s V against I'},
+  {id: 'short',    icon: '⚠', label: 'The largest current is E/r',          hint: 'Short a cell'},
+  {id: 'junction', icon: '⋔', label: 'Junction rule: in = out',             hint: 'Check a junction of three'},
+  {id: 'loop',     icon: '↻', label: 'Loop rule: Σ ΔV = 0',                 hint: 'Walk a closed loop'},
+  {id: 'bridge',   icon: '◇', label: 'A balanced bridge: P/Q = R/S',         hint: 'Get the galvanometer to zero'},
+  {id: 'ohmfail',  icon: '∿', label: 'A hot filament breaks Ohm’s law',      hint: 'Record a lamp’s V against I'},
+  {id: 'drift',    icon: '…', label: 'Electrons crawl: millimetres a second', hint: 'Look inside a wire carrying current'},
+], () => toast('All seven. That is Chapter 3, measured.', 4200));
+
+const POE = predict($('poe'), {
+  id: 'terminal-voltage',
+  q: 'A cell has an emf of 1.5 V. You draw more and more current from it by turning down the rheostat. What happens to the p.d. across its terminals?',
+  options: [
+    {id: 'const', text: 'It stays at 1.5 V: that is what the emf means.'},
+    {id: 'line',  text: 'It falls, in a straight line, as the current rises.', right: true},
+    {id: 'rise',  text: 'It rises, because the cell is working harder.'},
+    {id: 'zero',  text: 'It drops to zero as soon as any current flows.'},
+  ],
+  onLock(){
+    S.locked = true; lockControls(false);
+    say('Now measure it. Record the meters, change the rheostat, and record again.');
+    solve(); placeProbes();
+  },
+});
+function lockControls(lock){
+  document.body.classList.toggle('locked', lock);
+  for (const b of document.querySelectorAll('.tool')) b.disabled = lock;
+  $('preset').disabled = lock;
+  $('gate').hidden = !lock;
+}
+const shared = sharedState();
+if (shared && shared.parts) {
+  for (const k in shared.parts) if (SLOTS.includes(k)) S.parts[k] = shared.parts[k];
+  S.count = Object.keys(S.parts).length + 1;
+  if (shared.probes) S.probes = shared.probes;
+  for (const k of SLOTS) drawSlot(k);
+  solve(); placeProbes();
+} else loadPreset('cell');
+shareState(() => ({parts: S.parts, probes: S.probes}));
+lockControls(!POE.locked);
+if (!Play.FF('predict')) { S.locked = true; lockControls(false); solve(); }
+loop(tick);
+window.applyFeatures = () => solve();
+window.PG_STATE = () => JSON.parse(JSON.stringify(Object.assign({}, S, {cur: SOL && SOL.cur, drop: SOL && SOL.drop, T: SOL && SOL.T, vm: SOL ? voltmeter() : 0})));
+window.PG_MODEL = {solveNet, solveBoard: parts => solveBoard(parts, NN, ends), fitLine, driftSpeed, lampR, lampT, partR, PRESETS, ends, node, LAMP};
+</script>
+</body>
+</html>

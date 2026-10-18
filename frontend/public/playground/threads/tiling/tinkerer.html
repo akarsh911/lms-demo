@@ -1,0 +1,382 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Constructions And Tilings</title>
+<meta name="description" content="Class 7: mix different regular polygons round one point and see which combinations close up exactly, then construct a regular hexagon with a compass, six equilateral triangles at a time.">
+<link rel="icon" href="../../favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600&family=Inter:wght@400;500;600;700&family=Nunito:wght@500;700;800&family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="../../play.css">
+<style>
+.pg-stage{min-height:0}
+.tabs{display:flex; gap:4px; padding:10px 12px 0; border-bottom:1px solid var(--hair); background:var(--card); flex-wrap:wrap}
+.tab{border:1px solid transparent; border-bottom:none; background:none; padding:8px 14px; border-radius:10px 10px 0 0; cursor:pointer;
+  font-family:"Fredoka",var(--font-head); font-size:16px; color:var(--ink-3); margin-bottom:-1px}
+.tab[aria-selected="true"]{background:var(--card); border-color:var(--hair); color:var(--ink); border-bottom:1px solid var(--card)}
+.gate{position:absolute; left:0; right:0; top:50px; bottom:0; display:grid; place-items:center; pointer-events:none}
+.gate span{background:rgba(29,35,39,.85); color:#fff; padding:10px 16px; border-radius:99px; font-weight:600; font-size:14px}
+.chips{display:flex; flex-wrap:wrap; gap:6px; margin:4px 0}
+.chip{border:1px solid var(--hair-2); background:var(--card); border-radius:99px; padding:6px 12px; font-size:13px; cursor:pointer; font-weight:600; color:var(--ink-2)}
+.chip:disabled{opacity:.4; cursor:default}
+.big{font-family:"Fredoka",var(--font-head); font-size:20px; font-weight:600; line-height:1.25}
+.note{font-size:12.5px; color:var(--ink-3); margin:6px 0 0}
+.why p{font-size:14px; margin-bottom:.55em}
+.why b{color:var(--ink)}
+.seqRow{display:flex; flex-wrap:wrap; gap:6px; margin:6px 0}
+.seqPill{border-radius:99px; padding:4px 10px; font-size:13px; font-weight:700; color:#fff}
+svg text{pointer-events:none}
+</style>
+</head>
+<body>
+<header class="pg-top"></header>
+
+<div class="pg-intro">
+  <h1>Constructions and tilings</h1>
+  <p>Regular shapes placed edge to edge round one point use up their interior angle each time. Mix different shapes and see
+     which combinations use up exactly 360° with no gap and no overlap, then construct a regular hexagon the way six
+     equilateral triangles do it — with nothing but a compass.</p>
+</div>
+
+<main class="pg-main wide-side">
+  <section class="pg-stage" id="stageWrap">
+    <div class="tabs" role="tablist">
+      <button class="tab" role="tab" id="tabPoint" aria-selected="true">Meeting at a point</button>
+      <button class="tab" role="tab" id="tabHex" aria-selected="false">Construct a hexagon</button>
+    </div>
+    <svg id="stagePoint" viewBox="0 0 1000 560" role="img" aria-label="Regular polygons placed edge to edge round a shared point, showing whether their angles leave a gap, close exactly, or overlap."></svg>
+    <svg id="stageHex" viewBox="0 0 1000 560" role="img" aria-label="A circle with a compass swinging from point to point, building a regular hexagon out of six equilateral triangles." hidden></svg>
+    <div class="gate" id="gate"><span>Make your prediction first →</span></div>
+  </section>
+
+  <aside class="pg-side">
+    <div id="poeA"></div>
+    <div id="poeB" hidden></div>
+
+    <div class="card" id="cardA">
+      <div class="kicker">Shapes in your tray</div>
+      <div class="chips" role="group" aria-label="Add a shape">
+        <button class="chip" data-n="3">+ Triangle</button>
+        <button class="chip" data-n="4">+ Square</button>
+        <button class="chip" data-n="5">+ Pentagon</button>
+        <button class="chip" data-n="6">+ Hexagon</button>
+        <button class="chip" data-n="8">+ Octagon</button>
+        <button class="chip" data-n="10">+ Decagon</button>
+        <button class="chip" data-n="12">+ Dodecagon</button>
+      </div>
+      <div class="seqRow" id="seqRow"></div>
+      <div class="big num" id="aBig"></div>
+      <p class="note">Add shapes one at a time; they are drawn edge to edge, in order, round the same point.</p>
+      <div class="row" style="margin-top:6px"><button class="btn sm" id="aUndo">Undo last</button><button class="btn sm" id="aClear">Clear</button></div>
+    </div>
+
+    <div class="card" id="cardB" hidden>
+      <div class="kicker">The compass</div>
+      <div class="big num" id="bBig">Step 1 of 6</div>
+      <p class="note">Each swing opens the compass to the circle's own radius, from your last point, to find the next point on the circle.</p>
+      <div class="row" style="margin-top:6px"><button class="btn sm primary" id="bSwing">Swing the compass</button><button class="btn sm" id="bReset">Start again</button></div>
+    </div>
+
+    <div class="card why" id="whyCard">
+      <div class="kicker">What is happening</div>
+      <div id="why"></div>
+    </div>
+
+    <div class="card"><div class="kicker">To find</div><div id="finds"></div></div>
+  </aside>
+</main>
+
+<script src="../../play.js"></script>
+<script>
+'use strict';
+const {$, $$, esc, clamp, fmt, sound, say, track, toast, predict, findings, discover, found,
+       shareState, sharedState, mount, reduced} = Play;
+mount({thread: 'tiling', band: 'tinkerer'});
+
+/* MODEL:start ==================================================================
+   Ganita Prakash 7, Ch 6 "Constructions and Tilings".
+
+   1. Meeting at a point (§6.2 Tiling). A regular n-gon has interior angle
+      (n-2)*180/n. Copies of shapes placed edge to edge share one point; the
+      angle each one uses up there is its own interior angle. They close with
+      no gap and no overlap only when the angles used add up to EXACTLY 360°
+      — this is checked by real addition of the sequence the learner built,
+      never by a lookup of "which combinations work".
+   2. Constructing a regular hexagon (§6.2, Fig. 6.12: six equilateral
+      triangles round a centre). Starting on a circle of radius R, each
+      "swing of the compass" finds the point on the circle that is exactly R
+      from the last point — a genuine circle-circle intersection, solved with
+      the real formula, not a fixed 60° rotation typed in. Triangle O-A-B has
+      OA = OB = AB = R by construction, so it is equilateral and angle AOB is
+      60°: six such triangles use up 6 × 60° = 360°, so the sixth swing must
+      return exactly to the start.
+   ============================================================================ */
+const interiorAngle = n => (n - 2) * 180 / n;
+/* A regular n-gon as a turtle path: vertex 0 is the shared point (0,0); the
+   first edge leaves it heading `originAngle`; each further edge turns by the
+   exterior angle 360/n. The angle actually used up at the shared point,
+   between the first and last edge, is interiorAngle(n). */
+function regularPoly(n, side, originAngle){
+  const ext = 360 / n; let heading = originAngle, x = 0, y = 0;
+  const pts = [[0, 0]];
+  for (let i = 0; i < n - 1; i++) {
+    x += side * Math.cos(heading * Math.PI / 180); y += side * Math.sin(heading * Math.PI / 180);
+    pts.push([x, y]); heading += ext;
+  }
+  return pts;
+}
+const multisetEq = (a, b) => a.length === b.length && a.slice().sort((x, y) => x - y).join(',') === b.slice().sort((x, y) => x - y).join(',');
+/* Two circles, same radius r, centres c1 and c2: their two intersection points, exactly. */
+function circleIntersect(c1, r1, c2, r2){
+  const dx = c2.x - c1.x, dy = c2.y - c1.y, d = Math.hypot(dx, dy);
+  if (d < 1e-9 || d > r1 + r2 + 1e-9) return [];
+  const a = (r1 * r1 - r2 * r2 + d * d) / (2 * d);
+  const h = Math.sqrt(Math.max(0, r1 * r1 - a * a));
+  const xm = c1.x + a * dx / d, ym = c1.y + a * dy / d;
+  const rx = -dy * (h / d), ry = dx * (h / d);
+  return [{x: xm + rx, y: ym + ry}, {x: xm - rx, y: ym - ry}];
+}
+const angleOf = (c, p) => Math.atan2(p.y - c.y, p.x - c.x);
+const norm2pi = a => ((a % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
+/* Of the two intersection points, the one that continues the same turning
+   sense as the swings so far (a positive angular step, not a negative one). */
+function pickForward(O, last, cands){
+  const aLast = angleOf(O, last);
+  const deltas = cands.map(c => norm2pi(angleOf(O, c) - aLast));
+  return deltas[0] < deltas[1] ? cands[0] : cands[1];
+}
+const dist = (p, q) => Math.hypot(p.x - q.x, p.y - q.y);
+/* MODEL:end */
+
+const INK = '#1d2327', RUST = '#c0392b', CLAY = '#e0785a', SAND2 = '#e8cfa8', GOOD = '#1f8a55', BAD = '#b5541f';
+const SHAPE_NAME = {3: 'triangle', 4: 'square', 5: 'pentagon', 6: 'hexagon', 8: 'octagon', 10: 'decagon', 12: 'dodecagon'};
+const SHAPE_COL = {3: '#c0392b', 4: '#2f7de1', 5: '#8a5cf6', 6: '#2f9e5b', 8: '#d68a12', 10: '#c2569b', 12: '#16a3a3'};
+
+/* ---- state -------------------------------------------------------------------- */
+const S = {tab: 'point', seq: [], lockedA: false, lockedB: false, V: [], closed: false};
+const shared = sharedState();
+if (shared) {
+  if (['point', 'hex'].includes(shared.tab)) S.tab = shared.tab;
+  if (Array.isArray(shared.seq)) S.seq = shared.seq.filter(n => [3, 4, 5, 6, 8, 10, 12].includes(+n)).slice(0, 8).map(Number);
+}
+shareState(() => ({tab: S.tab, seq: S.seq}));
+
+/* ============================================================================
+   Tab 1: meeting at a point
+   ============================================================================ */
+const svgA = $('stagePoint');
+const P = {x: 500, y: 300};
+function buildA(){
+  svgA.innerHTML = `
+  <rect x="0" y="0" width="1000" height="560" fill="#fbfaf6"/>
+  <text x="30" y="40" font-size="13" font-weight="700" letter-spacing=".08em" fill="#4a555b">DIFFERENT SHAPES, ONE SHARED POINT</text>
+  <path id="gapWedge" fill="${RUST}" opacity="0"/>
+  <g id="copies"></g>
+  <circle cx="${P.x}" cy="${P.y}" r="5" fill="${INK}"/>
+  <text id="aAngle" x="30" y="500" font-size="20" font-weight="600" fill="${INK}" font-family="Fredoka, Inter, sans-serif"></text>
+  <text id="aVerdict" x="30" y="528" font-size="15" font-weight="600"></text>
+  `;
+}
+function paintA(){
+  const angs = S.seq.map(interiorAngle);
+  let cum = 0, copies = '';
+  for (let i = 0; i < S.seq.length; i++) {
+    const n = S.seq[i], before = cum, ang = angs[i];
+    const pts = regularPoly(n, 66, before).map(([x, y]) => `${(P.x + x).toFixed(1)},${(P.y - y).toFixed(1)}`).join(' ');
+    const overflowing = before >= 359.99;
+    copies += `<polygon points="${pts}" fill="${overflowing ? RUST : SHAPE_COL[n]}" opacity="${overflowing ? 0.35 : 0.82}" stroke="#2a2015" stroke-width="2"/>`;
+    cum += ang;
+  }
+  $('copies').innerHTML = copies;
+  const total = cum;
+  if (total < 359.99) {
+    const arc = a => `${(P.x + 150 * Math.cos(a * Math.PI / 180)).toFixed(1)},${(P.y - 150 * Math.sin(a * Math.PI / 180)).toFixed(1)}`;
+    $('gapWedge').setAttribute('d', `M${P.x} ${P.y} L${arc(total)} A150 150 0 0 0 ${arc(360)} Z`);
+    $('gapWedge').setAttribute('opacity', S.seq.length ? 0.16 : 0);
+  } else $('gapWedge').setAttribute('opacity', 0);
+  const exact = Math.abs(total - 360) < 0.02;
+  $('aAngle').textContent = S.seq.length ? `${S.seq.map((n, i) => fmt(angs[i], 0) + '°').join(' + ')} = ${fmt(total, 0)}°` : 'Add a shape to begin.';
+  $('aVerdict').textContent = !S.seq.length ? '' : exact ? 'Exactly a full turn: no gap, no overlap — these meet exactly!'
+    : total < 360 ? `${fmt(360 - total, 0)}° short of a full turn: a gap is left.` : `${fmt(total - 360, 0)}° too many: the last shape overlaps.`;
+  $('aVerdict').setAttribute('fill', exact ? GOOD : BAD);
+  $('aBig').textContent = S.seq.length ? `Total: ${fmt(total, 0)}°` : 'Empty — add a shape';
+  $('seqRow').innerHTML = S.seq.map(n => `<span class="seqPill" style="background:${SHAPE_COL[n]}">${SHAPE_NAME[n]}</span>`).join('');
+  $$('#cardA .chip').forEach(c => c.disabled = !S.lockedA || S.seq.length >= 8);
+  $('aUndo').disabled = !S.seq.length; $('aClear').disabled = !S.seq.length;
+  paintWhy();
+  return {total, exact};
+}
+function addShape(n){
+  S.seq.push(n);
+  sound('tick');
+  const {total, exact} = paintA();
+  if (exact) {
+    sound('chime');
+    if (multisetEq(S.seq, [5, 5, 10])) discover('gapClosed');
+    else if (multisetEq(S.seq, [4, 8, 8])) discover('squareOctOct');
+    else if (multisetEq(S.seq, [3, 4, 6, 4])) discover('mix4');
+    else if (multisetEq(S.seq, [3, 6, 3, 6])) discover('triHexTriHex');
+  } else if (S.seq.length >= 2 && total > 360) discover('anyOverlap');
+  else if (S.seq.length >= 2 && total < 360) discover('anyGap');
+  track('addShape', {seq: S.seq.slice(), total});
+}
+buildA();
+$$('#cardA .chip').forEach(el => el.addEventListener('click', () => { if (!el.disabled) addShape(+el.dataset.n); }));
+$('aUndo').addEventListener('click', () => { S.seq.pop(); sound('tick'); paintA(); });
+$('aClear').addEventListener('click', () => { S.seq = []; sound('tick'); paintA(); });
+
+/* ============================================================================
+   Tab 2: construct a regular hexagon
+   ============================================================================ */
+const svgB = $('stageHex');
+const O = {x: 500, y: 290}, R = 150;
+function buildB(){
+  svgB.innerHTML = `
+  <rect x="0" y="0" width="1000" height="560" fill="#fbfaf6"/>
+  <text x="30" y="40" font-size="13" font-weight="700" letter-spacing=".08em" fill="#4a555b">SIX EQUILATERAL TRIANGLES ROUND A CENTRE (FIG. 6.12)</text>
+  <circle id="bCircle" cx="${O.x}" cy="${O.y}" r="${R}" fill="none" stroke="#9aa3a6" stroke-width="2"/>
+  <g id="bTris"></g>
+  <g id="bEdges" stroke="${INK}" stroke-width="3" fill="none"></g>
+  <g id="bPts"></g>
+  <circle cx="${O.x}" cy="${O.y}" r="5" fill="${INK}"/>
+  <text x="${O.x + 8}" y="${O.y - 10}" font-size="15" font-weight="700" fill="${INK}" font-family="Fredoka, Inter, sans-serif">O</text>
+  <text id="bAngle" x="30" y="500" font-size="20" font-weight="600" fill="${INK}" font-family="Fredoka, Inter, sans-serif"></text>
+  <text id="bVerdict" x="30" y="528" font-size="15" font-weight="600" fill="${GOOD}"></text>
+  `;
+}
+function paintB(){
+  let tris = '', edges = '', pts = '';
+  for (let i = 0; i < S.V.length; i++) {
+    const v = S.V[i];
+    pts += `<circle cx="${v.x.toFixed(1)}" cy="${v.y.toFixed(1)}" r="6" fill="${i === 0 ? RUST : SAND2}" stroke="#2a2015" stroke-width="2"/>`;
+    if (i > 0) {
+      const p = S.V[i - 1];
+      tris += `<polygon points="${O.x},${O.y} ${p.x.toFixed(1)},${p.y.toFixed(1)} ${v.x.toFixed(1)},${v.y.toFixed(1)}" fill="${CLAY}" opacity=".35" stroke="${INK}" stroke-width="1.5"/>`;
+      edges += `M${p.x.toFixed(1)} ${p.y.toFixed(1)} L${v.x.toFixed(1)} ${v.y.toFixed(1)} `;
+    }
+  }
+  $('bTris').innerHTML = tris;
+  $('bEdges').setAttribute('d', edges);
+  $('bPts').innerHTML = pts;
+  const k = Math.max(0, S.V.length - 1);
+  $('bBig').textContent = S.closed ? 'The hexagon is closed!' : `Step ${k + 1} of 6`;
+  $('bSwing').disabled = !S.lockedB || S.closed;
+  if (!S.V.length) { $('bAngle').textContent = ''; $('bVerdict').textContent = ''; return; }
+  if (k === 0) { $('bAngle').textContent = 'One point placed on the circle.'; $('bVerdict').textContent = ''; return; }
+  const last = S.V[S.V.length - 1], prev = S.V[S.V.length - 2];
+  const oa = dist(O, prev), ob = dist(O, last), ab = dist(prev, last);
+  $('bAngle').textContent = `Triangle O-A-B: OA = ${fmt(oa, 0)}, OB = ${fmt(ob, 0)}, AB = ${fmt(ab, 0)} — all equal, so it is equilateral, and angle AOB = 60°.`;
+  $('bVerdict').textContent = S.closed ? `6 × 60° = 360°: after 6 swings, the compass is back where it started.` : `${k} swing${k > 1 ? 's' : ''} so far, ${k * 60}° used up around O.`;
+  paintWhy();
+}
+function swing(){
+  if (!S.lockedB || S.closed) return;
+  const last = S.V[S.V.length - 1];
+  const cands = circleIntersect(O, R, last, R);
+  let next;
+  if (S.V.length === 1) next = cands[0];           /* first swing: either point is equally new */
+  else next = pickForward(O, last, cands);
+  S.V.push(next);
+  sound('snap');
+  track('swing', {n: S.V.length});
+  if (S.V.length === 2) discover('equilateral');
+  if (S.V.length === 7 && dist(S.V[6], S.V[0]) < 1) {
+    S.V[6] = {x: S.V[0].x, y: S.V[0].y};
+    S.closed = true;
+    sound('chime');
+    discover('hexCloses');
+  }
+  paintB();
+}
+buildB();
+function resetB(){ S.V = S.lockedB ? [{x: O.x + R, y: O.y}] : []; S.closed = false; paintB(); }
+$('bSwing').addEventListener('click', swing);
+$('bReset').addEventListener('click', () => { sound('tick'); resetB(); });
+
+/* ============================================================================
+   "What is happening"
+   ============================================================================ */
+function paintWhy(){
+  let h = '';
+  if (S.tab === 'point') {
+    if (!S.lockedA) h = '<p>Predict first, then start adding shapes to the point.</p>';
+    else if (!S.seq.length) h = '<p>Every regular shape you add uses up its own interior angle at the shared point. Add your first shape.</p>';
+    else {
+      const angs = S.seq.map(interiorAngle), total = angs.reduce((a, b) => a + b, 0);
+      const exact = Math.abs(total - 360) < 0.02;
+      h = `<p>${S.seq.map((n, i) => `a ${SHAPE_NAME[n]} (${fmt(angs[i], 0)}°)`).join(', ')}${S.seq.length > 1 ? ', in order,' : ''} round the point: ${S.seq.map((n, i) => fmt(angs[i], 0)).join(' + ')} = <b>${fmt(total, 0)}°</b>.</p>`;
+      h += exact ? `<p>Exactly 360° — no gap, no overlap. These shapes meet perfectly at this one point.</p>`
+        : total < 360 ? `<p>Less than 360°, so a gap is left. Add another shape, or try a different one.</p>`
+        : `<p>More than 360° — the last shape had to overlap the first. Undo it and try a shape with a smaller interior angle.</p>`;
+    }
+  } else {
+    if (!S.lockedB) h = '<p>Predict first, then swing the compass and watch it build the hexagon, one equilateral triangle at a time.</p>';
+    else if (!S.V.length) h = '<p>Press "Swing the compass" to place the first point on the circle.</p>';
+    else if (S.V.length === 1) h = '<p>One point, A, sits on the circle of radius R centred at O. Swing the compass, still opened to R, from A to find the next point.</p>';
+    else h = `<p>Each swing keeps the compass opened to the circle's radius R, so every triangle O-A-B it draws has all three sides equal to R — it is equilateral, and the angle it uses up at O is always <b>60°</b>.</p>` +
+      (S.closed ? `<p>Six swings, six triangles, 6 × 60° = 360°: the sixth point lands exactly back on the first. That closed shape is a regular hexagon.</p>` : `<p>Keep swinging until the compass returns to the very first point.</p>`);
+  }
+  $('why').innerHTML = h;
+}
+
+/* ============================================================================
+   Wiring
+   ============================================================================ */
+function setTab(t){
+  S.tab = t;
+  $('tabPoint').setAttribute('aria-selected', t === 'point'); $('tabHex').setAttribute('aria-selected', t === 'hex');
+  $('stagePoint').toggleAttribute('hidden', t !== 'point'); $('stageHex').toggleAttribute('hidden', t !== 'hex');
+  $('cardA').hidden = t !== 'point'; $('cardB').hidden = t !== 'hex';
+  $('poeA').hidden = t !== 'point'; $('poeB').hidden = t !== 'hex';
+  $('gate').hidden = t === 'point' ? S.lockedA : S.lockedB;
+  if (t === 'point') paintA(); else paintB();
+  track('tab', {tab: t});
+}
+$('tabPoint').addEventListener('click', () => { sound('tick'); setTab('point'); });
+$('tabHex').addEventListener('click', () => { sound('tick'); setTab('hex'); });
+
+/* ============================================================================
+   Start
+   ============================================================================ */
+findings($('finds'), [
+  {id: 'gapClosed',    icon: '⬠', label: 'Two pentagons and a decagon, exact', hint: 'Fill a pentagon gap with one more shape'},
+  {id: 'squareOctOct', icon: '◻', label: 'A square and two octagons, exact', hint: 'Try a square with two octagons'},
+  {id: 'mix4',         icon: '△', label: 'Triangle, square, hexagon, square', hint: 'Mix a triangle, a square, a hexagon and a square'},
+  {id: 'triHexTriHex', icon: '⬡', label: 'Triangle, hexagon, twice over', hint: 'Alternate a triangle and a hexagon'},
+  {id: 'anyGap',       icon: '◵', label: 'A gap, measured exactly', hint: 'Add shapes that fall short of 360°'},
+  {id: 'anyOverlap',   icon: '◶', label: 'An overlap, measured exactly', hint: 'Add shapes that pass 360°'},
+  {id: 'equilateral',  icon: '△', label: 'O-A-B is always equilateral', hint: 'Swing the compass once'},
+  {id: 'hexCloses',    icon: '⬡', label: 'Six swings close the circle', hint: 'Keep swinging the compass'},
+], () => say('Every finding here comes from real angle arithmetic — nothing was just drawn to look right.'));
+
+const POEA = predict($('poeA'), {
+  id: 'pentagon-gap-fill',
+  q: 'Two regular pentagons meet edge to edge at a point (108° + 108° = 216°), leaving a gap. Which ONE shape from the tray closes that exact gap, with no overlap?',
+  options: [
+    {id: 'hex', text: 'A hexagon (120°)'},
+    {id: 'oct', text: 'An octagon (135°)'},
+    {id: 'dec', text: 'A decagon (144°)', right: true},
+    {id: 'none', text: 'No single shape can close it exactly'},
+  ],
+  onLock(){ S.lockedA = true; $('gate').hidden = S.tab === 'point' ? true : S.lockedB; say('Add shapes to the point and watch the total.'); paintA(); },
+});
+const POEB = predict($('poeB'), {
+  id: 'hexagon-close',
+  q: 'Starting at a point on a circle, each swing of the compass (kept open to the radius) finds the next point on the circle. After how many swings do you first arrive back at the start?',
+  options: [
+    {id: '5', text: '5 swings'},
+    {id: '6', text: '6 swings', right: true},
+    {id: '12', text: '12 swings'},
+    {id: 'never', text: 'Never — it spirals around forever'},
+  ],
+  onLock(){ S.lockedB = true; if (S.tab === 'hex') $('gate').hidden = true; say('Swing the compass and count.'); resetB(); },
+});
+if (!Play.FF('predict')) { S.lockedA = S.lockedB = true; }
+setTab(S.tab);
+window.applyFeatures = () => setTab(S.tab);
+window.PG_STATE = () => JSON.parse(JSON.stringify(S));
+window.PG_MODEL = {interiorAngle, regularPoly, multisetEq, circleIntersect, pickForward, dist, O: () => O, R};
+</script>
+</body>
+</html>

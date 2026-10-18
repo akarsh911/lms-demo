@@ -1,0 +1,556 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The House of Hundreds</title>
+<meta name="description" content="Class 3: Farooq Chacha's sweets live on three floors: boxes of a hundred, boxes of ten and loose laddoos. Pack ten into one box, open a box into ten, and add and take away orders with the carrying and borrowing made visible.">
+<link rel="icon" href="../../favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600&family=Nunito:wght@500;700;800&display=swap">
+<link rel="stylesheet" href="../../play.css">
+<style>
+#stageWrap{align-self:start; min-height:0}
+#stage{background:#eaf6ff}
+.hit{cursor:pointer}
+.hit.off{cursor:default}
+svg [tabindex]:focus{outline:none}
+svg [tabindex]:focus-visible{outline:none; stroke:#2f7de1; stroke-width:3; stroke-dasharray:6 5}
+.missions{list-style:none; margin:0; padding:0; display:grid; gap:8px}
+.missions li{display:grid; grid-template-columns:30px 1fr; gap:8px; align-items:center; font-weight:700; font-size:14.5px; line-height:1.3; color:var(--ink-2)}
+.missions li i{width:28px; height:28px; border-radius:50%; border:2.5px dashed var(--hair-2); display:grid; place-items:center; font-style:normal; font-size:15px; color:#fff}
+.missions li.done{color:var(--ink)}
+.missions li.done i{border:none; background:var(--good); animation:tickPop .5s var(--spring)}
+.missions li.done span{text-decoration:line-through; text-decoration-color:var(--good); text-decoration-thickness:2px}
+@keyframes tickPop{0%{transform:scale(.3)}100%{transform:scale(1)}}
+.says{display:grid; grid-template-columns:52px 1fr; gap:10px; align-items:center}
+.says svg{width:52px; height:52px}
+.chacha{font-size:15.5px; font-weight:700; line-height:1.45}
+.order{font-size:15px; font-weight:700; line-height:1.4; margin:0 0 10px}
+.order b{font-family:"Fredoka",var(--font-head); font-size:19px; color:#b8321f}
+</style>
+</head>
+<body>
+<header class="pg-top"></header>
+
+<div class="pg-intro">
+  <h1>The house of hundreds</h1>
+  <p>Farooq Chacha keeps sweets on three floors: boxes of 100, boxes of 10 and loose laddoos. Pack ten into one box and send it up,
+     open a box and send it down, and fill Chacha’s orders.</p>
+</div>
+
+<main class="pg-main">
+  <section class="pg-stage" id="stageWrap">
+    <svg id="stage" viewBox="0 0 1000 664" role="img" aria-label="A three-floor house of sweets: hundreds at the top, tens in the middle, loose ones on the ground floor, with a lift between the floors, a place-value chart, a sum, and a number line to 1000."></svg>
+  </section>
+
+  <aside class="pg-side">
+    <div class="card says">
+      <svg viewBox="-30 -30 60 60" aria-hidden="true">
+        <circle r="28" fill="#ffe0b8"/><path d="M-22 -8 Q-22 -30 0 -30 Q22 -30 22 -8 Z" fill="#fff" stroke="#c9c1b0" stroke-width="2"/>
+        <circle cx="-8" cy="0" r="3" fill="#2a1d12"/><circle cx="8" cy="0" r="3" fill="#2a1d12"/>
+        <path d="M-12 10 Q-6 6 0 10 Q6 6 12 10 Q6 14 0 12 Q-6 14 -12 10 Z" fill="#6b4a2a"/><path d="M-6 17 Q0 21 6 17" stroke="#8a3a1a" stroke-width="2" fill="none" stroke-linecap="round"/>
+      </svg>
+      <div><div class="kicker">Farooq Chacha says</div><div class="chacha" id="chacha">Welcome! Press + on each floor to fill my house with sweets.</div></div>
+    </div>
+    <div class="card">
+      <div class="kicker">The order</div>
+      <p class="order" id="orderText"></p>
+      <div class="row">
+        <button class="btn primary" id="doOrder"></button>
+        <button class="btn sm" id="nextOrder">Next order</button>
+      </div>
+    </div>
+    <div class="card">
+      <div class="kicker">Missions</div>
+      <ul class="missions" id="missions"></ul>
+    </div>
+    <div id="poe"></div>
+    <div class="card"><div class="kicker">Discoveries</div><div id="finds"></div></div>
+  </aside>
+</main>
+
+<script src="../../play.js"></script>
+<script>
+'use strict';
+const {$, esc, clamp, lerp, drag, sound, say, track, toast, tween, predict, findings, discover, found,
+       shareState, sharedState, mount, reduced, confetti, ease} = Play;
+mount({thread: 'numbers', band: 'explorer'});
+
+/* MODEL:start ==================================================================
+   Place value as a house (NCERT Maths Mela, Class 3, Ch 6 "House of Hundreds – I"
+   and Ch 3 "Double Century"). Arvind Dada packs sweets in boxes of 100 (H), boxes
+   of 10 (T) and loose sweets (O). The house holds H, T and O on three floors; the
+   number of sweets is COUNTED: N = 100·H + 10·T + O.
+
+   The only trades are the legal ones, done by the learner:
+     pack   ten on one floor into one box on the floor above  (O−10, T+1)  (T−10, H+1)
+     open   one box into ten on the floor below               (T−1, O+10)  (H−1, T+10)
+   Neither changes N. An order that arrives is unloaded floor by floor, so 235 + 47
+   leaves 12 loose laddoos on the ground floor until the learner packs ten of them: that
+   pack IS the carry. An order that leaves takes floor by floor, so 235 − 28 cannot take
+   8 loose laddoos from 5 until the learner opens a box of ten: that open IS the borrow.
+   ============================================================================ */
+const FLOORS = ['H', 'T', 'O'];
+const PLACE = {H: 100, T: 10, O: 1};
+const CAP = {H: 10, T: 19, O: 19};              // what each floor has room for
+const valueOf = s => 100 * s.H + 10 * s.T + s.O;
+const split = n => ({H: Math.floor(n / 100), T: Math.floor(n / 10) % 10, O: n % 10});
+const neat = s => s.H <= 9 && s.T <= 9 && s.O <= 9 || (s.H === 10 && s.T === 0 && s.O === 0);
+const BELOW = {H: 'T', T: 'O'}, ABOVE = {O: 'T', T: 'H'};
+function canPack(s, f){ return f !== 'H' && s[f] >= 10 && s[ABOVE[f]] + 1 <= CAP[ABOVE[f]]; }
+function canOpen(s, f){ return f !== 'O' && s[f] >= 1 && s[BELOW[f]] + 10 <= CAP[BELOW[f]]; }
+function pack(s, f){ if (!canPack(s, f)) return Object.assign({}, s); const r = Object.assign({}, s); r[f] -= 10; r[ABOVE[f]] += 1; return r; }
+function open(s, f){ if (!canOpen(s, f)) return Object.assign({}, s); const r = Object.assign({}, s); r[f] -= 1; r[BELOW[f]] += 10; return r; }
+/* An order arrives: its hundreds, tens and ones go to their own floors. Nothing is regrouped. */
+function unload(s, n){ const d = split(n); return {H: s.H + d.H, T: s.T + d.T, O: s.O + d.O}; }
+const fits = s => FLOORS.every(f => s[f] <= CAP[f]) && valueOf(s) <= 1000;
+/* An order leaves: which floors are short of what it needs? */
+function shortOf(s, n){ const d = split(n); return FLOORS.filter(f => s[f] < d[f]); }
+function takeOut(s, n){ const d = split(n); return shortOf(s, n).length ? null : {H: s.H - d.H, T: s.T - d.T, O: s.O - d.O}; }
+/* Number names, as the book writes them: "two hundred and thirty-five". */
+const ONES = ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten', 'eleven', 'twelve',
+              'thirteen', 'fourteen', 'fifteen', 'sixteen', 'seventeen', 'eighteen', 'nineteen'];
+const TENS = ['', 'ten', 'twenty', 'thirty', 'forty', 'fifty', 'sixty', 'seventy', 'eighty', 'ninety'];
+function below100(n){ return n < 20 ? ONES[n] : TENS[Math.floor(n / 10)] + (n % 10 ? '-' + ONES[n % 10] : ''); }
+function nameOf(n){
+  if (n === 1000) return 'one thousand';
+  const h = Math.floor(n / 100), r = n % 100;
+  if (!h) return below100(r);
+  return ONES[h] + ' hundred' + (r ? ' and ' + below100(r) : '');
+}
+/* The number sentence the book writes under a number: 235 = 200 + 30 + 5 (zeros left out). */
+function sentence(n){ const d = split(n), parts = []; if (d.H) parts.push(100 * d.H); if (d.T) parts.push(10 * d.T); if (d.O || !parts.length) parts.push(d.O); return parts.join(' + '); }
+/* Column addition done the written way, to check the house against: digits and carries. */
+function columnAdd(a, b){
+  const A = split(a), Bd = split(b); let c = 0; const out = {}, carry = {};
+  for (const f of ['O', 'T', 'H']) { const s = A[f] + Bd[f] + c; out[f] = s % 10; c = Math.floor(s / 10); carry[f] = c; }
+  return {sum: 100 * out.H + 10 * out.T + out.O + 1000 * c, carryIntoT: carry.O, carryIntoH: carry.T};
+}
+/* MODEL:end */
+
+/* ---- the world -------------------------------------------------------------- */
+const FL = {H: {y: 100, h: 140}, T: {y: 248, h: 140}, O: {y: 396, h: 140}};
+const ML = 578, ZL = 628;             // the number line to 1000, and the magnified hundred
+const COL = {H: '#7b5cd6', T: '#2f7de1', O: '#f29a1f'};
+const SOFT = {H: '#efe9fd', T: '#e3eefc', O: '#fff1d9'};
+const NAME = {H: 'Hundreds', T: 'Tens', O: 'Ones'};
+const itemXY = (f, i) => {
+  const y = FL[f].y;
+  if (f === 'H') return {x: 182 + (i % 5) * 70, y: y + 14 + Math.floor(i / 5) * 60};
+  if (f === 'T') return {x: 176 + i * 19 + Math.floor(i / 5) * 6, y: y + 15};
+  return {x: 186 + (i % 10) * 34 + ((i % 10) >= 5 ? 10 : 0), y: y + 42 + Math.floor(i / 10) * 56};
+};
+const ORDERS = [
+  {op: 'add',  n: 47,  text: n => `Chacha has made <b>${n}</b> more laddoos. Bring them into the house, and keep every floor neat.`},
+  {op: 'take', n: 28,  text: n => `Arvind Dada needs <b>${n}</b> laddoos for house 228. Load his cart.`},
+  {op: 'add',  n: 20,  text: n => `Jojo brings <b>${n}</b> more: two boxes of ten. Bring them in.`},
+  {op: 'take', n: 119, text: n => `A wedding order: <b>${n}</b> laddoos. Load the cart.`},
+  {op: 'add',  n: 125, text: n => `The morning batch: <b>${n}</b> laddoos. Bring them in.`},
+  {op: 'take', n: 57,  text: n => `House 367 wants <b>${n}</b> laddoos. Load the cart.`},
+];
+
+/* ---- state: plain data ------------------------------------------------------- */
+const S = {H: 0, T: 0, O: 0, order: 0, pending: null, lastDone: null};
+const shared = sharedState();
+if (shared) {
+  const t = {H: clamp(Math.round(+shared.H || 0), 0, 10), T: clamp(Math.round(+shared.T || 0), 0, 19), O: clamp(Math.round(+shared.O || 0), 0, 19)};
+  if (fits(t)) Object.assign(S, t);
+  if (Number.isInteger(+shared.order)) S.order = clamp(+shared.order, 0, ORDERS.length - 1);
+}
+shareState(() => ({H: S.H, T: S.T, O: S.O, order: S.order}));
+const floors = () => ({H: S.H, T: S.T, O: S.O});
+
+/* ============================================================================
+   The stage: built once, then patched.
+   ============================================================================ */
+const svg = $('stage');
+const f1 = n => (+n).toFixed(1);
+const NS = 'http://www.w3.org/2000/svg';
+const flatArt = (w = 52) => { const c = w / 10; let g = ''; for (let k = 1; k < 10; k++) g += `M${f1(k * c)} 0 V${w} M0 ${f1(k * c)} H${w} `;
+  return `<rect width="${w}" height="${w}" rx="4" fill="#9a7de8" stroke="#4b2fa0" stroke-width="2.5"/><path d="${g}" stroke="#5a3db5" stroke-width="1" opacity=".55"/>`; };
+const rodArt = (h = 110) => { const c = h / 10; let g = ''; for (let k = 1; k < 10; k++) g += `M0 ${f1(k * c)} H16 `;
+  return `<rect width="16" height="${h}" rx="4" fill="#6aa5f0" stroke="#1d5bb0" stroke-width="2.5"/><path d="${g}" stroke="#1d5bb0" stroke-width="1.2" opacity=".6"/>`; };
+const ladArt = (r = 14) => `<circle r="${r}" fill="#f5a623" stroke="#c66f10" stroke-width="2.5"/><circle cx="${-r * .35}" cy="${-r * .3}" r="${r * .22}" fill="#fbc463"/><circle cx="${r * .3}" cy="${r * .25}" r="${r * .2}" fill="#e08a12"/>`;
+const itemArt = f => f === 'H' ? flatArt() : f === 'T' ? rodArt() : ladArt();
+
+function button(id, x, y, w, h, label, col, aria){
+  return `<g id="${id}G"><rect id="${id}Bg" x="${x - w / 2}" y="${y - h / 2}" width="${w}" height="${h}" rx="${Math.min(h / 2, 16)}" fill="#fff" stroke="${col}" stroke-width="3"/>
+    <text id="${id}T" x="${x}" y="${y + 6}" text-anchor="middle" font-family="Fredoka, Nunito, sans-serif" font-size="${h > 46 ? 30 : 16}" font-weight="600" fill="${col}">${label}</text></g>
+    <rect id="${id}" class="hit" x="${x - w / 2}" y="${y - h / 2}" width="${w}" height="${h}" rx="${Math.min(h / 2, 16)}" fill="transparent" role="button" tabindex="0" aria-label="${aria}"/>`;
+}
+
+function build(){
+  let items = '', floorsArt = '', ctrls = '';
+  for (const f of FLOORS) {
+    const {y, h} = FL[f];
+    floorsArt += `
+      <rect x="20" y="${y}" width="540" height="${h}" fill="${SOFT[f]}" stroke="${COL[f]}" stroke-width="3"/>
+      <rect x="20" y="${y}" width="130" height="${h}" fill="${COL[f]}" opacity=".13"/>
+      <text x="85" y="${y + 28}" text-anchor="middle" font-family="Fredoka, Nunito, sans-serif" font-size="19" font-weight="600" fill="${COL[f]}">${NAME[f]}</text>
+      <text id="cnt${f}" x="85" y="${y + 76}" text-anchor="middle" font-family="Fredoka, Nunito, sans-serif" font-size="46" font-weight="600" fill="${COL[f]}">0</text>
+      <rect id="warn${f}" x="24" y="${y + 4}" width="532" height="${h - 8}" fill="none" stroke="#ff7a2f" stroke-width="6" stroke-dasharray="14 9" rx="6" opacity="0"/>`;
+    if (f === 'O') floorsArt += `<g opacity=".5">${Array.from({length: 20}, (_, i) => { const p = itemXY('O', i); return `<rect x="${p.x - 16}" y="${p.y - 16}" width="32" height="32" rx="6" fill="none" stroke="#e0a860" stroke-width="1.5"/>`; }).join('')}</g>`;
+    for (let i = 0; i < CAP[f]; i++) {
+      const p = itemXY(f, i);
+      items += `<g id="it${f}${i}" opacity="0"><g transform="translate(${f1(p.x)} ${f1(p.y)})"><g id="itJ${f}${i}">${itemArt(f)}</g></g></g>`;
+    }
+    ctrls += button('plus' + f, 56, y + h - 34, 56, 50, '+', COL[f], `Add one ${f === 'H' ? 'box of a hundred' : f === 'T' ? 'box of ten' : 'laddoo'}`);
+    ctrls += button('minus' + f, 116, y + h - 34, 56, 50, '−', COL[f], `Take away one ${f === 'H' ? 'box of a hundred' : f === 'T' ? 'box of ten' : 'laddoo'}`);
+  }
+  /* the lift: pack ten and send it up, or open one and send it down */
+  ctrls += button('packT', 604, FL.T.y + 34, 68, 44, 'Pack ↑', '#2f9e5b', 'Pack ten boxes of ten into a box of a hundred and send it up');
+  ctrls += button('openT', 604, FL.T.y + FL.T.h - 30, 68, 44, 'Open ↓', '#c2569b', 'Open a box of ten and send ten laddoos down');
+  ctrls += button('packO', 604, FL.O.y + 34, 68, 44, 'Pack ↑', '#2f9e5b', 'Pack ten loose laddoos into a box of ten and send it up');
+  ctrls += button('openH', 604, FL.H.y + FL.H.h - 30, 68, 44, 'Open ↓', '#c2569b', 'Open a box of a hundred and send ten boxes of ten down');
+
+  /* number line ticks */
+  let ticks = '', zt = '';
+  for (let k = 0; k <= 10; k++) { const x = 40 + k * 92; ticks += `<path d="M${x} ${ML - 6} v12" stroke="#1b2a3a" stroke-width="2"/><text x="${x}" y="${ML + 24}" text-anchor="middle" font-size="14" font-weight="700" fill="#44586e">${k * 100}</text>`; }
+  for (let k = 1; k < 20; k += 2) ticks += `<path d="M${40 + k * 46} ${ML - 4} v7" stroke="#7b8ea2" stroke-width="1.5"/>`;
+  for (let k = 0; k <= 10; k++) zt += `<path d="M${40 + k * 92} ${ZL - 4} v${k % 5 ? 8 : 12}" stroke="#1b2a3a" stroke-width="2"/><text id="zl${k}" x="${40 + k * 92}" y="${ZL + 24}" text-anchor="middle" font-size="13" font-weight="700" fill="#44586e"></text>`;
+  for (let k = 0; k < 100; k++) if (k % 10) zt += `<path d="M${f1(40 + k * 9.2)} ${ZL - 2} v4" stroke="#b3cfea" stroke-width="1.2"/>`;
+
+  svg.innerHTML = `
+  <defs>
+    <linearGradient id="gSky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#cfe8ff"/><stop offset="1" stop-color="#eef7ff"/></linearGradient>
+    <filter id="soft" x="-20%" y="-20%" width="140%" height="140%"><feDropShadow dx="0" dy="3" stdDeviation="3" flood-color="#1b2a3a" flood-opacity=".18"/></filter>
+  </defs>
+  <rect width="1000" height="664" fill="url(#gSky)"/>
+  <rect y="548" width="1000" height="116" fill="#f4f8fc"/>
+  <!-- the house -->
+  <path d="M6 100 L330 14 L654 100 Z" fill="#d6453d" stroke="#9e2a22" stroke-width="4" stroke-linejoin="round"/>
+  <rect x="200" y="46" width="260" height="42" rx="12" fill="#fff8e6" stroke="#9e2a22" stroke-width="3"/>
+  <text x="330" y="75" text-anchor="middle" font-family="Fredoka, Nunito, sans-serif" font-size="22" font-weight="600" fill="#9e2a22">House of Hundreds</text>
+  ${floorsArt}
+  <rect x="566" y="100" width="76" height="436" fill="#d9e2ec" stroke="#8a94a6" stroke-width="3"/>
+  <path d="M604 100 V536" stroke="#8a94a6" stroke-width="2" stroke-dasharray="4 6"/>
+  <rect x="14" y="536" width="634" height="10" rx="3" fill="#8a5a2b"/>
+  <g id="items">${items}</g>
+  ${ctrls}
+
+  <!-- place-value chart -->
+  <g filter="url(#soft)"><rect x="666" y="18" width="320" height="236" rx="18" fill="#fff"/></g>
+  ${FLOORS.map((f, k) => `<rect x="${682 + k * 98}" y="32" width="88" height="112" rx="12" fill="${SOFT[f]}" stroke="${COL[f]}" stroke-width="2.5"/>
+     <text x="${726 + k * 98}" y="54" text-anchor="middle" font-size="15" font-weight="800" fill="${COL[f]}">${f}</text>
+     <text id="pv${f}" x="${726 + k * 98}" y="124" text-anchor="middle" font-family="Fredoka, Nunito, sans-serif" font-size="58" font-weight="600" fill="${COL[f]}">0</text>`).join('')}
+  <text id="bigNum" x="826" y="190" text-anchor="middle" font-family="Fredoka, Nunito, sans-serif" font-size="40" font-weight="600" fill="#1b2a3a">0</text>
+  <text id="nameT" x="826" y="216" text-anchor="middle" font-size="15.5" font-weight="800" fill="#44586e"></text>
+  <text id="sentT" x="826" y="240" text-anchor="middle" font-size="15" font-weight="700" fill="#7b8ea2"></text>
+
+  <!-- the sum on the slate -->
+  <g filter="url(#soft)"><rect x="666" y="264" width="320" height="206" rx="18" fill="#2f4a3f"/></g>
+  <rect x="676" y="274" width="300" height="186" rx="12" fill="none" stroke="#7da38f" stroke-width="2"/>
+  <g id="sumG" font-family="Fredoka, Nunito, sans-serif" font-weight="600"></g>
+  <text id="sumIdle" x="826" y="360" text-anchor="middle" font-size="17" font-weight="700" fill="#cfe3d6">The sum appears here</text>
+  <text x="826" y="384" id="sumIdle2" text-anchor="middle" font-size="17" font-weight="700" fill="#cfe3d6">when an order comes in.</text>
+
+  <!-- Arvind Dada's cart -->
+  <g transform="translate(704 486) scale(.8)">
+    <rect x="0" y="0" width="150" height="46" rx="8" fill="#ffcf5c" stroke="#b58414" stroke-width="3"/>
+    <text x="75" y="30" text-anchor="middle" font-family="Fredoka, Nunito, sans-serif" font-size="16" font-weight="600" fill="#7a5a0c">Arvind Dada</text>
+    <circle cx="28" cy="54" r="14" fill="#44586e"/><circle cx="28" cy="54" r="5" fill="#cfd8e3"/>
+    <circle cx="122" cy="54" r="14" fill="#44586e"/><circle cx="122" cy="54" r="5" fill="#cfd8e3"/>
+    <path d="M150 20 h40 l18 36" stroke="#44586e" stroke-width="5" fill="none" stroke-linecap="round"/>
+    <circle cx="214" cy="54" r="18" fill="none" stroke="#44586e" stroke-width="5"/>
+    <circle cx="190" cy="-6" r="13" fill="#ffe0b8" stroke="#8a5a2b" stroke-width="2"/><path d="M180 -12 Q190 -26 200 -12 Z" fill="#2f7de1"/>
+    <path d="M190 8 L186 34 M190 12 L170 22" stroke="#2f7de1" stroke-width="7" stroke-linecap="round"/>
+  </g>
+  <g id="cartLoad"></g>
+
+  <!-- the number line to 1000, and the hundred it is in, magnified -->
+  <path d="M40 ${ML} H960" stroke="#1b2a3a" stroke-width="3"/>
+  ${ticks}
+  <path id="zoomFan" fill="#2f7de1" opacity=".1"/>
+  <path d="M40 ${ZL} H960" stroke="#1b2a3a" stroke-width="3"/>
+  ${zt}
+  <g id="mark"><path d="M0 0 L-9 -16 H9 Z" fill="#d6453d"/><text id="markT" y="-20" text-anchor="middle" font-family="Fredoka, Nunito, sans-serif" font-size="15" font-weight="600" fill="#d6453d"></text></g>
+  <g id="zmark"><path d="M0 0 L-9 -16 H9 Z" fill="#d6453d"/></g>
+  <g id="fx" pointer-events="none"></g>`;
+}
+build();
+
+/* ---- paint ------------------------------------------------------------------- */
+function paint(){
+  const n = valueOf(S);
+  for (const f of FLOORS) {
+    for (let i = 0; i < CAP[f]; i++) $('it' + f + i).setAttribute('opacity', i < S[f] ? 1 : 0);
+    $('cnt' + f).textContent = S[f];
+    const over = S[f] >= 10 && !(f === 'H' && S.H === 10 && S.T === 0 && S.O === 0);
+    $('cnt' + f).setAttribute('fill', over ? '#e8590c' : COL[f]);
+    $('warn' + f).setAttribute('opacity', over ? 1 : 0);
+    $('pv' + f).textContent = S[f];
+    $('pv' + f).setAttribute('font-size', S[f] >= 10 ? 44 : 58);
+    $('pv' + f).setAttribute('fill', over ? '#e8590c' : COL[f]);
+  }
+  setBtn('packO', canPack(S, 'O')); setBtn('packT', canPack(S, 'T'));
+  setBtn('openT', canOpen(S, 'T')); setBtn('openH', canOpen(S, 'H'));
+  for (const f of FLOORS) {
+    setBtn('plus' + f, S[f] < CAP[f] && n + PLACE[f] <= 1000, true);
+    setBtn('minus' + f, S[f] > 0, true);
+  }
+  $('bigNum').textContent = n;
+  $('nameT').textContent = nameOf(n);
+  $('sentT').setAttribute('fill', neat(S) ? '#7b8ea2' : '#e8590c');
+  $('sentT').textContent = neat(S) ? `${n} = ${sentence(n)}` : `${n} = ${FLOORS.filter(f => S[f]).map(f => S[f] * PLACE[f]).join(' + ') || 0}`;
+  /* number lines */
+  const x = 40 + n * 0.92;
+  $('mark').setAttribute('transform', `translate(${f1(x)} ${ML - 4})`);
+  $('markT').textContent = n;
+  const h0 = Math.min(9, Math.floor(n / 100)) * 100;
+  for (let k = 0; k <= 10; k++) $('zl' + k).textContent = h0 + k * 10;
+  $('zmark').setAttribute('transform', `translate(${f1(40 + (n - h0) * 9.2)} ${ZL - 4})`);
+  $('zoomFan').setAttribute('d', `M${f1(40 + h0 * 0.92)} ${ML + 2} L${f1(40 + (h0 + 100) * 0.92)} ${ML + 2} L960 ${ZL - 2} L40 ${ZL - 2} Z`);
+  paintSum();
+  paintOrder();
+}
+function setBtn(id, on, quiet){
+  $(id + 'G').setAttribute('opacity', on ? 1 : (quiet ? 0.35 : 0.25));
+  $(id).classList.toggle('off', !on);
+  $(id).setAttribute('aria-disabled', !on);
+  if (!quiet) $(id + 'Bg').setAttribute('fill', on ? '#fff7cc' : '#fff');
+}
+
+/* ---- the sum on the slate: the house's floors, written in columns ------------ */
+function paintSum(){
+  const P = S.pending || S.lastDone;
+  $('sumIdle').setAttribute('opacity', P ? 0 : 1); $('sumIdle2').setAttribute('opacity', P ? 0 : 1);
+  if (!P) { $('sumG').innerHTML = ''; return; }
+  const cx = {H: 766, T: 836, O: 906};
+  const d = split(P.n), ink = '#f4f1e6', chalk = '#ffd36b', warm = '#ff9f6b';
+  const cell = (f, y, v, col, size = 38) => `<text x="${cx[f]}" y="${y}" text-anchor="middle" font-size="${v >= 10 ? 28 : size}" fill="${col}">${v}</text>`;
+  let g = FLOORS.map(f => `<text x="${cx[f]}" y="294" text-anchor="middle" font-size="15" fill="#9fc2ad">${f}</text>`).join('');
+  const top = P.op === 'add' ? P.before : (P.done ? P.before : floors());
+  if (P.op === 'take') {
+    /* the top row is the house now: an opened box shows as the old digit struck through */
+    for (const f of FLOORS) {
+      const was = P.before[f], now = P.done ? P.shelf[f] : top[f];
+      if (now !== was) g += `<text x="${cx[f]}" y="314" text-anchor="middle" font-size="18" fill="#9fc2ad" text-decoration="line-through">${was}</text>`;
+      g += cell(f, 346, now, now !== was ? chalk : ink);
+    }
+  } else {
+    for (const f of FLOORS) g += cell(f, 346, top[f], ink);
+    /* carries: one little 1 for every box that was packed and sent up while this order was being put away */
+    if (P.carry.T) g += `<text x="${cx.T + 22}" y="314" text-anchor="middle" font-size="20" fill="${chalk}">${P.carry.T}</text>`;
+    if (P.carry.H) g += `<text x="${cx.H + 22}" y="314" text-anchor="middle" font-size="20" fill="${chalk}">${P.carry.H}</text>`;
+  }
+  g += `<text x="712" y="390" text-anchor="middle" font-size="40" fill="${ink}">${P.op === 'add' ? '+' : '−'}</text>`;
+  for (const f of FLOORS) g += cell(f, 390, d[f], ink);
+  g += `<path d="M700 404 H950" stroke="${ink}" stroke-width="3"/>`;
+  /* the answer row: what is on each floor now (so 12 loose laddoos show as 12 until they are packed) */
+  const res = P.done ? P.result : (P.op === 'add' ? floors() : null);
+  if (res) for (const f of FLOORS) g += cell(f, 446, res[f], P.done ? '#8fe3a8' : (res[f] >= 10 ? warm : ink));
+  else g += `<text x="836" y="442" text-anchor="middle" font-size="17" fill="#cfe3d6">load the cart to see</text>`;
+  if (P.done) g += `<text x="966" y="446" text-anchor="end" font-size="20" fill="#8fe3a8">✓</text>`;
+  $('sumG').innerHTML = g;
+}
+
+/* ---- the order card ------------------------------------------------------------ */
+function paintOrder(){
+  const O = ORDERS[S.order];
+  $('orderText').innerHTML = O.text(O.n);
+  $('doOrder').textContent = O.op === 'add' ? 'Bring them in' : 'Load the cart';
+  const busy = S.pending && S.pending.op === 'add' && !S.pending.done;
+  $('doOrder').disabled = busy || (S.lastDone && S.lastDone.idx === S.order);
+}
+function chacha(line, speak = true){ $('chacha').innerHTML = line; if (speak) say(line); }
+
+/* ---- juice ----------------------------------------------------------------------- */
+function flyIn(el, from, to, ms = 420, lift = 40){
+  if (reduced()) { el.removeAttribute('transform'); return Promise.resolve(); }
+  const dx = from.x - to.x, dy = from.y - to.y;
+  return tween(1, 0, ms, k => el.setAttribute('transform', `translate(${f1(dx * k)} ${f1(dy * k - Math.sin(k * Math.PI) * lift)})`), ease.out)
+    .then(() => el.removeAttribute('transform'));
+}
+function ghost(f, from, to, ms = 420, delay = 0){
+  if (reduced()) return;
+  const g = document.createElementNS(NS, 'g');
+  g.innerHTML = itemArt(f);
+  g.setAttribute('transform', `translate(${f1(from.x)} ${f1(from.y)})`);
+  g.setAttribute('opacity', 0);
+  $('fx').appendChild(g);
+  setTimeout(() => {
+    g.setAttribute('opacity', 1);
+    tween(0, 1, ms, k => { g.setAttribute('transform', `translate(${f1(lerp(from.x, to.x, k))} ${f1(lerp(from.y, to.y, k) - Math.sin(k * Math.PI) * 30)})`); g.setAttribute('opacity', (1 - k * k * 0.9).toFixed(2)); }, ease.inOut)
+      .then(() => g.remove());
+  }, delay);
+}
+const LIFT = f => ({x: 596, y: FL[f].y + FL[f].h / 2});
+const centre = (f, i) => { const p = itemXY(f, i); return f === 'H' ? {x: p.x + 26, y: p.y + 26} : f === 'T' ? {x: p.x + 8, y: p.y + 55} : p; };
+
+/* ============================================================================
+   The learner's moves
+   ============================================================================ */
+function plus(f){
+  if (S[f] >= CAP[f] || valueOf(S) + PLACE[f] > 1000) { sound('oops'); chacha(`The ${NAME[f].toLowerCase()} floor is full! Pack ten and send them up.`); return; }
+  S[f]++;
+  sound('pop');
+  after('plus', f);
+  const i = S[f] - 1, p = itemXY(f, i);
+  flyIn($('itJ' + f + i), {x: 85 - p.x + p.x, y: FL[f].y + 60}, p, 380, 40);
+  if (S[f] === 10 && f !== 'H') chacha(`Ten on the ${NAME[f].toLowerCase()} floor! Press <b>Pack ↑</b> to pack them into one box and send it upstairs.`);
+}
+function minus(f){
+  if (S[f] < 1) { sound('boing'); return; }
+  S[f]--;
+  sound('tick');
+  after('minus', f);
+}
+function doPack(f){
+  if (!canPack(S, f)) { sound('boing'); chacha(f === 'H' ? 'Hundreds is the top floor.' : `You need ten on the ${NAME[f].toLowerCase()} floor to fill a box.`); return; }
+  const up = ABOVE[f], from = S[f];
+  const r = pack(S, f); Object.assign(S, r);
+  sound('snap'); setTimeout(() => sound('chime'), 250);
+  if (S.pending && S.pending.op === 'add' && !S.pending.done) S.pending.carry[up]++;
+  S.packs = (S.packs || 0) + 1;
+  after('pack', f);
+  for (let k = 0; k < 10; k++) ghost(f, centre(f, from - 10 + k), LIFT(f), 360, k * 25);
+  const i = S[up] - 1, p = itemXY(up, i);
+  flyIn($('itJ' + up + i), {x: 596 - (up === 'H' ? 26 : 8), y: LIFT(up).y}, p, 520, 50);
+  if (!discoveredNow()) chacha(`Ten ${f === 'O' ? 'laddoos' : 'boxes of ten'} packed into one ${up === 'T' ? 'box of ten' : 'box of a hundred'}. Still ${valueOf(S)} sweets!`);
+}
+function doOpen(f){
+  if (!canOpen(S, f)) { sound('boing'); chacha(S[f] ? `No room downstairs for ten more. Pack the ${NAME[BELOW[f]].toLowerCase()} first.` : `There is no box on the ${NAME[f].toLowerCase()} floor to open.`); return; }
+  const dn = BELOW[f], n0 = valueOf(S), from = S[dn];
+  const r = open(S, f); Object.assign(S, r);
+  sound('boing'); setTimeout(() => sound('pop'), 200);
+  if (S.pending && S.pending.op === 'take' && !S.pending.done) S.pending.opens++;
+  S.opens = (S.opens || 0) + 1;
+  after('open', f);
+  for (let k = 0; k < 10; k++) { const i = from + k; flyIn($('itJ' + dn + i), LIFT(dn), itemXY(dn, i), 360 + k * 35, 30); }
+  explainOpen(n0);
+  if (!discoveredNow()) chacha(`One ${f === 'T' ? 'box of ten' : 'box of a hundred'} opened: ten ${dn === 'O' ? 'laddoos' : 'boxes of ten'} came down. Still ${valueOf(S)} sweets!`);
+}
+let lastFindAt = 0;
+const discoveredNow = () => performance.now() - lastFindAt < 300;
+
+/* ---- orders ------------------------------------------------------------------------ */
+function doOrder(){
+  const O = ORDERS[S.order];
+  if (O.op === 'add') {
+    if (S.pending && !S.pending.done) return;
+    const next = unload(S, O.n);
+    if (!fits(next)) { sound('oops'); chacha(valueOf(S) + O.n > 1000 ? 'That is more than 1000 sweets — my house cannot hold them!' : 'No room on a floor! Pack ten into a box first.'); return; }
+    S.pending = {op: 'add', n: O.n, idx: S.order, before: floors(), carry: {T: 0, H: 0}, opens: 0, done: false};
+    S.lastDone = null;
+    const was = floors();
+    Object.assign(S, next);
+    sound('whoosh');
+    after('unload');
+    let k = 0;
+    for (const f of FLOORS) for (let i = was[f]; i < S[f]; i++) flyIn($('itJ' + f + i), {x: 760, y: 500}, itemXY(f, i), 520 + (k++) * 30, 60);
+    const over = FLOORS.filter(f => S[f] >= 10);
+    chacha(over.length ? `${O.n} laddoos are in. But the ${NAME[over[0]].toLowerCase()} floor has ${S[over[0]]}! Pack ten of them and send them up.` : `${O.n} laddoos are in, and every floor is neat already.`);
+    checkPending();
+  } else {
+    if (!S.pending || S.pending.idx !== S.order) { S.pending = {op: 'take', n: O.n, idx: S.order, before: floors(), carry: {T: 0, H: 0}, opens: 0, done: false}; S.lastDone = null; }
+    if (valueOf(S) < O.n) { sound('oops'); chacha(`I have only ${valueOf(S)} sweets. That is less than ${O.n}! Put more in the house first.`); paint(); return; }
+    const short = shortOf(S, O.n);
+    if (short.length) {
+      const f = short[0], d = split(O.n);
+      sound('oops');
+      FLOORS.forEach(g => $('warn' + g).setAttribute('opacity', short.includes(g) ? 1 : 0));
+      chacha(f === 'H' ? `The cart needs ${d.H} boxes of a hundred and I have ${S.H}. Pack ten boxes of ten into a hundred!`
+        : `The cart needs ${d[f]} ${f === 'O' ? 'loose laddoos' : 'boxes of ten'}, but there ${S[f] === 1 ? 'is' : 'are'} only ${S[f]}. Open a ${f === 'O' ? 'box of ten' : 'box of a hundred'}!`);
+      paint();
+      FLOORS.forEach(g => { if (short.includes(g)) $('warn' + g).setAttribute('opacity', 1); });
+      return;
+    }
+    const P = S.pending, was = floors();
+    P.shelf = floors();
+    Object.assign(S, takeOut(S, O.n));
+    sound('whoosh');
+    for (const f of FLOORS) for (let i = S[f], k = 0; i < was[f]; i++, k++) ghost(f, centre(f, i), {x: 760, y: 500}, 480, k * 40);
+    finish(P);
+  }
+}
+function checkPending(){
+  const P = S.pending;
+  if (!P || P.done || P.op !== 'add') return;
+  if (neat(S) && valueOf(S) === valueOf(P.before) + P.n) finish(P);
+}
+function finish(P){
+  P.done = true; P.result = floors();
+  S.lastDone = P; S.pending = null;
+  const before = valueOf(P.before), after_ = valueOf(S);
+  after('order');
+  if (P.op === 'add' && (P.carry.T || P.carry.H)) discover('carry');
+  if (P.op === 'take' && P.opens) discover('borrow');
+  if (!discoveredNow()) chacha(P.op === 'add' ? `Neat! ${before} and ${P.n} more is ${after_}.` : `Loaded! ${before} take away ${P.n} leaves ${after_}. Off goes Arvind Dada!`);
+  paint();
+}
+function nextOrder(){
+  S.order = (S.order + 1) % ORDERS.length;
+  S.pending = null; S.lastDone = null;
+  sound('tick');
+  paint();
+  chacha(ORDERS[S.order].text(ORDERS[S.order].n).replace(/<[^>]+>/g, ''));
+}
+
+/* ---- after every change: missions and discoveries -------------------------------- */
+function after(kind, f){
+  const n = valueOf(S);
+  if (kind === 'pack' && f === 'O') find('packTen');
+  if (kind === 'pack' && f === 'T') find('packHundred');
+  if (kind === 'open') find('openBox');
+  if (n === 235 && neat(S)) find('build235');
+  checkPending();
+  paint();
+  track(kind, {floor: f, H: S.H, T: S.T, O: S.O, n});
+}
+function find(id){ if (discover(id)) { lastFindAt = performance.now(); tickMission(id); } }
+
+/* ---- a light prediction: does opening a box change the number of sweets? ---------- */
+const POE = predict($('poe'), {
+  id: 'open-box', confidence: false,
+  q: 'Chacha opens one box of ten and tips the laddoos onto the ground floor. What happens to the number of sweets in the house?',
+  options: [{id: 'up', text: 'It goes up by 10'}, {id: 'down', text: 'It goes down by 1'}, {id: 'same', text: 'It stays the same', right: true}],
+  onLock(){ sound('snap'); },
+});
+function explainOpen(n0){
+  if (!POE.locked || POE.explained) return;
+  const n = valueOf(S);
+  POE.explain(`Before: <b>${n0}</b> sweets. After opening the box: ${S.H} hundreds, ${S.T} tens and ${S.O} ones, which is ${100 * S.H} + ${10 * S.T} + ${S.O} = <b>${n}</b>. One box of ten is the same as ten laddoos.`, n === n0 ? undefined : false);
+}
+
+/* ---- missions ------------------------------------------------------------------------ */
+const MISSIONS = [
+  {id: 'build235',    text: 'Teji’s house number is 235. Put exactly 235 sweets in the house.'},
+  {id: 'packTen',     text: 'Ten loose laddoos on the ground floor? Pack them into a box of ten.'},
+  {id: 'openBox',     text: 'Open a box of ten. Does the number of sweets change?'},
+  {id: 'carry',       text: 'Bring in Chacha’s new laddoos and pack them neatly.'},
+  {id: 'borrow',      text: 'Load Arvind Dada’s cart when there are not enough loose laddoos.'},
+  {id: 'packHundred', text: 'Jojo has 299 toffees. Add one more. What happens?'},
+];
+function paintMissions(){
+  $('missions').innerHTML = MISSIONS.map(m => `<li id="m-${m.id}" class="${found(m.id) ? 'done' : ''}"><i>${found(m.id) ? '✓' : ''}</i><span>${esc(m.text)}</span></li>`).join('');
+}
+function tickMission(){ paintMissions(); }
+
+/* ---- wiring ---------------------------------------------------------------------------- */
+const onTap = (id, fn) => { $(id).addEventListener('click', fn); $(id).addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fn(); } }); };
+for (const f of FLOORS) { onTap('plus' + f, () => plus(f)); onTap('minus' + f, () => minus(f)); }
+onTap('packO', () => doPack('O')); onTap('packT', () => doPack('T'));
+onTap('openT', () => doOpen('T')); onTap('openH', () => doOpen('H'));
+$('doOrder').addEventListener('click', doOrder);
+$('nextOrder').addEventListener('click', nextOrder);
+
+findings($('finds'), [
+  {id: 'build235',    icon: '🏠', label: '235 = 200 + 30 + 5',       say: 'Two hundred and thirty-five: two hundreds, three tens and five ones.'},
+  {id: 'packTen',     icon: '📦', label: 'Ten ones make a ten',      say: 'Ten loose laddoos make one box of ten.'},
+  {id: 'openBox',     icon: '🔓', label: 'Same number, new look',    say: 'Opening a box does not change the number of sweets.'},
+  {id: 'carry',       icon: '➕', label: 'Adding with a carry',      say: 'You packed ten and carried a box upstairs. That is carrying!'},
+  {id: 'borrow',      icon: '➖', label: 'Taking with an open box',  say: 'You opened a box so the cart could take enough. That is borrowing!'},
+  {id: 'packHundred', icon: '💯', label: 'Ten tens make a hundred',  say: 'Ten boxes of ten make one box of a hundred!'},
+], () => { chacha('Every mission done! You can pack and open like Arvind Dada.'); });
+paintMissions();
+paint();
+window.applyFeatures = () => paint();
+window.PG_STATE = () => ({H: S.H, T: S.T, O: S.O, n: valueOf(S), name: nameOf(valueOf(S)), neat: neat(S), order: S.order,
+  pending: S.pending ? {op: S.pending.op, n: S.pending.n, before: valueOf(S.pending.before), carry: Object.assign({}, S.pending.carry), opens: S.pending.opens} : null,
+  lastDone: S.lastDone ? {op: S.lastDone.op, n: S.lastDone.n, before: valueOf(S.lastDone.before), result: valueOf(S.lastDone.result), carry: Object.assign({}, S.lastDone.carry), opens: S.lastDone.opens} : null});
+window.PG_MODEL = {valueOf, split, neat, pack, open, canPack, canOpen, unload, fits, shortOf, takeOut, nameOf, sentence, columnAdd, ORDERS, CAP};
+</script>
+</body>
+</html>

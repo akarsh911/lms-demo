@@ -1,0 +1,362 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Finding Common Ground</title>
+<meta name="description" content="Class 7: cut the biggest squares you can from a rectangle, again and again — the side of the last square is the HCF. Then walk two counters along their multiples until they land on the same number: that's the LCM.">
+<link rel="icon" href="../../favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600&family=Inter:wght@400;500;600;700&family=Nunito:wght@500;700;800&family=Newsreader:opsz,wght@6..72,400;6..72,500&family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="../../play.css">
+<style>
+/* Only what this page needs beyond play.css. */
+.pg-stage{background:#faf8f3}
+.tabs{display:flex; gap:4px; padding:8px 10px; background:var(--card); border-bottom:1px solid var(--hair)}
+.tabs button{flex:1; border:1px solid transparent; background:var(--sunk); border-radius:8px; padding:7px 10px; font-weight:600; font-size:13.5px; cursor:pointer; color:var(--ink-2)}
+.tabs button[aria-pressed="true"]{background:var(--accent); color:#fff}
+.gate{position:absolute; left:0; right:0; top:52px; height:40%; display:grid; place-items:center; pointer-events:none}
+.gate span{background:rgba(20,28,45,.86); color:#fff; padding:10px 16px; border-radius:99px; font-weight:600; font-size:14px}
+.ctl{grid-template-columns:20px 1fr 46px; margin:3px 0}
+.ctl label{font-size:12.5px}
+.ctl output{font-size:13px}
+.runrow{display:flex; gap:6px; align-items:center; margin:6px 0}
+.steps{font-family:var(--font-mono); font-size:12.5px; line-height:1.7; max-height:118px; overflow:auto; background:var(--sunk); border-radius:8px; padding:6px 10px; margin-top:6px}
+.steps div.done{color:var(--good, #1f8a53); font-weight:700}
+.readout{display:grid; grid-template-columns:1fr auto; gap:3px 12px; font-size:13px}
+.readout span{color:var(--ink-2)}
+.readout b{font-family:var(--font-mono); font-weight:600; font-size:12.5px; font-variant-numeric:tabular-nums; text-align:right}
+.why p{font-size:13.5px; margin-bottom:.5em}
+.why b{color:var(--ink)}
+.walk{display:flex; align-items:center; gap:8px; margin:6px 0}
+.walk button{min-width:34px; min-height:34px; border-radius:8px; border:1px solid var(--hair-2); background:var(--card); font-weight:700; cursor:pointer; font-size:16px}
+.walk button:disabled{opacity:.4}
+.walk .val{font-family:var(--font-mono); font-weight:700; min-width:110px; text-align:center}
+</style>
+</head>
+<body>
+<header class="pg-top"></header>
+
+<div class="pg-intro">
+  <h1>Finding common ground</h1>
+  <p>As in NCERT Class 7 Ganita Prakash, Chapter 3, “Finding Common Ground”. Cut the biggest square you can out of a
+     rectangle, then do it again to what is left, and again — the side of the very last square is the HCF. On the
+     second tab, walk two counters along their own multiples until they land on exactly the same number: that is the LCM.</p>
+</div>
+
+<main class="pg-main wide-side">
+  <section class="pg-stage" id="stageWrap">
+    <div class="tabs" id="tabs">
+      <button data-tab="hcf" aria-pressed="true">1 · Cutting squares (HCF)</button>
+      <button data-tab="lcm" aria-pressed="false">2 · Meeting multiples (LCM)</button>
+    </div>
+    <svg id="stage" viewBox="0 0 1000 660" role="img" aria-label="A rectangle being cut into the largest possible squares, round by round; and two number lines whose multiples are walked until they meet"></svg>
+    <div class="gate" id="gate"><span>Make your prediction first →</span></div>
+  </section>
+
+  <aside class="pg-side">
+    <div id="poe"></div>
+
+    <div class="card" id="ctlCard">
+      <div class="ctl"><label for="numA">a</label><input type="range" id="numA" min="4" max="96" step="1" value="24"><output id="numAOut" class="num">24</output></div>
+      <div class="ctl"><label for="numB">b</label><input type="range" id="numB" min="4" max="96" step="1" value="18"><output id="numBOut" class="num">18</output></div>
+
+      <div id="hcfCtl">
+        <div class="runrow">
+          <button class="btn sm primary" id="cutBtn">Cut the biggest square(s)</button>
+          <button class="btn sm" id="cutReset">Restart</button>
+        </div>
+        <div class="readout">
+          <span>Now cutting</span><b id="curRect">—</b>
+          <span>This round</span><b id="curCut">—</b>
+          <span>Rounds so far</span><b id="curRounds">—</b>
+          <span>HCF</span><b id="curHcf">—</b>
+        </div>
+        <div class="steps" id="stepsLog"></div>
+      </div>
+
+      <div id="lcmCtl" hidden>
+        <p class="hint" style="font-size:12.5px;color:var(--ink-3);margin:2px 0 8px">Walk each counter along its own multiples until both land on the same number.</p>
+        <div class="walk"><button id="aDown">−</button><span class="val" id="aVal">1 × a = —</span><button id="aUp">+</button></div>
+        <div class="walk"><button id="bDown">−</button><span class="val" id="bVal">1 × b = —</span><button id="bUp">+</button></div>
+        <div class="readout" style="margin-top:6px">
+          <span>Least common multiple</span><b id="lcmVal">—</b>
+          <span>Check: HCF × LCM</span><b id="prodCheck">—</b>
+        </div>
+      </div>
+    </div>
+
+    <div class="card why" id="whyCard" hidden>
+      <div class="kicker">What is happening</div>
+      <div id="why"></div>
+    </div>
+
+    <div class="card"><div class="kicker">To find</div><div id="finds"></div></div>
+  </aside>
+</main>
+
+<script src="../../play.js"></script>
+<script>
+'use strict';
+const {$, esc, clamp, fmt, sound, say, track, toast, predict, findings, discover, found,
+       shareState, sharedState, mount} = Play;
+mount({thread: 'factors', band: 'tinkerer'});
+
+/* MODEL:start ================================================================
+   HCF, geometrically (Euclid's own construction): from a longLen × shortLen
+   rectangle, cut q = floor(longLen/shortLen) squares of side shortLen; what is
+   left is an r = longLen - q*shortLen strip, turned on its side for the next
+   round (its long side is now the old shortLen). Repeat until nothing is left
+   over (r = 0) — the side of that last square is the HCF. This never adds
+   numbers or looks anything up: it tiles real squares and measures what is left.
+   LCM: walk n*a and m*b up their own multiples until they agree — the first
+   time they do is the LCM. HCF x LCM = a x b always, checked with the actual
+   numbers on the page, not asserted.
+   =============================================================================*/
+function eucRounds(a, b){
+  let longLen = Math.max(a, b), shortLen = Math.min(a, b), x0 = 0, y0 = 0, horizontal = true;
+  const rounds = [];
+  for (let guard = 0; guard < 64; guard++) {
+    const q = Math.floor(longLen / shortLen), r = longLen - q * shortLen;
+    const squares = [];
+    for (let i = 0; i < q; i++) squares.push(horizontal ? {x: x0 + i * shortLen, y: y0, size: shortLen} : {x: x0, y: y0 + i * shortLen, size: shortLen});
+    rounds.push({longLen, shortLen, q, r, x0, y0, horizontal, squares});
+    if (r === 0) break;
+    const nx0 = horizontal ? x0 + q * shortLen : x0, ny0 = horizontal ? y0 : y0 + q * shortLen;
+    x0 = nx0; y0 = ny0;
+    const newLong = shortLen, newShort = r;
+    longLen = newLong; shortLen = newShort; horizontal = !horizontal;
+  }
+  return rounds;
+}
+function gcd(a, b){ while (b) { [a, b] = [b, a % b]; } return a; }
+const lcmOf = (a, b) => a * b / gcd(a, b);
+/* MODEL:end */
+
+const PALETTE = ['#2f7de1', '#e0567a', '#2f9e5b', '#e8890c', '#8a5cf6', '#16a3a3', '#c2569b', '#7b5cd6'];
+
+/* ---- state ------------------------------------------------------------- */
+const S = {a: 24, b: 18, tab: 'hcf', revealed: 0, walkN: 1, walkM: 1, locked: false};
+S.rounds = eucRounds(S.a, S.b);
+const shared = sharedState();
+if (shared) {
+  S.a = clamp(+shared.a || 24, 4, 96); S.b = clamp(+shared.b || 18, 4, 96);
+  S.tab = shared.tab === 'lcm' ? 'lcm' : 'hcf';
+  S.rounds = eucRounds(S.a, S.b);
+  S.revealed = clamp(+shared.rev || 0, 0, S.rounds.length);
+  S.walkN = clamp(+shared.n || 1, 1, 999); S.walkM = clamp(+shared.m || 1, 1, 999);
+}
+shareState(() => ({a: S.a, b: S.b, tab: S.tab, rev: S.revealed, n: S.walkN, m: S.walkM}));
+
+const svg = $('stage');
+const GX0 = 40, GX1 = 960, GY0 = 70, GY1 = 600;
+
+function build(){
+  svg.innerHTML = `
+  <rect width="1000" height="660" fill="#fbfaf6"/>
+  <g id="scHcf">
+    <text x="${GX0}" y="46" fill="#4a555b" font-size="13" font-weight="700" letter-spacing=".08em">CUTTING THE BIGGEST SQUARES</text>
+    <text id="hcfSub" x="${GX1}" y="46" text-anchor="end" fill="#7c878c" font-size="11.5"></text>
+    <g id="squares"></g>
+    <g id="nextRect"></g>
+    <text id="doneLab" x="500" y="${GY1 + 40}" text-anchor="middle" font-size="16" font-weight="700" fill="#1f8a53"></text>
+  </g>
+  <g id="scLcm" display="none">
+    <text x="${GX0}" y="46" fill="#4a555b" font-size="13" font-weight="700" letter-spacing=".08em">WALKING THE MULTIPLES</text>
+    <text id="lcmSub" x="${GX1}" y="46" text-anchor="end" fill="#7c878c" font-size="11.5"></text>
+    <text id="meetBanner" x="500" y="88" text-anchor="middle" font-size="15" font-weight="700" fill="#1f8a53"></text>
+    <g id="lineAxis"></g>
+    <line id="lineA" x1="${GX0}" x2="${GX1}" stroke="#dfe3e6" stroke-width="18" stroke-linecap="round"/>
+    <line id="lineB" x1="${GX0}" x2="${GX1}" stroke="#dfe3e6" stroke-width="18" stroke-linecap="round"/>
+    <g id="ticksA"></g>
+    <g id="ticksB"></g>
+    <g id="meetMarks"></g>
+    <line id="tokAStem" stroke="#2f7de1" stroke-width="2"/>
+    <circle id="tokA" r="13" fill="#2f7de1" stroke="#fff" stroke-width="2.5"/>
+    <text id="tokALab" text-anchor="middle" fill="#fff" font-size="10.5" font-weight="700" dy="4"></text>
+    <line id="tokBStem" stroke="#e0567a" stroke-width="2"/>
+    <circle id="tokB" r="13" fill="#e0567a" stroke="#fff" stroke-width="2.5"/>
+    <text id="tokBLab" text-anchor="middle" fill="#fff" font-size="10.5" font-weight="700" dy="4"></text>
+  </g>
+  `;
+}
+
+function paintHCF(){
+  const W0 = Math.max(S.a, S.b), H0 = Math.min(S.a, S.b);
+  const scale = Math.min((GX1 - GX0) / W0, (GY1 - GY0 - 20) / H0);
+  const dx0 = GX0 + ((GX1 - GX0) - W0 * scale) / 2, dy0 = GY0 + 20 + ((GY1 - GY0 - 20) - H0 * scale) / 2;
+  const X = x => dx0 + x * scale, Y = y => dy0 + y * scale;
+  $('hcfSub').textContent = `${S.a} × ${S.b}, drawn true to shape`;
+  let sq = '';
+  for (let ri = 0; ri < S.revealed; ri++) {
+    const round = S.rounds[ri], col = PALETTE[ri % PALETTE.length];
+    for (const s of round.squares) {
+      const w = s.size * scale;
+      sq += `<rect x="${X(s.x).toFixed(1)}" y="${Y(s.y).toFixed(1)}" width="${w.toFixed(1)}" height="${w.toFixed(1)}" fill="${col}" fill-opacity=".28" stroke="${col}" stroke-width="1.6"/>`;
+      if (w > 22) sq += `<text x="${(X(s.x) + w / 2).toFixed(1)}" y="${(Y(s.y) + w / 2 + 4).toFixed(1)}" text-anchor="middle" font-size="${Math.min(13, w / 3).toFixed(1)}" font-weight="700" fill="${col}">${s.size}</text>`;
+    }
+  }
+  $('squares').innerHTML = sq;
+  const done = S.revealed >= S.rounds.length;
+  if (!done) {
+    const nr = S.rounds[S.revealed];
+    const w = nr.longLen * scale, h = nr.shortLen * scale;
+    $('nextRect').innerHTML = `<rect x="${X(nr.x0).toFixed(1)}" y="${Y(nr.y0).toFixed(1)}" width="${(nr.horizontal ? w : h).toFixed(1)}" height="${(nr.horizontal ? h : w).toFixed(1)}" fill="none" stroke="#9aa3a6" stroke-width="1.6" stroke-dasharray="6 5"/>
+      <text x="${(X(nr.x0) + (nr.horizontal ? w : h) / 2).toFixed(1)}" y="${(Y(nr.y0) - 8).toFixed(1)}" text-anchor="middle" font-size="12.5" font-weight="600" fill="#5d6a70">next: ${nr.longLen} × ${nr.shortLen}</text>`;
+    $('doneLab').textContent = '';
+  } else {
+    $('nextRect').innerHTML = '';
+    $('doneLab').textContent = `Nothing left over — the HCF of ${S.a} and ${S.b} is ${S.rounds[S.rounds.length - 1].shortLen}.`;
+  }
+  /* readouts */
+  if (!done) { const nr = S.rounds[S.revealed]; $('curRect').textContent = `${nr.longLen} × ${nr.shortLen}`; $('curCut').textContent = `${nr.q} square${nr.q === 1 ? '' : 's'} of side ${nr.shortLen}`; }
+  else { $('curRect').textContent = 'finished'; $('curCut').textContent = '—'; }
+  $('curRounds').textContent = S.revealed;
+  $('curHcf').textContent = done ? S.rounds[S.rounds.length - 1].shortLen : '—';
+  $('cutBtn').disabled = done || !S.locked;
+  $('cutBtn').textContent = done ? 'All cut' : 'Cut the biggest square(s)';
+  let log = '';
+  for (let ri = 0; ri < S.revealed; ri++) { const r = S.rounds[ri]; log += `<div class="${r.r === 0 ? 'done' : ''}">${r.longLen} = ${r.q} × ${r.shortLen} + ${r.r}</div>`; }
+  $('stepsLog').innerHTML = log || '<div style="color:var(--ink-3)">No cuts yet.</div>';
+}
+
+function paintLCM(){
+  const a = S.a, b = S.b, L = lcmOf(a, b);
+  const maxMark = L + Math.max(a, b);
+  const X = v => GX0 + v / maxMark * (GX1 - GX0);
+  const yA = 280, yB = 460;
+  $('lineA').setAttribute('y1', yA); $('lineA').setAttribute('y2', yA);
+  $('lineB').setAttribute('y1', yB); $('lineB').setAttribute('y2', yB);
+  $('lcmSub').textContent = `up to ${maxMark} — a little past the first meeting point`;
+  let ax = '', bx = '', meet = '';
+  for (let k = 1; k * a <= maxMark; k++) { const x = X(k * a); ax += `<line x1="${x.toFixed(1)}" y1="${yA - 11}" x2="${x.toFixed(1)}" y2="${yA + 11}" stroke="#2f7de1" stroke-width="2.4"/><text x="${x.toFixed(1)}" y="${yA - 16}" text-anchor="middle" font-size="10.5" fill="#2f7de1">${k * a}</text>`; }
+  for (let k = 1; k * b <= maxMark; k++) { const x = X(k * b); bx += `<line x1="${x.toFixed(1)}" y1="${yB - 11}" x2="${x.toFixed(1)}" y2="${yB + 11}" stroke="#e0567a" stroke-width="2.4"/><text x="${x.toFixed(1)}" y="${yB + 26}" text-anchor="middle" font-size="10.5" fill="#e0567a">${k * b}</text>`; }
+  for (let k = 1; k * L <= maxMark; k++) { const x = X(k * L); meet += `<line x1="${x.toFixed(1)}" y1="${yA - 22}" x2="${x.toFixed(1)}" y2="${yB + 22}" stroke="#1f8a53" stroke-width="1.6" stroke-dasharray="3 4"/>`; }
+  $('ticksA').innerHTML = ax; $('ticksB').innerHTML = bx; $('meetMarks').innerHTML = meet;
+  let axis = `<line x1="${GX0}" x2="${GX1}" y1="${yA - 40}" y2="${yA - 40}" stroke="transparent"/>`;
+  $('lineAxis').innerHTML = axis;
+
+  const va = S.walkN * a, vb = S.walkM * b;
+  const xa = X(va), xb = X(vb);
+  $('tokAStem').setAttribute('x1', xa); $('tokAStem').setAttribute('x2', xa); $('tokAStem').setAttribute('y1', yA - 30); $('tokAStem').setAttribute('y2', yA);
+  $('tokA').setAttribute('cx', xa); $('tokA').setAttribute('cy', yA - 34);
+  $('tokALab').setAttribute('x', xa); $('tokALab').setAttribute('y', yA - 34); $('tokALab').textContent = va;
+  $('tokBStem').setAttribute('x1', xb); $('tokBStem').setAttribute('x2', xb); $('tokBStem').setAttribute('y1', yB); $('tokBStem').setAttribute('y2', yB + 30);
+  $('tokB').setAttribute('cx', xb); $('tokB').setAttribute('cy', yB + 34);
+  $('tokBLab').setAttribute('x', xb); $('tokBLab').setAttribute('y', yB + 34); $('tokBLab').textContent = vb;
+  $('aVal').textContent = `${S.walkN} × ${a} = ${va}`;
+  $('bVal').textContent = `${S.walkM} × ${b} = ${vb}`;
+  $('aUp').disabled = !S.locked || va + a > maxMark;
+  $('bUp').disabled = !S.locked || vb + b > maxMark;
+  $('aDown').disabled = !S.locked || S.walkN <= 1;
+  $('bDown').disabled = !S.locked || S.walkM <= 1;
+  const hit = va === vb;
+  $('meetBanner').textContent = hit ? (va === L ? `They meet at ${va} — that is the LCM.` : `They meet at ${va} — a common multiple, but not the smallest.`) : '';
+  $('lcmVal').textContent = L;
+  const hcfDone = S.rounds.length && S.rounds[S.rounds.length - 1].r === 0 ? S.rounds[S.rounds.length - 1].shortLen : null;
+  $('prodCheck').textContent = hcfDone ? `${hcfDone} × ${L} = ${hcfDone * L}  (a × b = ${a * b})` : 'finish tab 1 first';
+}
+
+function paintWhy(){
+  if (!S.locked) return;
+  $('whyCard').hidden = false;
+  if (S.tab === 'hcf') {
+    const done = S.revealed >= S.rounds.length;
+    if (!done) { const nr = S.rounds[S.revealed];
+      $('why').innerHTML = `<p>The rectangle standing right now is <b>${nr.longLen} × ${nr.shortLen}</b>. The biggest square that fits has side <b>${nr.shortLen}</b>, and <b>${nr.q}</b> of them tile the long way, leaving a strip <b>${nr.r}</b> wide.</p><p>${nr.r === 0 ? 'Nothing is left over — that square’s side is the HCF.' : 'That leftover strip becomes the next rectangle to cut, turned on its side.'}</p>`;
+    } else { const h = S.rounds[S.rounds.length - 1].shortLen; $('why').innerHTML = `<p>No leftover strip remains. The last square cut has side <b>${h}</b>, so the HCF of <b>${S.a}</b> and <b>${S.b}</b> is <b>${h}</b>.</p>`; }
+  } else {
+    const va = S.walkN * S.a, vb = S.walkM * S.b, L = lcmOf(S.a, S.b);
+    $('why').innerHTML = `<p>Counter A stands at <b>${va}</b> (${S.walkN} × ${S.a}); counter B stands at <b>${vb}</b> (${S.walkM} × ${S.b}).</p>
+      <p>${va === vb ? `They agree — <b>${va}</b> is a common multiple.` : va < vb ? 'Counter A needs to move on.' : 'Counter B needs to move on.'} The smallest number where they can ever agree is <b>${L}</b>, the LCM.</p>`;
+  }
+}
+
+function paint(){ paintHCF(); paintLCM(); paintWhy(); checkFindings(); }
+
+function checkFindings(){
+  if (!S.locked) return;
+  if (S.revealed >= 1) discover('first-cut');
+  const done = S.revealed >= S.rounds.length;
+  if (done) {
+    discover('hcf-found');
+    if (S.rounds.length === 1) discover('one-step');
+    if (S.rounds[S.rounds.length - 1].shortLen === 1) discover('coprime');
+  }
+  const va = S.walkN * S.a, vb = S.walkM * S.b, L = lcmOf(S.a, S.b);
+  if (va === vb && va === L) {
+    discover('lcm-found');
+    if (done) discover('product-rule');
+  }
+  maybeExplain();
+}
+let EXPLAINED = false;
+function maybeExplain(){
+  if (EXPLAINED || !POE || !found('hcf-found')) return;
+  EXPLAINED = true;
+  const h = S.rounds[S.rounds.length - 1].shortLen;
+  POE.explain(`Every round, the leftover strip is strictly narrower than the square just cut, so it can only shrink — it never runs out with something in between. ` +
+    `For ${S.a} and ${S.b} it took ${S.rounds.length} round${S.rounds.length === 1 ? '' : 's'} to reach 0 left over, and the last square's side, <b>${h}</b>, is the HCF.`);
+}
+
+/* ---- controls ------------------------------------------------------------*/
+build();
+function lockControls(lock){
+  $('numA').disabled = lock; $('numB').disabled = lock;
+  $('cutBtn').disabled = lock; $('cutReset').disabled = lock;
+  for (const id of ['aDown', 'aUp', 'bDown', 'bUp']) $(id).disabled = lock;
+  $('gate').hidden = !lock;
+}
+function setTab(t){
+  S.tab = t;
+  for (const b of $('tabs').querySelectorAll('button')) b.setAttribute('aria-pressed', b.dataset.tab === t);
+  $('scHcf').setAttribute('display', t === 'hcf' ? '' : 'none');
+  $('scLcm').setAttribute('display', t === 'lcm' ? '' : 'none');
+  $('hcfCtl').hidden = t !== 'hcf'; $('lcmCtl').hidden = t !== 'lcm';
+  paint();
+}
+$('tabs').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; sound('tick'); track('tab', {tab: b.dataset.tab}); setTab(b.dataset.tab); });
+
+function resetPair(){ S.rounds = eucRounds(S.a, S.b); S.revealed = 0; S.walkN = 1; S.walkM = 1; EXPLAINED = false; }
+$('numA').addEventListener('input', e => { S.a = +e.target.value; $('numAOut').textContent = S.a; resetPair(); paint(); });
+$('numB').addEventListener('input', e => { S.b = +e.target.value; $('numBOut').textContent = S.b; resetPair(); paint(); });
+$('numA').addEventListener('change', () => track('setA', {a: S.a}));
+$('numB').addEventListener('change', () => track('setB', {b: S.b}));
+$('cutBtn').addEventListener('click', () => { if (S.revealed < S.rounds.length) { S.revealed++; sound('snap'); track('cut', {round: S.revealed}); paint(); } });
+$('cutReset').addEventListener('click', () => { resetPair(); sound('tick'); paint(); });
+
+$('aDown').addEventListener('click', () => { S.walkN = Math.max(1, S.walkN - 1); sound('tick'); paint(); });
+$('aUp').addEventListener('click', () => { S.walkN++; sound('tick'); track('walkA', {n: S.walkN}); paint(); });
+$('bDown').addEventListener('click', () => { S.walkM = Math.max(1, S.walkM - 1); sound('tick'); paint(); });
+$('bUp').addEventListener('click', () => { S.walkM++; sound('tick'); track('walkB', {m: S.walkM}); paint(); });
+
+/* ---- start ---------------------------------------------------------------*/
+findings($('finds'), [
+  {id: 'first-cut',    icon: '✂️', label: 'The first square, cut for real', hint: 'Cut the biggest square you can'},
+  {id: 'hcf-found',    icon: '📐', label: 'The HCF: nothing left over', hint: 'Keep cutting until the strip vanishes'},
+  {id: 'one-step',     icon: '⚡', label: 'One number divides the other exactly', hint: 'Try a pair like 6 and 18'},
+  {id: 'coprime',      icon: '🔹', label: 'Two numbers with no common ground but 1', hint: 'Try a pair like 8 and 15'},
+  {id: 'lcm-found',    icon: '🔗', label: 'The LCM: two counters landing together', hint: 'Walk the counters until they meet'},
+  {id: 'product-rule', icon: '⚖️', label: 'HCF × LCM = the two numbers multiplied', hint: 'Finish both tabs for the same pair'},
+], () => toast('All six found — you have rebuilt Euclid’s own method.', 4200));
+
+const POE = predict($('poe'), {
+  id: 'squares-always-finish',
+  q: 'You keep cutting the biggest possible square from what is left. Will this always finish exactly, with nothing left over?',
+  options: [
+    {id: 'yes',    text: 'Yes — it always finishes exactly, however long it takes.', right: true},
+    {id: 'sliver', text: 'No — sometimes a thin sliver is left forever.'},
+    {id: 'even',   text: 'Only when both numbers are even.'},
+    {id: 'square', text: 'Only when the rectangle is already a square.'},
+  ],
+  onLock(){ S.locked = true; lockControls(false); say('Now cut the biggest squares you can, round after round.'); paint(); },
+});
+lockControls(!POE.locked);
+if (!Play.FF('predict')) S.locked = true;
+setTab('hcf');
+window.applyFeatures = () => paint();
+window.PG_STATE = () => ({a: S.a, b: S.b, tab: S.tab, revealed: S.revealed, walkN: S.walkN, walkM: S.walkM, locked: S.locked});
+window.PG_MODEL = {eucRounds, gcd, lcmOf};
+</script>
+</body>
+</html>

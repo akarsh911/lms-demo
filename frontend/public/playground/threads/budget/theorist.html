@@ -1,0 +1,351 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Deficits, Computed</title>
+<meta name="description" content="Class 12 Economics: move the government's own receipts and expenditure and watch the revenue, fiscal and primary deficits recompute from their definitions, anchored on the Union Budget 2024-25 (NCERT Table 5.1).">
+<link rel="icon" href="../../favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600&family=Inter:wght@400;500;600;700&family=Nunito:wght@500;700;800&family=Newsreader:opsz,wght@6..72,400;6..72,500&family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="../../play.css">
+<style>
+/* Only what this page needs beyond play.css. */
+.pg-stage{min-height:0}
+.gate{position:absolute; inset:0; display:grid; place-items:center; pointer-events:none}
+.gate span{background:rgba(29,35,39,.86); color:#fff; padding:10px 16px; border-radius:99px; font-weight:600; font-size:14px}
+.sub{font-size:11px; letter-spacing:.07em; text-transform:uppercase; font-weight:700; color:var(--ink-3); margin:10px 0 2px}
+.ctl{grid-template-columns:120px 1fr 54px; margin:2px 0}
+.ctl label{font-size:12.5px; line-height:1.2}
+.ctl output{font-family:var(--font-mono); font-size:12px; font-weight:600}
+.note{font-size:12.5px; color:var(--ink-3); margin:6px 0 0}
+.why p{font-size:13.5px; margin-bottom:.55em}
+.why b.m{font-family:var(--font-mono)}
+svg text.m{font-family:var(--font-mono)}
+svg text.serif{font-family:"Newsreader",Georgia,serif}
+.row.top{justify-content:space-between}
+</style>
+</head>
+<body>
+<header class="pg-top"></header>
+
+<div class="pg-intro">
+  <h1>The government's budget</h1>
+  <p>CBSE Class 12 Economics, Ch 5 <i>Government Budget and the Economy</i>. Move the government's own receipts and
+     expenditure — the sliders start at the Union Budget 2024-25 (P.A.), the chapter's own Table 5.1, in per cent of GDP —
+     and watch the revenue, fiscal and primary deficits recompute from their definitions, not from a lookup. Borrowing is
+     whatever is left to make total receipts meet total expenditure: move an item and see how much more (or less) the
+     government must borrow.</p>
+</div>
+
+<main class="pg-main wide-side">
+  <section class="pg-stage" id="stageWrap">
+    <svg id="stage" viewBox="0 0 1000 900" role="img" aria-label="The government's receipts and expenditure as stacked bars, with the revenue, fiscal and primary deficits computed below, and the budget's three functions"></svg>
+    <div class="gate" id="gate"><span>Make your prediction first →</span></div>
+  </section>
+
+  <aside class="pg-side">
+    <div id="poe"></div>
+
+    <div class="card" id="ctlCard">
+      <div class="row top"><div class="kicker">This year's budget · % of GDP</div><button class="btn sm" id="btnReset">Reset to 2024-25</button></div>
+      <div class="sub">Revenue receipts</div>
+      <div class="ctl"><label for="tax">Tax revenue</label><input type="range" id="tax" min="0" max="15" step="0.1"><output id="taxOut"></output></div>
+      <div class="ctl"><label for="nontax">Non-tax revenue</label><input type="range" id="nontax" min="0" max="5" step="0.1"><output id="nontaxOut"></output></div>
+      <div class="sub">Revenue expenditure</div>
+      <div class="ctl"><label for="interest">Interest payments</label><input type="range" id="interest" min="0" max="8" step="0.1"><output id="interestOut"></output></div>
+      <div class="ctl"><label for="subsidies">Major subsidies</label><input type="range" id="subsidies" min="0" max="5" step="0.1"><output id="subsidiesOut"></output></div>
+      <div class="ctl"><label for="defence">Defence</label><input type="range" id="defence" min="0" max="3" step="0.1"><output id="defenceOut"></output></div>
+      <div class="ctl"><label for="otherRevExp">Other (salaries, pensions, grants)</label><input type="range" id="otherRevExp" min="0" max="12" step="0.1"><output id="otherRevExpOut"></output></div>
+      <div class="sub">Capital receipts (non-debt)</div>
+      <div class="ctl"><label for="recovery">Recovery of loans</label><input type="range" id="recovery" min="0" max="2" step="0.1"><output id="recoveryOut"></output></div>
+      <div class="ctl"><label for="otherCap">Disinvestment (PSU sale)</label><input type="range" id="otherCap" min="0" max="2" step="0.1"><output id="otherCapOut"></output></div>
+      <div class="sub">Capital expenditure</div>
+      <div class="ctl"><label for="capex">Roads, plant, loans given</label><input type="range" id="capex" min="0" max="8" step="0.1"><output id="capexOut"></output></div>
+      <p class="note">Borrowing is not a slider: it is whatever the model needs so total receipts meet total expenditure.
+        (Non-tax revenue starts at 1.3, not the table's printed 1.4, which rounds independently to a total a tenth out — 1.3 lands exactly on the table's own 9.2.)</p>
+    </div>
+
+    <div class="card why" id="whyCard" hidden>
+      <div class="kicker">What the model says</div>
+      <div id="why"></div>
+    </div>
+
+    <div class="card"><div class="kicker">To find</div><div id="finds"></div></div>
+  </aside>
+</main>
+
+<script src="../../play.js"></script>
+<script>
+'use strict';
+const {$, esc, clamp, fmt, sound, say, track, toast, predict, findings, discover, found,
+       shareState, sharedState, mount, reduced} = Play;
+mount({thread: 'budget', band: 'theorist'});
+
+/* MODEL:start ==================================================================
+   THE GOVERNMENT BUDGET (NCERT Introductory Macroeconomics, Class 12, Ch 5
+   "Government Budget and the Economy"). Every number below is computed from
+   the chapter's own definitions, applied to whatever the learner sets the
+   nine budget lines to. The defaults are the chapter's own Table 5.1, the
+   Union Budget 2024-25 (P.A.), in per cent of GDP:
+     tax 7.9, non-tax 1.3 (revenue receipts 9.2 — the table's own head-count;
+       its printed non-tax line rounds to 1.4, which would make 9.3, a tenth
+       out from the table's own total: independent rounding in the source)
+     interest 3.6, subsidies 1.4, defence 1.0, other 5.8 (revenue expenditure 11.8,
+       "other" being every non-plan/plan item the table does not break out)
+     recovery of loans 0.1, disinvestment 0.1 (non-debt capital receipts 0.2)
+     capital expenditure 3.2
+   which the chapter itself totals to revenue deficit 2.6, fiscal deficit 5.6
+   and primary deficit 2.0 (Table 5.1, items 3, 8, 9).
+
+   Revenue deficit = Revenue expenditure − Revenue receipts.
+   Non-debt receipts = Revenue receipts + Recovery of loans + Disinvestment.
+   Gross fiscal deficit = Total expenditure − Non-debt receipts
+     ("the total borrowing requirement of the government from all sources").
+   Borrowing is not set by the learner: it is exactly the fiscal deficit —
+   the plug that makes total receipts equal total expenditure, the way a
+   government's books always must.
+   Gross primary deficit = Gross fiscal deficit − interest payments (the
+   chapter's "net interest liabilities", taken here as gross interest paid,
+   since the model has no interest RECEIVED).
+   The chapter's own identity: Fiscal deficit = Revenue deficit + Capital
+   expenditure − Non-debt capital receipts (always true; it is algebra, not
+   a coincidence — this model recomputes and checks it every time).
+   ============================================================================ */
+function budgetOf(s){
+  const revenueReceipts = s.tax + s.nontax;
+  const revenueExpenditure = s.interest + s.subsidies + s.defence + s.otherRevExp;
+  const nonDebtCapReceipts = s.recovery + s.otherCap;
+  const totalExpenditure = revenueExpenditure + s.capex;
+  const nonDebtReceipts = revenueReceipts + nonDebtCapReceipts;
+  const fiscalDeficit = totalExpenditure - nonDebtReceipts;   // = borrowing needed (may be negative: net repayment)
+  const borrowing = fiscalDeficit;
+  const totalCapitalReceipts = nonDebtCapReceipts + borrowing;
+  const totalReceipts = revenueReceipts + totalCapitalReceipts;
+  const revenueDeficit = revenueExpenditure - revenueReceipts;
+  const primaryDeficit = fiscalDeficit - s.interest;
+  const identity = revenueDeficit + s.capex - nonDebtCapReceipts;   // must equal fiscalDeficit, always
+  return {revenueReceipts, revenueExpenditure, nonDebtCapReceipts, totalExpenditure, nonDebtReceipts,
+    fiscalDeficit, borrowing, totalCapitalReceipts, totalReceipts, revenueDeficit, primaryDeficit, identity};
+}
+const BOOK = {tax: 7.9, nontax: 1.3, interest: 3.6, subsidies: 1.4, defence: 1.0, otherRevExp: 5.8, recovery: 0.1, otherCap: 0.1, capex: 3.2};
+/* MODEL:end */
+
+const KEYS = Object.keys(BOOK);
+const r1 = v => (v < 0 ? '−' : '') + fmt(Math.abs(v), 1);
+
+/* ---- state: plain data --------------------------------------------------------- */
+const S = Object.assign({locked: false}, BOOK);
+/* a rolling log of (interest, primary deficit) pairs recorded while every OTHER
+   slider stays put — enough to show the primary deficit does not move with it. */
+let refKey = null, interestSamples = [];
+const nonInterestKey = () => KEYS.filter(k => k !== 'interest').map(k => S[k]).join(',');
+const shared = sharedState();
+if (shared) for (const k of KEYS) if (isFinite(+shared[k])) S[k] = clamp(+shared[k], 0, +$(k).max || 40);
+shareState(() => { const o = {}; for (const k of KEYS) o[k] = S[k]; return o; });
+
+/* ============================================================================
+   The stage
+   ============================================================================ */
+const svg = $('stage');
+const BAR = {y0: 610, y1: 70, w: 170, xR: 190, xE: 470};
+const REV_R = ['#2d6cc0', '#6b9fe0'];               // tax, non-tax
+const CAP_R = ['#2f9e5b', '#7bc79a'];               // recovery, disinvestment
+const BORROW = '#c9730a';
+const REV_E = ['#d6453d', '#e07872', '#ea9a95', '#f2c0bc'];  // interest, subsidies, defence, other
+const CAPEX = '#6a3fc2';
+const FN = [
+  ['ALLOCATION', 'Provides goods the market won’t on its own —', 'national defence, roads, administration.'],
+  ['REDISTRIBUTION', 'Taxes income progressively, and taxes', 'necessities lightly, luxuries heavily.'],
+  ['STABILISATION', 'Raises demand in a slump and cools it in a', 'boom, through its own spending and taxes.'],
+];
+
+function build(){
+  svg.innerHTML = `
+  <rect x="0" y="0" width="1000" height="900" fill="#fbfaf6"/>
+  <text x="20" y="30" font-size="12" font-weight="700" letter-spacing=".08em" fill="#4a555b">RECEIPTS AND EXPENDITURE · PER CENT OF GDP</text>
+  <line id="lRev" stroke="#9aa3a6" stroke-dasharray="4 4"/>
+  <text id="lRevT" font-size="10.5" fill="#7c878c"></text>
+  <line id="lND" stroke="#9aa3a6" stroke-dasharray="4 4"/>
+  <text id="lNDT" font-size="10.5" fill="#7c878c"></text>
+  <g id="barR"></g>
+  <g id="barE"></g>
+  <text x="${BAR.xR + BAR.w / 2}" y="${BAR.y0 + 24}" text-anchor="middle" font-size="14" font-weight="700" fill="#1d2327">Receipts</text>
+  <text x="${BAR.xE + BAR.w / 2}" y="${BAR.y0 + 24}" text-anchor="middle" font-size="14" font-weight="700" fill="#1d2327">Expenditure</text>
+  <line x1="660" y1="14" x2="660" y2="646" stroke="#e2ded2"/>
+  <text x="680" y="30" font-size="12" font-weight="700" letter-spacing=".08em" fill="#4a555b">THE THREE DEFICITS</text>
+  <g id="nums"></g>
+  <line x1="20" y1="672" x2="980" y2="672" stroke="#e2ded2"/>
+  <text x="20" y="700" font-size="12" font-weight="700" letter-spacing=".08em" fill="#4a555b">THE BUDGET'S THREE FUNCTIONS (SECTION 5.1.1)</text>
+  ${FN.map((f, i) => { const x = 20 + i * 328; return `
+    <text x="${x}" y="732" font-size="12.5" font-weight="700" fill="#6a3fc2">${esc(f[0])}</text>
+    <text x="${x}" y="756" font-size="12.5" fill="#1d2327">${esc(f[1])}</text>
+    <text x="${x}" y="776" font-size="12.5" fill="#1d2327">${esc(f[2])}</text>`; }).join('')}
+  <rect id="veil" x="0" y="0" width="1000" height="900" fill="#fbfaf6" opacity=".9"/>
+  <text id="veilT" x="500" y="330" text-anchor="middle" fill="#7c878c" font-size="15" font-weight="600">The deficits appear once you have made a prediction.</text>`;
+}
+
+function stack(x, segs, scale, y0){
+  let top = y0, g = '';
+  for (const seg of segs) {
+    if (seg.v <= 0) continue;
+    const h = seg.v * scale;
+    top -= h;
+    g += `<rect x="${x}" y="${top.toFixed(1)}" width="${BAR.w}" height="${h.toFixed(1)}" fill="${seg.col}" stroke="${seg.dash ? '#8a5010' : '#fff'}" stroke-width="${seg.dash ? 1.6 : 1}" ${seg.dash ? 'stroke-dasharray="5 3"' : ''}/>`;
+    if (h >= 15) g += `<text x="${x + BAR.w / 2}" y="${(top + h / 2 + 4).toFixed(1)}" text-anchor="middle" font-size="${h >= 22 ? 11 : 9.5}" fill="#fff" font-weight="600">${esc(seg.lab)} ${r1(seg.v)}</text>`;
+  }
+  return {g, top};
+}
+
+function paint(){
+  const b = budgetOf(S);
+  const mx = Math.max(b.totalExpenditure, b.totalReceipts, 1) * 1.16;
+  const scale = (BAR.y0 - BAR.y1) / mx;
+  const gy = v => BAR.y0 - v * scale;
+  const segR = [
+    {v: S.tax, col: REV_R[0], lab: 'Tax'}, {v: S.nontax, col: REV_R[1], lab: 'Non-tax'},
+    {v: S.recovery, col: CAP_R[0], lab: 'Recovery'}, {v: S.otherCap, col: CAP_R[1], lab: 'Disinvest.'},
+    {v: b.borrowing, col: BORROW, lab: b.borrowing >= 0 ? 'Borrowing' : 'Repayment', dash: true},
+  ];
+  const segE = [
+    {v: S.interest, col: REV_E[0], lab: 'Interest'}, {v: S.subsidies, col: REV_E[1], lab: 'Subsidies'},
+    {v: S.defence, col: REV_E[2], lab: 'Defence'}, {v: S.otherRevExp, col: REV_E[3], lab: 'Other'},
+    {v: S.capex, col: CAPEX, lab: 'Capital exp.'},
+  ];
+  $('barR').innerHTML = stack(BAR.xR, segR, scale, BAR.y0).g;
+  $('barE').innerHTML = stack(BAR.xE, segE, scale, BAR.y0).g;
+  $('lRev').setAttribute('x1', BAR.xR - 14); $('lRev').setAttribute('x2', BAR.xE + BAR.w + 14);
+  $('lRev').setAttribute('y1', gy(b.revenueReceipts)); $('lRev').setAttribute('y2', gy(b.revenueReceipts));
+  $('lRevT').setAttribute('x', BAR.xR - 18); $('lRevT').setAttribute('y', gy(b.revenueReceipts) - 4); $('lRevT').setAttribute('text-anchor', 'end');
+  $('lRevT').textContent = 'revenue receipts ' + r1(b.revenueReceipts);
+  $('lND').setAttribute('x1', BAR.xR - 14); $('lND').setAttribute('x2', BAR.xE + BAR.w + 14);
+  $('lND').setAttribute('y1', gy(b.nonDebtReceipts)); $('lND').setAttribute('y2', gy(b.nonDebtReceipts));
+  $('lNDT').setAttribute('x', BAR.xR - 18); $('lNDT').setAttribute('y', gy(b.nonDebtReceipts) - 4); $('lNDT').setAttribute('text-anchor', 'end');
+  $('lNDT').textContent = 'non-debt receipts ' + r1(b.nonDebtReceipts);
+
+  let t = `<text x="680" y="56" font-size="12.5" fill="#1d2327">Revenue deficit = Rev. expenditure − Rev. receipts</text>
+    <text x="980" y="78" text-anchor="end" font-size="13" class="m" font-weight="700" fill="${b.revenueDeficit > 0.05 ? '#b3261e' : b.revenueDeficit < -0.05 ? '#1f7a4d' : '#4a555b'}">${r1(b.revenueExpenditure)} − ${r1(b.revenueReceipts)} = ${r1(b.revenueDeficit)}</text>
+    <text x="680" y="98" font-size="11.5" fill="#7c878c">${b.revenueDeficit > 0.05 ? 'the government dissaves: it borrows for consumption too' : b.revenueDeficit < -0.05 ? 'a revenue surplus' : 'a balanced revenue budget'}</text>
+
+    <text x="680" y="132" font-size="12.5" fill="#1d2327">Fiscal deficit = Total exp. − Non-debt receipts</text>
+    <text x="980" y="154" text-anchor="end" font-size="13" class="m" font-weight="700" fill="#c9730a">${r1(b.totalExpenditure)} − ${r1(b.nonDebtReceipts)} = ${r1(b.fiscalDeficit)}</text>
+    <text x="680" y="174" font-size="11.5" fill="#7c878c">= the government's total borrowing requirement</text>
+
+    <text x="680" y="208" font-size="12.5" fill="#1d2327">Primary deficit = Fiscal deficit − Interest payments</text>
+    <text x="980" y="230" text-anchor="end" font-size="13" class="m" font-weight="700" fill="${Math.abs(b.primaryDeficit) < 0.05 ? '#1f7a4d' : '#4a2a8a'}">${r1(b.fiscalDeficit)} − ${r1(S.interest)} = ${r1(b.primaryDeficit)}</text>
+    <text x="680" y="250" font-size="11.5" fill="#7c878c">what is borrowed beyond servicing old debt</text>
+
+    <line x1="680" y1="274" x2="980" y2="274" stroke="#e2ded2"/>
+    <text x="680" y="298" font-size="12" font-weight="700" letter-spacing=".08em" fill="#4a555b">THE CHAPTER'S IDENTITY, CHECKED LIVE</text>
+    <text x="680" y="320" font-size="12" fill="#1d2327">Rev. deficit + Capital exp. − Non-debt capital receipts</text>
+    <text x="980" y="342" text-anchor="end" font-size="13" class="m" font-weight="700" fill="${Math.abs(b.identity - b.fiscalDeficit) < 1e-6 ? '#1f7a4d' : '#b3261e'}">${r1(b.revenueDeficit)} + ${r1(S.capex)} − ${r1(b.nonDebtCapReceipts)} = ${r1(b.identity)}</text>
+    <text x="680" y="362" font-size="11.5" fill="#7c878c">= the fiscal deficit above (${r1(b.fiscalDeficit)}): ${Math.abs(b.identity - b.fiscalDeficit) < 1e-6 ? 'it always matches' : 'mismatch'}</text>
+
+    <line x1="680" y1="386" x2="980" y2="386" stroke="#e2ded2"/>
+    <text x="680" y="410" font-size="12" font-weight="700" letter-spacing=".08em" fill="#4a555b">RECEIPTS, IN FULL</text>
+    <text x="680" y="434" font-size="12" fill="#1d2327">Revenue receipts (tax + non-tax)</text><text x="980" y="434" text-anchor="end" font-size="12" class="m" fill="#1d2327">${r1(b.revenueReceipts)}</text>
+    <text x="680" y="454" font-size="12" fill="#1d2327">+ Recovery of loans + Disinvestment</text><text x="980" y="454" text-anchor="end" font-size="12" class="m" fill="#1d2327">${r1(b.nonDebtCapReceipts)}</text>
+    <text x="680" y="474" font-size="12" fill="#1d2327">+ Borrowing (the plug above)</text><text x="980" y="474" text-anchor="end" font-size="12" class="m" fill="#c9730a">${r1(b.borrowing)}</text>
+    <text x="680" y="496" font-size="12.5" font-weight="700" fill="#1d2327">= Total receipts</text><text x="980" y="496" text-anchor="end" font-size="12.5" class="m" font-weight="700" fill="#1d2327">${r1(b.totalReceipts)}</text>
+    <text x="680" y="516" font-size="11.5" fill="${Math.abs(b.totalReceipts - b.totalExpenditure) < 1e-6 ? '#1f7a4d' : '#b3261e'}">= total expenditure (${r1(b.totalExpenditure)}): a budget always</text>
+    <text x="680" y="532" font-size="11.5" fill="${Math.abs(b.totalReceipts - b.totalExpenditure) < 1e-6 ? '#1f7a4d' : '#b3261e'}">balances once borrowing is counted.</text>`;
+  $('nums').innerHTML = t;
+  for (const k of KEYS) { $(k).value = S[k]; $(k + 'Out').textContent = r1(S[k]) + '%'; }
+  paintWhy(b); check(b);
+}
+
+/* ---- narrator ---------------------------------------------------------------------- */
+function paintWhy(b){
+  if (!S.locked) return;
+  $('whyCard').hidden = false;
+  let t = `<p>Every rupee the government spends this year, <b>${r1(b.totalExpenditure)}%</b> of GDP, is matched by a rupee of receipts: <b>${r1(b.revenueReceipts)}%</b> of taxes and non-tax income, <b>${r1(b.nonDebtCapReceipts)}%</b> from loans recovered and assets sold, and <b>${r1(b.borrowing)}%</b> borrowed to close the gap.</p>`;
+  t += b.revenueDeficit > 0.05
+    ? `<p>Revenue expenditure alone (<b>${r1(b.revenueExpenditure)}%</b>) already exceeds revenue receipts (<b>${r1(b.revenueReceipts)}%</b>) by <b>${r1(b.revenueDeficit)}%</b>: the government is dissaving, borrowing not only to build roads and plant but to pay salaries and interest.</p>`
+    : `<p>Revenue receipts now cover revenue expenditure (<b>${r1(b.revenueReceipts)}%</b> against <b>${r1(b.revenueExpenditure)}%</b>): whatever the government borrows, <b>${r1(b.borrowing)}%</b>, goes only towards capital expenditure — building assets, not funding today's consumption.</p>`;
+  t += `<p>Primary deficit strips out interest: <b>${r1(b.primaryDeficit)}%</b>. Notice it does not move when interest alone moves — interest is added to both the fiscal deficit and then subtracted straight back out.</p>`;
+  $('why').innerHTML = t;
+}
+
+/* ---- findings ------------------------------------------------------------------ */
+function check(b){
+  if (!S.locked) return;
+  if (near(b.revenueDeficit, 2.6, 0.05) && near(b.fiscalDeficit, 5.6, 0.05)) discover('book');
+  if (Math.abs(b.revenueDeficit) < 0.05) discover('balanced');
+  if (b.revenueDeficit < -0.05) discover('surplus');
+  if (Math.abs(b.primaryDeficit) < 0.05) { discover('zeroprimary'); maybeExplain(b); }
+  if (b.fiscalDeficit > 0.5 && b.revenueDeficit / b.fiscalDeficit > 0.75) discover('consumption');
+  const rk = nonInterestKey();
+  if (rk !== refKey) { refKey = rk; interestSamples = []; }
+  if (!interestSamples.some(p => Math.abs(p.interest - S.interest) < 1e-9)) interestSamples.push({interest: S.interest, primaryDeficit: b.primaryDeficit});
+  if (interestSamples.length >= 2) {
+    const lo = Math.min(...interestSamples.map(p => p.interest)), hi = Math.max(...interestSamples.map(p => p.interest));
+    if (hi - lo >= 0.5 && interestSamples.every(p => near(p.primaryDeficit, interestSamples[0].primaryDeficit, 0.01))) discover('invariant');
+  }
+}
+function near(v, want, tol){ return Math.abs(v - want) <= tol; }
+let EXPLAINED = false;
+function maybeExplain(b){
+  if (EXPLAINED || !POE) return;
+  EXPLAINED = true;
+  POE.explain(`With interest payments ${r1(S.interest)}% and a fiscal deficit of ${r1(b.fiscalDeficit)}%, the primary deficit is ${r1(b.fiscalDeficit)} − ${r1(S.interest)} = <b>${r1(b.primaryDeficit)}%</b>: essentially zero. Every rupee this year's borrowing raises goes to interest on debts already run up — none of it funds this year's own shortfall.`);
+}
+
+/* ============================================================================
+   Controls
+   ============================================================================ */
+build();
+function onSlide(k, v){
+  const before = S[k];
+  S[k] = clamp(v, 0, +$(k).max);
+  if (S[k] === before) return;
+  paint();
+}
+for (const k of KEYS) {
+  $(k).addEventListener('input', e => onSlide(k, +e.target.value));
+  $(k).addEventListener('change', () => track('slider', {k, v: S[k]}));
+}
+$('btnReset').addEventListener('click', () => { Object.assign(S, BOOK); refKey = null; interestSamples = []; sound('tick'); track('reset'); paint(); });
+
+function lockControls(lock){
+  for (const k of KEYS) $(k).disabled = lock;
+  $('btnReset').disabled = lock;
+  $('gate').hidden = !lock;
+}
+
+/* ============================================================================
+   Start
+   ============================================================================ */
+findings($('finds'), [
+  {id: 'book',        icon: '₹', label: "The book's own deficit: 2.6% revenue, 5.6% fiscal", hint: 'Start from the 2024-25 budget'},
+  {id: 'balanced',     icon: '=', label: 'A balanced revenue budget', hint: 'Raise revenue receipts to meet revenue expenditure'},
+  {id: 'surplus',      icon: '+', label: 'A revenue surplus', hint: 'Push revenue receipts past revenue expenditure'},
+  {id: 'invariant',    icon: '↔', label: 'The primary deficit ignores interest', hint: 'Move only the interest slider'},
+  {id: 'zeroprimary',  icon: '0', label: 'A zero primary deficit', hint: 'Borrowing that pays only old interest'},
+  {id: 'consumption',  icon: '!', label: 'Borrowing mostly for consumption', hint: 'Make the revenue deficit most of the fiscal deficit'},
+], () => toast('All six. One rule for each deficit — and the chapter\'s own identity ties them together.', 4800));
+
+const POE = predict($('poe'), {
+  id: 'primary',
+  q: "This year the government's entire fiscal deficit is interest payments on past debt — nothing else. What is its primary deficit?",
+  options: [
+    {id: 'zero', text: 'Zero: every rupee borrowed this year pays interest on old debt.', right: true},
+    {id: 'positive', text: 'Still positive: some of the deficit is always this year\'s own shortfall.'},
+    {id: 'negative', text: 'Negative: paying interest lowers the deficit further.'},
+    {id: 'depends', text: 'It depends how large the fiscal deficit is.'},
+  ],
+  onLock(){
+    S.locked = true; lockControls(false);
+    $('veil').remove(); $('veilT').remove();
+    say('Now move the budget and watch the deficits.');
+    paint();
+  },
+});
+lockControls(!POE.locked);
+if (!Play.FF('predict')) S.locked = true;
+paint();
+window.applyFeatures = () => paint();
+window.PG_STATE = () => Object.assign(JSON.parse(JSON.stringify(S)), {budget: budgetOf(S)});
+window.PG_MODEL = {budgetOf, BOOK};
+</script>
+</body>
+</html>

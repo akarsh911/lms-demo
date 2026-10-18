@@ -1,0 +1,783 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Shape Shadows</title>
+<meta name="description" content="Class 1–2: a shadow play. Move the shape friends in front of the torch and help them hide in the clock, the photo frame, the carrom board and the flag.">
+<link rel="icon" href="../../favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600&family=Inter:wght@400;500;600;700&family=Nunito:wght@500;700;800&display=swap">
+<link rel="stylesheet" href="../../play.css">
+<style>
+/* Tiny: the stage is almost the whole page. */
+.pg-main.tiny-main{grid-template-columns:minmax(0,1fr) 250px; padding-top:12px; padding-bottom:12px}
+.tiny-main .pg-stage{align-self:start; min-height:0}
+.pg-intro{display:flex; align-items:baseline; gap:18px; flex-wrap:wrap; padding-top:12px}
+.pg-intro p{margin:0}
+#stage{background:#3a2a1a}
+#pupHit{cursor:grab}
+#pupHit.dragging{cursor:grabbing}
+#torchHit, #wishHit, #kikkuHit, .benchHit, #shadowPath{cursor:pointer}
+svg [tabindex]:focus{outline:none}
+svg [tabindex]:focus-visible{outline:none; stroke:#ffd84a; stroke-width:4; stroke-dasharray:8 8}
+.fade{transition:opacity .45s}
+.hear{width:100%; min-height:76px; font-size:24px; font-family:var(--font-head); border-radius:var(--radius)}
+.hear .ic{font-size:30px}
+.finds-card h3{display:flex; align-items:center; gap:8px}
+.friends{display:grid; grid-template-columns:repeat(4,1fr); gap:6px; margin-top:4px}
+.friends svg{width:100%; height:auto; display:block}
+@media (max-width:980px){ .pg-main.tiny-main{grid-template-columns:1fr} }
+</style>
+</head>
+<body>
+<header class="pg-top"></header>
+
+<div class="pg-intro">
+  <h1>Shape shadows</h1>
+  <p>Hold the shapes up to the light and match their shadows.</p>
+</div>
+
+<main class="pg-main tiny-main">
+  <section class="pg-stage" id="stageWrap">
+    <svg id="stage" viewBox="0 0 1000 640" role="img" aria-label="A room at night with a torch shining on the wall. A shape friend on a stick stands in front of the torch and casts a shadow on the wall. Drag the shape to move it, tap it to turn it."></svg>
+  </section>
+
+  <aside class="pg-side">
+    <button class="btn primary hear" id="hear" aria-label="Hear what to do"><span class="ic">🔊</span> Hear it</button>
+    <div class="card finds-card"><h3>⭐ Found</h3><div id="finds"></div></div>
+  </aside>
+</main>
+
+<script src="../../play.js"></script>
+<script>
+'use strict';
+const {$, clamp, lerp, loop, tween, sleep, sound, tone, say, track, confetti, findings, discover, found,
+       shareState, sharedState, mount, reduced, drag, mulberry32, ease} = Play;
+mount({thread: 'shapes', band: 'tiny'});
+
+/* MODEL:start ==================================================================
+   A shadow play (the book's Togalu Gombeyaata). A torch is a point of light. A shape
+   friend is a flat card on a stick, held upright and facing the wall. Every point P
+   of the card throws a shadow where the straight line from the torch through P meets
+   the wall:
+        S = L + (P − L) · t,      t = L.Z / (L.Z − P.Z)
+   Z is the distance out from the wall, so t — how much bigger the shadow is than
+   the card — grows as the card comes nearer the torch. Because the card faces the
+   wall, t is the same for all its points: the shadow is the SAME SHAPE as the card,
+   only bigger. With the torch off there is no shadow at all.
+
+   The room is drawn in an "oblique" view: the wall is seen face-on (so a round
+   shadow looks round), and depth Z is drawn as a shift down and to the left.
+     screen x = X0 + X + Z·AX,  screen y = Y0 − Y + Z·AY
+   ============================================================================ */
+const X0 = 300, Y0 = 440, AX = -0.62, AY = 0.36;          // the oblique view
+const LAMP = {X: 250, Y: 150, Z: 500};                    // the torch: 500 px out from the wall
+const PY = 150;                                          // every card is held at the torch's height
+const TAU = Math.PI * 2, D2R = Math.PI / 180;
+const scr = (X, Y, Z) => ({x: X0 + X + Z * AX, y: Y0 - Y + Z * AY});
+
+/* The four friends from the book's hide-and-seek story, in the book's colours
+   ("Colour the triangles red, the circles green, the rectangles yellow, the squares blue").
+   Points are in screen orientation (y down), centred on the card's centroid. */
+function regular(n, r){ return Array.from({length: n}, (_, i) => [r * Math.cos(i / n * TAU - Math.PI / 2), r * Math.sin(i / n * TAU - Math.PI / 2)]); }
+const TRI_S = 92, TRI_H = TRI_S * Math.sqrt(3) / 2;
+const FRIENDS = {
+  circle:   {name: 'Circle',    col: '#3fae5a', edge: '#23813c', pts: regular(64, 40),                                 eyes: [[-13, -7], [13, -7]], er: 6.5, sym: 0,   rot0: 0},
+  rect:     {name: 'Rectangle', col: '#ffc93c', edge: '#c9921a', pts: [[-54, -31], [54, -31], [54, 31], [-54, 31]], eyes: [[-16, -6], [16, -6]], er: 6.5, sym: 180, rot0: 90},
+  square:   {name: 'Square',    col: '#3f7fd8', edge: '#23589e', pts: [[-38, -38], [38, -38], [38, 38], [-38, 38]], eyes: [[-13, -8], [13, -8]], er: 6.5, sym: 90,  rot0: 45},
+  triangle: {name: 'Triangle',  col: '#e2553f', edge: '#a8331f', pts: [[0, -TRI_H * 2 / 3], [TRI_S / 2, TRI_H / 3], [-TRI_S / 2, TRI_H / 3]], eyes: [[-10, 3], [10, 3]], er: 5.5, sym: 120, rot0: 90},
+};
+const ORDER = ['circle', 'rect', 'square', 'triangle'];
+/* The hiding places hang on the wall, all at the torch's height. Each is exactly the
+   shape of one friend, m times as big, turned rot degrees. */
+const TARGETS = {
+  circle:   {place: 'the clock',        word: 'clock',        X: 250, m: 1.7,       rot: 0},
+  rect:     {place: 'the photo frame',  word: 'photo frame',  X: 440, m: 180 / 108, rot: 0},
+  square:   {place: 'the carrom board', word: 'carrom board', X: 90,  m: 128 / 76,  rot: 0},
+  triangle: {place: 'the flag',         word: 'flag',         X: 612, m: 150 / 92,  rot: 180},
+};
+
+function mag(Z){ return LAMP.Z / (LAMP.Z - Z); }
+/* where the middle of the card's shadow lands on the wall (wall coordinates) */
+function shadowCentre(X, Z){ const t = mag(Z); return {X: LAMP.X + (X - LAMP.X) * t, Y: LAMP.Y + (PY - LAMP.Y) * t}; }
+function turnPt(p, deg){ const c = Math.cos(deg * D2R), s = Math.sin(deg * D2R); return [p[0] * c - p[1] * s, p[0] * s + p[1] * c]; }
+/* A card's outline, turned and scaled, placed at a screen point */
+function placed(pts, deg, k, cx, cy){ return pts.map(p => { const q = turnPt(p, deg); return [cx + q[0] * k, cy + q[1] * k]; }); }
+/* The shadow on the wall, in screen coordinates, or null with the torch off. */
+function shadowPoly(id, X, Z, rot, lampOn = true){
+  if (!lampOn || Z >= LAMP.Z) return null;
+  const c = shadowCentre(X, Z), s = scr(c.X, c.Y, 0);
+  return placed(FRIENDS[id].pts, rot, mag(Z), s.x, s.y);
+}
+function targetPoly(id){
+  const T = TARGETS[id], s = scr(T.X, PY, 0);
+  return placed(FRIENDS[id].pts, T.rot, T.m, s.x, s.y);
+}
+/* Where a card must stand for its shadow to fill a hiding place exactly:
+   t = m gives Z; the centre line from the torch gives X. */
+function fitFor(id){
+  const T = TARGETS[id];
+  return {Z: LAMP.Z * (1 - 1 / T.m), X: LAMP.X + (T.X - LAMP.X) / T.m, rot: T.rot};
+}
+
+/* ---- plane geometry: area, overlap, corners -------------------------------- */
+function area(P){ let a = 0; for (let i = 0; i < P.length; i++) { const p = P[i], q = P[(i + 1) % P.length]; a += p[0] * q[1] - q[0] * p[1]; } return a / 2; }
+const ccw = P => area(P) < 0 ? P.slice().reverse() : P;       // (y-down screen: positive area here = clockwise on screen)
+/* Sutherland–Hodgman: the part of convex polygon A inside convex polygon B. */
+function clip(A, B){
+  A = ccw(A); B = ccw(B);
+  let out = A;
+  for (let i = 0; i < B.length && out.length; i++) {
+    const a = B[i], b = B[(i + 1) % B.length], inp = out; out = [];
+    const side = p => (b[0] - a[0]) * (p[1] - a[1]) - (b[1] - a[1]) * (p[0] - a[0]);
+    for (let j = 0; j < inp.length; j++) {
+      const p = inp[j], q = inp[(j + 1) % inp.length], sp = side(p), sq = side(q);
+      if (sp >= 0) out.push(p);
+      if ((sp >= 0) !== (sq >= 0)) { const t = sp / (sp - sq); out.push([p[0] + (q[0] - p[0]) * t, p[1] + (q[1] - p[1]) * t]); }
+    }
+  }
+  return out;
+}
+/* How well two shapes cover each other: overlap ÷ everything covered (1 = a perfect fit). */
+function iou(A, B){ const I = Math.abs(area(clip(A, B))), a = Math.abs(area(A)), b = Math.abs(area(B)); return I / (a + b - I); }
+/* Count the corners: a corner is where the edge turns by more than 20°. A circle's
+   outline turns a little at every one of its 64 points, so it has none. */
+function classify(P){
+  const n = P.length, corners = [];
+  for (let i = 0; i < n; i++) {
+    const a = P[(i + n - 1) % n], b = P[i], c = P[(i + 1) % n];
+    const u = [b[0] - a[0], b[1] - a[1]], v = [c[0] - b[0], c[1] - b[1]];
+    const turn = Math.abs(Math.atan2(u[0] * v[1] - u[1] * v[0], u[0] * v[0] + u[1] * v[1])) / D2R;
+    if (turn > 20) corners.push(b);
+  }
+  const k = corners.length;
+  let name = k === 0 ? 'circle' : k === 3 ? 'triangle' : 'shape';
+  if (k === 4) {
+    const sides = corners.map((p, i) => Math.hypot(corners[(i + 1) % 4][0] - p[0], corners[(i + 1) % 4][1] - p[1]));
+    name = Math.max(...sides) / Math.min(...sides) < 1.06 ? 'square' : 'rectangle';
+  }
+  return {corners: k, sides: k, name, at: corners};
+}
+/* Is the card turned the same way as the hiding place (allowing for its own turn-symmetry)? */
+function sameTurn(id, rot){
+  const sym = FRIENDS[id].sym; if (!sym) return true;
+  const d = (((rot - TARGETS[id].rot) % sym) + sym) % sym;
+  return d < 3 || d > sym - 3;
+}
+/* A friend is hidden when its shadow covers its own hiding place well enough. */
+const FIT = 0.72;
+function hideCheck(id, X, Z, rot, lampOn = true){
+  const sh = shadowPoly(id, X, Z, rot, lampOn);
+  if (!sh) return {fit: 0, hidden: false};
+  const f = iou(sh, targetPoly(id));
+  return {fit: f, hidden: f >= FIT && sameTurn(id, rot) && classify(sh).name === classify(targetPoly(id)).name};
+}
+/* MODEL:end */
+
+/* ---- state: plain data --------------------------------------------------- */
+const START = {X: 380, Z: 110};
+const S = {stage: 'circle', X: START.X, Z: START.Z, rot: {}, lampOn: true, bench: ['rect', 'square', 'triangle'],
+           hid: {}, maxM: mag(START.Z), dragging: false, touched: false, mood: 'idle', moodT: 0, busy: false};
+for (const id of ORDER) S.rot[id] = FRIENDS[id].rot0;
+const shared = sharedState();
+if (shared && FRIENDS[shared.stage]) {
+  S.stage = shared.stage; S.bench = ORDER.filter(i => i !== S.stage);
+  S.X = clamp(+shared.X || START.X, -200, 900); S.Z = clamp(+shared.Z || START.Z, 20, 400);
+  if (shared.rot) for (const id of ORDER) if (isFinite(+shared.rot[id])) S.rot[id] = +shared.rot[id];
+  if (shared.lampOn === false) S.lampOn = false;
+}
+shareState(() => ({stage: S.stage, X: Math.round(S.X), Z: Math.round(S.Z), rot: S.rot, lampOn: S.lampOn}));
+
+/* ============================================================================
+   The stage: drawn once, then only patched.
+   ============================================================================ */
+const svg = $('stage');
+const f1 = n => (+n).toFixed(1);
+const ptsD = P => P.map((p, i) => (i ? 'L' : 'M') + f1(p[0]) + ' ' + f1(p[1])).join('') + 'Z';
+const BENCH = [{x: 762, y: 500}, {x: 856, y: 500}, {x: 950, y: 500}];      // puppet centres on the bench
+const BENCH_S = 0.72, BENCH_STICK = 88;
+const KIK = {x: 96, y: 548};
+const TORCH = scr(LAMP.X, LAMP.Y, LAMP.Z);                                  // (240, 470)
+const AIM = scr(420, 170, 0);
+const TORCH_ANG = Math.atan2(AIM.y - TORCH.y, AIM.x - TORCH.x) / D2R;
+
+/* A friend's face on its card. The eyes are holes cut in the card, like a real
+   leather shadow puppet, so light shines through them and the shadow has eyes too. */
+function friendBody(id){
+  const F = FRIENDS[id];
+  const mouthY = id === 'triangle' ? 15 : 8, mw = id === 'triangle' ? 9 : 11;
+  return `<path d="${ptsD(F.pts)}" fill="${F.col}" stroke="${F.edge}" stroke-width="3.5" stroke-linejoin="round"/>
+    <path d="${ptsD(F.pts.map(p => [p[0] * .82, p[1] * .82 - 2]))}" fill="#fff" opacity=".16"/>
+    ${F.eyes.map((e, i) => `<ellipse class="eye" data-i="${i}" cx="${e[0]}" cy="${e[1]}" rx="${F.er}" ry="${F.er}" fill="#3a2a1a" stroke="${F.edge}" stroke-width="1.5"/>`).join('')}
+    <ellipse cx="${F.eyes[0][0] - 6}" cy="${mouthY - 2}" rx="5" ry="3" fill="#ff8a7a" opacity=".55"/><ellipse cx="${F.eyes[1][0] + 6}" cy="${mouthY - 2}" rx="5" ry="3" fill="#ff8a7a" opacity=".55"/>
+    <path class="mouth" d="M${-mw} ${mouthY - 3} Q0 ${mouthY + 7} ${mw} ${mouthY - 3}" fill="none" stroke="#3a2a1a" stroke-width="3" stroke-linecap="round"/>`;
+}
+function friendMini(id, k = 0.42){ return `<g transform="scale(${k}) rotate(${FRIENDS[id].rot0 === 90 && id === 'rect' ? 0 : 0})">${friendBody(id)}</g>`; }
+
+/* The hiding places, drawn at their true place on the wall. */
+function decorArt(id){
+  const T = TARGETS[id], s = scr(T.X, PY, 0), P = targetPoly(id);
+  if (id === 'circle') {
+    const r = 40 * T.m; let ticks = '';
+    for (let i = 0; i < 12; i++) { const a = i / 12 * TAU, r0 = r - (i % 3 ? 10 : 16), r1 = r - 5;
+      ticks += `<line x1="${f1(s.x + r0 * Math.sin(a))}" y1="${f1(s.y - r0 * Math.cos(a))}" x2="${f1(s.x + r1 * Math.sin(a))}" y2="${f1(s.y - r1 * Math.cos(a))}" stroke="#3a2a1a" stroke-width="${i % 3 ? 3 : 5}" stroke-linecap="round"/>`; }
+    return `<circle cx="${s.x}" cy="${s.y}" r="${r}" fill="#c0392b"/><circle cx="${s.x}" cy="${s.y}" r="${r - 7}" fill="#fffaf0"/>${ticks}
+      <line x1="${s.x}" y1="${s.y}" x2="${f1(s.x - 26)}" y2="${f1(s.y + 15)}" stroke="#3a2a1a" stroke-width="6" stroke-linecap="round"/>
+      <line x1="${s.x}" y1="${s.y}" x2="${s.x}" y2="${f1(s.y - 44)}" stroke="#3a2a1a" stroke-width="4" stroke-linecap="round"/>
+      <circle cx="${s.x}" cy="${s.y}" r="6" fill="#c0392b"/>`;
+  }
+  if (id === 'rect') {
+    const w = 108 * T.m, h = 62 * T.m, x = s.x - w / 2, y = s.y - h / 2;
+    return `<rect x="${f1(x)}" y="${f1(y)}" width="${f1(w)}" height="${f1(h)}" rx="4" fill="#8a5a2b"/>
+      <rect x="${f1(x + 10)}" y="${f1(y + 10)}" width="${f1(w - 20)}" height="${f1(h - 20)}" fill="#bfe6ff"/>
+      <circle cx="${f1(x + w - 40)}" cy="${f1(y + 32)}" r="12" fill="#ffd84a"/>
+      <path d="M${f1(x + 10)} ${f1(y + h - 10)} L${f1(x + 50)} ${f1(y + 44)} L${f1(x + 80)} ${f1(y + 66)} L${f1(x + 112)} ${f1(y + 36)} L${f1(x + w - 10)} ${f1(y + h - 10)} Z" fill="#3aa35a"/>
+      <line x1="${f1(s.x)}" y1="${f1(y)}" x2="${f1(s.x)}" y2="${f1(y - 22)}" stroke="#8a5a2b" stroke-width="2"/><circle cx="${f1(s.x)}" cy="${f1(y - 24)}" r="4" fill="#8a5a2b"/>`;
+  }
+  if (id === 'square') {
+    const w = 76 * T.m, x = s.x - w / 2, y = s.y - w / 2;
+    const pk = (px, py) => `<circle cx="${f1(px)}" cy="${f1(py)}" r="8" fill="#3a2a1a"/>`;
+    return `<rect x="${f1(x)}" y="${f1(y)}" width="${f1(w)}" height="${f1(w)}" rx="6" fill="#6b3f1d"/>
+      <rect x="${f1(x + 11)}" y="${f1(y + 11)}" width="${f1(w - 22)}" height="${f1(w - 22)}" fill="#f4dca6"/>
+      ${pk(x + 21, y + 21)}${pk(x + w - 21, y + 21)}${pk(x + 21, y + w - 21)}${pk(x + w - 21, y + w - 21)}
+      <circle cx="${s.x}" cy="${s.y}" r="18" fill="none" stroke="#c0392b" stroke-width="3"/><circle cx="${s.x}" cy="${s.y}" r="5" fill="#c0392b"/>
+      <circle cx="${f1(s.x - 30)}" cy="${f1(s.y + 26)}" r="6" fill="#fff" stroke="#8a5a2b" stroke-width="1.5"/><circle cx="${f1(s.x + 24)}" cy="${f1(s.y - 30)}" r="6" fill="#3a2a1a"/>`;
+  }
+  /* the flag, hanging from a string */
+  const top = P.filter(p => p[1] < s.y);
+  return `<path d="M${X0} 232 Q${f1(s.x - 150)} 262 ${f1(top[0][0] < top[1][0] ? top[0][0] : top[1][0])} ${f1(top[0][1])} L${f1(Math.max(top[0][0], top[1][0]))} ${f1(top[0][1])} Q ${f1(s.x + 70)} 240 1000 226" fill="none" stroke="#8a5a2b" stroke-width="2.5"/>
+    <path d="${ptsD(P)}" fill="#ff9d2e" stroke="#c8641a" stroke-width="3" stroke-linejoin="round"/>
+    <path d="${ptsD(placed(FRIENDS.triangle.pts, 180, TARGETS.triangle.m * 0.55, s.x, s.y))}" fill="#fff4d6"/>
+    <circle cx="${s.x}" cy="${f1(s.y - 4)}" r="9" fill="#e2553f"/>`;
+}
+
+/* Pictures for the "wish" card: what to try next, shown, not written. */
+function wishArt(g){
+  const card = fill => `<rect x="-60" y="-52" width="120" height="104" rx="18" fill="${fill}"/>`;
+  const arrow = `<path d="M-6 0 h14 M2 -7 l7 7 l-7 7" stroke="#8a5a2b" stroke-width="4" fill="none" stroke-linecap="round" stroke-linejoin="round"/>`;
+  const mini = {
+    circle: `<circle r="22" fill="#c0392b"/><circle r="18" fill="#fffaf0"/><path d="M0 0 L-9 5 M0 0 V-13" stroke="#3a2a1a" stroke-width="3" stroke-linecap="round"/>`,
+    rect: `<rect x="-24" y="-15" width="48" height="30" rx="2" fill="#8a5a2b"/><rect x="-19" y="-10" width="38" height="20" fill="#bfe6ff"/><path d="M-19 10 L-6 -2 L4 5 L12 -3 L19 10Z" fill="#3aa35a"/>`,
+    square: `<rect x="-20" y="-20" width="40" height="40" rx="3" fill="#6b3f1d"/><rect x="-15" y="-15" width="30" height="30" fill="#f4dca6"/><circle r="6" fill="none" stroke="#c0392b" stroke-width="2"/>`,
+    triangle: `<path d="M-22 -16 L22 -16 L0 22 Z" fill="#ff9d2e" stroke="#c8641a" stroke-width="2.5" stroke-linejoin="round"/>`,
+  };
+  if (FRIENDS[g]) return card('#fff1c9') + `<g transform="translate(-30 2)">${friendMini(g, 0.4)}</g>${arrow}<g transform="translate(34 2)">${mini[g]}</g>`;
+  if (g === 'big') return card('#3b2c55') + `<circle cx="18" cy="-8" r="30" fill="#140c24" opacity=".85"/><circle cx="8" cy="-14" r="4" fill="#fff4d6"/><circle cx="28" cy="-14" r="4" fill="#fff4d6"/>
+    <g transform="translate(-30 26) scale(.3)">${friendBody('circle')}</g><path d="M-44 44 l-10 0" stroke="#ffd84a" stroke-width="4" stroke-linecap="round"/>`;
+  if (g === 'dark') return card('#1b2046') + `<g transform="translate(-6 4) rotate(-20)"><rect x="-26" y="-9" width="34" height="18" rx="5" fill="#4a6fd6"/><path d="M8 -14 L22 -18 L22 18 L8 14 Z" fill="#6d8ce6"/><ellipse cx="22" cy="0" rx="4" ry="18" fill="#fff6c8"/></g>
+    <g transform="translate(26 30) rotate(-30) scale(.55)"><path d="M-6 0 L-6 -34 Q-6 -42 1 -42 Q8 -42 8 -34 L8 -14 L20 -14 Q30 -14 30 -4 L30 16 Q30 30 16 30 L2 30 Q-12 30 -16 18 L-24 4 Q-27 -3 -20 -5 Q-14 -6 -10 2 Z" fill="#fff" stroke="#3a2a1a" stroke-width="3" stroke-linejoin="round"/></g>`;
+  return card('#fff1c9') + `<path d="M0 -34 L10 -10 L36 -8 L16 8 L22 34 L0 20 L-22 34 L-16 8 L-36 -8 L-10 -10 Z" fill="#ffc53d" stroke="#f29a1f" stroke-width="3" stroke-linejoin="round"/>`;
+}
+
+function kikkuArt(){
+  return `
+  <g id="kikku">
+    <ellipse cx="0" cy="84" rx="58" ry="12" fill="#000" opacity=".22"/>
+    <ellipse cx="0" cy="50" rx="46" ry="40" fill="#f7efe4" stroke="#c9b8a0" stroke-width="3"/>
+    <ellipse cx="0" cy="58" rx="26" ry="24" fill="#fff" opacity=".8"/>
+    <g id="kEars">
+      <g id="kEarL"><ellipse cx="-17" cy="-38" rx="12" ry="38" fill="#f7efe4" stroke="#c9b8a0" stroke-width="3" transform="rotate(-12 -17 -38)"/><ellipse cx="-17" cy="-36" rx="6" ry="27" fill="#ffb3c1" transform="rotate(-12 -17 -36)"/></g>
+      <g id="kEarR"><ellipse cx="17" cy="-38" rx="12" ry="38" fill="#f7efe4" stroke="#c9b8a0" stroke-width="3" transform="rotate(14 17 -38)"/><ellipse cx="17" cy="-36" rx="6" ry="27" fill="#ffb3c1" transform="rotate(14 17 -36)"/></g>
+    </g>
+    <circle cx="0" cy="6" r="36" fill="#f7efe4" stroke="#c9b8a0" stroke-width="3"/>
+    <g id="kEyes">
+      <ellipse cx="-13" cy="2" rx="9" ry="10.5" fill="#fff" stroke="#3a2a1a" stroke-width="1.5"/><ellipse cx="13" cy="2" rx="9" ry="10.5" fill="#fff" stroke="#3a2a1a" stroke-width="1.5"/>
+      <circle id="kPupL" cx="-13" cy="2" r="5.5" fill="#3a2a1a"/><circle id="kPupR" cx="13" cy="2" r="5.5" fill="#3a2a1a"/>
+      <circle id="kGlL" cx="-11" cy="0" r="1.8" fill="#fff"/><circle id="kGlR" cx="15" cy="0" r="1.8" fill="#fff"/>
+      <rect id="kLid" x="-24" y="-10" width="48" height="0" fill="#f7efe4"/>
+    </g>
+    <ellipse cx="-24" cy="18" rx="7" ry="4" fill="#ff9aa8" opacity=".6"/><ellipse cx="24" cy="18" rx="7" ry="4" fill="#ff9aa8" opacity=".6"/>
+    <path d="M-4 14 L4 14 L0 19 Z" fill="#ff7a8a"/>
+    <path id="kMouth" d="M-8 22 Q-4 27 0 22 Q4 27 8 22" fill="none" stroke="#3a2a1a" stroke-width="2.2" stroke-linecap="round"/>
+    <ellipse id="kMouthO" cx="0" cy="27" rx="6" ry="7" fill="#8a2a12" opacity="0"/>
+    <g id="kPaws"><ellipse cx="-22" cy="62" rx="11" ry="8" fill="#fff" stroke="#c9b8a0" stroke-width="2.5"/><ellipse cx="22" cy="62" rx="11" ry="8" fill="#fff" stroke="#c9b8a0" stroke-width="2.5"/></g>
+    <g id="kPawsUp" opacity="0"><ellipse cx="-44" cy="-4" rx="10" ry="8" fill="#fff" stroke="#c9b8a0" stroke-width="2.5"/><ellipse cx="44" cy="-4" rx="10" ry="8" fill="#fff" stroke="#c9b8a0" stroke-width="2.5"/></g>
+  </g>`;
+}
+
+function build(){
+  const rnd = mulberry32(5);
+  /* floor planks, along the depth */
+  let planks = '';
+  for (let x = X0 - 700; x <= 1000; x += 64) planks += `<line x1="${x}" y1="${Y0}" x2="${f1(x + AX * 560)}" y2="${f1(Y0 + AY * 560)}"/>`;
+  for (let z = 90; z < 600; z += 130) { const a = scr(-600, 0, z), b = scr(900, 0, z); planks += `<line x1="${f1(a.x)}" y1="${f1(a.y)}" x2="${f1(b.x)}" y2="${f1(b.y)}" opacity=".5"/>`; }
+  /* wallpaper: little flowers, fixed by a seeded random */
+  let paper = '';
+  for (let i = 0; i < 70; i++) { const x = 310 + rnd() * 680, y = 70 + rnd() * 360; paper += `<circle cx="${f1(x)}" cy="${f1(y)}" r="${(2 + rnd() * 1.5).toFixed(1)}"/>`; }
+  /* the marigold garland along the top of the wall */
+  let garland = '', gpath = 'M300 16';
+  for (let i = 0; i < 7; i++) { const x0 = 300 + i * 100; gpath += ` Q${x0 + 50} 60 ${x0 + 100} 16`;
+    for (let j = 1; j < 10; j++) { const t = j / 10, x = x0 + 100 * t, y = 16 + 2 * (1 - t) * t * 44;
+      garland += `<circle cx="${f1(x)}" cy="${f1(y)}" r="7.5" fill="${j % 2 ? '#ffa31a' : '#ffcf33'}"/>`; } }
+  /* the window on the side wall: its corners are real points on that wall (X = 0) */
+  const w = [scr(0, 330, 110), scr(0, 330, 300), scr(0, 170, 300), scr(0, 170, 110)];
+  const wm = (a, b, t) => ({x: lerp(a.x, b.x, t), y: lerp(a.y, b.y, t)});
+  const winD = w.map((p, i) => (i ? 'L' : 'M') + f1(p.x) + ' ' + f1(p.y)).join('') + 'Z';
+  const mt = wm(w[0], w[1], .5), mb = wm(w[3], w[2], .5), ml = wm(w[0], w[3], .5), mr = wm(w[1], w[2], .5);
+  const T0 = targetPoly;
+
+  svg.innerHTML = `
+  <defs>
+    <radialGradient id="gWall" gradientUnits="userSpaceOnUse" cx="${AIM.x}" cy="${AIM.y}" r="460">
+      <stop offset="0" stop-color="#fff6de"/><stop offset=".55" stop-color="#f6ddb0"/><stop offset="1" stop-color="#c79e72"/></radialGradient>
+    <linearGradient id="gSide" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#9c7650"/><stop offset="1" stop-color="#c49a6c"/></linearGradient>
+    <linearGradient id="gFloor" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#b8784a"/><stop offset="1" stop-color="#8e5530"/></linearGradient>
+    <linearGradient id="gNightWin" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1b2560"/><stop offset="1" stop-color="#3b3f8a"/></linearGradient>
+    <radialGradient id="gBeam" gradientUnits="userSpaceOnUse" cx="${TORCH.x}" cy="${TORCH.y}" r="520"><stop offset="0" stop-color="#fff6c8" stop-opacity=".55"/><stop offset="1" stop-color="#fff6c8" stop-opacity="0"/></radialGradient>
+    <radialGradient id="gLens"><stop offset="0" stop-color="#ffffff"/><stop offset=".6" stop-color="#fff2a8"/><stop offset="1" stop-color="#ffd84a"/></radialGradient>
+    <radialGradient id="gGlowEye"><stop offset="0" stop-color="#fff6b0"/><stop offset="1" stop-color="#ffd84a" stop-opacity="0"/></radialGradient>
+    <clipPath id="clipWall"><rect x="${X0}" y="0" width="${1000 - X0}" height="${Y0}"/></clipPath>
+    <filter id="soft" x="-20%" y="-20%" width="140%" height="140%"><feDropShadow dx="0" dy="4" stdDeviation="5" flood-color="#000" flood-opacity=".35"/></filter>
+    <filter id="penumbra" x="-10%" y="-10%" width="120%" height="120%"><feGaussianBlur stdDeviation="1.4"/></filter>
+  </defs>
+
+  <!-- the room -->
+  <rect width="1000" height="640" fill="#6b4a2b"/>
+  <path d="M${X0} 0 L${X0} ${Y0} L0 ${f1(Y0 + AY * (X0 / -AX))} L0 0 Z" fill="url(#gSide)"/>
+  <path d="${winD}" fill="url(#gNightWin)" stroke="#6b3f1d" stroke-width="8" stroke-linejoin="round"/>
+  <g id="winSky">
+    <path transform="translate(${f1(lerp(w[0].x, w[1].x, .35))} ${f1(lerp(w[0].y, w[3].y, .3) + 12)})" d="M8 -14 a15 15 0 1 0 12 25 a12 12 0 1 1 -12 -25 Z" fill="#ffe27a"/>
+    ${[[.7, .3], [.55, .62], [.2, .7], [.82, .72], [.15, .25]].map(([u, v]) => { const p = wm(wm(w[0], w[1], u), wm(w[3], w[2], u), v); return `<circle cx="${f1(p.x)}" cy="${f1(p.y)}" r="2" fill="#fff"/>`; }).join('')}
+  </g>
+  <path d="M${f1(mt.x)} ${f1(mt.y)} L${f1(mb.x)} ${f1(mb.y)} M${f1(ml.x)} ${f1(ml.y)} L${f1(mr.x)} ${f1(mr.y)}" stroke="#6b3f1d" stroke-width="6"/>
+  <rect x="${X0}" y="0" width="${1000 - X0}" height="${Y0}" fill="url(#gWall)"/>
+  <g fill="#e2b77f" opacity=".45">${paper}</g>
+  <path d="${gpath}" fill="none" stroke="#3a7a2a" stroke-width="3"/>${garland}
+  <rect x="${X0}" y="${Y0 - 14}" width="${1000 - X0}" height="14" fill="#8a5a2b"/>
+  <path d="M${X0} ${Y0} L1000 ${Y0} L1000 640 L0 640 L0 ${f1(Y0 + AY * (X0 / -AX))} Z" fill="url(#gFloor)"/>
+  <g stroke="#6e3f1f" stroke-width="2" opacity=".55">${planks}</g>
+  <line x1="${X0}" y1="0" x2="${X0}" y2="${Y0}" stroke="#7a5433" stroke-width="3"/>
+  <!-- a rangoli on the floor, drawn flat on it -->
+  <g transform="translate(${f1(scr(560, 0, 470).x)} ${f1(scr(560, 0, 470).y)}) scale(1 .42)" opacity=".85">
+    ${[0, 1, 2, 3, 4, 5, 6, 7].map(i => `<ellipse cx="0" cy="-26" rx="10" ry="22" fill="${i % 2 ? '#ff5aa0' : '#ffd84a'}" transform="rotate(${i * 45})"/>`).join('')}<circle r="12" fill="#3fb8e0"/><circle r="5" fill="#fff"/></g>
+
+  <!-- the hiding places on the wall -->
+  <g id="decor">${ORDER.map(id => `<g id="dec-${id}">${decorArt(id)}</g>`).join('')}</g>
+  <g id="goalRing" fill="none" stroke="#fff" stroke-width="4" stroke-dasharray="10 9" stroke-linejoin="round" opacity="0"><path id="goalPath"/></g>
+
+  <!-- the shadow: computed from the torch and the card, every frame -->
+  <g clip-path="url(#clipWall)" id="shadowG">
+    <path id="shadowPath" fill="#2a1c3c" fill-rule="evenodd" opacity=".82" filter="url(#penumbra)" role="button" aria-label="The shadow. Tap it to hear its shape."/>
+  </g>
+  <path id="fitGlow" fill="none" stroke="#fff3a8" stroke-width="8" stroke-linejoin="round" opacity="0"/>
+  <!-- friends who have hidden peek out from their hiding places -->
+  <g id="peeks">${ORDER.map(id => { const P = T0(id); const top = Math.min(...P.map(p => p[1])), right = Math.max(...P.map(p => p[0]));
+    return `<g id="peek-${id}" opacity="0" transform="translate(${f1(right - 16)} ${f1(top + 6)})"><g transform="scale(.36)">${friendBody(id)}</g></g>`; }).join('')}</g>
+
+  <!-- light from the torch -->
+  <path id="beam" d="M${TORCH.x + 30} ${TORCH.y - 40} L${X0 + 20} 30 L1000 60 L1000 ${Y0 + 30} L${TORCH.x + 40} ${TORCH.y + 12} Z" fill="url(#gBeam)" opacity=".5" pointer-events="none"/>
+
+  <!-- the bench where friends wait their turn -->
+  <g id="bench">
+    <rect x="705" y="566" width="292" height="20" rx="8" fill="#a8643a" stroke="#6e3f1f" stroke-width="3"/>
+    <rect x="720" y="584" width="14" height="46" rx="4" fill="#8a5030"/><rect x="968" y="584" width="14" height="46" rx="4" fill="#8a5030"/>
+  </g>
+  <!-- the torch on its stool -->
+  <g id="torchG">
+    <rect x="${TORCH.x - 46}" y="${TORCH.y + 30}" width="92" height="14" rx="6" fill="#c0392b" stroke="#7a2418" stroke-width="3"/>
+    <rect x="${TORCH.x - 38}" y="${TORCH.y + 42}" width="10" height="60" rx="3" fill="#7a2418"/><rect x="${TORCH.x + 28}" y="${TORCH.y + 42}" width="10" height="60" rx="3" fill="#7a2418"/>
+    <g transform="translate(${TORCH.x} ${TORCH.y}) rotate(${TORCH_ANG.toFixed(1)})">
+      <rect x="-50" y="-15" width="58" height="30" rx="9" fill="#4a6fd6" stroke="#2b4aa0" stroke-width="3"/>
+      <rect x="-38" y="-15" width="6" height="30" fill="#2b4aa0" opacity=".5"/><rect x="-26" y="-15" width="6" height="30" fill="#2b4aa0" opacity=".5"/>
+      <path d="M6 -19 L34 -28 L34 28 L6 19 Z" fill="#6d8ce6" stroke="#2b4aa0" stroke-width="3" stroke-linejoin="round"/>
+      <ellipse id="lens" cx="34" cy="0" rx="7" ry="28" fill="url(#gLens)" stroke="#2b4aa0" stroke-width="3"/>
+      <rect id="switch" x="-24" y="-23" width="14" height="10" rx="3" fill="#2f9e5b" stroke="#1f6b3d" stroke-width="2"/>
+    </g>
+    <circle id="lensGlow" cx="${f1(TORCH.x + 34 * Math.cos(TORCH_ANG * D2R))}" cy="${f1(TORCH.y + 34 * Math.sin(TORCH_ANG * D2R))}" r="46" fill="#fff6b0" opacity=".45"/>
+  </g>
+
+  <!-- the shape friends: each card is on a stick, standing in a little pot -->
+  <g id="friends">${ORDER.map(id => `
+    <g id="pup-${id}">
+      <line class="stick" x1="0" y1="0" x2="0" y2="150" stroke="#8a5a2b" stroke-width="7" stroke-linecap="round"/>
+      <g class="pot"><ellipse cx="0" cy="150" rx="22" ry="7" fill="#000" opacity=".22"/><path d="M-17 132 L17 132 L13 152 L-13 152 Z" fill="#c8641a" stroke="#8a3f10" stroke-width="2.5" stroke-linejoin="round"/></g>
+      <g class="body">${friendBody(id)}</g>
+    </g>`).join('')}</g>
+
+  <g transform="translate(${KIK.x} ${KIK.y})"><g id="kikkuJump">${kikkuArt()}</g></g>
+
+  <!-- counting corners -->
+  <g id="bubbles" pointer-events="none"></g>
+
+  <!-- lights off: the room goes dark, but Kikku's eyes still shine -->
+  <rect id="dark" width="1000" height="640" fill="#080a22" opacity="0" pointer-events="none" class="fade"/>
+  <g id="darkEyes" opacity="0" pointer-events="none" class="fade">
+    <circle cx="${KIK.x - 13}" cy="${KIK.y + 2}" r="16" fill="url(#gGlowEye)"/><circle cx="${KIK.x + 13}" cy="${KIK.y + 2}" r="16" fill="url(#gGlowEye)"/>
+    <circle cx="${KIK.x - 13}" cy="${KIK.y + 2}" r="5" fill="#fff"/><circle cx="${KIK.x + 13}" cy="${KIK.y + 2}" r="5" fill="#fff"/>
+    <path transform="translate(${f1(lerp(w[0].x, w[1].x, .35))} ${f1(lerp(w[0].y, w[3].y, .3) + 12)})" d="M8 -14 a15 15 0 1 0 12 25 a12 12 0 1 1 -12 -25 Z" fill="#ffe27a"/>
+  </g>
+
+  <!-- the "try this" card: a picture of what to do next; tap it to hear it -->
+  <g id="wish" filter="url(#soft)">
+    <rect x="14" y="14" width="150" height="138" rx="26" fill="#fff"/>
+    <g id="wishArt" transform="translate(89 76)"></g>
+    <g transform="translate(142 132)"><circle r="15" fill="#ff7a2f"/><path d="M-7 -4 h4 l6 -5 v18 l-6 -5 h-4 Z" fill="#fff"/><path d="M6 -5 q4 5 0 10" stroke="#fff" stroke-width="2" fill="none" stroke-linecap="round"/></g>
+  </g>
+
+  <!-- the hint hand: shows the drag until a friend has been moved once -->
+  <g id="hint" pointer-events="none">
+    <path id="hintPath" fill="none" stroke="#fff" stroke-width="7" stroke-linecap="round" stroke-dasharray="2 16" opacity=".9"/>
+    <g id="hintHand"><g transform="scale(1.2)"><path d="M-6 0 L-6 -34 Q-6 -42 1 -42 Q8 -42 8 -34 L8 -14 L20 -14 Q30 -14 30 -4 L30 16 Q30 30 16 30 L2 30 Q-12 30 -16 18 L-24 4 Q-27 -3 -20 -5 Q-14 -6 -10 2 Z" fill="#fff" stroke="#3a2a1a" stroke-width="3" stroke-linejoin="round"/></g></g>
+  </g>
+
+  <!-- hit targets: fixed ones never move; the card's own target only has its centre patched -->
+  <circle id="torchHit" cx="${TORCH.x}" cy="${TORCH.y + 6}" r="58" fill="transparent" role="button" tabindex="0" aria-label="The torch. Tap it to switch it on or off."/>
+  <circle id="kikkuHit" cx="${KIK.x}" cy="${KIK.y + 10}" r="62" fill="transparent" role="button" tabindex="0" aria-label="Kikku the rabbit. Tap to hear what to do."/>
+  ${BENCH.map((b, i) => `<rect class="benchHit" id="bench${i}" x="${b.x - 46}" y="${b.y - 56}" width="92" height="120" rx="20" fill="transparent" role="button" tabindex="0" aria-label="A friend waiting on the bench. Tap to bring them to the torch."/>`).join('')}
+  <rect id="wishHit" x="14" y="14" width="150" height="138" rx="26" fill="transparent" role="button" tabindex="0" aria-label="What to try next. Tap to hear it."/>
+  <circle id="pupHit" r="62" fill="transparent" tabindex="0" role="button" aria-label="The shape friend at the torch. Drag to move it. Tap to turn it. Arrow keys move it, Enter turns it."/>
+  `;
+}
+build();
+
+/* ---- juice helpers --------------------------------------------------------- */
+function clientOf(x, y){
+  const m = svg.getScreenCTM(); if (!m) return {x: innerWidth / 2, y: innerHeight / 2};
+  const p = svg.createSVGPoint(); p.x = x; p.y = y; const q = p.matrixTransform(m);
+  return {x: q.x, y: q.y};
+}
+let lastSnd = 0;
+const sfx = (fn, gap = 160) => { const t = performance.now(); if (t - lastSnd < gap) return; lastSnd = t; fn(); };
+const NUM = ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten'];
+const cap = s => s[0].toUpperCase() + s.slice(1);
+function setMood(m, t = 2.2){ S.mood = m; S.moodT = t; }
+
+/* ---- where each friend is drawn ------------------------------------------- */
+const pupAt = (X, Z) => scr(X, PY, Z);
+const disp = {};          // what is on screen now: {x, y, s, stick}
+function goalPose(id){
+  if (id === S.stage) { const p = pupAt(S.X, S.Z); return {x: p.x, y: p.y, s: 1, stick: PY}; }
+  const b = BENCH[S.bench.indexOf(id)];
+  return {x: b.x, y: b.y, s: BENCH_S, stick: BENCH_STICK};
+}
+for (const id of ORDER) disp[id] = goalPose(id);
+const landed = () => { const g = goalPose(S.stage), d = disp[S.stage]; return Math.hypot(g.x - d.x, g.y - d.y) < 3 && Math.abs(g.s - d.s) < .02; };
+
+/* ---- paint: everything that depends on the state -------------------------- */
+let T = 0, blink = {circle: 2, rect: 3.1, square: 4.2, triangle: 5.3, kikku: 2.6}, shut = {};
+function eyeHoles(id, cx, cy, deg, k){
+  const F = FRIENDS[id], open = shut[id] ? 0.12 : 1;
+  return F.eyes.map(e => {
+    const pts = [];
+    for (let i = 0; i < 14; i++) { const a = i / 14 * TAU; pts.push([e[0] + F.er * Math.cos(a), e[1] + F.er * open * Math.sin(a)]); }
+    return ptsD(placed(pts, deg, k, cx, cy).slice().reverse());
+  }).join('');
+}
+function paint(){
+  for (const id of ORDER) {
+    const d = disp[id], g = $('pup-' + id);
+    g.setAttribute('transform', `translate(${f1(d.x)} ${f1(d.y)}) scale(${d.s.toFixed(3)})`);
+    g.querySelector('.stick').setAttribute('y2', f1(d.stick));
+    g.querySelector('.pot').setAttribute('transform', `translate(0 ${f1(d.stick - 150)})`);
+    g.querySelector('.body').setAttribute('transform', `rotate(${S.rot[id].toFixed(2)})`);
+    g.querySelectorAll('.eye').forEach(e => e.setAttribute('ry', f1(FRIENDS[id].er * (shut[id] ? 0.12 : 1))));
+  }
+  /* the card at the torch, and its shadow */
+  const id = S.stage, d = disp[id];
+  $('pupHit').setAttribute('cx', f1(d.x)); $('pupHit').setAttribute('cy', f1(d.y));
+  const sh = landed() ? shadowPoly(id, S.X, S.Z, S.rot[id], S.lampOn) : null;
+  if (sh) {
+    const c = shadowCentre(S.X, S.Z), s = scr(c.X, c.Y, 0);
+    $('shadowPath').setAttribute('d', ptsD(sh) + eyeHoles(id, s.x, s.y, S.rot[id], mag(S.Z)));
+  } else $('shadowPath').setAttribute('d', '');
+  const hc = hideCheck(id, S.X, S.Z, S.rot[id], S.lampOn);
+  $('fitGlow').setAttribute('d', hc.hidden && sh ? ptsD(sh) : '');
+  $('fitGlow').setAttribute('opacity', hc.hidden && sh ? .9 : 0);
+  /* the goal's hiding place pulses */
+  const g = currentGoal();
+  $('goalPath').setAttribute('d', FRIENDS[g] && !S.hid[g] ? ptsD(targetPoly(g)) : '');
+  /* the torch */
+  $('beam').setAttribute('opacity', S.lampOn ? .5 : 0);
+  $('lensGlow').setAttribute('opacity', S.lampOn ? .45 : 0);
+  $('lens').setAttribute('fill', S.lampOn ? 'url(#gLens)' : '#9aa6c4');
+  $('switch').setAttribute('fill', S.lampOn ? '#2f9e5b' : '#c0392b');
+  $('dark').setAttribute('opacity', S.lampOn ? 0 : .8);
+  $('darkEyes').setAttribute('opacity', S.lampOn ? 0 : 1);
+  for (const f of ORDER) $('peek-' + f).setAttribute('opacity', S.hid[f] && S.stage !== f ? 1 : 0);
+  /* Kikku watches the shadow */
+  const look = sh ? (() => { const c = shadowCentre(S.X, S.Z); return scr(c.X, c.Y, 0); })() : d;
+  const dx = look.x - KIK.x, dy = look.y - KIK.y, L = Math.hypot(dx, dy) || 1;
+  const wow = S.mood === 'wow', px = dx / L * 3.4, py = dy / L * 4;
+  $('kPupL').setAttribute('cx', f1(-13 + px)); $('kPupL').setAttribute('cy', f1(2 + py)); $('kPupR').setAttribute('cx', f1(13 + px)); $('kPupR').setAttribute('cy', f1(2 + py));
+  $('kGlL').setAttribute('cx', f1(-11 + px)); $('kGlL').setAttribute('cy', f1(py)); $('kGlR').setAttribute('cx', f1(15 + px)); $('kGlR').setAttribute('cy', f1(py));
+  $('kPupL').setAttribute('r', wow ? 7 : 5.5); $('kPupR').setAttribute('r', wow ? 7 : 5.5);
+  $('kMouth').setAttribute('opacity', wow ? 0 : 1); $('kMouthO').setAttribute('opacity', wow ? 1 : 0);
+  $('kMouth').setAttribute('d', S.mood === 'yay' || S.mood === 'giggle' ? 'M-10 21 Q0 34 10 21 Z' : 'M-8 22 Q-4 27 0 22 Q4 27 8 22');
+  $('kMouth').setAttribute('fill', S.mood === 'yay' || S.mood === 'giggle' ? '#8a2a12' : 'none');
+  $('kPaws').setAttribute('opacity', S.mood === 'yay' ? 0 : 1); $('kPawsUp').setAttribute('opacity', S.mood === 'yay' ? 1 : 0);
+  $('pupHit').setAttribute('aria-label', `${FRIENDS[id].name} at the torch. ${sh ? 'Its shadow is ' + mag(S.Z).toFixed(1) + ' times as big.' : 'No shadow.'} Drag to move, tap to turn.`);
+}
+
+/* little life: blinking, ears, the goal ring, the hint hand — skipped under reduced motion */
+function idle(dt){
+  T += dt;
+  if (reduced()) { $('goalRing').setAttribute('opacity', .8); return; }
+  for (const k in blink) {
+    blink[k] -= dt;
+    shut[k] = blink[k] < 0.14 && blink[k] > 0;
+    if (blink[k] < 0) blink[k] = 2.2 + Math.random() * 3.5;
+  }
+  $('kLid').setAttribute('height', shut.kikku ? 24 : 0);
+  $('goalRing').setAttribute('opacity', (0.45 + 0.4 * Math.sin(T * 4)).toFixed(2));
+  $('goalRing').setAttribute('stroke-dashoffset', (-T * 30).toFixed(1));
+  const ear = Math.sin(T * 1.7) * 3 + (S.mood === 'wow' ? -6 : 0);
+  $('kEarL').setAttribute('transform', `rotate(${f1(-ear)} -17 -6)`); $('kEarR').setAttribute('transform', `rotate(${f1(ear)} 17 -6)`);
+  const hop = S.mood === 'yay' ? Math.abs(Math.sin(T * 9)) * 16 : S.mood === 'giggle' ? Math.abs(Math.sin(T * 14)) * 4 : 0;
+  $('kikkuJump').setAttribute('transform', `translate(0 ${f1(-hop)})`);
+  if (!S.touched) {
+    const k = (T * 0.45) % 1, e = ease.inOut(Math.min(1, k * 1.25));
+    const a = pupAt(S.X, S.Z), b = pupAt(S.X - 90, 300);
+    $('hintPath').setAttribute('d', `M${f1(a.x + 20)} ${f1(a.y + 40)} L${f1(b.x + 20)} ${f1(b.y + 40)}`);
+    $('hintHand').setAttribute('transform', `translate(${f1(lerp(a.x, b.x, e) + 20)} ${f1(lerp(a.y, b.y, e) + 44)})`);
+    $('hintHand').setAttribute('opacity', k > 0.9 ? 0 : 1);
+  }
+}
+
+/* ============================================================================
+   What the learner does. Every change of the card goes through the model.
+   ============================================================================ */
+function touch(){ if (S.touched) return; S.touched = true; $('hint').setAttribute('opacity', 0); track('firstMove'); }
+
+/* Drag the card: it follows the finger; the finger's place on the screen is turned back
+   into a place in the room (how far out from the wall, and how far along it). */
+const ZMIN = 28, ZMAX = 394;
+function moveTo(sx, sy){
+  sx = clamp(sx, 292, 680);
+  const Z = clamp((sy - (Y0 - PY)) / AY, ZMIN, ZMAX);
+  S.Z = Z; S.X = sx - X0 - Z * AX;
+  const m = mag(S.Z);
+  if (m > S.maxM + 0.25 || m < S.maxM - 0.6) { sfx(() => Play.sound('note', 820 / m, .09), 120); }
+  S.maxM = Math.max(S.maxM, m);
+  const sc = shadowCentre(S.X, S.Z);
+  if (m >= 3 && S.lampOn && sc.X > 40 && sc.X < 660) { if (discover('big', clientOf(700, 200))) { setMood('wow', 3); nextGoalSoon(4200); } else if (S.mood !== 'wow') setMood('wow', 1.4); }
+}
+let grab = null;
+drag($('pupHit'), svg, {
+  start(p){
+    if (S.busy) return false;
+    hello();
+    const d = disp[S.stage];
+    grab = {p0: p, x0: d.x, y0: d.y, moved: 0, t0: performance.now()};
+    $('bubbles').innerHTML = '';
+    S.dragging = true;
+  },
+  move(p){
+    if (!grab) return;
+    grab.moved = Math.max(grab.moved, Math.hypot(p.x - grab.p0.x, p.y - grab.p0.y));
+    if (grab.moved < 6) return;
+    touch();
+    moveTo(grab.x0 + p.x - grab.p0.x, grab.y0 + p.y - grab.p0.y);
+    disp[S.stage] = goalPose(S.stage);
+    paint();
+  },
+  end(){
+    S.dragging = false;
+    const g = grab; grab = null;
+    if (!g) return;
+    if (g.moved < 6) { turnCard(); return; }
+    track('move', {who: S.stage, X: Math.round(S.X), Z: Math.round(S.Z), m: +mag(S.Z).toFixed(2)});
+    afterChange();
+  },
+});
+$('pupHit').addEventListener('keydown', e => {
+  const k = {ArrowLeft: [-8, 0], ArrowRight: [8, 0], ArrowUp: [0, -6], ArrowDown: [0, 6]}[e.key];
+  if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); hello(); turnCard(); return; }
+  if (!k || S.busy) return;
+  e.preventDefault(); hello(); touch();
+  const d = pupAt(S.X, S.Z); moveTo(d.x + k[0], d.y + k[1]); disp[S.stage] = goalPose(S.stage); paint(); afterChange();
+});
+
+/* Tap the card: it turns an eighth of a turn, and so does its shadow. */
+async function turnCard(){
+  if (S.busy) return;
+  const id = S.stage, r0 = S.rot[id];
+  S.busy = true; touch();
+  Play.sound('boing'); setMood('giggle', 0.8);
+  await tween(r0, r0 + 45, 380, v => { S.rot[id] = v; paint(); }, ease.back);
+  S.rot[id] = (r0 + 45) % 360;
+  S.busy = false;
+  track('turn', {who: id, rot: S.rot[id]});
+  if (!S.saidTurn && id !== 'circle') { S.saidTurn = true; say('Round and round! The shadow turns too.'); }
+  if (id === 'circle' && !S.saidRound) { S.saidRound = true; say('Wheee! A circle looks the same when it turns.'); }
+  afterChange();
+  paint();
+}
+
+/* After every change: has the friend found its hiding place? */
+let lastHide = null;
+function afterChange(){
+  const id = S.stage, hc = hideCheck(id, S.X, S.Z, S.rot[id], S.lampOn);
+  if (!hc.hidden) { lastHide = null; return; }
+  if (lastHide === id) return;
+  lastHide = id;
+  hideFriend(id);
+}
+async function hideFriend(id){
+  S.busy = true;
+  /* slide the last little bit, so the shadow fits exactly */
+  const fit = fitFor(id), X0s = S.X, Z0s = S.Z;
+  await tween(0, 1, 420, k => { S.X = lerp(X0s, fit.X, k); S.Z = lerp(Z0s, fit.Z, k); disp[id] = goalPose(id); paint(); }, ease.out);
+  S.X = fit.X; S.Z = fit.Z; disp[id] = goalPose(id); paint();
+  S.busy = false;
+  const first = !S.hid[id];
+  S.hid[id] = true;
+  setMood('yay', 3.5);
+  const sh = shadowPoly(id, S.X, S.Z, S.rot[id], S.lampOn), cls = classify(sh);
+  const c = cls.at.length ? null : shadowCentre(S.X, S.Z);
+  discover(id, clientOf(...(cls.at[0] || [scr(c.X, c.Y, 0).x, scr(c.X, c.Y, 0).y])));
+  track('hide', {who: id, corners: cls.corners});
+  countCorners(id, sh, cls);
+  if (first) setTimeout(() => { if (S.stage === id && !S.dragging && !S.busy) bringNext(); }, reduced() ? 2500 : 5200 + cls.corners * 500);
+}
+/* Count the shadow's corners out loud, one bubble at a time. */
+function countCorners(id, sh, cls){
+  const F = FRIENDS[id];
+  const line = cls.corners === 0
+    ? `${F.name} is hiding in ${TARGETS[id].place}! No corners at all. Round and round!`
+    : `${F.name} is hiding in ${TARGETS[id].place}! ${cap(cls.at.map((_, i) => NUM[i + 1]).join(', '))} corners! ${cap(NUM[cls.sides])} sides!`;
+  say(line);
+  const B = $('bubbles'); B.innerHTML = '';
+  if (cls.corners === 0) {
+    const c = shadowCentre(S.X, S.Z), s = scr(c.X, c.Y, 0), r = 40 * mag(S.Z) + 16;
+    B.innerHTML = `<circle cx="${f1(s.x)}" cy="${f1(s.y)}" r="${f1(r)}" fill="none" stroke="#fff" stroke-width="6" stroke-linecap="round" stroke-dasharray="${f1(TAU * r)}" stroke-dashoffset="${f1(TAU * r)}" id="roundRing"/>`;
+    tween(TAU * r, 0, 1600, v => { const el = $('roundRing'); if (el) el.setAttribute('stroke-dashoffset', f1(v)); });
+  } else {
+    const cx = sh.reduce((a, p) => a + p[0], 0) / sh.length, cy = sh.reduce((a, p) => a + p[1], 0) / sh.length;
+    cls.at.forEach((p, i) => setTimeout(() => {
+      const ux = p[0] - cx, uy = p[1] - cy, L = Math.hypot(ux, uy) || 1, bx = clamp(p[0] + ux / L * 30, 26, 974), by = clamp(p[1] + uy / L * 30, 26, 614);
+      B.insertAdjacentHTML('beforeend', `<g transform="translate(${f1(bx)} ${f1(by)})"><circle r="22" fill="#ff7a2f" stroke="#fff" stroke-width="4"/>
+        <text y="9" text-anchor="middle" font-family="Fredoka, Nunito, sans-serif" font-size="26" font-weight="600" fill="#fff">${i + 1}</text></g>
+        <circle cx="${f1(p[0])}" cy="${f1(p[1])}" r="9" fill="#fff3a8" stroke="#ff7a2f" stroke-width="3"/>`);
+      Play.sound('note', 520 + i * 130, .16);
+    }, 900 + i * 620));
+  }
+  clearTimeout(countCorners.t);
+  countCorners.t = setTimeout(() => { B.innerHTML = ''; }, 6200);
+}
+
+/* Bring a friend from the bench to the torch (the one at the torch takes its seat). */
+function bringFriend(id){
+  if (id === S.stage || S.busy) return;
+  const slot = S.bench.indexOf(id);
+  S.bench[slot] = S.stage; S.stage = id;
+  S.X = START.X; S.Z = START.Z; lastHide = null;
+  $('bubbles').innerHTML = '';
+  Play.sound('pop');
+  track('bring', {who: id});
+  if (reduced()) for (const f of ORDER) disp[f] = goalPose(f);
+}
+function bringNext(){
+  const g = ORDER.find(f => !found(f));
+  if (g && g !== S.stage) { bringFriend(g); setTimeout(() => sayGoal(false), 500); }
+}
+S.bench.forEach((_, i) => {
+  const el = $('bench' + i);
+  const go = () => { hello(false); const id = S.bench[i]; bringFriend(id); say(`Hello ${FRIENDS[id].name}!`); };
+  el.addEventListener('click', go);
+  el.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go(); } });
+});
+
+/* The torch: tap to switch it off and on. */
+function tapTorch(){
+  hello(false);
+  S.lampOn = !S.lampOn;
+  tone(S.lampOn ? 900 : 500, 0.05, 'square', 0.06); tone(S.lampOn ? 1300 : 350, 0.05, 'square', 0.05, 0.05);
+  track('torch', {on: S.lampOn});
+  if (!S.lampOn) {
+    setMood('wow', 2.4);
+    if (!discover('dark', clientOf(TORCH.x, TORCH.y - 40))) say('Lights off! No light, no shadow.');
+    else nextGoalSoon(4200);
+  } else { setMood('yay', 1.6); say('Lights on! The shadow is back.'); afterChange(); }
+  paint();
+}
+$('torchHit').addEventListener('click', tapTorch);
+$('torchHit').addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); tapTorch(); } });
+
+/* Tap the shadow: Kikku names its shape and counts its corners. */
+$('shadowPath').addEventListener('click', () => {
+  const sh = shadowPoly(S.stage, S.X, S.Z, S.rot[S.stage], S.lampOn); if (!sh) return;
+  const cls = classify(sh);
+  const nm = {circle: 'a circle', square: 'a square', rectangle: 'a rectangle', triangle: 'a triangle', shape: 'a shape'}[cls.name];
+  say(cls.corners ? `It is ${nm}! It has ${NUM[cls.corners]} corners.` : `It is ${nm}! It has no corners.`);
+  setMood('giggle', 1.2);
+  track('nameShadow', {name: cls.name, corners: cls.corners});
+});
+
+/* ---- the wish card, Kikku, the Hear button --------------------------------- */
+const GOALS = ['circle', 'rect', 'square', 'triangle', 'big', 'dark'];
+const LINES = {
+  circle: 'Circle wants to hide in the clock! Move Circle until its shadow fits the clock.',
+  rect: 'Rectangle wants to hide in the photo frame. Tap Rectangle to turn it!',
+  square: 'Square wants to hide in the carrom board. Tap Square to turn it.',
+  triangle: 'Triangle wants to hide in the flag. Turn Triangle upside down!',
+  big: 'Take a friend close to the torch. Make a giant shadow!',
+  dark: 'Tap the torch. Where does the shadow go?',
+};
+const currentGoal = () => GOALS.find(g => !found(g)) || null;
+let shownGoal;
+function paintWish(){
+  const g = currentGoal();
+  if (g === shownGoal) return;
+  shownGoal = g;
+  $('wishArt').innerHTML = wishArt(g);
+}
+function sayGoal(bring = true){
+  const g = currentGoal();
+  if (bring && FRIENDS[g] && S.stage !== g) bringFriend(g);
+  say(g ? LINES[g] : 'You found everything! Make more shadows with your friends.');
+  paintWish();
+  track('hear', {goal: g});
+}
+function nextGoalSoon(ms){ setTimeout(() => { paintWish(); const g = currentGoal(); if (g && !FRIENDS[g]) say(LINES[g]); }, ms); }
+let spokeHello = false;
+function hello(speak = true){
+  if (spokeHello) return; spokeHello = true;
+  if (speak) say('Hello! I am Kikku. ' + LINES[currentGoal() || 'circle']);
+}
+$('wishHit').addEventListener('click', () => { spokeHello = true; sayGoal(); });
+$('wishHit').addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); spokeHello = true; sayGoal(); } });
+$('kikkuHit').addEventListener('click', () => { spokeHello = true; setMood('giggle', 1); Play.sound('boing'); sayGoal(false); });
+$('kikkuHit').addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); spokeHello = true; sayGoal(false); } });
+$('hear').addEventListener('click', () => { spokeHello = true; sayGoal(false); });
+
+/* ============================================================================
+   Start
+   ============================================================================ */
+findings($('finds'), [
+  {id: 'circle',   icon: '🕐', label: 'Circle hides in the clock'},
+  {id: 'rect',     icon: '🖼️', label: 'Rectangle hides in the frame'},
+  {id: 'square',   icon: '🟦', label: 'Square hides in the carrom board'},
+  {id: 'triangle', icon: '🔺', label: 'Triangle hides in the flag'},
+  {id: 'big',      icon: '🔦', label: 'Near the torch: a giant shadow', say: 'A giant shadow! Near the torch the shadow is big. Near the wall it is small.'},
+  {id: 'dark',     icon: '🌑', label: 'No light, no shadow',            say: 'Lights off! No light, no shadow.'},
+], () => { say('You found them all! Every shadow has the same shape as its friend.'); paintWish(); });
+
+loop(dt => {
+  if (!S.dragging) {
+    const k = reduced() ? 1 : 1 - Math.exp(-11 * dt);
+    for (const id of ORDER) {
+      const g = goalPose(id), d = disp[id];
+      disp[id] = {x: lerp(d.x, g.x, k), y: lerp(d.y, g.y, k), s: lerp(d.s, g.s, k), stick: lerp(d.stick, g.stick, k)};
+    }
+  }
+  S.moodT = Math.max(0, S.moodT - dt); if (S.moodT === 0) S.mood = 'idle';
+  idle(dt);
+  paint();
+});
+svg.addEventListener('pointerdown', () => hello());
+paintWish();
+paint();
+if (shared) touch();
+window.applyFeatures = () => paint();
+window.PG_STATE = () => {
+  const id = S.stage, sh = shadowPoly(id, S.X, S.Z, S.rot[id], S.lampOn), hc = hideCheck(id, S.X, S.Z, S.rot[id], S.lampOn);
+  return Object.assign(JSON.parse(JSON.stringify(S)), {m: mag(S.Z), shadow: sh && classify(sh).name, corners: sh ? classify(sh).corners : null,
+    fit: hc.fit, hidden: hc.hidden, goal: currentGoal(), screen: pupAt(S.X, S.Z)});
+};
+window.PG_MODEL = {mag, shadowCentre, shadowPoly, targetPoly, fitFor, area, clip, iou, classify, sameTurn, hideCheck, scr, pupAt,
+                   LAMP, PY, FRIENDS, TARGETS, FIT, ZMIN, ZMAX, BENCH};
+</script>
+</body>
+</html>

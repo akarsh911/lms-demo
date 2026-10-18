@@ -1,0 +1,830 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Global Winds and the Monsoon</title>
+<meta name="description" content="Class 11–12: integrate air parcels on a rotating Earth. Measure the Coriolis turning, set the Earth's spin and watch the pressure belts and planetary winds rearrange; then heat India and watch the ITCZ bring the monsoon.">
+<link rel="icon" href="../../favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600&family=Inter:wght@400;500;600;700&family=Nunito:wght@500;700;800&family=Newsreader:opsz,wght@6..72,400;6..72,500&family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="../../play.css">
+<style>
+/* Only what this page needs beyond play.css. */
+.pg-stage{background:#f7f6f3}
+.tabs{display:flex; gap:4px; padding:8px 10px; background:var(--card); border-bottom:1px solid var(--hair)}
+.tabs button{flex:1; border:1px solid transparent; background:var(--sunk); border-radius:7px; padding:7px 10px; font-weight:600; font-size:13.5px; cursor:pointer; color:var(--ink-2)}
+.tabs button[aria-pressed="true"]{background:var(--accent); color:#fff}
+.tabs button:disabled{opacity:.5; cursor:default}
+.gate{position:absolute; left:0; right:0; top:52px; height:40%; display:grid; place-items:center; pointer-events:none}
+.gate span{background:rgba(29,35,39,.86); color:#fff; padding:10px 16px; border-radius:99px; font-weight:600; font-size:14px}
+.seg{display:flex; gap:3px; background:var(--sunk); border-radius:8px; padding:3px; margin:4px 0 8px}
+.seg button{flex:1; border:0; background:transparent; border-radius:6px; padding:6px 6px; font-weight:600; font-size:12.5px; cursor:pointer; color:var(--ink-2)}
+.seg button[aria-pressed="true"]{background:var(--card); color:var(--ink); box-shadow:var(--shadow)}
+.seg button:disabled{opacity:.5; cursor:default}
+.ctl{grid-template-columns:112px 1fr 80px; margin:2px 0}
+.ctl label{font-size:12.5px; line-height:1.2}
+.ctl output{font-family:var(--font-mono); font-size:12.5px; font-weight:600; min-width:0}
+.readout{display:grid; grid-template-columns:1fr auto; gap:3px 12px; font-size:13px; align-items:baseline}
+.readout span{color:var(--ink-2)}
+.readout b{font-family:var(--font-mono); font-weight:600; font-size:12.5px; font-variant-numeric:tabular-nums; text-align:right}
+.readout .sep{grid-column:1/-1; height:1px; background:var(--hair); margin:3px 0}
+.note{font-size:12.5px; color:var(--ink-3); margin:6px 0 0}
+.why p{font-size:13.5px; margin-bottom:.5em}
+.why b{color:var(--ink)}
+.why .mono{font-size:12.5px}
+.tog[aria-pressed="true"]{background:var(--accent-soft); border-color:var(--accent)}
+#globeHit{cursor:crosshair}
+svg text.m{font-family:var(--font-mono)}
+</style>
+</head>
+<body>
+<header class="pg-top"></header>
+
+<div class="pg-intro">
+  <h1>Global winds and the monsoon</h1>
+  <p>Nothing here is drawn from a diagram in the book. Each parcel of air is pushed from high pressure to low pressure,
+     slowed by friction, and carried round on a spinning sphere; its path is integrated step by step (fourth-order Runge–Kutta).
+     The pressure belts, the trade winds and the westerlies come out of that. Measure the Coriolis turning yourself, change the Earth's spin,
+     then heat India and watch the Inter Tropical Convergence Zone (ITCZ) bring the south-west monsoon.</p>
+</div>
+
+<main class="pg-main wide-side">
+  <section class="pg-stage" id="stageWrap">
+    <div class="tabs" id="tabs">
+      <button data-tab="globe" aria-pressed="true">1 · Spin the Earth</button>
+      <button data-tab="monsoon" aria-pressed="false">2 · The monsoon</button>
+    </div>
+    <svg id="stage" viewBox="0 0 1000 680" role="img" aria-label="A rotating Earth with air parcels and pressure belts, and a map of the Indian Ocean with the ITCZ and the monsoon winds"></svg>
+    <div class="gate" id="gate"><span>Make your prediction first →</span></div>
+  </section>
+
+  <aside class="pg-side">
+    <div id="poe"></div>
+
+    <div class="card" id="ctlGlobe">
+      <div class="row" style="justify-content:space-between">
+        <div class="kicker" style="margin:0">The Earth</div>
+        <div class="row" style="gap:6px">
+          <button class="btn sm" id="btnRun">❚❚ Pause</button>
+          <button class="btn sm tog" id="btnFast" aria-pressed="false">×4 faster</button>
+        </div>
+      </div>
+      <div class="seg" id="modeSeg" style="margin-top:8px">
+        <button data-mode="launch" aria-pressed="true">Launch a parcel</button>
+        <button data-mode="belts" aria-pressed="false">Pressure belts on</button>
+      </div>
+      <div class="ctl"><label for="om">Spin, Ω / Ω<sub>Earth</sub></label><input type="range" id="om" min="0" max="3" step="0.05" value="1"><output id="omOut">1.00</output></div>
+      <div class="ctl" id="sunRow"><label for="sunLat">Sun overhead at</label><input type="range" id="sunLat" min="-23.4" max="23.4" step="0.1" value="0"><output id="sunOut">0.0°</output></div>
+      <p class="note" id="modeNote">Drag across the globe to launch a parcel of air: where you press is where it starts, the drag is its direction and speed.
+        No pressure force, no friction: only the spin turns it.</p>
+      <div class="readout" style="margin-top:8px" id="globeRead">
+        <span>Hadley cell edge (Held–Hou)</span><b id="gHH">—</b>
+        <span>Cells in each hemisphere</span><b id="gCells">—</b>
+        <span>Air leaving the equator at φ<sub>H</sub>, conserving angular momentum</span><b id="gJet">—</b>
+        <i class="sep"></i>
+        <span>Loops measured</span><b id="gN">0</b>
+        <span>Fitted period × sin φ</span><b id="gFit">—</b>
+        <span>Theory, π / Ω</span><b id="gTh">—</b>
+      </div>
+      <div class="row" style="margin-top:8px"><button class="btn sm" id="btnClear">Clear the measurements</button></div>
+    </div>
+
+    <div class="card" id="ctlMonsoon" hidden>
+      <div class="row" style="justify-content:space-between">
+        <div><div class="kicker" style="margin:0">Along 75° E</div><div style="font-family:var(--font-head); font-size:22px" id="dateOut">1 June</div></div>
+        <button class="btn sm" id="btnYear" aria-label="Play the year">▶ Play the year</button>
+      </div>
+      <div class="ctl"><label for="day">Day of the year</label><input type="range" id="day" min="1" max="365" step="1" value="152"><output id="dayOut">152</output></div>
+      <div class="ctl"><label for="cl">Land heat capacity</label><input type="range" id="cl" min="1" max="40" step="0.5" value="4.5"><output id="clOut">4.5 m</output></div>
+      <div class="ctl"><label for="om2">Spin, Ω / Ω<sub>Earth</sub></label><input type="range" id="om2" min="0" max="3" step="0.05" value="1"><output id="om2Out">1.00</output></div>
+      <div class="row" style="justify-content:space-between; margin-top:4px">
+        <button class="btn sm tog" id="btnHim" aria-pressed="true">⛰ Himalaya and Tibet</button>
+        <span class="note" style="margin:0">Sea: 40 m of water</span>
+      </div>
+      <p class="note">Heat capacity is in metres of water that warm together. Land is normally a few metres; make it 40 m and India warms as slowly as the sea.</p>
+      <div class="readout" style="margin-top:8px">
+        <span>ITCZ today</span><b id="mItcz">—</b>
+        <span>Reaches Kerala (10° N)</span><b id="mOnset">—</b>
+        <span>ITCZ on 15 July</span><b id="mJul">—</b>
+        <span>ITCZ farthest north</span><b id="mMax">—</b>
+        <i class="sep"></i>
+        <span>Wind at 5° S</span><b id="mW5s">—</b>
+        <span>Wind at 10° N (Kerala)</span><b id="mW10n">—</b>
+      </div>
+    </div>
+
+    <div class="card why" id="whyCard" hidden>
+      <div class="kicker">What the model says</div>
+      <div id="why"></div>
+    </div>
+
+    <div class="card"><div class="kicker">To find</div><div id="finds"></div></div>
+  </aside>
+</main>
+
+<script src="../../play.js"></script>
+<script>
+'use strict';
+const {$, $$, esc, clamp, fmt, drag, loop, sound, say, track, toast, predict, findings, discover, found,
+       shareState, sharedState, mount, reduced} = Play;
+mount({thread: 'weather', band: 'theorist'});
+
+/* MODEL:start ==================================================================
+   1. A PARCEL ON A ROTATING SPHERE. Position (φ, λ), eastward and northward speed (u, v):
+        du/dt =  f·v + u·v·tanφ / a − r·u
+        dv/dt = −f·u − u²·tanφ / a − r·v + F(φ)
+        dφ/dt = v / a,   dλ/dt = u / (a cosφ),     f = 2Ω sinφ  (the Coriolis parameter)
+      F = −(1/ρa)·∂p/∂φ is the push from high to low pressure; r is surface friction (1/day).
+      Integrated with fourth-order Runge–Kutta, 5-minute steps. With F = 0 and r = 0 a parcel
+      coasts in an inertial circle whose period is 2π/f = π/(Ω sinφ): 12 hours at the pole.
+   2. THE PRESSURE BELTS. Air rising at the ITCZ moves poleward aloft. Held and Hou (1980):
+      if it kept its angular momentum it would reach u = Ωa sin²φ / cosφ, and the
+      overturning cell can reach only as far as
+        φ_H = √( 5 g H Δ / (3 Ω² a²) )      (H = 10 km, Δ = 1/3, the equator-to-pole contrast)
+      which is 28.8° for the real Earth, and scales as 1/Ω. The surface pressure is modelled as
+      alternating belts with that spacing, low at the thermal equator:
+        p(φ) = 1011 − 5·cos(π(φ − φ_ITCZ)/φ_H) hPa   (one cell if φ_H ≥ 90°).
+      The belt SPACING is the Held–Hou law; everything the winds then do is integrated.
+   3. THE MONSOON. Surface temperature along 75° E, 30° S to 30° N, from a one-line energy
+      balance, implicit in time:
+        C·dT/dt = S(φ, day)(1 − α) − (A + B·T) + D·∇²T
+      Ocean south of 8° N (C = 40 m of water), land to the north (C = a few metres), the
+      Himalaya and Tibet at 28° N and beyond (bright and cold, α = 0.55). The surface pressure
+      falls where it is hot (thermal low, 0.8 hPa/K); the ITCZ is the warmest latitude.
+      The wind is the steady balance of pressure push, Coriolis and friction:
+        u = F·f / (r² + f²),   v = F·r / (r² + f²).
+   ============================================================================ */
+const OMEGA_E = 7.2921e-5, A_E = 6.371e6, G0 = 9.81, RHO = 1.15, D2R = Math.PI / 180, R2D = 180 / Math.PI;
+const HH = {H: 10000, delta: 1 / 3};
+/* Held–Hou: the Hadley cell's edge, in degrees, for a spin Ω (rad/s) */
+function hadleyEdge(om){
+  if (om <= 1e-9) return 90;
+  return Math.min(90, Math.sqrt(5 * G0 * HH.H * HH.delta / (3 * om * om * A_E * A_E)) * R2D);
+}
+const cellsPerHemisphere = om => Math.max(1, Math.round(90 / hadleyEdge(om)));
+const angMomWind = (om, phiDeg) => om * A_E * Math.pow(Math.sin(phiDeg * D2R), 2) / Math.cos(phiDeg * D2R);
+const BELT = {p0: 1011, amp: 5};
+function beltP(phiDeg, om, itcz){
+  return BELT.p0 - BELT.amp * Math.cos(Math.PI * (phiDeg - itcz) / hadleyEdge(om));
+}
+/* the push (m/s²) towards low pressure, northward positive */
+function beltForce(phiDeg, om, itcz){
+  const e = 0.25, dp = (beltP(phiDeg + e, om, itcz) - beltP(phiDeg - e, om, itcz)) * 100 / (2 * e * D2R);   // Pa per radian
+  return -dp / (RHO * A_E);
+}
+function deriv(s, om, force, r){
+  const f = 2 * om * Math.sin(s.phi), t = Math.tan(s.phi);
+  const F = force ? force(s.phi * R2D) : 0;
+  return {phi: s.v / A_E, lam: s.u / (A_E * Math.cos(s.phi)),
+          u: f * s.v + s.u * s.v * t / A_E - r * s.u,
+          v: -f * s.u - s.u * s.u * t / A_E - r * s.v + F};
+}
+function rk4(s, dt, om, force, r){
+  const add = (k, h) => ({phi: s.phi + h * k.phi, lam: s.lam + h * k.lam, u: s.u + h * k.u, v: s.v + h * k.v});
+  const k1 = deriv(s, om, force, r), k2 = deriv(add(k1, dt / 2), om, force, r), k3 = deriv(add(k2, dt / 2), om, force, r), k4 = deriv(add(k3, dt), om, force, r);
+  for (const k of ['phi', 'lam', 'u', 'v']) s[k] += dt / 6 * (k1[k] + 2 * k2[k] + 2 * k3[k] + k4[k]);
+  if (s.phi > 89.5 * D2R) { s.phi = 89.5 * D2R; s.v = -Math.abs(s.v); }
+  if (s.phi < -89.5 * D2R) { s.phi = -89.5 * D2R; s.v = Math.abs(s.v); }
+}
+/* A free parcel: integrate until its heading has turned through 360°. Returns the period (h),
+   its mean latitude and the sense of turning (−1 clockwise, +1 anticlockwise). */
+function inertialLoop(latDeg, speed, dirDeg, om, maxHours = 400){
+  const s = {phi: latDeg * D2R, lam: 0, u: speed * Math.cos(dirDeg * D2R), v: speed * Math.sin(dirDeg * D2R)};
+  let th0 = Math.atan2(s.v, s.u), acc = 0, t = 0, sum = 0, n = 0;
+  const dt = 300;
+  while (Math.abs(acc) < 2 * Math.PI && t < maxHours * 3600) {
+    rk4(s, dt, om, null, 0); t += dt;
+    const th = Math.atan2(s.v, s.u); acc += Math.atan2(Math.sin(th - th0), Math.cos(th - th0)); th0 = th;
+    sum += s.phi; n++;
+  }
+  return {closed: Math.abs(acc) >= 2 * Math.PI, hours: t / 3600, meanLat: sum / n * R2D, sense: Math.sign(acc)};
+}
+/* The steady wind (m/s, eastward u and northward v) for a push F at latitude φ. */
+function steadyWind(F, phiDeg, om, r){ const f = 2 * om * Math.sin(phiDeg * D2R), d = r * r + f * f; return {u: F * f / d, v: F * r / d}; }
+/* Where a wind blows FROM, as a compass bearing (0 = from the north, 90 = from the east). */
+const fromBearing = (u, v) => ((Math.atan2(-u, -v) * R2D) + 360) % 360;
+const compass = b => ['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE', 'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW'][Math.round(b / 22.5) % 16];
+
+/* ---- 3. the monsoon energy balance ------------------------------------------ */
+const EB = {S: -30, N: 30, coast: 8, Co: 40, D: 700, A: 178, B: 2.09, alb: 0.4, him: 28, albH: 0.55, kp: 0.8, r: 1 / 86400};
+function insol(lat, d){
+  const dec = 23.44 * Math.sin(2 * Math.PI * (d - 81) / 365) * D2R, phi = lat * D2R;
+  const c = -Math.tan(phi) * Math.tan(dec);
+  const H0 = c >= 1 ? 0 : c <= -1 ? Math.PI : Math.acos(c);
+  return 1361 / Math.PI * (1 + 0.033 * Math.cos(2 * Math.PI * (d - 3) / 365)) * (H0 * Math.sin(phi) * Math.sin(dec) + Math.cos(phi) * Math.cos(dec) * Math.sin(H0));
+}
+/* Run six years; keep the sixth, day by day. */
+function monsoonYear(o = {}){
+  const Cl = o.Cl != null ? o.Cl : 4.5, him = o.him !== false;
+  const n = EB.N - EB.S + 1, lat = Array.from({length: n}, (_, i) => EB.S + i);
+  const C = lat.map(l => (l >= EB.coast ? Cl : EB.Co) * 4.2e6);
+  const alb = lat.map(l => him && l >= EB.him ? EB.albH : EB.alb);
+  let T = lat.map(() => 25);
+  const dt = 43200, a = new Float64Array(n), b = new Float64Array(n), c = new Float64Array(n), r = new Float64Array(n);
+  const days = [];
+  for (let y = 0; y < 6; y++) for (let d = 0; d < 365; d++) {
+    for (let s = 0; s < 2; s++) {
+      const td = d + s / 2;
+      for (let i = 0; i < n; i++) {
+        const k = dt / C[i], L = i > 0 ? EB.D : 0, R = i < n - 1 ? EB.D : 0;
+        a[i] = -k * L; c[i] = -k * R; b[i] = 1 + k * (EB.B + L + R);
+        r[i] = T[i] + k * (insol(lat[i], td) * (1 - alb[i]) - EB.A);
+      }
+      for (let i = 1; i < n; i++) { const m = a[i] / b[i - 1]; b[i] -= m * c[i - 1]; r[i] -= m * r[i - 1]; }
+      T[n - 1] = r[n - 1] / b[n - 1];
+      for (let i = n - 2; i >= 0; i--) T[i] = (r[i] - c[i] * T[i + 1]) / b[i];
+    }
+    if (y === 5) {
+      let bi = 1, best = -1e9;
+      for (let i = 1; i < n - 1; i++) if (T[i] > best) { best = T[i]; bi = i; }
+      const A = T[bi - 1], B = T[bi], Cc = T[Math.min(n - 1, bi + 1)], den = A - 2 * B + Cc;
+      const off = den < -1e-9 ? clamp(0.5 * (A - Cc) / den, -0.5, 0.5) : 0;
+      days.push({itcz: lat[bi] + off, T: Float64Array.from(T)});
+    }
+  }
+  const it = days.map(x => x.itcz);
+  const onset = it.findIndex((x, i) => i > 60 && x >= 10);
+  return {lat, days, itcz: it, onset: onset >= 0 ? onset + 1 : null, jul15: it[195], max: Math.max(...it), jan: it[14]};
+}
+/* pressure and wind along the meridian on one day */
+function meridian(year, day, om){
+  const D = year.days[clamp(Math.round(day) - 1, 0, 364)], lat = year.lat, n = lat.length;
+  const mean = D.T.reduce((s, x) => s + x, 0) / n;
+  const p = Array.from(D.T, t => 1010 - EB.kp * (t - mean));
+  const wind = lat.map((l, i) => {
+    const i0 = Math.max(0, i - 1), i1 = Math.min(n - 1, i + 1);
+    const dpdy = (p[i1] - p[i0]) * 100 / ((lat[i1] - lat[i0]) * 111.2e3);
+    return steadyWind(-dpdy / RHO, l, om, EB.r);
+  });
+  return {lat, T: Array.from(D.T), p, wind, itcz: D.itcz};
+}
+const windAtLat = (m, l) => { const i = clamp(Math.round(l - EB.S), 0, m.lat.length - 1); return m.wind[i]; };
+/* MODEL:end */
+
+const MDAYS = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+function dateOf(d){ d = Math.round(d); let m = 0; while (m < 11 && d > MDAYS[m]) { d -= MDAYS[m]; m++; } return d + ' ' + MONTHS[m]; }
+
+/* ---- state ------------------------------------------------------------------ */
+const S = {tab: 'globe', locked: false, mode: 'launch', om: 1, sunLat: 0, running: true, fast: false, simH: 0,
+  loops: [], senses: {n: 0, s: 0}, day: 152, Cl: 4.5, om2: 1, him: true, playing: false};
+const shared = sharedState();
+if (shared) {
+  if (['globe', 'monsoon'].includes(shared.tab)) S.tab = shared.tab;
+  if (shared.om != null) S.om = clamp(+shared.om, 0, 3);
+  if (shared.day != null) S.day = clamp(+shared.day, 1, 365);
+  if (shared.Cl != null) S.Cl = clamp(+shared.Cl, 1, 40);
+}
+shareState(() => ({tab: S.tab, om: S.om, day: S.day, Cl: S.Cl}));
+let YEAR = monsoonYear({Cl: S.Cl, him: S.him});
+
+/* ============================================================================
+   The stage
+   ============================================================================ */
+const svg = $('stage');
+const GL = {cx: 290, cy: 345, R: 280, lam0: 75};
+function proj(phiDeg, lamDeg){
+  const p = phiDeg * D2R, l = (lamDeg - GL.lam0) * D2R;
+  return {x: GL.cx + GL.R * Math.cos(p) * Math.sin(l), y: GL.cy - GL.R * Math.sin(p), vis: Math.cos(p) * Math.cos(l) > 0};
+}
+function unproj(x, y){
+  const sp = (GL.cy - y) / GL.R; if (Math.abs(sp) >= 1) return null;
+  const cp = Math.sqrt(1 - sp * sp), sl = (x - GL.cx) / (GL.R * cp); if (Math.abs(sl) >= 1) return null;
+  return {phi: Math.asin(sp) * R2D, lam: GL.lam0 + Math.asin(sl) * R2D};
+}
+const yLat = phi => GL.cy - GL.R * Math.sin(phi * D2R);
+/* right panel, tab 1 */
+const BP = {x0: 620, x1: 770, w0: 800, w1: 975};
+const MP = {x: 640, y: 90, w: 320, h: 300};      // measurement plot, launch mode
+/* tab 2 map: 40–100° E, 30° S – 40° N */
+const MAP = {lon0: 40, lat1: 40, k: 9.1, ox: 10, oy: 20};
+const mP = (lon, lat) => [MAP.ox + (lon - MAP.lon0) * MAP.k, MAP.oy + (MAP.lat1 - lat) * MAP.k];
+const HV = {x: 620, y: 70, w: 350, h: 220};      // ITCZ against day
+const MR = {x: 620, y: 380, w: 350, h: 250};     // along the meridian
+const mry = l => MR.y + MR.h - (l + 30) / 60 * MR.h;
+const pts = (arr, P) => arr.map(p => P(p[0], p[1]).map(v => v.toFixed(1)).join(',')).join(' ');
+const INDIA = [[68.4,23.6],[69.1,22.8],[69.0,22.3],[69.6,21.6],[70.4,20.9],[71.0,20.7],[72.1,21.2],[72.3,21.9],[72.6,22.3],[72.7,21.1],[72.8,20.4],[72.8,19.0],[73.0,18.0],[73.3,17.0],[73.8,15.4],[74.1,14.8],[74.5,13.9],[74.8,12.9],[75.5,11.8],[75.8,11.2],[76.2,9.9],[76.5,9.2],[76.9,8.5],[77.5,8.1],[78.1,8.8],[78.6,9.1],[79.3,9.3],[79.85,10.3],[79.85,10.8],[79.83,11.9],[80.3,13.1],[80.1,14.4],[80.2,15.5],[80.8,15.9],[81.2,16.2],[82.3,16.9],[83.3,17.7],[84.1,18.3],[84.9,19.3],[85.8,19.8],[86.7,20.3],[87.0,21.0],[87.1,21.4],[87.5,21.6],[88.1,21.6],[88.9,21.6],[89.1,22.2],[88.7,23.3],[88.1,24.5],[88.3,25.2],[88.6,26.3],[89.8,26.0],[89.9,25.3],[92.0,25.1],[92.3,24.3],[91.4,24.1],[91.2,23.3],[91.8,22.9],[92.3,22.4],[92.6,21.95],[93.2,22.3],[93.4,23.6],[94.2,24.0],[94.6,25.4],[95.2,26.6],[96.1,27.2],[97.3,28.1],[96.4,29.2],[95.4,29.1],[94.0,28.9],[93.0,28.2],[92.0,27.8],[91.7,26.8],[89.8,26.7],[88.9,27.3],[88.7,28.1],[88.1,27.9],[88.1,26.4],[87.2,26.4],[85.8,26.6],[84.6,27.3],[83.3,27.4],[82.0,27.9],[81.0,28.4],[80.1,28.9],[80.4,29.7],[81.0,30.2],[79.9,30.9],[78.8,31.3],[78.4,32.5],[79.5,32.6],[78.9,33.4],[79.5,34.3],[80.3,35.4],[77.8,35.8],[75.9,36.8],[74.6,37.0],[73.0,36.2],[73.8,34.8],[73.6,33.8],[74.7,32.5],[74.6,31.9],[74.6,31.1],[73.9,30.4],[73.4,29.9],[72.9,29.0],[71.9,27.9],[70.6,28.0],[69.5,27.1],[70.1,26.6],[70.4,25.7],[71.1,24.6],[70.8,24.2],[69.5,24.3],[68.8,24.3]];
+/* the rest of the land round the Indian Ocean, coarsely */
+const REST = [[40,-15.5],[40.5,-15],[40,-10],[39.3,-6],[41,-2],[43,0.5],[46,2.5],[48,4.5],[49.5,7],[51,10.5],[51.3,11.8],[49,11.3],[45,10.4],[43.3,11.6],[43.3,12.7],[45,13],[48.5,14],[52,15.5],[55,17],[57,18.9],[58.5,20.5],[59.8,22.5],[58.5,23.6],[56.4,24.8],[56.3,26.4],[57.3,25.8],[61.6,25.2],[66.6,25.4],[67.4,23.9],[68.4,23.6],[68.8,24.3],[69.5,24.3],[70.8,24.2],[71.1,24.6],[70.4,25.7],[70.1,26.6],[69.5,27.1],[70.6,28.0],[71.9,27.9],[72.9,29.0],[73.4,29.9],[73.9,30.4],[74.6,31.1],[74.6,31.9],[74.7,32.5],[73.6,33.8],[73.8,34.8],[73.0,36.2],[74.6,37.0],[74.6,40],[40,40]];
+const EASTLAND = [[88.9,21.6],[89.6,21.9],[90.5,22.1],[91.1,22.5],[91.8,22.3],[92.0,21.4],[92.4,20.7],[92.9,20.1],[93.6,19.4],[94.3,18.3],[94.4,16.9],[94.2,16.0],[95.2,15.8],[96.3,16.6],[97.4,16.5],[97.7,15.0],[98.2,13.2],[98.5,10.0],[98.3,8.0],[99.5,6.5],[100,5.5],[100,40],[80.3,40],[80.3,35.4],[79.5,34.3],[78.9,33.4],[79.5,32.6],[78.4,32.5],[78.8,31.3],[79.9,30.9],[81.0,30.2],[80.4,29.7],[80.1,28.9],[81.0,28.4],[82.0,27.9],[83.3,27.4],[84.6,27.3],[85.8,26.6],[87.2,26.4],[88.1,26.4],[88.1,27.9],[88.7,28.1],[88.9,27.3],[89.8,26.7],[91.7,26.8],[92.0,27.8],[93.0,28.2],[94.0,28.9],[95.4,29.1],[96.4,29.2],[97.3,28.1],[96.1,27.2],[95.2,26.6],[94.6,25.4],[94.2,24.0],[93.4,23.6],[93.2,22.3],[92.6,21.95],[92.3,22.4],[91.8,22.9],[91.2,23.3],[91.4,24.1],[92.3,24.3],[92.0,25.1],[89.9,25.3],[89.8,26.0],[88.6,26.3],[88.3,25.2],[88.1,24.5],[88.7,23.3],[89.1,22.2]];
+const SRILANKA = [[79.9,9.8],[80.3,9.8],[81.0,8.9],[81.9,7.4],[81.7,6.4],[81.1,6.1],[80.1,6.1],[79.8,7.0],[79.8,8.2]];
+const MADAGASCAR = [[49.3,-12],[50.5,-15.5],[49.5,-18],[47.5,-25],[45,-25.5],[43.6,-22],[44.4,-17],[46.3,-15.8],[48,-13.5]];
+const SUMATRA = [[95.3,5.6],[97.8,4.8],[100,2.3],[100,-1.5],[99.2,-1],[98,1.5],[96.5,3.5]];
+
+function build(){
+  let mer = '';
+  for (let l = -60; l <= 60; l += 30) { const rx = Math.abs(GL.R * Math.sin(l * D2R)); mer += `<ellipse cx="${GL.cx}" cy="${GL.cy}" rx="${rx.toFixed(1)}" ry="${GL.R}" fill="none" stroke="#c9d6df" stroke-width=".8"/>`; }
+  let par = '';
+  for (let p = -60; p <= 60; p += 30) { const y = yLat(p), hw = GL.R * Math.cos(p * D2R);
+    par += `<line x1="${(GL.cx - hw).toFixed(1)}" x2="${(GL.cx + hw).toFixed(1)}" y1="${y.toFixed(1)}" y2="${y.toFixed(1)}" stroke="${p === 0 ? '#8aa0ad' : '#c9d6df'}" stroke-width="${p === 0 ? 1.4 : .8}"/>` +
+      `<text x="${(GL.cx - hw - 6).toFixed(1)}" y="${(y + 4).toFixed(1)}" text-anchor="end" class="m" font-size="10.5" fill="#7c878c">${p === 0 ? '0°' : Math.abs(p) + '°' + (p > 0 ? 'N' : 'S')}</text>`; }
+  const india = pts(INDIA, (lo, la) => { const q = proj(la, lo); return [q.x, q.y]; });
+  svg.innerHTML = `
+  <defs>
+    <radialGradient id="gGlobe" cx="42%" cy="38%"><stop offset="0" stop-color="#f5f9fb"/><stop offset=".8" stop-color="#dfe9ef"/><stop offset="1" stop-color="#c7d6df"/></radialGradient>
+    <clipPath id="clipGlobe"><circle cx="${GL.cx}" cy="${GL.cy}" r="${GL.R}"/></clipPath>
+    <marker id="ah" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto"><path d="M0 0L10 5L0 10z" fill="#1f5f7a"/></marker>
+    <marker id="ahR" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0L10 5L0 10z" fill="#6a3fc2"/></marker>
+  </defs>
+  <g id="scGlobe">
+    <rect x="0" y="0" width="1000" height="680" fill="#f7f6f3"/>
+    <text x="20" y="28" class="serif" font-size="17" fill="#1d2327">The Earth, seen from above the equator at 75° E</text>
+    <circle cx="${GL.cx}" cy="${GL.cy}" r="${GL.R}" fill="url(#gGlobe)" stroke="#9fb2bf"/>
+    <g clip-path="url(#clipGlobe)">
+      <g id="belts"></g>
+      ${mer}${par}
+      <polygon points="${india}" fill="#d9c79a" stroke="#a08c5c" stroke-width=".8" opacity=".75"/>
+      <g id="trails" fill="none" stroke-linecap="round" stroke-linejoin="round"></g>
+      <path id="launchPath" fill="none" stroke="#6a3fc2" stroke-width="2.2"/>
+      <circle id="launchDot" r="5" fill="#6a3fc2" stroke="#fff" stroke-width="1.5" opacity="0"/>
+      <line id="aim" stroke="#6a3fc2" stroke-width="2.5" marker-end="url(#ahR)" opacity="0"/>
+    </g>
+    <path d="M${GL.cx - 60} ${GL.cy - GL.R - 16} A 60 12 0 0 0 ${GL.cx + 60} ${GL.cy - GL.R - 16}" fill="none" stroke="#7c878c" stroke-width="1.5" marker-end="url(#ah)"/>
+    <text x="${GL.cx + 70}" y="${GL.cy - GL.R - 16}" class="m" font-size="11" fill="#7c878c" id="spinLab">spins west to east</text>
+    <circle id="globeHit" cx="${GL.cx}" cy="${GL.cy}" r="${GL.R}" fill="transparent"/>
+    <!-- right: belts mode -->
+    <g id="rightBelts">
+      <text x="${BP.x0}" y="${GL.cy - GL.R - 22}" fill="#4a555b" font-size="12.5" font-weight="700" letter-spacing=".06em">SURFACE PRESSURE</text>
+      <text x="${BP.w0}" y="${GL.cy - GL.R - 22}" fill="#4a555b" font-size="12.5" font-weight="700" letter-spacing=".06em">MEASURED WIND</text>
+      <text x="${BP.w0}" y="${GL.cy - GL.R - 8}" fill="#7c878c" font-size="10.5">mean of the parcels in each band</text>
+      <g id="bpAxes"></g>
+      <path id="bpCurve" fill="none" stroke="#6a3fc2" stroke-width="2.4"/>
+      <g id="bpLabs" font-size="11" font-weight="700"></g>
+      <g id="wBars"></g>
+      <g id="wLabs" font-size="10.5"></g>
+    </g>
+    <!-- right: launch mode -->
+    <g id="rightLaunch">
+      <text x="${MP.x}" y="${MP.y - 30}" fill="#4a555b" font-size="12.5" font-weight="700" letter-spacing=".06em">MEASURED: TIME FOR ONE LOOP</text>
+      <text x="${MP.x}" y="${MP.y - 14}" fill="#7c878c" font-size="11">Each dot is one launch; the line is the least-squares fit through 0</text>
+      <g id="mpAxes"></g><path id="mpTheory" stroke="#8a94a6" stroke-width="1.5" stroke-dasharray="5 4" fill="none"/><path id="mpFit" stroke="#6a3fc2" stroke-width="2.2" fill="none"/><g id="mpDots"></g>
+      <text x="${MP.x}" y="${MP.y + MP.h + 72}" fill="#4a555b" font-size="12.5" font-weight="700" letter-spacing=".06em">CLOSE-UP OF THE LAST PARCEL</text>
+      <rect x="${MP.x}" y="${MP.y + MP.h + 82}" width="${MP.w}" height="170" fill="#ffffff" stroke="#e2ded2"/>
+      <path id="closeUp" fill="none" stroke="#6a3fc2" stroke-width="2"/>
+      <circle id="closeDot" r="4.5" fill="#6a3fc2"/>
+      <text id="closeLab" x="${MP.x + 8}" y="${MP.y + MP.h + 100}" class="m" font-size="11" fill="#4a555b"></text>
+    </g>
+  </g>
+
+  <g id="scMonsoon" display="none">
+    <rect x="0" y="0" width="1000" height="680" fill="#f7f6f3"/>
+    <rect x="${MAP.ox}" y="${MAP.oy}" width="${60 * MAP.k}" height="${70 * MAP.k}" fill="#cfe3ee"/>
+    <g fill="#e2d6b4" stroke="#a08c5c" stroke-width=".8">
+      <polygon points="${pts(REST, mP)}"/><polygon points="${pts(EASTLAND, mP)}"/><polygon points="${pts(INDIA, mP)}" fill="#e9dcb4"/>
+      <polygon points="${pts(SRILANKA, mP)}"/><polygon points="${pts(MADAGASCAR, mP)}"/><polygon points="${pts(SUMATRA, mP)}"/>
+    </g>
+    <g id="mapGrid"></g>
+    <rect id="rainBelt" x="${MAP.ox}" width="${60 * MAP.k}" fill="#2c6f9a" opacity=".16"/>
+    <line id="itczLine" x1="${MAP.ox}" x2="${MAP.ox + 60 * MAP.k}" stroke="#2c6f9a" stroke-width="2.4" stroke-dasharray="10 6"/>
+    <text id="itczLab" x="${MAP.ox + 8}" fill="#1c4f70" font-size="12.5" font-weight="700"></text>
+    <g id="arrows" stroke="#1d2327" stroke-width="1.8" fill="none" stroke-linecap="round"></g>
+    <g id="kerala"></g>
+    <text x="${MAP.ox + 8}" y="${MAP.oy + 18}" class="serif" font-size="16" fill="#1d2327">Surface winds, from the model along 75° E</text>
+    <!-- ITCZ through the year -->
+    <text x="${HV.x}" y="${HV.y - 30}" fill="#4a555b" font-size="12.5" font-weight="700" letter-spacing=".06em">THE ITCZ THROUGH THE YEAR</text>
+    <text x="${HV.x}" y="${HV.y - 14}" fill="#7c878c" font-size="11">Latitude of the warmest air, day by day. Diamonds: the book.</text>
+    <g id="hvAxes"></g><path id="hvCurve" fill="none" stroke="#2c6f9a" stroke-width="2.6"/><path id="hvGhost" fill="none" stroke="#8a94a6" stroke-width="1.4" stroke-dasharray="5 4"/>
+    <g id="hvBook"></g><line id="hvNow" y1="${HV.y}" y2="${HV.y + HV.h}" stroke="#1d2327" stroke-width="1.3"/><circle id="hvDot" r="5" fill="#2c6f9a" stroke="#fff" stroke-width="2"/>
+    <!-- along the meridian today -->
+    <text x="${MR.x}" y="${MR.y - 30}" fill="#4a555b" font-size="12.5" font-weight="700" letter-spacing=".06em">ALONG 75° E TODAY</text>
+    <text x="${MR.x}" y="${MR.y - 14}" fill="#7c878c" font-size="11">Temperature, pressure and the steady wind at each latitude</text>
+    <g id="mrAxes"></g><path id="mrT" fill="none" stroke="#d6453d" stroke-width="2.2"/><path id="mrP" fill="none" stroke="#6a3fc2" stroke-width="2.2"/>
+    <g id="mrWind" stroke="#1d2327" stroke-width="1.6" fill="none" stroke-linecap="round"></g>
+    <line id="mrItcz" x1="${MR.x}" x2="${MR.x + MR.w}" stroke="#2c6f9a" stroke-dasharray="6 4" stroke-width="1.5"/>
+  </g>`;
+  buildMonsoonStatic();
+}
+function buildMonsoonStatic(){
+  let g = '';
+  for (let la = -20; la <= 30; la += 10) { const [, y] = mP(40, la); g += `<line x1="${MAP.ox}" x2="${MAP.ox + 60 * MAP.k}" y1="${y}" y2="${y}" stroke="#ffffff" stroke-opacity="${la === 0 ? .9 : .5}" stroke-width="${la === 0 ? 1.4 : .8}"/><text x="${MAP.ox + 60 * MAP.k - 4}" y="${y - 3}" text-anchor="end" class="m" font-size="10" fill="#4a6a80">${la === 0 ? 'equator' : Math.abs(la) + '°' + (la > 0 ? 'N' : 'S')}</text>`; }
+  for (let lo = 50; lo <= 90; lo += 10) { const [x] = mP(lo, 0); g += `<text x="${x}" y="${MAP.oy + 70 * MAP.k - 6}" text-anchor="middle" class="m" font-size="10" fill="#4a6a80">${lo}°E</text>`; }
+  $('mapGrid').innerHTML = g;
+  const [kx, ky] = mP(76.9, 8.5), [, y10] = mP(40, 10);
+  $('kerala').innerHTML = `<circle cx="${kx}" cy="${ky}" r="4" fill="#d6453d" stroke="#fff" stroke-width="1.5"/><text x="${kx - 8}" y="${ky + 14}" text-anchor="end" font-size="11" font-weight="700" fill="#9b2a24">Kerala</text>`;
+  /* ITCZ-through-the-year axes */
+  const hx = d => HV.x + (d - 1) / 364 * HV.w, hy = l => HV.y + HV.h - (l + 15) / 45 * HV.h;
+  let a = `<rect x="${HV.x}" y="${HV.y}" width="${HV.w}" height="${HV.h}" fill="#fff" stroke="#e2ded2"/>`;
+  for (let l = -10; l <= 30; l += 10) a += `<line x1="${HV.x}" x2="${HV.x + HV.w}" y1="${hy(l).toFixed(1)}" y2="${hy(l).toFixed(1)}" stroke="${l === 0 ? '#b9c3c7' : '#efece4'}"/><text x="${HV.x - 6}" y="${(hy(l) + 4).toFixed(1)}" text-anchor="end" class="m" font-size="10" fill="#7c878c">${l}°</text>`;
+  a += `<line x1="${HV.x}" x2="${HV.x + HV.w}" y1="${hy(10).toFixed(1)}" y2="${hy(10).toFixed(1)}" stroke="#d6453d" stroke-dasharray="3 4" stroke-width="1"/><text x="${HV.x + HV.w - 4}" y="${(hy(10) - 4).toFixed(1)}" text-anchor="end" font-size="10" fill="#9b2a24">Kerala, 10° N</text>`;
+  for (let m = 0; m < 12; m += 2) { const d = MDAYS.slice(0, m).reduce((s, x) => s + x, 0) + 1; a += `<text x="${hx(d).toFixed(1)}" y="${HV.y + HV.h + 14}" class="m" font-size="10" fill="#7c878c">${MONTHS[m].slice(0, 3)}</text>`; }
+  $('hvAxes').innerHTML = a;
+  /* the book: Kerala by 1 June; the ITCZ at 20–25° N in July (NCERT Class 11, India: Physical Environment, Ch 4) */
+  $('hvBook').innerHTML = `<path d="M${hx(152)} ${hy(10) - 6} l6 6 l-6 6 l-6 -6z" fill="#e8890c"/><rect x="${hx(182).toFixed(1)}" y="${hy(25).toFixed(1)}" width="${(hx(212) - hx(182)).toFixed(1)}" height="${(hy(20) - hy(25)).toFixed(1)}" fill="#e8890c" opacity=".25"/>` +
+    `<text x="${(hx(197)).toFixed(1)}" y="${(hy(25) - 4).toFixed(1)}" text-anchor="middle" font-size="10" fill="#9a5a00">July: 20–25° N</text>`;
+  let m = `<rect x="${MR.x}" y="${MR.y}" width="${MR.w}" height="${MR.h}" fill="#fff" stroke="#e2ded2"/>`;
+  for (let l = -30; l <= 30; l += 10) m += `<line x1="${MR.x}" x2="${MR.x + MR.w}" y1="${mry(l).toFixed(1)}" y2="${mry(l).toFixed(1)}" stroke="${l === 0 ? '#b9c3c7' : '#f1efe8'}"/><text x="${MR.x - 6}" y="${(mry(l) + 4).toFixed(1)}" text-anchor="end" class="m" font-size="10" fill="#7c878c">${l === 0 ? '0°' : Math.abs(l) + '°' + (l > 0 ? 'N' : 'S')}</text>`;
+  m += `<rect x="${MR.x}" y="${mry(30).toFixed(1)}" width="${MR.w}" height="${(mry(8) - mry(30)).toFixed(1)}" fill="#e9dcb4" opacity=".35"/><text x="${MR.x + MR.w - 4}" y="${(mry(8) - 4).toFixed(1)}" text-anchor="end" font-size="10" fill="#8a6a3a">India (land)</text>`;
+  m += `<text x="${MR.x + 6}" y="${MR.y + MR.h + 16}" font-size="10.5" fill="#b5352d">— temperature</text><text x="${MR.x + 110}" y="${MR.y + MR.h + 16}" font-size="10.5" fill="#6a3fc2">— pressure</text><text x="${MR.x + 200}" y="${MR.y + MR.h + 16}" font-size="10.5" fill="#1d2327">→ wind (arrows)</text>`;
+  $('mrAxes').innerHTML = m;
+}
+
+/* ---- tab 1: the globe -------------------------------------------------------- */
+const om = () => S.om * OMEGA_E;
+const itczLat = () => 0.4 * S.sunLat;
+let PARCELS = [], LAUNCH = null;
+function seedParcels(){
+  const rnd = Play.mulberry32(3);
+  PARCELS = Array.from({length: 170}, () => newParcel(rnd));
+}
+function newParcel(rnd = Math.random){
+  return {phi: Math.asin(rnd() * 1.9 - 0.95), lam: (GL.lam0 - 80 + rnd() * 160) * D2R, u: 0, v: 0, age: rnd() * 8, trail: []};
+}
+function stepGlobe(dtReal){
+  if (!S.running || !S.locked) return;
+  const hours = dtReal * (S.fast ? 12 : 3);
+  S.simH += hours;
+  const n = Math.max(1, Math.ceil(hours * 3600 / 600)), dt = hours * 3600 / n;
+  if (S.mode === 'belts') {
+    const force = phiDeg => beltForce(phiDeg, om(), itczLat());
+    for (const p of PARCELS) {
+      for (let i = 0; i < n; i++) rk4(p, dt, om(), force, 1 / 86400);
+      p.age += hours / 24;
+      p.trail.push([p.phi * R2D, p.lam * 1]);
+      if (p.trail.length > 14) p.trail.shift();
+      if (p.age > 9) Object.assign(p, newParcel(), {age: 0, trail: []});
+    }
+  }
+  if (LAUNCH && !LAUNCH.done) {
+    const s = LAUNCH.s;
+    for (let i = 0; i < n; i++) {
+      rk4(s, dt, om(), null, 0);
+      LAUNCH.t += dt;
+      const th = Math.atan2(s.v, s.u); LAUNCH.acc += Math.atan2(Math.sin(th - LAUNCH.th0), Math.cos(th - LAUNCH.th0)); LAUNCH.th0 = th;
+      LAUNCH.sum += s.phi; LAUNCH.n++;
+      if (LAUNCH.n % 3 === 0) LAUNCH.path.push([s.phi * R2D, s.lam * 1]);
+      if (Math.abs(LAUNCH.acc) >= 2 * Math.PI) { finishLoop(true); break; }
+      if (LAUNCH.t > 300 * 3600) { finishLoop(false); break; }
+    }
+  }
+}
+/* parcels and trails keep λ in radians, as the integrator does; drawing converts */
+function finishLoop(closed){
+  const L = LAUNCH; L.done = true;
+  const meanLat = L.sum / L.n * R2D, hours = L.t / 3600;
+  if (closed && Math.abs(meanLat) > 3) {
+    S.loops.push({lat: meanLat, hours, om: S.om, sense: Math.sign(L.acc)});
+    if (meanLat > 0) S.senses.n = Math.sign(L.acc); else S.senses.s = Math.sign(L.acc);
+    sound('chime');
+  } else sound('oops');
+  L.result = {closed, meanLat, hours, sense: Math.sign(L.acc)};
+  track('loop', {closed, lat: +meanLat.toFixed(1), hours: +hours.toFixed(2), om: S.om});
+  paintLaunchPanel(); whyGlobe(); checkGlobe();
+}
+function launch(phiDeg, lamDeg, eastV, northV){
+  const s = {phi: phiDeg * D2R, lam: lamDeg * D2R, u: eastV, v: northV};
+  LAUNCH = {s, t: 0, acc: 0, th0: Math.atan2(northV, eastV), sum: 0, n: 0, path: [[phiDeg, lamDeg * D2R]], done: false, start: {phiDeg, speed: Math.hypot(eastV, northV)}};
+  sound('whoosh'); track('launch', {lat: +phiDeg.toFixed(1), speed: +Math.hypot(eastV, northV).toFixed(1)});
+}
+function fitLoops(){
+  const pts = S.loops.filter(l => Math.abs(l.om - S.om) < 1e-6);
+  if (!pts.length) return null;
+  let sxy = 0, sxx = 0;
+  for (const p of pts) { const x = 1 / Math.abs(Math.sin(p.lat * D2R)); sxy += x * p.hours; sxx += x * x; }
+  const k = sxy / sxx, theory = S.om > 0 ? Math.PI / om() / 3600 : Infinity;
+  const xs = pts.map(p => 1 / Math.abs(Math.sin(p.lat * D2R)));
+  return {k, theory, n: pts.length, spread: Math.max(...xs) - Math.min(...xs), pts};
+}
+function drawBeltsPanel(){
+  const h = hadleyEdge(om()), it = itczLat();
+  /* shaded belts on the globe: low pressure blue, high orange, from p(φ) */
+  /* one gradient down the globe: blue where the pressure is low, orange where it is high */
+  let stops = '';
+  for (let p = 90; p >= -90; p -= 2) {
+    const v = (beltP(p, om(), it) - BELT.p0) / BELT.amp;          // −1 low … +1 high
+    const off = (yLat(p) - (GL.cy - GL.R)) / (2 * GL.R);
+    stops += `<stop offset="${off.toFixed(4)}" stop-color="${v < 0 ? '#3f7fd8' : '#e8890c'}" stop-opacity="${(Math.abs(v) * 0.3).toFixed(3)}"/>`;
+  }
+  $('belts').innerHTML = S.mode === 'belts' ? `<defs><linearGradient id="gBelt" gradientUnits="userSpaceOnUse" x1="0" y1="${GL.cy - GL.R}" x2="0" y2="${GL.cy + GL.R}">${stops}</linearGradient></defs>` +
+    `<rect x="${GL.cx - GL.R}" y="${GL.cy - GL.R}" width="${2 * GL.R}" height="${2 * GL.R}" fill="url(#gBelt)"/>` : '';
+  let ax = `<line x1="${BP.x0}" x2="${BP.x1}" y1="${GL.cy + GL.R + 8}" y2="${GL.cy + GL.R + 8}" stroke="#9aa3a6"/>`;
+  for (const pv of [1006, 1011, 1016]) { const x = BP.x0 + (pv - 1005) / 12 * (BP.x1 - BP.x0); ax += `<text x="${x.toFixed(1)}" y="${GL.cy + GL.R + 22}" text-anchor="middle" class="m" font-size="10" fill="#7c878c">${pv}</text>`; }
+  ax += `<text x="${BP.x1}" y="${GL.cy + GL.R + 36}" text-anchor="end" font-size="10" fill="#7c878c">hPa</text>`;
+  ax += `<line x1="${(BP.w0 + BP.w1) / 2}" x2="${(BP.w0 + BP.w1) / 2}" y1="${GL.cy - GL.R}" y2="${GL.cy + GL.R}" stroke="#9aa3a6"/>`;
+  ax += `<text x="${BP.w0}" y="${GL.cy + GL.R + 22}" font-size="10" fill="#7c878c">← from the east</text><text x="${BP.w1}" y="${GL.cy + GL.R + 22}" text-anchor="end" font-size="10" fill="#7c878c">from the west →</text>`;
+  for (const p of [-60, -30, 0, 30, 60]) ax += `<line x1="${BP.x0}" x2="${BP.w1}" y1="${yLat(p).toFixed(1)}" y2="${yLat(p).toFixed(1)}" stroke="#efece4"/>`;
+  $('bpAxes').innerHTML = ax;
+  let c = '';
+  for (let p = -89; p <= 89; p += 1) { const x = BP.x0 + (beltP(p, om(), it) - 1005) / 12 * (BP.x1 - BP.x0); c += (p > -89 ? 'L' : 'M') + x.toFixed(1) + ' ' + yLat(p).toFixed(1); }
+  $('bpCurve').setAttribute('d', c);
+  /* H and L at the belts */
+  let labs = '';
+  for (let p = -88; p <= 88; p += 1) {
+    const a = beltP(p - 1, om(), it), m = beltP(p, om(), it), z = beltP(p + 1, om(), it);
+    if (m < a && m <= z) labs += `<text x="${BP.x0 - 6}" y="${(yLat(p) + 4).toFixed(1)}" text-anchor="end" fill="#3f7fd8">L</text>`;
+    if (m > a && m >= z) labs += `<text x="${BP.x0 - 6}" y="${(yLat(p) + 4).toFixed(1)}" text-anchor="end" fill="#c46a00">H</text>`;
+  }
+  $('bpLabs').innerHTML = labs;
+  $('gHH').textContent = h >= 89.9 ? 'the pole' : fmt(h, 1) + '°';
+  $('gCells').textContent = cellsPerHemisphere(om());
+  $('gJet').textContent = h >= 89.9 ? '—' : fmt(angMomWind(om(), h), 0) + ' m/s';
+}
+/* the measured wind: mean u in 10° bands, from the parcels themselves */
+function measuredBands(){
+  const bands = [];
+  for (let b = -90; b < 90; b += 10) {
+    const ps = PARCELS.filter(p => p.phi * R2D >= b && p.phi * R2D < b + 10 && p.age > 2);
+    bands.push({lat: b + 5, n: ps.length, u: ps.length ? ps.reduce((s, p) => s + p.u, 0) / ps.length : 0, v: ps.length ? ps.reduce((s, p) => s + p.v, 0) / ps.length : 0});
+  }
+  return bands;
+}
+function paintGlobe(){
+  const vis = [];
+  if (S.mode === 'belts') {
+    let tr = '';
+    for (const p of PARCELS) {
+      if (p.trail.length < 2) continue;
+      let d = '', started = false;
+      for (const [la, lo] of p.trail) { const q = proj(la, lo * R2D); if (!q.vis) { started = false; continue; } d += (started ? 'L' : 'M') + q.x.toFixed(1) + ' ' + q.y.toFixed(1); started = true; }
+      if (d) tr += `<path d="${d}" stroke="${p.u < 0 ? '#1f7a68' : '#b3372f'}" stroke-width="1.6" opacity=".75"/>`;
+    }
+    $('trails').innerHTML = tr;
+    const bands = measuredBands(), mid = (BP.w0 + BP.w1) / 2, k = (BP.w1 - BP.w0) / 2 / 14;
+    $('wBars').innerHTML = bands.map(b => { const y0 = yLat(b.lat + 4), y1 = yLat(b.lat - 4), w = clamp(b.u, -14, 14) * k;
+      return b.n ? `<rect x="${(w < 0 ? mid + w : mid).toFixed(1)}" y="${y0.toFixed(1)}" width="${Math.abs(w).toFixed(1)}" height="${(y1 - y0).toFixed(1)}" fill="${b.u < 0 ? '#1f7a68' : '#b3372f'}" opacity=".75"/>` : ''; }).join('');
+    const name = b => b.u < -0.8 ? (Math.abs(b.lat) < 32 ? 'trades' : 'polar easterlies') : b.u > 0.8 ? 'westerlies' : '';
+    let last = '';
+    $('wLabs').innerHTML = bands.filter(b => b.n && Math.abs(b.lat) < 85).map(b => { const nm = name(b); const show = nm && nm !== last; last = nm; return show ? b : null; }).filter(Boolean).map(b => `<text x="${b.u < 0 ? mid + 4 : mid - 4}" y="${(yLat(b.lat) + 4).toFixed(1)}" text-anchor="${b.u < 0 ? 'start' : 'end'}" fill="#4a555b">${name(b)}</text>`).join('');
+  } else { $('trails').innerHTML = ''; }
+  if (LAUNCH) {
+    let d = '', started = false;
+    for (const [la, lo] of LAUNCH.path) { const q = proj(la, lo * R2D); if (!q.vis) { started = false; continue; } d += (started ? 'L' : 'M') + q.x.toFixed(1) + ' ' + q.y.toFixed(1); started = true; }
+    $('launchPath').setAttribute('d', d);
+    const q = proj(LAUNCH.s.phi * R2D, LAUNCH.s.lam * R2D);
+    $('launchDot').setAttribute('cx', q.x.toFixed(1)); $('launchDot').setAttribute('cy', q.y.toFixed(1)); $('launchDot').setAttribute('opacity', q.vis ? 1 : 0);
+    paintCloseUp();
+  } else { $('launchPath').setAttribute('d', ''); $('launchDot').setAttribute('opacity', 0); }
+  $('rightBelts').setAttribute('display', S.mode === 'belts' ? 'inline' : 'none');
+  $('rightLaunch').setAttribute('display', S.mode === 'launch' ? 'inline' : 'none');
+  $('spinLab').textContent = S.om > 0 ? `west to east, one turn: ${fmt(23.934 / S.om, 1)} h` : 'not spinning';
+}
+function paintCloseUp(){
+  const L = LAUNCH, box = {x: MP.x, y: MP.y + MP.h + 82, w: MP.w, h: 170};
+  if (!L || L.path.length < 2) { $('closeUp').setAttribute('d', ''); return; }
+  const la0 = L.path[0][0], lo0 = L.path[0][1] * R2D, k = 111.2, kx = 111.2 * Math.cos(la0 * D2R);
+  const xy = L.path.map(([la, lo]) => [(lo * R2D - lo0) * kx, (la - la0) * k]);
+  let mnx = 0, mxx = 0, mny = 0, mxy = 0; for (const [x, y] of xy) { mnx = Math.min(mnx, x); mxx = Math.max(mxx, x); mny = Math.min(mny, y); mxy = Math.max(mxy, y); }
+  const sc = Math.min((box.w - 30) / Math.max(1, mxx - mnx), (box.h - 40) / Math.max(1, mxy - mny));
+  const cx = box.x + box.w / 2 - (mnx + mxx) / 2 * sc, cy = box.y + 22 + (box.h - 40) / 2 + (mny + mxy) / 2 * sc;
+  $('closeUp').setAttribute('d', xy.map(([x, y], i) => (i ? 'L' : 'M') + (cx + x * sc).toFixed(1) + ' ' + (cy - y * sc).toFixed(1)).join(''));
+  const [lx, ly] = xy[xy.length - 1];
+  $('closeDot').setAttribute('cx', (cx + lx * sc).toFixed(1)); $('closeDot').setAttribute('cy', (cy - ly * sc).toFixed(1));
+  const turned = Math.abs(L.acc) * R2D;
+  $('closeLab').textContent = `${fmt(L.t / 3600, 1)} h · turned ${fmt(turned, 0)}° ${L.acc < 0 ? 'clockwise' : 'anticlockwise'} · ${fmt((mxx - mnx), 0)} km across`;
+}
+function paintLaunchPanel(){
+  const fit = fitLoops();
+  const maxX = 6, maxY = Math.max(60, ...(fit ? fit.pts.map(p => p.hours * 1.1) : [0]));
+  const X = x => MP.x + x / maxX * MP.w, Y = y => MP.y + MP.h - y / maxY * MP.h;
+  let a = `<rect x="${MP.x}" y="${MP.y}" width="${MP.w}" height="${MP.h}" fill="#fff" stroke="#e2ded2"/>`;
+  for (let x = 1; x <= maxX; x++) a += `<line x1="${X(x).toFixed(1)}" x2="${X(x).toFixed(1)}" y1="${MP.y}" y2="${MP.y + MP.h}" stroke="#f1efe8"/><text x="${X(x).toFixed(1)}" y="${MP.y + MP.h + 14}" text-anchor="middle" class="m" font-size="10" fill="#7c878c">${x}</text>`;
+  const ys = maxY > 150 ? 50 : 20;
+  for (let y = ys; y < maxY; y += ys) a += `<line x1="${MP.x}" x2="${MP.x + MP.w}" y1="${Y(y).toFixed(1)}" y2="${Y(y).toFixed(1)}" stroke="#f1efe8"/><text x="${MP.x - 5}" y="${(Y(y) + 4).toFixed(1)}" text-anchor="end" class="m" font-size="10" fill="#7c878c">${y}</text>`;
+  a += `<text x="${MP.x + MP.w}" y="${MP.y + MP.h + 30}" text-anchor="end" font-size="11" fill="#4a555b">1 / sin(mean latitude)</text><text x="${MP.x - 5}" y="${MP.y - 4}" text-anchor="end" font-size="11" fill="#4a555b">hours</text>`;
+  $('mpAxes').innerHTML = a;
+  const th = S.om > 0 ? Math.PI / om() / 3600 : null;
+  $('mpTheory').setAttribute('d', th ? `M${X(0)} ${Y(0)} L${X(maxX)} ${Y(Math.min(maxY, th * maxX)).toFixed(1)}` : '');
+  if (th && th * maxX > maxY) $('mpTheory').setAttribute('d', `M${X(0)} ${Y(0)} L${X(maxY / th).toFixed(1)} ${Y(maxY)}`);
+  $('mpFit').setAttribute('d', fit && fit.n >= 2 ? `M${X(0)} ${Y(0)} L${X(Math.min(maxX, maxY / fit.k)).toFixed(1)} ${Y(Math.min(maxY, fit.k * maxX)).toFixed(1)}` : '');
+  $('mpDots').innerHTML = S.loops.map(p => { const x = 1 / Math.abs(Math.sin(p.lat * D2R)); const cur = Math.abs(p.om - S.om) < 1e-6;
+    return `<circle cx="${X(Math.min(maxX, x)).toFixed(1)}" cy="${Y(Math.min(maxY, p.hours)).toFixed(1)}" r="5" fill="${cur ? (p.lat > 0 ? '#6a3fc2' : '#e0567a') : '#c3c9cc'}" stroke="#fff" stroke-width="1.2"/>`; }).join('');
+  $('gN').textContent = fit ? fit.n : 0;
+  $('gFit').textContent = fit && fit.n >= 2 ? fmt(fit.k, 2) + ' h' : '—';
+  $('gTh').textContent = th ? fmt(th, 2) + ' h' : '∞ (no spin)';
+}
+function whyGlobe(){
+  if (!S.locked || S.tab !== 'globe') return;
+  let t = '';
+  if (S.mode === 'launch') {
+    if (!LAUNCH) t = `<p>Press on the globe and drag to throw a parcel of air. With no pressure force and no friction, only the Earth's spin acts: the Coriolis term f = 2Ω sin φ.</p>`;
+    else {
+      const L = LAUNCH, lat = L.done && L.result ? L.result.meanLat : L.s.phi * R2D;
+      t = `<p>The parcel started at ${fmt(L.start.phiDeg, 1)}° at ${fmt(L.start.speed, 0)} m/s. It is turning <b>${L.acc < 0 ? 'clockwise, to its right' : 'anticlockwise, to its left'}</b>${lat > 0 ? ' in the northern hemisphere' : ' in the southern hemisphere'}.</p>`;
+      if (L.done && L.result) {
+        const r = L.result;
+        t += r.closed && Math.abs(r.meanLat) > 3 ? `<p>One full loop took <b class="mono">${fmt(r.hours, 2)} h</b> at a mean latitude of ${fmt(r.meanLat, 1)}°. The law 2π/f = π/(Ω sin φ) predicts <b class="mono">${S.om > 0 ? fmt(Math.PI / (om() * Math.abs(Math.sin(r.meanLat * D2R))) / 3600, 2) : '∞'} h</b>.</p>`
+          : `<p>It never closed a loop. Near the equator f = 2Ω sin φ is almost zero, and the parcel slides into the other hemisphere where the turning reverses: <b>the f-plane law breaks down here</b>.</p>`;
+      }
+    }
+    const fit = fitLoops();
+    if (fit && fit.n >= 2) t += `<p>Fitted through the origin: period = <b class="mono">${fmt(fit.k, 2)} h</b> / sin φ. Theory π/Ω = <b class="mono">${fmt(fit.theory, 2)} h</b> (${fmt(100 * (fit.k / fit.theory - 1), 1)} % off).</p>`;
+  } else {
+    const h = hadleyEdge(om()), bands = measuredBands();
+    const b15 = bands.find(b => b.lat === 15), b45 = bands.find(b => b.lat === 45);
+    t = `<p>Held–Hou puts the edge of the Hadley cell at <b class="mono">${h >= 89.9 ? '90° (one cell)' : fmt(h, 1) + '°'}</b> for this spin, so the belts are ${cellsPerHemisphere(om())} per hemisphere.</p>`;
+    if (b15 && b15.n) t += `<p>Measured at 15° N: the parcels average <b class="mono">u = ${fmt(b15.u, 1)}, v = ${fmt(b15.v, 1)} m/s</b>, a wind from the <b>${compass(fromBearing(b15.u, b15.v))}</b>. `;
+    if (b45 && b45.n) t += `At 45° N: <b class="mono">u = ${fmt(b45.u, 1)} m/s</b>, from the <b>${compass(fromBearing(b45.u, b45.v))}</b>.</p>`;
+    t += S.om < 0.05 ? `<p>Without spin nothing turns the air: it runs straight down the pressure gradient, from pole to equator.</p>`
+      : `<p>Air pushed towards low pressure is turned to its right (north) or left (south) until friction and the Coriolis force share the balance: that is why the trades blow <b>from the north-east</b> north of the ITCZ and <b>from the south-east</b> south of it.</p>`;
+  }
+  $('why').innerHTML = t; $('whyCard').hidden = false;
+}
+let beltClock = 0;
+function checkGlobe(){
+  if (!S.locked) return;
+  if (S.senses.n < 0 && S.senses.s > 0) discover('right');
+  const fit = fitLoops();
+  if (fit && fit.n >= 3 && fit.spread >= 0.4 && Math.abs(fit.k / fit.theory - 1) < 0.03) discover('inertial');
+  if (S.mode === 'belts' && beltClock > 6) {
+    const bands = measuredBands(), g = l => bands.find(b => b.lat === l) || {n: 0};
+    if (S.om > 0.8 && S.om < 1.25 && g(15).u < -1 && g(-15).u < -1 && g(45).u > 1 && g(-45).u > 1 && g(15).v < 0 && g(-15).v > 0) discover('trades');
+    if (cellsPerHemisphere(om()) === 1 && g(45).v < -0.3 && g(65).v < -0.3 && g(-45).v > 0.3 && g(-65).v > 0.3) discover('onecell');
+  }
+}
+
+/* ---- tab 2: the monsoon ------------------------------------------------------ */
+let GHOSTYEAR = null;
+function recomputeYear(){
+  YEAR = monsoonYear({Cl: S.Cl, him: S.him});
+  drawYear(); paintMonsoon();
+}
+function drawYear(){
+  const hx = d => HV.x + (d - 1) / 364 * HV.w, hy = l => HV.y + HV.h - (clamp(l, -15, 30) + 15) / 45 * HV.h;
+  $('hvCurve').setAttribute('d', YEAR.itcz.map((l, i) => (i ? 'L' : 'M') + hx(i + 1).toFixed(1) + ' ' + hy(l).toFixed(1)).join(''));
+  const std = (Math.abs(S.Cl - 4.5) > 0.01 || !S.him) ? (GHOSTYEAR || (GHOSTYEAR = monsoonYear({Cl: 4.5, him: true}))) : null;
+  $('hvGhost').setAttribute('d', std ? std.itcz.map((l, i) => (i ? 'L' : 'M') + hx(i + 1).toFixed(1) + ' ' + hy(l).toFixed(1)).join('') : '');
+}
+function paintMonsoon(){
+  const om2 = S.om2 * OMEGA_E, m = meridian(YEAR, S.day, om2);
+  const hx = d => HV.x + (d - 1) / 364 * HV.w, hy = l => HV.y + HV.h - (clamp(l, -15, 30) + 15) / 45 * HV.h;
+  $('hvNow').setAttribute('x1', hx(S.day).toFixed(1)); $('hvNow').setAttribute('x2', hx(S.day).toFixed(1));
+  $('hvDot').setAttribute('cx', hx(S.day).toFixed(1)); $('hvDot').setAttribute('cy', hy(m.itcz).toFixed(1));
+  /* ITCZ on the map */
+  const [, yI] = mP(40, m.itcz);
+  $('itczLine').setAttribute('y1', yI.toFixed(1)); $('itczLine').setAttribute('y2', yI.toFixed(1));
+  $('rainBelt').setAttribute('y', (yI - 3 * MAP.k).toFixed(1)); $('rainBelt').setAttribute('height', (6 * MAP.k).toFixed(1));
+  $('itczLab').setAttribute('y', (yI - 7).toFixed(1));
+  $('itczLab').textContent = S.locked ? `ITCZ ${fmt(Math.abs(m.itcz), 1)}° ${m.itcz >= 0 ? 'N' : 'S'}${m.itcz > 15 ? ' — the monsoon trough' : ''}` : '';
+  /* arrows: the model's steady wind at each latitude, drawn along the ocean and India */
+  let ar = '';
+  if (S.locked) for (let la = -25; la <= 30; la += 5) for (let lo = 55; lo <= 95; lo += 7.5) {
+    const w = windAtLat(m, la), sp = Math.hypot(w.u, w.v); if (sp < 0.3) continue;
+    const L = clamp(sp * 3.2, 6, 34), ux = w.u / sp, uy = w.v / sp;
+    const [x, y] = mP(lo, la), x1 = x - ux * L / 2, y1 = y + uy * L / 2, x2 = x + ux * L / 2, y2 = y - uy * L / 2;
+    const ang = Math.atan2(y2 - y1, x2 - x1);
+    ar += `<path d="M${x1.toFixed(1)} ${y1.toFixed(1)}L${x2.toFixed(1)} ${y2.toFixed(1)}M${(x2 - 6 * Math.cos(ang - .45)).toFixed(1)} ${(y2 - 6 * Math.sin(ang - .45)).toFixed(1)}L${x2.toFixed(1)} ${y2.toFixed(1)}L${(x2 - 6 * Math.cos(ang + .45)).toFixed(1)} ${(y2 - 6 * Math.sin(ang + .45)).toFixed(1)}" stroke="${w.u > 0.3 ? '#b3372f' : w.u < -0.3 ? '#1f7a68' : '#1d2327'}"/>`;
+  }
+  $('arrows').innerHTML = ar;
+  /* the meridian panel */
+  const Tmin = Math.min(...m.T), Tmax = Math.max(...m.T), pmin = Math.min(...m.p), pmax = Math.max(...m.p);
+  const tx = T => MR.x + 10 + (T - Tmin) / Math.max(1, Tmax - Tmin) * (MR.w * 0.42), px = p => MR.x + MR.w * 0.5 + (p - pmin) / Math.max(0.5, pmax - pmin) * (MR.w * 0.25);
+  $('mrT').setAttribute('d', S.locked ? m.lat.map((l, i) => (i ? 'L' : 'M') + tx(m.T[i]).toFixed(1) + ' ' + mry(l).toFixed(1)).join('') : '');
+  $('mrP').setAttribute('d', S.locked ? m.lat.map((l, i) => (i ? 'L' : 'M') + px(m.p[i]).toFixed(1) + ' ' + mry(l).toFixed(1)).join('') : '');
+  let wd = '';
+  if (S.locked) for (let l = -28; l <= 28; l += 4) { const w = windAtLat(m, l), sp = Math.hypot(w.u, w.v); if (sp < 0.2) continue;
+    const x = MR.x + MR.w - 30, y = mry(l), L = clamp(sp * 2.4, 5, 26), ux = w.u / sp, uy = w.v / sp, x2 = x + ux * L / 2, y2 = y - uy * L / 2, ang = Math.atan2(-uy, ux);
+    wd += `<path d="M${(x - ux * L / 2).toFixed(1)} ${(y + uy * L / 2).toFixed(1)}L${x2.toFixed(1)} ${y2.toFixed(1)}M${(x2 - 5 * Math.cos(ang - .45)).toFixed(1)} ${(y2 - 5 * Math.sin(ang - .45)).toFixed(1)}L${x2.toFixed(1)} ${y2.toFixed(1)}L${(x2 - 5 * Math.cos(ang + .45)).toFixed(1)} ${(y2 - 5 * Math.sin(ang + .45)).toFixed(1)}"/>`; }
+  $('mrWind').innerHTML = wd;
+  $('mrItcz').setAttribute('y1', mry(m.itcz).toFixed(1)); $('mrItcz').setAttribute('y2', mry(m.itcz).toFixed(1));
+  /* readouts */
+  const w5 = windAtLat(m, -5), w10 = windAtLat(m, 10);
+  const wtxt = w => { const sp = Math.hypot(w.u, w.v); return sp < 0.3 ? 'calm' : `${fmt(sp, 1)} m/s from ${compass(fromBearing(w.u, w.v))}`; };
+  $('dateOut').textContent = dateOf(S.day);
+  $('day').value = S.day; $('dayOut').textContent = S.day;
+  $('cl').value = S.Cl; $('clOut').textContent = fmt(S.Cl, 1) + ' m';
+  $('om2').value = S.om2; $('om2Out').textContent = fmt(S.om2, 2);
+  $('btnHim').setAttribute('aria-pressed', S.him); $('btnHim').textContent = S.him ? '⛰ Himalaya and Tibet' : '▭ Flat land to the north';
+  $('mItcz').textContent = S.locked ? `${fmt(Math.abs(m.itcz), 1)}° ${m.itcz >= 0 ? 'N' : 'S'}` : '—';
+  $('mOnset').textContent = S.locked ? (YEAR.onset ? dateOf(YEAR.onset) : 'never') : '—';
+  $('mJul').textContent = S.locked ? `${fmt(YEAR.jul15, 1)}°` : '—';
+  $('mMax').textContent = S.locked ? `${fmt(YEAR.max, 1)}°` : '—';
+  $('mW5s').textContent = S.locked ? wtxt(w5) : '—';
+  $('mW10n').textContent = S.locked ? wtxt(w10) : '—';
+  whyMonsoon(m, w5, w10); checkMonsoon(m, w5, w10);
+}
+function whyMonsoon(m, w5, w10){
+  if (!S.locked || S.tab !== 'monsoon') return;
+  const f10 = 2 * S.om2 * OMEGA_E * Math.sin(10 * D2R);
+  let t = `<p>On <b>${dateOf(S.day)}</b> the warmest air along 75° E is at <b>${fmt(Math.abs(m.itcz), 1)}° ${m.itcz >= 0 ? 'N' : 'S'}</b>: the lowest pressure, where the winds meet and rise. That is the ITCZ.</p>`;
+  if (m.itcz > 10) t += `<p>It has moved north over hot India. Air from the southern Indian Ocean is drawn across the equator towards it. South of the equator the Coriolis force turns it left: <b>${compass(fromBearing(w5.u, w5.v))}</b> at 5° S. Across the equator f changes sign and turns it right: at Kerala it blows from the <b>${compass(fromBearing(w10.u, w10.v))}</b>, with f = <span class="mono">${f10.toExponential(2)}</span> s⁻¹. That is the south-west monsoon.</p>`;
+  else t += `<p>The ITCZ is south of Kerala, so north of it the winds blow away from India, from the <b>${compass(fromBearing(w10.u, w10.v))}</b> at 10° N: the dry north-east monsoon.</p>`;
+  if (S.Cl > 20) t += `<p>With land as slow to warm as the sea, India never gets hot enough to pull the ITCZ north: it reaches only <b>${fmt(YEAR.max, 1)}°</b>.</p>`;
+  if (!S.him) t += `<p>Without the high, cold plateau the hottest land is at the northern edge: the ITCZ runs up to <b>${fmt(YEAR.max, 1)}°</b> and sits there.</p>`;
+  if (S.om2 < 0.05) t += `<p>With no spin there is no Coriolis turning at all: the air crosses the equator and <b>goes straight north</b>.</p>`;
+  $('why').innerHTML = t; $('whyCard').hidden = false;
+}
+let EXPLAINED = false;
+function checkMonsoon(m, w5, w10){
+  if (!S.locked) return;
+  const b5 = fromBearing(w5.u, w5.v), b10 = fromBearing(w10.u, w10.v);
+  const se = Math.hypot(w5.u, w5.v) > 0.5 && b5 > 100 && b5 < 170, sw = Math.hypot(w10.u, w10.v) > 0.5 && b10 > 190 && b10 < 260;
+  if (se && sw && S.om2 > 0.5 && m.itcz > 10) {
+    discover('sw');
+    if (!EXPLAINED && POE) { EXPLAINED = true;
+      POE.explain(`On ${dateOf(S.day)} the model's wind at 5° S blows from the ${compass(b5)} (${fmt(Math.hypot(w5.u, w5.v), 1)} m/s) and at 10° N from the <b>${compass(b10)}</b> (${fmt(Math.hypot(w10.u, w10.v), 1)} m/s). ` +
+        `The same air, drawn north towards the ITCZ at ${fmt(m.itcz, 1)}° N, is turned left while f &lt; 0 and right once f &gt; 0. The south-east trades become the south-west monsoon.`); }
+  }
+  if (S.Cl <= 6 && S.him && S.om2 > 0.8 && YEAR.onset && S.day >= YEAR.onset && m.itcz >= 10) discover('onset');
+  if (S.Cl >= 30 && YEAR.max < 10) discover('nomonsoon');
+}
+
+/* ============================================================================
+   Controls
+   ============================================================================ */
+build();
+seedParcels();
+function setTab(t){
+  S.tab = t;
+  for (const b of $('tabs').children) b.setAttribute('aria-pressed', b.dataset.tab === t);
+  $('scGlobe').setAttribute('display', t === 'globe' ? 'inline' : 'none');
+  $('scMonsoon').setAttribute('display', t === 'monsoon' ? 'inline' : 'none');
+  $('ctlGlobe').hidden = t !== 'globe'; $('ctlMonsoon').hidden = t !== 'monsoon';
+  $('whyCard').hidden = true;
+  if (t === 'globe') { drawBeltsPanel(); paintGlobe(); paintLaunchPanel(); whyGlobe(); } else { drawYear(); paintMonsoon(); }
+  track('tab', {tab: t});
+}
+$('tabs').addEventListener('click', e => { const b = e.target.closest('[data-tab]'); if (b && !b.disabled) { sound('tick'); setTab(b.dataset.tab); } });
+function setMode(md){
+  S.mode = md; beltClock = 0;
+  for (const b of $('modeSeg').children) b.setAttribute('aria-pressed', b.dataset.mode === md);
+  $('modeNote').innerHTML = md === 'launch' ? 'Drag across the globe to launch a parcel of air: where you press is where it starts, the drag is its direction and speed. No pressure force, no friction: only the spin turns it.'
+    : 'Each parcel is pushed from high to low pressure and slowed by friction (1/day), on the spinning Earth. The bars measure the wind they end up with.';
+  if (md === 'belts') seedParcels();
+  drawBeltsPanel(); paintGlobe(); whyGlobe();
+}
+$('modeSeg').addEventListener('click', e => { const b = e.target.closest('[data-mode]'); if (b && !b.disabled) { sound('tick'); setMode(b.dataset.mode); track('mode', {mode: b.dataset.mode}); } });
+$('om').addEventListener('input', e => { S.om = +e.target.value; $('omOut').textContent = fmt(S.om, 2); beltClock = 0; drawBeltsPanel(); paintLaunchPanel(); paintGlobe(); });
+$('om').addEventListener('change', () => track('spin', {om: S.om}));
+$('sunLat').addEventListener('input', e => { S.sunLat = +e.target.value; $('sunOut').textContent = fmt(S.sunLat, 1) + '°'; drawBeltsPanel(); });
+$('btnRun').addEventListener('click', () => { S.running = !S.running; $('btnRun').textContent = S.running ? '❚❚ Pause' : '▶ Run'; sound('tick'); });
+$('btnFast').addEventListener('click', () => { S.fast = !S.fast; $('btnFast').setAttribute('aria-pressed', S.fast); sound('tick'); });
+$('btnClear').addEventListener('click', () => { S.loops = []; paintLaunchPanel(); whyGlobe(); sound('tick'); });
+/* Launch: press on the globe, drag, release. */
+let AIM = null;
+drag($('globeHit'), svg, {
+  start(p){ if (!S.locked || S.mode !== 'launch') return false; const q = unproj(p.x, p.y); if (!q) return false; AIM = {x: p.x, y: p.y, q};
+    $('aim').setAttribute('x1', p.x); $('aim').setAttribute('y1', p.y); $('aim').setAttribute('x2', p.x); $('aim').setAttribute('y2', p.y); $('aim').setAttribute('opacity', 1); },
+  move(p){ if (!AIM) return; $('aim').setAttribute('x2', p.x.toFixed(1)); $('aim').setAttribute('y2', p.y.toFixed(1)); },
+  end(p){ if (!AIM) return; $('aim').setAttribute('opacity', 0);
+    const dx = p.x - AIM.x, dy = p.y - AIM.y, L = Math.hypot(dx, dy);
+    if (L > 8) { const sp = clamp(L / 6, 5, 25); launch(AIM.q.phi, AIM.q.lam, sp * dx / L, -sp * dy / L); }
+    AIM = null; paintGlobe(); whyGlobe(); },
+});
+
+$('day').addEventListener('input', e => { S.day = +e.target.value; setYearPlaying(false); paintMonsoon(); });
+$('cl').addEventListener('input', e => { S.Cl = +e.target.value; $('clOut').textContent = fmt(S.Cl, 1) + ' m'; });
+$('cl').addEventListener('change', () => { recomputeYear(); track('landCapacity', {Cl: S.Cl}); });
+$('om2').addEventListener('input', e => { S.om2 = +e.target.value; paintMonsoon(); });
+$('btnHim').addEventListener('click', () => { S.him = !S.him; sound('pop'); recomputeYear(); track('himalaya', {on: S.him}); });
+function setYearPlaying(on){ S.playing = on; $('btnYear').textContent = on ? '❚❚ Pause' : '▶ Play the year'; }
+$('btnYear').addEventListener('click', () => { setYearPlaying(!S.playing); sound('tick'); });
+
+function lockControls(lock){
+  for (const id of ['om', 'sunLat', 'btnRun', 'btnFast', 'btnClear', 'day', 'cl', 'om2', 'btnHim', 'btnYear']) $(id).disabled = lock;
+  for (const b of $$('#modeSeg button')) b.disabled = lock;
+  $('gate').hidden = !lock;
+}
+
+let paintAcc = 0;
+loop(dt => {
+  if (S.tab === 'globe') {
+    stepGlobe(dt);
+    if (S.mode === 'belts' && S.running && S.locked) beltClock += dt * (S.fast ? 12 : 3) / 24;
+    paintAcc += dt;
+    if (paintAcc > 0.05) { paintAcc = 0; paintGlobe(); }
+    if (S.locked && S.mode === 'belts' && Math.random() < 0.05) { checkGlobe(); whyGlobe(); }
+  } else if (S.playing) {
+    S.day += dt * 40; if (S.day > 365) S.day -= 365; S.day = Math.round(S.day * 10) / 10; paintMonsoon();
+  }
+});
+
+/* ============================================================================
+   Start
+   ============================================================================ */
+findings($('finds'), [
+  {id: 'right',     icon: '↻', label: 'Turned right in the north, left in the south', hint: 'Launch a parcel in each hemisphere'},
+  {id: 'inertial',  icon: 'T', label: 'Loop time = π / (Ω sin φ), measured',          hint: 'Measure three loops at different latitudes'},
+  {id: 'trades',    icon: '≋', label: 'Trades, westerlies and polar easterlies',     hint: 'Switch the pressure belts on'},
+  {id: 'onecell',   icon: '1', label: 'A slowly spinning Earth has one cell',         hint: 'Slow the Earth right down'},
+  {id: 'sw',        icon: '↗', label: 'South-east trades become the south-west monsoon', hint: 'Watch the wind cross the equator in July'},
+  {id: 'onset',     icon: '☂', label: 'The monsoon reaches Kerala',                  hint: 'Play the year from May'},
+  {id: 'nomonsoon', icon: '✕', label: 'Break it: land as slow as the sea',            hint: 'Give India the sea’s heat capacity'},
+], () => toast('All seven. You have built the general circulation and the monsoon from the equations of motion.', 4200));
+
+const POE = predict($('poe'), {
+  id: 'cross-equator',
+  q: 'In June the south-east trade winds of the southern Indian Ocean cross the equator, heading for India. When they reach Kerala, which way do they blow?',
+  options: [
+    {id: 'se', text: 'Still from the south-east: nothing turns them.'},
+    {id: 'sw', text: 'From the south-west.', right: true},
+    {id: 's',  text: 'Straight from the south.'},
+    {id: 'ne', text: 'From the north-east.'},
+  ],
+  onLock(){
+    S.locked = true;
+    lockControls(false);
+    say('Now measure it. Launch parcels on the spinning Earth, then heat India.');
+    drawBeltsPanel(); paintGlobe(); paintLaunchPanel(); whyGlobe(); paintMonsoon();
+  },
+});
+lockControls(!POE.locked);
+if (!Play.FF('predict')) S.locked = true;
+drawYear();
+setTab(S.tab);
+$('om').value = S.om; $('omOut').textContent = fmt(S.om, 2);
+window.PG_STATE = () => JSON.parse(JSON.stringify({tab: S.tab, mode: S.mode, om: S.om, loops: S.loops, senses: S.senses, day: S.day, Cl: S.Cl, om2: S.om2, him: S.him,
+  launch: LAUNCH && {t: LAUNCH.t, acc: LAUNCH.acc, done: LAUNCH.done, result: LAUNCH.result || null}, year: {onset: YEAR.onset, jul15: YEAR.jul15, max: YEAR.max, jan: YEAR.jan}, bands: measuredBands()}));
+window.PG_MODEL = {hadleyEdge, cellsPerHemisphere, angMomWind, beltP, beltForce, rk4, inertialLoop, steadyWind, fromBearing, compass, monsoonYear, meridian, windAtLat, OMEGA_E, A_E};
+</script>
+</body>
+</html>

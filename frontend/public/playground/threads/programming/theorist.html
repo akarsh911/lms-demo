@@ -1,0 +1,773 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tracing a Program</title>
+<meta name="description" content="CBSE Class 11-12 Computer Science: step a real Python interpreter through a loop, a recursive function and a scope example, watching the call stack and every variable; then push and pop a stack until it runs out and watch an exception get raised, caught and cleaned up by a finally block.">
+<link rel="icon" href="../../favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600&family=Inter:wght@400;500;600;700&family=Nunito:wght@500;700;800&family=Newsreader:opsz,wght@6..72,400;6..72,500&family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="../../play.css">
+<style>
+.pg-stage{align-self:start; min-height:0}
+svg text.m{font-family:var(--font-mono)}
+svg text.serif{font-family:"Newsreader",Georgia,serif}
+.tabs{display:flex; gap:4px; padding:10px 12px 0; border-bottom:1px solid var(--hair); background:var(--card)}
+.tab{border:1px solid transparent; border-bottom:none; background:none; padding:8px 14px; border-radius:8px 8px 0 0; cursor:pointer;
+  font-family:"Newsreader",Georgia,serif; font-size:16px; color:var(--ink-3); margin-bottom:-1px}
+.tab[aria-selected="true"]{background:var(--card); border-color:var(--hair); color:var(--ink); border-bottom:1px solid var(--card)}
+.gate{position:absolute; left:0; right:0; top:48px; bottom:0; display:grid; place-items:center; pointer-events:none}
+.gate span{background:rgba(29,35,39,.85); color:#fff; padding:10px 16px; border-radius:99px; font-weight:600; font-size:14px}
+.chips{display:flex; flex-wrap:wrap; gap:6px; margin:4px 0 8px}
+.chip{border:1px solid var(--hair-2); background:var(--card); border-radius:99px; padding:4px 11px; font-size:12.5px; cursor:pointer; font-weight:600; color:var(--ink-2)}
+.chip[aria-pressed="true"]{background:var(--accent-soft); border-color:var(--accent); color:var(--ink)}
+.chip:disabled{opacity:.45; cursor:default}
+.inrow{display:flex; gap:6px; align-items:center; margin:6px 0; font-size:13px; color:var(--ink-2)}
+.inrow input, .inrow select{font:inherit; font-family:var(--font-mono); padding:4px 6px; border:1px solid var(--hair-2); border-radius:6px; background:var(--card); color:var(--ink)}
+.inrow input{width:56px; text-align:right}
+.transport{display:flex; gap:5px; align-items:center; flex-wrap:wrap; margin:8px 0}
+.transport button{min-height:32px; padding:0 10px; font-size:13px}
+.transport input[type=range]{flex:1; min-width:80px}
+.readout{font-family:var(--font-mono); font-size:12.5px; color:var(--ink-2); margin:4px 0 8px}
+.note{font-size:12.5px; color:var(--ink-3); margin:6px 0 0}
+.why p{font-size:13.5px; margin-bottom:.55em}
+svg .click{cursor:pointer}
+@media (max-width:1180px) and (min-width:981px){ .pg-main.wide-side{grid-template-columns:minmax(0,1fr) 340px} }
+</style>
+</head>
+<body>
+<header class="pg-top"></header>
+
+<div class="pg-intro">
+  <h1>Tracing a program</h1>
+  <p>A computer runs a program one statement at a time. Pick a small Python program — a loop that
+     adds up numbers, a function that calls itself, or a function that quietly shadows a variable
+     outside it (CBSE Class 11 Computer Science: flow of control) — and step through it. Every
+     variable, every call stack frame and every printed line comes from a real little interpreter
+     running your program, not a recording. On the second tab, push and pop values from a stack
+     built from a Python list until it runs out, and watch an exception get raised, caught, and
+     cleaned up by a <code>finally</code> block (Class 12: functions, scope, exception handling,
+     and a stack implemented with a list).</p>
+</div>
+
+<main class="pg-main wide-side">
+  <section class="pg-stage" id="stageWrap">
+    <div class="tabs" role="tablist">
+      <button class="tab" role="tab" id="tabT" aria-selected="true">Trace</button>
+      <button class="tab" role="tab" id="tabX" aria-selected="false">Stack &amp; exceptions</button>
+    </div>
+    <svg id="stageT" viewBox="0 0 1000 700" role="img" aria-label="Source code with the current line highlighted, the call stack of frames beside it, and the program's output"></svg>
+    <svg id="stageX" viewBox="0 0 1000 700" role="img" aria-label="Source code, a stack of values being pushed and popped, and the program's output" hidden></svg>
+    <div class="gate" id="gate"><span>Make your prediction first →</span></div>
+  </section>
+
+  <aside class="pg-side">
+    <div id="poeT"></div>
+    <div id="poeX" hidden></div>
+
+    <div class="card" id="cardT">
+      <div class="kicker">Program</div>
+      <div class="chips" id="progT"></div>
+      <div class="inrow" id="paramRowT">
+        <span id="paramLabelT">n =</span>
+        <button class="btn sm" id="decT">− 1</button><button class="btn sm" id="incT">+ 1</button>
+        <input id="paramT" type="number" step="1" aria-label="parameter">
+      </div>
+      <div class="kicker" style="margin-top:6px">Step through it</div>
+      <div class="transport" id="transportT">
+        <button class="btn sm" id="resetT" title="Back to the start">⏮</button>
+        <button class="btn sm" id="backT" title="Back one line">◀ Back</button>
+        <button class="btn sm" id="stepT" title="Run the next line">Step ▶</button>
+        <button class="btn sm" id="playT" title="Play">▶ Play</button>
+        <button class="btn sm" id="endT" title="Run to the end">End ⏭</button>
+      </div>
+      <input type="range" id="rangeT" min="0" max="0" value="0" step="1" style="width:100%" aria-label="step">
+      <div class="readout" id="readoutT"></div>
+      <p class="note">Click a line of code to run straight to it. Change the program or the number, and it runs again from scratch.</p>
+    </div>
+
+    <div class="card" id="cardX" hidden>
+      <div class="kicker">Program</div>
+      <div class="chips" id="progX"></div>
+      <div class="inrow" id="paramRowX">
+        <span id="paramLabelX">pops =</span>
+        <button class="btn sm" id="decX">− 1</button><button class="btn sm" id="incX">+ 1</button>
+        <input id="paramX" type="number" step="1" aria-label="parameter">
+      </div>
+      <div class="kicker" style="margin-top:6px">Step through it</div>
+      <div class="transport" id="transportX">
+        <button class="btn sm" id="resetX" title="Back to the start">⏮</button>
+        <button class="btn sm" id="backX" title="Back one line">◀ Back</button>
+        <button class="btn sm" id="stepX" title="Run the next line">Step ▶</button>
+        <button class="btn sm" id="playX" title="Play">▶ Play</button>
+        <button class="btn sm" id="endX" title="Run to the end">End ⏭</button>
+      </div>
+      <input type="range" id="rangeX" min="0" max="0" value="0" step="1" style="width:100%" aria-label="step">
+      <div class="readout" id="readoutX"></div>
+      <p class="note">Click a line of code to run straight to it.</p>
+    </div>
+
+    <div class="card why" id="whyCard" hidden>
+      <div class="kicker">What the model says</div>
+      <div id="why"></div>
+    </div>
+
+    <div class="card"><div class="kicker">To find</div><div id="finds"></div></div>
+  </aside>
+</main>
+
+<script src="../../play.js"></script>
+<script>
+'use strict';
+const {$, esc, clamp, sound, track, toast, predict, findings, discover, found,
+       shareState, sharedState, mount, reduced, sleep} = Play;
+mount({thread: 'programming', band: 'theorist'});
+
+/* MODEL:start ==================================================================
+   A small Python-subset interpreter (tokenizer -> indentation-based parser -> tree-walking
+   executor) that ACTUALLY RUNS the program shown and records one snapshot of the whole machine
+   state (every call-stack frame, its locals, the output so far) after every statement it
+   executes. Stepping the UI forward or back only moves an index into that recorded trace: the
+   trace itself is never written by hand, it is what the interpreter did for the program and the
+   parameter the learner chose. Supports: assignment (=, +=, -=, *=, //=), if/elif/else, while,
+   for x in range(...), for x in <list>, def/return, try/except [as name]/else/finally,
+   raise Name("msg"), pass, break, continue, print(...), len(), range(...), list literals and
+   indexing, list.append/pop, arithmetic (+ - * / // % **), comparisons, and/or/not. Errors the
+   interpreter itself cannot recover from (division by zero, an empty pop, an undefined name) are
+   raised as real Python-style exceptions that unwind the call stack exactly as CPython's would,
+   so try/except/finally around them behaves for real.
+   ============================================================================ */
+function splitLines(src){
+  return src.replace(/\r\n/g, '\n').split('\n').map((text, i) => {
+    const stripped = text.replace(/#.*$/, '');
+    const trimmed = stripped.trim();
+    const indent = stripped.length - stripped.replace(/^ */, '').length;
+    return {no: i + 1, text, trimmed, indent, blank: trimmed === ''};
+  });
+}
+const KEYWORDS = new Set(['if','elif','else','while','for','in','def','return','try','except','as','finally','raise','pass','break','continue','and','or','not','True','False','None']);
+function tokenize(line){
+  const s = line, toks = []; let i = 0;
+  while (i < s.length) {
+    const c = s[i];
+    if (c === ' ') { i++; continue; }
+    if (/[0-9]/.test(c) || (c === '.' && /[0-9]/.test(s[i + 1] || ''))) {
+      let j = i; while (j < s.length && /[0-9.]/.test(s[j])) j++;
+      toks.push({t: 'num', v: parseFloat(s.slice(i, j))}); i = j; continue;
+    }
+    if (/[A-Za-z_]/.test(c)) {
+      let j = i; while (j < s.length && /[A-Za-z0-9_]/.test(s[j])) j++;
+      const w = s.slice(i, j);
+      toks.push({t: KEYWORDS.has(w) ? 'kw' : 'name', v: w}); i = j; continue;
+    }
+    if (c === '"' || c === "'") {
+      const q = c; let j = i + 1, buf = '';
+      while (j < s.length && s[j] !== q) { buf += s[j]; j++; }
+      toks.push({t: 'str', v: buf}); i = j + 1; continue;
+    }
+    const two = s.slice(i, i + 2);
+    if (['==', '!=', '<=', '>=', '//', '**', '+=', '-=', '*=', '/='].includes(two)) { toks.push({t: 'op', v: two}); i += 2; continue; }
+    if ('+-*/%()[],:.<>='.includes(c)) { toks.push({t: 'op', v: c}); i++; continue; }
+    throw new Error(`cannot tokenize '${c}' in: ${s}`);
+  }
+  return toks;
+}
+function parseExprTokens(toks){
+  let p = 0;
+  const peek = () => toks[p];
+  const eat = v => { if (!toks[p] || (v && toks[p].v !== v)) throw new Error('expected ' + v); return toks[p++]; };
+  function primary(){
+    const t = peek();
+    if (!t) throw new Error('unexpected end of expression');
+    if (t.t === 'num') { p++; return {k: 'num', v: t.v}; }
+    if (t.t === 'str') { p++; return {k: 'str', v: t.v}; }
+    if (t.t === 'kw' && t.v === 'True') { p++; return {k: 'bool', v: true}; }
+    if (t.t === 'kw' && t.v === 'False') { p++; return {k: 'bool', v: false}; }
+    if (t.t === 'kw' && t.v === 'None') { p++; return {k: 'none'}; }
+    if (t.v === '(') { p++; const e = orExpr(); eat(')'); return postfix(e); }
+    if (t.v === '[') { p++; const els = []; if (peek() && peek().v !== ']') { els.push(orExpr()); while (peek() && peek().v === ',') { p++; els.push(orExpr()); } } eat(']'); return postfix({k: 'list', items: els}); }
+    if (t.t === 'name') { p++; return postfix({k: 'name', v: t.v}); }
+    throw new Error('unexpected token ' + JSON.stringify(t));
+  }
+  function postfix(node){
+    for (;;) {
+      const t = peek();
+      if (t && t.v === '[') { p++; const idx = orExpr(); eat(']'); node = {k: 'index', obj: node, idx}; continue; }
+      if (t && t.v === '.') { p++; const name = eat().v; eat('('); const args = []; if (peek() && peek().v !== ')') { args.push(orExpr()); while (peek() && peek().v === ',') { p++; args.push(orExpr()); } } eat(')'); node = {k: 'method', obj: node, name, args}; continue; }
+      if (t && t.v === '(' && node.k === 'name') { p++; const args = []; if (peek() && peek().v !== ')') { args.push(orExpr()); while (peek() && peek().v === ',') { p++; args.push(orExpr()); } } eat(')'); node = {k: 'call', name: node.v, args}; continue; }
+      break;
+    }
+    return node;
+  }
+  function unary(){
+    const t = peek();
+    if (t && t.v === '-') { p++; return {k: 'neg', a: unary()}; }
+    if (t && t.t === 'kw' && t.v === 'not') { p++; return {k: 'not', a: unary()}; }
+    return primary();
+  }
+  function power(){ const a = unary(); if (peek() && peek().v === '**') { p++; return {k: 'bin', op: '**', a, b: unary()}; } return a; }
+  function term(){ let a = power(); while (peek() && ['*', '/', '//', '%'].includes(peek().v)) { const op = eat().v; a = {k: 'bin', op, a, b: power()}; } return a; }
+  function addExpr(){ let a = term(); while (peek() && ['+', '-'].includes(peek().v)) { const op = eat().v; a = {k: 'bin', op, a, b: term()}; } return a; }
+  function cmp(){ let a = addExpr(); const ops = ['==', '!=', '<=', '>=', '<', '>']; while (peek() && ops.includes(peek().v)) { const op = eat().v; a = {k: 'cmp', op, a, b: addExpr()}; } return a; }
+  function andExpr(){ let a = cmp(); while (peek() && peek().t === 'kw' && peek().v === 'and') { p++; a = {k: 'and', a, b: cmp()}; } return a; }
+  function orExpr(){ let a = andExpr(); while (peek() && peek().t === 'kw' && peek().v === 'or') { p++; a = {k: 'or', a, b: andExpr()}; } return a; }
+  const node = orExpr();
+  if (p !== toks.length) throw new Error('trailing tokens');
+  return node;
+}
+const parseExpr = s => parseExprTokens(tokenize(s));
+function parseHeader(line){
+  const toks = tokenize(line.trimmed);
+  const t0 = toks[0];
+  if (t0 && t0.t === 'kw') {
+    if (t0.v === 'if' || t0.v === 'elif') return {type: t0.v, line: line.no, cond: parseExprTokens(toks.slice(1, -1))};
+    if (t0.v === 'else') return {type: 'else', line: line.no};
+    if (t0.v === 'while') return {type: 'while', line: line.no, cond: parseExprTokens(toks.slice(1, -1))};
+    if (t0.v === 'for') {
+      const inIdx = toks.findIndex(t => t.t === 'kw' && t.v === 'in');
+      return {type: 'for', line: line.no, varName: toks[1].v, iter: parseExprTokens(toks.slice(inIdx + 1, -1))};
+    }
+    if (t0.v === 'def') {
+      const name = toks[1].v; let i = 3; const params = [];
+      while (toks[i] && toks[i].v !== ')') { if (toks[i].t === 'name') params.push(toks[i].v); i++; }
+      return {type: 'def', line: line.no, name, params};
+    }
+    if (t0.v === 'return') { const rest = toks.slice(1); return {type: 'return', line: line.no, expr: rest.length ? parseExprTokens(rest) : null}; }
+    if (t0.v === 'try') return {type: 'try', line: line.no};
+    if (t0.v === 'except') {
+      let exType = null, alias = null, i = 1;
+      if (toks[i] && toks[i].t === 'name') { exType = toks[i].v; i++; if (toks[i] && toks[i].t === 'kw' && toks[i].v === 'as') { alias = toks[i + 1].v; i += 2; } }
+      return {type: 'except', line: line.no, exType, alias};
+    }
+    if (t0.v === 'finally') return {type: 'finally', line: line.no};
+    if (t0.v === 'raise') return {type: 'raise', line: line.no, exType: toks[1].v, arg: toks.slice(3, -1).length ? parseExprTokens(toks.slice(3, -1)) : null};
+    if (t0.v === 'pass') return {type: 'pass', line: line.no};
+    if (t0.v === 'break') return {type: 'break', line: line.no};
+    if (t0.v === 'continue') return {type: 'continue', line: line.no};
+  }
+  const eqIdx = (() => { let depth = 0; for (let i = 0; i < toks.length; i++) { const v = toks[i].v; if ('(['.includes(v)) depth++; if (')]'.includes(v)) depth--; if (depth === 0 && ['=', '+=', '-=', '*=', '//='].includes(v) && toks[i].t === 'op') return i; } return -1; })();
+  if (eqIdx >= 0) return {type: 'assign', line: line.no, op: toks[eqIdx].v, target: parseExprTokens(toks.slice(0, eqIdx)), value: parseExprTokens(toks.slice(eqIdx + 1))};
+  return {type: 'expr', line: line.no, expr: parseExpr(line.trimmed)};
+}
+function parseBlock(lines, i, indent){
+  const stmts = [];
+  while (i < lines.length) {
+    while (i < lines.length && lines[i].blank) i++;
+    if (i >= lines.length) break;
+    const ln = lines[i];
+    if (ln.indent < indent) break;
+    if (ln.indent > indent) throw new Error('unexpected indent at line ' + ln.no);
+    const stmt = parseHeader(ln); i++;
+    const NEEDS_BODY = new Set(['if', 'elif', 'else', 'while', 'for', 'def', 'try', 'except', 'finally']);
+    if (NEEDS_BODY.has(stmt.type)) {
+      let j = i; while (j < lines.length && lines[j].blank) j++;
+      const childIndent = j < lines.length ? lines[j].indent : indent + 1;
+      if (childIndent <= indent) throw new Error('expected an indented block after line ' + stmt.line);
+      const [body, ni] = parseBlock(lines, i, childIndent);
+      stmt.body = body; i = ni;
+    }
+    if (stmt.type === 'if') {
+      stmt.clauses = [{cond: stmt.cond, body: stmt.body}];
+      for (;;) {
+        let j = i; while (j < lines.length && lines[j].blank) j++;
+        if (j < lines.length && lines[j].indent === indent && /^(elif|else)\b/.test(lines[j].trimmed)) {
+          const clause = parseHeader(lines[j]); let k = j + 1, m = k; while (m < lines.length && lines[m].blank) m++;
+          const ci = m < lines.length ? lines[m].indent : indent + 1;
+          const [body2, ni2] = parseBlock(lines, k, ci); clause.body = body2;
+          stmt.clauses.push({cond: clause.type === 'elif' ? clause.cond : null, body: clause.body});
+          i = ni2; if (clause.type === 'else') break;
+        } else break;
+      }
+    }
+    if (stmt.type === 'try') {
+      stmt.handlers = []; stmt.elseBody = null; stmt.finallyBody = null;
+      for (;;) {
+        let j = i; while (j < lines.length && lines[j].blank) j++;
+        if (j < lines.length && lines[j].indent === indent && /^except\b/.test(lines[j].trimmed)) {
+          const h = parseHeader(lines[j]); let k = j + 1, m = k; while (m < lines.length && lines[m].blank) m++;
+          const ci = m < lines.length ? lines[m].indent : indent + 1;
+          const [body2, ni2] = parseBlock(lines, k, ci); h.body = body2; stmt.handlers.push(h); i = ni2;
+        } else if (j < lines.length && lines[j].indent === indent && /^else\b/.test(lines[j].trimmed)) {
+          let k = j + 1, m = k; while (m < lines.length && lines[m].blank) m++;
+          const ci = m < lines.length ? lines[m].indent : indent + 1;
+          const [body2, ni2] = parseBlock(lines, k, ci); stmt.elseBody = body2; i = ni2;
+        } else if (j < lines.length && lines[j].indent === indent && /^finally\b/.test(lines[j].trimmed)) {
+          let k = j + 1, m = k; while (m < lines.length && lines[m].blank) m++;
+          const ci = m < lines.length ? lines[m].indent : indent + 1;
+          const [body2, ni2] = parseBlock(lines, k, ci); stmt.finallyBody = body2; i = ni2;
+        } else break;
+      }
+    }
+    stmts.push(stmt);
+  }
+  return [stmts, i];
+}
+const parseProgram = src => parseBlock(splitLines(src), 0, 0)[0];
+
+class PyError { constructor(type, message) { this.type = type; this.message = message; } }
+class ReturnSignal { constructor(value) { this.value = value; } }
+class BreakSignal {}
+class ContinueSignal {}
+function pyRepr(v){
+  if (v === undefined || v === null) return 'None';
+  if (v === true) return 'True'; if (v === false) return 'False';
+  if (Array.isArray(v)) return '[' + v.map(pyRepr).join(', ') + ']';
+  if (typeof v === 'string') return v;
+  return String(v);
+}
+const pyStr = v => typeof v === 'string' ? v : pyRepr(v);
+const clone = v => Array.isArray(v) ? v.map(clone) : v;
+const pyMod = (a, b) => { const r = a % b; return (r !== 0 && (r < 0) !== (b < 0)) ? r + b : r; };
+const pyFloorDiv = (a, b) => Math.floor(a / b);
+
+function run(src, {maxSteps = 4000} = {}){
+  const program = parseProgram(src);
+  const trace = [], G = {}, output = [];
+  const callStack = [{name: '<module>', locals: G, callLine: null}];
+  let curLine = null, stepCount = 0;
+  function snapshot(line, note, exc){
+    stepCount++;
+    if (stepCount > maxSteps) throw new PyError('RuntimeError', 'step limit reached');
+    trace.push({line, note: note || '', exc: exc || null,
+      frames: callStack.map(f => ({name: f.name, callLine: f.callLine, locals: Object.keys(f.locals).map(k => ({name: k, value: clone(f.locals[k]), repr: pyRepr(f.locals[k])}))})),
+      output: output.slice()});
+  }
+  const curFrame = () => callStack[callStack.length - 1];
+  function lookup(name){
+    const f = curFrame();
+    if (name in f.locals) return f.locals[name];
+    if (f !== callStack[0] && name in G) return G[name];
+    throw new PyError('NameError', `name '${name}' is not defined`);
+  }
+  const assignName = (name, value) => { curFrame().locals[name] = value; };
+  const FUNCS = {};
+  const truthy = v => Array.isArray(v) ? v.length > 0 : (typeof v === 'string' ? v.length > 0 : !!v);
+  function evalExpr(n){
+    switch (n.k) {
+      case 'num': case 'str': case 'bool': return n.v; case 'none': return undefined;
+      case 'name': return lookup(n.v);
+      case 'list': return n.items.map(evalExpr);
+      case 'neg': return -evalExpr(n.a);
+      case 'not': return !truthy(evalExpr(n.a));
+      case 'and': { const a = evalExpr(n.a); return truthy(a) ? evalExpr(n.b) : a; }
+      case 'or': { const a = evalExpr(n.a); return truthy(a) ? a : evalExpr(n.b); }
+      case 'index': {
+        const obj = evalExpr(n.obj); let idx = evalExpr(n.idx);
+        if (!Array.isArray(obj) && typeof obj !== 'string') throw new PyError('TypeError', 'object is not subscriptable');
+        if (idx < 0) idx += obj.length;
+        if (idx < 0 || idx >= obj.length) throw new PyError('IndexError', (Array.isArray(obj) ? 'list' : 'string') + ' index out of range');
+        return obj[idx];
+      }
+      case 'bin': {
+        const a = evalExpr(n.a), b = evalExpr(n.b);
+        if (n.op === '+') { if (Array.isArray(a) && Array.isArray(b)) return a.concat(b); return (typeof a === 'string' || typeof b === 'string') ? pyStr(a) + pyStr(b) : a + b; }
+        if (n.op === '-') return a - b;
+        if (n.op === '*') return typeof a === 'string' ? a.repeat(b) : a * b;
+        if (n.op === '/') { if (b === 0) throw new PyError('ZeroDivisionError', 'division by zero'); return a / b; }
+        if (n.op === '//') { if (b === 0) throw new PyError('ZeroDivisionError', 'integer division or modulo by zero'); return pyFloorDiv(a, b); }
+        if (n.op === '%') { if (b === 0) throw new PyError('ZeroDivisionError', 'integer division or modulo by zero'); return pyMod(a, b); }
+        if (n.op === '**') return Math.pow(a, b);
+        break;
+      }
+      case 'cmp': {
+        const a = evalExpr(n.a), b = evalExpr(n.b);
+        switch (n.op) { case '==': return a === b; case '!=': return a !== b; case '<': return a < b; case '>': return a > b; case '<=': return a <= b; case '>=': return a >= b; }
+        break;
+      }
+      case 'method': {
+        const obj = evalExpr(n.obj);
+        if (n.name === 'append') { obj.push(evalExpr(n.args[0])); return undefined; }
+        if (n.name === 'pop') {
+          if (obj.length === 0) throw new PyError('IndexError', 'pop from empty list');
+          let idx = n.args.length ? evalExpr(n.args[0]) : obj.length - 1;
+          if (idx < 0) idx += obj.length;
+          if (idx < 0 || idx >= obj.length) throw new PyError('IndexError', 'pop index out of range');
+          return obj.splice(idx, 1)[0];
+        }
+        throw new PyError('AttributeError', `no method ${n.name}`);
+      }
+      case 'call': {
+        if (n.name === 'print') { output.push(n.args.map(evalExpr).map(pyStr).join(' ')); return undefined; }
+        if (n.name === 'len') return evalExpr(n.args[0]).length;
+        if (n.name === 'range') {
+          const args = n.args.map(evalExpr); let a = 0, b, step = 1;
+          if (args.length === 1) b = args[0]; else { a = args[0]; b = args[1]; if (args.length === 3) step = args[2]; }
+          const out = []; if (step > 0) for (let v = a; v < b; v += step) out.push(v); else for (let v = a; v > b; v += step) out.push(v);
+          return out;
+        }
+        if (n.name === 'int') return Math.trunc(evalExpr(n.args[0]));
+        if (n.name === 'abs') return Math.abs(evalExpr(n.args[0]));
+        if (FUNCS[n.name]) return callFunction(n.name, n.args.map(evalExpr), curLine);
+        throw new PyError('NameError', `name '${n.name}' is not defined`);
+      }
+    }
+  }
+  function callFunction(name, args, callLine){
+    const fn = FUNCS[name], frame = {name, callLine, locals: {}};
+    fn.params.forEach((p, i) => { frame.locals[p] = args[i]; });
+    callStack.push(frame);
+    snapshot(fn.line, `call ${name}(${args.map(pyRepr).join(', ')})`);
+    let ret;
+    try { execStmts(fn.body); ret = undefined; }
+    catch (e) { if (e instanceof ReturnSignal) ret = e.value; else { callStack.pop(); throw e; } }
+    callStack.pop();
+    snapshot(callLine, `${name} returns ${pyRepr(ret)}`);
+    return ret;
+  }
+  function assignTarget(target, value){
+    if (target.k === 'name') { assignName(target.v, value); return; }
+    if (target.k === 'index') { const obj = evalExpr(target.obj); let idx = evalExpr(target.idx); if (idx < 0) idx += obj.length; obj[idx] = value; return; }
+  }
+  const execStmts = stmts => { for (const s of stmts) execStmt(s); };
+  function execStmt(s){
+    curLine = s.line;
+    switch (s.type) {
+      case 'assign': {
+        let value;
+        if (s.op === '=') value = evalExpr(s.value);
+        else {
+          const a = evalExpr(s.target), b = evalExpr(s.value), op = {'+=': '+', '-=': '-', '*=': '*', '//=': '//'}[s.op];
+          if (op === '+') value = (typeof a === 'string' || typeof b === 'string') ? pyStr(a) + pyStr(b) : (Array.isArray(a) ? a.concat(b) : a + b);
+          else if (op === '-') value = a - b; else if (op === '*') value = a * b; else if (op === '//') value = pyFloorDiv(a, b);
+        }
+        assignTarget(s.target, value);
+        snapshot(s.line, (s.target.k === 'name' ? s.target.v : '(index)') + ' = ' + pyRepr(value));
+        break;
+      }
+      case 'expr': evalExpr(s.expr); snapshot(s.line, 'evaluate'); break;
+      case 'pass': snapshot(s.line, 'pass'); break;
+      case 'if': { for (const clause of s.clauses) if (clause.cond === null || truthy(evalExpr(clause.cond))) { execStmts(clause.body); return; } break; }
+      case 'while': { while (truthy(evalExpr(s.cond))) { try { execStmts(s.body); } catch (e) { if (e instanceof BreakSignal) break; if (e instanceof ContinueSignal) continue; throw e; } } break; }
+      case 'for': {
+        for (const v of evalExpr(s.iter)) {
+          assignName(s.varName, v); snapshot(s.line, `${s.varName} = ${pyRepr(v)}`);
+          try { execStmts(s.body); } catch (e) { if (e instanceof BreakSignal) break; if (e instanceof ContinueSignal) continue; throw e; }
+        }
+        break;
+      }
+      case 'def': FUNCS[s.name] = s; break;
+      case 'return': throw new ReturnSignal(s.expr ? evalExpr(s.expr) : undefined);
+      case 'break': throw new BreakSignal();
+      case 'continue': throw new ContinueSignal();
+      case 'raise': throw new PyError(s.exType, s.arg ? pyStr(evalExpr(s.arg)) : '');
+      case 'try': {
+        let pending = null;
+        try { execStmts(s.body); if (s.elseBody) execStmts(s.elseBody); }
+        catch (e) {
+          if (e instanceof PyError) {
+            const h = s.handlers.find(h => !h.exType || h.exType === e.type || h.exType === 'Exception');
+            if (h) {
+              snapshot(h.line, `caught ${e.type}: ${e.message}`, {type: e.type, message: e.message});
+              if (h.alias) assignName(h.alias, e.message);
+              try { execStmts(h.body); } catch (e2) { pending = e2; }
+            } else pending = e;
+          } else pending = e;
+        }
+        if (s.finallyBody) execStmts(s.finallyBody);
+        if (pending) throw pending;
+        break;
+      }
+    }
+  }
+  snapshot(null, 'start');
+  let error = null;
+  try { execStmts(program); }
+  catch (e) { if (e instanceof PyError) { error = {type: e.type, message: e.message}; snapshot(null, `Uncaught ${e.type}: ${e.message}`, error); } else throw e; }
+  return {trace, output, error};
+}
+/* MODEL:end */
+
+const INK = '#1d2327', FAINT = '#7c878c', HUE = '#4a235a', AMB = '#e29a1c', GOOD = '#2f9e5b', BAD = '#c0392b', GRID = '#eeebe2', PLATE = '#7b5cd6';
+
+/* ---------- the fixed set of programs each tab offers ---------- */
+const PROGRAMS_T = {
+  sum:  {title: 'Sum with a loop', label: 'n', min: 1, max: 8, def: 4,
+    src: n => `n = ${n}\ntotal = 0\nfor i in range(1, n + 1):\n    total = total + i\nprint(total)`},
+  fact: {title: 'Factorial by recursion', label: 'n', min: 1, max: 6, def: 4,
+    src: n => `n = ${n}\ndef factorial(n):\n    if n <= 1:\n        return 1\n    return n * factorial(n - 1)\n\nresult = factorial(n)\nprint(result)`},
+  scope: {title: 'Local vs global', label: 'x', min: 0, max: 20, def: 10,
+    src: x => `x = ${x}\ndef change(x):\n    x = x + 5\n    return x\n\ny = change(x)\nprint(x, y)`},
+};
+const PROGRAMS_X = {
+  stack: {title: 'Push, pop, and running out', label: 'pops', min: 1, max: 5, def: 4,
+    src: p => `stack = []\nstack.append(10)\nstack.append(20)\nstack.append(30)\ntry:\n    for i in range(${p}):\n        print(stack.pop())\nexcept IndexError as e:\n    print("Stack is empty:", e)\nfinally:\n    print("Done")`},
+  divide: {title: 'Divide safely', label: 'b', min: 0, max: 5, def: 0,
+    src: b => `def safe_divide(a, b):\n    try:\n        return a / b\n    except ZeroDivisionError as e:\n        print("Error:", e)\n        return None\n    finally:\n        print("Attempted division of", a, "by", b)\n\nprint(safe_divide(10, ${b}))`},
+};
+
+/* ---------- state ---------- */
+const S = {tab: 'T', locked: {T: false, X: false}, touched: {T: false, X: false},
+  T: {prog: 'sum', param: 4, idx: 0, playing: false, trace: null},
+  X: {prog: 'stack', param: 4, idx: 0, playing: false, trace: null}};
+const shared = sharedState();
+if (shared) {
+  if (['T', 'X'].includes(shared.tab)) S.tab = shared.tab;
+  if (shared.T && PROGRAMS_T[shared.T.prog]) { S.T.prog = shared.T.prog; S.T.param = clamp(shared.T.param | 0, PROGRAMS_T[shared.T.prog].min, PROGRAMS_T[shared.T.prog].max); }
+  if (shared.X && PROGRAMS_X[shared.X.prog]) { S.X.prog = shared.X.prog; S.X.param = clamp(shared.X.param | 0, PROGRAMS_X[shared.X.prog].min, PROGRAMS_X[shared.X.prog].max); }
+}
+shareState(() => ({tab: S.tab, T: {prog: S.T.prog, param: S.T.param}, X: {prog: S.X.prog, param: S.X.param}}));
+
+function recompute(key){
+  const st = S[key], defs = key === 'T' ? PROGRAMS_T : PROGRAMS_X;
+  const src = defs[st.prog].src(st.param);
+  st.lines = splitLines(src);
+  st.trace = run(src).trace;
+  st.idx = 0; st.playing = false;
+}
+recompute('T'); recompute('X');
+
+/* ---------- code / call-stack / output rendering (shared by both tabs) ---------- */
+const CODE_X = 30, CODE_Y0 = 60, LINE_H = 24, RIGHT_X = 578, RIGHT_W = 392, OUT_Y = 60, OUT_H = 132, STACK_Y = 218, STACK_H = 452, CANVAS_H = 700;
+function highlightSegs(text){
+  const re = /('[^']*'|"[^"]*")|\b(def|return|if|elif|else|while|for|in|try|except|finally|raise|pass|break|continue|and|or|not|True|False|None|as)\b|\b(\d+\.?\d*)\b/g;
+  const segs = []; let last = 0, m;
+  while ((m = re.exec(text))) {
+    if (m.index > last) segs.push([text.slice(last, m.index), 'p']);
+    segs.push([m[0], m[1] ? 's' : m[2] ? 'k' : 'n']); last = re.lastIndex;
+  }
+  if (last < text.length) segs.push([text.slice(last), 'p']);
+  return segs;
+}
+const SEGCOL = {p: INK, s: GOOD, k: HUE, n: AMB};
+function codeSVG(lines, curLine){
+  let s = `<text x="${CODE_X}" y="34" font-size="17" fill="${INK}" class="serif">Source</text>`;
+  lines.forEach((ln, i) => {
+    const y = CODE_Y0 + i * LINE_H;
+    const on = ln.no === curLine;
+    s += `<g class="click" data-runto="${ln.no}">` +
+      `<rect x="${CODE_X - 6}" y="${y - 16}" width="536" height="${LINE_H}" fill="${on ? 'rgba(226,154,28,.16)' : 'transparent'}"/>` +
+      `<text x="${CODE_X + 22}" y="${y}" font-size="11.5" fill="${FAINT}" text-anchor="end" class="m">${ln.no}</text>`;
+    let x = CODE_X + 32;
+    if (!ln.blank) for (const [t, cls] of highlightSegs(ln.text.replace(/^\s+/, ''))) {
+      s += `<text x="${x}" y="${y}" font-size="13.5" fill="${SEGCOL[cls]}" font-weight="${cls === 'k' ? '700' : '400'}" class="m" xml:space="preserve">${esc(t)}</text>`;
+      x += t.length * 8.12;
+    }
+    s += `</g>`;
+  });
+  return s;
+}
+function framesSVG(frames, x0, y0, w, hAvail){
+  let s = `<text x="${x0}" y="${y0 - 8}" font-size="14" font-weight="700" fill="${INK}">Call stack</text>`;
+  const boxW = w;
+  /* When many frames are on the stack (deep recursion) each box compacts to a single line so
+     the whole stack always fits without ever overlapping the panel below it. */
+  const compact = frames.length > 3;
+  const gap = 8;
+  const h = compact ? 34 : Math.max(40, Math.min(70, Math.floor((hAvail - (frames.length - 1) * gap) / frames.length)));
+  let y = y0 + 14;
+  /* top of the visual stack = most recently called (innermost) frame */
+  const order = frames.slice().reverse();
+  order.forEach((f, i) => {
+    const top = i === 0;
+    s += `<rect x="${x0}" y="${y}" width="${boxW}" height="${h}" rx="8" fill="${top ? '#fff' : '#f4f2ea'}" stroke="${top ? AMB : '#cfc9b8'}" stroke-width="${top ? 2 : 1.3}"/>`;
+    if (compact) {
+      s += `<text x="${x0 + 12}" y="${y + h / 2 + 5}" font-size="12.5" font-weight="700" fill="${INK}" class="m">${esc(f.name)}</text>` +
+        `<text x="${x0 + boxW - 12}" y="${y + h / 2 + 5}" font-size="12" fill="${FAINT}" text-anchor="end" class="m">${esc(f.locals.map(l => l.name + '=' + l.repr).join(', '))}</text>`;
+    } else {
+      s += `<text x="${x0 + 12}" y="${y + 19}" font-size="13" font-weight="700" fill="${INK}" class="m">${esc(f.name)}</text>`;
+      const rowH = Math.max(15, Math.min(18, (h - 24) / Math.max(1, f.locals.length)));
+      f.locals.forEach((lv, k) => {
+        const ry = y + 24 + rowH * k + 12;
+        s += `<text x="${x0 + 16}" y="${ry}" font-size="12" fill="${FAINT}" class="m">${esc(lv.name)}</text>` +
+          `<text x="${x0 + boxW - 12}" y="${ry}" font-size="12" fill="${INK}" font-weight="600" text-anchor="end" class="m">${esc(lv.repr)}</text>`;
+      });
+    }
+    y += h + gap;
+  });
+  return s;
+}
+function platesSVG(arr, x0, y0, w){
+  let s = `<text x="${x0}" y="${y0 - 8}" font-size="14" font-weight="700" fill="${INK}">The stack (a list)</text>`;
+  const ph = 34, baseY = y0 + 210;
+  s += `<line x1="${x0}" y1="${baseY + ph}" x2="${x0 + w}" y2="${baseY + ph}" stroke="${INK}" stroke-width="2"/>`;
+  arr.forEach((v, i) => {
+    const y = baseY - i * (ph + 6);
+    s += `<rect x="${x0}" y="${y}" width="${w}" height="${ph}" rx="8" fill="${i === arr.length - 1 ? PLATE : '#e4dcf5'}" stroke="${PLATE}" stroke-width="1.6"/>` +
+      `<text x="${x0 + w / 2}" y="${y + ph / 2 + 5}" font-size="15" font-weight="700" text-anchor="middle" fill="${i === arr.length - 1 ? '#fff' : INK}" class="m">${esc(pyRepr(v))}</text>`;
+  });
+  if (arr.length === 0) s += `<text x="${x0 + w / 2}" y="${baseY - 4}" font-size="12.5" text-anchor="middle" fill="${FAINT}">empty</text>`;
+  s += `<text x="${x0 + w / 2}" y="${baseY + ph + 20}" font-size="11.5" text-anchor="middle" fill="${FAINT}">top of stack ↑</text>`;
+  return s;
+}
+function outputSVG(lines, x0, y0, w, h, exc){
+  let s = `<rect x="${x0}" y="${y0}" width="${w}" height="${h}" rx="8" fill="#fbfaf7" stroke="${GRID}"/>` +
+    `<text x="${x0 + 12}" y="${y0 + 20}" font-size="12" font-weight="700" fill="${FAINT}">OUTPUT</text>`;
+  lines.forEach((l, i) => { s += `<text x="${x0 + 12}" y="${y0 + 42 + i * 19}" font-size="12.5" fill="${INK}" class="m">${esc(l)}</text>`; });
+  if (exc) s += `<rect x="${x0 + 8}" y="${y0 + h - 34}" width="${w - 16}" height="26" rx="6" fill="#fbeceb"/>` +
+    `<text x="${x0 + 16}" y="${y0 + h - 16}" font-size="12.5" font-weight="700" fill="${BAD}" class="m">${esc(exc.type)}: ${esc(exc.message)}</text>`;
+  return s;
+}
+
+/* ---------- paint each tab ---------- */
+function paintTab(key){
+  const st = S[key], step = st.trace[st.idx], svg = $('stage' + key);
+  let s = `<rect x="0" y="0" width="1000" height="${CANVAS_H}" fill="#fbfaf7"/>`;
+  s += codeSVG(st.lines, step.line);
+  s += outputSVG(step.output, RIGHT_X, OUT_Y, RIGHT_W, OUT_H, step.exc);
+  if (key === 'T' || st.prog === 'divide') s += framesSVG(step.frames, RIGHT_X, STACK_Y, RIGHT_W, STACK_H);
+  else {
+    const stackVar = step.frames[0].locals.find(l => l.name === 'stack');
+    s += platesSVG(stackVar ? stackVar.value : [], RIGHT_X, STACK_Y, RIGHT_W);
+  }
+  s += `<text x="${CODE_X}" y="${CANVAS_H - 15}" font-size="13" fill="${FAINT}">Step ${st.idx} of ${st.trace.length - 1}${step.note ? ' — ' + esc(step.note) : ''}</text>`;
+  svg.innerHTML = s;
+  $('readout' + key).textContent = `Step ${st.idx} / ${st.trace.length - 1}${step.note ? ' — ' + step.note : ''}`;
+  $('range' + key).max = st.trace.length - 1; $('range' + key).value = st.idx;
+  for (const b of $$('#prog' + key + ' .chip')) b.setAttribute('aria-pressed', b.dataset.p === st.prog);
+  if (document.activeElement !== $('param' + key)) $('param' + key).value = st.param;
+  $('back' + key).disabled = !S.locked[key] || st.idx === 0;
+  $('step' + key).disabled = !S.locked[key] || st.idx === st.trace.length - 1;
+  $('end' + key).disabled = !S.locked[key] || st.idx === st.trace.length - 1;
+  $('reset' + key).disabled = !S.locked[key] || st.idx === 0;
+  $('play' + key).textContent = st.playing ? '⏸ Pause' : '▶ Play';
+}
+function $$(sel){ return document.querySelectorAll(sel); }
+
+/* ---------- findings ---------- */
+function checkT(){
+  const st = S.T; if (!S.locked.T || !S.touched.T) return;
+  const atEnd = st.idx === st.trace.length - 1, out = st.trace[st.idx].output;
+  if (st.prog === 'sum' && atEnd) { const expect = st.param * (st.param + 1) / 2; if (out[out.length - 1] === String(expect)) discover('accumulator'); }
+  if (st.prog === 'fact' && atEnd && st.param >= 4) { const f = n => n <= 1 ? 1 : n * f(n - 1); if (out[out.length - 1] === String(f(st.param))) discover('recursion'); }
+  if (st.prog === 'scope' && atEnd) {
+    if (out[out.length - 1] === `${st.param} ${st.param + 5}`) {
+      const was = discover('scope');
+      if (was && !POET.explained) POET.explain(`The interpreter's own trace shows it: the module's <b>x</b> stayed <b>${st.param}</b> the whole time, while <b>change</b> got its own frame with its own local <b>x</b>, which became <b>${st.param + 5}</b> and was returned as <b>y</b>. Printed together: <b>${st.param} ${st.param + 5}</b>.`);
+    }
+  }
+}
+function checkX(){
+  const st = S.X; if (!S.locked.X || !S.touched.X) return;
+  const atEnd = st.idx === st.trace.length - 1;
+  if (st.prog === 'stack') {
+    const seenPush3 = st.trace.slice(0, st.idx + 1).some(s => { const v = s.frames[0].locals.find(l => l.name === 'stack'); return v && v.value.length === 3; });
+    if (seenPush3) discover('push');
+    if (st.trace[st.idx].output.length >= 1) discover('pop');
+    if (atEnd && st.param > 3 && st.trace.some(s => s.exc && s.exc.type === 'IndexError')) {
+      const was = discover('underflow');
+      if (was && !POEX.explained) POEX.explain(`After the 3rd pop the stack was empty. The 4th call to <b>stack.pop()</b> raised <b>IndexError: pop from empty list</b>, which the <b>except IndexError</b> clause caught and printed; the <b>finally</b> block then ran anyway, printing <b>Done</b>.`);
+    }
+  }
+  if (st.prog === 'divide' && atEnd) {
+    if (st.param === 0 && st.trace[st.idx].output.includes('None')) discover('zerodiv');
+    if (st.param > 0 && st.trace[st.idx].output.some(l => l.startsWith('Attempted division'))) discover('finally');
+  }
+}
+
+/* ---------- explanations ---------- */
+const EXPL = {T: false, X: false};
+function paintWhy(){
+  const on = S.locked[S.tab]; $('whyCard').hidden = !on; if (!on) return;
+  $('why').innerHTML = S.tab === 'T'
+    ? `<p>Each function call gets its own frame with its own locals; a name is looked up in the current frame first, and only falls back to the module's frame if it is not there. So a parameter called <b>x</b> inside a function is a completely different box from a global <b>x</b> of the same name — writing to one never touches the other.</p>
+       <p>Recursion is the same call mechanism used on itself: each call pushes a new frame onto the stack before the next one starts, and every frame waits, paused, until the call above it returns a value — that is why the stack grows all the way down before any multiplication happens, then unwinds back up.</p>`
+    : `<p>A Python list used as a stack only ever changes at one end: <b>append</b> adds to the top, <b>pop</b> removes from the top. Popping an empty list is not silently ignored — it raises <b>IndexError</b>, which unwinds the program exactly like any other exception until a matching <b>except</b> catches it.</p>
+       <p>A <b>finally</b> block runs no matter how the <b>try</b> ends — whether it finished cleanly, returned a value, or raised — because it is the block's own cleanup, not part of the outcome.</p>`;
+}
+
+/* ---------- transport controls ---------- */
+let playTok = 0;
+async function playToggle(key){
+  const st = S[key];
+  if (st.playing) { st.playing = false; paintTab(key); return; }
+  if (st.idx >= st.trace.length - 1) st.idx = 0;
+  st.playing = true; const tok = ++playTok; S.touched[key] = true;
+  while (st.playing && tok === playTok && st.idx < st.trace.length - 1) {
+    st.idx++; sound('tick'); paint();
+    if (!reduced()) await sleep(360);
+  }
+  st.playing = false; paint();
+}
+function wireTab(key){
+  const defs = key === 'T' ? PROGRAMS_T : PROGRAMS_X;
+  $('prog' + key).innerHTML = Object.entries(defs).map(([id, d]) => `<button class="chip" data-p="${id}">${esc(d.title)}</button>`).join('');
+  $('prog' + key).addEventListener('click', e => {
+    const b = e.target.closest('[data-p]'); if (!b || b.disabled || !S.locked[key]) return;
+    S[key].prog = b.dataset.p; S[key].param = defs[b.dataset.p].def; S.touched[key] = true;
+    $('paramLabel' + key).textContent = defs[b.dataset.p].label + ' =';
+    $('param' + key).min = defs[b.dataset.p].min; $('param' + key).max = defs[b.dataset.p].max;
+    sound('tick'); recompute(key); paint(); track('program', {tab: key, prog: b.dataset.p});
+  });
+  const setParam = v => {
+    const d = defs[S[key].prog]; S[key].param = clamp(Math.round(v), d.min, d.max); S.touched[key] = true;
+    recompute(key); paint(); track('param', {tab: key, value: S[key].param});
+  };
+  $('dec' + key).addEventListener('click', () => { if (S.locked[key]) setParam(S[key].param - 1); });
+  $('inc' + key).addEventListener('click', () => { if (S.locked[key]) setParam(S[key].param + 1); });
+  $('param' + key).addEventListener('input', e => { const v = parseInt(e.target.value, 10); if (S.locked[key] && Number.isFinite(v)) setParam(v); });
+  $('reset' + key).addEventListener('click', () => { if (!S.locked[key]) return; S[key].idx = 0; S.touched[key] = true; sound('tick'); paint(); });
+  $('back' + key).addEventListener('click', () => { if (!S.locked[key]) return; S[key].idx = Math.max(0, S[key].idx - 1); S.touched[key] = true; sound('tick'); paint(); });
+  $('step' + key).addEventListener('click', () => { if (!S.locked[key]) return; S[key].idx = Math.min(S[key].trace.length - 1, S[key].idx + 1); S.touched[key] = true; sound('tick'); paint(); });
+  $('end' + key).addEventListener('click', () => { if (!S.locked[key]) return; S[key].idx = S[key].trace.length - 1; S.touched[key] = true; sound('tick'); paint(); });
+  $('play' + key).addEventListener('click', () => { if (S.locked[key]) playToggle(key); });
+  $('range' + key).addEventListener('input', e => { if (!S.locked[key]) return; S[key].idx = +e.target.value; S.touched[key] = true; paint(); });
+  $('stage' + key).addEventListener('click', e => {
+    if (!S.locked[key]) return;
+    const g = e.target.closest('[data-runto]'); if (!g) return;
+    const lineNo = +g.dataset.runto, st = S[key];
+    let ni = st.trace.findIndex((s, i) => i > st.idx && s.line === lineNo);
+    if (ni < 0) ni = st.trace.findIndex(s => s.line === lineNo);
+    if (ni >= 0) { st.idx = ni; S.touched[key] = true; sound('tick'); paint(); }
+  });
+}
+wireTab('T'); wireTab('X');
+
+/* ---------- tabs, paint, lock ---------- */
+function paint(){
+  for (const k of ['T', 'X']) {
+    const on = S.tab === k;
+    $('tab' + k).setAttribute('aria-selected', on); $('stage' + k).toggleAttribute('hidden', !on);
+    $('card' + k).hidden = !on; $('poe' + k).hidden = !on;
+  }
+  $('gate').hidden = S.locked[S.tab];
+  paintTab('T'); paintTab('X'); checkT(); checkX(); paintWhy();
+}
+$('tabT').addEventListener('click', () => { S.tab = 'T'; sound('tick'); paint(); track('tab', {tab: 'T'}); });
+$('tabX').addEventListener('click', () => { S.tab = 'X'; sound('tick'); paint(); track('tab', {tab: 'X'}); });
+
+findings($('finds'), [
+  {id: 'accumulator', icon: 'Σ', label: 'A loop that adds 1..n really does sum to n(n+1)/2', hint: 'Step the sum loop to the end'},
+  {id: 'recursion',   icon: '⟲', label: 'The call stack grows to depth n, then unwinds multiplying', hint: 'Step factorial(4) or more to the end'},
+  {id: 'scope',       icon: '▭', label: 'A local x cannot change the global x of the same name', hint: 'Step the scope example to the end'},
+  {id: 'push',        icon: '▲', label: 'Three plates pushed onto an empty stack', hint: 'Step the stack program forward'},
+  {id: 'pop',         icon: '▼', label: 'Popping returns the plate that was pushed last', hint: 'Watch the output as it pops'},
+  {id: 'underflow',   icon: '⚠', label: 'Popping past empty raises IndexError — caught, and finally still runs', hint: 'Set pops above 3 and run to the end'},
+  {id: 'zerodiv',     icon: '÷', label: 'Dividing by zero raises ZeroDivisionError, caught, returning None', hint: 'Set b to 0 and run to the end'},
+  {id: 'finally',     icon: '✓', label: 'finally prints even when nothing went wrong', hint: 'Set b above 0 and run to the end'},
+], () => toast('All eight: a real interpreter, a real call stack, real exceptions.', 4200));
+
+const POET = predict($('poeT'), {
+  id: 'scope',
+  q: '`change(x)` sets its parameter x to x + 5 and returns it. If x is 10 outside, and y = change(x), what is x after the call?',
+  options: [
+    {id: 'fifteen', text: 'x becomes 15 too — the function changed it.'},
+    {id: 'ten', text: 'x is still 10 — the function only changed its own local copy.', right: true},
+    {id: 'error', text: 'It raises an error: you cannot reuse a parameter name.'},
+    {id: 'zero', text: 'x becomes 0, since it was reassigned.'},
+  ],
+  onLock(){ S.locked.T = true; paint(); },
+});
+const POEX = predict($('poeX'), {
+  id: 'underflow',
+  q: 'A stack has 3 plates. Code inside try/except IndexError tries to pop() 5 times. What happens?',
+  options: [
+    {id: 'crash', text: 'The whole program crashes with no output.'},
+    {id: 'caught', text: 'The 4th pop raises IndexError, the except runs, and finally still runs after it.', right: true},
+    {id: 'none', text: 'Extra pops just return None quietly.'},
+    {id: 'ignore', text: 'Python ignores pops past the end.'},
+  ],
+  onLock(){ S.locked.X = true; paint(); },
+});
+if (!Play.FF('predict')) { S.locked = {T: true, X: true}; }
+paint();
+window.applyFeatures = () => paint();
+window.PG_STATE = () => ({
+  tab: S.tab, locked: Object.assign({}, S.locked),
+  T: {prog: S.T.prog, param: S.T.param, idx: S.T.idx, len: S.T.trace.length, line: S.T.trace[S.T.idx].line, output: S.T.trace[S.T.idx].output.slice()},
+  X: {prog: S.X.prog, param: S.X.param, idx: S.X.idx, len: S.X.trace.length, line: S.X.trace[S.X.idx].line, output: S.X.trace[S.X.idx].output.slice()},
+});
+window.PG_MODEL = {run, parseProgram, tokenize, parseExpr, pyRepr, pyMod, pyFloorDiv, PROGRAMS_T, PROGRAMS_X};
+</script>
+</body>
+</html>

@@ -1,0 +1,670 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Shadows and the Moon</title>
+<meta name="description" content="Class 3–5: help Meena move the Sun across the sky and watch her shadow stick, then walk the Moon round the Earth and collect all eight phases.">
+<link rel="icon" href="../../favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600&family=Nunito:wght@500;700;800&display=swap">
+<link rel="stylesheet" href="../../play.css">
+<style>
+/* Only what this page needs beyond play.css. */
+html{scrollbar-gutter:stable}   /* no layout jump when a verdict makes the page scroll */
+.tabs{display:flex; gap:8px; padding:10px 12px; background:var(--sunk); border-bottom:1px solid var(--hair)}
+.tab{flex:1; min-height:48px; border-radius:var(--radius-sm); border:2px solid transparent; background:var(--card); cursor:pointer;
+  font-family:var(--font-head); font-size:17px; font-weight:600; color:var(--ink-2); display:flex; align-items:center; justify-content:center; gap:8px}
+.tab[aria-selected="true"]{border-color:var(--accent); color:var(--ink); box-shadow:0 2px 0 var(--accent)}
+.tab:hover{border-color:var(--hair-2)}
+#stageWrap{align-self:start; min-height:0}
+#sunHit, #moonHit{cursor:grab}
+#sunHit.dragging, #moonHit.dragging{cursor:grabbing}
+.gate{position:absolute; left:0; right:0; top:70px; display:grid; place-items:center; pointer-events:none}
+.gate span{background:rgba(15,26,43,.86); color:#fff; padding:12px 20px; border-radius:99px; font-weight:700; font-size:16px}
+.cities{display:grid; grid-template-columns:repeat(3,1fr); gap:6px}
+.city{min-height:48px; border-radius:var(--radius-sm); border:2px solid var(--hair-2); background:var(--card); cursor:pointer; font-weight:700; font-size:15px; line-height:1.1}
+.city small{display:block; font-weight:600; font-size:11px; color:var(--ink-3)}
+.city[aria-pressed="true"]{border-color:var(--accent); background:var(--accent-soft)}
+.missions{list-style:none; margin:0; padding:0; display:grid; gap:7px}
+.missions li{display:grid; grid-template-columns:30px 1fr; gap:8px; align-items:center; font-weight:700; font-size:15px; line-height:1.3; color:var(--ink-2)}
+.missions li i{width:28px; height:28px; border-radius:50%; border:2.5px dashed var(--hair-2); display:grid; place-items:center; font-style:normal; font-size:15px; color:#fff}
+.missions li.done{color:var(--ink)}
+.missions li.done i{border:none; background:var(--good); animation:tickPop .5s var(--spring)}
+.missions li.done span{text-decoration:line-through; text-decoration-color:var(--good); text-decoration-thickness:2px}
+@keyframes tickPop{0%{transform:scale(.3)}100%{transform:scale(1)}}
+.note{font-size:13px; color:var(--ink-3); margin:6px 0 0}
+.readout{display:grid; grid-template-columns:auto 1fr; gap:4px 12px; font-size:15px}
+.readout span{color:var(--ink-2)} .readout b{font-variant-numeric:tabular-nums}
+.bigtime{font-family:var(--font-head); font-size:28px; font-weight:600; line-height:1}
+</style>
+</head>
+<body>
+<header class="pg-top"></header>
+
+<div class="pg-intro">
+  <h1>Shadows and the Moon</h1>
+  <p>Help Meena with her shadow stick: drag the Sun across the sky and watch the shadow. Then fly to space and walk the Moon round the Earth.</p>
+</div>
+
+<main class="pg-main">
+  <section class="pg-stage" id="stageWrap">
+    <div class="tabs" role="tablist">
+      <button class="tab" id="tabSun" role="tab" aria-selected="true">☀️ Meena’s shadow stick</button>
+      <button class="tab" id="tabMoon" role="tab" aria-selected="false">🌙 The Moon walk</button>
+    </div>
+    <svg id="sunStage" viewBox="0 0 1000 580" role="img" aria-label="Meena's courtyard with a shadow stick. Drag the Sun across the sky."></svg>
+    <svg id="moonStage" viewBox="0 0 1000 580" role="img" aria-label="The Earth and Moon seen from above, with the Moon as Meena sees it" hidden></svg>
+    <div class="gate" id="gate" hidden><span>Make a guess first →</span></div>
+  </section>
+
+  <aside class="pg-side">
+    <!-- the Sun scene -->
+    <div id="sideSun" class="pg-side" style="gap:12px">
+      <div class="card">
+        <div class="kicker">Missions</div>
+        <ul class="missions" id="missionsSun"></ul>
+      </div>
+      <div class="card">
+        <div class="row" style="justify-content:space-between;align-items:flex-end">
+          <div><div class="kicker">Sun time</div><div class="bigtime num" id="timeOut">9:00 am</div></div>
+          <div style="text-align:right"><div class="kicker">Date</div><div class="bigtime num" id="dateOut" style="font-size:20px">1 Mar</div></div>
+        </div>
+        <div class="ctl"><label for="time">Time</label><input type="range" id="time" min="300" max="1140" step="5" value="900"><output id="timeNum" class="num"></output></div>
+        <div class="ctl"><label for="date">Date</label><input type="range" id="date" min="1" max="365" step="1" value="60"><output id="dateNum" class="num"></output></div>
+        <div class="kicker" style="margin-top:6px">Where is Meena?</div>
+        <div class="cities" id="cities">
+          <button class="city" data-city="Delhi" aria-pressed="false">Delhi<small>28.6° N</small></button>
+          <button class="city" data-city="Bhopal" aria-pressed="false">Bhopal<small>23.3° N</small></button>
+          <button class="city" data-city="Chennai" aria-pressed="true">Chennai<small>13.1° N</small></button>
+        </div>
+      </div>
+      <div class="card">
+        <div class="kicker">Meena’s notebook</div>
+        <div class="readout" id="readout"></div>
+      </div>
+    </div>
+
+    <!-- the Moon scene -->
+    <div id="sideMoon" class="pg-side" style="gap:12px" hidden>
+      <div id="poe"></div>
+      <div class="card">
+        <div class="kicker">Missions</div>
+        <ul class="missions" id="missionsMoon"></ul>
+      </div>
+      <div class="card">
+        <div class="row" style="justify-content:space-between">
+          <div><div class="kicker">The Moon’s month</div><div class="bigtime num" id="moonDay">Day 0</div></div>
+          <button class="btn" id="btnOrbit">▶ Let it go round</button>
+        </div>
+        <p class="note">Drag the Moon round the Earth. It goes round anticlockwise, the way the arrow shows.</p>
+      </div>
+    </div>
+
+    <div class="card"><div class="kicker">Discoveries</div><div id="finds"></div></div>
+  </aside>
+</main>
+
+<script src="../../play.js"></script>
+<script>
+'use strict';
+const {$, esc, clamp, fmt, drag, loop, sound, say, track, toast, tween, predict, findings, discover, found,
+       shareState, sharedState, mount, reduced} = Play;
+mount({thread: 'sun-earth', band: 'explorer'});
+
+/* MODEL:start ==================================================================
+   Two small, real models.
+
+   THE SUN IN MEENA'S SKY. The Sun's declination on a day of the year comes from
+   its ecliptic longitude (mean longitude plus the equation of centre). Its
+   height (altitude) and compass direction (azimuth, from north, clockwise) at a
+   given sun-time come from the standard spherical-astronomy formulas for the
+   city's latitude. A stick of height h then throws a shadow of length
+   h / tan(altitude), pointing directly away from the Sun (azimuth + 180°).
+
+   THE MOON'S PHASE. Seen from above the North Pole, sunlight comes from the left.
+   phi is the Sun–Earth–Moon angle measured the way the Moon travels
+   (anticlockwise): 0° new, 90° first quarter, 180° full. The lit fraction of the
+   disc we see is (1 − cos phi) / 2. While phi is between 0° and 180° the Moon is
+   waxing and, from India, its right side is lit; after 180° it wanes and the
+   left side is lit.
+   ============================================================================ */
+const D2R = Math.PI / 180, R2D = 180 / Math.PI;
+const TILT = 23.44;
+const CITIES = {Delhi: {lat: 28.61}, Bhopal: {lat: 23.26}, Chennai: {lat: 13.08}};
+
+/* The Sun's declination (degrees) on day-of-year d (1 = 1 January, noon). */
+function declination(d){
+  const n = d - 1.5;                                     // days from 1 January, noon
+  const L = (280.46 + 0.9856474 * n) % 360;              // mean longitude
+  const g = ((357.528 + 0.9856003 * n) % 360) * D2R;     // mean anomaly
+  const lam = (L + 1.915 * Math.sin(g) + 0.020 * Math.sin(2 * g)) * D2R;
+  return Math.asin(Math.sin(TILT * D2R) * Math.sin(lam)) * R2D;
+}
+/* Where the Sun is at sun-time t (hours; 12 = noon) on day d at latitude lat. */
+function sunAt(lat, d, t){
+  const dec = declination(d) * D2R, phi = lat * D2R, H = 15 * (t - 12) * D2R;
+  const sinAlt = Math.sin(phi) * Math.sin(dec) + Math.cos(phi) * Math.cos(dec) * Math.cos(H);
+  const alt = Math.asin(clamp(sinAlt, -1, 1));
+  let az = Math.atan2(-Math.cos(dec) * Math.sin(H), Math.sin(dec) * Math.cos(phi) - Math.cos(dec) * Math.sin(phi) * Math.cos(H));
+  az = ((az * R2D) % 360 + 360) % 360;
+  return {alt: alt * R2D, az, dec: dec * R2D, H: H * R2D};
+}
+/* A shadow of a stick h tall: its length and the compass direction it points (degrees from north). */
+function shadow(alt, az, h = 1){
+  if (alt <= 0) return {len: Infinity, dir: (az + 180) % 360, east: 0, north: 0};
+  const len = h / Math.tan(alt * D2R), dir = (az + 180) % 360;
+  return {len, dir, east: len * Math.sin(dir * D2R), north: len * Math.cos(dir * D2R)};
+}
+/* The sun-times (hours) when the Sun is at least minAlt degrees up. */
+function dayWindow(lat, d, minAlt = 0){
+  const dec = declination(d) * D2R, phi = lat * D2R;
+  const c = (Math.sin(minAlt * D2R) - Math.sin(phi) * Math.sin(dec)) / (Math.cos(phi) * Math.cos(dec));
+  const H0 = c >= 1 ? 0 : c <= -1 ? 180 : Math.acos(c) * R2D;
+  return {rise: 12 - H0 / 15, set: 12 + H0 / 15};
+}
+const noonAlt = (lat, d) => 90 - Math.abs(lat - declination(d));
+const compass8 = a => ['north', 'north-east', 'east', 'south-east', 'south', 'south-west', 'west', 'north-west'][Math.round((((a % 360) + 360) % 360) / 45) % 8];
+
+/* The Moon. */
+const litFraction = phi => (1 - Math.cos(phi * D2R)) / 2;
+const PHASES = ['New Moon', 'Waxing crescent', 'First quarter', 'Waxing gibbous', 'Full Moon', 'Waning gibbous', 'Last quarter', 'Waning crescent'];
+const phaseIndex = phi => Math.round((((phi % 360) + 360) % 360) / 45) % 8;
+const litSide = phi => { const p = ((phi % 360) + 360) % 360; return p === 0 || p === 180 ? 'none' : p < 180 ? 'right' : 'left'; };
+const MONTH = 29.53;                                          // days, new Moon to new Moon
+/* The lit part of a Moon disc of radius r at (cx, cy), as an SVG path, for angle phi.
+   The limb is a half circle on the lit side; the terminator is half an ellipse whose
+   width is r·|cos phi| — bulging towards the lit side for a crescent, away for a gibbous. */
+function phasePath(cx, cy, r, phi){
+  const p = ((phi % 360) + 360) % 360, c = Math.cos(p * D2R), rx = Math.abs(c) * r;
+  const right = p <= 180;
+  const limbSweep = right ? 1 : 0;
+  const termSweep = right ? (c > 0 ? 0 : 1) : (c > 0 ? 1 : 0);
+  const f = v => v.toFixed(2);
+  return `M${f(cx)} ${f(cy - r)} A${f(r)} ${f(r)} 0 0 ${limbSweep} ${f(cx)} ${f(cy + r)} A${f(rx)} ${f(r)} 0 0 ${termSweep} ${f(cx)} ${f(cy - r)}Z`;
+}
+/* MODEL:end */
+
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const MONTHS_L = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+const MDAYS = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+function dateOf(d, long){ d = Math.round(d); let m = 0; while (m < 11 && d > MDAYS[m]) { d -= MDAYS[m]; m++; } return d + ' ' + (long ? MONTHS_L : MONTHS)[m]; }
+function clock(t){
+  let mins = Math.round(t * 60), h = Math.floor(mins / 60), m = mins % 60;
+  if (h === 12 && m === 0) return '12 noon';
+  const ap = h < 12 ? 'am' : 'pm'; h = h % 12 || 12;
+  return h + ':' + String(m).padStart(2, '0') + ' ' + ap;
+}
+const angDiff = (a, b) => { const d = Math.abs((((a - b) % 360) + 540) % 360 - 180); return d; };
+function mix(a, b, t){
+  t = clamp(t, 0, 1);
+  const pa = [1, 3, 5].map(i => parseInt(a.slice(i, i + 2), 16)), pb = [1, 3, 5].map(i => parseInt(b.slice(i, i + 2), 16));
+  return '#' + pa.map((v, i) => Math.round(v + (pb[i] - v) * t).toString(16).padStart(2, '0')).join('');
+}
+
+/* ---- state: plain data --------------------------------------------------- */
+const S = {scene: 'sun', city: 'Chennai', day: 60, t: 15, touched: false, phi: 60, locked: false, orbiting: false,
+           cal: [null, null, null, null, null, null, null, null], missions: {}};
+const shared = sharedState();
+if (shared) {
+  if (CITIES[shared.city]) S.city = shared.city;
+  S.day = clamp(+shared.day || 60, 1, 365); S.t = clamp(+shared.t || 9, 5, 19);
+  S.phi = ((+shared.phi || 0) % 360 + 360) % 360; if (shared.scene === 'moon') S.scene = 'moon';
+}
+shareState(() => ({scene: S.scene, city: S.city, day: Math.round(S.day), t: +S.t.toFixed(3), phi: Math.round(S.phi)}));
+
+/* ---- missions: a checklist that ticks itself when the model gets there ---- */
+const MISSIONS = [
+  {id: 'noon',    scene: 'sun',  text: 'Make the shortest shadow of the day'},
+  {id: 'west',    scene: 'sun',  text: 'Make the shadow point west'},
+  {id: 'long',    scene: 'sun',  text: 'Make the longest shadow you can'},
+  {id: 'zero',    scene: 'sun',  text: 'Is there a day with no shadow at noon? Find it!'},
+  {id: 'full',    scene: 'moon', text: 'Guess, then find the full Moon'},
+  {id: 'new',     scene: 'moon', text: 'Find the new Moon'},
+  {id: 'cal',     scene: 'moon', text: 'Fill the Moon calendar'},
+];
+function renderMissions(){
+  for (const sc of ['sun', 'moon']) {
+    $(sc === 'sun' ? 'missionsSun' : 'missionsMoon').innerHTML = MISSIONS.filter(m => m.scene === sc).map(m => {
+      const done = S.missions[m.id];
+      let txt = m.text;
+      if (m.id === 'cal') txt += ` (${S.cal.filter(Boolean).length} of 8)`;
+      return `<li class="${done ? 'done' : ''}" data-m="${m.id}"><i aria-hidden="true">${done ? '✓' : ''}</i><span>${esc(txt)}</span></li>`;
+    }).join('');
+  }
+}
+function tickMission(id, line){
+  if (S.missions[id]) return;
+  S.missions[id] = true;
+  renderMissions();
+  sound('chime');
+  track('mission', {id});
+  if (line && !found(id)) say(line);
+}
+
+/* ============================================================================
+   Scene 1: Meena's courtyard. Built once, then patched.
+   ============================================================================ */
+const sunSvg = $('sunStage');
+const HY = 300, CX = 500, RX = 430, RY = 255;         // horizon, sky dome
+const GY = 440, GS = 64, GK = 0.42; const VH = 580;                   // ground: stick foot, 1 m in px, foreshortening
+const proj = (E, N) => ({x: CX - E * GS, y: GY + N * GS * GK});   // we look south: east is on the left
+const MEENA = {E: 2.4, N: 0.7, h: 1.3};
+const skyPt = s => ({x: CX - Math.cos(s.alt * D2R) * Math.sin(s.az * D2R) * RX, y: HY - Math.sin(s.alt * D2R) * RY});
+
+function buildSun(){
+  /* courtyard tiles, projected from the ground grid */
+  let tiles = '';
+  for (let E = -9; E <= 9; E++) { const a = proj(E, -6), b = proj(E, 7); tiles += `<line x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}"/>`; }
+  for (let N = -5; N <= 7; N++) { const a = proj(-9, N), b = proj(9, N); tiles += `<line x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}"/>`; }
+  /* compass letters painted on the ground round the stick */
+  const cp = (E, N, t) => { const p = proj(E, N); return `<text x="${p.x}" y="${p.y + 6}" text-anchor="middle">${t}</text>`; };
+  /* rangoli */
+  const rg = proj(-3.6, 3.2);
+  let petals = '';
+  for (let i = 0; i < 8; i++) { const a = i * 45 * D2R; petals += `<ellipse cx="${(rg.x + Math.cos(a) * 26).toFixed(1)}" cy="${(rg.y + Math.sin(a) * 26 * GK).toFixed(1)}" rx="13" ry="${(13 * GK).toFixed(1)}" fill="${i % 2 ? '#ff5d8f' : '#ffc53d'}"/>`; }
+  let rays = '';
+  for (let i = 0; i < 12; i++) { const a = i * 30 * D2R; rays += `<path d="M${(Math.cos(a) * 36).toFixed(1)} ${(Math.sin(a) * 36).toFixed(1)} L${(Math.cos(a + .12) * 50).toFixed(1)} ${(Math.sin(a + .12) * 50).toFixed(1)} L${(Math.cos(a - .12) * 50).toFixed(1)} ${(Math.sin(a - .12) * 50).toFixed(1)}Z" fill="#ffc53d"/>`; }
+  const m = proj(MEENA.E, MEENA.N);
+  sunSvg.innerHTML = `
+  <defs>
+    <linearGradient id="gSky" x1="0" y1="0" x2="0" y2="1"><stop id="sky0" offset="0" stop-color="#3d8fe6"/><stop id="sky1" offset="1" stop-color="#bfe3fb"/></linearGradient>
+    <radialGradient id="gSun" cx="42%" cy="38%"><stop offset="0" stop-color="#fff6c8"/><stop offset=".6" stop-color="#ffc53d"/><stop offset="1" stop-color="#f28a12"/></radialGradient>
+    <radialGradient id="gGlow"><stop offset="0" stop-color="#ffe27a" stop-opacity=".75"/><stop offset="1" stop-color="#ffe27a" stop-opacity="0"/></radialGradient>
+    <linearGradient id="gGround" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#e4b27c"/><stop offset="1" stop-color="#d4945a"/></linearGradient>
+    <clipPath id="clipGround"><rect x="0" y="${HY}" width="1000" height="${VH - HY}"/></clipPath>
+  </defs>
+  <rect width="1000" height="${HY}" fill="url(#gSky)"/>
+  <g fill="#fff" opacity=".85"><path d="M150 90a22 22 0 0 1 40-10a18 18 0 0 1 30 12a14 14 0 0 1 0 28h-72a15 15 0 0 1 2-30z"/><path d="M770 70a20 20 0 0 1 36-9a16 16 0 0 1 27 11a12 12 0 0 1 0 25h-66a13 13 0 0 1 3-27z"/></g>
+  <path id="sunPath" fill="none" stroke="#fff" stroke-width="2.5" stroke-dasharray="2 9" stroke-linecap="round" opacity=".8"/>
+  <g id="noonMark"><line id="noonTick" stroke="#fff" stroke-width="2" opacity=".7"/><text id="noonText" fill="#fff" font-size="13" font-weight="800" text-anchor="middle">noon</text></g>
+  <!-- far away: hills, a palm tree and a house -->
+  <path d="M0 ${HY} L0 292 Q60 280 130 290 T260 288 T420 292 T560 286 T720 291 T880 284 T1000 290 L1000 ${HY}Z" fill="#7fb069"/>
+  <g transform="translate(205 ${HY})"><path d="M0 0 Q-4 -40 4 -78" stroke="#8a5a2b" stroke-width="7" fill="none" stroke-linecap="round"/>
+    <g fill="#2f8f46"><path d="M4 -78 q-30 -8 -44 10 q24 -16 44 -10z"/><path d="M4 -78 q30 -12 46 6 q-26 -12 -46 -6z"/><path d="M4 -78 q-12 -26 -34 -30 q24 4 34 30z"/><path d="M4 -78 q14 -26 38 -26 q-26 6 -38 26z"/></g></g>
+  <g transform="translate(760 ${HY})"><rect x="0" y="-46" width="92" height="46" fill="#f3d9b1"/><rect x="-6" y="-52" width="104" height="9" fill="#c9774b"/>
+    <rect x="16" y="-32" width="16" height="16" fill="#6aa9d8"/><rect x="58" y="-30" width="18" height="30" fill="#8a5a2b"/></g>
+  <text x="${CX}" y="${HY - 6}" fill="#fff" font-size="12" font-weight="800" letter-spacing=".06em" text-anchor="middle" opacity=".9">SOUTH</text>
+  <!-- the courtyard -->
+  <rect x="0" y="${HY}" width="1000" height="${VH - HY}" fill="url(#gGround)"/>
+  <g stroke="#c4834b" stroke-width="1.2" opacity=".55" clip-path="url(#clipGround)">${tiles}</g>
+  <text x="18" y="${HY + 30}" fill="#7a4a22" font-size="17" font-weight="800" letter-spacing=".06em">EAST</text>
+  <text x="18" y="${HY + 48}" fill="#7a4a22" font-size="12.5" font-weight="700">the Sun rises here</text>
+  <text x="982" y="${HY + 30}" fill="#7a4a22" font-size="17" font-weight="800" letter-spacing=".06em" text-anchor="end">WEST</text>
+  <text x="982" y="${HY + 48}" fill="#7a4a22" font-size="12.5" font-weight="700" text-anchor="end">the Sun sets here</text>
+  <g opacity=".9">${petals}<ellipse cx="${rg.x}" cy="${rg.y}" rx="12" ry="${12 * GK}" fill="#fff"/></g>
+  <g fill="#fff" font-size="17" font-weight="800" opacity=".75">${cp(0, 3.1, 'N')}${cp(0, -3.4, 'S')}${cp(3.5, 0, 'E')}${cp(-3.5, 0, 'W')}</g>
+  <ellipse cx="${CX}" cy="${GY}" rx="${3 * GS}" ry="${3 * GS * GK}" fill="none" stroke="#fff" stroke-width="1.5" stroke-dasharray="4 7" opacity=".5"/>
+  <!-- shadows: computed from the Sun -->
+  <g clip-path="url(#clipGround)">
+    <path id="meenaShadow" fill="#3b2412" opacity=".32"/>
+    <line id="stickShadow" x1="${CX}" y1="${GY}" stroke="#3b2412" stroke-width="7" stroke-linecap="round" opacity=".45"/>
+  </g>
+  <text id="shadowLab" fill="#3b2412" font-size="15" font-weight="800" text-anchor="middle"></text>
+  <!-- the stick -->
+  <ellipse cx="${CX}" cy="${GY}" rx="9" ry="4" fill="#7a5230"/>
+  <rect x="${CX - 3}" y="${GY - GS}" width="6" height="${GS}" rx="2" fill="#8a5a2b"/>
+  <circle cx="${CX}" cy="${GY - GS}" r="5" fill="#e0567a"/>
+  <!-- Meena -->
+  <g id="meena" transform="translate(${m.x} ${m.y})">
+    <rect x="-8" y="-28" width="6" height="28" rx="3" fill="#8d5a3b"/><rect x="2" y="-28" width="6" height="28" rx="3" fill="#8d5a3b"/>
+    <ellipse cx="-5" cy="0" rx="6" ry="3" fill="#c0392b"/><ellipse cx="5" cy="0" rx="6" ry="3" fill="#c0392b"/>
+    <path d="M-17 -24 L17 -24 L10 -62 L-10 -62Z" fill="#ff9f1c"/>
+    <path d="M-15 -30 L15 -30" stroke="#fff" stroke-width="3" opacity=".7"/>
+    <path d="M-10 -58 Q-24 -46 -22 -34" stroke="#8d5a3b" stroke-width="6" fill="none" stroke-linecap="round"/>
+    <path id="meenaArm" d="M10 -58 Q26 -66 34 -80" stroke="#8d5a3b" stroke-width="6" fill="none" stroke-linecap="round"/>
+    <circle cx="0" cy="-74" r="14" fill="#a86a45"/>
+    <path d="M-15 -74 Q-15 -92 0 -90 Q15 -92 15 -74 Q10 -84 0 -83 Q-10 -84 -15 -74Z" fill="#2b1a12"/>
+    <path d="M-13 -72 Q-22 -60 -18 -46" stroke="#2b1a12" stroke-width="5" fill="none" stroke-linecap="round"/>
+    <path d="M13 -72 Q22 -60 18 -46" stroke="#2b1a12" stroke-width="5" fill="none" stroke-linecap="round"/>
+    <circle cx="-18" cy="-46" r="3" fill="#e0567a"/><circle cx="18" cy="-46" r="3" fill="#e0567a"/>
+    <circle cx="-5" cy="-75" r="2" fill="#2b1a12"/><circle cx="5" cy="-75" r="2" fill="#2b1a12"/>
+    <path id="meenaMouth" d="M-5 -68 Q0 -64 5 -68" stroke="#6b2a1a" stroke-width="2" fill="none" stroke-linecap="round"/>
+    <circle cx="-9" cy="-70" r="2.5" fill="#ff8a8a" opacity=".6"/><circle cx="9" cy="-70" r="2.5" fill="#ff8a8a" opacity=".6"/>
+  </g>
+  <!-- Meena's speech bubble -->
+  <g id="bubble">
+    <rect id="bubbleBox" x="40" y="318" width="270" height="58" rx="16" fill="#fff" stroke="#1b2a3a" stroke-opacity=".15"/>
+    <path id="bubbleTail" fill="#fff"/>
+    <text id="bubble1" x="56" y="342" fill="#1b2a3a" font-size="15" font-weight="700"></text>
+    <text id="bubble2" x="56" y="363" fill="#1b2a3a" font-size="15" font-weight="700"></text>
+  </g>
+  <text id="northNote" x="${CX}" y="26" text-anchor="middle" fill="#fff" font-size="14" font-weight="800" opacity="0">Today the noon Sun is a little to the NORTH</text>
+  <!-- the Sun, drawn last -->
+  <g id="sunG" pointer-events="none"><circle r="70" fill="url(#gGlow)"/><g id="sunRays">${rays}</g><circle r="30" fill="url(#gSun)"/>
+    <circle cx="-9" cy="-4" r="3" fill="#8a4b00"/><circle cx="9" cy="-4" r="3" fill="#8a4b00"/>
+    <path d="M-10 7 Q0 16 10 7" stroke="#8a4b00" stroke-width="3" fill="none" stroke-linecap="round"/>
+    <circle cx="-16" cy="5" r="4" fill="#ff8a3d" opacity=".5"/><circle cx="16" cy="5" r="4" fill="#ff8a3d" opacity=".5"/></g>
+  <!-- the hit target is never re-parented -->
+  <circle id="sunHit" r="46" fill="transparent" tabindex="0" role="slider" aria-label="The Sun: drag it along its path across the sky"/>
+  <g id="dragHint" pointer-events="none" opacity="0"><rect id="dragHintBox" width="150" height="30" rx="15" fill="#1b2a3a" opacity=".8"/><text id="dragHintT" fill="#fff" font-size="14" font-weight="800" text-anchor="middle">Drag me! ☀</text></g>
+  `;
+}
+
+let SUNPATH = [];      // screen points along today's path, for dragging
+function sunWin(){ return dayWindow(CITIES[S.city].lat, S.day, 2); }
+function buildSunPath(){
+  const lat = CITIES[S.city].lat, w = sunWin();
+  SUNPATH = [];
+  const n = 240;
+  for (let i = 0; i <= n; i++) { const t = w.rise + (w.set - w.rise) * i / n; const p = skyPt(sunAt(lat, S.day, t)); SUNPATH.push({t, x: p.x, y: p.y}); }
+  $('sunPath').setAttribute('d', SUNPATH.map((p, i) => (i ? 'L' : 'M') + p.x.toFixed(1) + ' ' + p.y.toFixed(1)).join(''));
+  const np = skyPt(sunAt(lat, S.day, 12));
+  $('noonTick').setAttribute('x1', np.x); $('noonTick').setAttribute('x2', np.x);
+  $('noonTick').setAttribute('y1', np.y - 40); $('noonTick').setAttribute('y2', np.y - 50);
+  $('noonText').setAttribute('x', np.x); $('noonText').setAttribute('y', Math.max(14, np.y - 56));
+  $('noonMark').setAttribute('opacity', np.y - 56 < 14 ? 0 : 1);
+}
+function wrap(s, n){
+  const words = s.split(' '), lines = ['']; for (const w of words) { if ((lines[lines.length - 1] + ' ' + w).trim().length > n) lines.push(w); else lines[lines.length - 1] = (lines[lines.length - 1] + ' ' + w).trim(); }
+  return lines;
+}
+/* What Meena says, from the model's state. */
+function meenaLine(s, sh){
+  if (sh.len < 0.035) return 'No shadow at all! The Sun is right over my head!';
+  if (Math.abs(S.t - 12) < 1 / 6) return 'Noon! This is the shortest shadow of the whole day.';
+  if (s.alt < 8) return 'Look how LONG our shadows are! The Sun is so low.';
+  if (S.t < 12) return `Morning. The Sun is in the east, so my shadow points ${compass8(sh.dir)}.`;
+  return `Afternoon. Now the Sun is in the west and my shadow points ${compass8(sh.dir)}.`;
+}
+function paintSun(){
+  const lat = CITIES[S.city].lat, s = sunAt(lat, S.day, S.t), sh = shadow(s.alt, s.az, 1);
+  const p = skyPt(s);
+  $('sunG').setAttribute('transform', `translate(${p.x.toFixed(1)} ${p.y.toFixed(1)})`);
+  $('sunHit').setAttribute('cx', p.x.toFixed(1)); $('sunHit').setAttribute('cy', p.y.toFixed(1));
+  $('dragHint').setAttribute('transform', `translate(${clamp(p.x, 90, 910).toFixed(1)} ${(p.y + 64).toFixed(1)})`);
+  $('dragHintBox').setAttribute('x', -75); $('dragHintBox').setAttribute('y', -20); $('dragHintT').setAttribute('y', 0);
+  /* the sky: dawn orange low down, clear blue when the Sun is high */
+  const k = clamp(s.alt / 35, 0, 1);
+  $('sky0').setAttribute('stop-color', mix('#5b6fb8', '#3d8fe6', k));
+  $('sky1').setAttribute('stop-color', mix('#ffb36b', '#bfe3fb', k));
+  /* shadows */
+  const L = Math.min(sh.len, 30), tip = proj(sh.east / sh.len * L || 0, sh.north / sh.len * L || 0);
+  $('stickShadow').setAttribute('x2', tip.x.toFixed(1)); $('stickShadow').setAttribute('y2', tip.y.toFixed(1));
+  /* Meena's shadow: the shadow of her body (a thick band) and her head, cast along the same direction */
+  const ux = sh.len > 0 ? sh.east / sh.len : 0, uy = sh.len > 0 ? sh.north / sh.len : 0;
+  const pt = (along, side) => proj(MEENA.E + ux * along - uy * side, MEENA.N + uy * along + ux * side);
+  const Lm = Math.min(sh.len * MEENA.h, 30), body = Lm * 0.8;
+  const a = pt(0, -0.14), b = pt(0, 0.14), c = pt(body, 0.1), d = pt(body, -0.1), hd = pt(Lm * 0.9, 0);
+  const hr = Math.max(0.12, 0.16) * GS;
+  $('meenaShadow').setAttribute('d', `M${a.x.toFixed(1)} ${a.y.toFixed(1)}L${b.x.toFixed(1)} ${b.y.toFixed(1)}L${c.x.toFixed(1)} ${c.y.toFixed(1)}L${d.x.toFixed(1)} ${d.y.toFixed(1)}Z` +
+    (sh.len > 0.05 ? `M${(hd.x - hr).toFixed(1)} ${hd.y.toFixed(1)}a${hr.toFixed(1)} ${(hr * 0.6).toFixed(1)} 0 1 0 ${(2 * hr).toFixed(1)} 0a${hr.toFixed(1)} ${(hr * 0.6).toFixed(1)} 0 1 0 ${(-2 * hr).toFixed(1)} 0Z` : ''));
+  /* length label near the tip, kept on the ground */
+  const lab = proj(ux * Math.min(sh.len, 6) * 1.0, uy * Math.min(sh.len, 6));
+  const off = sh.len < 0.4 ? 22 : 0;
+  $('shadowLab').setAttribute('x', clamp(lab.x + (ux < 0 ? 28 : -28) * (sh.len > 0.4 ? 1 : 0) + off, 40, 960).toFixed(1));
+  $('shadowLab').setAttribute('y', clamp(lab.y + 22, HY + 20, VH - 12).toFixed(1));
+  $('shadowLab').textContent = sh.len < 0.035 ? 'no shadow!' : fmt(sh.len, sh.len < 10 ? 1 : 0) + ' m';
+  /* Meena's bubble */
+  const lines = wrap(meenaLine(s, sh), 32);
+  $('bubble1').textContent = lines[0] || ''; $('bubble2').textContent = lines.slice(1).join(' ');
+  const bw = Math.max(...lines.map(l => l.length)) * 8.8 + 32;
+  $('bubbleBox').setAttribute('width', bw.toFixed(0));
+  const mp = proj(MEENA.E, MEENA.N);
+  $('bubbleBox').setAttribute('x', (mp.x - 30 - bw / 2).toFixed(0));
+  $('bubble1').setAttribute('x', (mp.x - 30 - bw / 2 + 16).toFixed(0)); $('bubble2').setAttribute('x', (mp.x - 30 - bw / 2 + 16).toFixed(0));
+  $('bubbleTail').setAttribute('d', `M${mp.x - 30} 374 L${mp.x - 8} ${mp.y - 90} L${mp.x - 12} 374Z`);
+  $('meenaMouth').setAttribute('d', sh.len < 0.035 || s.alt < 8 ? 'M-5 -68 Q0 -60 5 -68Z' : 'M-5 -68 Q0 -64 5 -68');
+  $('northNote').setAttribute('opacity', s.dec > CITIES[S.city].lat + 0.3 ? 1 : 0);
+  /* side panel */
+  $('timeOut').textContent = clock(S.t); $('timeNum').textContent = clock(S.t).replace(' noon', '');
+  $('dateOut').textContent = dateOf(S.day); $('dateNum').textContent = dateOf(S.day);
+  $('time').value = Math.round(S.t * 60 / 5) * 5; $('date').value = Math.round(S.day);
+  $('readout').innerHTML = `<span>The Sun is up</span><b>${fmt(s.alt, 0)}°</b>
+    <span>The stick is</span><b>1 m tall</b>
+    <span>Its shadow is</span><b>${sh.len < 0.035 ? 'gone!' : fmt(sh.len, sh.len < 10 ? 2 : 1) + ' m long'}</b>
+    <span>The shadow points</span><b>${sh.len < 0.035 ? '—' : compass8(sh.dir)}</b>
+    <span>The Sun is in the</span><b>${s.alt > 88 ? 'middle of the sky' : compass8(s.az)}</b>`;
+  for (const b of document.querySelectorAll('.city')) b.setAttribute('aria-pressed', b.dataset.city === S.city);
+  checkSun(s, sh);
+}
+function checkSun(s, sh){
+  if (!S.touched) return;
+  const at = stagePointOf(sunSvg, skyPt(s));
+  if (Math.abs(S.t - 12) <= 1 / 6 + 1e-9) { tickMission('noon'); discover('noon', at); }
+  if (sh.len > 0.05 && angDiff(sh.dir, 270) <= 30) tickMission('west', 'Yes! In the morning the shadow points west.');
+  if (s.alt <= 6) { tickMission('long'); discover('longest', at); }
+  if (sh.len < 0.035) { tickMission('zero'); discover('zero', at); }
+}
+/* Screen position of an SVG point, for the confetti. */
+function stagePointOf(svg, p){
+  const m = svg.getScreenCTM(); if (!m) return null;
+  const q = svg.createSVGPoint(); q.x = p.x; q.y = p.y; const r = q.matrixTransform(m);
+  return {x: r.x, y: r.y};
+}
+
+/* ============================================================================
+   Scene 2: the Moon walk. Built once, then patched.
+   ============================================================================ */
+const moonSvg = $('moonStage');
+const EC = {x: 330, y: 232}, OR = 164;             // Earth centre, orbit radius (top view)
+const MI = {x: 800, y: 184, r: 88};                // the Moon as Meena sees it
+const CAL = {x: 38, y: 446, w: 112, gap: 4};       // the calendar strip
+const moonPos = phi => ({x: EC.x - OR * Math.cos(phi * D2R), y: EC.y + OR * Math.sin(phi * D2R)});
+
+function buildMoon(){
+  const rnd = Play.mulberry32(11);
+  let stars = '';
+  for (let i = 0; i < 90; i++) stars += `<circle cx="${(rnd() * 1000).toFixed(1)}" cy="${(rnd() * 580).toFixed(1)}" r="${(rnd() * 1.3 + .3).toFixed(2)}" fill="#fff" opacity="${(rnd() * .6 + .2).toFixed(2)}"/>`;
+  let arrows = '';
+  for (let i = 0; i < 7; i++) { const y = 66 + i * 50; arrows += `<line x1="16" y1="${y}" x2="92" y2="${y}" stroke="#ffd36b" stroke-width="3" stroke-linecap="round" opacity=".8"/><path d="M92 ${y - 7} L104 ${y} L92 ${y + 7}Z" fill="#ffd36b" opacity=".8"/>`; }
+  const craters = [[-30, -28, 16], [26, -8, 12], [-8, 30, 20], [34, 36, 9], [-44, 18, 8], [6, -52, 10], [44, -44, 7]]
+    .map(c => `<circle cx="${MI.x + c[0]}" cy="${MI.y + c[1]}" r="${c[2]}" fill="#d9d2b6" stroke="#cbc3a4" stroke-width="2"/>`).join('');
+  let cal = '';
+  for (let i = 0; i < 8; i++) {
+    const x = CAL.x + i * (CAL.w + CAL.gap), cx = x + CAL.w / 2;
+    cal += `<g id="cal${i}"><rect x="${x}" y="${CAL.y}" width="${CAL.w}" height="126" rx="16" fill="#16233a" stroke="#2c3e5c" stroke-width="2"/>
+      <circle cx="${cx}" cy="${CAL.y + 46}" r="28" fill="#1f2b40" stroke="#34466a" stroke-width="2" stroke-dasharray="4 5" id="calRing${i}"/>
+      <path id="calLit${i}" fill="#f4efd8"/>
+      <text id="calQ${i}" x="${cx}" y="${CAL.y + 54}" text-anchor="middle" fill="#56698a" font-size="24" font-weight="800">?</text>
+      <text id="calName${i}" x="${cx}" y="${CAL.y + 96}" text-anchor="middle" fill="#8ea3c2" font-size="13" font-weight="800"></text>
+      <text id="calName${i}b" x="${cx}" y="${CAL.y + 113}" text-anchor="middle" fill="#8ea3c2" font-size="13" font-weight="800"></text></g>`;
+  }
+  moonSvg.innerHTML = `
+  <defs>
+    <radialGradient id="gEarth" cx="40%" cy="38%"><stop offset="0" stop-color="#6fc1ff"/><stop offset=".7" stop-color="#2471c9"/><stop offset="1" stop-color="#174d93"/></radialGradient>
+    <linearGradient id="gSunlight" x1="0" x2="1"><stop offset="0" stop-color="#ffcf5a" stop-opacity=".55"/><stop offset="1" stop-color="#ffcf5a" stop-opacity="0"/></linearGradient>
+    <linearGradient id="gNight" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#0a1330"/><stop offset="1" stop-color="#1d2f5e"/></linearGradient>
+    <clipPath id="clipMoonLit"><path id="moonLitClip"/></clipPath>
+    <clipPath id="clipEarth"><circle cx="${EC.x}" cy="${EC.y}" r="42"/></clipPath>
+    <marker id="arrowHead" markerWidth="10" markerHeight="10" refX="5" refY="5" orient="auto"><path d="M0 0 L10 5 L0 10Z" fill="#8ea3c2"/></marker>
+  </defs>
+  <rect width="1000" height="580" fill="#0d1726"/>
+  <g>${stars}</g>
+  <rect x="0" y="0" width="150" height="420" fill="url(#gSunlight)"/>
+  <g>${arrows}</g>
+  <text x="24" y="408" fill="#ffd36b" font-size="14" font-weight="800" letter-spacing=".06em">SUNLIGHT</text>
+  <text x="130" y="30" fill="#9fb3c8" font-size="14" font-weight="800" letter-spacing=".06em">LOOKING DOWN ON THE NORTH POLE</text>
+  <circle cx="${EC.x}" cy="${EC.y}" r="${OR}" fill="none" stroke="#3d5573" stroke-width="2" stroke-dasharray="3 7"/>
+  <path d="M${(EC.x + (OR + 22) * Math.cos(20 * D2R)).toFixed(1)} ${(EC.y + (OR + 22) * Math.sin(20 * D2R)).toFixed(1)} A${OR + 22} ${OR + 22} 0 0 0 ${(EC.x + (OR + 22) * Math.cos(-20 * D2R)).toFixed(1)} ${(EC.y + (OR + 22) * Math.sin(-20 * D2R)).toFixed(1)}" fill="none" stroke="#8ea3c2" stroke-width="3" marker-end="url(#arrowHead)"/>
+  <line id="sight" stroke="#9fb3c8" stroke-width="1.5" stroke-dasharray="4 6" opacity=".7"/>
+  <!-- the Earth: day side towards the Sun -->
+  <g>
+    <circle cx="${EC.x}" cy="${EC.y}" r="42" fill="url(#gEarth)"/>
+    <g clip-path="url(#clipEarth)" fill="#4caf6a"><path d="M${EC.x - 20} ${EC.y - 30} q18 -6 22 10 q-4 14 -18 18 q-10 -10 -4 -28z"/><path d="M${EC.x + 6} ${EC.y + 4} q16 -4 22 12 q-8 16 -22 10z"/><path d="M${EC.x - 34} ${EC.y + 10} q10 0 12 10 q-8 8 -14 2z"/></g>
+    <path d="M${EC.x} ${EC.y - 42} A42 42 0 0 1 ${EC.x} ${EC.y + 42}Z" fill="#050b16" opacity=".62"/>
+    <circle cx="${EC.x}" cy="${EC.y}" r="4" fill="#fff"/>
+    <text x="${EC.x}" y="${EC.y + 66}" text-anchor="middle" fill="#cfe0f5" font-size="14" font-weight="800">Earth</text>
+  </g>
+  <!-- the Moon on its orbit: the half facing the Sun is always lit -->
+  <g id="moonTop">
+    <circle r="17" fill="#3a4152"/>
+    <path d="M0 -17 A17 17 0 0 0 0 17Z" fill="#f4efd8"/>
+    <circle r="17" fill="none" stroke="#fff" stroke-opacity=".25"/>
+  </g>
+  <g id="moonTag" pointer-events="none"><rect x="-60" y="-50" width="120" height="26" rx="13" fill="#1b2a3a" opacity=".85"/><text y="-32" text-anchor="middle" fill="#fff" font-size="13" font-weight="800">Drag the Moon</text></g>
+  <!-- what Meena sees -->
+  <rect x="610" y="16" width="376" height="400" rx="22" fill="url(#gNight)" stroke="#2c3e5c" stroke-width="2"/>
+  <text x="628" y="46" fill="#9fb3c8" font-size="14" font-weight="800" letter-spacing=".06em">WHAT MEENA SEES</text>
+  <circle cx="${MI.x}" cy="${MI.y}" r="${MI.r}" fill="#1c2538" stroke="#2f3b55" stroke-width="2"/>
+  <path id="moonLit" fill="#f4efd8"/>
+  <g clip-path="url(#clipMoonLit)">${craters}</g>
+  <text id="goneText" x="${MI.x}" y="${MI.y + 6}" text-anchor="middle" fill="#8ea3c2" font-size="17" font-weight="800" opacity="0">Where did the Moon go?</text>
+  <text id="phaseName" x="${MI.x}" y="${MI.y + MI.r + 34}" text-anchor="middle" fill="#fff" font-size="23" font-weight="800" style="font-family:Fredoka,Nunito,sans-serif"></text>
+  <text id="phaseStat" x="${MI.x}" y="${MI.y + MI.r + 56}" text-anchor="middle" fill="#bcd0ea" font-size="14" font-weight="700"></text>
+  <path d="M612 394 Q700 380 800 388 T984 384 L984 396 Q984 416 964 416 L632 416 Q612 416 612 396Z" fill="#1a2a1f"/>
+  <g transform="translate(700 396)"><circle cx="0" cy="-26" r="7" fill="#2b1a12"/><path d="M-7 -18 L7 -18 L5 0 L-5 0Z" fill="#2b1a12"/><path d="M4 -30 L16 -40" stroke="#2b1a12" stroke-width="3" stroke-linecap="round"/></g>
+  <!-- the Moon calendar -->
+  <text x="${CAL.x}" y="${CAL.y - 12}" fill="#ffd36b" font-size="14" font-weight="800" letter-spacing=".06em">MEENA’S MOON CALENDAR</text>
+  ${cal}
+  <circle id="moonHit" r="30" fill="transparent" tabindex="0" role="slider" aria-label="The Moon: drag it round the Earth"/>
+  `;
+}
+function paintMoon(){
+  const phi = S.phi, p = moonPos(phi), k = litFraction(phi), idx = phaseIndex(phi);
+  $('moonTop').setAttribute('transform', `translate(${p.x.toFixed(1)} ${p.y.toFixed(1)})`);
+  $('moonHit').setAttribute('cx', p.x.toFixed(1)); $('moonHit').setAttribute('cy', p.y.toFixed(1));
+  $('moonTag').setAttribute('transform', `translate(${p.x.toFixed(1)} ${p.y.toFixed(1)})`);
+  $('moonTag').setAttribute('opacity', S.locked && !S.dragged ? 1 : 0);
+  const dx = p.x - EC.x, dy = p.y - EC.y, L = Math.hypot(dx, dy);
+  $('sight').setAttribute('x1', (EC.x + dx / L * 46).toFixed(1)); $('sight').setAttribute('y1', (EC.y + dy / L * 46).toFixed(1));
+  $('sight').setAttribute('x2', (p.x - dx / L * 20).toFixed(1)); $('sight').setAttribute('y2', (p.y - dy / L * 20).toFixed(1));
+  const d = phasePath(MI.x, MI.y, MI.r, phi);
+  $('moonLit').setAttribute('d', d); $('moonLitClip').setAttribute('d', d);
+  $('goneText').setAttribute('opacity', k < 0.02 ? 1 : 0);
+  const near = angDiff(phi, idx * 45) <= 9;
+  $('phaseName').textContent = near ? PHASES[idx] : (phi < 180 ? 'Growing (waxing)' : 'Shrinking (waning)');
+  $('phaseStat').textContent = `${Math.round(k * 100)}% of the side we see is lit`;
+  $('moonDay').textContent = `Day ${fmt(phi / 360 * MONTH, 0)} of 29½`;
+  checkMoon(k);
+}
+function paintCal(){
+  for (let i = 0; i < 8; i++) {
+    const got = S.cal[i] != null, x = CAL.x + i * (CAL.w + CAL.gap), cx = x + CAL.w / 2;
+    $('calLit' + i).setAttribute('d', got ? phasePath(cx, CAL.y + 46, 28, S.cal[i]) : '');
+    $('calQ' + i).setAttribute('opacity', got ? 0 : 1);
+    $('calRing' + i).setAttribute('stroke-dasharray', got ? '' : '4 5');
+    const nm = got ? PHASES[i].split(' ') : [];
+    $('calName' + i).textContent = nm[0] || ''; $('calName' + i + 'b').textContent = nm.slice(1).join(' ');
+    $('calName' + i).setAttribute('fill', got ? '#fff' : '#8ea3c2');
+  }
+}
+function checkMoon(k){
+  if (!S.locked) return;
+  const phi = S.phi, idx = phaseIndex(phi), at = stagePointOf(moonSvg, {x: MI.x, y: MI.y});
+  if (angDiff(phi, idx * 45) <= 9 && S.cal[idx] == null) {
+    S.cal[idx] = Math.round(phi);
+    paintCal(); renderMissions();
+    sound('pop');
+    track('phase', {phase: PHASES[idx]});
+    if (idx !== 0 && idx !== 4) say(PHASES[idx]);
+    if (S.cal.every(c => c != null)) { tickMission('cal'); discover('calendar', at); }
+  }
+  if (angDiff(phi, 180) <= 6) {
+    tickMission('full'); discover('full', at);
+    if (POE && !POE.explained) POE.explain(`On the far side of the Earth from the Sun, the Moon’s sunny half faces us. The model shows <b>${Math.round(k * 100)}%</b> of it lit: a full, round Moon.`);
+  }
+  if (angDiff(phi, 0) <= 6) { tickMission('new'); discover('new', at); }
+}
+
+/* ============================================================================
+   Controls
+   ============================================================================ */
+buildSun(); buildMoon();
+function showScene(sc){
+  S.scene = sc;
+  $('tabSun').setAttribute('aria-selected', sc === 'sun'); $('tabMoon').setAttribute('aria-selected', sc === 'moon');
+  $('sunStage').toggleAttribute('hidden', sc !== 'sun'); $('moonStage').toggleAttribute('hidden', sc !== 'moon');   // SVG has no .hidden property
+  $('sideSun').hidden = sc !== 'sun'; $('sideMoon').hidden = sc !== 'moon';
+  $('gate').hidden = !(sc === 'moon' && !S.locked);
+  if (sc !== 'moon') setOrbiting(false);
+  if (sc === 'moon') { paintMoon(); if (!S.locked) say('Before you walk the Moon, make a guess!'); }
+  else paintSun();
+}
+$('tabSun').addEventListener('click', () => { sound('tick'); showScene('sun'); track('scene', {scene: 'sun'}); });
+$('tabMoon').addEventListener('click', () => { sound('tick'); showScene('moon'); track('scene', {scene: 'moon'}); });
+
+function setTime(t, touch = true){ if (touch) S.touched = true; const w = sunWin(); S.t = clamp(t, w.rise, w.set); paintSun(); }
+$('time').addEventListener('input', e => setTime(+e.target.value / 60));
+$('date').addEventListener('input', e => { S.day = +e.target.value; buildSunPath(); setTime(S.t); });
+$('date').addEventListener('change', () => track('date', {day: S.day}));
+$('cities').addEventListener('click', e => {
+  const b = e.target.closest('[data-city]'); if (!b) return;
+  S.city = b.dataset.city; sound('pop'); buildSunPath(); setTime(S.t); track('city', {city: S.city});
+  say('Meena is in ' + S.city + '.');
+});
+
+/* Drag the Sun: it stays on today's path; the pointer picks the nearest moment. */
+let sunHintOff = false;
+drag($('sunHit'), sunSvg, {
+  start(){ sunHintOff = true; $('dragHint').setAttribute('opacity', 0); sound('tick'); },
+  move(p){
+    let best = SUNPATH[0], bd = Infinity;
+    for (const q of SUNPATH) { const d = (q.x - p.x) ** 2 + (q.y - p.y) ** 2; if (d < bd) { bd = d; best = q; } }
+    let t = best.t;
+    if (Math.abs(t - 12) < 0.13) t = 12;            // a gentle click-stop at noon
+    setTime(t);
+  },
+  end(){ track('dragSun', {t: +S.t.toFixed(2)}); },
+});
+$('sunHit').addEventListener('keydown', e => {
+  const k = {ArrowRight: 1, ArrowUp: 1, ArrowLeft: -1, ArrowDown: -1}[e.key]; if (!k) return;
+  e.preventDefault(); setTime(S.t + k * 0.25);
+});
+
+/* Drag the Moon round its orbit. */
+drag($('moonHit'), moonSvg, {
+  start(){ if (!S.locked) return false; setOrbiting(false); S.dragged = true; },
+  move(p){ S.phi = ((Math.atan2(p.y - EC.y, -(p.x - EC.x)) * R2D) % 360 + 360) % 360; paintMoon(); },
+  end(){ track('dragMoon', {phi: Math.round(S.phi)}); },
+});
+$('moonHit').addEventListener('keydown', e => {
+  const k = {ArrowRight: 1, ArrowUp: 1, ArrowLeft: -1, ArrowDown: -1}[e.key]; if (!k || !S.locked) return;
+  e.preventDefault(); S.phi = ((S.phi + k * 5) % 360 + 360) % 360; paintMoon();
+});
+let ORBIT = null;
+function setOrbiting(on){
+  S.orbiting = on;
+  $('btnOrbit').textContent = on ? '❚❚ Stop' : '▶ Let it go round';
+  if (ORBIT) { ORBIT.stop(); ORBIT = null; }
+  if (on) ORBIT = loop(dt => { S.phi = (S.phi + dt * 30) % 360; paintMoon(); });
+}
+$('btnOrbit').addEventListener('click', () => { if (!S.locked) { toast('Make your guess first!'); return; } setOrbiting(!S.orbiting); sound('tick'); });
+
+/* The Sun's rays turn slowly: decoration only. */
+if (!reduced()) loop((dt, t) => { if (S.scene === 'sun') $('sunRays').setAttribute('transform', `rotate(${(t * 8) % 360})`); });
+
+/* ============================================================================
+   Start
+   ============================================================================ */
+findings($('finds'), [
+  {id: 'noon',     icon: '🕛', label: 'Noon: the shortest shadow', hint: 'When is the shadow shortest?', say: 'At noon the Sun is highest, so the shadow is shortest.'},
+  {id: 'zero',     icon: '⭕', label: 'A day with no shadow',       hint: 'Try Chennai in late April', say: 'No shadow! The noon Sun is exactly overhead. This only happens between the tropics.'},
+  {id: 'longest',  icon: '🌅', label: 'The longest shadow',         hint: 'Make the Sun very low', say: 'When the Sun is low, shadows are very long.'},
+  {id: 'full',     icon: '🌕', label: 'Full Moon',                  hint: 'Where is the Moon all lit up?', say: 'Full Moon! Its sunny side faces us.'},
+  {id: 'new',      icon: '🌑', label: 'New Moon: where did it go?', hint: 'Put the Moon between us and the Sun', say: 'Where did the Moon go? Its sunny side faces away from us.'},
+  {id: 'calendar', icon: '📅', label: 'A whole Moon calendar',      hint: 'Collect all eight Moons', say: 'You collected every Moon. That is one Moon month, about twenty nine and a half days.'},
+], () => toast('All six found! You are a real sky detective.', 4200));
+
+const POE = predict($('poe'), {
+  id: 'moon-far-side',
+  q: 'The Moon goes round to the far side of the Earth, away from the Sun. What will Meena see?',
+  options: [
+    {id: 'full', text: '🌕 A full, round Moon', right: true},
+    {id: 'none', text: '🌑 No Moon at all — the Earth hides it'},
+    {id: 'half', text: '🌓 Half a Moon'},
+  ],
+  confidence: false,
+  onLock(){
+    S.locked = true; $('gate').hidden = true;
+    say('Now walk the Moon round the Earth and find out!');
+    paintMoon();
+  },
+});
+if (!Play.FF('predict')) S.locked = true;
+
+renderMissions();
+buildSunPath();
+setTime(S.t, false);
+paintCal();
+showScene(S.scene);
+setTimeout(() => { if (!sunHintOff && S.scene === 'sun') $('dragHint').setAttribute('opacity', 1); }, 400);
+if (S.scene === 'sun') say('Help Meena! Drag the Sun across the sky and watch her shadow.');
+window.applyFeatures = () => { paintSun(); paintMoon(); };
+window.PG_STATE = () => JSON.parse(JSON.stringify(S));
+window.PG_VIEW = {EC, OR, moonPos, skyPt};   // geometry, read-only, for tests
+window.PG_MODEL = {declination, sunAt, shadow, dayWindow, noonAlt, compass8, litFraction, phaseIndex, litSide, phasePath, PHASES};
+</script>
+</body>
+</html>

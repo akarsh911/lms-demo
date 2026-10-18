@@ -1,0 +1,589 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Vectors in Space</title>
+<meta name="description" content="Class 12: vectors and lines in a rotatable 3-D space. Add arrows tip to tail, project one on another, read the cross product as an area and its components as shadows, and hunt for the shortest segment between two skew lines.">
+<link rel="icon" href="../../favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600&family=Inter:wght@400;500;600;700&family=Nunito:wght@500;700;800&family=Newsreader:opsz,wght@6..72,400;6..72,500&family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="../../play.css">
+<style>
+/* Only what this page needs beyond play.css. */
+.pg-stage{align-self:start; min-height:0}
+.tabs{display:flex; gap:4px; padding:10px 12px 0; border-bottom:1px solid var(--hair); background:var(--card)}
+.tab{border:1px solid transparent; border-bottom:none; background:none; padding:8px 14px; border-radius:8px 8px 0 0; cursor:pointer;
+  font-family:"Newsreader",Georgia,serif; font-size:17px; color:var(--ink-3); margin-bottom:-1px}
+.tab[aria-selected="true"]{background:var(--card); border-color:var(--hair); color:var(--ink); border-bottom:1px solid var(--card)}
+.tab:disabled{cursor:default; opacity:.6}
+.gate{position:absolute; left:0; right:0; top:48px; bottom:0; display:grid; place-items:center; pointer-events:none}
+.gate span{background:rgba(29,35,39,.86); color:#fff; padding:10px 16px; border-radius:99px; font-weight:600; font-size:14px}
+.chips{display:flex; flex-wrap:wrap; gap:6px; margin:4px 0 8px}
+.chip{border:1px solid var(--hair-2); background:var(--card); border-radius:99px; padding:4px 11px; font-size:13px; cursor:pointer; font-weight:600; color:var(--ink-2)}
+.chip[aria-pressed="true"]{background:var(--accent-soft); border-color:var(--accent); color:var(--ink)}
+.chip:disabled{opacity:.45; cursor:default}
+.lab{font-size:11.5px; font-weight:700; color:var(--ink-3); letter-spacing:.06em; text-transform:uppercase; margin-top:8px}
+.vin{display:grid; grid-template-columns:28px repeat(3, 1fr); gap:6px; align-items:center; margin:5px 0}
+.vin b{font-family:var(--font-mono); font-size:14px}
+.vin input{width:100%; min-height:32px; border-radius:7px; border:1px solid var(--hair-2); background:var(--card); color:var(--ink); font:600 13.5px var(--font-mono); padding:0 6px; text-align:center}
+.vin input:disabled{opacity:.5}
+.vhead{display:grid; grid-template-columns:28px repeat(3, 1fr); gap:6px; font-size:11px; color:var(--ink-3); text-align:center; font-family:var(--font-mono)}
+.readout{display:grid; grid-template-columns:auto 1fr; gap:3px 12px; font-size:13px; align-items:baseline}
+.readout span{color:var(--ink-2)}
+.readout b{font-family:var(--font-mono); font-weight:600; font-size:12.5px; font-variant-numeric:tabular-nums; text-align:right; overflow-wrap:anywhere}
+.readout .sep{grid-column:1/-1; height:1px; background:var(--hair); margin:3px 0}
+.note{font-size:12.5px; color:var(--ink-3); margin:6px 0 0}
+.why p{font-size:13.5px; margin-bottom:.55em}
+.ctl{grid-template-columns:118px 1fr 56px; margin:4px 0}
+.ctl label{font-size:12.5px; line-height:1.2}
+.ctl output{font-family:var(--font-mono); font-size:12.5px; font-weight:600; min-width:0}
+.btn[aria-pressed="true"]{background:var(--accent-soft); border-color:var(--accent)}
+#viewHit, #viewHitL{cursor:grab} #viewHit.dragging, #viewHitL.dragging{cursor:grabbing} #mapHit{cursor:crosshair}
+@media (max-width:1180px) and (min-width:981px){ .pg-main.wide-side{grid-template-columns:minmax(0,1fr) 340px} }
+</style>
+</head>
+<body>
+<header class="pg-top"></header>
+
+<div class="pg-intro">
+  <h1>Vectors in space</h1>
+  <p>Two arrows in a space you can turn. Add them tip to tail, drop one onto the other to project it, and read the cross product as the area of the parallelogram they span,
+     its three components as the areas of that parallelogram’s shadows. Then take two lines in space and hunt, by hand, for the shortest segment between them.
+     Drag empty space to turn the view; drag an arrow’s tip to move it level with the floor.</p>
+</div>
+
+<main class="pg-main wide-side">
+  <section class="pg-stage" id="stageWrap">
+    <div class="tabs" role="tablist">
+      <button class="tab" role="tab" id="tabV" aria-selected="true">Two vectors</button>
+      <button class="tab" role="tab" id="tabL" aria-selected="false">Two lines</button>
+    </div>
+    <svg id="stageV" viewBox="0 0 1000 600" role="img" aria-label="Two vectors a and b in 3-D with their sum, the projection of a on b, the cross product, and the parallelogram's shadows on the three coordinate planes"></svg>
+    <svg id="stageL" viewBox="0 0 1000 600" role="img" aria-label="Two lines in 3-D with points P and Q on them, and a map of the distance PQ" hidden></svg>
+    <div class="gate" id="gate"><span>Make your prediction first →</span></div>
+  </section>
+
+  <aside class="pg-side">
+    <div id="poe"></div>
+
+    <div class="card" id="cardV">
+      <div class="kicker">The vectors</div>
+      <div class="chips" id="vChips">
+        <button class="chip" data-v="ex22">Example 22</button>
+        <button class="chip" data-v="ex25">Example 25</button>
+        <button class="chip" data-v="ex16">Example 16</button>
+        <button class="chip" data-v="ex14">Example 14</button>
+        <button class="chip" data-v="ex15">Example 15</button>
+      </div>
+      <div class="vhead"><span></span><span>î</span><span>ĵ</span><span>k̂</span></div>
+      <div class="vin"><b style="color:#2b6cb0">a</b><input type="number" id="a0" min="-6" max="6" step="1"><input type="number" id="a1" min="-6" max="6" step="1"><input type="number" id="a2" min="-6" max="6" step="1"></div>
+      <div class="vin"><b style="color:#d9731a">b</b><input type="number" id="b0" min="-6" max="6" step="1"><input type="number" id="b1" min="-6" max="6" step="1"><input type="number" id="b2" min="-6" max="6" step="1"></div>
+      <div class="row" style="gap:6px; margin-top:6px">
+        <button class="btn sm" id="btnSwap">Swap a and b</button>
+        <button class="btn sm" id="btnSum" aria-pressed="true">a + b</button>
+        <button class="btn sm" id="btnProj" aria-pressed="true">Projection</button>
+        <button class="btn sm" id="btnCross" aria-pressed="true">a × b</button>
+      </div>
+      <div class="readout" id="readV" style="margin-top:10px"></div>
+    </div>
+
+    <div class="card" id="cardL" hidden>
+      <div class="kicker">The lines r = a₁ + λb₁ and r = a₂ + μb₂</div>
+      <div class="chips" id="lChips">
+        <button class="chip" data-l="ex9">Example 9</button>
+        <button class="chip" data-l="room">A room, 1 × 3 × 2</button>
+        <button class="chip" data-l="ex7">Example 7</button>
+        <button class="chip" data-l="ex10">Example 10</button>
+      </div>
+      <div class="ctl"><label for="turn">Turn l₂ towards l₁</label><input type="range" id="turn" min="0" max="1" step="0.05" value="0"><output id="turnOut">0</output></div>
+      <div class="ctl"><label for="lift">Lift l₂ (along k̂)</label><input type="range" id="lift" min="-3" max="3" step="0.01" value="0"><output id="liftOut">0</output></div>
+      <p class="note">Drag P along l₁ and Q along l₂, or drag the dot on the distance map, until PQ is as short as it gets.</p>
+      <div class="readout" id="readL" style="margin-top:8px"></div>
+    </div>
+
+    <div class="card why" id="whyCard" hidden>
+      <div class="kicker">What the model says</div>
+      <div id="why"></div>
+    </div>
+
+    <div class="card"><div class="kicker">To find</div><div id="finds"></div></div>
+  </aside>
+</main>
+
+<script src="../../play.js"></script>
+<script>
+'use strict';
+const {$, esc, clamp, fmt, drag, sound, say, track, toast, predict, findings, discover, found,
+       shareState, sharedState, mount} = Play;
+mount({thread: 'vectors', band: 'theorist'});
+
+/* MODEL:start ==================================================================
+   Vectors are arrays [x, y, z] (NCERT Class 12 Ch 10, 11).
+     a · b = a₁b₁ + a₂b₂ + a₃b₃            cos θ = a · b / (|a||b|)
+     projection of a on b = a · b / |b|    (a vector: (a · b / |b|²) b)
+     a × b = (a₂b₃ − a₃b₂, a₃b₁ − a₁b₃, a₁b₂ − a₂b₁)     |a × b| = area of the parallelogram
+   The SHADOWS: the parallelogram on a and b is projected onto the yz-, zx- and
+   xy-planes and each shadow's area is measured by the shoelace formula, separately
+   from the cross product. They come out equal to its three components.
+   LINES r = a₁ + λb₁ and r = a₂ + μb₂. The distance |P(λ)Q(μ)| is computed for any
+   λ, μ the learner picks; its true minimum is found by setting both partial
+   derivatives of |PQ|² to zero (two linear equations). The book's formulas,
+     skew:     d = |(b₁ × b₂) · (a₂ − a₁)| / |b₁ × b₂|
+     parallel: d = |b × (a₂ − a₁)| / |b|,
+   are evaluated as well, and checked against the minimum.
+   ============================================================================ */
+const add = (a, b) => a.map((x, i) => x + b[i]);
+const sub = (a, b) => a.map((x, i) => x - b[i]);
+const mulS = (a, k) => a.map(x => x * k);
+const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+const mag = a => Math.hypot(a[0], a[1], a[2]);
+const angleDeg = (a, b) => { const m = mag(a) * mag(b); return m < 1e-12 ? null : Math.acos(clamp(dot(a, b) / m, -1, 1)) * 180 / Math.PI; };
+const projScalar = (a, b) => mag(b) < 1e-12 ? null : dot(a, b) / mag(b);
+const projVector = (a, b) => mag(b) < 1e-12 ? [0, 0, 0] : mulS(b, dot(a, b) / dot(b, b));
+const dirCosines = a => { const m = mag(a); return m < 1e-12 ? null : a.map(x => x / m); };
+/* the signed area of a polygon given as 2-D points: the shoelace formula */
+const shoelace = P => P.reduce((s, p, i) => { const q = P[(i + 1) % P.length]; return s + (p[0] * q[1] - q[0] * p[1]); }, 0) / 2;
+/* the parallelogram 0, a, a + b, b, dropped onto a coordinate plane */
+const PLANES = {yz: [1, 2], zx: [2, 0], xy: [0, 1]};
+function shadowArea(a, b, plane){
+  const [i, j] = PLANES[plane], pt = v => [v[i], v[j]];
+  return shoelace([[0, 0], pt(a), pt(add(a, b)), pt(b)]);
+}
+/* lines */
+const pointOn = (a1, b1, t) => add(a1, mulS(b1, t));
+const distPQ = (L, lam, mu) => mag(sub(pointOn(L.a2, L.b2, mu), pointOn(L.a1, L.b1, lam)));
+function closest(L){
+  const w0 = sub(L.a1, L.a2), A = dot(L.b1, L.b1), Bq = dot(L.b1, L.b2), Cq = dot(L.b2, L.b2), D = dot(L.b1, w0), E = dot(L.b2, w0);
+  const den = A * Cq - Bq * Bq;
+  if (Math.abs(den) < 1e-10 * A * Cq) return {parallel: true, lam: 0, mu: E / Cq, d: distPQ(L, 0, E / Cq)};
+  const lam = (Bq * E - Cq * D) / den, mu = (A * E - Bq * D) / den;
+  return {parallel: false, lam, mu, d: distPQ(L, lam, mu)};
+}
+function bookDistance(L){
+  const n = cross(L.b1, L.b2), m = mag(n), w = sub(L.a2, L.a1);
+  if (m < 1e-9) return {kind: 'parallel', d: mag(cross(L.b1, w)) / mag(L.b1), skewFormula: NaN};
+  return {kind: 'skew', d: Math.abs(dot(n, w)) / m, skewFormula: Math.abs(dot(n, w)) / m};
+}
+const lineAngle = (b1, b2) => { const c = Math.abs(dot(b1, b2)) / (mag(b1) * mag(b2)); return Math.acos(clamp(c, -1, 1)) * 180 / Math.PI; };
+/* MODEL:end */
+
+/* ---- presets, from the book ----------------------------------------------- */
+const VPRE = {
+  ex22: {a: [2, 1, 3], b: [3, 5, -2]},  ex25: {a: [3, 1, 4], b: [1, -1, 1]},  ex16: {a: [2, 3, 2], b: [1, 2, 1]},
+  ex14: {a: [1, 1, -1], b: [1, -1, 1]}, ex15: {a: [6, 2, -8], b: [4, -4, 2]},
+};
+const LPRE = {
+  ex9:  {a1: [1, 1, 0], b1: [2, -1, 1], a2: [2, 1, -1], b2: [3, -5, 2]},
+  room: {a1: [0, 0, 2], b1: [1, 3, 0], a2: [1, 0, 2], b2: [0, 3, -2]},
+  ex7:  {a1: [3, 2, -4], b1: [1, 2, 2], a2: [5, -2, 0], b2: [3, 2, 6]},
+  ex10: {a1: [1, 2, -4], b1: [2, 3, 6], a2: [3, 3, -5], b2: [2, 3, 6]},
+};
+
+/* ---- number formatting ---------------------------------------------------- */
+const MINUS = '−';
+function nf(x, dp = 3){
+  if (x == null || !isFinite(x)) return '—';
+  let s = (Math.abs(x) < 5e-10 ? 0 : x).toFixed(dp);
+  if (s.includes('.')) s = s.replace(/0+$/, '').replace(/\.$/, '');
+  if (s === '-0') s = '0';
+  return s.replace('-', MINUS);
+}
+const vf = (v, dp = 2) => '(' + v.map(x => nf(x, dp)).join(', ') + ')';
+function vijk(v, dp = 2){
+  const parts = []; ['î', 'ĵ', 'k̂'].forEach((u, i) => { const x = v[i]; if (Math.abs(x) < 5e-10) return;
+    const c = nf(Math.abs(x), dp); parts.push((x < 0 ? (parts.length ? ' − ' : MINUS) : (parts.length ? ' + ' : '')) + (c === '1' ? '' : c) + u); });
+  return parts.length ? parts.join('') : '0';
+}
+
+/* ---- state: plain data ---------------------------------------------------- */
+const S = {tab: 'V', a: [2, 1, 3], b: [3, 5, -2], preset: 'ex22', showSum: true, showProj: true, showCross: true,
+  lp: 'ex9', turn: 0, lift: 0, lam: -1.5, mu: 1.2, az: 32, el: 24, locked: false, swapped: null, searched: false, moved: false};
+const shared = sharedState();
+if (shared) {
+  if (['V', 'L'].includes(shared.tab)) S.tab = shared.tab;
+  const okv = v => Array.isArray(v) && v.length === 3 && v.every(x => isFinite(+x)) ? v.map(x => clamp(Math.round(+x), -6, 6)) : null;
+  if (okv(shared.a)) S.a = okv(shared.a); if (okv(shared.b)) S.b = okv(shared.b);
+  if (LPRE[shared.lp]) S.lp = shared.lp;
+  S.turn = clamp(+shared.turn || 0, 0, 1); S.lift = clamp(+shared.lift || 0, -3, 3);
+  if (isFinite(+shared.az)) S.az = +shared.az; if (isFinite(+shared.el)) S.el = clamp(+shared.el, 8, 80);
+  S.preset = null;
+}
+shareState(() => ({tab: S.tab, a: S.a, b: S.b, lp: S.lp, turn: S.turn, lift: S.lift, az: S.az, el: S.el}));
+/* the lines, after the learner's turn and lift */
+function lines(){
+  const P = LPRE[S.lp], k = mag(P.b2) / mag(P.b1);
+  const b2 = S.turn >= 1 ? mulS(P.b1, k) : P.b2.map((x, i) => x * (1 - S.turn) + P.b1[i] * k * S.turn);
+  return {a1: P.a1, b1: P.b1, a2: add(P.a2, [0, 0, S.lift]), b2};
+}
+
+/* ============================================================================
+   3-D: an orthographic camera with z up. az turns about the z-axis, el tilts.
+   ============================================================================ */
+const CX = 318, CY = 318;
+function cam(v){
+  const a = S.az * Math.PI / 180, e = S.el * Math.PI / 180, sa = Math.sin(a), ca = Math.cos(a), se = Math.sin(e), ce = Math.cos(e);
+  return [-sa * v[0] + ca * v[1], -se * ca * v[0] - se * sa * v[1] + ce * v[2], ce * ca * v[0] + ce * sa * v[1] + se * v[2]];
+}
+let SC = 40, TGT = [0, 0, 0];                              // px per unit and the point at the centre, refitted when nothing is being dragged
+const P2 = v => { const c = cam(sub(v, TGT)); return {x: CX + c[0] * SC, y: CY - c[1] * SC, z: c[2]}; };
+/* a screen point back to world, on the level z = h */
+function unprojectAt(p, h){
+  const a = S.az * Math.PI / 180, e = S.el * Math.PI / 180, sa = Math.sin(a), ca = Math.cos(a), se = Math.sin(e), ce = Math.cos(e);
+  const X = (p.x - CX) / SC, Y = (CY - p.y) / SC, T = (ce * h - Y) / se;
+  return [-sa * X + ca * T, ca * X + sa * T, h];
+}
+const COL = {a: '#2b6cb0', b: '#d9731a', s: '#6d7a86', p: '#1f8a70', c: '#7b3fc2', ink: '#1d2327', ink2: '#4a555b', ink3: '#7c878c', grid: '#e7e3d8', axis: '#9aa3a6'};
+const marker = (id, c) => `<marker id="${id}" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="${c}"/></marker>`;
+const seg = (p, q, attrs) => { const A = P2(p), B = P2(q); return `<line x1="${A.x.toFixed(1)}" y1="${A.y.toFixed(1)}" x2="${B.x.toFixed(1)}" y2="${B.y.toFixed(1)}" ${attrs}/>`; };
+const poly = (pts, attrs) => `<polygon points="${pts.map(v => { const p = P2(v); return p.x.toFixed(1) + ',' + p.y.toFixed(1); }).join(' ')}" ${attrs}/>`;
+const tlabel = (v, text, col, dx = 8, dy = -8, size = 14) => { const p = P2(v); return `<text x="${(p.x + dx).toFixed(1)}" y="${(p.y + dy).toFixed(1)}" font-size="${size}" font-weight="700" fill="${col}" stroke="#fff" stroke-width="4" paint-order="stroke" ${dx < 0 ? 'text-anchor="end"' : ''} font-family="JetBrains Mono, monospace">${esc(text)}</text>`; };
+function axes(L){
+  let g = '';
+  for (let k = -L; k <= L; k++) { g += seg([k, -L, 0], [k, L, 0], `stroke="${COL.grid}"`) + seg([-L, k, 0], [L, k, 0], `stroke="${COL.grid}"`); }
+  g += seg([-L, 0, 0], [0, 0, 0], `stroke="${COL.axis}" stroke-dasharray="3 4"`) + seg([0, -L, 0], [0, 0, 0], `stroke="${COL.axis}" stroke-dasharray="3 4"`) + seg([0, 0, -L * 0.6], [0, 0, 0], `stroke="${COL.axis}" stroke-dasharray="3 4"`);
+  g += seg([0, 0, 0], [L + 0.6, 0, 0], `stroke="${COL.axis}" stroke-width="1.5" marker-end="url(#mAx)"`) + seg([0, 0, 0], [0, L + 0.6, 0], `stroke="${COL.axis}" stroke-width="1.5" marker-end="url(#mAx)"`) + seg([0, 0, 0], [0, 0, L * 0.9], `stroke="${COL.axis}" stroke-width="1.5" marker-end="url(#mAx)"`);
+  const lb = (v, t) => { const p = P2(v); return `<text x="${p.x.toFixed(1)}" y="${(p.y + 4).toFixed(1)}" font-size="13" font-style="italic" text-anchor="middle" fill="${COL.ink2}">${t}</text>`; };
+  return g + lb([L + 1.1, 0, 0], 'x') + lb([0, L + 1.1, 0], 'y') + lb([0, 0, L * 0.9 + 0.5], 'z');
+}
+
+/* ============================================================================
+   Stage V: two vectors
+   ============================================================================ */
+const sV = $('stageV'), sL = $('stageL');
+const VIEWBOX = {x: 14, y: 14, w: 612, h: 572};
+function buildV(){
+  sV.innerHTML = `
+  <defs>${marker('mA', COL.a)}${marker('mB', COL.b)}${marker('mS', COL.s)}${marker('mP', COL.p)}${marker('mC', COL.c)}${marker('mAx', COL.axis)}
+    <clipPath id="clipV"><rect x="${VIEWBOX.x}" y="${VIEWBOX.y}" width="${VIEWBOX.w}" height="${VIEWBOX.h}" rx="10"/></clipPath></defs>
+  <rect x="0" y="0" width="1000" height="600" fill="#fbfaf6"/>
+  <rect x="${VIEWBOX.x}" y="${VIEWBOX.y}" width="${VIEWBOX.w}" height="${VIEWBOX.h}" rx="10" fill="#fff" stroke="#e2ded2"/>
+  <g clip-path="url(#clipV)"><g id="v3d"></g></g>
+  <text x="30" y="574" font-size="12" fill="${COL.ink3}" id="vHint"></text>
+  <rect id="viewHit" x="${VIEWBOX.x}" y="${VIEWBOX.y}" width="${VIEWBOX.w}" height="${VIEWBOX.h}" fill="transparent" role="img" aria-label="Drag to turn the view; drag a tip to move it"/>
+  <text x="648" y="36" font-size="18" class="serif" fill="${COL.ink}">The parallelogram’s shadows</text>
+  <text x="648" y="56" font-size="12" fill="${COL.ink3}">each area measured by the shoelace formula</text>
+  <g id="shadows"></g>`;
+}
+function fitScale(pts, room = 250){
+  const ext = Math.max(3, ...pts.map(v => Math.max(...v.map(Math.abs))));
+  return clamp(room / (ext * 1.15), 14, 60);
+}
+let DRAGGING = false;
+function paintV(){
+  const a = S.a, b = S.b, sum = add(a, b), n = cross(a, b), L = Math.max(3, Math.ceil(Math.max(...[...a, ...b, ...sum].map(Math.abs))));
+  if (!DRAGGING) { TGT = [0, 0, 0]; SC = fitScale([a, b, sum]); }
+  let g = axes(L);
+  if (!S.locked) { $('v3d').innerHTML = g; $('shadows').innerHTML = `<text x="648" y="96" font-size="13" fill="${COL.ink3}">Three shadows, measured, appear once you</text><text x="648" y="114" font-size="13" fill="${COL.ink3}">have made your prediction.</text>`; $('vHint').textContent = ''; return; }
+  /* drop lines from the tips to the floor, so heights read */
+  for (const [v, c] of [[a, COL.a], [b, COL.b]]) g += seg(v, [v[0], v[1], 0], `stroke="${c}" stroke-opacity=".5" stroke-dasharray="2 4"`) + seg([0, 0, 0], [v[0], v[1], 0], `stroke="${c}" stroke-opacity=".25" stroke-dasharray="2 4"`);
+  /* the parallelogram */
+  g += poly([[0, 0, 0], a, sum, b], `fill="${COL.c}" fill-opacity=".10" stroke="${COL.c}" stroke-opacity=".35"`);
+  if (S.showSum) g += seg(a, sum, `stroke="${COL.b}" stroke-width="2" stroke-dasharray="6 4" stroke-opacity=".75"`) + seg([0, 0, 0], sum, `stroke="${COL.s}" stroke-width="3" marker-end="url(#mS)"`) + tlabel(sum, 'a + b', COL.s);
+  if (S.showProj && mag(b) > 0) {
+    const pv = projVector(a, b);
+    g += seg(a, pv, `stroke="${COL.p}" stroke-width="1.6" stroke-dasharray="4 3"`);
+    g += seg([0, 0, 0], pv, `stroke="${COL.p}" stroke-width="7" stroke-opacity=".45" stroke-linecap="round"`);
+    /* a right-angle mark at the foot */
+    if (mag(sub(a, pv)) > 0.2 && mag(pv) > 0.2) {
+      const u1 = mulS(b, (dot(a, b) >= 0 ? -1 : 1) * 0.3 / mag(b)), u2 = mulS(sub(a, pv), 0.3 / mag(sub(a, pv)));
+      g += `<path d="M${P2(add(pv, u1)).x.toFixed(1)} ${P2(add(pv, u1)).y.toFixed(1)} L${P2(add(add(pv, u1), u2)).x.toFixed(1)} ${P2(add(add(pv, u1), u2)).y.toFixed(1)} L${P2(add(pv, u2)).x.toFixed(1)} ${P2(add(pv, u2)).y.toFixed(1)}" fill="none" stroke="${COL.p}" stroke-width="1.4"/>`;
+    }
+  }
+  g += seg([0, 0, 0], b, `stroke="${COL.b}" stroke-width="3.2" marker-end="url(#mB)"`) + seg([0, 0, 0], a, `stroke="${COL.a}" stroke-width="3.2" marker-end="url(#mA)"`);
+  let crossNote = '';
+  if (S.showCross && mag(n) > 1e-9) {
+    const k = Math.min(1, (L * 0.95) / mag(n)), nn = mulS(n, k);
+    g += seg([0, 0, 0], nn, `stroke="${COL.c}" stroke-width="3.2" marker-end="url(#mC)"`) + tlabel(nn, S.swapped ? 'b × a' : 'a × b', COL.c);
+    if (k < 1) crossNote = `a × b is drawn at ${nf(k, 2)} of its length (${nf(mag(n), 2)})`;
+  }
+  g += tlabel(a, 'a', COL.a, 9, -9, 16) + tlabel(b, 'b', COL.b, 9, -9, 16);
+  const pa = P2(a), pb = P2(b);
+  g += `<circle cx="${pa.x.toFixed(1)}" cy="${pa.y.toFixed(1)}" r="6" fill="${COL.a}" stroke="#fff" stroke-width="2"/><circle cx="${pb.x.toFixed(1)}" cy="${pb.y.toFixed(1)}" r="6" fill="${COL.b}" stroke="#fff" stroke-width="2"/>`;
+  $('v3d').innerHTML = g;
+  $('vHint').textContent = crossNote || 'Drag empty space to turn; drag a tip to slide it level with the floor.';
+  paintShadows(a, b, n);
+}
+function paintShadows(a, b, n){
+  const names = [['yz', 'y', 'z', 0, 'x'], ['zx', 'z', 'x', 1, 'y'], ['xy', 'x', 'y', 2, 'z']];
+  let h = '';
+  names.forEach(([pl, u, v, ci, cn], k) => {
+    const [i, j] = PLANES[pl], pt = w => [w[i], w[j]], pts = [[0, 0], pt(a), pt(add(a, b)), pt(b)];
+    const ext = Math.max(2, ...pts.flat().map(Math.abs)), bx = 648, by = 72 + k * 176, sz = 150, s = sz / 2 / (ext * 1.1), ox = bx + sz / 2, oy = by + sz / 2;
+    const P = q => `${(ox + q[0] * s).toFixed(1)},${(oy - q[1] * s).toFixed(1)}`;
+    const area = shadowArea(a, b, pl);
+    h += `<rect x="${bx}" y="${by}" width="${sz}" height="${sz}" rx="6" fill="#fff" stroke="#e2ded2"/>
+      <line x1="${bx + 6}" y1="${oy}" x2="${bx + sz - 6}" y2="${oy}" stroke="${COL.axis}"/><line x1="${ox}" y1="${by + 6}" x2="${ox}" y2="${by + sz - 6}" stroke="${COL.axis}"/>
+      <text x="${bx + sz - 8}" y="${oy - 5}" font-size="11" font-style="italic" text-anchor="end" fill="${COL.ink3}">${u}</text><text x="${ox + 5}" y="${by + 16}" font-size="11" font-style="italic" fill="${COL.ink3}">${v}</text>
+      <polygon points="${pts.map(P).join(' ')}" fill="${COL.c}" fill-opacity=".22" stroke="${COL.c}" stroke-width="1.4"/>
+      <line x1="${ox}" y1="${oy}" x2="${(ox + pt(a)[0] * s).toFixed(1)}" y2="${(oy - pt(a)[1] * s).toFixed(1)}" stroke="${COL.a}" stroke-width="2"/>
+      <line x1="${ox}" y1="${oy}" x2="${(ox + pt(b)[0] * s).toFixed(1)}" y2="${(oy - pt(b)[1] * s).toFixed(1)}" stroke="${COL.b}" stroke-width="2"/>
+      <text x="${bx + sz + 14}" y="${by + 40}" font-size="13" fill="${COL.ink2}">on the ${pl}-plane</text>
+      <text x="${bx + sz + 14}" y="${by + 64}" font-size="13.5" fill="${COL.ink}" font-family="JetBrains Mono, monospace">area ${nf(area, 2)}</text>
+      <text x="${bx + sz + 14}" y="${by + 88}" font-size="13.5" fill="${COL.c}" font-family="JetBrains Mono, monospace">${cn}-part of a×b</text>
+      <text x="${bx + sz + 14}" y="${by + 108}" font-size="13.5" fill="${COL.c}" font-family="JetBrains Mono, monospace">= ${nf(n[ci], 2)}</text>
+      <text x="${bx + sz + 14}" y="${by + 132}" font-size="12.5" fill="${Math.abs(area - n[ci]) < 1e-9 ? COL.p : '#d6453d'}">${Math.abs(area - n[ci]) < 1e-9 ? '✓ equal' : '✗ differ'}</text>`;
+  });
+  $('shadows').innerHTML = h;
+}
+
+/* ============================================================================
+   Stage L: two lines, P and Q, and the distance map
+   ============================================================================ */
+const MAP = {x: 668, y: 92, w: 300, h: 300, n: 40};
+function buildL(){
+  let cells = '';
+  for (let i = 0; i < MAP.n; i++) for (let j = 0; j < MAP.n; j++) cells += `<rect id="c${i}_${j}" x="${(MAP.x + i * MAP.w / MAP.n).toFixed(2)}" y="${(MAP.y + j * MAP.h / MAP.n).toFixed(2)}" width="${(MAP.w / MAP.n + 0.4).toFixed(2)}" height="${(MAP.h / MAP.n + 0.4).toFixed(2)}"/>`;
+  sL.innerHTML = `
+  <defs>${marker('mA2', COL.a).replace(/6\.5/g, '3.2')}${marker('mB2', COL.b).replace(/6\.5/g, '3.2')}${marker('mAx', COL.axis)}
+    <clipPath id="clipL"><rect x="${VIEWBOX.x}" y="${VIEWBOX.y}" width="${VIEWBOX.w}" height="${VIEWBOX.h}" rx="10"/></clipPath></defs>
+  <rect x="0" y="0" width="1000" height="600" fill="#fbfaf6"/>
+  <rect x="${VIEWBOX.x}" y="${VIEWBOX.y}" width="${VIEWBOX.w}" height="${VIEWBOX.h}" rx="10" fill="#fff" stroke="#e2ded2"/>
+  <g clip-path="url(#clipL)"><g id="l3d"></g></g>
+  <rect id="viewHitL" x="${VIEWBOX.x}" y="${VIEWBOX.y}" width="${VIEWBOX.w}" height="${VIEWBOX.h}" fill="transparent" role="img" aria-label="Drag P or Q along its line, or drag empty space to turn the view"/>
+  <text x="648" y="36" font-size="18" class="serif" fill="${COL.ink}">|PQ| for every P(λ) and Q(μ)</text>
+  <text x="648" y="56" font-size="12" fill="${COL.ink3}">darker is shorter; drag the dot</text>
+  <g id="cells" shape-rendering="crispEdges">${cells}</g>
+  <rect x="${MAP.x}" y="${MAP.y}" width="${MAP.w}" height="${MAP.h}" fill="none" stroke="#cfc9b8"/>
+  <g id="mapAxes"></g>
+  <circle id="mapMin" r="6" fill="none" stroke="#fff" stroke-width="2"/>
+  <circle id="mapDot" r="7" fill="${COL.p}" stroke="#fff" stroke-width="2.4"/>
+  <rect id="mapHit" x="${MAP.x}" y="${MAP.y}" width="${MAP.w}" height="${MAP.h}" fill="transparent" role="img" aria-label="Pick λ and μ"/>
+  <g id="lNums"></g>`;
+}
+let MAPR = 4, MAPKEY = '';
+const mx = lam => MAP.x + (lam + MAPR) / (2 * MAPR) * MAP.w, my = mu => MAP.y + (MAPR - mu) / (2 * MAPR) * MAP.h;
+function shade(t){                                     // 0 = near, 1 = far: a calm blue ramp
+  const c0 = [30, 64, 120], c1 = [243, 240, 232], k = Math.pow(clamp(t, 0, 1), 0.6);
+  return `rgb(${c0.map((x, i) => Math.round(x + (c1[i] - x) * k)).join(',')})`;
+}
+function paintMap(Ln, cl){
+  const key = JSON.stringify(Ln);
+  if (key !== MAPKEY) {
+    MAPKEY = key;
+    MAPR = cl.parallel ? 4 : Math.max(4, Math.ceil(Math.max(Math.abs(cl.lam), Math.abs(cl.mu)) + 1.5));
+    let dmax = 0;
+    const D = [];
+    for (let i = 0; i < MAP.n; i++) { D[i] = []; for (let j = 0; j < MAP.n; j++) { const lam = -MAPR + (i + 0.5) * 2 * MAPR / MAP.n, mu = MAPR - (j + 0.5) * 2 * MAPR / MAP.n; D[i][j] = distPQ(Ln, lam, mu); dmax = Math.max(dmax, D[i][j]); } }
+    for (let i = 0; i < MAP.n; i++) for (let j = 0; j < MAP.n; j++) $(`c${i}_${j}`).setAttribute('fill', shade((D[i][j] - cl.d) / (dmax - cl.d || 1)));
+    let ax = '';
+    const st = MAPR > 6 ? 2 : 1;
+    for (let v = -MAPR; v <= MAPR; v += st) ax += `<text x="${mx(v)}" y="${MAP.y + MAP.h + 15}" font-size="10.5" text-anchor="middle" fill="${COL.ink3}">${nf(v)}</text><text x="${MAP.x - 5}" y="${my(v) + 4}" font-size="10.5" text-anchor="end" fill="${COL.ink3}">${nf(v)}</text>`;
+    ax += `<text x="${MAP.x + MAP.w}" y="${MAP.y + MAP.h + 32}" font-size="12" text-anchor="end" fill="${COL.a}" font-style="italic">λ: where P is on l₁</text><text x="${MAP.x - 26}" y="${MAP.y - 8}" font-size="12" fill="${COL.b}" font-style="italic">μ: where Q is on l₂</text>`;
+    $('mapAxes').innerHTML = ax;
+  }
+  $('mapDot').setAttribute('cx', mx(clamp(S.lam, -MAPR, MAPR))); $('mapDot').setAttribute('cy', my(clamp(S.mu, -MAPR, MAPR)));
+  const showMin = !cl.parallel && found('shortest');
+  $('mapMin').setAttribute('cx', mx(clamp(cl.lam, -MAPR, MAPR))); $('mapMin').setAttribute('cy', my(clamp(cl.mu, -MAPR, MAPR))); $('mapMin').setAttribute('opacity', showMin ? 1 : 0);
+}
+function paintL(){
+  const Ln = lines(), cl = closest(Ln), bk = bookDistance(Ln);
+  const P = pointOn(Ln.a1, Ln.b1, S.lam), Q = pointOn(Ln.a2, Ln.b2, S.mu);
+  if (!DRAGGING) { const c1 = pointOn(Ln.a1, Ln.b1, cl.lam), c2 = pointOn(Ln.a2, Ln.b2, cl.mu); TGT = mulS(add(c1, c2), 0.5).map(x => Math.round(x));
+    SC = fitScale([Ln.a1, Ln.a2, c1, c2, P, Q].map(v => sub(v, TGT)), 240); }
+  const L = 4;
+  let g = axes(L);
+  if (S.locked) {
+    const far = 40;
+    g += seg(pointOn(Ln.a1, Ln.b1, -far), pointOn(Ln.a1, Ln.b1, far), `stroke="${COL.a}" stroke-width="2.6"`);
+    g += seg(pointOn(Ln.a2, Ln.b2, -far), pointOn(Ln.a2, Ln.b2, far), `stroke="${COL.b}" stroke-width="2.6"`);
+    g += seg(Ln.a1, add(Ln.a1, Ln.b1), `stroke="${COL.a}" stroke-width="5" stroke-opacity=".5" marker-end="url(#mA2)"`) + seg(Ln.a2, add(Ln.a2, Ln.b2), `stroke="${COL.b}" stroke-width="5" stroke-opacity=".5" marker-end="url(#mB2)"`);
+    g += tlabel(add(Ln.a1, mulS(Ln.b1, 1.1)), 'b₁', COL.a, 6, -6, 12.5) + tlabel(add(Ln.a2, mulS(Ln.b2, 1.1)), 'b₂', COL.b, 6, -6, 12.5);
+    for (const [v, c, t] of [[Ln.a1, COL.a, 'a₁'], [Ln.a2, COL.b, 'a₂']]) { const p = P2(v); g += `<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="3.5" fill="${c}"/>` + tlabel(v, t, c, -6, 16, 12); }
+    g += tlabel(pointOn(Ln.a1, Ln.b1, 2.6), 'l₁', COL.a, 8, -8, 15) + tlabel(pointOn(Ln.a2, Ln.b2, 2.6), 'l₂', COL.b, 8, -8, 15);
+    /* the true shortest segment, once the learner has found it */
+    if (found('shortest') && !cl.parallel && cl.d > 1e-6) g += seg(pointOn(Ln.a1, Ln.b1, cl.lam), pointOn(Ln.a2, Ln.b2, cl.mu), `stroke="${COL.c}" stroke-width="2" stroke-dasharray="2 3"`);
+    g += seg(P, Q, `stroke="${COL.p}" stroke-width="3" stroke-dasharray="7 4"`);
+    const pp = P2(P), pq = P2(Q);
+    g += `<circle cx="${pp.x.toFixed(1)}" cy="${pp.y.toFixed(1)}" r="7.5" fill="${COL.a}" stroke="#fff" stroke-width="2.4"/><circle cx="${pq.x.toFixed(1)}" cy="${pq.y.toFixed(1)}" r="7.5" fill="${COL.b}" stroke="#fff" stroke-width="2.4"/>`;
+    g += tlabel(P, 'P', COL.a, -10, -8, 15) + tlabel(Q, 'Q', COL.b, 10, -8, 15);
+  }
+  $('l3d').innerHTML = g;
+  if (S.locked) paintMap(Ln, cl);
+  let t = '';
+  if (S.locked) {
+    const pq = sub(Q, P), a1 = angleDeg(pq, Ln.b1), a2 = angleDeg(pq, Ln.b2);
+    const rows = [['your |PQ|', nf(mag(pq), 3), COL.p], ['angle PQ to l₁', a1 == null ? '—' : nf(a1, 1) + '°', COL.a], ['angle PQ to l₂', a2 == null ? '—' : nf(a2, 1) + '°', COL.b],
+      ['angle between the lines', nf(lineAngle(Ln.b1, Ln.b2), 2) + '°', COL.ink2]];
+    rows.forEach(([k, v, c], i) => t += `<text x="668" y="${446 + i * 22}" font-size="13" fill="${COL.ink2}">${k}</text><text x="968" y="${446 + i * 22}" font-size="13.5" text-anchor="end" fill="${c}" font-family="JetBrains Mono, monospace" font-weight="600">${esc(v)}</text>`);
+    t += `<text x="668" y="${446 + 4 * 22 + 6}" font-size="12" fill="${COL.ink3}">${cl.parallel ? 'Parallel lines: the dark valley has no single lowest point.' : 'At the lowest point PQ meets both lines at 90°.'}</text>`;
+  }
+  $('lNums').innerHTML = t;
+}
+
+/* ---- side panel ------------------------------------------------------------ */
+function paintSide(){
+  const v = S.tab === 'V';
+  $('tabV').setAttribute('aria-selected', v); $('tabL').setAttribute('aria-selected', !v);
+  sV.toggleAttribute('hidden', !v); sL.toggleAttribute('hidden', v);
+  $('cardV').toggleAttribute('hidden', !v); $('cardL').toggleAttribute('hidden', v);
+  for (let i = 0; i < 3; i++) { if (document.activeElement !== $('a' + i)) $('a' + i).value = S.a[i]; if (document.activeElement !== $('b' + i)) $('b' + i).value = S.b[i]; }
+  document.querySelectorAll('#vChips [data-v]').forEach(b => b.setAttribute('aria-pressed', b.dataset.v === S.preset));
+  document.querySelectorAll('#lChips [data-l]').forEach(b => b.setAttribute('aria-pressed', b.dataset.l === S.lp));
+  $('btnSum').setAttribute('aria-pressed', S.showSum); $('btnProj').setAttribute('aria-pressed', S.showProj); $('btnCross').setAttribute('aria-pressed', S.showCross);
+  $('turn').value = S.turn; $('turnOut').textContent = nf(S.turn, 2);
+  $('lift').value = S.lift; $('liftOut').textContent = nf(S.lift, 2);
+  $('gate').hidden = S.locked;
+  if (!S.locked) { $('readV').innerHTML = ''; $('readL').innerHTML = ''; $('whyCard').hidden = true; return; }
+  const a = S.a, b = S.b, n = cross(a, b), th = angleDeg(a, b), dc = dirCosines(a);
+  $('readV').innerHTML = `<span>a · b</span><b>${nf(dot(a, b), 3)}</b>
+    <span>|a|, |b|</span><b>${nf(mag(a), 3)}, ${nf(mag(b), 3)}</b>
+    <span>angle θ between them</span><b>${th == null ? '—' : nf(th, 2) + '°'}</b>
+    <span>projection of a on b</span><b>${nf(projScalar(a, b), 3)}</b><i class="sep"></i>
+    <span>a × b</span><b>${esc(vijk(n))}</b>
+    <span>|a × b| = area</span><b>${nf(mag(n), 3)}</b>
+    <span>direction cosines of a</span><b>${dc ? vf(dc, 3) : '—'}</b>`;
+  const Ln = lines(), cl = closest(Ln), bk = bookDistance(Ln);
+  $('readL').innerHTML = `<span>b₁ × b₂</span><b>${esc(vijk(cross(Ln.b1, Ln.b2), 2))}</b>
+    <span>book, skew formula</span><b>${isFinite(bk.skewFormula) ? nf(bk.skewFormula, 4) : '0 ÷ 0: breaks'}</b>
+    ${bk.kind === 'parallel' ? `<span>book, parallel formula</span><b>${nf(bk.d, 4)}</b>` : ''}
+    <span>lowest |PQ| (model)</span><b>${nf(cl.d, 4)}</b>`;
+  $('whyCard').hidden = false;
+  $('why').innerHTML = v ? whyV(a, b, n, th) : whyL(Ln, cl, bk);
+}
+function whyV(a, b, n, th){
+  const d = dot(a, b);
+  if (mag(a) < 1e-9 || mag(b) < 1e-9) return '<p>A zero vector has no direction: nothing to measure.</p>';
+  if (mag(n) < 1e-9) return `<p>a and b point along one line, so the parallelogram has no width: a × b = 0 and every shadow has area 0.</p>`;
+  if (Math.abs(d) < 1e-9) return `<p>a · b = 0: the two arrows are at exactly 90°, and the projection of a on b has length 0. The parallelogram is a rectangle, of area |a||b| = ${nf(mag(a) * mag(b), 3)}.</p>`;
+  return `<p>a · b = ${nf(d, 3)}, so cos θ = ${nf(d / (mag(a) * mag(b)), 4)} and θ = ${nf(th, 2)}°. ${d < 0 ? 'The dot product is negative: the angle is obtuse, and the projection of a falls <b>behind</b> O along b.' : `Dropping a perpendicular from a’s tip onto b cuts off ${nf(projScalar(a, b), 3)}.`}</p>
+    <p>The shaded parallelogram has area |a × b| = ${nf(mag(n), 3)}. Its shadows on the three planes measure ${nf(n[0], 2)}, ${nf(n[1], 2)} and ${nf(n[2], 2)}: the components of a × b.</p>`;
+}
+function whyL(Ln, cl, bk){
+  if (cl.parallel) return `<p>b₁ × b₂ = 0: the lines are parallel. The skew formula divides 0 by 0 and breaks. On the map the dark region is a valley, not a single pit: slide P along l₁ and a matching Q keeps the same distance, ${nf(bk.d, 4)} = |b × (a₂ − a₁)| ÷ |b|.</p>`;
+  if (cl.d < 0.02) return `<p>The lowest |PQ| is ${nf(cl.d, 4)}: the lines meet, at λ = ${nf(cl.lam, 3)}, μ = ${nf(cl.mu, 3)}. Two lines that meet lie in one plane, so (b₁ × b₂) · (a₂ − a₁) = 0.</p>`;
+  return `<p>These lines are at ${nf(lineAngle(Ln.b1, Ln.b2), 2)}° to each other, not parallel, yet |PQ| never falls below ${nf(cl.d, 4)}: they are <b>skew</b>. The lowest point of the map is at λ = ${nf(cl.lam, 3)}, μ = ${nf(cl.mu, 3)}, and the book’s formula gives the same ${nf(bk.d, 4)}.</p>`;
+}
+
+function paint(){ if (S.tab === 'V') paintV(); else paintL(); paintSide(); check(); }
+
+/* ---- findings ---------------------------------------------------------------- */
+function check(){
+  if (!S.locked) return;
+  const a = S.a, b = S.b, n = cross(a, b);
+  if (S.tab === 'V' && mag(a) > 0 && mag(b) > 0) {
+    if (dot(a, b) === 0) discover('perp');
+    if (dot(a, b) < 0 && mag(n) > 0) discover('obtuse');
+    if (mag(n) === 0) discover('flat');
+    if (n.every(x => x !== 0) && ['yz', 'zx', 'xy'].every((pl, i) => Math.abs(shadowArea(a, b, pl) - n[i]) < 1e-9) && S.moved) discover('shadow');
+    if (S.swapped && mag(n) > 0 && n.every((x, i) => x === -S.swapped.n[i])) discover('flip');
+  }
+  if (S.tab === 'L') {
+    const Ln = lines(), cl = closest(Ln), bk = bookDistance(Ln);
+    if (!cl.parallel && cl.d > 0.05 && S.searched) {
+      const P = pointOn(Ln.a1, Ln.b1, S.lam), Q = pointOn(Ln.a2, Ln.b2, S.mu), pq = sub(Q, P);
+      if (mag(pq) - cl.d < 0.02 && Math.abs(angleDeg(pq, Ln.b1) - 90) < 5 && Math.abs(angleDeg(pq, Ln.b2) - 90) < 5) { discover('shortest'); explainPOE(Ln, cl, bk); }
+    }
+    if (cl.parallel && !isFinite(bk.skewFormula)) discover('parallel');
+    if (!cl.parallel && cl.d < 0.02) discover('meet');
+  }
+}
+function explainPOE(Ln, cl, bk){
+  if (!POE || POE.explained) return;
+  POE.explain(`These two lines are at ${nf(lineAngle(Ln.b1, Ln.b2), 1)}° to each other, so they are not parallel. Yet the shortest |PQ| you found is ${nf(Math.hypot(...sub(pointOn(Ln.a2, Ln.b2, S.mu), pointOn(Ln.a1, Ln.b1, S.lam))), 3)},
+    and the model’s lowest is ${nf(cl.d, 4)} (the book’s formula: ${nf(bk.d, 4)}). <b>In space, lines that are not parallel need not meet</b>: they are skew.`);
+}
+
+/* ---- controls ---------------------------------------------------------------- */
+buildV(); buildL();
+const setTab = t => { S.tab = t; sound('tick'); paint(); track('tab', {tab: t === 'V' ? 'vectors' : 'lines'}); };
+$('tabV').addEventListener('click', () => { if (S.locked) setTab('V'); });
+$('tabL').addEventListener('click', () => { if (S.locked) setTab('L'); });
+$('vChips').addEventListener('click', e => { const b = e.target.closest('[data-v]'); if (!b || !S.locked) return; const p = VPRE[b.dataset.v]; S.a = p.a.slice(); S.b = p.b.slice(); S.preset = b.dataset.v; S.swapped = null; S.moved = true; sound('pop'); paint(); track('vectors', {preset: S.preset}); });
+for (const v of ['a', 'b']) for (let i = 0; i < 3; i++) {
+  $(v + i).addEventListener('input', e => { const x = Math.round(+e.target.value); if (!isFinite(x) || e.target.value === '' || e.target.value === '-') return; S[v][i] = clamp(x, -6, 6); S.preset = null; S.swapped = null; S.moved = true; paint(); });
+  $(v + i).addEventListener('change', e => { e.target.value = S[v][i]; track('vectors', {a: S.a, b: S.b}); });
+}
+$('btnSwap').addEventListener('click', () => { if (!S.locked) return; const before = cross(S.a, S.b); [S.a, S.b] = [S.b, S.a]; S.swapped = S.swapped ? null : {n: before}; S.preset = null; sound('snap'); paint(); track('swap'); });
+$('btnSum').addEventListener('click', () => { S.showSum = !S.showSum; sound('tick'); paint(); });
+$('btnProj').addEventListener('click', () => { S.showProj = !S.showProj; sound('tick'); paint(); });
+$('btnCross').addEventListener('click', () => { S.showCross = !S.showCross; sound('tick'); paint(); });
+$('lChips').addEventListener('click', e => { const b = e.target.closest('[data-l]'); if (!b || !S.locked) return; S.lp = b.dataset.l; S.turn = 0; S.lift = 0; S.lam = -1.5; S.mu = 1.2; S.searched = false; sound('pop'); paint(); track('lines', {preset: S.lp}); });
+$('turn').addEventListener('input', e => { S.turn = +e.target.value; paint(); });
+$('turn').addEventListener('change', () => track('turn', {turn: S.turn}));
+$('lift').addEventListener('input', e => { S.lift = +e.target.value; paint(); });
+$('lift').addEventListener('change', () => track('lift', {lift: S.lift}));
+/* the 3-D views: grab a handle if one is near, else turn the view */
+let DR = null;
+function view3d(hit, svg){
+  drag(hit, svg, {
+    start(p){
+      if (!S.locked) return false;
+      let best = null, bd = 22;
+      const cand = S.tab === 'V' ? [['a', P2(S.a)], ['b', P2(S.b)]] : (() => { const Ln = lines(); return [['P', P2(pointOn(Ln.a1, Ln.b1, S.lam))], ['Q', P2(pointOn(Ln.a2, Ln.b2, S.mu))]]; })();
+      for (const [k, q] of cand) { const d = Math.hypot(q.x - p.x, q.y - p.y); if (d < bd) { bd = d; best = k; } }
+      DR = {mode: best || 'rot', x: p.x, y: p.y}; DRAGGING = true;
+    },
+    move(p){
+      if (!DR) return;
+      if (DR.mode === 'rot') { S.az -= (p.x - DR.x) * 0.45; S.el = clamp(S.el + (p.y - DR.y) * 0.45, 8, 80); DR.x = p.x; DR.y = p.y; paint(); return; }
+      if (DR.mode === 'a' || DR.mode === 'b') {
+        const v = S[DR.mode], w = unprojectAt(p, v[2]).map(x => clamp(Math.round(x), -6, 6));
+        if (w[0] !== v[0] || w[1] !== v[1]) { S[DR.mode] = [w[0], w[1], v[2]]; S.preset = null; S.swapped = null; S.moved = true; paint(); }
+        return;
+      }
+      const Ln = lines(), [a0, d0] = DR.mode === 'P' ? [Ln.a1, Ln.b1] : [Ln.a2, Ln.b2];
+      const o = P2(a0), e = P2(add(a0, d0)), dx = e.x - o.x, dy = e.y - o.y, dd = dx * dx + dy * dy;
+      if (dd < 1e-6) return;
+      const t = clamp(((p.x - o.x) * dx + (p.y - o.y) * dy) / dd, -MAPR, MAPR);
+      if (DR.mode === 'P') S.lam = t; else S.mu = t;
+      S.searched = true; paint();
+    },
+    end(){ if (DR) track(DR.mode === 'rot' ? 'rotate' : 'drag', {what: DR.mode, a: S.a, b: S.b, lam: S.lam, mu: S.mu}); DR = null; DRAGGING = false; paint(); },
+  });
+}
+view3d($('viewHit'), sV); view3d($('viewHitL'), sL);
+drag($('mapHit'), sL, {
+  start(p){ if (!S.locked) return false; setMap(p); },
+  move(p){ setMap(p); },
+  end(){ track('map', {lam: S.lam, mu: S.mu}); },
+});
+function setMap(p){
+  S.lam = clamp(-MAPR + (p.x - MAP.x) / MAP.w * 2 * MAPR, -MAPR, MAPR);
+  S.mu = clamp(MAPR - (p.y - MAP.y) / MAP.h * 2 * MAPR, -MAPR, MAPR);
+  S.searched = true; DRAGGING = true; paint(); DRAGGING = false;
+}
+
+/* ---- start ------------------------------------------------------------------ */
+findings($('finds'), [
+  {id: 'perp',     icon: '⊥', label: 'a · b = 0: perpendicular', hint: 'Make the dot product zero'},
+  {id: 'obtuse',   icon: '∠', label: 'A negative dot product: an obtuse angle', hint: 'Make the angle more than 90°'},
+  {id: 'shadow',   icon: '▱', label: 'a × b’s components are shadow areas', hint: 'Change the vectors and compare the three shadows with a × b'},
+  {id: 'flip',     icon: '⇵', label: 'b × a = −(a × b)', hint: 'Swap the two vectors'},
+  {id: 'flat',     icon: '∥', label: 'Parallel vectors: a × b = 0', hint: 'Make b point along a'},
+  {id: 'shortest', icon: '↧', label: 'Skew lines: the shortest segment is ⊥ to both', hint: 'Find the shortest PQ by hand'},
+  {id: 'parallel', icon: '÷', label: 'Parallel lines break the skew formula', hint: 'Turn l₂ all the way towards l₁'},
+  {id: 'meet',     icon: '✕', label: 'Lines that meet: distance 0', hint: 'Find two lines that cross'},
+], () => toast('All eight. Dot, cross, shadows and the shortest distance, all measured.', 4200));
+
+const POE = predict($('poe'), {
+  id: 'skew-lines',
+  q: 'Two straight lines in space are not parallel. Must they meet somewhere?',
+  options: [
+    {id: 'yes', text: 'Yes: two lines that are not parallel always cross.'},
+    {id: 'far', text: 'Yes, though perhaps very far away.'},
+    {id: 'no', text: 'No: in space they can pass each other without meeting.', right: true},
+    {id: 'perp', text: 'Only if they are perpendicular.'},
+  ],
+  onLock(){ S.locked = true; lockControls(false); say('Turn the view, then try the two lines.'); paint(); },
+});
+function lockControls(lock){
+  for (const id of ['btnSwap', 'btnSum', 'btnProj', 'btnCross', 'turn', 'lift', 'tabV', 'tabL', 'a0', 'a1', 'a2', 'b0', 'b1', 'b2']) $(id).disabled = lock;
+  document.querySelectorAll('#vChips button, #lChips button').forEach(b => b.disabled = lock);
+  for (const id of ['viewHit', 'viewHitL', 'mapHit']) $(id).style.pointerEvents = lock ? 'none' : '';
+}
+lockControls(!POE.locked);
+if (!Play.FF('predict')) { S.locked = true; lockControls(false); }
+paint();
+window.applyFeatures = () => paint();
+window.PG_STATE = () => { const Ln = lines(), cl = closest(Ln);
+  return JSON.parse(JSON.stringify({tab: S.tab, a: S.a, b: S.b, cross: cross(S.a, S.b), dot: dot(S.a, S.b), az: S.az, el: S.el, locked: S.locked, lp: S.lp, turn: S.turn, lift: S.lift,
+    lam: S.lam, mu: S.mu, pq: distPQ(Ln, S.lam, S.mu), best: cl, book: bookDistance(Ln), mapR: MAPR,
+    screen: {a: P2(S.a), b: P2(S.b), P: P2(pointOn(Ln.a1, Ln.b1, S.lam)), Q: P2(pointOn(Ln.a2, Ln.b2, S.mu))}})); };
+window.PG_MODEL = {add, sub, dot, cross, mag, angleDeg, projScalar, projVector, dirCosines, shoelace, shadowArea, pointOn, distPQ, closest, bookDistance, lineAngle, VPRE, LPRE,
+  project: v => P2(v), lineScreen: (which, t) => { const Ln = lines(); return which === 'P' ? P2(pointOn(Ln.a1, Ln.b1, t)) : P2(pointOn(Ln.a2, Ln.b2, t)); },
+  map: (lam, mu) => ({x: mx(lam), y: my(mu)})};
+</script>
+</body>
+</html>

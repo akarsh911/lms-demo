@@ -1,0 +1,459 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Metals and Non-metals</title>
+<meta name="description" content="Class 10: dip a metal strip into a salt solution and find out, from the reactivity series alone, who displaces whom — the same series that decides how a metal reacts with water and with dilute acid.">
+<link rel="icon" href="../../favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600&family=Inter:wght@400;500;600;700&family=Nunito:wght@500;700;800&family=Newsreader:opsz,wght@6..72,400;6..72,500&family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="../../play.css">
+<style>
+.pg-stage{min-height:0}
+.tabs{display:flex; gap:4px; padding:10px 12px 0; border-bottom:1px solid var(--hair); background:var(--card)}
+.tab{border:1px solid transparent; border-bottom:none; background:none; padding:8px 14px; border-radius:10px 10px 0 0; cursor:pointer;
+  font-weight:600; font-size:15px; color:var(--ink-3); margin-bottom:-1px; font-family:var(--font-head)}
+.tab[aria-selected="true"]{background:var(--card); color:var(--ink); border-color:var(--hair); border-bottom:1px solid var(--card)}
+.gate{position:absolute; left:0; right:0; top:48px; bottom:0; display:grid; place-items:center; pointer-events:none}
+.gate span{background:rgba(29,35,39,.86); color:#fff; padding:10px 16px; border-radius:99px; font-weight:600; font-size:14px}
+.ctl{grid-template-columns:70px 1fr; margin:7px 0}
+.ctl select{width:100%}
+.nums{display:grid; grid-template-columns:1fr auto; gap:3px 12px; font-size:13.5px}
+.nums b{font-family:var(--font-mono); font-weight:600; font-variant-numeric:tabular-nums}
+.why p{font-size:13.5px; margin-bottom:.5em}
+.why b{color:var(--ink)}
+.note{font-size:12.5px; color:var(--ink-3); margin:6px 0 0}
+.shelfBtn{cursor:pointer}
+.shelfBtn:hover .shelfBg{stroke:#1f8fb3; stroke-width:2.2}
+.shelfBtn[aria-pressed="true"] .shelfBg{fill:#e1f0f6; stroke:#1f8fb3}
+@media (max-width:1100px) and (min-width:981px){ .pg-main{grid-template-columns:minmax(0,1fr) 310px; padding-inline:12px} }
+</style>
+</head>
+<body>
+<header class="pg-top"></header>
+
+<div class="pg-intro">
+  <h1>Metals and non-metals</h1>
+  <p>Dip a metal strip into a salt solution: the model never looks up who wins &mdash; it compares the two metals' places in the
+     reactivity series and decides. The very same series says which metal explodes into cold water, which needs steam, and
+     which needs a nudge from an acid at all. NCERT Class 10 Science, Chapter 3, Metals and Non-metals.</p>
+</div>
+
+<main class="pg-main">
+  <section class="pg-stage" id="stageWrap">
+    <div class="tabs" role="tablist">
+      <button class="tab" role="tab" id="tabDisp" aria-selected="true">&#x1f9ea; Displacement</button>
+      <button class="tab" role="tab" id="tabWater" aria-selected="false">&#x1f4a7; Water and acid</button>
+    </div>
+    <svg id="stage" viewBox="0 0 1000 640" role="img" aria-label="A metal strip in a salt solution, the reactivity series, and metals tested with water and dilute acid"></svg>
+    <div class="gate" id="gate"><span>Make your prediction first →</span></div>
+  </section>
+
+  <aside class="pg-side">
+    <div id="poe"></div>
+
+    <div class="card" id="ctlDisp">
+      <div class="kicker">Dip the strip</div>
+      <div class="ctl"><label for="selStrip">Strip</label><select id="selStrip"></select></div>
+      <div class="ctl"><label for="selSalt">Solution</label><select id="selSalt"></select></div>
+      <p class="note">The strip metal displaces the dissolved metal only if it is higher in the reactivity series.</p>
+    </div>
+
+    <div class="card" id="ctlWater" hidden>
+      <div class="kicker">Pick a metal</div>
+      <p class="note" style="margin-top:0">Choose a metal from the shelf on the stage to test it with water and with dilute hydrochloric acid at the same time.</p>
+    </div>
+
+    <div class="card" id="numCard">
+      <div class="kicker">The numbers</div>
+      <div class="nums" id="nums"></div>
+    </div>
+
+    <div class="card why" id="whyCard" hidden>
+      <div class="kicker">What is happening</div>
+      <div id="why"></div>
+    </div>
+
+    <div class="card"><div class="kicker">To find</div><div id="finds"></div></div>
+  </aside>
+</main>
+
+<script src="../../play.js"></script>
+<script>
+'use strict';
+const {$, esc, clamp, fmt, drag, tween, sound, say, track, toast, predict, findings, discover, found,
+       shareState, sharedState, mount, reduced} = Play;
+mount({thread: 'reactions', band: 'modeller'});
+
+/* MODEL:start ==================================================================
+   METALS AND NON-METALS (NCERT Class 10 Science, Ch 3).
+
+   The reactivity series (Table 3.2) is the whole model: a rank from 0 (potassium,
+   most reactive) to 12 (gold, least), with hydrogen at rank 8.
+     Displacement: metal A displaces metal B from B's salt solution iff
+     rank(A) < rank(B) (Activity 3.12). The word equation is not looked up —
+     it is BALANCED from each metal's valence and the salt's anion charge, by
+     searching for the smallest whole-number coefficients that conserve atoms
+     and electrons (the same arithmetic a student does by hand).
+     Water: potassium and sodium (rank 0–1) react so violently with cold water
+     that the hydrogen catches fire; calcium (rank 2) reacts but less violently
+     and floats; magnesium (rank 3) needs hot water; aluminium, zinc and iron
+     (ranks 4–6) react only with steam; everything at or below lead (rank ≥ 7)
+     does not react with water at all (§3.2.2).
+     Acid: every metal above hydrogen displaces it from dilute acid, faster the
+     higher its rank (Activity 3.11: Mg > Al > Zn > Fe); metals at or below
+     hydrogen (Cu, Ag, …) do not react (§3.2.3).
+   ============================================================================ */
+const ANION = {SO4: {charge: 2, formula: 'SO₄'}, NO3: {charge: 1, formula: 'NO₃'}};
+const RANK = {K: 0, Na: 1, Ca: 2, Mg: 3, Al: 4, Zn: 5, Fe: 6, Pb: 7, H: 8, Cu: 9, Hg: 10, Ag: 11, Au: 12};
+const METAL = {
+  K:  {name: 'potassium',  swatch: '#cabfe0'},
+  Na: {name: 'sodium',     swatch: '#d7d2be'},
+  Ca: {name: 'calcium',    swatch: '#cfd8d2'},
+  Mg: {name: 'magnesium',  swatch: '#dde1e3', valence: 2, ion: '#eef6fb', ionName: 'Mg²⁺'},
+  Al: {name: 'aluminium',  swatch: '#c7ccd1', valence: 3, ion: '#eef6fb', ionName: 'Al³⁺'},
+  Zn: {name: 'zinc',       swatch: '#b7bec4', valence: 2, ion: '#eef6fb', ionName: 'Zn²⁺'},
+  Fe: {name: 'iron',       swatch: '#8f97a0', valence: 2, ion: '#c9e2c1', ionName: 'Fe²⁺'},
+  Pb: {name: 'lead',       swatch: '#6c7480', valence: 2, ion: '#eef6fb', ionName: 'Pb²⁺', anion: 'NO3'},
+  Cu: {name: 'copper',     swatch: '#c07a3e', valence: 2, ion: '#bcd9f0', ionName: 'Cu²⁺'},
+  Hg: {name: 'mercury',    swatch: '#c6c9cc'},
+  Ag: {name: 'silver',     swatch: '#d9dce1', valence: 1, ion: '#eef6fb', ionName: 'Ag⁺', anion: 'NO3'},
+  Au: {name: 'gold',       swatch: '#e0c34a'},
+};
+const gcd = (a, b) => b ? gcd(b, a % b) : a;
+const sub = n => n === 1 ? '' : String(n).replace(/\d/g, d => '₀₁₂₃₄₅₆₇₈₉'[d]);
+function saltCounts(valence, anionCharge){ const g = gcd(valence, anionCharge); return {x: anionCharge / g, y: valence / g}; }
+function saltFormula(sym, anionKey){
+  const m = METAL[sym], a = ANION[anionKey || m.anion || 'SO4'], {x, y} = saltCounts(m.valence, a.charge);
+  return sym + sub(x) + (y > 1 ? '(' + a.formula + ')' + sub(y) : a.formula);
+}
+/* Balance p A + q [B_x Anion_y] -> r [A_x' Anion_y'] + s B by search: smallest whole coefficients
+   that conserve metal atoms, anion groups and electrons transferred. */
+function balance(symA, symB){
+  const A = METAL[symA], B = METAL[symB], anion = ANION[B.anion || 'SO4'];
+  const {x, y} = saltCounts(B.valence, anion.charge), {x: xp, y: yp} = saltCounts(A.valence, anion.charge);
+  for (let total = 2; total <= 30; total++)
+    for (let p = 1; p < total; p++) {
+      const q = total - p, s = q * x;
+      if (p * A.valence !== s * B.valence) continue;
+      if (p % xp !== 0) continue;
+      const r = p / xp;
+      if (r * yp !== q * y) continue;
+      return {p, q, r, s};
+    }
+  return null;
+}
+const reacts = (symA, symB) => RANK[symA] < RANK[symB];
+const WATER_TIER = sym => RANK[sym] <= 1 ? 'fire' : RANK[sym] === 2 ? 'floats' : RANK[sym] === 3 ? 'hot' : RANK[sym] <= 6 ? 'steam' : 'none';
+const acidReacts = sym => RANK[sym] < RANK.H;
+const acidVigor = sym => acidReacts(sym) ? 1 / (RANK[sym] + 1) : 0;
+/* MODEL:end */
+
+const DISP_METALS = ['Mg', 'Al', 'Zn', 'Fe', 'Pb', 'Cu', 'Ag'];
+const WATER_METALS = ['K', 'Na', 'Ca', 'Mg', 'Al', 'Zn', 'Fe', 'Pb', 'Cu', 'Ag'];
+const WATER_LABEL = {fire: 'Catches fire in cold water', floats: 'Reacts with cold water and floats', hot: 'Reacts only with hot water',
+  steam: 'Reacts only with steam', none: 'Does not react with water at all'};
+
+/* ---- state -------------------------------------------------------------- */
+const S = {tab: 'disp', locked: false, strip: 'Fe', salt: 'Cu', tried: [], metalW: 'Mg'};
+const shared = sharedState();
+if (shared) {
+  if (['disp', 'water'].includes(shared.tab)) S.tab = shared.tab;
+  if (METAL[shared.strip] && DISP_METALS.includes(shared.strip)) S.strip = shared.strip;
+  if (METAL[shared.salt] && DISP_METALS.includes(shared.salt)) S.salt = shared.salt;
+  if (WATER_METALS.includes(shared.metalW)) S.metalW = shared.metalW;
+}
+shareState(() => ({tab: S.tab, strip: S.strip, salt: S.salt, metalW: S.metalW}));
+
+/* ============================================================================
+   The stage
+   ============================================================================ */
+const svg = $('stage');
+const BK = {x0: 150, x1: 310, top: 118, bot: 400};
+function card(x, y, w, h, title){
+  return `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="12" fill="#ffffff" stroke="#d8d2c4"/>` +
+    (title ? `<text x="${x + 16}" y="${y + 26}" fill="#2b3338" font-size="13.5" font-weight="700" letter-spacing=".06em">${title}</text>` : '');
+}
+const RANK_ORDER = Object.keys(RANK).sort((a, b) => RANK[a] - RANK[b]);
+function build(){
+  /* the reactivity ladder, drawn once */
+  let ladder = '';
+  RANK_ORDER.forEach((sym, i) => {
+    const y = 62 + i * 16.5;
+    ladder += `<text id="ladTxt_${sym}" x="522" y="${y}" font-size="12.5" fill="#4a555b">${sym === 'H' ? '[H]  hydrogen' : (METAL[sym].name[0].toUpperCase() + METAL[sym].name.slice(1))} <tspan fill="#9aa3a6" font-size="10.5">(${sym})</tspan></text>
+      <rect id="ladBg_${sym}" x="510" y="${y - 13}" width="220" height="17" rx="4" fill="none"/>`;
+  });
+  /* the metal shelf for tab 2 */
+  let shelf = '';
+  WATER_METALS.forEach((sym, i) => {
+    const y = 66 + i * 54;
+    shelf += `<g class="shelfBtn" id="shelf_${sym}" data-m="${sym}" role="button" tabindex="0" aria-label="${METAL[sym].name}" aria-pressed="false">
+      <rect class="shelfBg" x="30" y="${y}" width="180" height="44" rx="9" fill="#f7f5f0" stroke="#c9c2b0" stroke-width="1.4"/>
+      <circle cx="52" cy="${y + 22}" r="12" fill="${METAL[sym].swatch}" stroke="#8a949b"/>
+      <text x="76" y="${y + 20}" font-size="12.5" font-weight="700" fill="#1d2327">${METAL[sym].name[0].toUpperCase() + METAL[sym].name.slice(1)}</text>
+      <text x="76" y="${y + 36}" font-size="10.5" fill="#7c878c">rank ${RANK[sym]} of 12</text>
+    </g>`;
+  });
+  svg.innerHTML = `
+  <rect x="0" y="0" width="1000" height="640" fill="#fbfaf6"/>
+
+  <g id="dG">
+    ${card(18, 18, 460, 604, 'THE BEAKER')}
+    <text id="dSub" x="34" y="72" font-size="13.5" fill="#1d2327"></text>
+    <path d="M${BK.x0 - 8} ${BK.top - 6} L${BK.x0} ${BK.top} V${BK.bot - 14} Q${BK.x0} ${BK.bot} ${BK.x0 + 14} ${BK.bot} H${BK.x1 - 14} Q${BK.x1} ${BK.bot} ${BK.x1} ${BK.bot - 14} V${BK.top}" fill="none" stroke="#7d93a8" stroke-width="3"/>
+    <clipPath id="clipBk"><path d="M${BK.x0} ${BK.top} V${BK.bot - 14} Q${BK.x0} ${BK.bot} ${BK.x0 + 14} ${BK.bot} H${BK.x1 - 14} Q${BK.x1} ${BK.bot} ${BK.x1} ${BK.bot - 14} V${BK.top}Z"/></clipPath>
+    <g clip-path="url(#clipBk)"><rect id="dLiq" x="${BK.x0}" y="230" width="${BK.x1 - BK.x0}" height="170" fill="#eef6fb"/></g>
+    <rect id="dStrip" x="${(BK.x0 + BK.x1) / 2 - 9}" y="150" width="18" height="220" rx="3" fill="#b7bec4" stroke="#6c7480" stroke-width="1.4"/>
+    <g id="dDeposit"></g>
+    <text id="dLabel" x="230" y="440" text-anchor="middle" font-size="13" font-weight="700" fill="#1d2327"></text>
+    <text id="dEqn" x="34" y="480" font-size="16.5" fill="#1d2327" class="serif"></text>
+    <text id="dVerdict" x="34" y="506" font-size="13.5" fill="#4a555b"></text>
+    <text x="34" y="546" font-size="12" font-weight="700" letter-spacing=".06em" fill="#4a555b">TRIED SO FAR</text>
+    <g id="dTried" font-size="12"></g>
+
+    ${card(498, 18, 484, 300, "TABLE 3.2 · THE REACTIVITY SERIES")}
+    ${ladder}
+
+    ${card(498, 330, 484, 292, 'TRIED SO FAR, RANKED')}
+    <g id="dRankedNote"></g>
+  </g>
+
+  <g id="wG" hidden>
+    ${card(18, 18, 214, 604, 'THE METAL SHELF')}
+    <g id="shelf">${shelf}</g>
+
+    ${card(246, 18, 358, 604, 'IN WATER')}
+    <text id="wName" x="425" y="66" text-anchor="middle" font-size="16" font-weight="700" fill="#1d2327"></text>
+    <path d="M300 110 V300 A50 50 0 0 0 400 300 V110" fill="#fbfdff" stroke="#7d93a8" stroke-width="3"/>
+    <rect x="290" y="102" width="120" height="9" rx="3" fill="#c7d4de"/>
+    <clipPath id="clipW"><path d="M300 110 V300 A50 50 0 0 0 400 300 V110Z"/></clipPath>
+    <g clip-path="url(#clipW)"><rect id="wLiq" x="290" y="180" width="120" fill="#dcecf8"/></g>
+    <g id="wFx"></g>
+    <text id="wTier" x="425" y="352" text-anchor="middle" font-size="14" font-weight="700" fill="#1d2327"></text>
+    <text id="wLine1" x="425" y="392" text-anchor="middle" font-size="12.5" fill="#4a555b"></text>
+    <text id="wLine2" x="425" y="410" text-anchor="middle" font-size="12.5" fill="#4a555b"></text>
+    <line x1="264" y1="440" x2="586" y2="440" stroke="#e2ded2"/>
+    <text x="264" y="464" font-size="12" font-weight="700" letter-spacing=".06em" fill="#4a555b">THE FIVE TIERS, TOP TO BOTTOM</text>
+    <g id="wLegend"></g>
+
+    ${card(612, 18, 370, 604, 'IN DILUTE HYDROCHLORIC ACID')}
+    <text id="aName" x="797" y="66" text-anchor="middle" font-size="16" font-weight="700" fill="#1d2327"></text>
+    <rect x="762" y="108" width="70" height="220" rx="10" fill="#fbfdff" stroke="#7d93a8" stroke-width="3"/>
+    <clipPath id="clipA"><rect x="762" y="108" width="70" height="220" rx="10"/></clipPath>
+    <g clip-path="url(#clipA)"><rect id="aLiq" x="762" y="220" width="70" height="108" fill="#eef6fb"/></g>
+    <g id="aBubbles"></g>
+    <text id="aTier" x="797" y="366" text-anchor="middle" font-size="14" font-weight="700" fill="#1d2327"></text>
+    <text id="aLine1" x="797" y="394" text-anchor="middle" font-size="12.5" fill="#4a555b"></text>
+    <text id="aLine2" x="797" y="412" text-anchor="middle" font-size="12.5" fill="#4a555b"></text>
+    <line x1="628" y1="440" x2="964" y2="440" stroke="#e2ded2"/>
+    <text x="628" y="464" font-size="12" font-weight="700" letter-spacing=".06em" fill="#4a555b">RATE, BY RANK</text>
+    <g id="aBars"></g>
+  </g>
+
+  <rect id="veil" x="0" y="0" width="1000" height="640" fill="#fbfaf6" opacity=".9"/>
+  <text id="veilT" x="500" y="320" text-anchor="middle" fill="#7c878c" font-size="15" font-weight="600">The reactivity series opens once you have made a prediction.</text>`;
+
+  /* legend for water tiers */
+  const tiers = [['fire', 'Explosive with cold water', 'K, Na'], ['floats', 'Reacts, floats', 'Ca'], ['hot', 'Hot water only', 'Mg'],
+    ['steam', 'Steam only', 'Al, Zn, Fe'], ['none', 'No reaction at all', 'Pb, Cu, Ag, …']];
+  $('wLegend').innerHTML = tiers.map((t, i) => `<text x="264" y="${486 + i * 22}" font-size="12.5" fill="#1d2327"><tspan font-weight="700">${esc(t[1])}</tspan> — ${esc(t[2])}</text>`).join('');
+}
+
+/* ---- paint: displacement --------------------------------------------------- */
+function paintDisp(){
+  const willReact = reacts(S.strip, S.salt), same = S.strip === S.salt;
+  $('dSub').textContent = `${METAL[S.strip].name[0].toUpperCase() + METAL[S.strip].name.slice(1)} strip in ${saltFormula(S.salt)} solution`;
+  $('dLiq').setAttribute('fill', same ? METAL[S.salt].ion : (willReact ? METAL[S.strip].ion : METAL[S.salt].ion));
+  $('dStrip').setAttribute('fill', METAL[S.strip].swatch); $('dStrip').setAttribute('stroke', '#5b6770');
+  let dep = '';
+  if (S.locked && willReact && !same) {
+    for (let i = 0; i < 10; i++) dep += `<circle cx="${(BK.x0 + BK.x1) / 2 + (i % 2 ? 1 : -1) * (8 + (i % 3) * 3)}" cy="${330 - i * 16}" r="4.4" fill="${METAL[S.salt].swatch}" stroke="#5b6770" stroke-width=".8"/>`;
+  }
+  $('dDeposit').innerHTML = dep;
+  if (!S.locked) { $('dLabel').textContent = ''; $('dEqn').textContent = ''; $('dVerdict').textContent = ''; $('dTried').innerHTML = ''; $('dRankedNote').innerHTML = ''; RANK_ORDER.forEach(s => $('ladBg_' + s).setAttribute('fill', 'none')); return; }
+  $('dLabel').textContent = same ? 'Same metal: nothing happens.' : willReact ? 'A deposit forms: displacement.' : 'No deposit: no reaction.';
+  if (same) { $('dEqn').textContent = ''; $('dVerdict').textContent = `${METAL[S.strip].name[0].toUpperCase() + METAL[S.strip].name.slice(1)} cannot displace itself.`; }
+  else {
+    const b = balance(S.strip, S.salt);
+    if (willReact && b) {
+      $('dEqn').textContent = `${b.p > 1 ? b.p : ''}${S.strip} + ${b.q > 1 ? b.q : ''}${saltFormula(S.salt)} → ${b.r > 1 ? b.r : ''}${saltFormula(S.strip, METAL[S.salt].anion || 'SO4')} + ${b.s > 1 ? b.s : ''}${S.salt}`;
+      $('dVerdict').textContent = `${METAL[S.strip].name[0].toUpperCase() + METAL[S.strip].name.slice(1)} (rank ${RANK[S.strip]}) is higher than ${METAL[S.salt].name} (rank ${RANK[S.salt]}): it displaces it.`;
+    } else {
+      $('dEqn').textContent = `${S.strip} + ${saltFormula(S.salt)} → no reaction`;
+      $('dVerdict').textContent = `${METAL[S.strip].name[0].toUpperCase() + METAL[S.strip].name.slice(1)} (rank ${RANK[S.strip]}) is lower than ${METAL[S.salt].name} (rank ${RANK[S.salt]}): it cannot displace it.`;
+    }
+  }
+  RANK_ORDER.forEach(s => {
+    const on = s === S.strip || s === S.salt;
+    $('ladBg_' + s).setAttribute('fill', s === S.strip ? '#e1f0f6' : s === S.salt ? '#fdeee0' : 'none');
+    $('ladTxt_' + s).setAttribute('font-weight', on ? 700 : 400);
+    $('ladTxt_' + s).setAttribute('fill', s === S.strip ? '#0e6a86' : s === S.salt ? '#a8620c' : '#4a555b');
+  });
+  /* tried-so-far log and a ranking built purely from observed wins */
+  let log = '';
+  S.tried.slice(-8).forEach((t, i) => { log += `<text x="34" y="${568 + i * 16}" fill="${t.win ? '#1f7a4a' : '#4a555b'}">${t.strip} into ${saltFormula(t.salt)}: ${t.win ? 'displaced it' : 'no reaction'}</text>`; });
+  $('dTried').innerHTML = log;
+  const known = new Set(); S.tried.forEach(t => { known.add(t.strip); known.add(t.salt); });
+  let rn = `<text x="514" y="386" font-size="12" fill="#7c878c">Metals you have tested, ordered by wins:</text>`;
+  const order = [...known].sort((a, b) => {
+    const wa = S.tried.filter(t => t.strip === a && t.win).length, wb = S.tried.filter(t => t.strip === b && t.win).length;
+    return wb - wa;
+  });
+  order.forEach((sym, i) => { rn += `<text x="514" y="${410 + i * 20}" font-size="13" fill="#1d2327">${i + 1}. ${METAL[sym].name} <tspan fill="#7c878c" font-size="11">(true rank ${RANK[sym]})</tspan></text>`; });
+  if (!order.length) rn += `<text x="514" y="410" font-size="12.5" fill="#7c878c">Dip a strip to begin building this list.</text>`;
+  $('dRankedNote').innerHTML = rn;
+}
+
+/* ---- paint: water and acid -------------------------------------------------- */
+function paintWater(){
+  for (const sym of WATER_METALS) $('shelf_' + sym).setAttribute('aria-pressed', sym === S.metalW);
+  if (!S.locked) { $('wName').textContent = ''; $('wTier').textContent = ''; $('wLine1').textContent = ''; $('wLine2').textContent = ''; $('aName').textContent = ''; $('aTier').textContent = ''; $('aLine1').textContent = ''; $('aLine2').textContent = ''; $('wFx').innerHTML = ''; $('aBubbles').innerHTML = ''; $('aBars').innerHTML = ''; return; }
+  const sym = S.metalW, tier = WATER_TIER(sym);
+  $('wName').textContent = METAL[sym].name[0].toUpperCase() + METAL[sym].name.slice(1);
+  $('wLiq').setAttribute('height', 120);
+  $('wTier').textContent = WATER_LABEL[tier];
+  $('wLine1').textContent = tier === 'fire' ? 'Hydrogen gas forms so fast, the heat sets it alight.' : tier === 'floats' ? 'Bubbles of hydrogen stick to it and it floats.' : tier === 'hot' ? 'No change in cold water; try heating it.' : tier === 'steam' ? 'No change even in hot water; only steam reacts.' : 'Rank ' + RANK[sym] + ' of 12: too unreactive for water.';
+  $('wLine2').textContent = tier === 'none' ? '' : `Metal oxide + hydrogen gas is formed.`;
+  let fx = '';
+  if (tier === 'fire') for (let i = 0; i < 5; i++) fx += `<path d="M${340 + i * 24} 170 q-8 -18 0 -30 q8 12 0 30Z" fill="${i % 2 ? '#f2a01f' : '#e0562f'}" opacity=".9"/>`;
+  else if (tier === 'floats' || tier === 'hot' || tier === 'steam') for (let i = 0; i < (tier === 'floats' ? 8 : tier === 'hot' ? 3 : 0); i++) fx += `<circle cx="${340 + (i % 4) * 24}" cy="${200 - Math.floor(i / 4) * 20}" r="4" fill="#bcd9f0" opacity=".8"/>`;
+  $('wFx').innerHTML = fx;
+  $('aName').textContent = METAL[sym].name[0].toUpperCase() + METAL[sym].name.slice(1);
+  const ok = acidReacts(sym), vig = acidVigor(sym);
+  $('aTier').textContent = ok ? 'Reacts: bubbles of hydrogen' : 'No reaction';
+  $('aLine1').textContent = ok ? `Rank ${RANK[sym]} of 12, above hydrogen (rank ${RANK.H}).` : `Rank ${RANK[sym]} of 12, at or below hydrogen (rank ${RANK.H}).`;
+  $('aLine2').textContent = ok ? `Metal + dilute acid → salt + hydrogen.` : 'Below hydrogen: it cannot displace hydrogen from an acid.';
+  let ab = '';
+  if (ok) { const n = Math.round(3 + vig * 14); for (let i = 0; i < n; i++) ab += `<circle cx="${770 + (i * 37) % 55}" cy="${310 - (i * 53) % 190}" r="${2.4 + (i % 3)}" fill="#dceefb" stroke="#8fb3d0" stroke-width=".6"/>`; }
+  $('aBubbles').innerHTML = ab;
+  let bars = '';
+  const shown = ['Mg', 'Al', 'Zn', 'Fe', 'Pb', 'Cu', 'Ag'];
+  shown.forEach((m, i) => { const y = 486 + i * 20, w = acidVigor(m) * 260; bars += `<text x="628" y="${y}" font-size="12" fill="${m === sym ? '#1d2327' : '#7c878c'}" font-weight="${m === sym ? 700 : 400}">${METAL[m].name}</text><rect x="740" y="${y - 10}" width="${(w).toFixed(1)}" height="10" rx="3" fill="${acidReacts(m) ? '#3f7fd8' : '#c9c2b0'}"/>`; });
+  $('aBars').innerHTML = bars;
+}
+
+function paint(){
+  $('dG').toggleAttribute('hidden', S.tab !== 'disp');
+  $('wG').toggleAttribute('hidden', S.tab !== 'water');
+  $('ctlDisp').hidden = S.tab !== 'disp'; $('ctlWater').hidden = S.tab !== 'water';
+  for (const [id, key] of [['tabDisp', 'disp'], ['tabWater', 'water']]) $(id).setAttribute('aria-selected', S.tab === key);
+  $('veil').toggleAttribute('hidden', S.locked); $('veilT').toggleAttribute('hidden', S.locked);
+  if (S.tab === 'disp') paintDisp(); else paintWater();
+  paintWhy();
+  const rows = S.tab === 'disp'
+    ? [['Strip', METAL[S.strip].name], ['Rank', RANK[S.strip] + ' of 12'], ['Solution', saltFormula(S.salt)], ['Dissolved metal rank', RANK[S.salt] + ' of 12'], ['Displaces it?', reacts(S.strip, S.salt) ? 'Yes' : S.strip === S.salt ? '—' : 'No']]
+    : [['Metal', METAL[S.metalW].name], ['Rank', RANK[S.metalW] + ' of 12'], ['With water', WATER_LABEL[WATER_TIER(S.metalW)]], ['With dilute acid', acidReacts(S.metalW) ? 'Reacts' : 'No reaction']];
+  $('nums').innerHTML = S.locked ? rows.map(r => `<span>${r[0]}</span><b>${r[1]}</b>`).join('') : '<span style="grid-column:1/-1;color:var(--ink-3)">The numbers appear once you have made a prediction.</span>';
+}
+
+function paintWhy(){
+  if (!S.locked) return;
+  $('whyCard').hidden = false;
+  let h = '';
+  if (S.tab === 'disp') {
+    h += `<p>The model never remembers "who beats whom": it only compares two numbers, the ranks in Table 3.2, and a metal higher in the table always displaces one lower down.</p>`;
+    if (S.strip === 'Fe' && S.salt === 'Cu') h += `<p>This is Activity 3.12 from the book: an iron nail in copper sulfate grows a coat of copper, while a copper wire in iron sulfate does nothing.</p>`;
+    h += `<p>The word equation itself comes from balancing electrons lost by ${METAL[S.strip].name} against electrons gained by ${METAL[S.salt].name}, not from a memorised list.</p>`;
+  } else {
+    const sym = S.metalW;
+    h += `<p>${METAL[sym].name[0].toUpperCase() + METAL[sym].name.slice(1)} sits at rank ${RANK[sym]} of 12. The same rank decides both columns: reactivity with water falls off in five clear steps, and reactivity with acid simply needs to beat hydrogen (rank ${RANK.H}).</p>`;
+    if (sym === 'K' || sym === 'Na') h += `<p>Because the reaction is so exothermic, the hydrogen gas produced ignites on the spot — which is exactly why these metals are stored under kerosene.</p>`;
+    if (sym === 'Cu' || sym === 'Ag') h += `<p>Below hydrogen, a metal simply has no tendency to lose its electrons to H⁺: no gas, no reaction, however strong the acid.</p>`;
+  }
+  $('why').innerHTML = h;
+}
+
+/* ---- findings --------------------------------------------------------------- */
+let EXPLAINED = false;
+function maybeExplain(){
+  if (EXPLAINED || !POE || !POE.locked) return;
+  EXPLAINED = true;
+  const feWinsCu = reacts('Fe', 'Cu'), cuWinsFe = reacts('Cu', 'Fe');
+  POE.explain(`Iron sits at rank ${RANK.Fe}, copper at rank ${RANK.Cu} — iron is higher, so ${feWinsCu ? 'it displaces copper from copper sulfate' : 'it still cannot displace copper'} ` +
+    `(${saltFormula('Cu')} + Fe → ${saltFormula('Fe')} + Cu). Copper, being lower, ${cuWinsFe ? 'also displaces iron' : 'cannot displace iron from iron sulfate at all'}: no deposit, no reaction.`);
+}
+function checkDisp(){
+  if (!S.locked) return;
+  const win = reacts(S.strip, S.salt), same = S.strip === S.salt;
+  if (!same && !S.tried.some(t => t.strip === S.strip && t.salt === S.salt)) S.tried.push({strip: S.strip, salt: S.salt, win});
+  if (win) discover('displace'); else if (!same) discover('noreact');
+  if (S.strip === 'Fe' && S.salt === 'Cu' && win) discover('ironcopper');
+  maybeExplain();
+}
+function checkWater(){
+  if (!S.locked) return;
+  const sym = S.metalW, tier = WATER_TIER(sym);
+  if (tier === 'fire') discover('violentwater');
+  if (tier === 'steam') discover('steamonly');
+  if (tier === 'none') discover('nowater');
+  if (sym === 'Mg') discover('fastacid');
+  if ((sym === 'Cu' || sym === 'Ag') && !acidReacts(sym)) discover('noacid');
+}
+
+/* ============================================================================
+   Controls
+   ============================================================================ */
+$('selStrip').innerHTML = DISP_METALS.map(m => `<option value="${m}">${METAL[m].name[0].toUpperCase() + METAL[m].name.slice(1)}</option>`).join('');
+$('selSalt').innerHTML = DISP_METALS.map(m => `<option value="${m}">${saltFormula(m)}</option>`).join('');
+build();
+function setTab(t){ S.tab = t; paint(); }
+$('tabDisp').addEventListener('click', () => { setTab('disp'); sound('tick'); track('tab', {tab: 'disp'}); });
+$('tabWater').addEventListener('click', () => { setTab('water'); sound('tick'); track('tab', {tab: 'water'}); });
+
+$('selStrip').value = S.strip; $('selSalt').value = S.salt;
+$('selStrip').addEventListener('change', e => { S.strip = e.target.value; sound('pop'); checkDisp(); paint(); track('strip', {strip: S.strip}); });
+$('selSalt').addEventListener('change', e => { S.salt = e.target.value; sound('pop'); checkDisp(); paint(); track('salt', {salt: S.salt}); });
+
+for (const sym of WATER_METALS) {
+  const g = $('shelf_' + sym);
+  const pick = () => { if (!S.locked) return; S.metalW = sym; sound('pop'); paint(); checkWater(); track('metalW', {metal: sym}); };
+  g.addEventListener('click', pick);
+  g.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); pick(); } });
+}
+
+function lockControls(lock){
+  for (const id of ['selStrip', 'selSalt', 'tabWater']) $(id).disabled = lock;
+  $('shelf').style.pointerEvents = lock ? 'none' : '';
+  $('gate').hidden = !lock;
+}
+
+/* ============================================================================
+   Start
+   ============================================================================ */
+findings($('finds'), [
+  {id: 'displace',    icon: '⬇', label: 'A metal displaces a weaker one',      hint: 'Dip a higher-ranked strip into a lower-ranked salt'},
+  {id: 'noreact',     icon: '✕', label: 'Too weak to displace',                hint: 'Dip a lower-ranked strip into a higher-ranked salt'},
+  {id: 'ironcopper',  icon: '🔩', label: 'Activity 3.12: iron beats copper', hint: 'Try the iron nail in copper sulfate'},
+  {id: 'violentwater',icon: '🔥', label: 'Explosive with cold water',      hint: 'Test potassium or sodium in water'},
+  {id: 'steamonly',   icon: '♨', label: 'Only steam will do',                  hint: 'Test aluminium, zinc or iron in water'},
+  {id: 'nowater',     icon: '🚫', label: 'Never reacts with water',        hint: 'Test copper or silver in water'},
+  {id: 'fastacid',    icon: '⚡', label: 'The fastest bubbles in acid',         hint: 'Test magnesium with dilute acid'},
+  {id: 'noacid',      icon: '⊖', label: 'No reaction with acid at all',        hint: 'Test copper or silver with dilute acid'},
+], () => toast('All eight found. One series explains all of it.', 4200));
+
+const POE = predict($('poe'), {
+  id: 'iron-copper',
+  q: 'An iron nail is dropped into copper sulfate solution, and a copper wire into iron sulfate solution. In which test tube does a reaction happen?',
+  options: [
+    {id: 'both',    text: 'Both — metals always react with other metals’ salts.'},
+    {id: 'neither', text: 'Neither — metals don’t react with each other’s salts.'},
+    {id: 'iron',    text: 'Only the iron nail in copper sulfate.', right: true},
+    {id: 'copper',  text: 'Only the copper wire in iron sulfate.'},
+  ],
+  onLock(){
+    S.locked = true; lockControls(false);
+    say('Now try it. Choose a strip and a solution.');
+    checkDisp(); paint();
+  },
+});
+lockControls(!POE.locked);
+if (!Play.FF('predict')) S.locked = true;
+paint();
+window.applyFeatures = () => paint();
+window.PG_STATE = () => JSON.parse(JSON.stringify({tab: S.tab, locked: S.locked, strip: S.strip, salt: S.salt, metalW: S.metalW,
+  reacts: reacts(S.strip, S.salt), tried: S.tried, waterTier: WATER_TIER(S.metalW), acidReacts: acidReacts(S.metalW)}));
+window.PG_MODEL = {RANK, METAL, reacts, balance, saltFormula, saltCounts, WATER_TIER, acidReacts, acidVigor};
+</script>
+</body>
+</html>

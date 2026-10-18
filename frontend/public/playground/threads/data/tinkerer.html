@@ -1,0 +1,559 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Connecting the Dots</title>
+<meta name="description" content="Class 7: level towers of guavas to find the mean, drag an outlier along a dot plot and watch the mean run while the median stays, then plot a column graph yourself and see how a cut axis exaggerates.">
+<link rel="icon" href="../../favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600&family=Inter:wght@400;500;600;700&family=Nunito:wght@500;700;800&family=Newsreader:opsz,wght@6..72,400;6..72,500&family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="../../play.css">
+<style>
+/* Only what this page needs beyond play.css. */
+.pg-stage{align-self:start; min-height:0}
+svg text.m{font-family:var(--font-mono)}
+.tabs{display:flex; gap:4px; padding:10px 12px 0; border-bottom:1px solid var(--hair); background:var(--card)}
+.tab{border:1px solid transparent; border-bottom:none; background:none; padding:8px 14px; border-radius:10px 10px 0 0; cursor:pointer;
+  font-family:"Fredoka",var(--font-head); font-size:16px; color:var(--ink-3); margin-bottom:-1px}
+.tab[aria-selected="true"]{background:var(--card); border-color:var(--hair); color:var(--ink); border-bottom:1px solid var(--card)}
+.tab:disabled{cursor:default; opacity:.6}
+.gate{position:absolute; left:0; right:0; top:48px; bottom:0; display:grid; place-items:center; pointer-events:none}
+.gate span{background:rgba(29,35,39,.85); color:#fff; padding:10px 16px; border-radius:99px; font-weight:600; font-size:14px}
+.chips{display:flex; flex-wrap:wrap; gap:6px; margin:4px 0 8px}
+.chip{border:1px solid var(--hair-2); background:var(--card); border-radius:99px; padding:5px 12px; font-size:13px; cursor:pointer; font-weight:600; color:var(--ink-2)}
+.chip[aria-pressed="true"]{background:var(--accent-soft); border-color:var(--accent); color:var(--ink)}
+.chip:disabled{opacity:.45; cursor:default}
+.readout{display:grid; grid-template-columns:auto 1fr; gap:4px 12px; font-size:13.5px; align-items:baseline; margin-top:8px}
+.readout span{color:var(--ink-2)}
+.readout b{font-family:var(--font-mono); font-weight:600; font-size:13px; font-variant-numeric:tabular-nums; text-align:right; overflow-wrap:anywhere}
+.note{font-size:12.5px; color:var(--ink-3); margin:6px 0 0}
+.why p{font-size:14px; margin-bottom:.55em}
+.why b{color:var(--ink)}
+.hit{cursor:grab}
+.hit.dragging{cursor:grabbing}
+.ctl output{min-width:78px; font-family:var(--font-mono); font-size:13px}
+@media (max-width:1180px) and (min-width:981px){ .pg-main.wide-side{grid-template-columns:minmax(0,1fr) 340px} }
+</style>
+</head>
+<body>
+<header class="pg-top"></header>
+
+<div class="pg-intro">
+  <h1>Connecting the dots</h1>
+  <p>Can one number stand for a whole group of numbers? Level the towers of guavas and find the fair share. Drag the smallest child in Poovizhi’s family
+     along a dot plot and watch which average follows. Then draw a column graph from the book’s table yourself — and see how a graph can tell the truth or exaggerate it.</p>
+</div>
+
+<main class="pg-main wide-side">
+  <section class="pg-stage" id="stageWrap">
+    <div class="tabs" role="tablist">
+      <button class="tab" role="tab" id="tab0" data-tab="0" aria-selected="true">Fair share</button>
+      <button class="tab" role="tab" id="tab1" data-tab="1" aria-selected="false">Outliers</button>
+      <button class="tab" role="tab" id="tab2" data-tab="2" aria-selected="false">Column graph</button>
+    </div>
+    <svg id="sv0" viewBox="0 0 1000 600" role="img" aria-label="Towers of blocks, one per person or day. Drag a block from one tower to another to level them."></svg>
+    <svg id="sv1" viewBox="0 0 1000 600" role="img" aria-label="A dot plot with the mean and the median marked. Drag a dot to change its value." hidden></svg>
+    <svg id="sv2" viewBox="0 0 1000 600" role="img" aria-label="A clustered column graph of electric vehicle registrations. Drag each bar to its value from the table." hidden></svg>
+    <div class="gate" id="gate"><span>Make your prediction first →</span></div>
+  </section>
+
+  <aside class="pg-side">
+    <div id="poe"></div>
+
+    <div class="card" id="card0">
+      <div class="kicker">Whose data?</div>
+      <div class="chips" id="lvChips"></div>
+      <p class="note" style="margin-top:0">Drag a block from a tall tower onto a short one. Nothing is added or taken away.</p>
+      <div class="readout" id="read0"></div>
+      <div class="row" style="margin-top:10px"><button class="btn sm" id="lvReset">Start again</button></div>
+    </div>
+
+    <div class="card" id="card1" hidden>
+      <div class="kicker">Whose data?</div>
+      <div class="chips" id="dpChips"></div>
+      <p class="note" style="margin-top:0">Drag any dot along the line. The mean and the median are recomputed from the dots.</p>
+      <div class="readout" id="read1"></div>
+      <div class="row" style="margin-top:10px"><button class="btn sm" id="dpReset">Put the dots back</button></div>
+    </div>
+
+    <div class="card" id="card2" hidden>
+      <div class="kicker">Draw it, then cut it</div>
+      <p class="note" style="margin-top:0">Drag each bar up to its value in the table. Then move where the vertical line starts.</p>
+      <div class="ctl"><label for="axMin">Starts at</label><input type="range" id="axMin" min="0" max="60000" step="5000" value="0"><output id="axOut">0</output></div>
+      <div class="readout" id="read2"></div>
+      <div class="row" style="margin-top:10px"><button class="btn sm" id="cgReset">Clear the bars</button></div>
+    </div>
+
+    <div class="card why" id="whyCard" hidden>
+      <div class="kicker">What is happening</div>
+      <div id="why"></div>
+    </div>
+
+    <div class="card"><div class="kicker">To find</div><div id="finds"></div></div>
+  </aside>
+</main>
+
+<script src="../../play.js"></script>
+<script>
+'use strict';
+const {$, esc, clamp, fmt, drag, sound, say, track, toast, predict, findings, discover, found,
+       shareState, sharedState, mount, reduced} = Play;
+mount({thread: 'data', band: 'tinkerer'});
+
+/* MODEL:start ==================================================================
+   Every number is the book's (NCERT Ganita Prakash, Grade 7 Part II, Ch 5 "Connecting the Dots…").
+   Every number on screen is computed here from the data the learner has in front of them:
+     mean   = (sum of the values) ÷ (number of values)                         §5.2
+     median = the middle of the sorted values; for an even count, the average
+              of the two middle values                                          §5.2 "Outliers and Medians"
+   Levelling towers: a move takes the top block off one tower and puts it on another, so the
+   total never changes; when every tower is the same height, that height is total ÷ count.
+   A column graph draws each value as a bar whose height is (value − start of the vertical line).
+   If the line starts at 0 the ratio of two bars is the ratio of the values; if it starts higher,
+   the picture's ratio is (a − s) ÷ (b − s), which is bigger than a ÷ b: the cut axis exaggerates.
+   ============================================================================ */
+const sum = xs => xs.reduce((s, x) => s + x, 0);
+const mean = xs => xs.length ? sum(xs) / xs.length : NaN;
+function median(xs){
+  if (!xs.length) return NaN;
+  const s = xs.slice().sort((a, b) => a - b), n = s.length, h = n >> 1;
+  return n % 2 ? s[h] : (s[h - 1] + s[h]) / 2;
+}
+/* one levelling move: a block from tower i to tower j (refused if tower i is empty) */
+function move(towers, i, j){
+  if (i === j || towers[i] <= 0) return towers.slice();
+  const t = towers.slice(); t[i]--; t[j]++; return t;
+}
+const levelled = t => t.length > 0 && Math.max(...t) === Math.min(...t);
+/* how much a column graph exaggerates: the ratio the eye sees ÷ the ratio of the numbers */
+function barRatio(a, b, start){
+  const hi = Math.max(a, b), lo = Math.min(a, b);
+  const seen = (hi - start) / Math.max(lo - start, 1e-9), real = hi / lo;
+  return {seen, real, factor: seen / real};
+}
+/* MODEL:end */
+
+/* ---- the book's data ------------------------------------------------------- */
+const LEVEL = {
+  shreyas: {name: 'Shreyas’s group', long: 'Shreyas and 4 of his friends collected guavas', unit: 'guavas', what: 'person', whats: 'people', icon: 'guava',
+            labels: ['Shreyas', 'Friend 1', 'Friend 2', 'Friend 3', 'Friend 4'], v: [3, 8, 10, 5, 4]},
+  parag:   {name: 'Parag’s group', long: 'Parag and 5 of his friends collected guavas', unit: 'guavas', what: 'person', whats: 'people', icon: 'guava',
+            labels: ['Parag', 'Friend 1', 'Friend 2', 'Friend 3', 'Friend 4', 'Friend 5'], v: [5, 4, 6, 3, 4, 8]},
+  hibiscus:{name: 'Hibiscus', long: 'Hibiscus flowers blooming in Vaishnavi’s garden each day', unit: 'flowers', what: 'day', whats: 'days', icon: 'flower',
+            labels: ['Day 1', 'Day 2', 'Day 3', 'Day 4', 'Day 5'], v: [2, 7, 9, 4, 3]},
+  bounces: {name: 'Ball bounces', long: 'Shreyas’s bounces of the ball on the bat, 8 attempts', unit: 'bounces', what: 'attempt', whats: 'attempts', icon: 'ball',
+            labels: ['1st', '2nd', '3rd', '4th', '5th', '6th', '7th', '8th'], v: [6, 2, 9, 5, 4, 6, 3, 5]},
+};
+const DOTS = {
+  poovizhi: {name: 'Poovizhi’s family', long: 'Heights of Poovizhi’s family', unit: 'cm', lo: 110, hi: 200, tick: 10, v: [170, 173, 165, 118, 175]},
+  yaangba:  {name: 'Yaangba’s family', long: 'Heights of Yaangba’s family', unit: 'cm', lo: 110, hi: 200, tick: 10, v: [169, 173, 155, 165, 160, 164]},
+  paper:    {name: 'Newspaper pages', long: 'Pages in a newspaper, Monday to Sunday', unit: 'pages', lo: 0, hi: 40, tick: 5, v: [16, 18, 20, 22, 26, 16, 10]},
+  onion:    {name: 'Onions in Wahapur', long: 'Monthly price of onions in Wahapur (₹ per kg)', unit: '₹/kg', lo: 10, hi: 70, tick: 5, v: [19, 17, 23, 30, 38, 35, 42, 39, 53, 60, 52, 42]},
+};
+/* Figure it Out 4(a): electric vehicles registered, rounded to thousands */
+const EV = {states: ['Gujarat', 'Delhi'], years: ['2022', '2023', '2024'],
+            v: [[69000, 89000, 78000], [62000, 74000, 81000]]};
+const YEARCOL = ['#6aa9c2', '#2f7d9c', '#174c63'];
+
+/* ---- state: plain data --------------------------------------------------- */
+const S = {tab: 0, locked: false,
+  lv: {set: 'shreyas', t: LEVEL.shreyas.v.slice(), moves: 0, done: {}},
+  dp: {set: 'poovizhi', v: DOTS.poovizhi.v.slice(), seenLow: false, seenHigh: false},
+  cg: {v: [[0, 0, 0], [0, 0, 0]], start: 0},
+};
+const shared = sharedState();
+if (shared) {
+  if (LEVEL[shared.lvSet] && Array.isArray(shared.lv) && shared.lv.length === LEVEL[shared.lvSet].v.length && sum(shared.lv) === sum(LEVEL[shared.lvSet].v)) { S.lv.set = shared.lvSet; S.lv.t = shared.lv.map(Number); }
+  if (DOTS[shared.dpSet] && Array.isArray(shared.dp) && shared.dp.length === DOTS[shared.dpSet].v.length) { S.dp.set = shared.dpSet; S.dp.v = shared.dp.map(x => clamp(Math.round(+x || 0), DOTS[shared.dpSet].lo, DOTS[shared.dpSet].hi)); }
+  if (Array.isArray(shared.cg) && shared.cg.length === 2) S.cg.v = shared.cg.map(r => [0, 1, 2].map(k => clamp(Math.round((+r[k] || 0) / 1000) * 1000, 0, 100000)));
+  if ([0, 1, 2].includes(shared.tab)) S.tab = shared.tab;
+  S.cg.start = clamp(Math.round((+shared.start || 0) / 5000) * 5000, 0, 60000);
+}
+shareState(() => ({tab: S.tab, lvSet: S.lv.set, lv: S.lv.t, dpSet: S.dp.set, dp: S.dp.v, cg: S.cg.v, start: S.cg.start}));
+
+const INK = '#1d2327', FAINT = '#7c878c', DOT = '#2f7d9c', MEAN = '#d9730d', MED = '#7b5cd6', PAPER = '#fbfaf6';
+const NS = 'http://www.w3.org/2000/svg';
+const mk = (tag, attrs, parent) => { const el = document.createElementNS(NS, tag); for (const k in attrs) el.setAttribute(k, attrs[k]); if (parent) parent.appendChild(el); return el; };
+const nf = x => Math.round(x).toLocaleString('en-IN');
+
+/* ============================================================================
+   Tab 1 — Fair share: level the towers
+   ============================================================================ */
+const sv0 = $('sv0');
+const LV = {x0: 90, x1: 910, base: 520, unit: 36, maxN: 8};
+const lvCols = () => { const n = S.lv.t.length, w = (LV.x1 - LV.x0) / n; return Array.from({length: n}, (_, i) => ({x: LV.x0 + w * (i + .5), w})); };
+function iconSVG(kind, x, y){
+  if (kind === 'guava') return `<circle cx="${x}" cy="${y + 1}" r="8" fill="#9ccc4a" stroke="#5e8a1f" stroke-width="1.2"/><path d="M${x} ${y - 7} q4 -5 8 -3" stroke="#5e8a1f" stroke-width="1.6" fill="none"/>`;
+  if (kind === 'flower') { let p = ''; for (let k = 0; k < 5; k++) { const a = k * 72 * Math.PI / 180; p += `<circle cx="${(x + 6 * Math.sin(a)).toFixed(1)}" cy="${(y - 6 * Math.cos(a)).toFixed(1)}" r="4.6" fill="#e5484d"/>`; } return p + `<circle cx="${x}" cy="${y}" r="3" fill="#ffd43b"/>`; }
+  return `<circle cx="${x}" cy="${y}" r="7.5" fill="#fff" stroke="#b44" stroke-width="1.4"/><path d="M${x - 5} ${y - 4} q5 4 0 8 M${x + 5} ${y - 4} q-5 4 0 8" stroke="#c33" stroke-width="1" fill="none"/>`;
+}
+function build0(){
+  sv0.innerHTML = `
+  <rect width="1000" height="600" fill="${PAPER}"/>
+  <text x="28" y="40" font-size="13" font-weight="700" letter-spacing=".08em" fill="#4a555b">LEVEL THE TOWERS</text>
+  <text id="lvLong" x="28" y="62" font-size="14" fill="${INK}"></text>
+  <line x1="${LV.x0 - 20}" y1="${LV.base}" x2="${LV.x1 + 20}" y2="${LV.base}" stroke="${INK}" stroke-width="2"/>
+  <g id="lvGhost"></g>
+  <g id="lvBlocks"></g>
+  <g id="lvLevel" opacity="0">
+    <line id="lvLine" x1="${LV.x0 - 20}" x2="${LV.x1 + 20}" stroke="${MEAN}" stroke-width="2.5" stroke-dasharray="9 6"/>
+    <text id="lvLineT" x="${LV.x1 + 16}" font-size="14" font-weight="700" text-anchor="end" fill="${MEAN}"></text>
+  </g>
+  <g id="lvLabels"></g>
+  <text id="lvTotal" x="500" y="575" font-size="15" text-anchor="middle" fill="#4a555b" class="m"></text>
+  <g id="lvFloat" opacity="0" pointer-events="none"><rect x="-22" y="-13" width="44" height="26" rx="6" fill="#fff" stroke="${DOT}" stroke-width="2"/><g id="lvFloatI"></g></g>
+  <g id="lvHits"></g>`;
+}
+/* hit targets: one per tower, full height. Rebuilt only when the data set changes, never mid-drag. */
+let lvFrom = -1;
+function buildHits0(){
+  const g = $('lvHits'); g.innerHTML = '';
+  lvCols().forEach((c, i) => {
+    const r = mk('rect', {x: (c.x - c.w / 2 + 2).toFixed(1), y: 80, width: (c.w - 4).toFixed(1), height: LV.base - 80 + 40, fill: 'transparent', class: 'hit', id: 'tower' + i,
+      role: 'button', 'aria-label': `${LEVEL[S.lv.set].labels[i]}: drag a block from here to another tower`}, g);
+    drag(r, sv0, {
+      start(){ if (!S.locked || S.lv.t[i] <= 0) return false; lvFrom = i; sound('tick'); paint0(); },
+      move(p){ $('lvFloat').setAttribute('transform', `translate(${p.x.toFixed(1)} ${p.y.toFixed(1)})`); $('lvFloat').setAttribute('opacity', 1); },
+      end(p){
+        $('lvFloat').setAttribute('opacity', 0);
+        const cols = lvCols(); let j = -1;
+        cols.forEach((c, k) => { if (Math.abs(p.x - c.x) <= c.w / 2) j = k; });
+        if (j >= 0 && j !== lvFrom) { S.lv.t = move(S.lv.t, lvFrom, j); S.lv.moves++; sound('pop'); track('level', {from: lvFrom, to: j, t: S.lv.t.join(',')}); }
+        lvFrom = -1; paint0();
+      },
+    });
+  });
+}
+function paint0(){
+  const L = LEVEL[S.lv.set], t = S.lv.t, cols = lvCols();
+  $('lvLong').textContent = L.long + ': ' + L.v.join(', ') + '.';
+  const bw = Math.min(64, cols[0].w - 18);
+  let ghost = '', blocks = '', labs = '';
+  cols.forEach((c, i) => {
+    const h0 = L.v[i] * LV.unit;
+    ghost += `<rect x="${(c.x - bw / 2 - 5).toFixed(1)}" y="${LV.base - h0}" width="${(bw + 10).toFixed(1)}" height="${h0}" rx="8" fill="none" stroke="#c9c3b3" stroke-width="1.5" stroke-dasharray="4 4"/>`;
+    for (let k = 0; k < t[i]; k++) {
+      const y = LV.base - (k + 1) * LV.unit, top = k === t[i] - 1 && lvFrom === i;
+      blocks += `<rect x="${(c.x - bw / 2).toFixed(1)}" y="${y + 2}" width="${bw.toFixed(1)}" height="${LV.unit - 4}" rx="6" fill="${top ? '#fff' : '#e3f0f5'}" stroke="${DOT}" stroke-width="${top ? 2.4 : 1.4}" ${top ? 'stroke-dasharray="4 3"' : ''}/>` +
+        (top ? '' : iconSVG(L.icon, c.x, y + LV.unit / 2));
+    }
+    labs += `<text x="${c.x.toFixed(1)}" y="${LV.base - t[i] * LV.unit - 10}" font-size="17" font-weight="700" text-anchor="middle" fill="${INK}" class="m">${t[i]}</text>` +
+      `<text x="${c.x.toFixed(1)}" y="${LV.base + 24}" font-size="13" text-anchor="middle" fill="#4a555b">${esc(L.labels[i])}</text>`;
+  });
+  $('lvGhost').innerHTML = ghost; $('lvBlocks').innerHTML = blocks; $('lvLabels').innerHTML = labs;
+  $('lvFloatI').innerHTML = iconSVG(L.icon, 0, 0);
+  const tot = sum(t), n = t.length, lev = levelled(t);
+  $('lvTotal').textContent = `Total ${tot} ${L.unit} · ${n} ${L.whats}` + (lev ? ` · each ${L.what} has ${t[0]}` : '');
+  $('lvLevel').setAttribute('opacity', lev ? 1 : 0);
+  if (lev) {
+    const y = LV.base - t[0] * LV.unit;
+    $('lvLine').setAttribute('y1', y); $('lvLine').setAttribute('y2', y);
+    $('lvLineT').setAttribute('y', y - 32); $('lvLineT').textContent = `fair share = ${tot} ÷ ${n} = ${fmt(tot / n, 0)}`;
+  }
+  const mx = Math.max(...t), mn = Math.min(...t);
+  $('read0').innerHTML = `<span>Total</span><b>${tot} ${L.unit}</b><span>${L.whats[0].toUpperCase() + L.whats.slice(1)}</span><b>${n}</b>` +
+    `<span>Tallest − shortest</span><b>${mx} − ${mn} = ${mx - mn}</b><span>Blocks moved</span><b>${S.lv.moves}</b>` +
+    (lev ? `<span>Each gets (the mean)</span><b>${tot} ÷ ${n} = ${fmt(tot / n, 0)}</b>` : '');
+  if (S.locked && lev) {
+    S.lv.done[S.lv.set] = t[0];
+    discover('level');
+    if (S.lv.done.shreyas != null && S.lv.done.parag != null) discover('fair');
+  }
+  if (S.tab === 0) paintWhy();
+}
+
+/* ============================================================================
+   Tab 2 — Outliers: a dot plot you can drag
+   ============================================================================ */
+const sv1 = $('sv1');
+const DP = {x0: 90, x1: 910, axis: 380, r: 12};
+const dpx = v => { const D = DOTS[S.dp.set]; return DP.x0 + (v - D.lo) / (D.hi - D.lo) * (DP.x1 - DP.x0); };
+const dpv = x => { const D = DOTS[S.dp.set]; return clamp(Math.round(D.lo + (x - DP.x0) / (DP.x1 - DP.x0) * (D.hi - D.lo)), D.lo, D.hi); };
+function build1(){
+  sv1.innerHTML = `
+  <rect width="1000" height="600" fill="${PAPER}"/>
+  <text x="28" y="40" font-size="13" font-weight="700" letter-spacing=".08em" fill="#4a555b">A DOT PLOT</text>
+  <text id="dpLong" x="28" y="62" font-size="14" fill="${INK}"></text>
+  <g id="dpAxis"></g>
+  <g id="dpMarks">
+    <line id="mnLine" y1="112" y2="${DP.axis}" stroke="${MEAN}" stroke-width="2.5"/>
+    <line id="mdLine" y1="140" y2="${DP.axis}" stroke="${MED}" stroke-width="2.5" stroke-dasharray="7 5"/>
+    <text id="mnT" y="104" paint-order="stroke" stroke="#fbfaf6" stroke-width="6" font-size="15" font-weight="700" fill="${MEAN}" class="m"></text>
+    <text id="mdT" y="132" paint-order="stroke" stroke="#fbfaf6" stroke-width="6" font-size="15" font-weight="700" fill="${MED}" class="m"></text>
+  </g>
+  <g id="dpDots"></g>
+  <text x="28" y="462" font-size="12.5" font-weight="700" letter-spacing=".08em" fill="#4a555b">SORTED</text>
+  <g id="dpSorted"></g>
+  <text id="dpSum" x="28" y="540" font-size="14" fill="${INK}" class="m"></text>
+  <text id="dpMed" x="28" y="566" font-size="14" fill="${INK}" class="m"></text>`;
+}
+let dpDrag = null;       // {i, mean0, med0}
+function buildDots(){
+  const g = $('dpDots'); g.innerHTML = '';
+  S.dp.v.forEach((v, i) => {
+    const c = mk('circle', {r: DP.r, fill: DOT, stroke: '#fff', 'stroke-width': 2, class: 'hit', id: 'dot' + i, tabindex: 0, role: 'slider', 'aria-label': 'A value: drag it left or right'}, g);
+    drag(c, sv1, {
+      start(){ if (!S.locked) return false; dpDrag = {i, mean0: mean(S.dp.v), med0: median(S.dp.v)}; sound('tick'); },
+      move(p){ const nv = dpv(p.x); if (nv !== S.dp.v[i]) { S.dp.v[i] = nv; paint1(); } },
+      end(){ track('dot', {set: S.dp.set, i, v: S.dp.v[i]}); checkDrag(); dpDrag = null; paint1(); },
+    });
+    c.addEventListener('keydown', e => {
+      const k = {ArrowRight: 1, ArrowUp: 1, ArrowLeft: -1, ArrowDown: -1}[e.key];
+      if (!k || !S.locked) return; e.preventDefault();
+      const D = DOTS[S.dp.set]; S.dp.v[i] = clamp(S.dp.v[i] + k, D.lo, D.hi); paint1();
+    });
+  });
+}
+function paint1(){
+  const D = DOTS[S.dp.set], v = S.dp.v;
+  $('dpLong').textContent = D.long + ` (${D.unit}).`;
+  let ax = `<line x1="${DP.x0 - 20}" y1="${DP.axis}" x2="${DP.x1 + 20}" y2="${DP.axis}" stroke="${INK}" stroke-width="2"/>`;
+  for (let t = D.lo; t <= D.hi; t += D.tick) ax += `<line x1="${dpx(t)}" y1="${DP.axis}" x2="${dpx(t)}" y2="${DP.axis + 8}" stroke="${INK}"/><text x="${dpx(t)}" y="${DP.axis + 26}" font-size="13" text-anchor="middle" fill="#4a555b" class="m">${t}</text>`;
+  $('dpAxis').innerHTML = ax;
+  /* stack dots that would overlap: each sits on the lowest free level */
+  const placed = [];
+  v.forEach((x, i) => {
+    const px = dpx(x); let k = 0;
+    while (placed.some(p => p.k === k && Math.abs(p.x - px) < 2 * DP.r + 2)) k++;
+    placed.push({x: px, k});
+    const el = $('dot' + i);
+    el.setAttribute('cx', px.toFixed(1)); el.setAttribute('cy', (DP.axis - DP.r - 4 - k * (2 * DP.r + 3)).toFixed(1));
+    el.setAttribute('fill', dpDrag && dpDrag.i === i ? '#1b5a73' : DOT);
+  });
+  const m = mean(v), md = median(v);
+  const mx = dpx(m), mdx = dpx(md);
+  $('mnLine').setAttribute('x1', mx.toFixed(1)); $('mnLine').setAttribute('x2', mx.toFixed(1));
+  $('mdLine').setAttribute('x1', mdx.toFixed(1)); $('mdLine').setAttribute('x2', mdx.toFixed(1));
+  /* labels on the outer side of each line, so neither line runs through the other's label */
+  const place = (el, x, right) => { el.setAttribute('x', (x + (right ? 8 : -8)).toFixed(1)); el.setAttribute('text-anchor', right ? 'start' : 'end'); };
+  const meanRight = Math.abs(mx - mdx) < 1 ? mx < 700 : mx > mdx;
+  $('mnT').textContent = 'Mean = ' + fmt(m, 1); place($('mnT'), mx, meanRight);
+  $('mdT').textContent = 'Median = ' + fmt(md, 1); place($('mdT'), mdx, Math.abs(mx - mdx) < 1 ? meanRight : !meanRight);
+  /* the sorted strip, middle value(s) ringed */
+  const s = v.slice().sort((a, b) => a - b), n = s.length, h = n >> 1;
+  const mid = n % 2 ? [h] : [h - 1, h];
+  const cw = Math.min(70, 940 / n);
+  let st = '';
+  s.forEach((x, k) => {
+    const cx = 28 + cw * (k + .5), on = mid.includes(k);
+    st += `<rect x="${(cx - cw / 2 + 3).toFixed(1)}" y="474" width="${(cw - 6).toFixed(1)}" height="34" rx="8" fill="${on ? '#efe9fb' : '#fff'}" stroke="${on ? MED : '#d8d3c6'}" stroke-width="${on ? 2.2 : 1}"/>` +
+      `<text x="${cx.toFixed(1)}" y="497" font-size="15" text-anchor="middle" fill="${on ? MED : INK}" font-weight="${on ? 700 : 500}" class="m">${x}</text>`;
+  });
+  $('dpSorted').innerHTML = st;
+  $('dpSum').textContent = `Mean   = (${v.join(' + ')}) ÷ ${n} = ${sum(v)} ÷ ${n} = ${fmt(m, 1)}`;
+  $('dpMed').textContent = n % 2 ? `Median = the middle (value number ${h + 1} of ${n}) = ${md}` : `Median = (${s[h - 1]} + ${s[h]}) ÷ 2 = ${fmt(md, 1)}  (an even count: two middle values)`;
+  $('read1').innerHTML = `<span>Values</span><b>${n}</b><span>Smallest, largest</span><b>${s[0]}, ${s[n - 1]}</b>` +
+    `<span style="color:${MEAN};font-weight:700">Mean</span><b>${fmt(m, 2)}</b><span style="color:${MED};font-weight:700">Median</span><b>${fmt(md, 1)}</b>` +
+    `<span>Mean − median</span><b>${fmt(m - md, 2)}</b>`;
+  if (S.locked) {
+    const span = D.hi - D.lo;
+    if (m < md - 0.03 * span) S.dp.seenLow = true;
+    if (m > md + 0.03 * span) S.dp.seenHigh = true;
+    if (S.dp.seenLow && S.dp.seenHigh) discover('sides');
+    if (n % 2 === 0 && !s.includes(md)) discover('even');
+  }
+  if (S.tab === 1) paintWhy();
+}
+/* After a drag: did the mean run while the median stayed? That is the outlier finding. */
+function checkDrag(){
+  if (!dpDrag || !S.locked) return;
+  const D = DOTS[S.dp.set], span = D.hi - D.lo;
+  const dm = Math.abs(mean(S.dp.v) - dpDrag.mean0), dmd = Math.abs(median(S.dp.v) - dpDrag.med0);
+  if (dm >= 0.08 * span && dmd <= 0.02 * span) {
+    discover('outlier');
+    if (!EXPLAINED) {
+      EXPLAINED = true;
+      POE.explain(`You moved one value and the <b>mean</b> went from <b>${fmt(dpDrag.mean0, 1)}</b> to <b>${fmt(mean(S.dp.v), 1)}</b>, ` +
+        `while the <b>median</b> went from <b>${fmt(dpDrag.med0, 1)}</b> to <b>${fmt(median(S.dp.v), 1)}</b>. The mean adds up every value, so one far-off value (an <i>outlier</i>) pulls it; ` +
+        `the median only asks which value is in the middle, so it hardly notices.`);
+    }
+  }
+}
+let EXPLAINED = false;
+
+/* ============================================================================
+   Tab 3 — Column graph: plot it, then cut the axis
+   ============================================================================ */
+const sv2 = $('sv2');
+const CG = {x0: 120, x1: 640, top: 110, base: 500, max: 100000};
+const cgy = v => CG.base - clamp((v - S.cg.start) / (CG.max - S.cg.start), 0, 1) * (CG.base - CG.top);
+const cgv = y => clamp(Math.round((S.cg.start + (CG.base - y) / (CG.base - CG.top) * (CG.max - S.cg.start)) / 1000) * 1000, 0, CG.max);
+const slot = (s, k) => { const cw = (CG.x1 - CG.x0) / 2, bw = 44; return {x: CG.x0 + cw * s + cw / 2 + (k - 1) * (bw + 12), w: bw}; };
+function build2(){
+  let table = `<text x="690" y="130" font-size="12.5" font-weight="700" letter-spacing=".06em" fill="#4a555b">THE BOOK’S TABLE</text>`;
+  table += `<text x="690" y="158" font-size="13" fill="#4a555b" font-weight="700">State</text>` + EV.years.map((y, k) => `<text x="${800 + k * 62}" y="158" font-size="13" text-anchor="end" fill="#4a555b" font-weight="700" class="m">${y}</text>`).join('');
+  EV.states.forEach((s, i) => { table += `<text x="690" y="${184 + i * 24}" font-size="13.5" fill="${INK}">${s}</text>` + EV.v[i].map((v, k) => `<text x="${800 + k * 62}" y="${184 + i * 24}" font-size="13" text-anchor="end" fill="${INK}" class="m">${nf(v)}</text>`).join(''); });
+  table += `<line x1="690" y1="164" x2="930" y2="164" stroke="#d8d3c6"/>`;
+  sv2.innerHTML = `
+  <rect width="1000" height="600" fill="${PAPER}"/>
+  <text x="28" y="40" font-size="13" font-weight="700" letter-spacing=".08em" fill="#4a555b">NUMBER OF ELECTRIC VEHICLES REGISTERED PER YEAR</text>
+  <text x="28" y="62" font-size="14" fill="${INK}">Draw the bars for Gujarat and Delhi from the table (Figure it Out 4a).</text>
+  <g id="cgAxis"></g>
+  <g id="cgBars"></g>
+  <path id="cgBreak" fill="none" stroke="${INK}" stroke-width="2" opacity="0"/>
+  <text id="cgWarn" x="${CG.x0}" y="${CG.top - 16}" font-size="13" font-weight="700" fill="#b3261e" opacity="0"></text>
+  ${table}
+  <g font-size="13">${EV.years.map((y, k) => `<rect x="690" y="${260 + k * 24}" width="16" height="16" rx="3" fill="${YEARCOL[k]}"/><text x="714" y="${273 + k * 24}" fill="${INK}">${y}</text>`).join('')}</g>
+  <g id="cgRatio"></g>
+  <g id="cgHits"></g>`;
+  const g = $('cgHits');
+  EV.states.forEach((s, i) => EV.years.forEach((y, k) => {
+    const sl = slot(i, k);
+    const r = mk('rect', {x: (sl.x - sl.w / 2 - 5).toFixed(1), y: CG.top - 20, width: sl.w + 10, height: CG.base - CG.top + 30, fill: 'transparent', class: 'hit', id: `bar${i}${k}`, role: 'slider', 'aria-label': `${s} ${y}: drag the bar to its value`}, g);
+    drag(r, sv2, {
+      start(p){ if (!S.locked) return false; S.cg.v[i][k] = cgv(p.y); paint2(); },
+      move(p){ S.cg.v[i][k] = cgv(p.y); paint2(); },
+      end(){ sound('tick'); track('bar', {state: s, year: y, v: S.cg.v[i][k]}); paint2(); },
+    });
+  }));
+}
+function paint2(){
+  const st = S.cg.start;
+  let ax = '';
+  for (let v = 0; v <= CG.max; v += 10000) {
+    if (v < st) continue;
+    const y = cgy(v);
+    ax += `<line x1="${CG.x0}" y1="${y.toFixed(1)}" x2="${CG.x1}" y2="${y.toFixed(1)}" stroke="${v === st ? INK : '#e6e1d4'}" stroke-width="${v === st ? 2 : 1}"/>` +
+      `<text x="${CG.x0 - 10}" y="${(y + 4).toFixed(1)}" font-size="12.5" text-anchor="end" fill="#4a555b" class="m">${nf(v)}</text>`;
+  }
+  if (st % 10000) ax += `<line x1="${CG.x0}" y1="${CG.base}" x2="${CG.x1}" y2="${CG.base}" stroke="${INK}" stroke-width="2"/><text x="${CG.x0 - 10}" y="${CG.base + 4}" font-size="12.5" text-anchor="end" fill="#b3261e" class="m" font-weight="700">${nf(st)}</text>`;
+  ax += `<line x1="${CG.x0}" y1="${CG.top - 10}" x2="${CG.x0}" y2="${CG.base}" stroke="${INK}" stroke-width="2"/>`;
+  EV.states.forEach((s, i) => { ax += `<text x="${(CG.x0 + (CG.x1 - CG.x0) / 4 * (2 * i + 1)).toFixed(1)}" y="${CG.base + 26}" font-size="14" text-anchor="middle" fill="${INK}" font-weight="600">${s}</text>`; });
+  $('cgAxis').innerHTML = ax;
+  let bars = '';
+  EV.states.forEach((s, i) => EV.years.forEach((y, k) => {
+    const sl = slot(i, k), v = S.cg.v[i][k], yy = cgy(v), right = v === EV.v[i][k];
+    if (v > 0) bars += `<rect x="${(sl.x - sl.w / 2).toFixed(1)}" y="${yy.toFixed(1)}" width="${sl.w}" height="${(CG.base - yy).toFixed(1)}" fill="${YEARCOL[k]}" rx="2"/>`;
+    else bars += `<rect x="${(sl.x - sl.w / 2).toFixed(1)}" y="${CG.base - 30}" width="${sl.w}" height="30" fill="none" stroke="#b9b4a8" stroke-dasharray="4 4" rx="2"/><text x="${sl.x}" y="${CG.base - 38}" font-size="16" text-anchor="middle" fill="#b9b4a8">↑</text>`;
+    if (v > 0) bars += `<text x="${sl.x}" y="${(yy - 7).toFixed(1)}" font-size="11.5" text-anchor="middle" fill="${right ? '#1f7a47' : '#4a555b'}" font-weight="700" class="m">${right ? '✓' : ''}${Math.round(v / 1000)}k</text>`;
+  }));
+  $('cgBars').innerHTML = bars;
+  $('cgBreak').setAttribute('opacity', st > 0 ? 1 : 0);
+  $('cgBreak').setAttribute('d', `M${CG.x0 - 8} ${CG.base - 18} l8 -5 l8 5 M${CG.x0 - 8} ${CG.base - 26} l8 -5 l8 5`);
+  $('cgWarn').setAttribute('opacity', st > 0 ? 1 : 0);
+  $('cgWarn').textContent = st > 0 ? `The vertical line starts at ${nf(st)}, not at 0.` : '';
+  $('axOut').textContent = nf(st);
+  /* compare the tallest and the shortest bar the learner has drawn */
+  const drawn = [];
+  EV.states.forEach((s, i) => EV.years.forEach((y, k) => { if (S.cg.v[i][k] > 0) drawn.push({v: S.cg.v[i][k], name: `${s} ${y}`}); }));
+  const plotted = EV.v.every((r, i) => r.every((x, k) => S.cg.v[i][k] === x));
+  let rd = `<span>Bars matching the table</span><b>${EV.v.flat().filter((x, j) => S.cg.v[j / 3 | 0][j % 3] === x).length} of 6</b>`;
+  let rsvg = '';
+  if (drawn.length >= 2) {
+    drawn.sort((a, b) => a.v - b.v);
+    const lo = drawn[0], hi = drawn[drawn.length - 1];
+    if (hi.v > lo.v && lo.v > st) {
+      const R = barRatio(hi.v, lo.v, st);
+      rd += `<span>${esc(hi.name)} ÷ ${esc(lo.name)}</span><b>${nf(hi.v)} ÷ ${nf(lo.v)} = ${fmt(R.real, 2)}</b>` +
+            `<span>…but the bars look</span><b>${fmt(R.seen, 2)} times as tall</b><span>Exaggerated by</span><b>× ${fmt(R.factor, 2)}</b>`;
+      rsvg = `<text x="690" y="370" font-size="12.5" font-weight="700" letter-spacing=".06em" fill="#4a555b">TALLEST ÷ SHORTEST</text>` +
+        `<text x="690" y="396" font-size="14" fill="${INK}">The numbers: <tspan class="m" font-weight="700">${fmt(R.real, 2)}</tspan> times</text>` +
+        `<text x="690" y="420" font-size="14" fill="${R.factor > 1.2 ? '#b3261e' : INK}">The picture: <tspan class="m" font-weight="700">${fmt(R.seen, 2)}</tspan> times</text>`;
+      if (S.locked && R.factor >= 2) discover('cut');
+    } else if (lo.v <= st) rd += `<span>Shortest bar</span><b>below the start: it vanishes</b>`;
+  }
+  $('cgRatio').innerHTML = rsvg;
+  $('read2').innerHTML = rd;
+  if (S.locked && plotted) discover('plotted');
+  if (S.tab === 2) paintWhy();
+}
+
+/* ---- the live narrator: words computed from the current state ------------- */
+function paintWhy(){
+  if (!S.locked) return;
+  $('whyCard').hidden = false;
+  let h = '';
+  if (S.tab === 0) {
+    const L = LEVEL[S.lv.set], t = S.lv.t, tot = sum(t), n = t.length, mx = Math.max(...t), mn = Math.min(...t);
+    if (levelled(t)) h = `<p><b>Every tower has ${t[0]} ${L.unit}.</b> Nothing was added or taken away: the ${tot} ${L.unit} were only shared out. So the level height is ${tot} ÷ ${n} = <b>${t[0]}</b> — the mean, or <i>average</i>.</p>` +
+      (S.lv.done.shreyas != null && S.lv.done.parag != null ? `<p>Both groups collected 30 guavas, but Shreyas’s 5 people get <b>${S.lv.done.shreyas}</b> each and Parag’s 6 get <b>${S.lv.done.parag}</b>. The same total, shared among more, is a smaller share.</p>` : '');
+    else h = `<p>The towers still differ: the tallest has <b>${mx}</b>, the shortest <b>${mn}</b>. The total stays <b>${tot}</b> whatever you move. Take from the highs, give to the lows.</p>`;
+  } else if (S.tab === 1) {
+    const D = DOTS[S.dp.set], v = S.dp.v, m = mean(v), md = median(v), d = m - md, span = D.hi - D.lo;
+    const s = v.slice().sort((a, b) => a - b);
+    h = `<p>The <b style="color:${MEAN}">mean</b> is <b>${fmt(m, 1)}</b> and the <b style="color:${MED}">median</b> is <b>${fmt(md, 1)}</b>.</p>`;
+    if (Math.abs(d) <= 0.03 * span) h += `<p>They are close together: the values are spread fairly evenly, with no value far from the rest.</p>`;
+    else if (d < 0) h += `<p>The mean is <b>below</b> the median. A low value (here ${s[0]}) is far from the rest and drags the sum down; the middle value does not care how far away it is.</p>`;
+    else h += `<p>The mean is <b>above</b> the median. A high value (here ${s[s.length - 1]}) is far from the rest and pulls the sum up; the middle value does not care how far away it is.</p>`;
+  } else {
+    const st = S.cg.start;
+    h = st === 0 ? `<p>The vertical line starts at <b>0</b>, so each bar’s height is the whole number. A bar twice as tall means twice as many vehicles.</p>`
+      : `<p>The vertical line starts at <b>${nf(st)}</b>. Every bar has lost its bottom ${nf(st)}, so short bars shrink much more than tall ones. The numbers have not changed — only the picture.</p>` +
+        `<p>A zoomed-in axis can help you see small differences (the book does it for heights, starting at 145 cm), but it must be marked clearly.</p>`;
+  }
+  $('why').innerHTML = h;
+}
+
+/* ============================================================================
+   Controls
+   ============================================================================ */
+function chipsFor(host, obj, cur, onPick){
+  host.innerHTML = Object.keys(obj).map(k => `<button class="chip" data-k="${k}" aria-pressed="${k === cur}">${esc(obj[k].name)}</button>`).join('');
+  host.addEventListener('click', e => {
+    const b = e.target.closest('[data-k]'); if (!b || b.disabled) return;
+    for (const c of host.querySelectorAll('.chip')) c.setAttribute('aria-pressed', c === b);
+    onPick(b.dataset.k); sound('pop');
+  });
+}
+chipsFor($('lvChips'), LEVEL, S.lv.set, k => { S.lv.set = k; S.lv.t = LEVEL[k].v.slice(); S.lv.moves = 0; buildHits0(); paint0(); track('set', {tab: 'level', set: k}); });
+chipsFor($('dpChips'), DOTS, S.dp.set, k => { S.dp.set = k; S.dp.v = DOTS[k].v.slice(); S.dp.seenLow = S.dp.seenHigh = false; buildDots(); paint1(); track('set', {tab: 'dots', set: k}); });
+$('lvReset').addEventListener('click', () => { S.lv.t = LEVEL[S.lv.set].v.slice(); S.lv.moves = 0; paint0(); });
+$('dpReset').addEventListener('click', () => { S.dp.v = DOTS[S.dp.set].v.slice(); paint1(); });
+$('cgReset').addEventListener('click', () => { S.cg.v = [[0, 0, 0], [0, 0, 0]]; paint2(); });
+$('axMin').addEventListener('input', e => { S.cg.start = +e.target.value; paint2(); });
+$('axMin').addEventListener('change', () => track('axis', {start: S.cg.start}));
+
+function showTab(t){
+  S.tab = t;
+  [0, 1, 2].forEach(k => { $('tab' + k).setAttribute('aria-selected', k === t); $('sv' + k).toggleAttribute('hidden', k !== t); $('card' + k).hidden = k !== t; });
+  [paint0, paint1, paint2][t]();
+  paintWhy();
+}
+for (const b of document.querySelectorAll('.tab')) b.addEventListener('click', () => { if (!S.locked) return; showTab(+b.dataset.tab); sound('tick'); track('tab', {tab: S.tab}); });
+
+function lockControls(lock){
+  for (const el of document.querySelectorAll('.tab, .chip, #lvReset, #dpReset, #cgReset, #axMin')) el.disabled = lock;
+  $('gate').hidden = !lock;
+}
+
+/* ============================================================================
+   Start
+   ============================================================================ */
+build0(); buildHits0(); build1(); buildDots(); build2();
+findings($('finds'), [
+  {id: 'level',   icon: '▤', label: 'The level height is the mean',        hint: 'Level every tower'},
+  {id: 'fair',    icon: '⚖', label: 'Same total, smaller share',           hint: 'Level both guava groups'},
+  {id: 'outlier', icon: '↔', label: 'An outlier pulls the mean, not the median', hint: 'Drag a dot far from the rest'},
+  {id: 'sides',   icon: '⇄', label: 'The mean follows the outlier’s side', hint: 'Put an outlier low, then high'},
+  {id: 'even',    icon: '÷', label: 'An even count has two middles',       hint: 'Try a family of six'},
+  {id: 'plotted', icon: '▥', label: 'Plotted from the table',              hint: 'Draw all six bars'},
+  {id: 'cut',     icon: '✂', label: 'A cut axis exaggerates',              hint: 'Move where the vertical line starts'},
+], () => toast('All seven found. You can now read a graph better than most newspaper readers.', 4200));
+
+const POE = predict($('poe'), {
+  id: 'outlier-mean-median',
+  q: 'Poovizhi’s family is 170, 173, 165, 118 and 175 cm tall. The youngest child grows from 118 cm to 168 cm. What happens to the family’s mean and median height?',
+  options: [
+    {id: 'mean',   text: 'The mean goes up a lot; the median hardly changes.', right: true},
+    {id: 'median', text: 'The median goes up a lot; the mean hardly changes.'},
+    {id: 'both',   text: 'Both go up by the same amount.'},
+    {id: 'none',   text: 'Neither changes: it is still the same five people.'},
+  ],
+  onLock(){
+    S.locked = true;
+    lockControls(false);
+    say('Now find out. Level the towers first, then drag the dots in the Outliers tab.');
+    showTab(S.tab);
+  },
+});
+lockControls(!POE.locked);
+if (!Play.FF('predict')) S.locked = true;
+showTab(S.tab);
+paint0(); paint1(); paint2(); showTab(S.tab);
+window.applyFeatures = () => showTab(S.tab);
+window.PG_STATE = () => JSON.parse(JSON.stringify(S));
+window.PG_MODEL = {sum, mean, median, move, levelled, barRatio, LEVEL, DOTS, EV};
+</script>
+</body>
+</html>

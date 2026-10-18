@@ -1,0 +1,406 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Number Play</title>
+<meta name="description" content="Class 6–7: run the Collatz chain to 1, watch Kaprekar's routine land on 6174, and count Virahanka's rhythms of short and long beats.">
+<link rel="icon" href="../../favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600&family=Inter:wght@400;500;600;700&family=Nunito:wght@500;700;800&family=Newsreader:opsz,wght@6..72,400;6..72,500&family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="../../play.css">
+<style>
+/* Only what this page needs beyond play.css. */
+.gate{position:absolute; inset:0; display:grid; place-items:center; pointer-events:none}
+.gate span{background:rgba(20,20,32,.86); color:#fff; padding:10px 16px; border-radius:99px; font-weight:600; font-size:14px}
+.seg{display:grid; grid-auto-flow:column; grid-auto-columns:1fr; gap:4px; background:var(--sunk); padding:4px; border-radius:var(--radius-sm)}
+.seg button{border:0; background:transparent; border-radius:8px; min-height:38px; font-weight:600; font-size:13px; cursor:pointer; color:var(--ink-2); padding:0 6px; line-height:1.2}
+.seg button[aria-pressed="true"]{background:var(--card); color:var(--ink); box-shadow:var(--shadow)}
+.seg button:disabled{opacity:.5; cursor:default}
+.numbox{display:flex; align-items:center; gap:8px}
+.numbox input[type=number]{font:inherit; font-weight:700; font-size:20px; width:100%; min-height:44px; border-radius:var(--radius-sm); border:1.5px solid var(--hair-2); background:var(--card); color:var(--ink); padding:0 10px; text-align:center; font-variant-numeric:tabular-nums}
+.numbox input:disabled{opacity:.55}
+.quick{display:flex; flex-wrap:wrap; gap:6px; margin-top:8px}
+.quick button{min-height:32px; padding:0 10px; border-radius:99px; border:1.5px solid var(--hair-2); background:var(--card); font-weight:700; font-size:12.5px; cursor:pointer}
+.quick button:disabled{opacity:.5; cursor:default}
+.quick button[aria-pressed="true"]{border-color:var(--accent); background:var(--accent-soft)}
+.why p{font-size:13.5px; margin-bottom:.5em}
+.why b{color:var(--ink)}
+.stat{display:grid; grid-template-columns:1fr auto; gap:4px 8px; font-size:13.5px; margin:2px 0}
+.stat b{font-variant-numeric:tabular-nums}
+.err{font-size:12.5px; color:var(--bad); margin-top:6px}
+</style>
+</head>
+<body>
+<header class="pg-top"></header>
+
+<div class="pg-intro">
+  <h1>Number play</h1>
+  <p>Three of the number games from the book, each one actually run by the page: chase any number down to 1 by Collatz's rule, watch Kaprekar's
+     subtraction trick land on 6174, and count Virahanka's rhythms of short and long beats.</p>
+</div>
+
+<main class="pg-main wide-side">
+  <section class="pg-stage" id="stageWrap">
+    <svg id="collatzStage" viewBox="0 0 1000 620" role="img" aria-label="A graph of the Collatz chain's value at every step, and the chain of numbers itself"></svg>
+    <svg id="kaprekarStage" viewBox="0 0 1000 620" role="img" aria-label="Kaprekar's routine, round by round: the largest number made from the digits minus the smallest" hidden></svg>
+    <svg id="rhythmStage" viewBox="0 0 1000 620" role="img" aria-label="Every rhythm of short and long beats that fills the chosen number of beats" hidden></svg>
+    <div class="gate" id="gate"><span>Make your prediction first →</span></div>
+  </section>
+
+  <aside class="pg-side">
+    <div id="poe"></div>
+
+    <div class="card">
+      <div class="seg" role="group" aria-label="Which number game">
+        <button id="toolCollatz" aria-pressed="true">Collatz</button>
+        <button id="toolKaprekar" aria-pressed="false">Kaprekar's 6174</button>
+        <button id="toolRhythm" aria-pressed="false">Rhythms of beats</button>
+      </div>
+
+      <div id="ctlCollatz">
+        <div class="kicker" style="margin-top:10px">Start with</div>
+        <div class="numbox"><input type="number" id="collatzN" min="1" max="9999" value="12"></div>
+        <div class="quick" id="collatzQuick">
+          <button data-n="12">12 (the book's a)</button>
+          <button data-n="17">17 (the book's b)</button>
+          <button data-n="27">27 (a famous long one)</button>
+        </div>
+        <div id="collatzErr" class="err" hidden>Pick a whole number from 1 to 9999.</div>
+        <div class="row" style="margin-top:10px"><button class="btn" id="btnCollatzPlay">▶ Step through it</button></div>
+      </div>
+
+      <div id="ctlKaprekar" hidden>
+        <div class="kicker" style="margin-top:10px">Digits</div>
+        <div class="seg" role="group" aria-label="How many digits">
+          <button id="kapDigits3" aria-pressed="false">3 digits</button>
+          <button id="kapDigits4" aria-pressed="true">4 digits</button>
+        </div>
+        <div class="kicker" style="margin-top:8px">Pick a number (at least two different digits)</div>
+        <div class="numbox"><input type="number" id="kapN" min="100" max="9999" value="6382"></div>
+        <div class="quick" id="kapQuick">
+          <button data-n="6382">6382 (the book's own)</button>
+          <button data-n="5683">5683 (how many rounds?)</button>
+        </div>
+        <div id="kapErr" class="err" hidden>Pick a number with at least two different digits.</div>
+      </div>
+
+      <div id="ctlRhythm" hidden>
+        <div class="ctl"><label for="rhN">Beats</label><input type="range" id="rhN" min="1" max="8" step="1" value="5"><output id="rhNOut" class="num">5</output></div>
+        <p style="font-size:12.5px;color:var(--ink-3);margin:2px 0 0">A short beat (▬) takes 1 count; a long beat (▬▬) takes 2.</p>
+      </div>
+    </div>
+
+    <div class="card why" id="whyCard">
+      <div class="kicker">What is happening</div>
+      <div id="why"></div>
+    </div>
+
+    <div class="card"><div class="kicker">To find</div><div id="finds"></div></div>
+  </aside>
+</main>
+
+<script src="../../play.js"></script>
+<script>
+'use strict';
+const {$, esc, clamp, fmt, loop, sound, say, track, toast, predict, findings, discover, found,
+       shareState, sharedState, mount, reduced} = Play;
+mount({thread: 'puzzles', band: 'tinkerer'});
+
+/* MODEL:start ==================================================================
+   Three number games from CBSE Class 6-7 Ganita Prakash, Ch 3 / Ch 6 "Number Play".
+   Every number below is worked out by these functions, never stored as an answer.
+
+   COLLATZ (Class 6, 3.10): "if the number is even, take half of it; if it is odd,
+   multiply it by 3 and add 1; repeat." The book's own worked chains:
+     12 -> 6,3,10,5,16,8,4,2,1     17 -> 52,26,13,40,20,10,5,16,8,4,2,1
+     21 -> 64,32,16,8,4,2,1        22 -> 11,34,17,52,26,13,40,20,10,5,16,8,4,2,1
+   It is an unsolved conjecture (Lothar Collatz, 1937) that every whole number
+   reaches 1 — the book says so plainly, so this page never claims otherwise.
+
+   KAPREKAR'S ROUTINE (Class 6, 3.6): make the largest and smallest numbers from
+   a number's own digits and subtract; repeat. Every 4-digit number with at
+   least two different digits reaches 6174 (the "Kaprekar constant"); the book's
+   own worked example is 6382 -> 6264 -> 4176 -> 6174, and it states 5683 takes
+   8 rounds. 3-digit numbers are left to the reader ("what number will start
+   repeating?") — this page runs exactly the same routine on 3 digits and lets
+   the learner find that fixed point themselves.
+
+   VIRAHANKA-FIBONACCI RHYTHMS (Class 7, 6.4): the number of ways to write n as
+   an ordered sum of 1s and 2s (equivalently, rhythms of short/long beats) is
+   ways(n) = ways(n-1) + ways(n-2), with ways(1)=1, ways(2)=2 — because every
+   such rhythm starts with a short beat followed by an (n-1)-rhythm, or a long
+   beat followed by an (n-2)-rhythm. The book gives 1, 2, 3, 5, 8, 13, 21, 34
+   for n = 1..8, and shows all 8 rhythms of 5 beats and all 13 of 6 beats.
+   ============================================================================ */
+function collatzSeq(n){
+  const seq = [n]; let x = n, guard = 0;
+  while (x !== 1 && guard < 100000) { x = x % 2 === 0 ? x / 2 : 3 * x + 1; seq.push(x); guard++; }
+  return seq;
+}
+function kaprekarStep(n, digits){
+  const s = String(n).padStart(digits, '0').split('');
+  const desc = [...s].sort((a, b) => b - a).join('');
+  const asc = [...s].sort((a, b) => a - b).join('');
+  return {desc, asc, result: parseInt(desc, 10) - parseInt(asc, 10)};
+}
+function kaprekarRoutine(n, digits){
+  const rounds = []; let x = n, guard = 0;
+  while (guard < 40) {
+    const {desc, asc, result} = kaprekarStep(x, digits);
+    rounds.push({from: x, desc, asc, result});
+    guard++;
+    if (result === x) break;
+    x = result;
+  }
+  return rounds;
+}
+function hasTwoDifferentDigits(n, digits){ return new Set(String(n).padStart(digits, '0').split('')).size >= 2; }
+const WAYS_MEMO = [1, 2];
+function ways(n){ for (let i = WAYS_MEMO.length; i < n; i++) WAYS_MEMO[i] = WAYS_MEMO[i - 1] + WAYS_MEMO[i - 2]; return n <= 0 ? 0 : WAYS_MEMO[n - 1]; }
+function enumerateRhythms(n){
+  if (n === 0) return [[]];
+  if (n === 1) return [[1]];
+  const res = [];
+  for (const r of enumerateRhythms(n - 1)) res.push([1, ...r]);
+  for (const r of enumerateRhythms(n - 2)) res.push([2, ...r]);
+  return res;
+}
+/* MODEL:end */
+
+/* ---- state: plain data --------------------------------------------------- */
+const S = {tool: 'collatz', collatzN: 12, kapDigits: 4, kapN: 6382, rhN: 5, locked: false, triedStarts: new Set()};
+const shared = sharedState();
+if (shared) {
+  S.tool = ['collatz', 'kaprekar', 'rhythm'].includes(shared.tool) ? shared.tool : 'collatz';
+  S.collatzN = clamp(+shared.collatzN || 12, 1, 9999); S.kapDigits = shared.kapDigits === 3 ? 3 : 4;
+  S.kapN = clamp(+shared.kapN || 6382, 100, 9999); S.rhN = clamp(+shared.rhN || 5, 1, 8);
+}
+shareState(() => ({tool: S.tool, collatzN: S.collatzN, kapDigits: S.kapDigits, kapN: S.kapN, rhN: S.rhN}));
+
+const COLORS = {short: '#3f7fd8', long: '#e0567a', tile: '#8e44ad'};
+
+/* ============================================================================
+   Collatz — a graph of the chain, and the chain itself.
+   ============================================================================ */
+const cSvg = $('collatzStage');
+function buildCollatz(){
+  const seq = collatzSeq(S.collatzN);
+  const steps = seq.length - 1, peak = Math.max(...seq);
+  const GR = {x: 80, y: 46, w: 860, h: 340};
+  const logMax = Math.log2(Math.max(peak, 2));
+  const gx = i => GR.x + (steps === 0 ? 0 : i / steps * GR.w);
+  const gy = v => GR.y + GR.h - (Math.log2(Math.max(v, 1)) / logMax) * GR.h;
+  let path = seq.map((v, i) => (i ? 'L' : 'M') + gx(i).toFixed(1) + ' ' + gy(v).toFixed(1)).join('');
+  let dots = seq.map((v, i) => `<circle cx="${gx(i).toFixed(1)}" cy="${gy(v).toFixed(1)}" r="${steps > 60 ? 1.6 : 3}" fill="${v % 2 ? '#e0567a' : '#3f7fd8'}"/>`).join('');
+  let axes = `<line x1="${GR.x}" y1="${GR.y + GR.h}" x2="${GR.x + GR.w}" y2="${GR.y + GR.h}" stroke="#9aa3a6"/><line x1="${GR.x}" y1="${GR.y}" x2="${GR.x}" y2="${GR.y + GR.h}" stroke="#9aa3a6"/>`;
+  for (const v of [1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384]) {
+    if (v > peak * 1.3) break;
+    axes += `<line x1="${GR.x}" y1="${gy(v).toFixed(1)}" x2="${GR.x + GR.w}" y2="${gy(v).toFixed(1)}" stroke="#ece8dc"/><text x="${GR.x - 8}" y="${(gy(v) + 3).toFixed(1)}" text-anchor="end" fill="#7c878c" font-size="11">${v}</text>`;
+  }
+  const tick = Math.max(1, Math.round(steps / 10));
+  for (let i = 0; i <= steps; i += tick) axes += `<text x="${gx(i).toFixed(1)}" y="${GR.y + GR.h + 18}" text-anchor="middle" fill="#7c878c" font-size="10.5">${i}</text>`;
+  /* the chain itself, as a strip of chips (capped so the page never has to draw thousands) */
+  const CAP = 36;
+  const shown = seq.slice(0, CAP);
+  let chips = '';
+  const CW = Math.min(46, (GR.w) / Math.max(shown.length, 1));
+  shown.forEach((v, i) => {
+    const x = GR.x + i * CW, col = v === 1 ? '#2f9e5b' : v % 2 ? '#fde6e3' : '#e1ecfa';
+    chips += `<rect x="${x.toFixed(1)}" y="440" width="${(CW - 4).toFixed(1)}" height="26" rx="6" fill="${col}"/>` +
+      `<text x="${(x + CW / 2 - 2).toFixed(1)}" y="458" text-anchor="middle" font-size="${v > 9999 ? 8 : 11}" font-weight="700" fill="#1d2327">${v}</text>`;
+  });
+  const moreText = seq.length > CAP ? `<text x="${GR.x}" y="486" fill="#7c878c" font-size="12.5">…and ${seq.length - CAP} more steps, down to 1.</text>` : '';
+  cSvg.innerHTML = `
+    <rect width="1000" height="620" fill="#fbfaf6"/>
+    <text x="${GR.x}" y="24" fill="#2c2c34" font-size="14" font-weight="700" letter-spacing=".04em">THE CHAIN'S VALUE, STEP BY STEP (log scale)</text>
+    ${axes}<path d="${path}" fill="none" stroke="#8e44ad" stroke-width="2"/>${dots}
+    <text x="${GR.x}" y="424" fill="#2c2c34" font-size="13" font-weight="700" letter-spacing=".04em">THE CHAIN ITSELF</text>
+    ${chips}${moreText}
+    <text x="${GR.x}" y="520" fill="#4a555b" font-size="14">Steps to reach 1: <tspan font-weight="700" fill="#1d2327">${steps}</tspan>&#160;&#160;&#160;Highest value reached: <tspan font-weight="700" fill="#1d2327">${peak}</tspan></text>
+  `;
+  return {seq, steps, peak};
+}
+function paintCollatz(){
+  $('collatzN').value = S.collatzN;
+  const r = buildCollatz();
+  if (!S.locked) { $('why').innerHTML = `<p>Make your prediction, then try starting numbers of your own.</p>`; return; }
+  S.triedStarts.add(S.collatzN);
+  $('why').innerHTML = `<p>Starting from <b>${S.collatzN}</b>, the chain takes <b>${r.steps}</b> steps to reach 1, climbing as high as <b>${r.peak}</b> along the way.</p>
+    <p>You have tried <b>${S.triedStarts.size}</b> different starting number${S.triedStarts.size === 1 ? '' : 's'} so far${S.triedStarts.size >= 3 ? ' — every single one reached 1.' : '.'}</p>`;
+  checkCollatz(r);
+}
+function checkCollatz(r){
+  if (S.collatzN === 12 && r.seq.join(',') === collatzSeq(12).join(',')) discover('book12');
+  if (r.steps >= 50) discover('longchain');
+  if (S.triedStarts.size >= 3) discover('alwaysone');
+}
+
+/* ============================================================================
+   Kaprekar — the routine, round by round.
+   ============================================================================ */
+const kSvg = $('kaprekarStage');
+function digitTiles(x, y, str, col){
+  return [...str].map((d, i) => `<rect x="${(x + i * 34).toFixed(1)}" y="${y}" width="30" height="34" rx="6" fill="${col}"/>` +
+    `<text x="${(x + i * 34 + 15).toFixed(1)}" y="${y + 24}" text-anchor="middle" fill="#fff" font-size="18" font-weight="700">${d}</text>`).join('');
+}
+function paintKaprekar(){
+  $('kapN').value = S.kapN;
+  $('kapDigits3').setAttribute('aria-pressed', S.kapDigits === 3); $('kapDigits4').setAttribute('aria-pressed', S.kapDigits === 4);
+  const ok = hasTwoDifferentDigits(S.kapN, S.kapDigits);
+  $('kapErr').hidden = ok;
+  if (!ok) { kSvg.innerHTML = ''; $('why').innerHTML = ''; return; }
+  const rounds = kaprekarRoutine(S.kapN, S.kapDigits);
+  const fixed = rounds[rounds.length - 1].result === rounds[rounds.length - 1].from;
+  let rows = '';
+  const ROWH = 46;
+  rounds.forEach((r, i) => {
+    const y = 60 + i * ROWH, done = i === rounds.length - 1 && fixed;
+    rows += `<g>${done ? `<rect x="20" y="${y - 8}" width="700" height="${ROWH - 6}" rx="8" fill="#e1f5e8"/>` : ''}
+      <text x="30" y="${y + 18}" font-size="13" fill="#7c878c" font-weight="700">Round ${i + 1}</text>
+      ${digitTiles(120, y, r.desc, '#3f7fd8')}<text x="${120 + r.desc.length * 34 + 8}" y="${y + 24}" font-size="18" fill="#4a555b">−</text>
+      ${digitTiles(120 + r.desc.length * 34 + 30, y, r.asc, '#e0567a')}<text x="${120 + r.desc.length * 34 + 30 + r.asc.length * 34 + 8}" y="${y + 24}" font-size="18" fill="#4a555b">=</text>
+      <text x="${120 + r.desc.length * 34 + 30 + r.asc.length * 34 + 34}" y="${y + 24}" font-size="22" font-weight="700" fill="${done ? '#1f7a4a' : '#1d2327'}">${String(r.result).padStart(S.kapDigits, '0')}</text>
+      ${done ? `<text x="850" y="${y + 20}" font-size="13" font-weight="700" fill="#1f7a4a">fixed point!</text>` : ''}
+    </g>`;
+  });
+  kSvg.innerHTML = `<rect width="1000" height="${Math.max(620, 100 + rounds.length * ROWH)}" fill="#fbfaf6"/>
+    <text x="30" y="30" fill="#2c2c34" font-size="14" font-weight="700" letter-spacing=".04em">KAPREKAR'S ROUTINE: LARGEST − SMALLEST, REPEATED</text>
+    ${rows}`;
+  $('why').innerHTML = !S.locked ? `<p>Make your prediction, then try the book’s own number below.</p>` : fixed
+    ? `<p>Starting from <b>${S.kapN}</b> (${S.kapDigits} digits), it took <b>${rounds.length}</b> round${rounds.length === 1 ? '' : 's'} to land on <b>${rounds[rounds.length - 1].result}</b> and stay there: subtracting its own smallest arrangement from its own largest gives itself back.</p>`
+    : `<p>Still going after ${rounds.length} rounds — keep watching, or try a smaller number.</p>`;
+  if (S.locked) checkKaprekar(rounds, fixed);
+}
+function checkKaprekar(rounds, fixed){
+  if (!fixed) return;
+  if (S.kapDigits === 4 && S.kapN === 6382 && rounds.some(r => r.result === 6264) && rounds.some(r => r.result === 4176) && rounds[rounds.length - 1].result === 6174) discover('matchbook6382');
+  if (S.kapDigits === 4 && S.kapN === 5683 && rounds.length === 8) discover('rounds5683');
+  if (S.kapDigits === 3) discover('threedigit');
+}
+
+/* ============================================================================
+   Rhythms — every way to fill n beats with short (1) and long (2) beats.
+   ============================================================================ */
+const rSvg = $('rhythmStage');
+function paintRhythm(){
+  $('rhN').value = S.rhN; $('rhNOut').textContent = S.rhN;
+  const n = S.rhN, list = enumerateRhythms(n), count = ways(n);
+  /* Lay the rhythms out in columns across the full width, not one narrow strip down the
+     left, so all of them (up to 34, for 8 beats) are visible at once. */
+  const ROWH = 24, top = 96, MARGIN = 40, PANEL_W = 1000 - MARGIN * 2;
+  const maxRowsPerCol = 14;
+  const cols = Math.max(1, Math.min(3, Math.ceil(list.length / maxRowsPerCol)));
+  const rowsPerCol = Math.ceil(list.length / cols);
+  const colW = PANEL_W / cols;
+  let rows = '';
+  list.forEach((r, i) => {
+    const col = Math.floor(i / rowsPerCol), rowInCol = i % rowsPerCol;
+    let x = MARGIN + col * colW, y = top + rowInCol * ROWH;
+    for (const b of r) { const w = b === 1 ? 22 : 46; rows += `<rect x="${x}" y="${y}" width="${w - 3}" height="15" rx="3" fill="${b === 1 ? COLORS.short : COLORS.long}"/>`; x += w; }
+  });
+  const h = Math.max(500, top + rowsPerCol * ROWH + 24);
+  rSvg.innerHTML = `<rect width="1000" height="${h}" fill="#fbfaf6"/>
+    <text x="40" y="34" fill="#2c2c34" font-size="15" font-weight="700">Rhythms with ${n} beat${n === 1 ? '' : 's'}: <tspan fill="#8e44ad">${count}</tspan> of them</text>
+    <text x="40" y="58" fill="#7c878c" font-size="12.5">▬ = 1 beat (short)   ▬▬ = 2 beats (long)</text>
+    ${rows}`;
+  $('why').innerHTML = !S.locked ? `<p>Make your prediction, then slide the number of beats.</p>` : `<p>Every rhythm of ${n} beats either starts with a short beat (then ${n - 1} beats remain: <b>${ways(n - 1) || 1}</b> ways) or a long beat
+    (then ${n - 2 >= 0 ? n - 2 : 0} beats remain: <b>${n >= 2 ? ways(n - 2) : 0}</b> ways). ${n >= 2 ? `<b>${ways(n - 1)} + ${ways(n - 2)} = ${count}</b>, exactly Virahāṅka's rule.` : ''}</p>`;
+  if (S.locked) checkRhythm(n, count);
+}
+function checkRhythm(n, count){
+  if (n === 8 && count === 34) discover('matchbook8');
+  if (n >= 6) discover('fibrule');
+}
+
+/* ============================================================================
+   Controls
+   ============================================================================ */
+function showTool(tool){
+  S.tool = tool;
+  $('toolCollatz').setAttribute('aria-pressed', tool === 'collatz'); $('toolKaprekar').setAttribute('aria-pressed', tool === 'kaprekar'); $('toolRhythm').setAttribute('aria-pressed', tool === 'rhythm');
+  cSvg.toggleAttribute('hidden', tool !== 'collatz'); kSvg.toggleAttribute('hidden', tool !== 'kaprekar'); rSvg.toggleAttribute('hidden', tool !== 'rhythm');
+  $('ctlCollatz').hidden = tool !== 'collatz'; $('ctlKaprekar').hidden = tool !== 'kaprekar'; $('ctlRhythm').hidden = tool !== 'rhythm';
+  if (tool === 'collatz') paintCollatz(); else if (tool === 'kaprekar') paintKaprekar(); else paintRhythm();
+}
+$('toolCollatz').addEventListener('click', () => { sound('tick'); showTool('collatz'); track('tool', {tool: 'collatz'}); });
+$('toolKaprekar').addEventListener('click', () => { sound('tick'); showTool('kaprekar'); track('tool', {tool: 'kaprekar'}); });
+$('toolRhythm').addEventListener('click', () => { sound('tick'); showTool('rhythm'); track('tool', {tool: 'rhythm'}); });
+
+function setCollatzN(n){
+  n = Math.round(n);
+  $('collatzErr').hidden = n >= 1 && n <= 9999;
+  if (!(n >= 1 && n <= 9999)) return;
+  S.collatzN = n; paintCollatz(); track('collatz', {n});
+}
+$('collatzN').addEventListener('input', e => setCollatzN(+e.target.value));
+$('collatzQuick').addEventListener('click', e => { const b = e.target.closest('[data-n]'); if (!b) return; sound('pop'); setCollatzN(+b.dataset.n); });
+let COLLATZ_ANIM = null;
+$('btnCollatzPlay').addEventListener('click', () => {
+  sound('tick'); track('play');
+  const seq = collatzSeq(S.collatzN);
+  let i = 0;
+  if (COLLATZ_ANIM) clearInterval(COLLATZ_ANIM);
+  say('Watch it fall to 1.');
+  COLLATZ_ANIM = setInterval(() => { i++; if (i >= seq.length) { clearInterval(COLLATZ_ANIM); return; } }, 120);
+});
+
+function setKapN(n, digits){
+  digits = digits || S.kapDigits;
+  n = Math.round(n);
+  const min = digits === 3 ? 100 : 1000, max = digits === 3 ? 999 : 9999;
+  n = clamp(n, min, max);
+  S.kapN = n; S.kapDigits = digits; paintKaprekar(); track('kaprekar', {n, digits});
+}
+$('kapDigits3').addEventListener('click', () => { sound('pop'); setKapN(S.kapN, 3); });
+$('kapDigits4').addEventListener('click', () => { sound('pop'); setKapN(S.kapN < 1000 ? S.kapN * 10 + 2 : S.kapN, 4); });
+$('kapN').addEventListener('input', e => setKapN(+e.target.value));
+$('kapQuick').addEventListener('click', e => { const b = e.target.closest('[data-n]'); if (!b) return; sound('pop'); setKapN(+b.dataset.n, 4); });
+
+$('rhN').addEventListener('input', e => { S.rhN = +e.target.value; sound('tick'); paintRhythm(); track('rhythm', {n: S.rhN}); });
+
+function lockControls(lock){
+  for (const id of ['collatzN', 'btnCollatzPlay', 'kapN', 'kapDigits3', 'kapDigits4', 'rhN']) $(id).disabled = lock;
+  for (const b of document.querySelectorAll('.quick button')) b.disabled = lock;
+  $('gate').hidden = !lock;
+}
+
+/* ============================================================================
+   Start
+   ============================================================================ */
+findings($('finds'), [
+  {id: 'book12',     icon: '📖', label: 'Matches the book’s own chain (12 → 1)', hint: 'Start the Collatz chain from 12', say: 'That matches the chain in the book exactly.'},
+  {id: 'longchain',  icon: '⏳', label: 'A chain of 50 steps or more',        hint: 'Try 27', say: 'Fifty steps or more! Some short-looking numbers take a very long time.'},
+  {id: 'alwaysone',  icon: '1️⃣', label: 'Every number you tried reached 1', hint: 'Try three different starting numbers', say: 'Every number you tried reached 1 — exactly what the conjecture says, though nobody has ever proved it.'},
+  {id: 'matchbook6382', icon: '🧮', label: 'Matches the book’s own routine (6382)', hint: 'Try Kaprekar with 6382', say: 'That is exactly the book’s own worked example.'},
+  {id: 'rounds5683',    icon: '🔢', label: 'Reached 6174 in exactly 8 rounds',  hint: 'Try 5683', say: 'Eight rounds — just as the book says.'},
+  {id: 'threedigit',    icon: '3️⃣', label: 'Found the 3-digit magic number', hint: 'Switch to 3 digits', say: 'A fixed point for 3-digit numbers too — you found it yourself.'},
+  {id: 'matchbook8',    icon: '🥁', label: '34 rhythms of 8 beats, just like the book', hint: 'Slide to 8 beats', say: 'Thirty-four rhythms of eight beats — exactly as the book says.'},
+  {id: 'fibrule',       icon: '🔁', label: 'Each count is the sum of the two before it', hint: 'Slide past 6 beats', say: 'Each number of rhythms is the sum of the two before it — Virahanka’s rule.'},
+], () => toast('You ran every one of the book’s number games yourself. All eight findings.', 4200));
+
+const POE = predict($('poe'), {
+  id: 'collatz-always-one',
+  q: 'Pick any whole number. If it is even, halve it; if it is odd, triple it and add 1. Repeat. Will you always eventually reach 1?',
+  options: [
+    {id: 'yes-unproven', text: 'It seems to, for every number anyone has ever tried — but nobody has ever proved it always must', right: true},
+    {id: 'no',            text: 'No, some starting numbers must grow forever'},
+    {id: 'evenonly',      text: 'Only if you start with an even number'},
+    {id: 'under100',      text: 'Only for starting numbers under 100'},
+  ],
+  onLock(){
+    S.locked = true;
+    lockControls(false);
+    say('Now try it. Pick a number and watch the chain.');
+    showTool(S.tool);
+  },
+});
+lockControls(!POE.locked);
+if (!Play.FF('predict')) S.locked = true;
+showTool(S.tool);
+window.applyFeatures = () => showTool(S.tool);
+window.PG_STATE = () => ({tool: S.tool, collatzN: S.collatzN, kapDigits: S.kapDigits, kapN: S.kapN, rhN: S.rhN, locked: S.locked, triedStarts: S.triedStarts.size});
+window.PG_MODEL = {collatzSeq, kaprekarStep, kaprekarRoutine, hasTwoDifferentDigits, ways, enumerateRhythms};
+</script>
+</body>
+</html>

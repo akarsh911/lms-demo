@@ -1,0 +1,665 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Area, Perimeter, Right Angle</title>
+<meta name="description" content="Class 6–8: nine tiles with different perimeters, one string that makes rectangles of different areas, a triangle that is always half its rectangle, and Baudhāyana's cut that turns two squares into one.">
+<link rel="icon" href="../../favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600&family=Inter:wght@400;500;600;700&family=Nunito:wght@500;700;800&family=Newsreader:opsz,wght@6..72,400;6..72,500&family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="../../play.css">
+<style>
+/* Only what this page needs beyond play.css. */
+.pg-stage{min-height:0}
+.tabs{display:flex; gap:4px; padding:10px 12px 0; border-bottom:1px solid var(--hair); background:var(--card); flex-wrap:wrap}
+.tab{border:1px solid transparent; border-bottom:none; background:none; padding:8px 14px; border-radius:10px 10px 0 0; cursor:pointer;
+  font-family:"Fredoka",var(--font-head); font-size:16px; color:var(--ink-3); margin-bottom:-1px}
+.tab[aria-selected="true"]{background:var(--card); border-color:var(--hair); color:var(--ink); border-bottom:1px solid var(--card)}
+.gate{position:absolute; left:0; right:0; top:50px; bottom:0; display:grid; place-items:center; pointer-events:none}
+.gate span{background:rgba(29,35,39,.85); color:#fff; padding:10px 16px; border-radius:99px; font-weight:600; font-size:14px}
+.chips{display:flex; flex-wrap:wrap; gap:6px; margin:4px 0}
+.chip{border:1px solid var(--hair-2); background:var(--card); border-radius:99px; padding:6px 12px; font-size:13px; cursor:pointer; font-weight:600; color:var(--ink-2)}
+.chip[aria-pressed="true"]{background:var(--accent-soft); border-color:var(--accent); color:var(--ink)}
+.chip:disabled,.btn:disabled{opacity:.45; cursor:default}
+.big{font-family:"Fredoka",var(--font-head); font-size:22px; font-weight:600; line-height:1.2}
+.note{font-size:12.5px; color:var(--ink-3); margin:6px 0 0}
+.why p{font-size:14px; margin-bottom:.55em}
+.why b{color:var(--ink)}
+#tileHit{cursor:pointer}
+.hdl{cursor:grab} .hdl.dragging{cursor:grabbing}
+svg text{pointer-events:none}
+</style>
+</head>
+<body>
+<header class="pg-top"></header>
+
+<div class="pg-intro">
+  <h1>Area, perimeter and a right angle</h1>
+  <p>Area is how much space a shape covers; perimeter is how far it is around the edge. Join nine square tiles in different ways,
+     bend one piece of string into different rectangles, and slide the tip of a triangle. Then do what Baudhāyana described
+     nearly 3000 years ago: cut two squares and rearrange the pieces into one.</p>
+</div>
+
+<main class="pg-main wide-side">
+  <section class="pg-stage" id="stageWrap">
+    <div class="tabs" role="tablist">
+      <button class="tab" role="tab" id="tabTiles" aria-selected="true">Nine tiles</button>
+      <button class="tab" role="tab" id="tabString" aria-selected="false">String and triangle</button>
+      <button class="tab" role="tab" id="tabBaud" aria-selected="false">Baudhāyana’s squares</button>
+    </div>
+    <svg id="stageT" viewBox="0 0 1000 560" role="img" aria-label="A grid of square tiles. Click a square to add or remove a tile. The perimeter is drawn in orange, with a graph of the perimeters of your nine-tile shapes"></svg>
+    <svg id="stageS" viewBox="0 0 1000 560" role="img" aria-label="A rectangle with a triangle inside it, and a graph of area against length for a fixed piece of string" hidden></svg>
+    <svg id="stageB" viewBox="0 0 1000 560" role="img" aria-label="Two squares joined side by side, cut into three pieces and rearranged into one square" hidden></svg>
+    <div class="gate" id="gate"><span>Make your prediction first →</span></div>
+  </section>
+
+  <aside class="pg-side">
+    <div id="poeA"></div>
+    <div id="poeB" hidden></div>
+
+    <div class="card" id="cardT">
+      <div class="kicker">Nine tiles</div>
+      <div class="big num" id="tBig">Area 9 · Perimeter 14</div>
+      <p class="note">Click an empty square to add a tile; click a tile to take it away. The book’s rule: every tile shares at least one whole side with another, and there are no holes.</p>
+      <div class="row" style="margin-top:8px"><button class="btn sm" id="tReset">Back to the start</button></div>
+    </div>
+
+    <div class="card" id="cardS" hidden>
+      <div class="kicker">The rectangle</div>
+      <div class="chips">
+        <button class="chip" id="chipString" aria-pressed="true">Keep the string 24 units long</button>
+        <button class="chip" id="chipFree" aria-pressed="false">Any rectangle</button>
+      </div>
+      <div class="ctl"><label for="len">length</label><input type="range" id="len" min="1" max="13" step="0.5" value="8"><output id="lenOut" class="num">8</output></div>
+      <div class="ctl"><label for="tip">tip E</label><input type="range" id="tip" min="0" max="1" step="0.05" value="0.3"><output id="tipOut" class="num">0.30</output></div>
+      <div class="big num" id="sBig"></div>
+      <p class="note">Drag the corner C, or the tip E of the triangle along the top.</p>
+    </div>
+
+    <div class="card" id="cardB" hidden>
+      <div class="kicker">Two squares</div>
+      <div class="ctl"><label for="sa">side a</label><input type="range" id="sa" min="1" max="12" step="0.5" value="3"><output id="saOut" class="num">3</output></div>
+      <div class="ctl"><label for="sb">side b</label><input type="range" id="sb" min="1" max="12" step="0.5" value="4"><output id="sbOut" class="num">4</output></div>
+      <div class="row" style="margin-top:4px">
+        <button class="btn sm" id="bCut">1 · Make two cuts</button>
+        <button class="btn sm primary" id="bMove" disabled>2 · Rearrange</button>
+        <button class="btn sm" id="bReset">Join again</button>
+      </div>
+      <div class="big num" id="bBig" style="margin-top:8px"></div>
+      <p class="note">You can also drag the top edges of the two squares.</p>
+    </div>
+
+    <div class="card why" id="whyCard">
+      <div class="kicker">What is happening</div>
+      <div id="why"></div>
+    </div>
+
+    <div class="card"><div class="kicker">To find</div><div id="finds"></div></div>
+  </aside>
+</main>
+
+<script src="../../play.js"></script>
+<script>
+'use strict';
+const {$, esc, clamp, fmt, drag, sound, say, track, toast, predict, findings, discover, found,
+       shareState, sharedState, mount, reduced, tween, svgPoint} = Play;
+mount({thread: 'area', band: 'tinkerer'});
+
+/* MODEL:start ==================================================================
+   Three small models. Nothing on the page is looked up; every number is counted
+   or computed from the shape the learner made.
+
+   1. Tiles. A shape is a set of unit squares. Its area is how many there are.
+      Its perimeter is the number of tile sides that touch no other tile — each
+      tile brings 4 sides, and every join hides 2 of them: P = 4N − 2J.
+      The book's rules (Ganita Prakash 6, §6.2 "Making it more or less"): the
+      tiles must form one connected piece, joined along whole sides, with no holes.
+   2. Rectangle and triangle. Area = l × b; perimeter = 2(l + b). The triangle
+      ABE has its base on AB and its tip E on DC; its area is found by the
+      shoelace formula from its three corners, not by ½ × base × height.
+   3. Baudhāyana (Ganita Prakash 8, §2.4, "Combining two squares using paper").
+      Join squares of sides a ≤ b on one line. Mark P at distance b from the left
+      end and cut from P to the two top outer corners. Turn the left triangle 90°
+      about the top of the small square and the right triangle 90° about the top
+      of the big one. The pieces are real polygons; their areas are shoelace sums.
+   ============================================================================ */
+const key = (r, c) => r + ',' + c;
+function tileStats(cells){
+  const set = new Set(cells.map(([r, c]) => key(r, c)));
+  const N = set.size;
+  let J = 0;
+  for (const [r, c] of cells) { if (set.has(key(r, c + 1))) J++; if (set.has(key(r + 1, c))) J++; }
+  const P = 4 * N - 2 * J;
+  /* connected: flood from the first tile */
+  let connected = N > 0;
+  if (N) {
+    const seen = new Set([key(...cells[0])]), st = [cells[0]];
+    while (st.length) { const [r, c] = st.pop(); for (const [dr, dc] of [[1,0],[-1,0],[0,1],[0,-1]]) { const k = key(r + dr, c + dc); if (set.has(k) && !seen.has(k)) { seen.add(k); st.push([r + dr, c + dc]); } } }
+    connected = seen.size === N;
+  }
+  /* holes: flood the empty squares from outside the bounding box; any empty square not reached is a hole */
+  let holes = 0;
+  if (N) {
+    const rs = cells.map(x => x[0]), cs = cells.map(x => x[1]);
+    const r0 = Math.min(...rs) - 1, r1 = Math.max(...rs) + 1, c0 = Math.min(...cs) - 1, c1 = Math.max(...cs) + 1;
+    const out = new Set([key(r0, c0)]), st = [[r0, c0]];
+    while (st.length) { const [r, c] = st.pop(); for (const [dr, dc] of [[1,0],[-1,0],[0,1],[0,-1]]) { const R = r + dr, C = c + dc, k = key(R, C);
+      if (R < r0 || R > r1 || C < c0 || C > c1 || set.has(k) || out.has(k)) continue; out.add(k); st.push([R, C]); } }
+    for (let r = r0; r <= r1; r++) for (let c = c0; c <= c1; c++) if (!set.has(key(r, c)) && !out.has(key(r, c))) holes++;
+  }
+  return {N, J, P, connected, holes, valid: N > 0 && connected && holes === 0};
+}
+/* The sides that make the boundary, as unit segments [x0, y0, x1, y1] in grid units. */
+function boundary(cells){
+  const set = new Set(cells.map(([r, c]) => key(r, c))), segs = [];
+  for (const [r, c] of cells) {
+    if (!set.has(key(r - 1, c))) segs.push([c, r, c + 1, r]);
+    if (!set.has(key(r + 1, c))) segs.push([c, r + 1, c + 1, r + 1]);
+    if (!set.has(key(r, c - 1))) segs.push([c, r, c, r + 1]);
+    if (!set.has(key(r, c + 1))) segs.push([c + 1, r, c + 1, r + 1]);
+  }
+  return segs;
+}
+/* A shape's name that does not change when it is slid across the grid. */
+function shapeKey(cells){
+  const r0 = Math.min(...cells.map(x => x[0])), c0 = Math.min(...cells.map(x => x[1]));
+  return cells.map(([r, c]) => key(r - r0, c - c0)).sort().join(';');
+}
+const shoelace = pts => { let s = 0; for (let i = 0; i < pts.length; i++) { const p = pts[i], q = pts[(i + 1) % pts.length]; s += p[0] * q[1] - q[0] * p[1]; } return Math.abs(s) / 2; };
+function rect(l, b, e){
+  /* A(0,0) B(l,0) C(l,b) D(0,b); E on DC at fraction e from D; F its foot on AB. */
+  const A = [0, 0], B = [l, 0], C = [l, b], D = [0, b], E = [e * l, b], F = [e * l, 0];
+  return {A, B, C, D, E, F, area: l * b, perim: 2 * (l + b), tri: shoelace([A, B, E]), left: shoelace([A, F, E]), right: shoelace([F, B, E])};
+}
+const rot = (p, o, ang) => { const c = Math.cos(ang), s = Math.sin(ang), x = p[0] - o[0], y = p[1] - o[1]; return [o[0] + c * x - s * y, o[1] + s * x + c * y]; };
+function baud(a0, b0, k = 0){
+  const a = Math.min(a0, b0), b = Math.max(a0, b0);
+  const T1 = [[0, 0], [b, 0], [0, a]], T2 = [[b, 0], [a + b, 0], [a + b, b]];
+  const mid = [[0, a], [b, 0], [a + b, b], [a, b], [a, a]];
+  if (a === b) mid.splice(3, 1);                      /* equal squares: (a, b) and (a, a) are the same corner */
+  const piv1 = [0, a], piv2 = [a + b, b];
+  const t1 = T1.map(p => rot(p, piv1, k * Math.PI / 2)), t2 = T2.map(p => rot(p, piv2, -k * Math.PI / 2));
+  const c = Math.hypot(a, b);
+  const square = [[0, a], [b, 0], [a + b, b], [a, a + b]];
+  return {a, b, c, T1: t1, T2: t2, mid, square, P: [b, 0],
+          areas: [shoelace(T1), shoelace(T2), shoelace(mid)], total: shoelace(T1) + shoelace(T2) + shoelace(mid)};
+}
+/* After the move, is every corner of every piece a corner of the big square or inside it? */
+function fits(a, b){
+  const B = baud(a, b, 1), sq = B.square, c = B.c;
+  const inSq = p => { const u = [p[0] - sq[0][0], p[1] - sq[0][1]], e1 = [(sq[1][0] - sq[0][0]) / c, (sq[1][1] - sq[0][1]) / c], e2 = [(sq[3][0] - sq[0][0]) / c, (sq[3][1] - sq[0][1]) / c];
+    const s = u[0] * e1[0] + u[1] * e1[1], t = u[0] * e2[0] + u[1] * e2[1]; return s > -1e-9 && s < c + 1e-9 && t > -1e-9 && t < c + 1e-9; };
+  return [...B.T1, ...B.T2, ...B.mid].every(inSq) && Math.abs(B.total - c * c) < 1e-9;
+}
+/* MODEL:end */
+
+/* ---- state -------------------------------------------------------------------- */
+const START = [[3,3],[3,4],[3,5],[3,6],[3,7],[4,3],[4,4],[4,5],[4,6]];
+const S = {tab: 'tiles', lockedA: false, lockedB: false,
+  cells: START.map(x => x.slice()), seen: {}, lastAdd: null,
+  l: 8, b: 4, e: 0.3, string: true, trail: [], eMoved: false,
+  a: 3, bb: 4, phase: 0, k: 0};
+const shared = sharedState();
+if (shared) {
+  if (Array.isArray(shared.cells)) S.cells = shared.cells.filter(x => Array.isArray(x) && x.length === 2).map(([r, c]) => [clamp(r | 0, 0, 7), clamp(c | 0, 0, 12)]);
+  if (shared.l) { S.l = clamp(+shared.l, 1, 13); S.b = clamp(+shared.b, 1, 11); S.e = clamp(+shared.e, 0, 1); S.string = !!shared.string; }
+  if (shared.a) { S.a = clamp(+shared.a, 1, 12); S.bb = clamp(+shared.bb, 1, 12); }
+  if (['tiles', 'string', 'baud'].includes(shared.tab)) S.tab = shared.tab;
+}
+shareState(() => ({tab: S.tab, cells: S.cells, l: S.l, b: S.b, e: S.e, string: S.string, a: S.a, bb: S.bb}));
+
+const NS = 'http://www.w3.org/2000/svg';
+const INK = '#1d2327', PINK = '#c2569b', ORANGE = '#e8890c', TILE = '#f7d6e8', TILE2 = '#e7a8cb';
+
+/* ============================================================================
+   Tab 1: nine tiles
+   ============================================================================ */
+const svgT = $('stageT');
+const G = {x: 30, y: 70, cell: 44, cols: 13, rows: 8};
+const GR1 = {x: 660, y: 120, w: 300, h: 250};
+function buildT(){
+  let grid = '';
+  for (let r = 0; r <= G.rows; r++) grid += `<line x1="${G.x}" y1="${G.y + r * G.cell}" x2="${G.x + G.cols * G.cell}" y2="${G.y + r * G.cell}"/>`;
+  for (let c = 0; c <= G.cols; c++) grid += `<line x1="${G.x + c * G.cell}" y1="${G.y}" x2="${G.x + c * G.cell}" y2="${G.y + G.rows * G.cell}"/>`;
+  let ax = '';
+  for (let p = 12; p <= 20; p += 2) { const x = gxP(p); ax += `<text x="${x}" y="${GR1.y + GR1.h + 20}" text-anchor="middle" font-size="13" font-weight="600" fill="#4a555b">${p}</text>`; }
+  svgT.innerHTML = `
+  <rect x="0" y="0" width="1000" height="560" fill="#fbfaf6"/>
+  <text x="30" y="40" font-size="13" font-weight="700" letter-spacing=".08em" fill="#4a555b">SQUARED PAPER · 1 SQUARE = 1 SQUARE UNIT</text>
+  <g stroke="#dcd6c6" stroke-width="1">${grid}</g>
+  <g id="tiles"></g>
+  <g id="edges" stroke="${ORANGE}" stroke-width="4" stroke-linecap="round"></g>
+  <g id="joins" stroke="${PINK}" stroke-width="2" stroke-dasharray="3 4"></g>
+  <rect id="tileHit" x="${G.x}" y="${G.y}" width="${G.cols * G.cell}" height="${G.rows * G.cell}" fill="transparent"/>
+  <text id="tSum" x="30" y="${G.y + G.rows * G.cell + 44}" font-size="20" font-weight="600" fill="${INK}" font-family="Fredoka, Inter, sans-serif"></text>
+  <text id="tSum2" x="30" y="${G.y + G.rows * G.cell + 72}" font-size="14.5" fill="#4a555b"></text>
+  <text x="${GR1.x}" y="40" font-size="13" font-weight="700" letter-spacing=".08em" fill="#4a555b">YOUR NINE-TILE SHAPES</text>
+  <text x="${GR1.x}" y="60" font-size="12" fill="#7c878c">Each block is a different shape you made.</text>
+  <line x1="${GR1.x}" y1="${GR1.y + GR1.h}" x2="${GR1.x + GR1.w}" y2="${GR1.y + GR1.h}" stroke="#9aa3a6"/>
+  ${ax}
+  <text x="${GR1.x + GR1.w / 2}" y="${GR1.y + GR1.h + 42}" text-anchor="middle" font-size="12.5" fill="#4a555b" font-weight="600">perimeter (units)</text>
+  <g id="bars"></g>
+  <text id="barsEmpty" x="${GR1.x + GR1.w / 2}" y="${GR1.y + GR1.h / 2}" text-anchor="middle" font-size="13" fill="#7c878c">Make a shape with exactly 9 tiles.</text>
+  `;
+}
+function gxP(p){ return GR1.x + 20 + (p - 12) / 8 * (GR1.w - 40); }
+function paintT(){
+  const st = tileStats(S.cells);
+  let t = '';
+  for (const [r, c] of S.cells) t += `<rect x="${G.x + c * G.cell + 1.5}" y="${G.y + r * G.cell + 1.5}" width="${G.cell - 3}" height="${G.cell - 3}" rx="4" fill="${TILE}" stroke="${TILE2}" stroke-width="1.5"/>`;
+  $('tiles').innerHTML = t;
+  const segs = boundary(S.cells);
+  $('edges').innerHTML = segs.map(([x0, y0, x1, y1]) => `<line x1="${G.x + x0 * G.cell}" y1="${G.y + y0 * G.cell}" x2="${G.x + x1 * G.cell}" y2="${G.y + y1 * G.cell}"/>`).join('');
+  /* joins: the hidden sides, drawn faintly so they can be counted */
+  const set = new Set(S.cells.map(([r, c]) => key(r, c)));
+  let j = '';
+  for (const [r, c] of S.cells) {
+    if (set.has(key(r, c + 1))) j += `<line x1="${G.x + (c + 1) * G.cell}" y1="${G.y + r * G.cell + 6}" x2="${G.x + (c + 1) * G.cell}" y2="${G.y + (r + 1) * G.cell - 6}"/>`;
+    if (set.has(key(r + 1, c))) j += `<line x1="${G.x + c * G.cell + 6}" y1="${G.y + (r + 1) * G.cell}" x2="${G.x + (c + 1) * G.cell - 6}" y2="${G.y + (r + 1) * G.cell}"/>`;
+  }
+  $('joins').innerHTML = j;
+  $('tSum').textContent = S.lockedA ? `Area ${st.N} square units · Perimeter ${st.P} units` : `Area ${st.N} square units · Perimeter ?`;
+  $('tSum2').textContent = !st.N ? 'No tiles.' : !st.valid ? (st.connected ? `This shape has a hole. The book’s rule says no holes.` : 'The tiles are not all joined into one piece.')
+    : S.lockedA ? `${st.N} tiles × 4 sides = ${4 * st.N}, minus 2 for each of the ${st.J} joins = ${st.P}.` : 'Lock in your prediction to see the perimeter.';
+  $('tBig').textContent = S.lockedA ? `Area ${st.N} · Perimeter ${st.P}` : `Area ${st.N} · Perimeter ?`;
+  /* graph: one block per distinct nine-tile shape, stacked above its perimeter */
+  const by = {};
+  for (const k in S.seen) { const p = S.seen[k]; (by[p] = by[p] || []).push(k); }
+  let bars = '';
+  const cur = st.valid && st.N === 9 ? shapeKey(S.cells) : null;
+  for (const p in by) by[p].forEach((k, i) => {
+    const x = gxP(+p) - 14, y = GR1.y + GR1.h - (i + 1) * 20;
+    if (y < GR1.y - 10) return;
+    bars += `<rect x="${x}" y="${y + 2}" width="28" height="17" rx="3" fill="${k === cur ? PINK : TILE2}"/>`;
+  });
+  $('bars').innerHTML = bars;
+  $('barsEmpty').setAttribute('opacity', Object.keys(S.seen).length ? 0 : 1);
+  return st;
+}
+function toggleCell(r, c){
+  const before = tileStats(S.cells);
+  const i = S.cells.findIndex(x => x[0] === r && x[1] === c);
+  if (i >= 0) { S.cells.splice(i, 1); S.lastAdd = null; sound('tick'); }
+  else { S.cells.push([r, c]); S.lastAdd = {before}; sound('pop'); }
+  const st = paintT0();
+  if (S.lastAdd && before.valid && st.valid && before.P === st.P && S.lockedA) discover('addsame');
+  track('tile', {r, c, n: st.N, p: st.P});
+}
+function paintT0(){
+  const st = tileStats(S.cells);
+  if (S.lockedA && st.valid && st.N === 9) S.seen[shapeKey(S.cells)] = st.P;
+  paintT();
+  if (S.lockedA && st.valid && st.N === 9) {
+    if (st.P === 12) discover('tight');
+    if (st.P === 20) discover('long');
+  }
+  paintWhy();
+  maybeExplainA();
+  return st;
+}
+
+/* ============================================================================
+   Tab 2: string and triangle
+   ============================================================================ */
+const svgS = $('stageS');
+const R = {x: 60, y: 490, u: 34};
+const GR2 = {x: 610, y: 110, w: 340, h: 300, lmax: 12, amax: 40};
+const rx = x => R.x + x * R.u, ry = y => R.y - y * R.u;
+const g2x = l => GR2.x + l / GR2.lmax * GR2.w, g2y = A => GR2.y + GR2.h - A / GR2.amax * GR2.h;
+function buildS(){
+  let grid = '';
+  for (let i = 0; i <= 13; i++) grid += `<line x1="${rx(i)}" y1="${ry(0)}" x2="${rx(i)}" y2="${ry(11)}"/>`;
+  for (let j = 0; j <= 11; j++) grid += `<line x1="${rx(0)}" y1="${ry(j)}" x2="${rx(13)}" y2="${ry(j)}"/>`;
+  let ax = '';
+  for (let l = 0; l <= 12; l += 2) ax += `<text x="${g2x(l)}" y="${GR2.y + GR2.h + 18}" text-anchor="middle" font-size="12" fill="#4a555b">${l}</text>`;
+  for (let A = 0; A <= 40; A += 10) ax += `<line x1="${GR2.x}" y1="${g2y(A)}" x2="${GR2.x + GR2.w}" y2="${g2y(A)}" stroke="#ece8dc"/><text x="${GR2.x - 8}" y="${g2y(A) + 4}" text-anchor="end" font-size="12" fill="#4a555b">${A}</text>`;
+  svgS.innerHTML = `
+  <rect x="0" y="0" width="1000" height="560" fill="#fbfaf6"/>
+  <g stroke="#e6e1d3" stroke-width="1">${grid}</g>
+  <text x="30" y="40" font-size="13" font-weight="700" letter-spacing=".08em" fill="#4a555b">1 SQUARE = 1 SQUARE UNIT</text>
+  <rect id="rRect" fill="#fdf0f6" stroke="${INK}" stroke-width="2.5"/>
+  <path id="rAEF" fill="#f3b6d5" opacity=".9"/>
+  <path id="rBEF" fill="#c9a7f0" opacity=".9"/>
+  <line id="rEF" stroke="${INK}" stroke-width="1.5" stroke-dasharray="5 4"/>
+  <path id="rTri" fill="none" stroke="${PINK}" stroke-width="3" stroke-linejoin="round"/>
+  <g font-size="15" font-weight="700" fill="${INK}" font-family="Fredoka, Inter, sans-serif">
+    <text id="lA">A</text><text id="lB">B</text><text id="lC">C</text><text id="lD">D</text><text id="lE" fill="${PINK}">E</text><text id="lF">F</text>
+  </g>
+  <text id="rLen" text-anchor="middle" font-size="13" font-weight="600" fill="#4a555b"></text>
+  <text id="rBr" text-anchor="middle" font-size="13" font-weight="600" fill="#4a555b"></text>
+  <circle id="hC" class="hdl" r="13" fill="${ORANGE}" stroke="#fff" stroke-width="3"/>
+  <circle id="hE" class="hdl" r="11" fill="${PINK}" stroke="#fff" stroke-width="3"/>
+  <text x="${GR2.x}" y="40" font-size="13" font-weight="700" letter-spacing=".08em" fill="#4a555b">AREA AGAINST LENGTH</text>
+  <text id="g2sub" x="${GR2.x}" y="60" font-size="12" fill="#7c878c">Every rectangle you make with the 24-unit string leaves a dot.</text>
+  <g id="g2ax">${ax}</g>
+  <line x1="${GR2.x}" y1="${GR2.y + GR2.h}" x2="${GR2.x + GR2.w}" y2="${GR2.y + GR2.h}" stroke="#9aa3a6"/>
+  <line x1="${GR2.x}" y1="${GR2.y}" x2="${GR2.x}" y2="${GR2.y + GR2.h}" stroke="#9aa3a6"/>
+  <text x="${GR2.x + GR2.w / 2}" y="${GR2.y + GR2.h + 38}" text-anchor="middle" font-size="12.5" font-weight="600" fill="#4a555b">length (units)</text>
+  <text x="${GR2.x - 40}" y="${GR2.y - 12}" font-size="12.5" font-weight="600" fill="#4a555b">area (square units)</text>
+  <g id="trail" fill="${TILE2}"></g>
+  <circle id="gNow" r="7" fill="${PINK}" stroke="#fff" stroke-width="2"/>
+  <text id="g2free" x="${GR2.x + GR2.w / 2}" y="${GR2.y + 120}" text-anchor="middle" font-size="13" fill="#7c878c" opacity="0">The graph is for the 24-unit string.</text>
+  `;
+}
+function setL(l, b){
+  S.l = clamp(Math.round(l * 2) / 2, 1, S.string ? 11 : 13);
+  S.b = S.string ? 12 - S.l : clamp(Math.round(b * 2) / 2, 1, 11);
+  if (S.string && S.lockedA) S.trail.push([S.l, S.l * S.b]);
+  paintS();
+}
+function paintS(){
+  const m = rect(S.l, S.b, S.e);
+  const P = p => `${rx(p[0]).toFixed(1)} ${ry(p[1]).toFixed(1)}`;
+  $('rRect').setAttribute('x', rx(0)); $('rRect').setAttribute('y', ry(S.b)); $('rRect').setAttribute('width', S.l * R.u); $('rRect').setAttribute('height', S.b * R.u);
+  $('rAEF').setAttribute('d', `M${P(m.A)} L${P(m.F)} L${P(m.E)}Z`);
+  $('rBEF').setAttribute('d', `M${P(m.F)} L${P(m.B)} L${P(m.E)}Z`);
+  $('rEF').setAttribute('x1', rx(m.E[0])); $('rEF').setAttribute('x2', rx(m.E[0])); $('rEF').setAttribute('y1', ry(0)); $('rEF').setAttribute('y2', ry(S.b));
+  $('rTri').setAttribute('d', `M${P(m.A)} L${P(m.B)} L${P(m.E)}Z`);
+  const lab = (id, p, dx, dy) => { $(id).setAttribute('x', (rx(p[0]) + dx).toFixed(1)); $(id).setAttribute('y', (ry(p[1]) + dy).toFixed(1)); };
+  lab('lA', m.A, -18, 18); lab('lB', m.B, 6, 18); lab('lC', m.C, 12, -8); lab('lD', m.D, -18, -6); lab('lE', m.E, -5, -12); lab('lF', m.F, -5, 20);
+  $('lF').setAttribute('opacity', m.E[0] > 0.3 && m.E[0] < S.l - 0.3 ? 1 : 0);
+  $('rLen').setAttribute('x', rx(S.l / 2)); $('rLen').setAttribute('y', ry(0) + 38); $('rLen').textContent = `length ${fmt(S.l, 1).replace('.0', '')}`;
+  $('rBr').setAttribute('x', rx(S.l) + 44); $('rBr').setAttribute('y', ry(S.b / 2) + 4); $('rBr').textContent = `breadth ${fmt(S.b, 1).replace('.0', '')}`;
+  $('hC').setAttribute('cx', rx(S.l)); $('hC').setAttribute('cy', ry(S.b));
+  $('hE').setAttribute('cx', rx(m.E[0])); $('hE').setAttribute('cy', ry(S.b));
+  /* graph */
+  const uniq = {};
+  for (const [l, A] of S.trail) uniq[l] = A;
+  $('trail').innerHTML = Object.keys(uniq).map(l => `<circle cx="${g2x(+l).toFixed(1)}" cy="${g2y(uniq[l]).toFixed(1)}" r="5"/>`).join('');
+  $('gNow').setAttribute('cx', g2x(Math.min(S.l, 12))); $('gNow').setAttribute('cy', g2y(Math.min(m.area, 40)));
+  $('gNow').setAttribute('opacity', S.string && S.lockedA ? 1 : 0);
+  $('g2free').setAttribute('opacity', S.string ? 0 : 1);
+  $('len').value = S.l; $('lenOut').textContent = fmt(S.l, 1).replace('.0', '');
+  $('len').max = S.string ? 11 : 13;
+  $('tip').value = S.e; $('tipOut').textContent = fmt(S.e, 2);
+  $('sBig').innerHTML = S.lockedA ? `Area ${fmt(m.area, 2).replace(/\.?0+$/, '')} · Perimeter ${fmt(m.perim, 1).replace('.0', '')}<br><span style="color:${PINK}">Triangle ABE: ${fmt(m.tri, 2).replace(/\.?0+$/, '')}</span>` : '';
+  $('chipString').setAttribute('aria-pressed', S.string); $('chipFree').setAttribute('aria-pressed', !S.string);
+  if (S.lockedA) {
+    if (S.string && S.l === 6) discover('square');
+    if (S.eMoved && S.e > 0.05 && S.e < 0.95 && Math.abs(m.tri - m.area / 2) < 1e-9) discover('half');
+  }
+  paintWhy();
+}
+
+/* ============================================================================
+   Tab 3: Baudhāyana's squares
+   ============================================================================ */
+const svgB = $('stageB');
+const BF = {x: 70, y: 500, size: 400};
+function buildB(){
+  svgB.innerHTML = `
+  <rect x="0" y="0" width="1000" height="560" fill="#fbfaf6"/>
+  <text x="30" y="40" font-size="13" font-weight="700" letter-spacing=".08em" fill="#4a555b">JOIN · CUT · TURN</text>
+  <text id="bStep" x="30" y="60" font-size="12.5" fill="#7c878c"></text>
+  <path id="bSq" fill="none" stroke="${INK}" stroke-width="2" stroke-dasharray="7 5" opacity="0"/>
+  <path id="bMid" fill="#fde2b8" stroke="${INK}" stroke-width="2" stroke-linejoin="round"/>
+  <path id="bT1" fill="#f3b6d5" stroke="${INK}" stroke-width="2" stroke-linejoin="round"/>
+  <path id="bT2" fill="#bfe3c9" stroke="${INK}" stroke-width="2" stroke-linejoin="round"/>
+  <path id="bSmall" fill="none" stroke="${INK}" stroke-width="1.2" stroke-dasharray="3 4" opacity=".6"/>
+  <line id="bCut1" stroke="#d6453d" stroke-width="3" stroke-dasharray="9 6"/>
+  <line id="bCut2" stroke="#d6453d" stroke-width="3" stroke-dasharray="9 6"/>
+  <circle id="bP" r="5" fill="#d6453d"/><text id="bPl" font-size="14" font-weight="700" fill="#d6453d">P</text>
+  <g font-size="14" font-weight="700" fill="${INK}" font-family="Fredoka, Inter, sans-serif">
+    <text id="bLa" text-anchor="middle"></text><text id="bLb" text-anchor="middle"></text><text id="bLc" text-anchor="middle" fill="#d6453d"></text>
+  </g>
+  <rect id="hA" class="hdl" height="16" rx="6" fill="${ORANGE}" stroke="#fff" stroke-width="2"/>
+  <rect id="hB" class="hdl" height="16" rx="6" fill="${ORANGE}" stroke="#fff" stroke-width="2"/>
+  <line x1="560" y1="30" x2="560" y2="530" stroke="#e2ded2"/>
+  <text x="590" y="40" font-size="13" font-weight="700" letter-spacing=".08em" fill="#4a555b">THE SAME TRIANGLE, WITH ITS SQUARES</text>
+  <g id="cls"></g>
+  <g font-size="14" font-family="JetBrains Mono, monospace" fill="${INK}">
+    <text id="eqA" x="590" y="470"></text><text id="eqB" x="590" y="492"></text><text id="eqC" x="590" y="514" font-weight="600"></text>
+  </g>
+  `;
+}
+function paintB(){
+  const B = baud(S.a, S.bb, S.k), s = S.dragScale || Math.min(BF.size / (B.a + B.b), 60);
+  const X = x => BF.x + x * s, Y = y => BF.y - y * s;
+  const path = pts => 'M' + pts.map(p => `${X(p[0]).toFixed(1)} ${Y(p[1]).toFixed(1)}`).join(' L') + 'Z';
+  $('bMid').setAttribute('d', path(B.mid)); $('bT1').setAttribute('d', path(B.T1)); $('bT2').setAttribute('d', path(B.T2));
+  /* before any cut, the three pieces are drawn without their cut lines: show just the two squares */
+  const whole = S.phase === 0;
+  for (const id of ['bMid', 'bT1', 'bT2']) $(id).setAttribute('stroke-width', whole ? 0 : 2);
+  $('bSmall').setAttribute('d', whole ? `M${X(0)} ${Y(0)} L${X(B.a + B.b)} ${Y(0)} L${X(B.a + B.b)} ${Y(B.b)} L${X(B.a)} ${Y(B.b)} L${X(B.a)} ${Y(0)} M${X(B.a)} ${Y(B.a)} L${X(0)} ${Y(B.a)} L${X(0)} ${Y(0)}` : '');
+  $('bSmall').setAttribute('stroke-dasharray', whole ? '' : '3 4'); $('bSmall').setAttribute('stroke-width', 2); $('bSmall').setAttribute('opacity', 1);
+  const cut = S.phase >= 1 && S.k === 0;
+  for (const [id, q] of [['bCut1', [0, B.a]], ['bCut2', [B.a + B.b, B.b]]]) {
+    $(id).setAttribute('x1', X(B.P[0])); $(id).setAttribute('y1', Y(0)); $(id).setAttribute('x2', X(q[0])); $(id).setAttribute('y2', Y(q[1]));
+    $(id).setAttribute('opacity', cut ? 1 : 0);
+  }
+  $('bP').setAttribute('cx', X(B.P[0])); $('bP').setAttribute('cy', Y(0)); $('bP').setAttribute('opacity', S.phase >= 1 ? 1 : 0);
+  $('bPl').setAttribute('x', X(B.P[0]) - 4); $('bPl').setAttribute('y', Y(0) + 22); $('bPl').setAttribute('opacity', S.phase >= 1 ? 1 : 0);
+  $('bSq').setAttribute('d', path(B.square)); $('bSq').setAttribute('opacity', S.phase >= 1 ? .8 : 0);
+  $('bLa').setAttribute('x', X(B.a / 2)); $('bLa').setAttribute('y', Y(0) + 22); $('bLa').textContent = S.k === 0 ? 'a = ' + num(B.a) : '';
+  $('bLb').setAttribute('x', X(B.a + B.b / 2) + (S.phase >= 1 ? 24 : 0)); $('bLb').setAttribute('y', Y(0) + 22); $('bLb').textContent = S.k === 0 ? 'b = ' + num(B.b) : '';
+  const mc = [(B.square[0][0] + B.square[3][0]) / 2, (B.square[0][1] + B.square[3][1]) / 2];
+  $('bLc').setAttribute('x', X(mc[0]) - 34); $('bLc').setAttribute('y', Y(mc[1]));
+  $('bLc').textContent = S.phase === 2 && S.k === 1 ? 'c = ' + (isInt(B.c) ? B.c : fmt(B.c, 2)) : '';
+  /* handles on the top edges of the squares (only while they are joined, not cut) */
+  const hs = S.phase === 0 && S.lockedB;
+  $('hA').setAttribute('x', X(0) + 6); $('hA').setAttribute('width', Math.max(20, B.a * s - 12)); $('hA').setAttribute('y', Y(B.a) - 8);
+  $('hB').setAttribute('x', X(B.a) + 6); $('hB').setAttribute('width', Math.max(20, B.b * s - 12)); $('hB').setAttribute('y', Y(B.b) - 8);
+  $('hA').style.display = hs ? '' : 'none'; $('hB').style.display = hs ? '' : 'none';
+  $('bStep').textContent = ['Two squares, side by side on one line.', 'Cut from P, which is b from the left end, to the two top corners.',
+    S.k < 1 ? 'Turning the two triangles…' : 'The three pieces now make one square on the cut.'][S.phase];
+  paintClassic(B);
+  const sa = B.a * B.a, sb = B.b * B.b;
+  $('eqA').textContent = `a² = ${num(B.a)} × ${num(B.a)} = ${num(sa)}`;
+  $('eqB').textContent = `b² = ${num(B.b)} × ${num(B.b)} = ${num(sb)}`;
+  $('eqC').textContent = S.lockedB ? `c² = ${num(sa)} + ${num(sb)} = ${num(sa + sb)},  c = ${isInt(B.c) ? B.c : fmt(B.c, 3) + '…'}` : 'c² = ?';
+  $('bBig').textContent = S.lockedB ? `Pieces: ${num(B.areas[0])} + ${num(B.areas[1])} + ${num(B.areas[2])} = ${num(B.total)}` : '';
+  $('sa').value = S.a; $('saOut').textContent = num(S.a); $('sb').value = S.bb; $('sbOut').textContent = num(S.bb);
+  $('bCut').disabled = !S.lockedB || S.phase !== 0; $('bMove').disabled = !S.lockedB || S.phase !== 1;
+  paintWhy();
+}
+const isInt = v => Math.abs(v - Math.round(v)) < 1e-9;
+const num = v => isInt(v) ? String(Math.round(v)) : fmt(v, 2).replace(/0$/, '');
+/* The classic figure: the right triangle with a square on each side, fitted to its box. */
+function paintClassic(B){
+  const a = B.a, b = B.b;
+  const O = [0, 0], PA = [0, a], PB = [b, 0];
+  const sqA = [O, PA, [-a, a], [-a, 0]], sqB = [O, [0, -b], [b, -b], PB];
+  const sqC = [PA, PB, [PB[0] + a, PB[1] + b], [PA[0] + a, PA[1] + b]];
+  const all = [...sqA, ...sqB, ...sqC];
+  const x0 = Math.min(...all.map(p => p[0])), x1 = Math.max(...all.map(p => p[0])), y0 = Math.min(...all.map(p => p[1])), y1 = Math.max(...all.map(p => p[1]));
+  const s = Math.min(360 / (x1 - x0), 370 / (y1 - y0));
+  const ox = 590 + (380 - (x1 - x0) * s) / 2 - x0 * s, oy = 70 + (370 - (y1 - y0) * s) / 2 + y1 * s;
+  const d = pts => 'M' + pts.map(p => `${(ox + p[0] * s).toFixed(1)} ${(oy - p[1] * s).toFixed(1)}`).join(' L') + 'Z';
+  const cx = pts => ox + pts.reduce((t, p) => t + p[0], 0) / pts.length * s, cy = pts => oy - pts.reduce((t, p) => t + p[1], 0) / pts.length * s;
+  $('cls').innerHTML = `
+    <path d="${d(sqA)}" fill="#f7d6e8" stroke="${INK}" stroke-width="1.5"/>
+    <path d="${d(sqB)}" fill="#fde2b8" stroke="${INK}" stroke-width="1.5"/>
+    <path d="${d(sqC)}" fill="#e8e1fb" stroke="${INK}" stroke-width="1.5" ${S.lockedB ? '' : 'stroke-dasharray="5 4"'}/>
+    <path d="${d([O, PB, PA])}" fill="#ffffff" stroke="${INK}" stroke-width="2.5"/>
+    <path d="M${ox + 10} ${oy} L${ox + 10} ${oy - 10} L${ox} ${oy - 10}" fill="none" stroke="${INK}"/>
+    <text x="${cx(sqA)}" y="${cy(sqA) + 5}" text-anchor="middle" font-size="14" font-weight="700" fill="${INK}">${num(a * a)}</text>
+    <text x="${cx(sqB)}" y="${cy(sqB) + 5}" text-anchor="middle" font-size="14" font-weight="700" fill="${INK}">${num(b * b)}</text>
+    <text x="${cx(sqC)}" y="${cy(sqC) + 5}" text-anchor="middle" font-size="15" font-weight="700" fill="#6a3fc2">${S.lockedB ? num(a * a + b * b) : '?'}</text>`;
+}
+async function doMove(){
+  if (S.phase !== 1) return;
+  S.phase = 2; sound('whoosh'); track('rearrange', {a: S.a, b: S.bb});
+  await tween(0, 1, 1400, k => { S.k = k; paintB(); });
+  S.k = 1; paintB();
+  if (fits(S.a, S.bb)) {
+    sound('snap');
+    if (S.a === S.bb) discover('double'); else discover('combine');
+    const B = baud(S.a, S.bb);
+    if (S.a !== S.bb && isInt(B.a) && isInt(B.b) && isInt(B.c)) discover('triple');
+  }
+  maybeExplainB();
+}
+
+/* ============================================================================
+   "What is happening", from the model
+   ============================================================================ */
+function paintWhy(){
+  let h = '';
+  if (S.tab === 'tiles') {
+    const st = tileStats(S.cells);
+    if (!S.lockedA) h = '<p>Nine tiles, each 1 unit by 1 unit. Before you move any, predict what happens to the perimeter.</p>';
+    else if (!st.valid) h = `<p>${st.N} tiles, but ${st.connected ? 'there is a hole in the middle' : 'they are not all joined together'}. Join them edge to edge.</p>`;
+    else {
+      h = `<p><b>${st.N} tiles cover ${st.N} square units.</b> The orange edge is the perimeter: <b>${st.P} units</b>.</p>` +
+          `<p>Each tile has 4 sides, so ${st.N} tiles have ${4 * st.N}. Where two tiles meet, both of those sides are hidden. This shape has <b>${st.J} joins</b>, so ${4 * st.N} − 2 × ${st.J} = ${st.P}.</p>` +
+          `<p>${st.N === 9 ? (st.P === 12 ? 'This is the most joins nine tiles can make — the 3 × 3 square.' : st.P === 20 ? 'Only 8 joins: the fewest possible for nine joined tiles.' : 'More joins means a shorter perimeter. How few joins can you make? How many?') : 'The book asks about exactly 9 tiles. Add or take away tiles to get back to 9.'}</p>`;
+    }
+  } else if (S.tab === 'string') {
+    const m = rect(S.l, S.b, S.e);
+    if (!S.lockedA) h = '<p>Lock in your prediction first.</p>';
+    else {
+      h = `<p>The rectangle is <b>${num(S.l)} by ${num(S.b)}</b>: area ${num(S.l)} × ${num(S.b)} = <b>${num(m.area)}</b> square units, perimeter 2 × (${num(S.l)} + ${num(S.b)}) = <b>${num(m.perim)}</b> units.</p>`;
+      if (S.string) h += `<p>${S.l === 6 ? 'Length and breadth are equal: a square. No other rectangle from this string covers as much.' : `The same 24-unit string. Make it ${S.l > 6 ? 'shorter and fatter' : 'longer and thinner'} and watch the area on the graph.`}</p>`;
+      h += `<p>Triangle ABE: the line EF cuts it into two triangles. The pink one is half of rectangle AFED (${num(m.E[0])} × ${num(S.b)}), the purple one half of rectangle FBCE (${num(S.l - m.E[0])} × ${num(S.b)}). Together: <b>${num(m.tri)}</b>, which is half of ${num(m.area)}.</p>`;
+    }
+  } else {
+    const B = baud(S.a, S.bb);
+    if (!S.lockedB) h = '<p>Two squares. Predict first: can their pieces make one square, and how long would its side be?</p>';
+    else if (S.phase === 0) h = `<p>A square of side ${num(B.a)} (area ${num(B.a * B.a)}) and a square of side ${num(B.b)} (area ${num(B.b * B.b)}), joined on one line. Together they cover <b>${num(B.a * B.a + B.b * B.b)}</b> square units.</p><p>Press “Make two cuts”.</p>`;
+    else if (S.phase === 1) h = `<p>P is ${num(B.b)} from the left end. Each cut is the long side of a right triangle with shorter sides ${num(B.a)} and ${num(B.b)}. Both cuts have the same length, c = ${fmt(B.c, 3)}.</p><p>Now turn the two triangles.</p>`;
+    else h = `<p>The pink triangle turned a quarter-turn about the top of the small square; the green one a quarter-turn about the top of the big square. Nothing was stretched, so the area is still <b>${num(B.total)}</b>.</p>` +
+      `<p>The pieces fill a square whose side is the cut, c. So <b>c² = a² + b²</b>: ${num(B.c * B.c)} = ${num(B.a * B.a)} + ${num(B.b * B.b)}${B.a === B.b ? ' — twice the first square, as in Baudhāyana’s verse on doubling a square' : ''}.</p>`;
+  }
+  $('why').innerHTML = h;
+}
+
+/* ============================================================================
+   Predictions
+   ============================================================================ */
+let EXA = false, EXB = false;
+function maybeExplainA(){
+  const ps = [...new Set(Object.values(S.seen))].sort((x, y) => x - y);
+  if (EXA || !POEA || ps.length < 2) return;
+  EXA = true;
+  POEA.explain(`Your nine-tile shapes had perimeters of <b>${ps.join(', ')}</b> units, and every one of them covered 9 square units. ` +
+    `The area counts the tiles; the perimeter counts the sides left showing. Each join hides 2 sides, so P = 36 − 2 × (joins). ` +
+    `Nine tiles can make as few as 8 joins (perimeter 20) or as many as 12 (perimeter 12).`);
+}
+function maybeExplainB(){
+  if (EXB || !POEB || S.phase !== 2) return;
+  const B = baud(S.a, S.bb);
+  if (!fits(S.a, S.bb)) return;
+  EXB = true;
+  POEB.explain(`The three pieces of the ${num(B.a)} and ${num(B.b)} squares fill one square exactly. Its side is the cut, the long side of the right triangle: ` +
+    `c² = ${num(B.a * B.a)} + ${num(B.b * B.b)} = ${num(B.c * B.c)}, so c = ${isInt(B.c) ? B.c : fmt(B.c, 3)}. ` +
+    `${num(B.a)} + ${num(B.b)} = ${num(B.a + B.b)} would be far too big: a square of side ${num(B.a + B.b)} covers ${num((B.a + B.b) ** 2)}.`);
+}
+
+/* ============================================================================
+   Wiring
+   ============================================================================ */
+buildT(); buildS(); buildB();
+function setTab(t){
+  S.tab = t;
+  for (const [id, n] of [['tabTiles', 'tiles'], ['tabString', 'string'], ['tabBaud', 'baud']]) $(id).setAttribute('aria-selected', t === n);
+  /* SVG elements have no .hidden property: set the attribute */
+  $('stageT').toggleAttribute('hidden', t !== 'tiles'); $('stageS').toggleAttribute('hidden', t !== 'string'); $('stageB').toggleAttribute('hidden', t !== 'baud');
+  $('cardT').hidden = t !== 'tiles'; $('cardS').hidden = t !== 'string'; $('cardB').hidden = t !== 'baud';
+  $('poeA').hidden = t === 'baud'; $('poeB').hidden = t !== 'baud';
+  $('gate').hidden = t === 'baud' ? S.lockedB : S.lockedA;
+  $('gate').style.top = '50px';
+  if (t === 'tiles') paintT0(); else if (t === 'string') paintS(); else paintB();
+  track('tab', {tab: t});
+}
+$('tabTiles').addEventListener('click', () => { sound('tick'); setTab('tiles'); });
+$('tabString').addEventListener('click', () => { sound('tick'); setTab('string'); });
+$('tabBaud').addEventListener('click', () => { sound('tick'); setTab('baud'); });
+
+$('tileHit').addEventListener('click', e => {
+  if (!S.lockedA) return;
+  const p = svgPoint(svgT, e);
+  const c = Math.floor((p.x - G.x) / G.cell), r = Math.floor((p.y - G.y) / G.cell);
+  if (r < 0 || r >= G.rows || c < 0 || c >= G.cols) return;
+  toggleCell(r, c);
+});
+$('tReset').addEventListener('click', () => { S.cells = START.map(x => x.slice()); sound('tick'); paintT0(); });
+
+$('chipString').addEventListener('click', () => { S.string = true; sound('tick'); setL(Math.min(S.l, 11)); });
+$('chipFree').addEventListener('click', () => { S.string = false; sound('tick'); paintS(); });
+$('len').addEventListener('input', e => setL(+e.target.value, S.b));
+$('tip').addEventListener('input', e => { S.e = +e.target.value; S.eMoved = true; paintS(); });
+drag($('hC'), svgS, {
+  start(){ if (!S.lockedA) return false; },
+  move(p){ setL((p.x - R.x) / R.u, (R.y - p.y) / R.u); },
+  end(){ track('rect', {l: S.l, b: S.b}); },
+});
+drag($('hE'), svgS, {
+  start(){ if (!S.lockedA) return false; },
+  move(p){ S.e = clamp(Math.round((p.x - R.x) / R.u / S.l * 20) / 20, 0, 1); S.eMoved = true; paintS(); },
+  end(){ track('tip', {e: S.e}); },
+});
+
+function setAB(a, b){
+  S.a = clamp(Math.round(a * 2) / 2, 1, 12); S.bb = clamp(Math.round(b * 2) / 2, 1, 12);
+  S.phase = 0; S.k = 0; paintB();
+}
+$('sa').addEventListener('input', e => setAB(+e.target.value, S.bb));
+$('sb').addEventListener('input', e => setAB(S.a, +e.target.value));
+$('bCut').addEventListener('click', () => { if (S.phase === 0 && S.lockedB) { S.phase = 1; sound('snap'); track('cut', {a: S.a, b: S.bb}); paintB(); } });
+$('bMove').addEventListener('click', () => doMove());
+$('bReset').addEventListener('click', () => { S.phase = 0; S.k = 0; sound('tick'); paintB(); });
+/* Drag the top edge of either square. Which slider it moves depends on which square is the small one. */
+function edgeDrag(which){
+  let v = null;
+  drag($(which), svgB, {
+    start(){
+      if (!S.lockedB || S.phase !== 0) return false;
+      /* decided once, at the start: the left handle is on the smaller square */
+      const smallIsA = S.a <= S.bb;
+      v = (which === 'hA') === smallIsA ? 'a' : 'bb';
+      const B = baud(S.a, S.bb); S.dragScale = Math.min(BF.size / (B.a + B.b), 60);
+    },
+    move(p){
+      const side = clamp((BF.y - p.y) / S.dragScale, 1, 12);
+      if (v === 'a') setAB(side, S.bb); else setAB(S.a, side);
+    },
+    end(){ S.dragScale = null; paintB(); track('square', {a: S.a, b: S.bb}); },
+  });
+}
+edgeDrag('hA'); edgeDrag('hB');
+
+/* ============================================================================
+   Start
+   ============================================================================ */
+findings($('finds'), [
+  {id: 'tight',   icon: '▦', label: 'Nine tiles, perimeter 12: the 3 × 3 square', hint: 'The shortest boundary for 9 tiles'},
+  {id: 'long',    icon: '▭', label: 'Nine tiles, perimeter 20: a single line', hint: 'The longest boundary for 9 tiles'},
+  {id: 'addsame', icon: '+', label: 'One more tile, the same perimeter', hint: 'Add a tile without changing the perimeter'},
+  {id: 'square',  icon: '□', label: 'Same string, most area: the square', hint: 'Which rectangle from the string holds most?'},
+  {id: 'half',    icon: '◿', label: 'A triangle is half its rectangle', hint: 'Slide the tip of the triangle'},
+  {id: 'combine', icon: '⊞', label: 'Two squares make one: a² + b² = c²', hint: 'Cut and rearrange two different squares'},
+  {id: 'double',  icon: '◇', label: 'Doubling a square (equal sides)', hint: 'Try two equal squares'},
+  {id: 'triple',  icon: '△', label: 'A whole-number triple', hint: 'Whole-number sides with a whole-number c'},
+], () => toast('All eight found. Baudhāyana would be pleased.', 4200));
+
+const POEA = predict($('poeA'), {
+  id: 'nine-tiles',
+  q: 'Nine square tiles, each 1 unit by 1 unit, are joined edge to edge in different ways. What happens to the perimeter?',
+  options: [
+    {id: 'always36', text: 'It is always 36 units: 9 tiles × 4 sides each.'},
+    {id: 'fixed',    text: 'It is always the same, but less than 36, because joined sides are hidden.'},
+    {id: 'changes',  text: 'It changes with the arrangement, while the area stays 9 square units.', right: true},
+    {id: 'both',     text: 'The area and the perimeter both change.'},
+  ],
+  onLock(){ S.lockedA = true; $('gate').hidden = S.tab === 'baud' ? S.lockedB : true; say('Now join the tiles in different ways and watch the orange edge.'); paintT0(); paintS(); },
+});
+const POEB = predict($('poeB'), {
+  id: 'two-squares',
+  q: 'Squares of side 3 and side 4 cover 9 and 16 square units. If you cut them and rearrange all the pieces into one square, how long is its side?',
+  options: [
+    {id: 'seven', text: '7, because 3 + 4 = 7.'},
+    {id: 'five',  text: '5, because 9 + 16 = 25 = 5 × 5.', right: true},
+    {id: 'twofive', text: '25.'},
+    {id: 'cannot', text: 'Two different squares can’t be made into one square.'},
+  ],
+  onLock(){ S.lockedB = true; if (S.tab === 'baud') $('gate').hidden = true; say('Cut the squares, then turn the pieces.'); paintB(); },
+});
+if (!Play.FF('predict')) { S.lockedA = S.lockedB = true; }
+setTab(S.tab);
+window.applyFeatures = () => setTab(S.tab);
+window.PG_STATE = () => JSON.parse(JSON.stringify(S));
+window.PG_MODEL = {tileStats, boundary, shapeKey, shoelace, rect, baud, fits};
+</script>
+</body>
+</html>

@@ -1,0 +1,953 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>How Fast, How Far</title>
+<meta name="description" content="Class 7–8: time a pendulum clock, race two trains and plot their distance against time, then push a box across different floors and pull it both ways.">
+<link rel="icon" href="../../favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600&family=Inter:wght@400;500;600;700&family=Nunito:wght@500;700;800&family=Newsreader:opsz,wght@6..72,400;6..72,500&family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="../../play.css">
+<style>
+/* Only what this page needs beyond play.css. */
+.pg-stage{background:#fbfaf5}
+.tabs{display:flex; gap:4px; padding:8px; background:var(--sunk); border-bottom:1px solid var(--hair)}
+.tabs button{flex:1; border:0; background:transparent; border-radius:10px; padding:8px 10px; font-weight:600; font-size:14px; cursor:pointer; color:var(--ink-2)}
+.tabs button[aria-selected="true"]{background:var(--card); color:var(--ink); box-shadow:var(--shadow)}
+.tabs button:disabled{cursor:default; opacity:.55}
+.gate{position:absolute; inset:52px 0 0 0; display:grid; place-items:center; pointer-events:none}
+.gate span{background:rgba(24,34,20,.84); color:#fff; padding:10px 16px; border-radius:99px; font-weight:600; font-size:14px}
+.seg{display:flex; background:var(--sunk); border-radius:99px; padding:3px; gap:3px; margin:6px 0}
+.seg button{flex:1; border:0; background:transparent; border-radius:99px; padding:6px 8px; font-weight:600; font-size:13px; cursor:pointer; color:var(--ink-2)}
+.seg button[aria-pressed="true"]{background:var(--card); color:var(--ink); box-shadow:var(--shadow)}
+.seg button:disabled{cursor:default; opacity:.5}
+.ctl{grid-template-columns:96px 1fr 70px; margin:4px 0}
+.hint{font-size:12.5px; color:var(--ink-3); margin:6px 0 0}
+.why p{font-size:14px; margin-bottom:.55em}
+.why b{color:var(--ink)}
+.why .book{font-size:12.5px; color:var(--ink-3); border-left:3px solid var(--hair-2); padding-left:8px; margin-top:8px}
+table.log{width:100%; border-collapse:collapse; font-size:12.5px; font-variant-numeric:tabular-nums}
+table.log th{font-size:11px; text-transform:uppercase; letter-spacing:.04em; color:var(--ink-3); font-weight:700; text-align:right; padding:3px 4px; border-bottom:1px solid var(--hair)}
+table.log td{text-align:right; padding:3px 4px; border-bottom:1px solid var(--hair)}
+table.log th:first-child, table.log td:first-child{text-align:left}
+table.log tr.new td{background:var(--accent-soft)}
+.empty{font-size:13px; color:var(--ink-3)}
+.hit{cursor:ns-resize}
+.hit:focus{outline:none}
+@media (max-width:1180px) and (min-width:981px){ .pg-main.wide-side{grid-template-columns:minmax(0,1fr) 340px} }
+</style>
+</head>
+<body>
+<header class="pg-top"></header>
+
+<div class="pg-intro">
+  <h1>How fast, how far</h1>
+  <p>Galileo timed a swinging lamp with his pulse. Build his pendulum, time ten swings and find what sets its beat. Then race two trains
+     from the book’s Table 8.3 and watch their distance–time graphs draw themselves. Last, push a box across ice, glass and sand, and pull it from both sides at once.</p>
+</div>
+
+<main class="pg-main wide-side">
+  <section class="pg-stage" id="stageWrap">
+    <div class="tabs" role="tablist" aria-label="Three experiments">
+      <button role="tab" id="tabPend" data-tab="pend" aria-selected="true">⏱ Pendulum clock</button>
+      <button role="tab" id="tabTrain" data-tab="train" aria-selected="false">🚆 Two trains</button>
+      <button role="tab" id="tabBox" data-tab="box" aria-selected="false">📦 Push a box</button>
+    </div>
+    <svg id="stage" viewBox="0 0 1000 620" role="img" aria-label="The experiment for the chosen tab: a pendulum with a stopwatch, two trains with speed plans and a distance-time graph, or a box on a floor with its forces and a speed-time graph"></svg>
+    <div class="gate" id="gate"><span>Make your prediction first →</span></div>
+  </section>
+
+  <aside class="pg-side">
+    <div id="poe"></div>
+
+    <!-- pendulum controls -->
+    <div class="card" id="ctlPend">
+      <div class="kicker">Your pendulum</div>
+      <div class="ctl"><label for="len">String length</label><input type="range" id="len" min="20" max="150" step="1" value="100"><output id="lenOut">100 cm</output></div>
+      <div class="ctl"><label for="amp">Pull aside</label><input type="range" id="amp" min="4" max="30" step="1" value="10"><output id="ampOut">10°</output></div>
+      <div class="kicker" style="margin-top:6px">Bob</div>
+      <div class="seg" id="bobSeg" role="group" aria-label="Bob">
+        <button data-bob="0.05" aria-pressed="true">Stone 50 g</button>
+        <button data-bob="0.2" aria-pressed="false">Ball 200 g</button>
+        <button data-bob="0.5" aria-pressed="false">Iron 500 g</button>
+      </div>
+      <div class="row" style="margin-top:8px">
+        <button class="btn primary" id="btnRelease">Release and time 10 oscillations</button>
+        <button class="btn sm" id="btnFast" aria-pressed="false" title="Run the model five times faster">Fast ×5</button>
+      </div>
+      <p class="hint">The stopwatch starts as you let go and stops when the bob is back at A for the tenth time. Your thumb is human: each reading can be a little off.</p>
+    </div>
+    <div class="card" id="logPend">
+      <div class="kicker">Table 8.1 · time period of a simple pendulum</div>
+      <div id="pendTable"><p class="empty">Your readings will appear here.</p></div>
+    </div>
+
+    <!-- train controls -->
+    <div class="card" id="ctlTrain" hidden>
+      <div class="kicker">Speed plans, 10:00 to 11:00</div>
+      <p class="hint" style="margin-top:0">Drag the top of any bar on the stage to set a train’s speed for that ten minutes.</p>
+      <div class="row" style="margin-top:8px">
+        <button class="btn primary" id="btnRun">▶ Run the trains</button>
+        <button class="btn sm" id="btnBook">Load the book’s Table 8.3</button>
+      </div>
+    </div>
+    <div class="card" id="logTrain" hidden>
+      <div class="kicker">Table 8.3 · distances in equal intervals of 10 minutes</div>
+      <div id="trainTable"><p class="empty">Run the trains to fill the table.</p></div>
+    </div>
+
+    <!-- box controls -->
+    <div class="card" id="ctlBox" hidden>
+      <div class="kicker">Floor</div>
+      <select id="surface" style="width:100%">
+        <option value="ice">Ice</option>
+        <option value="tile">Polished tile</option>
+        <option value="glass">Glass</option>
+        <option value="wood" selected>Wooden floor</option>
+        <option value="cloth">Cloth</option>
+        <option value="sand">Sand</option>
+      </select>
+      <div class="seg" id="modeSeg" role="group" aria-label="What to do">
+        <button data-mode="push" aria-pressed="true">Push once</button>
+        <button data-mode="tug" aria-pressed="false">Pull both ways</button>
+      </div>
+      <div id="pushCtl">
+        <div class="ctl"><label for="push">Push</label><input type="range" id="push" min="1" max="20" step="1" value="10"><output id="pushOut">10 N</output></div>
+        <button class="btn primary" id="btnPush">Push the box</button>
+        <p class="hint">Your hand pushes for 0.3 s, then lets go.</p>
+      </div>
+      <div id="tugCtl" hidden>
+        <div class="ctl"><label for="pullL">Pull to left</label><input type="range" id="pullL" min="0" max="10" step="1" value="0"><output id="pullLOut">0 N</output></div>
+        <div class="ctl"><label for="pullR">Pull to right</label><input type="range" id="pullR" min="0" max="10" step="1" value="0"><output id="pullROut">0 N</output></div>
+        <button class="btn sm" id="btnCentre">Put the box back in the middle</button>
+      </div>
+    </div>
+    <div class="card" id="logBox" hidden>
+      <div class="kicker">Your pushes</div>
+      <div id="boxTable"><p class="empty">Push the box to record how far it slides.</p></div>
+    </div>
+
+    <div class="card why" id="whyCard" hidden>
+      <div class="kicker">What is happening</div>
+      <div id="why"></div>
+    </div>
+
+    <div class="card"><div class="kicker">To find</div><div id="finds"></div></div>
+  </aside>
+</main>
+
+<script src="../../play.js"></script>
+<script>
+'use strict';
+const {$, esc, clamp, fmt, drag, loop, sound, say, track, toast, predict, findings, discover, found,
+       shareState, sharedState, mount, reduced} = Play;
+mount({thread: 'motion', band: 'tinkerer'});
+
+/* MODEL:start ==================================================================
+   Three small worlds, each integrated step by step. Nothing is a stored answer.
+
+   1. The pendulum (Curiosity Grade 7, Activity 8.2). The bob of mass m on a string of
+      length L obeys  m·L·θ'' = −m·g·sin θ − b·L·θ'  (b: a little air drag). It is
+      integrated with RK4. The mass stays in the equation; the model is left to show
+      whether it matters. One oscillation is counted each time the bob turns round at
+      the extreme position A it was released from.
+   2. The trains (Table 8.3). Each train follows its own speed plan, one speed for each
+      10-minute interval; its position is the running sum of speed × time.
+   3. The box (Curiosity Grade 8, Exploring Forces). Newton's rule in its Grade-8 form:
+      an unbalanced force changes the motion. Net force = the pushes and pulls − friction.
+      Friction is up to μ·m·g, it always opposes the motion (or the motion the box is
+      trying to make), and it can hold the box still when the other forces are small.
+   ============================================================================ */
+const G = 9.8;                      // m/s², at the Earth's surface
+const AIR_B = 0.0008;               // kg/s: a small air drag on the bob, the same for every bob
+
+/* derivatives of (θ, ω) for a pendulum */
+function pendDeriv(th, w, L, m){ return [w, -(G / L) * Math.sin(th) - (AIR_B / m) * w]; }
+function pendStep(s, dt, L, m){
+  const [a1, b1] = pendDeriv(s.th, s.w, L, m);
+  const [a2, b2] = pendDeriv(s.th + a1 * dt / 2, s.w + b1 * dt / 2, L, m);
+  const [a3, b3] = pendDeriv(s.th + a2 * dt / 2, s.w + b2 * dt / 2, L, m);
+  const [a4, b4] = pendDeriv(s.th + a3 * dt, s.w + b3 * dt, L, m);
+  const w0 = s.w;
+  s.th += (a1 + 2 * a2 + 2 * a3 + a4) * dt / 6;
+  s.w  += (b1 + 2 * b2 + 2 * b3 + b4) * dt / 6;
+  s.t += dt;
+  /* back at A: the bob stops on the release side and turns (ω goes from + to −) */
+  if (w0 > 0 && s.w <= 0 && s.th > 0) {
+    s.osc++;
+    s.tA = s.t - dt * s.w / (s.w - w0);         // the turning instant, interpolated
+  }
+  return s;
+}
+const PEND_DT = 1 / 1200;
+function pendNew(ampDeg){ return {th: ampDeg * Math.PI / 180, w: 0, t: 0, osc: 0, tA: 0}; }
+/* Time for n oscillations of a pendulum, straight from the integration. */
+function pendTime(Lcm, mKg, ampDeg, n = 10){
+  const s = pendNew(ampDeg), L = Lcm / 100;
+  while (s.osc < n && s.t < 200) pendStep(s, PEND_DT, L, mKg);
+  return s.tA;
+}
+
+/* Trains: speeds in km/h for six 10-minute intervals. Positions (km) every minute. */
+function trainRun(speeds){
+  let x = 0; const pos = [0];
+  for (let min = 0; min < 60; min++) {
+    const v = speeds[Math.floor(min / 10)];
+    for (let k = 0; k < 60; k++) x += v * (1 / 3600);          // one-second steps
+    pos.push(x);
+  }
+  return pos;
+}
+const trainPosAt = (speeds, tMin) => {
+  let x = 0;
+  for (let i = 0; i < 6; i++) { const a = i * 10, b = Math.min(tMin, a + 10); if (b > a) x += speeds[i] * (b - a) / 60; }
+  return x;
+};
+
+/* Box: mass 1 kg. μ are typical values for a wooden box on these floors (the book gives none). */
+const BOX_M = 1;
+const SURF = {
+  ice:   {mu: 0.03, name: 'ice',            col: '#cdeefa', dot: '#a9dcef'},
+  tile:  {mu: 0.18, name: 'polished tile',  col: '#efe9df', dot: '#d9d0c1'},
+  glass: {mu: 0.25, name: 'glass',          col: '#d9ecef', dot: '#b8d6db'},
+  wood:  {mu: 0.35, name: 'a wooden floor', col: '#d8b07a', dot: '#b98a52'},
+  cloth: {mu: 0.5,  name: 'cloth',          col: '#9fb4d8', dot: '#7f95bd'},
+  sand:  {mu: 0.7,  name: 'sand',           col: '#e5cf93', dot: '#c9ae66'},
+};
+/* One step of the box. F = the other forces along the floor (N, + to the right). */
+function boxStep(b, dt, F, mu){
+  const fmax = mu * BOX_M * G;
+  let fr = 0;
+  if (Math.abs(b.v) < 1e-9) {
+    if (Math.abs(F) <= fmax) { b.v = 0; b.fr = -F; b.a = 0; b.t += dt; return b; }   // friction holds it
+    fr = -Math.sign(F) * fmax;
+  } else fr = -Math.sign(b.v) * fmax;
+  const a = (F + fr) / BOX_M;
+  const v1 = b.v + a * dt;
+  if (b.v !== 0 && Math.sign(v1) !== Math.sign(b.v) && Math.abs(F) <= fmax) {
+    /* friction brings it to rest inside this step: stop exactly */
+    const tStop = Math.abs(b.v / a);
+    b.x += b.v * tStop / 2; b.v = 0; b.a = a; b.fr = fr; b.t += dt; return b;
+  }
+  b.x += (b.v + v1) / 2 * dt; b.v = v1; b.a = a; b.fr = fr; b.t += dt;
+  return b;
+}
+/* A push of F newtons for tPush seconds, then let go: how far does it go, and for how long? */
+function boxPush(F, mu, tPush = 0.3){
+  const b = {x: 0, v: 0, a: 0, fr: 0, t: 0}, dt = 1 / 1000;
+  let moving = false;
+  for (let i = 0; i < 200000; i++) {
+    boxStep(b, dt, b.t < tPush ? F : 0, mu);
+    if (Math.abs(b.v) > 0) moving = true;
+    if (b.t > tPush && b.v === 0) break;
+  }
+  return {dist: b.x, time: moving ? b.t : 0};
+}
+/* MODEL:end */
+
+/* ---- state: plain data --------------------------------------------------- */
+const BOOK_Y = [120, 90, 90, 150, 120, 150];     // Table 8.3: 20, 15, 15, 25, 20, 25 km in each 10 min
+const S = {
+  tab: 'pend', locked: false,
+  pend: {L: 100, amp: 10, m: 0.05, fast: false, running: false, sim: null, rows: [], seed: 11},
+  train: {X: [120, 120, 120, 120, 120, 120], Y: BOOK_Y.slice(), t: 0, running: false, done: false, runs: 0},
+  box: {surface: 'wood', mode: 'push', F: 10, pullL: 0, pullR: 0, b: {x: 0.6, v: 0, a: 0, fr: 0, t: 0}, pushing: 0, run: null,
+        runs: [], trace: [], restT: 0, virtual: 0},
+};
+const shared = sharedState();
+if (shared) {
+  if (shared.tab && ['pend', 'train', 'box'].includes(shared.tab)) S.tab = shared.tab;
+  if (shared.L) S.pend.L = clamp(+shared.L, 20, 150);
+  if (shared.m) S.pend.m = [0.05, 0.2, 0.5].includes(+shared.m) ? +shared.m : 0.05;
+  if (Array.isArray(shared.X) && shared.X.length === 6) S.train.X = shared.X.map(v => clamp(Math.round(+v / 15) * 15, 0, 180));
+  if (Array.isArray(shared.Y) && shared.Y.length === 6) S.train.Y = shared.Y.map(v => clamp(Math.round(+v / 15) * 15, 0, 180));
+  if (SURF[shared.surface]) S.box.surface = shared.surface;
+}
+shareState(() => ({tab: S.tab, L: S.pend.L, m: S.pend.m, X: S.train.X, Y: S.train.Y, surface: S.box.surface}));
+
+/* ============================================================================
+   The stage: three scenes, drawn once, then patched.
+   ============================================================================ */
+const svg = $('stage');
+const NS = 'http://www.w3.org/2000/svg';
+const set = (id, attrs) => { const el = $(id); for (const k in attrs) el.setAttribute(k, attrs[k]); return el; };
+const PIV = {x: 290, y: 64}, PXCM = 3.05;             // pendulum pivot, px per cm
+const TL = {x: 620, y: 384, w: 330, h: 180};           // period–length graph
+const TR = {x0: 70, x1: 940, y: 88, kmMax: 180};       // track
+const BARS = {X: {x: 70, y: 240, w: 380, h: 130}, Y: {x: 70, y: 430, w: 380, h: 130}};
+const DT = {x: 560, y: 230, w: 390, h: 330};           // distance–time graph
+const FL = {x0: 70, x1: 930, y: 196, m: 6};            // floor, metres shown
+const VT = {x: 110, y: 318, w: 800, h: 240};           // box speed–time graph
+const fx = m => FL.x0 + m / FL.m * (FL.x1 - FL.x0);
+const tx = km => TR.x0 + km / TR.kmMax * (TR.x1 - TR.x0);
+
+function build(){
+  const bars = key => {
+    const B = BARS[key], col = key === 'X' ? '#2f7de1' : '#e8890c';
+    let s = `<text x="${B.x}" y="${B.y - 14}" font-size="13" font-weight="700" fill="${col}">TRAIN ${key} · SPEED PLAN</text>
+      <line x1="${B.x}" y1="${B.y + B.h}" x2="${B.x + B.w}" y2="${B.y + B.h}" stroke="#9aa39a"/>`;
+    for (const v of [60, 120, 180]) {
+      const y = B.y + B.h - v / 180 * B.h;
+      s += `<line x1="${B.x}" y1="${y}" x2="${B.x + B.w}" y2="${y}" stroke="#e6e3d8"/><text x="${B.x - 6}" y="${y + 4}" font-size="10.5" fill="#7c878c" text-anchor="end">${v}</text>`;
+    }
+    for (let i = 0; i < 6; i++) {
+      const bx = B.x + 8 + i * (B.w / 6);
+      s += `<rect id="bar${key}${i}" x="${bx}" width="${B.w / 6 - 16}" rx="3" fill="${col}" opacity=".85"/>
+        <text id="barT${key}${i}" x="${bx + (B.w / 6 - 16) / 2}" font-size="11" font-weight="700" fill="#1d2327" text-anchor="middle"></text>
+        <text x="${bx + (B.w / 6 - 16) / 2}" y="${B.y + B.h + 14}" font-size="10.5" fill="#7c878c" text-anchor="middle">10:${i}0</text>`;
+    }
+    s += `<text x="${B.x + B.w}" y="${B.y - 14}" font-size="11" fill="#7c878c" text-anchor="end">speed in km/h</text>`;
+    for (let i = 0; i < 6; i++) {
+      const bx = B.x + i * (B.w / 6);
+      s += `<rect class="hit" id="hit${key}${i}" data-k="${key}" data-i="${i}" x="${bx}" y="${B.y - 6}" width="${B.w / 6}" height="${B.h + 12}" fill="transparent" tabindex="0" role="slider" aria-label="Train ${key}, speed from 10:${i}0"/>`;
+    }
+    return s;
+  };
+  let trackTicks = '';
+  for (let km = 0; km <= 180; km += 20) trackTicks += `<line x1="${tx(km)}" y1="${TR.y + 50}" x2="${tx(km)}" y2="${TR.y + 58}" stroke="#7c878c"/><text x="${tx(km)}" y="${TR.y + 72}" font-size="11" fill="#5b666b" text-anchor="middle">${km}</text>`;
+  let dtAx = '';
+  for (let km = 0; km <= 180; km += 30) {
+    const y = DT.y + DT.h - km / 180 * DT.h;
+    dtAx += `<line x1="${DT.x}" y1="${y}" x2="${DT.x + DT.w}" y2="${y}" stroke="#ece9df"/><text x="${DT.x - 6}" y="${y + 4}" font-size="11" fill="#7c878c" text-anchor="end">${km}</text>`;
+  }
+  for (let m = 0; m <= 60; m += 10) {
+    const x = DT.x + m / 60 * DT.w;
+    dtAx += `<line x1="${x}" y1="${DT.y}" x2="${x}" y2="${DT.y + DT.h}" stroke="#ece9df"/><text x="${x}" y="${DT.y + DT.h + 16}" font-size="11" fill="#7c878c" text-anchor="middle">${m === 60 ? '11:00' : '10:' + String(m).padStart(2, '0')}</text>`;
+  }
+  let floorTicks = '';
+  for (let m = 0; m <= FL.m; m += 0.5) floorTicks += `<line x1="${fx(m)}" y1="${FL.y + 14}" x2="${fx(m)}" y2="${FL.y + (m % 1 ? 20 : 26)}" stroke="#5b666b"/>` + (m % 1 ? '' : `<text x="${fx(m)}" y="${FL.y + 40}" font-size="11.5" fill="#4a555b" text-anchor="middle">${m} m</text>`);
+  let vtAx = '';
+  for (let v = 0; v <= 6; v += 1) { const y = VT.y + VT.h - v / 6 * VT.h; vtAx += `<line x1="${VT.x}" y1="${y}" x2="${VT.x + VT.w}" y2="${y}" stroke="#ece9df"/><text x="${VT.x - 8}" y="${y + 4}" font-size="11" fill="#7c878c" text-anchor="end">${v}</text>`; }
+  let tlAx = '';
+  for (let T = 0; T <= 3; T += 0.5) { const y = TL.y + TL.h - T / 3 * TL.h; tlAx += `<line x1="${TL.x}" y1="${y}" x2="${TL.x + TL.w}" y2="${y}" stroke="#ece9df"/><text x="${TL.x - 6}" y="${y + 4}" font-size="11" fill="#7c878c" text-anchor="end">${T}</text>`; }
+  for (let L = 0; L <= 150; L += 50) { const x = TL.x + L / 150 * TL.w; tlAx += `<text x="${x}" y="${TL.y + TL.h + 16}" font-size="11" fill="#7c878c" text-anchor="middle">${L}</text>`; }
+
+  svg.innerHTML = `
+  <defs>
+    <radialGradient id="gBob" cx="35%" cy="32%"><stop offset="0" stop-color="#e8eef2"/><stop offset=".55" stop-color="#8d9aa3"/><stop offset="1" stop-color="#4b565d"/></radialGradient>
+    <radialGradient id="gStone" cx="35%" cy="32%"><stop offset="0" stop-color="#d9cfc0"/><stop offset="1" stop-color="#7b6d5b"/></radialGradient>
+    <linearGradient id="gWood" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#b7834c"/><stop offset="1" stop-color="#8a5d31"/></linearGradient>
+    <marker id="arrG" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#2f9e5b"/></marker>
+    <marker id="arrR" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#d6453d"/></marker>
+    <marker id="arrB" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#3057c9"/></marker>
+    <marker id="arrP" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#7b5cd6"/></marker>
+    <marker id="arrK" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#1d2327"/></marker>
+  </defs>
+  <rect x="0" y="0" width="1000" height="620" fill="#fbfaf5"/>
+
+  <!-- ===== pendulum ===== -->
+  <g id="scPend">
+    <rect x="0" y="0" width="580" height="620" fill="#f1efe6"/>
+    <rect x="${PIV.x - 150}" y="${PIV.y - 26}" width="300" height="22" rx="4" fill="url(#gWood)"/>
+    <text x="24" y="32" font-size="13" font-weight="700" fill="#4a555b" letter-spacing=".06em">A SIMPLE PENDULUM</text>
+    <path id="arcPath" fill="none" stroke="#b9b39f" stroke-width="1.2" stroke-dasharray="3 5"/>
+    <line id="meanLine" stroke="#c9c3ae" stroke-dasharray="4 6"/>
+    <g id="markO"><text id="labO" font-size="13" font-weight="700" fill="#7c878c" text-anchor="middle">O</text></g>
+    <text id="labA" font-size="13" font-weight="700" fill="#2f9e5b" text-anchor="middle">A</text>
+    <text id="labB" font-size="13" font-weight="700" fill="#7c878c" text-anchor="middle">B</text>
+    <line id="string" x1="${PIV.x}" y1="${PIV.y}" stroke="#3a3a3a" stroke-width="1.6"/>
+    <circle cx="${PIV.x}" cy="${PIV.y}" r="4" fill="#3a3a3a"/>
+    <circle id="bob" r="12" fill="url(#gBob)" stroke="#39434a" stroke-width="1"/>
+    <text id="lenLab" font-size="12" fill="#5b666b" font-weight="600"></text>
+
+    <!-- stopwatch -->
+    <g transform="translate(785 146)">
+      <rect x="-60" y="-118" width="120" height="16" rx="5" fill="#8d9aa3"/>
+      <circle r="102" fill="#ffffff" stroke="#39434a" stroke-width="5"/>
+      <g id="swTicks"></g>
+      <line id="swHand" x1="0" y1="10" x2="0" y2="-84" stroke="#d6453d" stroke-width="3" stroke-linecap="round"/>
+      <circle r="6" fill="#d6453d"/>
+      <text id="swRead" y="134" font-size="24" font-weight="600" text-anchor="middle" class="m" fill="#1d2327">0.00 s</text>
+      <text id="swOsc" y="156" font-size="12.5" text-anchor="middle" fill="#4a555b">oscillations: 0 of 10</text>
+    </g>
+    <text x="${TL.x - 34}" y="${TL.y - 34}" font-size="13" font-weight="700" fill="#4a555b" letter-spacing=".06em">TIME PERIOD AGAINST LENGTH</text>
+    ${tlAx}
+    <line x1="${TL.x}" y1="${TL.y + TL.h}" x2="${TL.x + TL.w}" y2="${TL.y + TL.h}" stroke="#9aa39a"/>
+    <line x1="${TL.x}" y1="${TL.y}" x2="${TL.x}" y2="${TL.y + TL.h}" stroke="#9aa39a"/>
+    <text x="${TL.x + TL.w}" y="${TL.y + TL.h + 34}" font-size="11.5" fill="#4a555b" text-anchor="end">length of string (cm)</text>
+    <text x="${TL.x - 34}" y="${TL.y - 12}" font-size="11.5" fill="#4a555b">period (s)</text>
+    <path id="tlCurve" fill="none" stroke="#1f8a70" stroke-width="1.5" stroke-dasharray="5 5" opacity="0"/>
+    <g id="tlPts"></g>
+    <g font-size="11.5" transform="translate(${TL.x + TL.w - 168} ${TL.y + TL.h - 14})">
+      <circle cx="4" cy="0" r="4.5" fill="#a58b62"/><text x="12" y="4" fill="#4a555b">50 g</text>
+      <circle cx="58" cy="0" r="4.5" fill="#3f7fd8"/><text x="66" y="4" fill="#4a555b">200 g</text>
+      <circle cx="118" cy="0" r="4.5" fill="#39434a"/><text x="126" y="4" fill="#4a555b">500 g</text>
+    </g>
+  </g>
+
+  <!-- ===== trains ===== -->
+  <g id="scTrain" style="display:none">
+    <text x="24" y="32" font-size="13" font-weight="700" fill="#4a555b" letter-spacing=".06em">A STRAIGHT TRACK</text>
+    <text id="clock" x="940" y="34" font-size="22" font-weight="600" text-anchor="end" fill="#1d2327" class="m">10:00 AM</text>
+    ${[9, 39].map(y => `<g>${Array.from({length: 60}, (_, i) => `<rect x="${TR.x0 - 6 + i * 14.8}" y="${TR.y + y - 5}" width="5" height="11" fill="#8a7a66"/>`).join('')}</g>
+    <line x1="${TR.x0 - 10}" y1="${TR.y + y - 3}" x2="${TR.x1 + 10}" y2="${TR.y + y - 3}" stroke="#555" stroke-width="1.6"/>
+    <line x1="${TR.x0 - 10}" y1="${TR.y + y + 3}" x2="${TR.x1 + 10}" y2="${TR.y + y + 3}" stroke="#555" stroke-width="1.6"/>`).join('')}
+    ${trackTicks}
+    <text x="${TR.x1 + 16}" y="${TR.y + 72}" font-size="11" fill="#5b666b">km</text>
+    <g id="trainX"><rect x="-58" y="-18" width="58" height="18" rx="5" fill="#2f7de1"/><rect x="-50" y="-14" width="10" height="7" rx="1.5" fill="#dbe9fb"/><rect x="-34" y="-14" width="10" height="7" rx="1.5" fill="#dbe9fb"/><rect x="-18" y="-14" width="10" height="7" rx="1.5" fill="#dbe9fb"/><text x="-64" y="-4" font-size="13" font-weight="700" fill="#2f7de1" text-anchor="end">X</text></g>
+    <g id="trainY"><rect x="-58" y="-18" width="58" height="18" rx="5" fill="#e8890c"/><rect x="-50" y="-14" width="10" height="7" rx="1.5" fill="#fff1d9"/><rect x="-34" y="-14" width="10" height="7" rx="1.5" fill="#fff1d9"/><rect x="-18" y="-14" width="10" height="7" rx="1.5" fill="#fff1d9"/><text x="-64" y="-4" font-size="13" font-weight="700" fill="#b86500" text-anchor="end">Y</text></g>
+    ${bars('X')}
+    ${bars('Y')}
+    <text x="${DT.x}" y="${DT.y - 14}" font-size="13" font-weight="700" fill="#4a555b" letter-spacing=".06em">DISTANCE AGAINST TIME</text>
+    ${dtAx}
+    <line x1="${DT.x}" y1="${DT.y + DT.h}" x2="${DT.x + DT.w}" y2="${DT.y + DT.h}" stroke="#9aa39a"/>
+    <line x1="${DT.x}" y1="${DT.y}" x2="${DT.x}" y2="${DT.y + DT.h}" stroke="#9aa39a"/>
+    <text x="${DT.x - 8}" y="${DT.y - 14}" font-size="11" fill="#7c878c" text-anchor="end">km</text>
+    <path id="dtX" fill="none" stroke="#2f7de1" stroke-width="3" stroke-linejoin="round"/>
+    <path id="dtY" fill="none" stroke="#e8890c" stroke-width="3" stroke-linejoin="round"/>
+    <g id="dtPts"></g>
+  </g>
+
+  <!-- ===== box ===== -->
+  <g id="scBox" style="display:none">
+    <text x="24" y="32" font-size="13" font-weight="700" fill="#4a555b" letter-spacing=".06em">A BOX ON THE FLOOR · MASS 1 kg</text>
+    <rect id="floor" x="${FL.x0 - 30}" y="${FL.y}" width="${FL.x1 - FL.x0 + 60}" height="14" fill="#d8b07a"/>
+    <g id="floorDots"></g>
+    <rect x="${FL.x0 - 30}" y="${FL.y + 14}" width="${FL.x1 - FL.x0 + 60}" height="34" fill="#f1efe6"/>
+    ${floorTicks}
+    <line id="startMark" y1="${FL.y - 70}" y2="${FL.y}" stroke="#7c878c" stroke-dasharray="3 4"/>
+    <g id="boxG">
+      <rect x="-34" y="-56" width="68" height="56" rx="5" fill="#c98a4b" stroke="#8a5d31" stroke-width="2"/>
+      <line x1="-34" y1="-30" x2="34" y2="-30" stroke="#8a5d31" stroke-width="1.5"/>
+      <text x="0" y="-38" font-size="11" font-weight="700" fill="#5a3a18" text-anchor="middle">1 kg</text>
+    </g>
+    <g id="handG" opacity="0"><path d="M-30 -36 h20 a8 8 0 0 1 8 8 v8 a8 8 0 0 1 -8 8 h-20z" fill="#e7b48a" stroke="#b07a52"/><rect x="-70" y="-30" width="42" height="16" rx="6" fill="#e7b48a" stroke="#b07a52"/></g>
+    <line id="arPush" stroke="#2f9e5b" stroke-width="5" marker-end="url(#arrG)"/>
+    <text id="labPush" font-size="12.5" font-weight="700" fill="#1e7a45" text-anchor="middle"></text>
+    <line id="arFric" stroke="#d6453d" stroke-width="5" marker-end="url(#arrR)"/>
+    <text id="labFric" font-size="12.5" font-weight="700" fill="#b0302a" text-anchor="middle"></text>
+    <line id="arL" stroke="#3057c9" stroke-width="5" marker-end="url(#arrB)"/>
+    <text id="labL" font-size="12.5" font-weight="700" fill="#3057c9" text-anchor="middle"></text>
+    <line id="arR" stroke="#7b5cd6" stroke-width="5" marker-end="url(#arrP)"/>
+    <text id="labR" font-size="12.5" font-weight="700" fill="#6446b8" text-anchor="middle"></text>
+    <line id="arNet" stroke="#1d2327" stroke-width="3" marker-end="url(#arrK)"/>
+    <text id="labNet" font-size="12.5" font-weight="700" fill="#1d2327" text-anchor="middle"></text>
+    <text id="offEdge" x="${FL.x1 + 6}" y="${FL.y - 70}" font-size="13" font-weight="700" fill="#1d6fa5" text-anchor="end"></text>
+    <text id="boxRead" x="${FL.x0}" y="${FL.y + 76}" font-size="14" font-weight="600" fill="#1d2327"></text>
+    <text x="${VT.x}" y="${VT.y - 16}" font-size="13" font-weight="700" fill="#4a555b" letter-spacing=".06em">SPEED AGAINST TIME</text>
+    ${vtAx}
+    <line x1="${VT.x}" y1="${VT.y + VT.h}" x2="${VT.x + VT.w}" y2="${VT.y + VT.h}" stroke="#9aa39a"/>
+    <line x1="${VT.x}" y1="${VT.y}" x2="${VT.x}" y2="${VT.y + VT.h}" stroke="#9aa39a"/>
+    <text x="${VT.x - 8}" y="${VT.y - 16}" font-size="10.5" fill="#7c878c" text-anchor="end">m/s</text><g id="vtTicks"></g>
+    <path id="vtPrev" fill="none" stroke="#b7bdb3" stroke-width="2"/>
+    <path id="vtNow" fill="none" stroke="#c0392b" stroke-width="3" stroke-linejoin="round"/>
+    <text id="vtNote" x="${VT.x + VT.w}" y="${VT.y + 14}" font-size="12" fill="#7c878c" text-anchor="end"></text>
+  </g>`;
+  let ticks = '';
+  for (let i = 0; i < 60; i++) { const a = i / 60 * 2 * Math.PI, r0 = i % 5 ? 90 : 82; ticks += `<line x1="${(Math.sin(a) * r0).toFixed(1)}" y1="${(-Math.cos(a) * r0).toFixed(1)}" x2="${(Math.sin(a) * 96).toFixed(1)}" y2="${(-Math.cos(a) * 96).toFixed(1)}" stroke="#39434a" stroke-width="${i % 5 ? 1 : 2}"/>`; }
+  for (let i = 0; i < 12; i++) { const a = i / 12 * 2 * Math.PI; ticks += `<text x="${(Math.sin(a) * 68).toFixed(1)}" y="${(-Math.cos(a) * 68 + 4).toFixed(1)}" font-size="11" text-anchor="middle" fill="#4a555b">${i * 5}</text>`; }
+  $('swTicks').innerHTML = ticks;
+}
+
+/* ============================================================================
+   Pendulum
+   ============================================================================ */
+const BOBS = {0.05: {name: 'stone, 50 g', r: 10, fill: 'url(#gStone)', col: '#a58b62'}, 0.2: {name: 'ball, 200 g', r: 14, fill: 'url(#gBob)', col: '#3f7fd8'}, 0.5: {name: 'iron ball, 500 g', r: 19, fill: 'url(#gBob)', col: '#39434a'}};
+function paintPend(){
+  const P = S.pend, sim = P.sim;
+  const th = sim ? sim.th : P.amp * Math.PI / 180;   // at rest, held at A, ready to let go
+  const Lp = P.L * PXCM;
+  const bx = PIV.x + Lp * Math.sin(th), by = PIV.y + Lp * Math.cos(th);
+  set('string', {x2: bx.toFixed(1), y2: by.toFixed(1)});
+  const B = BOBS[P.m];
+  set('bob', {cx: bx.toFixed(1), cy: by.toFixed(1), r: B.r, fill: B.fill});
+  const a = P.amp * Math.PI / 180;
+  const ax = PIV.x + Lp * Math.sin(a), ay = PIV.y + Lp * Math.cos(a);
+  set('arcPath', {d: `M${(PIV.x - Lp * Math.sin(a)).toFixed(1)} ${ay.toFixed(1)} A${Lp} ${Lp} 0 0 0 ${ax.toFixed(1)} ${ay.toFixed(1)}`});
+  set('meanLine', {x1: PIV.x, y1: PIV.y, x2: PIV.x, y2: PIV.y + Lp + 30});
+  set('labO', {x: PIV.x, y: PIV.y + Lp + 44});
+  set('labA', {x: (ax + 20).toFixed(1), y: (ay + 26).toFixed(1)});
+  set('labB', {x: (2 * PIV.x - ax - 20).toFixed(1), y: (ay + 26).toFixed(1)});
+  set('lenLab', {x: PIV.x - 58, y: PIV.y + Lp / 2});
+  $('lenLab').textContent = P.L + ' cm';
+  const t = sim ? (sim.osc >= 10 ? sim.tA : sim.t) : 0;
+  set('swHand', {transform: `rotate(${(t % 60) * 6})`});
+  $('swRead').textContent = (sim && sim.osc >= 10 && P.rows.length ? P.rows[P.rows.length - 1].read : t).toFixed(2) + ' s';
+  $('swOsc').textContent = `oscillations: ${sim ? Math.min(10, sim.osc) : 0} of 10`;
+  /* period–length graph */
+  let pts = '';
+  for (const r of P.rows) {
+    const x = TL.x + r.L / 150 * TL.w, y = TL.y + TL.h - r.T / 3 * TL.h;
+    pts += `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="5" fill="${BOBS[r.m].col}" stroke="#fff" stroke-width="1.5"/>`;
+  }
+  $('tlPts').innerHTML = pts;
+  if (found('longer')) {
+    let d = '';
+    for (let L = 10; L <= 150; L += 5) d += (L === 10 ? 'M' : 'L') + (TL.x + L / 150 * TL.w).toFixed(1) + ' ' + (TL.y + TL.h - (2 * Math.PI * Math.sqrt(L / 100 / G)) / 3 * TL.h).toFixed(1);
+    set('tlCurve', {d, opacity: 1});
+  }
+  $('len').value = P.L; $('lenOut').textContent = P.L + ' cm';
+  $('amp').value = P.amp; $('ampOut').textContent = P.amp + '°';
+  document.querySelectorAll('#bobSeg button').forEach(b => b.setAttribute('aria-pressed', +b.dataset.bob === P.m));
+  $('btnRelease').textContent = P.running ? 'Swinging… (stop)' : 'Release and time 10 oscillations';
+  $('btnFast').setAttribute('aria-pressed', P.fast);
+  for (const id of ['len', 'amp']) $(id).disabled = !S.locked || P.running;
+  document.querySelectorAll('#bobSeg button').forEach(b => b.disabled = !S.locked || P.running);
+}
+function pendTable(){
+  const P = S.pend;
+  if (!P.rows.length) { $('pendTable').innerHTML = '<p class="empty">Your readings will appear here.</p>'; return; }
+  $('pendTable').innerHTML = `<table class="log"><tr><th>#</th><th>Length</th><th>Bob</th><th>10 oscillations</th><th>Period</th></tr>` +
+    P.rows.slice(-7).map((r, i, a) => `<tr${i === a.length - 1 ? ' class="new"' : ''}><td>${r.n}</td><td>${r.L} cm</td><td>${r.m * 1000} g</td><td>${r.read.toFixed(2)} s</td><td><b>${r.T.toFixed(2)} s</b></td></tr>`).join('') + '</table>';
+}
+function releasePend(){
+  const P = S.pend;
+  if (P.running) { P.running = false; P.sim = null; paintAll(); return; }
+  P.sim = pendNew(P.amp); P.running = true;
+  sound('tick'); track('release', {L: P.L, m: P.m, amp: P.amp});
+  if (reduced()) { while (P.sim.osc < 10) pendStep(P.sim, PEND_DT, P.L / 100, P.m); finishPend(); }
+  paintAll();
+}
+function finishPend(){
+  const P = S.pend, sim = P.sim;
+  P.running = false;
+  /* the stopwatch is started and stopped by a human thumb: a small random error each time */
+  const rnd = Play.mulberry32(P.seed++ * 7919);
+  const err = (rnd() - 0.5) * 0.3;
+  const read = Math.max(0, sim.tA + err);
+  const row = {n: P.rows.length + 1, L: P.L, m: P.m, amp: P.amp, read, T: read / 10, Ttrue: sim.tA / 10};
+  P.rows.push(row);
+  sim.th = P.amp * Math.PI / 180; sim.w = 0;          // it is back at A
+  sound('chime');
+  track('timed', {L: row.L, m: row.m, T: +row.T.toFixed(3)});
+  pendTable();
+  checkPend();
+}
+function checkPend(){
+  const R = S.pend.rows;
+  for (let i = 0; i < R.length; i++) for (let j = i + 1; j < R.length; j++) {
+    if (R[i].L === R[j].L && Math.abs(R[i].T - R[j].T) < 0.035) {
+      discover('same');
+      if (R[i].m !== R[j].m) discover('mass');
+    }
+  }
+  const byL = {};
+  for (const r of R) (byL[r.L] = byL[r.L] || []).push(r.T);
+  const Ls = Object.keys(byL).map(Number).sort((a, b) => a - b);
+  if (Ls.length >= 3) {
+    const mean = L => byL[L].reduce((a, b) => a + b, 0) / byL[L].length;
+    let inc = true; for (let i = 1; i < Ls.length; i++) if (mean(Ls[i]) <= mean(Ls[i - 1])) inc = false;
+    if (inc && Ls[Ls.length - 1] - Ls[0] >= 40) discover('longer');
+  }
+  maybeExplain();
+}
+
+/* ============================================================================
+   Trains
+   ============================================================================ */
+function paintTrain(){
+  const T = S.train;
+  for (const k of ['X', 'Y']) {
+    const B = BARS[k], sp = T[k];
+    for (let i = 0; i < 6; i++) {
+      const h = sp[i] / 180 * B.h;
+      set('bar' + k + i, {y: (B.y + B.h - h).toFixed(1), height: Math.max(0.5, h).toFixed(1)});
+      set('barT' + k + i, {y: (B.y + B.h - h - 5).toFixed(1)});
+      $('barT' + k + i).textContent = sp[i];
+    }
+    const x = trainPosAt(sp, T.t);
+    set('train' + k, {transform: `translate(${tx(x).toFixed(1)} ${TR.y + (k === 'X' ? 6 : 36)})`});
+  }
+  const mins = Math.floor(T.t + 1e-9);
+  $('clock').textContent = (T.t >= 60 ? '11:00' : '10:' + String(mins).padStart(2, '0')) + ' AM';
+  for (const k of ['X', 'Y']) {
+    let d = '';
+    const pos = trainRun(T[k]);
+    for (let m = 0; m <= Math.min(60, T.t); m += 0.5) {
+      const x = m === Math.floor(m) ? pos[m] : trainPosAt(T[k], m);
+      d += (m === 0 ? 'M' : 'L') + (DT.x + m / 60 * DT.w).toFixed(1) + ' ' + (DT.y + DT.h - x / 180 * DT.h).toFixed(1);
+    }
+    if (T.t > 0 && T.t % 0.5) d += 'L' + (DT.x + T.t / 60 * DT.w).toFixed(1) + ' ' + (DT.y + DT.h - trainPosAt(T[k], T.t) / 180 * DT.h).toFixed(1);
+    $('dt' + k).setAttribute('d', T.t > 0 ? d : '');
+  }
+  let pts = '';
+  for (let m = 0; m <= Math.min(60, T.t + 1e-9); m += 10) for (const k of ['X', 'Y']) {
+    const x = trainPosAt(T[k], m);
+    pts += `<circle cx="${(DT.x + m / 60 * DT.w).toFixed(1)}" cy="${(DT.y + DT.h - x / 180 * DT.h).toFixed(1)}" r="4.5" fill="${k === 'X' ? '#2f7de1' : '#e8890c'}" stroke="#fff" stroke-width="1.5"/>`;
+  }
+  $('dtPts').innerHTML = T.t > 0 ? pts : '';
+  $('btnRun').textContent = T.running ? '❚❚ Pause' : (T.done ? '↺ Run again' : '▶ Run the trains');
+  $('btnBook').disabled = !S.locked || T.running;
+  $('btnRun').disabled = !S.locked;
+}
+function trainTable(){
+  const T = S.train;
+  if (T.t <= 0) { $('trainTable').innerHTML = '<p class="empty">Run the trains to fill the table.</p>'; return; }
+  let rows = '';
+  for (let m = 0; m <= Math.min(60, T.t + 1e-9); m += 10) {
+    const xp = trainPosAt(T.X, m), yp = trainPosAt(T.Y, m);
+    const xd = m ? xp - trainPosAt(T.X, m - 10) : 0, yd = m ? yp - trainPosAt(T.Y, m - 10) : 0;
+    rows += `<tr><td>${m === 60 ? '11:00' : '10:' + String(m).padStart(2, '0')}</td><td>${fmt(xp, 0)}</td><td>${fmt(xd, 0)}</td><td>${fmt(yp, 0)}</td><td>${fmt(yd, 0)}</td></tr>`;
+  }
+  let foot = '';
+  if (T.done) {
+    const ax = trainPosAt(T.X, 60), ay = trainPosAt(T.Y, 60);
+    foot = `<p style="font-size:12.5px;margin:8px 0 0">Average speed = total distance ÷ total time: X ${fmt(ax, 0)} km ÷ 1 h = <b>${fmt(ax, 0)} km/h</b> (${fmt(ax / 3.6, 1)} m/s); Y ${fmt(ay, 0)} km ÷ 1 h = <b>${fmt(ay, 0)} km/h</b> (${fmt(ay / 3.6, 1)} m/s).</p>`;
+  }
+  $('trainTable').innerHTML = `<table class="log"><tr><th>Time</th><th>X at (km)</th><th>X moved</th><th>Y at (km)</th><th>Y moved</th></tr>${rows}</table>${foot}`;
+}
+function runTrains(){
+  const T = S.train;
+  if (T.running) { T.running = false; paintAll(); return; }
+  if (T.done || T.t >= 60) { T.t = 0; T.done = false; }
+  T.running = true; T.runs++;
+  sound('whoosh'); track('runTrains', {X: T.X.slice(), Y: T.Y.slice()});
+  if (reduced()) { T.t = 60; endTrains(); }
+  paintAll();
+}
+function endTrains(){
+  const T = S.train;
+  T.t = 60; T.running = false; T.done = true;
+  sound('chime');
+  const legs = k => [0, 1, 2, 3, 4, 5].map(i => trainPosAt(T[k], (i + 1) * 10) - trainPosAt(T[k], i * 10));
+  let nonU = false;
+  for (const k of ['X', 'Y']) {
+    const L = legs(k);
+    const uni = L.every(d => Math.abs(d - L[0]) < 1e-6);
+    if (uni && L[0] > 0) discover('uniform');
+    if (!uni) { discover('nonuniform'); nonU = true; }
+    if (T[k].some(v => v === 0) && L.some(d => d > 0)) discover('rest');
+  }
+  if (nonU && Math.abs(trainPosAt(T.X, 60) - trainPosAt(T.Y, 60)) < 1e-6 && trainPosAt(T.X, 60) > 0) discover('sameavg');
+  trainTable();
+}
+/* drag the bars */
+function wireBars(){
+  for (const k of ['X', 'Y']) for (let i = 0; i < 6; i++) {
+    const hit = $('hit' + k + i), B = BARS[k];
+    const setFrom = p => {
+      if (!S.locked || S.train.running) return;
+      const v = clamp(Math.round((B.y + B.h - p.y) / B.h * 180 / 15) * 15, 0, 180);
+      if (v !== S.train[k][i]) { S.train[k][i] = v; S.train.t = 0; S.train.done = false; sound('tick'); trainTable(); paintAll(); }
+    };
+    drag(hit, svg, {start(p){ if (!S.locked || S.train.running) return false; setFrom(p); }, move: setFrom, end(){ track('speedPlan', {train: k, i, v: S.train[k][i]}); }});
+    hit.addEventListener('keydown', e => {
+      const d = {ArrowUp: 15, ArrowRight: 15, ArrowDown: -15, ArrowLeft: -15}[e.key];
+      if (!d || !S.locked || S.train.running) return;
+      e.preventDefault(); S.train[k][i] = clamp(S.train[k][i] + d, 0, 180); S.train.t = 0; S.train.done = false; trainTable(); paintAll();
+    });
+  }
+}
+
+/* ============================================================================
+   Box
+   ============================================================================ */
+function boxForces(){
+  const X = S.box;
+  if (X.mode === 'tug') return X.pullR - X.pullL;
+  return X.pushing > 0 ? X.F : 0;
+}
+function paintBox(){
+  const X = S.box, b = X.b, sf = SURF[X.surface];
+  set('floor', {fill: sf.col});
+  const onFloor = b.x <= FL.m - 0.3;
+  const shown = clamp(b.x, 0.3, FL.m - 0.3);
+  const bx = fx(shown);
+  set('boxG', {transform: `translate(${bx.toFixed(1)} ${FL.y})`, opacity: onFloor || X.mode === 'tug' ? 1 : 0.25});
+  set('startMark', {x1: fx(X.run ? X.run.x0 : 0.6), x2: fx(X.run ? X.run.x0 : 0.6), opacity: X.mode === 'push' ? 1 : 0});
+  const F = boxForces();
+  const k = 9;                                   // px per newton
+  const arrow = (id, lab, x0, len, y, text, atTip) => {
+    if (Math.abs(len) < 0.05) { set(id, {x1: 0, y1: 0, x2: 0, y2: 0, opacity: 0}); $(lab).textContent = ''; return; }
+    set(id, {x1: x0.toFixed(1), y1: y, x2: (x0 + len * k).toFixed(1), y2: y, opacity: 1});
+    if (atTip) set(lab, {x: (x0 + len * k + (len < 0 ? -12 : 12)).toFixed(1), y: y + 4, 'text-anchor': len < 0 ? 'end' : 'start'});
+    else set(lab, {x: (x0 + len * k / 2).toFixed(1), y: y - 9, 'text-anchor': 'middle'});
+    $(lab).textContent = text;
+  };
+  const show = onFloor || X.mode === 'tug';
+  if (X.mode === 'push') {
+    arrow('arPush', 'labPush', bx - 34 - X.F * k - 4, X.pushing > 0 && show ? X.F : 0, FL.y - 28, `push ${X.F} N`);
+    set('handG', {transform: `translate(${(bx - 34).toFixed(1)} ${FL.y})`, opacity: X.pushing > 0 ? 1 : 0});
+    arrow('arL', 'labL', 0, 0, 0, ''); arrow('arR', 'labR', 0, 0, 0, '');
+  } else {
+    set('handG', {opacity: 0});
+    arrow('arPush', 'labPush', 0, 0, 0, '');
+    arrow('arL', 'labL', bx - 34, -X.pullL, FL.y - 40, X.pullL ? `pull ${X.pullL} N` : '');
+    arrow('arR', 'labR', bx + 34, X.pullR, FL.y - 40, X.pullR ? `pull ${X.pullR} N` : '');
+  }
+  arrow('arFric', 'labFric', bx + (b.fr < 0 ? -36 : 36), show ? b.fr : 0, FL.y - 7, `friction ${fmt(Math.abs(b.fr), 1)} N`, true);
+  const net = F + b.fr;
+  arrow('arNet', 'labNet', bx, show && Math.abs(net) > 0.05 ? net : 0, FL.y - 100, `net force ${fmt(Math.abs(net), 1)} N`);
+  $('offEdge').textContent = !onFloor && X.mode === 'push' ? `→ still sliding: ${fmt(b.x - (X.run ? X.run.x0 : 0), 1)} m from the start` : '';
+  const moved = X.run ? b.x - X.run.x0 : 0;
+  $('boxRead').textContent = X.mode === 'push'
+    ? (X.run ? `Slid ${fmt(moved, 2)} m · speed ${fmt(Math.abs(b.v), 2)} m/s · time ${fmt(b.t, 2)} s` : 'Press “Push the box”.')
+    : `Box at ${fmt(b.x, 2)} m · speed ${fmt(Math.abs(b.v), 2)} m/s`;
+  /* speed–time trace */
+  const tEnd = tr => tr && tr.length ? tr[tr.length - 1][0] : 0;
+  const need = Math.max(tEnd(X.trace), tEnd(X.prevTrace));
+  const tmax = need <= 4 ? 4 : need <= 8 ? 8 : need <= 16 ? 16 : 32;
+  if (tmax !== X.tmax) {
+    X.tmax = tmax;
+    const st = tmax / 8;
+    let ax = '';
+    for (let t = 0; t <= tmax + 1e-9; t += st) ax += `<text x="${(VT.x + t / tmax * VT.w).toFixed(1)}" y="${VT.y + VT.h + 16}" font-size="11" fill="#7c878c" text-anchor="middle">${t} s</text>`;
+    $('vtTicks').innerHTML = ax;
+  }
+  const path = tr => tr.map((p, i) => (i ? 'L' : 'M') + (VT.x + clamp(p[0], 0, tmax) / tmax * VT.w).toFixed(1) + ' ' + (VT.y + VT.h - clamp(Math.abs(p[1]), 0, 6) / 6 * VT.h).toFixed(1)).join('');
+  $('vtNow').setAttribute('d', X.trace.length > 1 ? path(X.trace) : '');
+  $('vtPrev').setAttribute('d', X.prevTrace && X.prevTrace.length > 1 ? path(X.prevTrace) : '');
+  $('vtNote').textContent = X.prevTrace && X.prevTrace.length > 1 ? 'grey: the run before' : '';
+  /* side */
+  $('surface').value = X.surface;
+  document.querySelectorAll('#modeSeg button').forEach(e => e.setAttribute('aria-pressed', e.dataset.mode === X.mode));
+  $('pushCtl').hidden = X.mode !== 'push'; $('tugCtl').hidden = X.mode !== 'tug';
+  $('push').value = X.F; $('pushOut').textContent = X.F + ' N';
+  $('pullL').value = X.pullL; $('pullLOut').textContent = X.pullL + ' N';
+  $('pullR').value = X.pullR; $('pullROut').textContent = X.pullR + ' N';
+  $('btnPush').disabled = !S.locked || !!(X.run && X.run.active);
+}
+let FLOOR_DOTS = '';
+function floorDots(){
+  const sf = SURF[S.box.surface], rnd = Play.mulberry32(5);
+  let s = '';
+  const n = Math.round(sf.mu * 260);
+  for (let i = 0; i < n; i++) s += `<circle cx="${(FL.x0 - 30 + rnd() * (FL.x1 - FL.x0 + 60)).toFixed(1)}" cy="${(FL.y + 2 + rnd() * 10).toFixed(1)}" r="${(0.8 + rnd() * 1.4).toFixed(1)}" fill="${sf.dot}"/>`;
+  if (S.box.surface === 'ice') s += Array.from({length: 14}, (_, i) => `<line x1="${FL.x0 + i * 64}" y1="${FL.y + 3}" x2="${FL.x0 + i * 64 + 26}" y2="${FL.y + 3}" stroke="#fff" stroke-width="2" opacity=".8"/>`).join('');
+  $('floorDots').innerHTML = s;
+}
+function pushBox(){
+  const X = S.box;
+  if (X.run && X.run.active) return;
+  X.prevTrace = X.trace.length ? X.trace : X.prevTrace;
+  X.b = {x: 0.6, v: 0, a: 0, fr: 0, t: 0};
+  X.run = {x0: 0.6, F: X.F, surface: X.surface, active: true};
+  X.pushing = 0.3; X.trace = [[0, 0]];
+  sound('pop'); track('push', {F: X.F, surface: X.surface});
+  if (reduced()) { while (X.run.active) stepBox(1 / 240); }
+  paintAll();
+}
+function stepBox(dt){
+  const X = S.box, sf = SURF[X.surface];
+  const sub = 8, h = dt / sub;
+  for (let i = 0; i < sub; i++) {
+    const F = boxForces();
+    boxStep(X.b, h, F, sf.mu);
+    if (X.pushing > 0) X.pushing = Math.max(0, X.pushing - h);
+    if (X.mode === 'tug') {
+      if (X.b.x < 0.3 || X.b.x > FL.m - 0.3) { X.b.x = clamp(X.b.x, 0.3, FL.m - 0.3); X.b.v = 0; }
+    }
+  }
+  if (X.mode === 'push' && X.run && X.run.active) {
+    const last = X.trace[X.trace.length - 1];
+    if (X.b.t - last[0] > 0.02) X.trace.push([X.b.t, X.b.v]);
+    if (X.pushing === 0 && X.b.v === 0) endPush();
+    else if (X.b.t > 60) endPush();
+  }
+  if (X.mode === 'tug') {
+    const last = X.trace[X.trace.length - 1];
+    if (!last) X.trace.push([0, X.b.v]);
+    else if (X.b.t - last[0] > 0.05 && X.b.t < 32) X.trace.push([X.b.t, X.b.v]);
+    checkTug(dt);
+  }
+}
+function endPush(){
+  const X = S.box, r = X.run;
+  r.active = false;
+  X.trace.push([X.b.t, 0]);
+  r.dist = X.b.x - r.x0; r.time = X.b.t;
+  X.runs.push({F: r.F, surface: r.surface, dist: r.dist, time: r.time});
+  track('slid', {F: r.F, surface: r.surface, dist: +r.dist.toFixed(3)});
+  boxTable();
+  if (r.dist > 0.02 && r.dist <= FL.m - 0.9) discover('friction');
+  if (r.surface === 'ice' && r.dist > FL.m - 0.9) discover('ice');
+  const R = X.runs;
+  for (let i = 0; i < R.length; i++) for (let j = 0; j < R.length; j++) {
+    if (i !== j && R[i].F === R[j].F && SURF[R[i].surface].mu < SURF[R[j].surface].mu && R[j].dist > 0.01 && R[i].dist > 1.5 * R[j].dist) discover('rough');
+  }
+}
+function boxTable(){
+  const R = S.box.runs;
+  if (!R.length) { $('boxTable').innerHTML = '<p class="empty">Push the box to record how far it slides.</p>'; return; }
+  $('boxTable').innerHTML = `<table class="log"><tr><th>Floor</th><th>Push</th><th>Slid</th><th>Time</th></tr>` +
+    R.slice(-7).map((r, i, a) => `<tr${i === a.length - 1 ? ' class="new"' : ''}><td>${SURF[r.surface].name}</td><td>${r.F} N</td><td><b>${r.dist > 0.005 ? fmt(r.dist, 2) + ' m' : 'did not move'}</b></td><td>${fmt(r.time, 2)} s</td></tr>`).join('') + '</table>';
+}
+function checkTug(dt){
+  const X = S.box;
+  if (X.pullL > 0 && X.pullL === X.pullR && X.b.v === 0) { X.restT += dt; if (X.restT > 0.6) discover('balanced'); }
+  else X.restT = 0;
+  if (X.pullL !== X.pullR && Math.abs(X.b.v) > 0.3 && Math.abs(X.b.a) > 0.05) discover('unbalanced');
+}
+
+/* ============================================================================
+   The narrator: what is happening now, in words from the model.
+   ============================================================================ */
+function paintWhy(){
+  if (!S.locked) return;
+  $('whyCard').hidden = false;
+  let h = '';
+  if (S.tab === 'pend') {
+    const P = S.pend, sim = P.sim;
+    const Tm = 2 * Math.PI * Math.sqrt(P.L / 100 / G);
+    if (P.running && sim) {
+      const deg = sim.th * 180 / Math.PI;
+      const where = Math.abs(deg) < 1.2 ? 'passing the mean position O, at its fastest' : deg > 0 ? (Math.abs(sim.w) < 0.05 ? 'at the extreme position A, stopped for an instant' : 'on the A side') : (Math.abs(sim.w) < 0.05 ? 'at the extreme position B, stopped for an instant' : 'on the B side');
+      h += `<p>The bob is <b>${where}</b>. The Earth’s pull keeps dragging it back towards O; it overshoots, and swings up the other side.</p>`;
+      h += `<p>Oscillations so far: <b>${sim.osc}</b>. Time: <b>${sim.t.toFixed(2)} s</b>.</p>`;
+    } else {
+      h += `<p>A <b>${P.L} cm</b> string with a <b>${BOBS[P.m].name}</b>, pulled aside <b>${P.amp}°</b> to A. Let go, and the stopwatch runs until the bob has come back to A ten times.</p>`;
+      if (P.rows.length) { const r = P.rows[P.rows.length - 1]; h += `<p>Last reading: 10 oscillations in <b>${r.read.toFixed(2)} s</b>, so one oscillation takes <b>${r.T.toFixed(2)} s</b>. Without the thumb’s error the model’s own clock says ${r.Ttrue.toFixed(3)} s.</p>`; }
+    }
+    if (found('longer')) h += `<p class="book">The dashed line is the model’s period for every length. A 4× longer string swings only 2× slower: at ${P.L} cm it is ${Tm.toFixed(2)} s.</p>`;
+  } else if (S.tab === 'train') {
+    const T = S.train, t = T.t;
+    const iv = Math.min(5, Math.floor(t / 10));
+    const vx = T.X[iv], vy = T.Y[iv];
+    const xp = trainPosAt(T.X, t), yp = trainPosAt(T.Y, t);
+    h += `<p>At <b>${$('clock').textContent}</b>, train X is at <b>${fmt(xp, 1)} km</b> going at ${vx} km/h, and train Y is at <b>${fmt(yp, 1)} km</b> going at ${vy} km/h.</p>`;
+    h += `<p>${Math.abs(xp - yp) < 0.05 ? 'They are side by side.' : (xp > yp ? 'X is ahead' : 'Y is ahead') + ` by ${fmt(Math.abs(xp - yp), 1)} km.`} ` +
+      `In each 10 minutes a train moves (speed × 1/6 h): X moves ${fmt(vx / 6, 1)} km in this interval, Y ${fmt(vy / 6, 1)} km.</p>`;
+    h += `<p class="book">Steeper line on the graph = more distance in the same time = faster. A flat line: the train is standing still.</p>`;
+  } else {
+    const X = S.box, sf = SURF[X.surface], b = X.b, fmax = sf.mu * BOX_M * G;
+    const F = boxForces(), net = F + b.fr;
+    h += `<p>On <b>${sf.name}</b>, friction can push back with up to <b>${fmax.toFixed(1)} N</b> on this 1 kg box (μ = ${sf.mu}).</p>`;
+    if (X.mode === 'push') {
+      if (X.pushing > 0) h += `<p>Your hand pushes with <b>${X.F} N</b>. ${X.F > fmax ? `That beats friction by ${(X.F - fmax).toFixed(1)} N, so the box speeds up.` : `That is not more than friction can hold, so the box does not move.`}</p>`;
+      else if (b.v !== 0) h += `<p>Your hand has let go. The only force along the floor now is <b>friction, ${Math.abs(b.fr).toFixed(1)} N, backwards</b>. It is slowing the box by ${Math.abs(b.a).toFixed(2)} m/s every second.</p>`;
+      else if (X.run) h += `<p>The box has stopped after <b>${fmt(X.run.dist != null ? X.run.dist : b.x - X.run.x0, 2)} m</b>. Friction took all its motion away.</p>`;
+    } else {
+      h += `<p>Pulls: <b>${X.pullL} N</b> to the left and <b>${X.pullR} N</b> to the right. ${X.pullL === X.pullR ? 'They are equal and opposite: <b>balanced</b>. They cancel, and the box’s motion does not change.' : `They are unbalanced by <b>${Math.abs(X.pullR - X.pullL)} N</b> ${X.pullR > X.pullL ? 'to the right' : 'to the left'}.`}</p>`;
+      if (X.pullL !== X.pullR) h += b.v === 0 && Math.abs(F) <= fmax ? `<p>But friction holds back up to ${fmax.toFixed(1)} N, and that is enough: the box stays still.</p>` : `<p>That is more than friction can hold (${fmax.toFixed(1)} N). The net force is <b>${Math.abs(net).toFixed(1)} N</b>, and the box speeds up in its direction.</p>`;
+    }
+  }
+  $('why').innerHTML = h;
+}
+
+/* ============================================================================
+   Paint, tabs, controls
+   ============================================================================ */
+function paintAll(){
+  $('scPend').style.display = S.tab === 'pend' ? '' : 'none';
+  $('scTrain').style.display = S.tab === 'train' ? '' : 'none';
+  $('scBox').style.display = S.tab === 'box' ? '' : 'none';
+  for (const [id, t] of [['ctlPend', 'pend'], ['logPend', 'pend'], ['ctlTrain', 'train'], ['logTrain', 'train'], ['ctlBox', 'box'], ['logBox', 'box']]) $(id).hidden = S.tab !== t;
+  document.querySelectorAll('.tabs button').forEach(b => { b.setAttribute('aria-selected', b.dataset.tab === S.tab); b.disabled = !S.locked; });
+  if (S.tab === 'pend') paintPend();
+  if (S.tab === 'train') paintTrain();
+  if (S.tab === 'box') paintBox();
+  paintWhy();
+}
+function lockControls(lock){
+  for (const id of ['btnRelease', 'btnFast', 'len', 'amp', 'btnRun', 'btnBook', 'surface', 'push', 'btnPush', 'pullL', 'pullR', 'btnCentre']) $(id).disabled = lock;
+  document.querySelectorAll('#bobSeg button, #modeSeg button').forEach(b => b.disabled = lock);
+  $('gate').hidden = !lock;
+}
+
+build();
+wireBars();
+floorDots();
+document.querySelectorAll('.tabs button').forEach(b => b.addEventListener('click', () => {
+  if (!S.locked) return;
+  S.tab = b.dataset.tab; sound('tick'); track('tab', {tab: S.tab}); paintAll();
+}));
+$('len').addEventListener('input', e => { S.pend.L = +e.target.value; S.pend.sim = null; paintAll(); });
+$('amp').addEventListener('input', e => { S.pend.amp = +e.target.value; S.pend.sim = null; paintAll(); });
+$('bobSeg').addEventListener('click', e => { const b = e.target.closest('[data-bob]'); if (!b || b.disabled) return; S.pend.m = +b.dataset.bob; S.pend.sim = null; sound('pop'); paintAll(); });
+$('btnRelease').addEventListener('click', releasePend);
+$('btnFast').addEventListener('click', () => { S.pend.fast = !S.pend.fast; paintAll(); });
+$('btnRun').addEventListener('click', runTrains);
+$('btnBook').addEventListener('click', () => { S.train.X = [120, 120, 120, 120, 120, 120]; S.train.Y = BOOK_Y.slice(); S.train.t = 0; S.train.done = false; sound('pop'); trainTable(); paintAll(); });
+$('surface').addEventListener('change', e => { S.box.surface = e.target.value; floorDots(); sound('pop'); track('surface', {surface: S.box.surface}); paintAll(); });
+$('modeSeg').addEventListener('click', e => {
+  const b = e.target.closest('[data-mode]'); if (!b || b.disabled) return;
+  S.box.mode = b.dataset.mode; S.box.pushing = 0; S.box.run = null;
+  S.box.b = {x: S.box.mode === 'tug' ? 3 : 0.6, v: 0, a: 0, fr: 0, t: 0};
+  S.box.prevTrace = S.box.trace.length ? S.box.trace : S.box.prevTrace; S.box.trace = [];
+  sound('tick'); paintAll();
+});
+$('push').addEventListener('input', e => { S.box.F = +e.target.value; paintAll(); });
+$('btnPush').addEventListener('click', pushBox);
+$('pullL').addEventListener('input', e => { S.box.pullL = +e.target.value; paintAll(); });
+$('pullR').addEventListener('input', e => { S.box.pullR = +e.target.value; paintAll(); });
+$('btnCentre').addEventListener('click', () => { S.box.b = {x: 3, v: 0, a: 0, fr: 0, t: 0}; S.box.prevTrace = S.box.trace; S.box.trace = []; sound('pop'); paintAll(); });
+
+/* One frame loop drives whichever world is moving. Under reduced motion the pendulum and
+   the trains jump to their end states; the box still moves (it is what the learner does). */
+loop(dt => {
+  let dirty = false;
+  const P = S.pend;
+  if (P.running && P.sim) {
+    const n = Math.round(dt * (P.fast ? 5 : 1) / PEND_DT);
+    for (let i = 0; i < n && P.sim.osc < 10; i++) pendStep(P.sim, PEND_DT, P.L / 100, P.m);
+    if (P.sim.osc >= 10) finishPend();
+    dirty = S.tab === 'pend';
+  }
+  const T = S.train;
+  if (T.running) {
+    T.t += dt * 5;                                   // five minutes of the journey each second
+    if (T.t >= 60) endTrains();
+    else if (Math.floor((T.t - dt * 5) / 10) !== Math.floor(T.t / 10)) { sound('tick'); trainTable(); }
+    dirty = dirty || S.tab === 'train';
+  }
+  const X = S.box;
+  if ((X.run && X.run.active) || X.mode === 'tug') {
+    const before = X.b.x + ',' + X.b.v;
+    stepBox(dt);
+    if (before !== X.b.x + ',' + X.b.v || X.mode === 'tug') dirty = dirty || S.tab === 'box';
+  }
+  if (dirty) paintAll();
+});
+
+/* ============================================================================
+   Findings, predict, start
+   ============================================================================ */
+findings($('finds'), [
+  {id: 'same',       icon: '⏱', label: 'Same pendulum, same period every time', hint: 'Time the same pendulum twice'},
+  {id: 'mass',       icon: '⚖', label: 'A heavier bob keeps the same beat',     hint: 'Change only the bob'},
+  {id: 'longer',     icon: '↕', label: 'A longer string swings slower',          hint: 'Time three different lengths'},
+  {id: 'uniform',    icon: '═', label: 'Equal distances in equal times: a straight line', hint: 'Give a train one steady speed'},
+  {id: 'nonuniform', icon: '〰', label: 'Unequal distances: a bent line',         hint: 'Change a train’s speed on the way'},
+  {id: 'sameavg',    icon: '≡', label: 'Same average speed, different journeys', hint: 'Both trains end at the same place'},
+  {id: 'rest',       icon: '▭', label: 'Standing still draws a flat line',        hint: 'Stop a train for ten minutes'},
+  {id: 'friction',   icon: '✋', label: 'Friction stops a sliding box',           hint: 'Push the box and let go'},
+  {id: 'rough',      icon: '▦', label: 'Rougher floor, shorter slide',            hint: 'Same push, two floors'},
+  {id: 'ice',        icon: '❄', label: 'On ice it hardly stops',                  hint: 'Try the smoothest floor'},
+  {id: 'balanced',   icon: '⇄', label: 'Balanced forces: no change in motion',   hint: 'Pull both ways equally'},
+  {id: 'unbalanced', icon: '→', label: 'Unbalanced forces change the motion',     hint: 'Pull harder one way'},
+], () => toast('All twelve found. Time, speed and force: you measured each one yourself.', 4200));
+
+let EXPLAINED = false;
+function maybeExplain(){
+  if (EXPLAINED || !found('mass')) return;
+  const R = S.pend.rows;
+  let pair = null;
+  for (let i = 0; i < R.length && !pair; i++) for (let j = i + 1; j < R.length; j++) if (R[i].L === R[j].L && R[i].m !== R[j].m && Math.abs(R[i].T - R[j].T) < 0.035) { pair = [R[i], R[j]]; break; }
+  if (!pair) return;
+  EXPLAINED = true;
+  const [a, b] = pair;
+  const light = pendTime(a.L, 0.05, a.amp) / 10, heavy = pendTime(a.L, 0.5, a.amp) / 10;
+  POE.explain(`At ${a.L} cm you timed the ${a.m * 1000} g bob at <b>${a.T.toFixed(2)} s</b> and the ${b.m * 1000} g bob at <b>${b.T.toFixed(2)} s</b>. ` +
+    `The model’s own clock gives ${light.toFixed(3)} s for 50 g and ${heavy.toFixed(3)} s for 500 g. ` +
+    `A heavier bob is pulled harder by the Earth, but it is also harder to get moving, by exactly the same amount. The two cancel: <b>only the length sets the beat</b>.`);
+}
+
+const POE = predict($('poe'), {
+  id: 'pendulum-mass',
+  q: 'Your pendulum has a 100 cm string and a 50 g stone. You swap the stone for a 500 g iron ball, ten times heavier. Its time period will…',
+  options: [
+    {id: 'shorter', text: 'Get shorter: a heavier bob swings faster.'},
+    {id: 'longer',  text: 'Get longer: a heavier bob is harder to move.'},
+    {id: 'same',    text: 'Stay the same.', right: true},
+    {id: 'stop',    text: 'Swing only a few times and stop.'},
+  ],
+  onLock(){
+    S.locked = true;
+    lockControls(false);
+    say('Now find out. Time ten swings, then change one thing at a time.');
+    paintAll();
+  },
+});
+lockControls(!POE.locked);
+if (!Play.FF('predict')) S.locked = true;
+trainTable();
+paintAll();
+window.applyFeatures = () => paintAll();
+window.PG_STATE = () => JSON.parse(JSON.stringify({tab: S.tab, locked: S.locked, pend: {L: S.pend.L, m: S.pend.m, amp: S.pend.amp, running: S.pend.running, rows: S.pend.rows, osc: S.pend.sim ? S.pend.sim.osc : 0},
+  train: {X: S.train.X, Y: S.train.Y, t: S.train.t, done: S.train.done, running: S.train.running},
+  box: {surface: S.box.surface, mode: S.box.mode, F: S.box.F, pullL: S.box.pullL, pullR: S.box.pullR, x: S.box.b.x, v: S.box.b.v, runs: S.box.runs}}));
+window.PG_MODEL = {pendTime, pendStep, pendNew, trainRun, trainPosAt, boxStep, boxPush, SURF, G};
+</script>
+</body>
+</html>

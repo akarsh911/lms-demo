@@ -1,0 +1,495 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Matrices Move the Plane</title>
+<meta name="description" content="Class 12: a 2 × 2 matrix as a machine that moves the plane. Drag its columns and watch the grid stretch and turn; the determinant is the area scale, zero flattens the plane, AX = B is a hunt for the point that lands on B, and AB is not BA.">
+<link rel="icon" href="../../favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600&family=Inter:wght@400;500;600;700&family=Nunito:wght@500;700;800&family=Newsreader:opsz,wght@6..72,400;6..72,500&family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="../../play.css">
+<style>
+/* Only what this page needs beyond play.css. */
+.pg-stage{align-self:start; min-height:0}
+.tabs{display:flex; gap:4px; padding:10px 12px 0; border-bottom:1px solid var(--hair); background:var(--card)}
+.tab{border:1px solid transparent; border-bottom:none; background:none; padding:8px 14px; border-radius:8px 8px 0 0; cursor:pointer;
+  font-family:"Newsreader",Georgia,serif; font-size:17px; color:var(--ink-3); margin-bottom:-1px}
+.tab[aria-selected="true"]{background:var(--card); border-color:var(--hair); color:var(--ink); border-bottom:1px solid var(--card)}
+.tab:disabled{cursor:default; opacity:.6}
+.gate{position:absolute; left:0; right:0; top:48px; bottom:0; display:grid; place-items:center; pointer-events:none}
+.gate span{background:rgba(29,35,39,.86); color:#fff; padding:10px 16px; border-radius:99px; font-weight:600; font-size:14px}
+.chips{display:flex; flex-wrap:wrap; gap:6px; margin:4px 0 8px}
+.chip{border:1px solid var(--hair-2); background:var(--card); border-radius:99px; padding:4px 11px; font-size:13px; cursor:pointer; font-weight:600; color:var(--ink-2)}
+.chip[aria-pressed="true"]{background:var(--accent-soft); border-color:var(--accent); color:var(--ink)}
+.chip:disabled{opacity:.45; cursor:default}
+.lab{font-size:11.5px; font-weight:700; color:var(--ink-3); letter-spacing:.06em; text-transform:uppercase; margin-top:8px}
+.readout{display:grid; grid-template-columns:auto 1fr; gap:3px 12px; font-size:13px; align-items:baseline}
+.readout span{color:var(--ink-2)}
+.readout b{font-family:var(--font-mono); font-weight:600; font-size:12.5px; font-variant-numeric:tabular-nums; text-align:right; overflow-wrap:anywhere}
+.readout .sep{grid-column:1/-1; height:1px; background:var(--hair); margin:3px 0}
+.note{font-size:12.5px; color:var(--ink-3); margin:6px 0 0}
+.why p{font-size:13.5px; margin-bottom:.55em}
+.ctl{grid-template-columns:64px 1fr 52px; margin:2px 0}
+.ctl label{font-size:12.5px; line-height:1.2; font-family:var(--font-mono)}
+.ctl output{font-family:var(--font-mono); font-size:12.5px; font-weight:600; min-width:0}
+.mats{display:grid; grid-template-columns:1fr 1fr; gap:10px}
+.mat{display:grid; grid-template-columns:22px 1fr 1fr; gap:5px; align-items:center}
+.mat b{font-family:var(--font-mono); font-size:15px; grid-row:span 2}
+.mat input{width:100%; min-height:32px; border-radius:7px; border:1px solid var(--hair-2); background:var(--card); color:var(--ink); font:600 13.5px var(--font-mono); padding:0 4px; text-align:center}
+.mat input:disabled{opacity:.5}
+#hitR, #hitL{cursor:grab} #hitR.dragging, #hitL.dragging{cursor:grabbing}
+@media (max-width:1180px) and (min-width:981px){ .pg-main.wide-side{grid-template-columns:minmax(0,1fr) 340px} }
+</style>
+</head>
+<body>
+<header class="pg-top"></header>
+
+<div class="pg-intro">
+  <h1>Matrices move the plane</h1>
+  <p>A 2 × 2 matrix is a machine that moves every point of the plane: its first column is where (1, 0) goes, its second where (0, 1) goes. Drag the columns and watch the grid
+     stretch, turn and flip; measure the area of what the unit square becomes and compare it with the determinant. Then solve AX = B by hunting for the one point X that lands on B,
+     make the determinant zero and watch the hunt fail, and find out why AB and BA are different machines.</p>
+</div>
+
+<main class="pg-main wide-side">
+  <section class="pg-stage" id="stageWrap">
+    <div class="tabs" role="tablist">
+      <button class="tab" role="tab" id="tabT" aria-selected="true">A moves the plane</button>
+      <button class="tab" role="tab" id="tabO" aria-selected="false">AB and BA</button>
+    </div>
+    <svg id="stageT" viewBox="0 0 1000 556" role="img" aria-label="Left: the plane before, with the unit square, a letter F, the point X and the two equations as lines. Right: the plane after A, with the moved grid, the images and the target B."></svg>
+    <svg id="stageO" viewBox="0 0 1000 600" role="img" aria-label="A letter F moved by AB and by BA, and the row-by-column products" hidden></svg>
+    <div class="gate" id="gate"><span>Make your prediction first →</span></div>
+  </section>
+
+  <aside class="pg-side">
+    <div id="poe"></div>
+
+    <div class="card" id="cardT">
+      <div class="kicker">AX = B</div>
+      <div class="chips" id="tChips">
+        <button class="chip" data-t="ex16">Example 16</button>
+        <button class="chip" data-t="q1">Ex 4.5, Q1</button>
+        <button class="chip" data-t="q3">Ex 4.5, Q3</button>
+        <button class="chip" data-t="rot">Example 23, θ = 30°</button>
+        <button class="chip" data-t="mirror">Mirror</button>
+      </div>
+      <div class="ctl"><label for="ea">a₁₁</label><input type="range" id="ea" min="-6" max="6" step="0.1"><output id="eaOut"></output></div>
+      <div class="ctl"><label for="eb">a₁₂</label><input type="range" id="eb" min="-6" max="6" step="0.1"><output id="ebOut"></output></div>
+      <div class="ctl"><label for="ec">a₂₁</label><input type="range" id="ec" min="-6" max="6" step="0.1"><output id="ecOut"></output></div>
+      <div class="ctl"><label for="ed">a₂₂</label><input type="range" id="ed" min="-6" max="6" step="0.1"><output id="edOut"></output></div>
+      <div class="row" style="gap:6px; margin-top:4px"><button class="btn sm" id="btnSolve">Solve X = A⁻¹B</button></div>
+      <p class="note">Drag the column tips (blue, red) and B (orange) on the right, and X (green) on the left.</p>
+      <div class="readout" id="readT" style="margin-top:8px"></div>
+    </div>
+
+    <div class="card" id="cardO" hidden>
+      <div class="kicker">Two matrices</div>
+      <div class="chips" id="oChips">
+        <button class="chip" data-o="ex14">Example 14</button>
+        <button class="chip" data-o="diag">Two diagonals</button>
+        <button class="chip" data-o="ex15">Example 15</button>
+        <button class="chip" data-o="inv">A and its inverse</button>
+      </div>
+      <div class="mats">
+        <div class="mat"><b>A</b><input id="A00" type="number" step="1" min="-5" max="5"><input id="A01" type="number" step="1" min="-5" max="5"><input id="A10" type="number" step="1" min="-5" max="5"><input id="A11" type="number" step="1" min="-5" max="5"></div>
+        <div class="mat"><b>B</b><input id="B00" type="number" step="1" min="-5" max="5"><input id="B01" type="number" step="1" min="-5" max="5"><input id="B10" type="number" step="1" min="-5" max="5"><input id="B11" type="number" step="1" min="-5" max="5"></div>
+      </div>
+      <div class="readout" id="readO" style="margin-top:10px"></div>
+    </div>
+
+    <div class="card why" id="whyCard" hidden>
+      <div class="kicker">What the model says</div>
+      <div id="why"></div>
+    </div>
+
+    <div class="card"><div class="kicker">To find</div><div id="finds"></div></div>
+  </aside>
+</main>
+
+<script src="../../play.js"></script>
+<script>
+'use strict';
+const {$, esc, clamp, fmt, drag, sound, say, track, toast, predict, findings, discover, found,
+       shareState, sharedState, mount} = Play;
+mount({thread: 'matrices', band: 'theorist'});
+
+/* MODEL:start ==================================================================
+   Matrices are arrays of rows (NCERT Class 12 Ch 3, 4).
+     product:     (AB)ᵢⱼ = Σₖ aᵢₖ bₖⱼ, row i of A against column j of B
+     determinant: |A| = a₁₁a₂₂ − a₁₂a₂₁;  3 × 3 by expanding along the first row
+     adjoint:     adj A = [[a₂₂, −a₁₂], [−a₂₁, a₁₁]];  A⁻¹ = adj A / |A|  (|A| ≠ 0)
+     area of a triangle = ½ |x₁ y₁ 1; x₂ y₂ 1; x₃ y₃ 1|  (section 4.3)
+   A moves the point (x, y) to A[x; y]. The area of any polygon, before and after,
+   is MEASURED by cutting it into triangles and adding their determinant areas;
+   the ratio is then compared with |A|, which the model never uses to draw.
+   AX = B (section 4.6): if |A| ≠ 0, X = A⁻¹B, the only solution. If |A| = 0 the
+   book computes (adj A)B: not O means no solution (inconsistent); O means the
+   two equations are one line of solutions (consistent, infinitely many).
+   ============================================================================ */
+function mul(A, B){
+  if (A[0].length !== B.length) return null;
+  return A.map(row => B[0].map((_, j) => row.reduce((s, a, k) => s + a * B[k][j], 0)));
+}
+const apply = (A, v) => [A[0][0] * v[0] + A[0][1] * v[1], A[1][0] * v[0] + A[1][1] * v[1]];
+const det2 = A => A[0][0] * A[1][1] - A[0][1] * A[1][0];
+const det3 = M => M[0][0] * (M[1][1] * M[2][2] - M[1][2] * M[2][1]) - M[0][1] * (M[1][0] * M[2][2] - M[1][2] * M[2][0]) + M[0][2] * (M[1][0] * M[2][1] - M[1][1] * M[2][0]);
+const adj2 = A => [[A[1][1], -A[0][1]], [-A[1][0], A[0][0]]];
+const inv2 = A => { const d = det2(A); return Math.abs(d) < 1e-12 ? null : adj2(A).map(r => r.map(x => x / d)); };
+/* the signed area of a triangle, by the book's determinant */
+const triArea = (p, q, r) => det3([[p[0], p[1], 1], [q[0], q[1], 1], [r[0], r[1], 1]]) / 2;
+/* the signed area of a polygon: triangles fanned out from its first vertex */
+const polyArea = P => { let s = 0; for (let i = 1; i < P.length - 1; i++) s += triArea(P[0], P[i], P[i + 1]); return s; };
+const isZero = (A, eps = 1e-9) => A.every(r => r.every(x => Math.abs(x) < eps));
+const sameM = (A, B, eps = 1e-9) => A.every((r, i) => r.every((x, j) => Math.abs(x - B[i][j]) < eps));
+function solve(A, Bv){
+  const d = det2(A);
+  if (Math.abs(d) > 1e-9) { const X = apply(inv2(A), Bv); return {kind: 'unique', X, det: d}; }
+  const aB = apply(adj2(A), Bv);
+  if (Math.hypot(...aB) > 1e-9) return {kind: 'none', adjB: aB, det: 0};
+  /* consistent: the solutions are the line p x + q y = r of any non-zero row */
+  const row = Math.hypot(A[0][0], A[0][1]) > 1e-12 ? 0 : 1;
+  if (Math.hypot(A[row][0], A[row][1]) < 1e-12) return {kind: Math.hypot(...Bv) < 1e-12 ? 'all' : 'none', adjB: aB, det: 0};
+  return {kind: 'many', adjB: aB, det: 0, line: [A[row][0], A[row][1], Bv[row]]};
+}
+/* MODEL:end */
+
+/* ---- presets, from the book ----------------------------------------------- */
+const C30 = Math.cos(Math.PI / 6), S30 = Math.sin(Math.PI / 6);
+const TPRE = {
+  ex16:   {A: [[2, 5], [3, 2]], B: [1, 7]},              // 2x + 5y = 1, 3x + 2y = 7
+  q1:     {A: [[1, 2], [2, 3]], B: [2, 3]},              // x + 2y = 2, 2x + 3y = 3
+  q3:     {A: [[1, 3], [2, 6]], B: [5, 8]},              // x + 3y = 5, 2x + 6y = 8
+  rot:    {A: [[C30, S30], [-S30, C30]], B: [2, 2]},     // Example 23's [[cos θ, sin θ], [−sin θ, cos θ]], θ = 30°
+  mirror: {A: [[1, 0], [0, -1]], B: [2, 1]},             // Example 14's A
+};
+const OPRE = {
+  ex14: {A: [[1, 0], [0, -1]], B: [[0, 1], [1, 0]]}, diag: {A: [[1, 0], [0, 2]], B: [[3, 0], [0, 4]]},
+  ex15: {A: [[0, -1], [0, 2]], B: [[3, 5], [0, 0]]},  inv: {A: [[2, 3], [1, 2]], B: [[2, -3], [-1, 2]]},
+};
+const F_SHAPE = [[0, 0], [0.25, 0], [0.25, 0.4], [0.6, 0.4], [0.6, 0.6], [0.25, 0.6], [0.25, 0.8], [0.8, 0.8], [0.8, 1], [0, 1]].map(([x, y]) => [0.5 + 2 * x, 0.5 + 2 * y]);
+const SQUARE = [[0, 0], [1, 0], [1, 1], [0, 1]];
+
+/* ---- formatting ------------------------------------------------------------- */
+const MINUS = '−';
+function nf(x, dp = 2){
+  if (x == null || !isFinite(x)) return '—';
+  let s = (Math.abs(x) < 5e-10 ? 0 : x).toFixed(dp);
+  if (s.includes('.')) s = s.replace(/0+$/, '').replace(/\.$/, '');
+  if (s === '-0') s = '0';
+  return s.replace('-', MINUS);
+}
+const mf = (A, dp = 2) => '[' + A.map(r => r.map(x => nf(x, dp)).join(', ')).join('; ') + ']';
+const vfm = (v, dp = 2) => '(' + v.map(x => nf(x, dp)).join(', ') + ')';
+const r1 = x => Math.round(x * 10) / 10;
+const pn = (x, dp = 2) => x < -5e-10 ? '(' + nf(x, dp) + ')' : nf(x, dp);
+
+/* ---- state -------------------------------------------------------------------- */
+const S = {tab: 'T', A: [[1, 0.5], [0, 1]], B: [2, 1], X: [-1, 2], preset: null, solved: false, locked: false, touched: false, huntedX: false,
+  OA: [[1, 0], [0, -1]], OB: [[0, 1], [1, 0]], opre: 'ex14'};
+const shared = sharedState();
+if (shared) {
+  if (['T', 'O'].includes(shared.tab)) S.tab = shared.tab;
+  const m2 = (M, lo, hi) => Array.isArray(M) && M.length === 2 && M.every(r => Array.isArray(r) && r.length === 2 && r.every(x => isFinite(+x))) ? M.map(r => r.map(x => clamp(+x, lo, hi))) : null;
+  if (m2(shared.A, -6, 6)) S.A = m2(shared.A, -6, 6);
+  if (Array.isArray(shared.B) && shared.B.length === 2) S.B = shared.B.map(x => clamp(+x || 0, -10, 10));
+  if (m2(shared.OA, -5, 5)) S.OA = m2(shared.OA, -5, 5); if (m2(shared.OB, -5, 5)) S.OB = m2(shared.OB, -5, 5);
+  S.opre = null;
+}
+shareState(() => ({tab: S.tab, A: S.A, B: S.B, OA: S.OA, OB: S.OB}));
+
+/* ============================================================================
+   Stage T: before and after
+   ============================================================================ */
+const sT = $('stageT'), sO = $('stageO');
+const LP = {cx: 252, cy: 262, u: 44, r: 5}, RP = {cx: 748, cy: 262, u: 22, r: 10};
+const toP = (P, v) => ({x: P.cx + v[0] * P.u, y: P.cy - v[1] * P.u});
+const fromP = (P, p) => [(p.x - P.cx) / P.u, (P.cy - p.y) / P.u];
+const COL = {i: '#3f7fd8', j: '#d6453d', X: '#1f8a70', B: '#d9731a', F: '#6d7a86', pos: '#6a3fc2', neg: '#d6453d', ink: '#1d2327', ink2: '#4a555b', ink3: '#7c878c', grid: '#ebe7dc', axis: '#9aa3a6'};
+const pts = (P, list) => list.map(v => { const s = toP(P, v); return s.x.toFixed(1) + ',' + s.y.toFixed(1); }).join(' ');
+function panel(P, id, title){
+  const h = P.u * P.r;
+  let g = `<rect x="${P.cx - h - 8}" y="${P.cy - h - 8}" width="${2 * h + 16}" height="${2 * h + 16}" rx="10" fill="#fff" stroke="#e2ded2"/>
+    <clipPath id="${id}"><rect x="${P.cx - h}" y="${P.cy - h}" width="${2 * h}" height="${2 * h}"/></clipPath>
+    <text x="${P.cx - h - 8}" y="${P.cy - h - 20}" font-size="18" class="serif" fill="${COL.ink}">${title}</text>`;
+  const st = P.r > 6 ? 2 : 1;
+  for (let k = -P.r; k <= P.r; k += st) {
+    g += `<line x1="${P.cx + k * P.u}" y1="${P.cy - h}" x2="${P.cx + k * P.u}" y2="${P.cy + h}" stroke="${COL.grid}"/><line x1="${P.cx - h}" y1="${P.cy - k * P.u}" x2="${P.cx + h}" y2="${P.cy - k * P.u}" stroke="${COL.grid}"/>`;
+    if (k && Math.abs(k) < P.r) g += `<text x="${P.cx + k * P.u}" y="${P.cy + 13}" font-size="10" text-anchor="middle" fill="${COL.ink3}">${nf(k)}</text><text x="${P.cx - 4}" y="${P.cy - k * P.u + 4}" font-size="10" text-anchor="end" fill="${COL.ink3}">${nf(k)}</text>`;
+  }
+  g += `<line x1="${P.cx - h}" y1="${P.cy}" x2="${P.cx + h}" y2="${P.cy}" stroke="${COL.axis}"/><line x1="${P.cx}" y1="${P.cy - h}" x2="${P.cx}" y2="${P.cy + h}" stroke="${COL.axis}"/>`;
+  return g;
+}
+function buildT(){
+  sT.innerHTML = `
+  <defs>
+    <marker id="mI" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0L10 5L0 10z" fill="${COL.i}"/></marker>
+    <marker id="mJ" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0L10 5L0 10z" fill="${COL.j}"/></marker>
+  </defs>
+  <rect x="0" y="0" width="1000" height="556" fill="#fbfaf6"/>
+  ${panel(LP, 'clipLp', 'Before: the point X')}
+  ${panel(RP, 'clipRp', 'After A: the point AX')}
+  <g clip-path="url(#clipLp)"><g id="left"></g></g>
+  <g clip-path="url(#clipRp)"><g id="right"></g></g>
+  <path d="M${LP.cx + LP.u * LP.r + 14} ${LP.cy} L${RP.cx - RP.u * RP.r - 14} ${LP.cy}" stroke="${COL.ink3}" stroke-width="1.6" fill="none"/>
+  <text x="${(LP.cx + LP.u * LP.r + RP.cx - RP.u * RP.r) / 2}" y="${LP.cy - 8}" font-size="15" text-anchor="middle" class="serif" fill="${COL.ink2}">A</text>
+  <g id="dots"></g>
+  <g id="foot"></g>
+  <rect id="hitL" x="${LP.cx - LP.u * LP.r}" y="${LP.cy - LP.u * LP.r}" width="${2 * LP.u * LP.r}" height="${2 * LP.u * LP.r}" fill="transparent" role="img" aria-label="Drag X"/>
+  <rect id="hitR" x="${RP.cx - RP.u * RP.r}" y="${RP.cy - RP.u * RP.r}" width="${2 * RP.u * RP.r}" height="${2 * RP.u * RP.r}" fill="transparent" role="img" aria-label="Drag a column tip or B"/>`;
+}
+/* a line p x + q y = r across a panel */
+function rowLine(P, p, q, r, col, dash = ''){
+  const m = p * p + q * q; if (m < 1e-12) return '';
+  const o = [p * r / m, q * r / m], d = [-q / Math.sqrt(m), p / Math.sqrt(m)], L = 3 * P.r;
+  const a = toP(P, [o[0] - d[0] * L, o[1] - d[1] * L]), b = toP(P, [o[0] + d[0] * L, o[1] + d[1] * L]);
+  return `<line x1="${a.x.toFixed(1)}" y1="${a.y.toFixed(1)}" x2="${b.x.toFixed(1)}" y2="${b.y.toFixed(1)}" stroke="${col}" stroke-width="2" ${dash ? `stroke-dasharray="${dash}"` : ''} stroke-opacity=".8"/>`;
+}
+function paintT(){
+  const A = S.A, d = det2(A), sol = solve(A, S.B), locked = S.locked;
+  /* left: the plane before */
+  let l = `<polygon points="${pts(LP, SQUARE)}" fill="${COL.F}" fill-opacity=".10" stroke="${COL.F}" stroke-dasharray="3 3"/>
+    <polygon points="${pts(LP, F_SHAPE)}" fill="${COL.F}" fill-opacity=".28" stroke="${COL.F}"/>
+    <line x1="${LP.cx}" y1="${LP.cy}" x2="${toP(LP, [1, 0]).x}" y2="${LP.cy}" stroke="${COL.i}" stroke-width="3" marker-end="url(#mI)"/>
+    <line x1="${LP.cx}" y1="${LP.cy}" x2="${LP.cx}" y2="${toP(LP, [0, 1]).y}" stroke="${COL.j}" stroke-width="3" marker-end="url(#mJ)"/>`;
+  if (locked) {
+    l += rowLine(LP, A[0][0], A[0][1], S.B[0], COL.i, '7 4') + rowLine(LP, A[1][0], A[1][1], S.B[1], COL.j, '7 4');
+    if (S.solved && sol.kind === 'many') l += rowLine(LP, ...sol.line, COL.X, '');
+  }
+  $('left').innerHTML = l;
+  /* right: the plane after */
+  let r = '';
+  const h = RP.r;
+  if (locked) {
+    for (let k = -8; k <= 8; k++) {
+      const a1 = toP(RP, apply(A, [k, -8])), a2 = toP(RP, apply(A, [k, 8])), b1 = toP(RP, apply(A, [-8, k])), b2 = toP(RP, apply(A, [8, k]));
+      r += `<line x1="${a1.x.toFixed(1)}" y1="${a1.y.toFixed(1)}" x2="${a2.x.toFixed(1)}" y2="${a2.y.toFixed(1)}" stroke="${COL.i}" stroke-opacity="${k ? 0.16 : 0.5}"/>
+            <line x1="${b1.x.toFixed(1)}" y1="${b1.y.toFixed(1)}" x2="${b2.x.toFixed(1)}" y2="${b2.y.toFixed(1)}" stroke="${COL.j}" stroke-opacity="${k ? 0.16 : 0.5}"/>`;
+    }
+    const col = Math.abs(d) < 1e-9 ? COL.ink : d > 0 ? COL.pos : COL.neg;
+    r += `<polygon points="${pts(RP, SQUARE.map(v => apply(A, v)))}" fill="${col}" fill-opacity=".12" stroke="${col}" stroke-dasharray="3 3"/>
+      <polygon points="${pts(RP, F_SHAPE.map(v => apply(A, v)))}" fill="${col}" fill-opacity=".30" stroke="${col}" stroke-width="1.4"/>`;
+    if (Math.abs(d) < 1e-9 && !isZero(A)) {
+      const c = Math.hypot(A[0][0], A[1][0]) > 1e-9 ? [A[0][0], A[1][0]] : [A[0][1], A[1][1]];
+      r += rowLine(RP, -c[1], c[0], 0, COL.ink, '');
+    }
+  } else r += `<polygon points="${pts(RP, SQUARE)}" fill="${COL.F}" fill-opacity=".10" stroke="${COL.F}" stroke-dasharray="3 3"/><polygon points="${pts(RP, F_SHAPE)}" fill="${COL.F}" fill-opacity=".28" stroke="${COL.F}"/>`;
+  $('right').innerHTML = r;
+  /* handles and dots (outside the clip, so they are never hidden) */
+  let g = '';
+  const dot = (P, v, col, rr, lab, dx = 10, dy = -10) => { const s = toP(P, v); const inside = Math.abs(v[0]) <= P.r + 0.2 && Math.abs(v[1]) <= P.r + 0.2;
+    return inside ? `<circle cx="${s.x.toFixed(1)}" cy="${s.y.toFixed(1)}" r="${rr}" fill="${col}" stroke="#fff" stroke-width="2"/>` + (lab ? `<text x="${(s.x + dx).toFixed(1)}" y="${(s.y + dy).toFixed(1)}" font-size="13" font-weight="700" fill="${col}" stroke="#fff" stroke-width="4" paint-order="stroke" ${dx < 0 ? 'text-anchor="end"' : ''} font-family="JetBrains Mono, monospace">${esc(lab)}</text>` : '') : ''; };
+  if (locked) {
+    const ci = [A[0][0], A[1][0]], cj = [A[0][1], A[1][1]], ax = apply(A, S.X);
+    g += `<line x1="${RP.cx}" y1="${RP.cy}" x2="${toP(RP, ci).x.toFixed(1)}" y2="${toP(RP, ci).y.toFixed(1)}" stroke="${COL.i}" stroke-width="3" marker-end="url(#mI)"/>
+      <line x1="${RP.cx}" y1="${RP.cy}" x2="${toP(RP, cj).x.toFixed(1)}" y2="${toP(RP, cj).y.toFixed(1)}" stroke="${COL.j}" stroke-width="3" marker-end="url(#mJ)"/>`;
+    g += dot(RP, S.B, COL.B, 8, 'B = ' + vfm(S.B, 1), 11, -12);
+    g += dot(RP, ax, COL.X, 6.5, 'AX', -9, 20);
+    g += dot(RP, ci, COL.i, 7.5, '', 0, 0) + dot(RP, cj, COL.j, 7.5, '', 0, 0);
+    g += dot(LP, S.X, COL.X, 8, 'X = ' + vfm(S.X, 2), 11, -11);
+    if (S.solved && sol.kind === 'unique') { const s = toP(LP, sol.X); g += `<circle cx="${s.x.toFixed(1)}" cy="${s.y.toFixed(1)}" r="12" fill="none" stroke="${COL.X}" stroke-width="2" stroke-dasharray="3 3"/>`; }
+  }
+  $('dots').innerHTML = g;
+  /* the foot: det against the measured area */
+  let f = '';
+  if (locked) {
+    const aSq = polyArea(SQUARE.map(v => apply(A, v))), aF = polyArea(F_SHAPE.map(v => apply(A, v))), aF0 = polyArea(F_SHAPE);
+    f = `<text x="36" y="536" font-size="13.5" fill="${COL.ink}" font-family="JetBrains Mono, monospace">|A| = ${pn(A[0][0])}·${pn(A[1][1])} − ${pn(A[0][1])}·${pn(A[1][0])} = ${nf(d, 3)}</text>
+      <text x="${RP.cx - RP.u * RP.r - 8}" y="536" font-size="13.5" fill="${COL.ink}" font-family="JetBrains Mono, monospace">area of the image: square ${nf(aSq, 3)}, F ÷ F = ${nf(aF / aF0, 3)}</text>`;
+  }
+  $('foot').innerHTML = f;
+}
+
+/* ============================================================================
+   Stage O: AB and BA
+   ============================================================================ */
+const OP = [{cx: 170, cy: 190, u: 22, r: 6}, {cx: 500, cy: 190, u: 22, r: 6}, {cx: 830, cy: 190, u: 22, r: 6}];
+function buildO(){
+  sO.innerHTML = `<rect x="0" y="0" width="1000" height="600" fill="#fbfaf6"/>
+    ${panel(OP[0], 'clipO0', 'The F')}${panel(OP[1], 'clipO1', 'AB: first B, then A')}${panel(OP[2], 'clipO2', 'BA: first A, then B')}
+    <g clip-path="url(#clipO0)"><g id="o0"></g></g><g clip-path="url(#clipO1)"><g id="o1"></g></g><g clip-path="url(#clipO2)"><g id="o2"></g></g>
+    <g id="oText"></g>`;
+}
+function paintO(){
+  const A = S.OA, Bm = S.OB, AB = mul(A, Bm), BA = mul(Bm, A);
+  const F = (P, M, col) => `<polygon points="${pts(P, SQUARE.map(v => M ? apply(M, v) : v))}" fill="${col}" fill-opacity=".1" stroke="${col}" stroke-dasharray="3 3"/><polygon points="${pts(P, F_SHAPE.map(v => M ? apply(M, v) : v))}" fill="${col}" fill-opacity=".32" stroke="${col}" stroke-width="1.3"/>`;
+  $('o0').innerHTML = F(OP[0], null, COL.F);
+  $('o1').innerHTML = S.locked ? F(OP[1], AB, COL.pos) : '';
+  $('o2').innerHTML = S.locked ? F(OP[2], BA, COL.B) : '';
+  let t = '';
+  if (S.locked) {
+    const work = (X, Y, name, x0) => {
+      const P = mul(X, Y); let s = `<text x="${x0}" y="376" font-size="17" class="serif" fill="${COL.ink}">${name} = ${esc(mf(P))}</text>`;
+      [[0, 0], [0, 1], [1, 0], [1, 1]].forEach(([i, j], k) => {
+        s += `<text x="${x0}" y="${406 + k * 24}" font-size="13" fill="${COL.ink2}" font-family="JetBrains Mono, monospace">(${name})${'₁₂'[i]}${'₁₂'[j]} = ${pn(X[i][0])}·${pn(Y[0][j])} + ${pn(X[i][1])}·${pn(Y[1][j])} = ${nf(P[i][j])}</text>`;
+      });
+      return s;
+    };
+    t += work(A, Bm, 'AB', 40) + work(Bm, A, 'BA', 520);
+    const same = sameM(AB, BA);
+    t += `<text x="40" y="530" font-size="13" fill="${COL.ink3}">row i of the first matrix, against column j of the second</text>
+      <text x="40" y="564" font-size="16" class="serif" fill="${same ? '#1f8a70' : '#d6453d'}">${same ? 'AB = BA for this pair: both orders give the same machine.' : 'AB ≠ BA: the two orders move the F to different places.'}${isZero(AB) ? ' And AB = O, though neither A nor B is O.' : ''}</text>`;
+  }
+  $('oText').innerHTML = t;
+}
+
+/* ---- side panel -------------------------------------------------------------- */
+function paintSide(){
+  const t = S.tab === 'T';
+  $('tabT').setAttribute('aria-selected', t); $('tabO').setAttribute('aria-selected', !t);
+  sT.toggleAttribute('hidden', !t); sO.toggleAttribute('hidden', t);
+  $('cardT').toggleAttribute('hidden', !t); $('cardO').toggleAttribute('hidden', t);
+  const E = {ea: S.A[0][0], eb: S.A[0][1], ec: S.A[1][0], ed: S.A[1][1]};
+  for (const k in E) { $(k).value = E[k]; $(k + 'Out').textContent = nf(E[k], 1); }
+  for (const [M, n] of [[S.OA, 'A'], [S.OB, 'B']]) for (let i = 0; i < 2; i++) for (let j = 0; j < 2; j++) { const el = $(n + i + j); if (document.activeElement !== el) el.value = M[i][j]; }
+  document.querySelectorAll('#tChips [data-t]').forEach(b => b.setAttribute('aria-pressed', b.dataset.t === S.preset));
+  document.querySelectorAll('#oChips [data-o]').forEach(b => b.setAttribute('aria-pressed', b.dataset.o === S.opre));
+  $('gate').hidden = S.locked;
+  if (!S.locked) { $('readT').innerHTML = ''; $('readO').innerHTML = ''; $('whyCard').hidden = true; return; }
+  const A = S.A, d = det2(A), inv = inv2(A), sol = solve(A, S.B), ax = apply(A, S.X);
+  $('readT').innerHTML = `<span>the system</span><b>${eqn(A[0], S.B[0])}<br>${eqn(A[1], S.B[1])}</b>
+    <span>|A|</span><b>${nf(d, 3)}</b><span>adj A</span><b>${mf(adj2(A), 2)}</b>
+    <span>A⁻¹</span><b>${inv ? mf(inv, 3) : 'none: |A| = 0'}</b><i class="sep"></i>
+    <span>AX, your X</span><b>${vfm(ax, 2)}</b><span>AX − B</span><b>${vfm([ax[0] - S.B[0], ax[1] - S.B[1]], 2)}</b>
+    ${S.solved ? (sol.kind === 'unique' ? `<span>X = A⁻¹B</span><b>${vfm(sol.X, 3)}</b>` : `<span>(adj A)B</span><b>${vfm(sol.adjB, 2)}</b>`) : ''}`;
+  const AB = mul(S.OA, S.OB), BA = mul(S.OB, S.OA);
+  $('readO').innerHTML = `<span>|A|, |B|</span><b>${nf(det2(S.OA))}, ${nf(det2(S.OB))}</b><span>AB</span><b>${mf(AB)}</b><span>BA</span><b>${mf(BA)}</b><span>|AB| = |A||B|</span><b>${nf(det2(AB))} = ${nf(det2(S.OA) * det2(S.OB))}</b>`;
+  $('whyCard').hidden = false;
+  $('why').innerHTML = t ? whyT(A, d, sol) : whyO(AB, BA);
+}
+function eqn(row, rhs){
+  const t = (c, v, first) => { if (Math.abs(c) < 5e-10) return ''; const m = nf(Math.abs(c), 3), k = m === '1' ? '' : m;
+    return (c < 0 ? (first ? MINUS : ' − ') : (first ? '' : ' + ')) + k + v; };
+  const lhs = t(row[0], 'x', true) + t(row[1], 'y', Math.abs(row[0]) < 5e-10);
+  return (lhs || '0') + ' = ' + nf(rhs, 2);
+}
+function whyT(A, d, sol){
+  const aSq = polyArea(SQUARE.map(v => apply(A, v)));
+  if (isZero(A)) return '<p>A = O sends every point to the origin.</p>';
+  if (Math.abs(d) < 1e-9) {
+    const tail = sol.kind === 'none' ? `B is off that line, so no X can reach it: (adj A)B = ${vfm(sol.adjB)} ≠ O, and the system is <b>inconsistent</b>. The two equation lines on the left are parallel.`
+      : `B is on that line, so (adj A)B = O and a whole line of X’s lands on it: <b>infinitely many solutions</b>. On the left the two equation lines are one line.`;
+    return `<p>The columns point along one line, so |A| = 0 and the unit square is flattened to area ${nf(aSq, 3)}. The whole plane lands on a single line: there is no A⁻¹. ${tail}</p>`;
+  }
+  return `<p>The unit square becomes a parallelogram of area ${nf(Math.abs(aSq), 3)}, cut into triangles and measured: exactly |A| = ${nf(d, 3)}${d < 0 ? ' in size, and the F is <b>mirrored</b>: a negative determinant turns the plane over' : ''}.
+    Every shape is scaled by the same factor. Because |A| ≠ 0 exactly one X lands on B: X = A⁻¹B = ${vfm(sol.X, 3)}, where the two equation lines cross.</p>`;
+}
+function whyO(AB, BA){
+  if (isZero(AB) && !isZero(S.OA) && !isZero(S.OB)) return `<p>B flattens the plane onto a line, and A sends exactly that line to O: AB = O with neither matrix O. For numbers, ab = 0 forces a = 0 or b = 0; for matrices it does not.</p>`;
+  if (sameM(AB, BA)) return `<p>For this pair the order does not matter${sameM(AB, [[1, 0], [0, 1]]) ? ': AB = BA = I, so B is A’s inverse and each undoes the other' : ''}. That is special, not the rule.</p>`;
+  return `<p>AB means “first B, then A”; BA the other way round. Each entry is a row of the first matrix against a column of the second, and the two orders give different rows and columns: AB ≠ BA. The F ends up in different places.</p>`;
+}
+
+function paint(){ if (S.tab === 'T') paintT(); else paintO(); paintSide(); check(); }
+
+/* ---- findings ------------------------------------------------------------------ */
+function check(){
+  if (!S.locked) return;
+  const A = S.A, d = det2(A);
+  if (S.tab === 'T') {
+    const aSq = polyArea(SQUARE.map(v => apply(A, v))), aF = polyArea(F_SHAPE.map(v => apply(A, v))) / polyArea(F_SHAPE);
+    if (S.touched && Math.abs(Math.abs(d) - 1) > 0.05 && Math.abs(d) > 0.05 && Math.abs(aSq - d) < 1e-9 && Math.abs(aF - d) < 1e-9) discover('area');
+    if (S.touched && d < -1e-9) discover('flip');
+    if (S.touched && Math.abs(d) < 1e-9 && !isZero(A)) { discover('flat'); explainPOE(); }
+    const sol = solve(A, S.B);
+    if (S.huntedX && sol.kind === 'unique') { const ax = apply(A, S.X); if (Math.hypot(ax[0] - S.B[0], ax[1] - S.B[1]) < 0.1) discover('preimage'); }
+    if (S.touched && sol.kind === 'none' && !isZero(A)) discover('none');
+    if (S.touched && sol.kind === 'many') discover('many');
+  } else {
+    const AB = mul(S.OA, S.OB), BA = mul(S.OB, S.OA);
+    if (!sameM(AB, BA)) discover('order');
+    if (isZero(AB) && !isZero(S.OA) && !isZero(S.OB)) discover('zero');
+  }
+}
+function explainPOE(){
+  if (!POE || POE.explained) return;
+  const A = S.A, aSq = polyArea(SQUARE.map(v => apply(A, v))), sol = solve(A, S.B);
+  POE.explain(`With columns (${nf(A[0][0])}, ${nf(A[1][0])}) and (${nf(A[0][1])}, ${nf(A[1][1])}) along one line, |A| = ${nf(det2(A), 3)} and the unit square’s image has area ${nf(aSq, 3)}.
+    <b>The whole plane is squashed onto a line</b>; points off it, like ${sol.kind === 'none' ? 'your B = ' + vfm(S.B, 1) : 'most of the plane'}, can never be reached, and A has no inverse.`);
+}
+
+/* ---- controls ------------------------------------------------------------------ */
+buildT(); buildO();
+const setTab = t => { S.tab = t; sound('tick'); paint(); track('tab', {tab: t === 'T' ? 'transform' : 'order'}); };
+$('tabT').addEventListener('click', () => { if (S.locked) setTab('T'); });
+$('tabO').addEventListener('click', () => { if (S.locked) setTab('O'); });
+$('tChips').addEventListener('click', e => { const b = e.target.closest('[data-t]'); if (!b || !S.locked) return; const p = TPRE[b.dataset.t];
+  S.A = p.A.map(r => r.slice()); S.B = p.B.slice(); S.preset = b.dataset.t; S.solved = false; S.touched = true; sound('pop'); paint(); track('system', {preset: S.preset}); });
+for (const [id, i, j] of [['ea', 0, 0], ['eb', 0, 1], ['ec', 1, 0], ['ed', 1, 1]]) {
+  $(id).addEventListener('input', e => { S.A[i][j] = r1(+e.target.value); S.preset = null; S.solved = false; S.touched = true; paint(); });
+  $(id).addEventListener('change', () => track('matrix', {A: S.A}));
+}
+$('btnSolve').addEventListener('click', () => { if (!S.locked) return; S.solved = true; sound('chime'); track('solve', {A: S.A, B: S.B, kind: solve(S.A, S.B).kind}); paint(); });
+$('oChips').addEventListener('click', e => { const b = e.target.closest('[data-o]'); if (!b || !S.locked) return; const p = OPRE[b.dataset.o];
+  S.OA = p.A.map(r => r.slice()); S.OB = p.B.map(r => r.slice()); S.opre = b.dataset.o; sound('pop'); paint(); track('pair', {preset: S.opre}); });
+for (const n of ['A', 'B']) for (let i = 0; i < 2; i++) for (let j = 0; j < 2; j++) {
+  $(n + i + j).addEventListener('input', e => { const v = e.target.value; if (v === '' || v === '-' || !isFinite(+v)) return; (n === 'A' ? S.OA : S.OB)[i][j] = clamp(Math.round(+v), -5, 5); S.opre = null; paint(); });
+  $(n + i + j).addEventListener('change', e => { e.target.value = (n === 'A' ? S.OA : S.OB)[i][j]; track('pair', {A: S.OA, B: S.OB}); });
+}
+/* right panel: the column tips and B */
+let DR = null;
+drag($('hitR'), sT, {
+  start(p){
+    if (!S.locked) return false;
+    const c = [['i', [S.A[0][0], S.A[1][0]]], ['j', [S.A[0][1], S.A[1][1]]], ['B', S.B]];
+    let best = null, bd = 20;
+    for (const [k, v] of c) { const s = toP(RP, v), dd = Math.hypot(s.x - p.x, s.y - p.y); if (dd < bd) { bd = dd; best = k; } }
+    if (!best) return false;
+    DR = best;
+  },
+  move(p){
+    if (!DR) return;
+    const v = fromP(RP, p).map(x => clamp(r1(x), DR === 'B' ? -10 : -6, DR === 'B' ? 10 : 6));
+    if (DR === 'B') S.B = v; else if (DR === 'i') { S.A[0][0] = v[0]; S.A[1][0] = v[1]; } else { S.A[0][1] = v[0]; S.A[1][1] = v[1]; }
+    S.preset = null; S.solved = false; S.touched = true; paint();
+  },
+  end(){ if (DR) track('drag', {what: DR, A: S.A, B: S.B}); DR = null; },
+});
+/* left panel: X */
+let DX = false;
+drag($('hitL'), sT, {
+  start(p){ if (!S.locked) return false; const s = toP(LP, S.X); if (Math.hypot(s.x - p.x, s.y - p.y) > 22) return false; DX = true; },
+  move(p){ if (!DX) return; S.X = fromP(LP, p).map(x => clamp(Math.round(x * 100) / 100, -LP.r, LP.r)); S.huntedX = true; paint(); },
+  end(){ if (DX) track('hunt', {X: S.X, AX: apply(S.A, S.X), B: S.B}); DX = false; },
+});
+
+/* ---- start ------------------------------------------------------------------------ */
+findings($('finds'), [
+  {id: 'area',     icon: '▱', label: '|A| is the area scale', hint: 'Change A and compare the measured area with |A|'},
+  {id: 'flip',     icon: '⇋', label: 'A negative determinant flips the plane', hint: 'Swap the columns round'},
+  {id: 'flat',     icon: '—', label: '|A| = 0 flattens the plane: no inverse', hint: 'Line the two columns up'},
+  {id: 'preimage', icon: '◎', label: 'Found the X that lands on B', hint: 'Drag X until AX sits on B'},
+  {id: 'none',     icon: '∅', label: 'Inconsistent: (adj A)B ≠ O', hint: 'Flatten the plane with B off the line'},
+  {id: 'many',     icon: '∞', label: 'Infinitely many solutions', hint: 'Flatten the plane with B on the line'},
+  {id: 'order',    icon: '⇄', label: 'AB ≠ BA', hint: 'Compare the two orders'},
+  {id: 'zero',     icon: 'O', label: 'AB = O with A, B ≠ O', hint: 'Find two non-zero matrices whose product is zero'},
+], () => toast('All eight. Every rule of the chapter, seen as the plane moving.', 4200));
+
+const POE = predict($('poe'), {
+  id: 'flatten',
+  q: 'Drag A’s two columns until they point along the same line. What happens to the plane?',
+  options: [
+    {id: 'turn', text: 'It turns round.'},
+    {id: 'flat', text: 'It is squashed onto a line, and most points can no longer be reached.', right: true},
+    {id: 'double', text: 'It doubles in size.'},
+    {id: 'none', text: 'Nothing special happens.'},
+  ],
+  onLock(){ S.locked = true; lockControls(false); say('Drag the blue and red column tips on the right.'); paint(); },
+});
+function lockControls(lock){
+  for (const id of ['ea', 'eb', 'ec', 'ed', 'btnSolve', 'tabT', 'tabO', 'A00', 'A01', 'A10', 'A11', 'B00', 'B01', 'B10', 'B11']) $(id).disabled = lock;
+  document.querySelectorAll('#tChips button, #oChips button').forEach(b => b.disabled = lock);
+  for (const id of ['hitL', 'hitR']) $(id).style.pointerEvents = lock ? 'none' : '';
+}
+lockControls(!POE.locked);
+if (!Play.FF('predict')) { S.locked = true; lockControls(false); }
+paint();
+window.applyFeatures = () => paint();
+window.PG_STATE = () => JSON.parse(JSON.stringify({tab: S.tab, A: S.A, B: S.B, X: S.X, det: det2(S.A), AX: apply(S.A, S.X), solve: solve(S.A, S.B), solved: S.solved, locked: S.locked,
+  areaSquare: polyArea(SQUARE.map(v => apply(S.A, v))), OA: S.OA, OB: S.OB, AB: mul(S.OA, S.OB), BA: mul(S.OB, S.OA)}));
+window.PG_MODEL = {mul, apply, det2, det3, adj2, inv2, triArea, polyArea, solve, isZero, sameM, F_SHAPE, SQUARE, TPRE, OPRE,
+  toLeft: v => toP(LP, v), toRight: v => toP(RP, v)};
+</script>
+</body>
+</html>

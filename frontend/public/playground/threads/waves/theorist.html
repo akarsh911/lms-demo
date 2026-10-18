@@ -1,0 +1,952 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Oscillations and Waves</title>
+<meta name="description" content="Class 11: a block on a spring and a pendulum integrated step by step, a string and air columns solved for their standing waves, and two strings that beat. Set the force law, measure the period, and break SHM.">
+<link rel="icon" href="../../favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600&family=Inter:wght@400;500;600;700&family=Nunito:wght@500;700;800&family=Newsreader:opsz,wght@6..72,400;6..72,500&family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="../../play.css">
+<style>
+/* Only what this page needs beyond play.css. */
+.pg-stage{align-self:start; min-height:0}
+.gate{position:absolute; inset:0; display:grid; place-items:center; pointer-events:none}
+.gate span{background:rgba(29,35,39,.86); color:#fff; padding:10px 16px; border-radius:99px; font-weight:600; font-size:14px}
+.seg{display:grid; grid-template-columns:repeat(4,1fr); gap:4px; background:var(--sunk); padding:4px; border-radius:var(--radius-sm); margin-bottom:8px}
+.seg.three{grid-template-columns:repeat(3,1fr)}
+.seg button{border:0; background:transparent; border-radius:7px; min-height:30px; font-weight:600; font-size:12.5px; cursor:pointer; color:var(--ink-2); padding:0 4px}
+.seg button[aria-pressed="true"]{background:var(--card); color:var(--ink); box-shadow:var(--shadow)}
+.seg button:disabled{opacity:.5; cursor:default}
+.ctl{grid-template-columns:104px 1fr 86px; margin:3px 0}
+.ctl label{font-size:12.5px; line-height:1.2}
+.ctl output{font-family:var(--font-mono); font-size:12.5px; font-weight:600; min-width:0}
+.readout{display:grid; grid-template-columns:1fr auto; gap:2px 12px; font-size:13px; align-items:baseline}
+.readout span{color:var(--ink-2)}
+.readout b{font-family:var(--font-mono); font-weight:600; font-size:12.5px; font-variant-numeric:tabular-nums; text-align:right}
+.readout .eq{grid-column:1/-1; font-family:var(--font-mono); font-size:11.5px; color:var(--ink-3); margin:-1px 0 3px}
+.readout .sep{grid-column:1/-1; height:1px; background:var(--hair); margin:4px 0}
+.why p{font-size:13.5px; margin-bottom:.5em}
+.note{font-size:12.5px; color:var(--ink-3); margin:6px 0 0}
+.kicker2{font-size:11px; letter-spacing:.07em; text-transform:uppercase; font-weight:700; color:var(--ink-3); margin:6px 0 2px}
+#blockHit, #bobHit, #resHit, #winHit{cursor:grab}
+#blockHit.dragging, #bobHit.dragging, #resHit.dragging, #winHit.dragging{cursor:grabbing}
+</style>
+</head>
+<body>
+<header class="pg-top"></header>
+
+<div class="pg-intro">
+  <h1>Oscillations and waves</h1>
+  <p>Every motion here is computed, step by step, from a force law you can change. Pull a block on a spring and let go; swing a pendulum; drive a string or an air column and let
+     the model find where it resonates; pluck two strings that are nearly in tune. Measure the period, fit it, and then break the rules the formulas rely on.</p>
+</div>
+
+<main class="pg-main wide-side">
+  <section class="pg-stage" id="stageWrap">
+    <svg id="stage" viewBox="0 0 1000 700" role="img" aria-label="A block on a spring beside its reference circle, with graphs of displacement, velocity and acceleration, and energy bars"></svg>
+    <div class="gate" id="gate"><span>Make your prediction first →</span></div>
+  </section>
+
+  <aside class="pg-side">
+    <div id="poe"></div>
+
+    <div class="card" id="ctlCard">
+      <div class="seg" role="tablist">
+        <button id="tabSpring" aria-pressed="true">Spring</button>
+        <button id="tabPend" aria-pressed="false">Pendulum</button>
+        <button id="tabString" aria-pressed="false">String, pipe</button>
+        <button id="tabBeats" aria-pressed="false">Beats</button>
+      </div>
+      <div id="ctlSpring">
+        <div class="ctl"><label for="kS">Stiffness k</label><input type="range" id="kS" min="10" max="200" step="1" value="50"><output id="kSOut">50 N/m</output></div>
+        <div class="ctl"><label for="mS">Mass m</label><input type="range" id="mS" min="0.2" max="5" step="0.1" value="1"><output id="mSOut">1.0 kg</output></div>
+        <div class="ctl"><label for="aS">Pull out to</label><input type="range" id="aS" min="1" max="20" step="1" value="10"><output id="aSOut">10 cm</output></div>
+        <div class="ctl"><label for="bS">Damping b</label><input type="range" id="bS" min="0" max="2" step="0.05" value="0"><output id="bSOut">0 kg/s</output></div>
+        <div class="ctl"><label for="pS">Force law, p</label><input type="range" id="pS" min="0.5" max="3" step="0.5" value="1"><output id="pSOut">1 (Hooke)</output></div>
+        <div class="row"><button class="btn primary sm" id="btnRelS">Pull and let go</button><button class="btn sm" id="btnBook">Example 13.7</button></div>
+        <p class="note">Or drag the block out and let go. The spring pulls with F = −k x·|x/x₀|<sup>p−1</sup>, x₀ = 10 cm: p = 1 is Hooke’s law.</p>
+      </div>
+      <div id="ctlPend" hidden>
+        <div class="ctl"><label for="lP">Length L</label><input type="range" id="lP" min="0.1" max="2.5" step="0.01" value="1"><output id="lPOut">1.00 m</output></div>
+        <div class="ctl"><label for="aP">Let go from</label><input type="range" id="aP" min="2" max="170" step="1" value="8"><output id="aPOut">8°</output></div>
+        <div class="row"><button class="btn primary sm" id="btnRelP">Let go</button></div>
+        <p class="note">Or drag the bob out and let go. g = 9.8 m/s². Every measured swing is added to the graphs.</p>
+      </div>
+      <div id="ctlString" hidden>
+        <div class="seg three" id="sys">
+          <button data-y="string" aria-pressed="true">String</button>
+          <button data-y="open" aria-pressed="false">Open pipe</button>
+          <button data-y="closed" aria-pressed="false">Closed pipe</button>
+        </div>
+        <div class="ctl"><label for="lW">Length L</label><input type="range" id="lW" min="0.1" max="1.5" step="0.01" value="0.72"><output id="lWOut">0.72 m</output></div>
+        <div class="ctl" id="rowT"><label for="tW">Tension T</label><input type="range" id="tW" min="10" max="200" step="1" value="60"><output id="tWOut">60 N</output></div>
+        <div class="ctl" id="rowMu"><label for="muW">µ, mass/length</label><input type="range" id="muW" min="1" max="20" step="0.01" value="6.94"><output id="muWOut">6.94 g/m</output></div>
+        <div class="ctl" id="rowV" hidden><label for="vW">Speed of sound</label><input type="range" id="vW" min="300" max="360" step="1" value="330"><output id="vWOut">330 m/s</output></div>
+        <div class="ctl"><label for="fW">Driver frequency</label><input type="range" id="fW" min="0" max="3000" step="1" value="400"><output id="fWOut">—</output></div>
+        <div class="row"><button class="btn sm" id="btnHear">🔊 Hear the driver</button></div>
+        <p class="note">Drag along the resonance graph to move the driver; the arrow keys on the slider fine-tune it.</p>
+      </div>
+      <div id="ctlBeats" hidden>
+        <div class="ctl"><label for="fA">String A</label><input type="range" id="fA" min="200" max="600" step="1" value="427"><output id="fAOut">427 Hz</output></div>
+        <div class="ctl"><label for="tB">Tension of B</label><input type="range" id="tB" min="0.9" max="1.1" step="0.001" value="1"><output id="tBOut">100.0%</output></div>
+        <div class="row"><button class="btn primary sm" id="btnBoth">🔊 Both together</button><button class="btn sm" id="btnA">A</button><button class="btn sm" id="btnB">B</button></div>
+        <p class="note">Book, Example 14.6: A is 427 Hz and B is out of tune. Change B’s tension and count the beats. Drag the window on the long graph to look closely at any moment.</p>
+      </div>
+    </div>
+
+    <div class="card" id="numCard">
+      <div class="kicker" id="numKick">Measured</div>
+      <div id="nums"></div>
+    </div>
+
+    <div class="card why" id="whyCard" hidden>
+      <div class="kicker">What the model says</div>
+      <div id="why"></div>
+    </div>
+
+    <div class="card"><div class="kicker">To find</div><div id="finds"></div></div>
+  </aside>
+</main>
+
+<script src="../../play.js"></script>
+<script>
+'use strict';
+const {$, esc, clamp, lerp, fmt, drag, loop, sound, tone, say, track, toast, predict, findings, discover, found,
+       shareState, sharedState, mount, reduced} = Play;
+mount({thread: 'waves', band: 'theorist'});
+
+/* MODEL:start ==================================================================
+   1. SPRING. A block of mass m on a frictionless floor, pulled by a spring whose force
+      law you can change:  F = −k x |x/x₀|^(p−1) − b v   (x₀ = 0.1 m; p = 1 is Hooke’s law).
+      Its potential energy is U = k x₀² |x/x₀|^(p+1) / (p+1)  (½kx² for p = 1).
+      Integrated with fourth-order Runge–Kutta at 4000 steps per second.
+   2. PENDULUM. θ'' = −(g/L) sin θ, the full equation, not the small-angle one.
+      Integrated the same way. g = 9.8 m/s².
+      The period of both is MEASURED: the time between upward crossings of the middle.
+   3. STRING AND AIR COLUMN. The medium is cut into N = 120 pieces, each pulled by its
+      neighbours: μa ü_i = (T/a)(u_{i+1} − 2u_i + u_{i−1}) − γ μa u̇_i + F_i. A fixed end
+      (string ends, the closed end of a pipe) has u = 0; an open end of a pipe is free.
+      A driver shakes one piece at frequency f; the page solves for the steady motion
+      u_i(t) = Re(U_i e^{iωt}) — a tridiagonal linear system — at every frequency, and the
+      resonance curve is its amplitude. For the air, T/μ is v². No formula for the
+      harmonics is used: the peaks are where the model puts them.
+   4. BEATS. Two strings: A at f_A, and B, whose frequency goes as √(tension):
+      f_B = 422 Hz × √(T/T₀). The page samples y = sin 2πf_A t + sin 2πf_B t and counts
+      the slow swells of its envelope.
+   ============================================================================ */
+const G = 9.8, X0 = 0.1;
+/* ---- 1. the spring ---- */
+const springForce = (x, v, P) => -P.k * x * Math.pow(Math.abs(x / X0) + 1e-300, P.p - 1) - P.b * v;
+const springPE = (x, P) => P.k * X0 * X0 * Math.pow(Math.abs(x / X0), P.p + 1) / (P.p + 1);
+function rk4(y, dt, acc){
+  const [x, v] = y;
+  const k1v = acc(x, v), k1x = v;
+  const k2v = acc(x + k1x * dt / 2, v + k1v * dt / 2), k2x = v + k1v * dt / 2;
+  const k3v = acc(x + k2x * dt / 2, v + k2v * dt / 2), k3x = v + k2v * dt / 2;
+  const k4v = acc(x + k3x * dt, v + k3v * dt), k4x = v + k3v * dt;
+  return [x + dt / 6 * (k1x + 2 * k2x + 2 * k3x + k4x), v + dt / 6 * (k1v + 2 * k2v + 2 * k3v + k4v)];
+}
+/* An oscillator: advance it, and record every upward crossing of zero (interpolated). */
+function makeOsc(acc, x0, dt){ return {acc, x: x0, v: 0, t: 0, dt, ups: [], x0}; }
+function stepOsc(o, T){
+  const n = Math.max(1, Math.round(T / o.dt));
+  for (let i = 0; i < n; i++) {
+    const [x, v] = rk4([o.x, o.v], o.dt, o.acc);
+    if (o.x < 0 && x >= 0) o.ups.push(o.t + o.dt * (-o.x) / (x - o.x));
+    o.x = x; o.v = v; o.t += o.dt;
+  }
+}
+const periodOf = o => o.ups.length >= 2 ? o.ups[o.ups.length - 1] - o.ups[o.ups.length - 2] : null;
+/* run a spring to a measured period; returns period, energies at |x| = x_at on the first pass */
+function springRun(P, A, cycles = 3){
+  const o = makeOsc((x, v) => springForce(x, v, P) / P.m, A, 1 / 4000);
+  let at = null;
+  const E0 = springPE(A, P);
+  for (let s = 0; s < 400000 && o.ups.length < cycles + 1; s++) {
+    const xp = o.x;
+    stepOsc(o, o.dt);
+    if (P.xAt && !at && Math.abs(xp) > P.xAt && Math.abs(o.x) <= P.xAt) at = {KE: 0.5 * P.m * o.v * o.v, PE: springPE(o.x, P), v: Math.abs(o.v)};
+  }
+  const E1 = 0.5 * P.m * o.v * o.v + springPE(o.x, P);
+  return {T: periodOf(o), E0, E1, at, formula: 2 * Math.PI * Math.sqrt(P.m / P.k)};
+}
+/* ---- 2. the pendulum ---- */
+const pendAcc = L => (th, w) => -G / L * Math.sin(th);
+function pendRun(L, deg){
+  const o = makeOsc(pendAcc(L), deg * Math.PI / 180, 1 / 4000);
+  for (let s = 0; s < 800000 && o.ups.length < 3; s++) stepOsc(o, o.dt);
+  return {T: periodOf(o), small: 2 * Math.PI * Math.sqrt(L / G)};
+}
+/* fit T² = s L through the origin; g = 4π²/s */
+function fitG(recs){
+  let sLT = 0, sLL = 0;
+  for (const r of recs) { sLT += r.L * r.T * r.T; sLL += r.L * r.L; }
+  const s = sLT / sLL;
+  return {slope: s, g: 4 * Math.PI * Math.PI / s};
+}
+/* ---- 3. string and air columns: the steady driven motion ---- */
+const NS = 120;
+function medium(o){
+  if (o.sys === 'string') return {v: Math.sqrt(o.T / o.mu), K: o.T / (o.L / NS), m: o.mu * o.L / NS, fix0: true, fixN: true, drive: 7};
+  const v = o.vs, a = o.L / NS;
+  return {v, K: v * v / a, m: a, fix0: o.sys === 'closed', fixN: false, drive: o.sys === 'closed' ? NS : 0};
+}
+const GAMMA = {string: 12, open: 40, closed: 40};    // damping, per second
+function steady(o, f){
+  const md = medium(o), w = 2 * Math.PI * f, g = GAMMA[o.sys];
+  const i0 = md.fix0 ? 1 : 0, i1 = md.fixN ? NS - 1 : NS, n = i1 - i0 + 1;
+  const dr = new Float64Array(n), di = new Float64Array(n), rr = new Float64Array(n), ri = new Float64Array(n);
+  for (let j = 0; j < n; j++) {
+    const i = i0 + j, end = (i === 0 && !md.fix0) || (i === NS && !md.fixN);
+    const mm = end ? md.m / 2 : md.m, kk = end ? md.K : 2 * md.K;
+    dr[j] = kk - w * w * mm; di[j] = w * g * mm;
+    rr[j] = i === md.drive ? 1 : 0; ri[j] = 0;
+  }
+  /* Thomas algorithm, complex diagonal, real off-diagonals −K */
+  const c = -md.K;
+  const cpr = new Float64Array(n), cpi = new Float64Array(n), dpr = new Float64Array(n), dpi = new Float64Array(n);
+  let br = dr[0], bi = di[0], den = br * br + bi * bi;
+  cpr[0] = c * br / den; cpi[0] = -c * bi / den;
+  dpr[0] = (rr[0] * br + ri[0] * bi) / den; dpi[0] = (ri[0] * br - rr[0] * bi) / den;
+  for (let j = 1; j < n; j++) {
+    br = dr[j] - c * cpr[j - 1]; bi = di[j] - c * cpi[j - 1]; den = br * br + bi * bi;
+    cpr[j] = c * br / den; cpi[j] = -c * bi / den;
+    const nr = rr[j] - c * dpr[j - 1], ni = ri[j] - c * dpi[j - 1];
+    dpr[j] = (nr * br + ni * bi) / den; dpi[j] = (ni * br - nr * bi) / den;
+  }
+  const Ur = new Float64Array(NS + 1), Ui = new Float64Array(NS + 1);
+  for (let j = n - 1; j >= 0; j--) {
+    let xr = dpr[j], xi = dpi[j];
+    if (j < n - 1) { xr -= cpr[j] * Ur[i0 + j + 1] - cpi[j] * Ui[i0 + j + 1]; xi -= cpr[j] * Ui[i0 + j + 1] + cpi[j] * Ur[i0 + j + 1]; }
+    Ur[i0 + j] = xr; Ui[i0 + j] = xi;
+  }
+  /* an air column that is open at both ends can also slide as a whole: take that out */
+  if (!md.fix0 && !md.fixN) { let mr = 0, mi = 0; for (let i = 0; i <= NS; i++) { mr += Ur[i]; mi += Ui[i]; } mr /= NS + 1; mi /= NS + 1; for (let i = 0; i <= NS; i++) { Ur[i] -= mr; Ui[i] -= mi; } }
+  let amp = 0;
+  for (let i = 0; i <= NS; i++) amp = Math.max(amp, Math.hypot(Ur[i], Ui[i]));
+  return {Ur, Ui, amp, v: md.v};
+}
+const fTop = o => 6.5 * medium(o).v / (2 * o.L);     // the right edge of the graph
+/* sweep the driver; find the resonance peaks and refine each one */
+function sweep(o, n = 1500){
+  const top = fTop(o), fs = [], as = [];
+  for (let k = 1; k <= n; k++) { const f = top * k / n; fs.push(f); as.push(steady(o, f).amp); }
+  const peaks = [];
+  for (let k = 1; k < n - 1; k++) if (as[k] > as[k - 1] && as[k] >= as[k + 1]) {
+    let a = fs[k - 1], b = fs[k + 1];
+    for (let it = 0; it < 40; it++) { const m1 = a + (b - a) * 0.382, m2 = a + (b - a) * 0.618; if (steady(o, m1).amp > steady(o, m2).amp) b = m2; else a = m1; }
+    const f = (a + b) / 2;
+    peaks.push({f, amp: steady(o, f).amp});
+  }
+  return {fs, as, peaks: peaks.filter(p => p.amp > 1e-3 * Math.max(...peaks.map(q => q.amp)))};
+}
+/* interior nodes of a steady pattern: pieces whose amplitude is a local minimum near zero */
+function nodesOf(st){
+  const A = []; for (let i = 0; i <= NS; i++) A.push(Math.hypot(st.Ur[i], st.Ui[i]));
+  const top = Math.max(...A), out = [];
+  for (let i = 1; i < NS; i++) if (A[i] <= A[i - 1] && A[i] < A[i + 1] && A[i] < 0.08 * top) out.push(i / NS);
+  return out;
+}
+/* ---- 4. beats ---- */
+const F_B0 = 422;
+const fB = tension => F_B0 * Math.sqrt(tension);
+function beatSignal(fa, fb, T = 2, fsmp = 8000){
+  const n = Math.round(T * fsmp), y = new Float32Array(n);
+  for (let i = 0; i < n; i++) { const t = i / fsmp; y[i] = Math.sin(2 * Math.PI * fa * t) + Math.sin(2 * Math.PI * fb * t); }
+  return {y, fsmp};
+}
+/* the envelope: the largest |y| in each short slice (5 ms, or one wave if longer); the beat frequency is the number of its
+   dips per second, timed from the first dip to the last */
+function measureBeats(fa, fb, T = 2){
+  const {y, fsmp} = beatSignal(fa, fb, T);
+  const w = Math.round(fsmp * Math.max(0.005, 1.1 / Math.min(fa, fb))), env = [];      // a slice at least one wave long
+  for (let i = 0; i + w <= y.length; i += w) { let m = 0; for (let j = i; j < i + w; j++) m = Math.max(m, Math.abs(y[j])); env.push(m); }
+  const dips = [];
+  for (let k = 1; k < env.length - 1; k++) if (env[k] < env[k - 1] && env[k] <= env[k + 1] && env[k] < 1.0) {
+    if (!dips.length || k - dips[dips.length - 1] > 3) dips.push(k);
+  }
+  if (dips.length < 2) return {beats: 0, env, dips};
+  const dt = w / fsmp;
+  return {beats: (dips.length - 1) / ((dips[dips.length - 1] - dips[0]) * dt), env, dips, dt};
+}
+/* MODEL:end */
+
+/* ---- state ------------------------------------------------------------------- */
+const S = {tab: 'spring', locked: false,
+  sp: {k: 50, m: 1, A: 0.10, b: 0, p: 1}, spRecs: [],
+  pe: {L: 1, deg: 8}, peRecs: [],
+  st: {sys: 'string', L: 0.72, T: 60, mu: 6.94e-3, vs: 330, f: 64}, onPeak: [],
+  bt: {fa: 427, tb: 1, win: 0.25}, beatRecs: []};
+const shared = sharedState();
+if (shared && ['spring', 'pend', 'string', 'beats'].includes(shared.tab)) S.tab = shared.tab;
+shareState(() => ({tab: S.tab, sp: S.sp, pe: S.pe, st: S.st, bt: S.bt}));
+
+let OSC = null, OSCP = null, DRAGGING = null, TRACE = [], PTRACE = [], RELEASE = null, PREL = null;
+function releaseSpring(A){
+  const P = Object.assign({}, S.sp);
+  OSC = makeOsc((x, v) => springForce(x, v, P) / P.m, A, 1 / 4000);
+  OSC.P = P; TRACE = []; RELEASE = {A: Math.abs(A), P};
+}
+function releasePend(deg){
+  const L = S.pe.L;
+  OSCP = makeOsc(pendAcc(L), deg * Math.PI / 180, 1 / 4000);
+  OSCP.L = L; PTRACE = []; PREL = {deg: Math.abs(deg), L};
+}
+let SWEEP = null, SWEEPKEY = '';
+function sweepNow(){ const key = JSON.stringify([S.st.sys, S.st.L, S.st.T, S.st.mu, S.st.vs]); if (key !== SWEEPKEY) { SWEEP = sweep(S.st); SWEEPKEY = key; } return SWEEP; }
+
+/* ============================================================================
+   The stage
+   ============================================================================ */
+const svg = $('stage');
+const INK = '#1d2327', INK2 = '#4a555b', INK3 = '#7c878c', HAIR = '#e4e0d6', TEAL = '#16a3a3', RED = '#d6453d', BLUE = '#2f6fd0', ORANGE = '#e0822f', PURPLE = '#6a3fc2';
+const SX0 = 330, SPX = 1000;                           // spring: equilibrium px, px per metre
+const PH = {x: 800, y: 145, r: 88};                    // reference circle
+const TG = {x: 80, w: 610, ys: [262, 382, 502], h: 96};
+const EB = {x: 760, y: 318, h: 280};
+const PV = {x: 280, y: 262};                            // pendulum pivot (drawn so it can swing right over the top)
+const pvScale = L => Math.min(200, 225 / L);           // px per metre: long pendulums are drawn smaller
+const T2 = {x: 610, y: 80, w: 340, h: 230};
+const TA = {x: 610, y: 410, w: 340, h: 200};
+const SG = {x: 100, x1: 900};                          // string span
+const RG = {x: 90, y: 420, w: 860, h: 210};            // resonance graph
+const BG1 = {x: 90, y: 96, w: 860, h: 176}, BG2 = {x: 90, y: 350, w: 860, h: 200};
+
+function build(){
+  svg.innerHTML = `
+  <defs>
+    <marker id="ar" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="${INK}"/></marker>
+    <marker id="arB" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="${BLUE}"/></marker>
+    <linearGradient id="gBlock" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#8a6ad8"/><stop offset="1" stop-color="#5a3aa8"/></linearGradient>
+    <radialGradient id="gBob" cx="38%" cy="35%"><stop offset="0" stop-color="#e3dafa"/><stop offset="1" stop-color="#6a3fc2"/></radialGradient>
+    <linearGradient id="gPipe" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#e6eff1"/><stop offset="1" stop-color="#d2e2e6"/></linearGradient>
+  </defs>
+  <rect x="0" y="0" width="1000" height="700" fill="#fbfaf6"/>
+
+  <!-- ===== spring ===== -->
+  <g id="vSpring">
+    <text x="24" y="32" class="serif" font-size="19" fill="${INK}">A block on a spring</text>
+    <text x="24" y="50" font-size="11.5" fill="${INK3}">Frictionless floor · the block’s motion is integrated, not drawn from a formula</text>
+    <rect x="30" y="92" width="18" height="118" fill="#b9b3a6"/>
+    ${Array.from({length: 8}, (_, i) => `<line x1="30" y1="${98 + i * 15}" x2="18" y2="${110 + i * 15}" stroke="#9a9384"/>`).join('')}
+    <line x1="30" y1="210" x2="720" y2="210" stroke="#9a9384" stroke-width="2"/>
+    <line x1="${SX0}" y1="80" x2="${SX0}" y2="222" stroke="${INK3}" stroke-dasharray="4 4"/>
+    <text x="${SX0}" y="236" font-size="11" text-anchor="middle" fill="${INK3}">x = 0</text>
+    <path id="spring" fill="none" stroke="#5b646a" stroke-width="2.4" stroke-linejoin="round"/>
+    <rect id="block" y="150" width="60" height="60" rx="6" fill="url(#gBlock)"/>
+    <text id="blockLab" y="186" font-size="13" font-weight="700" fill="#fff" text-anchor="middle"></text>
+    <line id="xArrow" y1="120" y2="120" stroke="${TEAL}" stroke-width="2" marker-end="url(#ar)"/>
+    <text id="xLab" y="112" font-size="12" font-weight="700" fill="#0e6f6f" text-anchor="middle"></text>
+    <rect id="blockHit" y="140" width="80" height="80" fill="transparent" role="slider" aria-label="The block: drag it out and let go"/>
+
+    <text x="${PH.x}" y="36" class="serif" font-size="15" fill="${INK}" text-anchor="middle">Its reference circle</text>
+    <circle id="phC" cx="${PH.x}" cy="${PH.y}" r="${PH.r}" fill="none" stroke="#cfc9b8"/>
+    <line x1="${PH.x - PH.r - 12}" y1="${PH.y}" x2="${PH.x + PH.r + 12}" y2="${PH.y}" stroke="#cfc9b8"/>
+    <path id="phPath" fill="none" stroke="${PURPLE}" stroke-width="1.2" opacity=".35"/>
+    <line id="phR" x1="${PH.x}" y1="${PH.y}" stroke="${PURPLE}" stroke-width="2"/>
+    <line id="phDrop" stroke="${PURPLE}" stroke-dasharray="3 3"/>
+    <circle id="phP" r="6" fill="${PURPLE}"/>
+    <circle id="phX" r="4.5" fill="${TEAL}"/>
+    <text id="phLab" x="${PH.x}" y="${PH.y + PH.r + 24}" font-size="11" text-anchor="middle" fill="${INK3}">(x, −v/ω) · a circle only for SHM</text>
+
+    <g id="tAxes"></g>
+    <path id="trX" fill="none" stroke="${TEAL}" stroke-width="2.2"/>
+    <path id="trV" fill="none" stroke="${BLUE}" stroke-width="2.2"/>
+    <path id="trA" fill="none" stroke="${RED}" stroke-width="2.2"/>
+    <g id="tMark"></g>
+    <g id="eBars"></g>
+    <g id="spRecs"></g>
+  </g>
+
+  <!-- ===== pendulum ===== -->
+  <g id="vPend" display="none">
+    <text x="24" y="32" class="serif" font-size="19" fill="${INK}">A simple pendulum</text>
+    <text x="24" y="50" font-size="11.5" fill="${INK3}">θ″ = −(g/L) sin θ, integrated in full</text>
+    <rect x="${PV.x - 7}" y="${PV.y - 7}" width="14" height="14" rx="3" fill="#b9b3a6"/><g id="pScale"></g>
+    <path id="pArc" fill="none" stroke="#cfc9b8" stroke-dasharray="4 5"/>
+    <line x1="${PV.x}" y1="${PV.y}" x2="${PV.x}" y2="${PV.y + 235}" stroke="#e2ded2" stroke-dasharray="3 6"/>
+    <line id="rod" x1="${PV.x}" y1="${PV.y}" stroke="#5b646a" stroke-width="2"/>
+    <circle cx="${PV.x}" cy="${PV.y}" r="4" fill="#5b646a"/>
+    <circle id="bob" r="17" fill="url(#gBob)" stroke="#4a2a92"/>
+    <text id="thLab" font-size="12.5" font-weight="700" fill="${PURPLE}"></text>
+    <circle id="bobHit" r="30" fill="transparent" role="slider" aria-label="The bob: drag it out and let go"/>
+    <g id="pthStrip"></g>
+    <path id="pth" fill="none" stroke="${PURPLE}" stroke-width="2"/>
+    <text x="${T2.x}" y="${T2.y - 30}" class="serif" font-size="15" fill="${INK}">T² against L, for swings under 15°</text>
+    <g id="t2Axes"></g><g id="t2Pts"></g>
+    <text x="${TA.x}" y="${TA.y - 30}" class="serif" font-size="15" fill="${INK}">Measured T ÷ 2π√(L/g), against the swing</text>
+    <g id="taAxes"></g><g id="taPts"></g>
+  </g>
+
+  <!-- ===== string and pipes ===== -->
+  <g id="vString" display="none">
+    <text x="24" y="32" id="stTitle" class="serif" font-size="19" fill="${INK}"></text>
+    <text x="24" y="50" id="stSub" font-size="11.5" fill="${INK3}"></text>
+    <g id="pipeG">
+      <rect x="${SG.x}" y="120" width="${SG.x1 - SG.x}" height="110" fill="url(#gPipe)"/>
+      <line x1="${SG.x}" y1="120" x2="${SG.x1}" y2="120" stroke="#7d8a8f" stroke-width="3"/>
+      <line x1="${SG.x}" y1="230" x2="${SG.x1}" y2="230" stroke="#7d8a8f" stroke-width="3"/>
+      <rect id="cap" y="116" width="10" height="118" fill="#5b646a"/>
+      <g id="air"></g>
+    </g>
+    <g id="strG">
+      <rect x="${SG.x - 16}" y="110" width="16" height="130" fill="#b9b3a6"/><rect x="${SG.x1}" y="110" width="16" height="130" fill="#b9b3a6"/>
+      <path id="strEnv" fill="#16a3a3" opacity=".08"/>
+      <path id="strLine" fill="none" stroke="#3d464c" stroke-width="2.4"/>
+    </g>
+    <g id="driver"></g>
+    <g id="nodeMarks"></g>
+    <text x="${SG.x}" y="286" font-size="12" font-weight="700" letter-spacing=".06em" fill="${INK2}" id="envTitle"></text>
+    <line x1="${SG.x}" y1="345" x2="${SG.x1}" y2="345" stroke="#cfc9b8"/>
+    <path id="envU" fill="none" stroke="${TEAL}" stroke-width="2.2"/>
+    <path id="envP" fill="none" stroke="${ORANGE}" stroke-width="2" stroke-dasharray="6 4"/>
+    <g id="envKey"></g>
+    <text x="${RG.x}" y="${RG.y - 30}" class="serif" font-size="15" fill="${INK}">Resonance: how hard the driver shakes it, at every frequency</text>
+    <g id="rAxes"></g>
+    <path id="rCurve" fill="none" stroke="${PURPLE}" stroke-width="2"/>
+    <g id="rPeaks"></g>
+    <line id="rNow" stroke="${RED}" stroke-width="2"/>
+    <circle id="rDot" r="6" fill="${RED}" stroke="#fff" stroke-width="2"/>
+    <rect id="resHit" x="${RG.x}" y="${RG.y}" width="${RG.w}" height="${RG.h}" fill="transparent" role="slider" aria-label="Driver frequency: drag along the resonance graph"/>
+  </g>
+
+  <!-- ===== beats ===== -->
+  <g id="vBeats" display="none">
+    <text x="24" y="32" class="serif" font-size="19" fill="${INK}">Two strings, nearly in tune</text>
+    <text x="24" y="50" id="bSub" font-size="11.5" fill="${INK3}"></text>
+    <text x="${BG1.x}" y="${BG1.y - 12}" font-size="12" font-weight="700" letter-spacing=".06em" fill="${INK2}" id="bg1T"></text>
+    <g id="b1Axes"></g>
+    <path id="bA" fill="none" stroke="${TEAL}" stroke-width="1.8"/>
+    <path id="bB" fill="none" stroke="${ORANGE}" stroke-width="1.8"/>
+    <path id="bS1" fill="none" stroke="${INK}" stroke-width="2.2"/>
+    <text x="${BG2.x}" y="${BG2.y - 12}" font-size="12" font-weight="700" letter-spacing=".06em" fill="${INK2}">THE SUM, OVER TWO SECONDS</text>
+    <g id="b2Axes"></g>
+    <path id="bS2" fill="none" stroke="${INK}" stroke-width="0.7" opacity=".75"/>
+    <path id="bEnv" fill="none" stroke="${PURPLE}" stroke-width="2"/>
+    <g id="bDips"></g>
+    <rect id="win" y="${BG2.y}" height="${BG2.h}" fill="${TEAL}" opacity=".12" stroke="${TEAL}"/>
+    <rect id="winHit" y="${BG2.y}" height="${BG2.h}" fill="transparent" role="slider" aria-label="The close-up window: drag along the long graph"/>
+    <g id="bBig"></g>
+  </g>
+  <rect id="veil" x="0" y="240" width="1000" height="460" fill="#fbfaf6" opacity=".93"/>
+  <text id="veilT" x="500" y="440" font-size="15" text-anchor="middle" fill="${INK3}">The graphs appear once you have made a prediction.</text>
+  `;
+}
+
+/* ---- 1. spring ---------------------------------------------------------------- */
+const WIN = () => Math.max(2.5, 3 * 2 * Math.PI * Math.sqrt(S.sp.m / S.sp.k));
+function springX(){ return DRAGGING === 'block' ? S.dragX : OSC ? OSC.x : 0; }
+function paintSpring(){
+  const P = OSC ? OSC.P : S.sp, x = springX(), v = OSC && DRAGGING !== 'block' ? OSC.v : 0;
+  const bx = SX0 + x * SPX;
+  /* spring coils from the wall to the block */
+  const x0 = 48, x1 = bx - 30, n = 14, amp = 14;
+  let d = `M${x0} 180 L${x0 + 12} 180`;
+  for (let i = 0; i <= n; i++) { const xx = x0 + 12 + (x1 - x0 - 24) * i / n; d += ` L${xx.toFixed(1)} ${i === 0 || i === n ? 180 : 180 + (i % 2 ? -amp : amp)}`; }
+  d += ` L${x1} 180`;
+  $('spring').setAttribute('d', d);
+  $('block').setAttribute('x', bx - 30); $('blockHit').setAttribute('x', bx - 40);
+  $('blockLab').setAttribute('x', bx); $('blockLab').textContent = fmt(P.m, 1) + ' kg';
+  $('xArrow').setAttribute('x1', SX0); $('xArrow').setAttribute('x2', bx); $('xArrow').setAttribute('opacity', Math.abs(x) > 0.004 ? 1 : 0);
+  $('xLab').setAttribute('x', (SX0 + bx) / 2); $('xLab').textContent = Math.abs(x) > 0.004 ? `x = ${fmt(x * 100, 1)} cm` : '';
+  /* reference circle: the point (x, −v/ω₀) scaled by the release amplitude */
+  const w0 = Math.sqrt(P.k / P.m), Aref = RELEASE ? Math.max(0.01, RELEASE.A) : Math.max(0.01, Math.abs(x));
+  const px = PH.x + x / Aref * PH.r, py = PH.y + (v / w0) / Aref * PH.r;
+  $('phP').setAttribute('cx', px.toFixed(1)); $('phP').setAttribute('cy', py.toFixed(1));
+  $('phR').setAttribute('x2', px.toFixed(1)); $('phR').setAttribute('y2', py.toFixed(1));
+  $('phDrop').setAttribute('x1', px.toFixed(1)); $('phDrop').setAttribute('y1', py.toFixed(1)); $('phDrop').setAttribute('x2', px.toFixed(1)); $('phDrop').setAttribute('y2', PH.y);
+  $('phX').setAttribute('cx', px.toFixed(1)); $('phX').setAttribute('cy', PH.y);
+  let pp = '';
+  for (const q of TRACE.slice(-800)) pp += (pp ? 'L' : 'M') + (PH.x + q.x / Aref * PH.r).toFixed(1) + ' ' + (PH.y + (q.v / w0) / Aref * PH.r).toFixed(1);
+  $('phPath').setAttribute('d', pp);
+  if (!S.locked) return;
+  /* traces */
+  const W = WIN(), tNow = OSC ? OSC.t : 0, A = RELEASE ? RELEASE.A : 0.1;
+  const aMax = Math.max(1e-6, Math.abs(springForce(A, 0, P)) / P.m), vMax = Math.max(1e-6, Math.sqrt(2 * springPE(A, P) / P.m));
+  const scales = [A * 1.15, vMax * 1.15, aMax * 1.15];
+  const keys = ['x', 'v', 'a'], ids = ['trX', 'trV', 'trA'];
+  keys.forEach((kk, j) => {
+    let dd = '';
+    const y0 = TG.ys[j] + TG.h / 2;
+    for (const q of TRACE) if (q.t >= tNow - W) dd += (dd ? 'L' : 'M') + (TG.x + (q.t - tNow + W) / W * TG.w).toFixed(1) + ' ' + (y0 - clamp(q[kk] / scales[j], -1, 1) * TG.h / 2).toFixed(1);
+    $(ids[j]).setAttribute('d', dd);
+  });
+  /* the measured period, bracketed on the x–t trace */
+  const T = OSC ? periodOf(OSC) : null;
+  let mk = '';
+  if (T && OSC.ups.length >= 2) {
+    const u1 = OSC.ups[OSC.ups.length - 2], u2 = OSC.ups[OSC.ups.length - 1];
+    const xa = TG.x + (u1 - tNow + W) / W * TG.w, xb = TG.x + (u2 - tNow + W) / W * TG.w, y = TG.ys[0] + TG.h / 2;
+    if (xa > TG.x) mk = `<line x1="${xa}" y1="${y}" x2="${xb}" y2="${y}" stroke="${INK}" stroke-width="1.3" marker-start="url(#ar)" marker-end="url(#ar)"/><text x="${(xa + xb) / 2}" y="${y - 6}" font-size="12" font-weight="700" text-anchor="middle" fill="${INK}" class="m">T = ${fmt(T, 3)} s</text>`;
+  }
+  $('tMark').innerHTML = mk;
+  /* energy */
+  const KE = 0.5 * P.m * v * v, PE = springPE(x, P), E0 = RELEASE ? springPE(RELEASE.A, RELEASE.P) : Math.max(PE, 1e-9);
+  const bar = (i, val, col, lab) => { const h = clamp(val / (E0 || 1), 0, 1.05) * EB.h, x = EB.x + i * 70;
+    return `<rect x="${x}" y="${EB.y + EB.h - h}" width="44" height="${h}" fill="${col}" rx="3"/><text x="${x + 22}" y="${EB.y + EB.h + 16}" font-size="12" font-weight="700" text-anchor="middle" fill="${INK2}">${lab}</text>
+      <text x="${x + 22}" y="${EB.y + EB.h - h - 6}" font-size="11" text-anchor="middle" fill="${INK}" class="m">${fmt(val, 3)} J</text>`; };
+  $('eBars').innerHTML = `<text x="${EB.x}" y="${EB.y - 18}" class="serif" font-size="15" fill="${INK}">Energy</text>
+    <line x1="${EB.x - 6}" y1="${EB.y + EB.h}" x2="${EB.x + 200}" y2="${EB.y + EB.h}" stroke="#9aa3a6"/>` +
+    bar(0, KE, BLUE, 'KE') + bar(1, PE, TEAL, 'PE') + bar(2, KE + PE, PURPLE, 'total');
+  /* releases so far */
+  let rc = `<text x="${TG.x}" y="652" font-size="11" font-weight="700" letter-spacing=".06em" fill="${INK2}">YOUR RELEASES</text>`;
+  S.spRecs.slice(-5).forEach((r, i) => { rc += `<text x="${TG.x + 120 + i * 172}" y="652" font-size="11.5" fill="${INK}" class="m">${fmt(r.A * 100, 0)} cm${r.p !== 1 ? ` p=${r.p}` : ''} → ${fmt(r.T, 3)} s</text>`; });
+  $('spRecs').innerHTML = S.spRecs.length ? rc : '';
+}
+function drawSpringAxes(){
+  let ax = '';
+  const labs = [['x', 'displacement', TEAL], ['v', 'velocity', BLUE], ['a', 'acceleration', RED]];
+  TG.ys.forEach((y, j) => {
+    ax += `<line x1="${TG.x}" y1="${y + TG.h / 2}" x2="${TG.x + TG.w}" y2="${y + TG.h / 2}" stroke="#9aa3a6"/><line x1="${TG.x}" y1="${y}" x2="${TG.x}" y2="${y + TG.h}" stroke="#9aa3a6"/>`;
+    ax += `<text x="${TG.x - 10}" y="${y + TG.h / 2 + 5}" font-size="16" text-anchor="end" fill="${labs[j][2]}" class="serif" font-style="italic">${labs[j][0]}</text>`;
+    ax += `<text x="${TG.x + 8}" y="${y + 11}" font-size="10.5" fill="${INK3}">${labs[j][1]}</text>`;
+  });
+  ax += `<text x="${TG.x + TG.w}" y="${TG.ys[2] + TG.h + 16}" font-size="10.5" text-anchor="end" fill="${INK3}">last ${fmt(WIN(), 1)} s → now</text>`;
+  $('tAxes').innerHTML = ax;
+}
+
+/* ---- 2. pendulum -------------------------------------------------------------- */
+function pendTh(){ return DRAGGING === 'bob' ? S.dragTh : OSCP ? OSCP.x : 0; }
+const t2x = L => T2.x + L / 2.6 * T2.w, t2y = t2 => T2.y + T2.h - clamp(t2 / 10.5, 0, 1) * T2.h;
+const tax = d => TA.x + d / 180 * TA.w, tay = r => TA.y + TA.h - clamp((r - 0.95) / 0.95, 0, 1) * TA.h;
+function paintPend(){
+  const L = OSCP ? OSCP.L : S.pe.L, th = pendTh(), sc = pvScale(L), len = L * sc;
+  $('pScale').innerHTML = `<line x1="40" y1="580" x2="${40 + sc * 0.5}" y2="580" stroke="${INK2}" stroke-width="2"/><text x="40" y="572" font-size="10.5" fill="${INK3}">50 cm</text>`;
+  const bx = PV.x + len * Math.sin(th), by = PV.y + len * Math.cos(th);
+  $('rod').setAttribute('x2', bx.toFixed(1)); $('rod').setAttribute('y2', by.toFixed(1));
+  $('bob').setAttribute('cx', bx.toFixed(1)); $('bob').setAttribute('cy', by.toFixed(1));
+  $('bobHit').setAttribute('cx', bx.toFixed(1)); $('bobHit').setAttribute('cy', by.toFixed(1));
+  const a0 = (PREL ? PREL.deg : S.pe.deg) * Math.PI / 180;
+  $('pArc').setAttribute('d', `M${PV.x + len * Math.sin(-a0)} ${PV.y + len * Math.cos(-a0)} A${len} ${len} 0 ${a0 > Math.PI / 2 ? 1 : 0} 0 ${PV.x + len * Math.sin(a0)} ${PV.y + len * Math.cos(a0)}`);
+  $('thLab').setAttribute('x', 24); $('thLab').setAttribute('y', 78);
+  $('thLab').textContent = `θ = ${fmt(th * 180 / Math.PI, 1)}°`;
+  if (!S.locked) return;
+  /* θ(t) strip */
+  const W = Math.max(4, 3 * 2 * Math.PI * Math.sqrt(L / G)), tNow = OSCP ? OSCP.t : 0, y0 = 640, h = 40, sa = Math.max(0.05, a0);
+  $('pthStrip').innerHTML = `<line x1="40" y1="${y0}" x2="520" y2="${y0}" stroke="#cfc9b8"/><text x="40" y="${y0 - h - 6}" font-size="10.5" fill="${INK3}">θ against time, last ${fmt(W, 1)} s</text>`;
+  let dd = '';
+  for (const q of PTRACE) if (q.t >= tNow - W) dd += (dd ? 'L' : 'M') + (40 + (q.t - tNow + W) / W * 480).toFixed(1) + ' ' + (y0 - q.th / sa * h).toFixed(1);
+  $('pth').setAttribute('d', dd);
+  /* T² against L */
+  let ax = `<line x1="${T2.x}" y1="${T2.y + T2.h}" x2="${T2.x + T2.w}" y2="${T2.y + T2.h}" stroke="#9aa3a6"/><line x1="${T2.x}" y1="${T2.y}" x2="${T2.x}" y2="${T2.y + T2.h}" stroke="#9aa3a6"/>`;
+  for (const L2 of [0, 0.5, 1, 1.5, 2, 2.5]) ax += `<text x="${t2x(L2)}" y="${T2.y + T2.h + 16}" font-size="10.5" text-anchor="middle" fill="${INK3}">${L2}</text>`;
+  for (const t of [0, 2, 4, 6, 8, 10]) ax += `<line x1="${T2.x}" y1="${t2y(t)}" x2="${T2.x + T2.w}" y2="${t2y(t)}" stroke="${HAIR}"/><text x="${T2.x - 6}" y="${t2y(t) + 4}" font-size="10.5" text-anchor="end" fill="${INK3}">${t}</text>`;
+  ax += `<text x="${T2.x + T2.w}" y="${T2.y + T2.h + 32}" font-size="10.5" text-anchor="end" fill="${INK3}">L (m)</text><text x="${T2.x - 30}" y="${T2.y - 8}" font-size="10.5" fill="${INK3}">T² (s²)</text>`;
+  $('t2Axes').innerHTML = ax;
+  const small = S.peRecs.filter(r => r.deg <= 15);
+  let pts = small.map(r => `<circle cx="${t2x(r.L)}" cy="${t2y(r.T * r.T)}" r="5" fill="${PURPLE}" stroke="#fff" stroke-width="1.5"/>`).join('');
+  if (small.length >= 2) {
+    const fit = fitG(small);
+    pts += `<line x1="${t2x(0)}" y1="${t2y(0)}" x2="${t2x(2.6)}" y2="${t2y(fit.slope * 2.6)}" stroke="${PURPLE}" stroke-dasharray="6 4" opacity=".7"/>`;
+    pts += `<text x="${T2.x + 12}" y="${T2.y + 14}" font-size="12.5" fill="${INK}" class="m">slope ${fmt(fit.slope, 3)} s²/m → g = 4π²/slope = ${fmt(fit.g, 2)} m/s²</text>`;
+  }
+  $('t2Pts').innerHTML = pts;
+  let ax2 = `<line x1="${TA.x}" y1="${TA.y + TA.h}" x2="${TA.x + TA.w}" y2="${TA.y + TA.h}" stroke="#9aa3a6"/><line x1="${TA.x}" y1="${TA.y}" x2="${TA.x}" y2="${TA.y + TA.h}" stroke="#9aa3a6"/>`;
+  for (const dg of [0, 30, 60, 90, 120, 150, 180]) ax2 += `<text x="${tax(dg)}" y="${TA.y + TA.h + 16}" font-size="10.5" text-anchor="middle" fill="${INK3}">${dg}°</text>`;
+  for (const r of [1, 1.2, 1.4, 1.6, 1.8]) ax2 += `<line x1="${TA.x}" y1="${tay(r)}" x2="${TA.x + TA.w}" y2="${tay(r)}" stroke="${r === 1 ? '#b8a8e0' : HAIR}"/><text x="${TA.x - 6}" y="${tay(r) + 4}" font-size="10.5" text-anchor="end" fill="${INK3}">${fmt(r, 1)}</text>`;
+  ax2 += `<text x="${TA.x + TA.w - 4}" y="${tay(1) - 6}" font-size="10.5" text-anchor="end" fill="${PURPLE}">the small-swing formula</text>`;
+  $('taAxes').innerHTML = ax2;
+  $('taPts').innerHTML = S.peRecs.map(r => `<circle cx="${tax(r.deg)}" cy="${tay(r.T / (2 * Math.PI * Math.sqrt(r.L / G)))}" r="5" fill="${ORANGE}" stroke="#fff" stroke-width="1.5"/>`).join('');
+}
+
+/* ---- 3. string and pipes ------------------------------------------------------ */
+const sx = u => SG.x + u * (SG.x1 - SG.x);
+const rx = f => RG.x + f / fTop(S.st) * RG.w;
+const ry = a => { const db = 20 * Math.log10(Math.max(a, 1e-12)); return RG.y + RG.h - clamp((db - DBLO) / (DBHI - DBLO), 0, 1) * RG.h; };
+let DBLO = -60, DBHI = 0, STPH = 0;
+function paintString(){
+  const o = S.st, sw = sweepNow(), md = medium(o), f = o.f, st = steady(o, f), isStr = o.sys === 'string';
+  $('stTitle').textContent = isStr ? 'A stretched string' : o.sys === 'open' ? 'An air column open at both ends' : 'An air column closed at one end';
+  $('stSub').textContent = isStr ? `v = √(T/µ) = √(${o.T} N ÷ ${fmt(o.mu * 1000, 2)} g/m) = ${fmt(md.v, 1)} m/s · both ends fixed · a vibrator shakes it near the left end`
+    : `v = ${o.vs} m/s · a speaker at the ${o.sys === 'open' ? 'left' : 'open right'} end · the dots are slices of air, moving along the tube`;
+  $('pipeG').setAttribute('display', isStr ? 'none' : ''); $('strG').setAttribute('display', isStr ? '' : 'none');
+  $('cap').setAttribute('display', o.sys === 'closed' ? '' : 'none'); $('cap').setAttribute('x', SG.x - 5);
+  /* scale the peak response to the drawing */
+  const peakAmp = Math.max(...sw.peaks.map(p => p.amp), st.amp);
+  const vis = 58 / peakAmp;
+  const c = Math.cos(STPH), s = Math.sin(STPH);
+  if (isStr) {
+    let d = '', env = '', envB = '';
+    for (let i = 0; i <= NS; i++) {
+      const X = sx(i / NS), u = (st.Ur[i] * c - st.Ui[i] * s) * vis, A = Math.hypot(st.Ur[i], st.Ui[i]) * vis;
+      d += (i ? 'L' : 'M') + X.toFixed(1) + ' ' + (175 - u).toFixed(1);
+      env += (i ? 'L' : 'M') + X.toFixed(1) + ' ' + (175 - A).toFixed(1);
+      envB = 'L' + X.toFixed(1) + ' ' + (175 + A).toFixed(1) + envB;
+    }
+    $('strLine').setAttribute('d', d); $('strEnv').setAttribute('d', env + envB + 'Z');
+  } else {
+    let air = '';
+    const cols = 90;
+    for (let cc = 0; cc <= cols; cc++) {
+      const i = Math.round(cc / cols * NS), u = (st.Ur[i] * c - st.Ui[i] * s) * vis * 0.28;
+      const X = sx(cc / cols) + u;
+      for (let r = 0; r < 6; r++) air += `<circle cx="${X.toFixed(1)}" cy="${132 + r * 17 + (cc % 2) * 8}" r="2.6" fill="#2a7f8f" opacity=".75"/>`;
+    }
+    $('air').innerHTML = air;
+  }
+  /* the driver */
+  const dX = sx(md.drive / NS);
+  $('driver').innerHTML = isStr ? `<rect x="${dX - 9}" y="236" width="18" height="30" rx="3" fill="${RED}"/><line x1="${dX}" y1="236" x2="${dX}" y2="${175 - (st.Ur[md.drive] * c - st.Ui[md.drive] * s) * vis}" stroke="${RED}" stroke-width="2"/>`
+    : `<path d="M${o.sys === 'open' ? SG.x - 36 : SG.x1 + 36} 140 l${o.sys === 'open' ? 24 : -24} 14 v42 l${o.sys === 'open' ? -24 : 24} 14z" fill="${RED}"/>`;
+  /* the amplitude envelope along it, with nodes marked */
+  const A = [], P = [];
+  for (let i = 0; i <= NS; i++) A.push(Math.hypot(st.Ur[i], st.Ui[i]));
+  for (let i = 0; i <= NS; i++) { const j = Math.min(NS - 1, i), dr = st.Ur[j + 1] - st.Ur[j], di = st.Ui[j + 1] - st.Ui[j]; P.push(Math.hypot(dr, di)); }
+  const aTop = Math.max(...A) || 1, pTop = Math.max(...P) || 1;
+  $('envU').setAttribute('d', A.map((a, i) => (i ? 'L' : 'M') + sx(i / NS).toFixed(1) + ' ' + (345 - a / aTop * 45).toFixed(1)).join(''));
+  $('envP').setAttribute('d', isStr ? '' : P.map((p, i) => (i ? 'L' : 'M') + sx(i / NS).toFixed(1) + ' ' + (345 - p / pTop * 45).toFixed(1)).join(''));
+  $('envTitle').textContent = isStr ? 'HOW FAR EACH POINT SWINGS' : 'HOW FAR THE AIR SWINGS (SOLID) · HOW MUCH THE PRESSURE SWINGS (DASHED)';
+  const nodes = nodesOf(st);
+  let nm = nodes.map(u => `<text x="${sx(u)}" y="${isStr ? 106 : 112}" font-size="12" font-weight="700" text-anchor="middle" fill="${PURPLE}">N</text>`).join('');
+  $('nodeMarks').innerHTML = nm;
+  /* resonance graph */
+  const allA = sw.as.concat(sw.peaks.map(p => p.amp)), mx = Math.max(...allA);
+  DBHI = 20 * Math.log10(mx) + 2; DBLO = DBHI - 62;
+  let ax = `<line x1="${RG.x}" y1="${RG.y + RG.h}" x2="${RG.x + RG.w}" y2="${RG.y + RG.h}" stroke="#9aa3a6"/><line x1="${RG.x}" y1="${RG.y}" x2="${RG.x}" y2="${RG.y + RG.h}" stroke="#9aa3a6"/>`;
+  const top = fTop(o), step = niceStep(top / 7);
+  for (let q = 0; q <= top + 1e-9; q += step) ax += `<line x1="${rx(q)}" y1="${RG.y + RG.h}" x2="${rx(q)}" y2="${RG.y + RG.h + 5}" stroke="${INK3}"/><text x="${rx(q)}" y="${RG.y + RG.h + 18}" font-size="10.5" text-anchor="middle" fill="${INK3}">${fmt(q, 0)}</text>`;
+  ax += `<text x="${RG.x + RG.w}" y="${RG.y + RG.h + 34}" font-size="10.5" text-anchor="end" fill="${INK3}">driver frequency (Hz)</text>`;
+  for (let k = 0; k <= 3; k++) { const y = RG.y + k / 3 * RG.h; ax += `<text x="${RG.x - 6}" y="${y + 4}" font-size="10.5" text-anchor="end" fill="${INK3}">${k === 0 ? '0 dB' : '−' + Math.round(k / 3 * 62) + ''}</text>`; }
+  $('rAxes').innerHTML = ax;
+  $('rCurve').setAttribute('d', sw.fs.map((q, k) => (k ? 'L' : 'M') + rx(q).toFixed(1) + ' ' + ry(sw.as[k]).toFixed(1)).join(''));
+  const f1 = sw.peaks.length ? sw.peaks[0].f : null;
+  $('rPeaks').innerHTML = sw.peaks.map((p, k) => `<text x="${rx(p.f)}" y="${ry(p.amp) - 8}" font-size="11" font-weight="700" text-anchor="middle" fill="${PURPLE}" class="m">${fmt(p.f, p.f < 100 ? 1 : 0)}</text>
+     <text x="${rx(p.f)}" y="${ry(p.amp) - 21}" font-size="10.5" text-anchor="middle" fill="${INK3}">×${fmt(p.f / f1, 2)}</text>`).join('');
+  $('rNow').setAttribute('x1', rx(f)); $('rNow').setAttribute('x2', rx(f)); $('rNow').setAttribute('y1', RG.y); $('rNow').setAttribute('y2', RG.y + RG.h);
+  $('rDot').setAttribute('cx', rx(f)); $('rDot').setAttribute('cy', ry(st.amp));
+  S.stNow = {amp: st.amp, nodes: nodes.length, v: md.v};
+}
+const niceStep = x => { const p = Math.pow(10, Math.floor(Math.log10(x))), m = x / p; return (m < 1.5 ? 1 : m < 3.5 ? 2 : m < 7.5 ? 5 : 10) * p; };
+/* is the driver sitting on a resonance? then which one */
+function onResonance(){
+  const sw = sweepNow(), f = S.st.f, a = steady(S.st, f).amp;
+  let best = null;
+  sw.peaks.forEach((p, k) => { if (!best || Math.abs(p.f - f) < Math.abs(best.p.f - f)) best = {p, k}; });
+  if (!best || a < 0.5 * best.p.amp) return null;
+  return {n: best.k + 1, f: best.p.f, ratio: best.p.f / sw.peaks[0].f, amp: a};
+}
+
+/* ---- 4. beats ----------------------------------------------------------------- */
+function paintBeats(){
+  const fa = S.bt.fa, fb = fB(S.bt.tb), mb = measureBeats(fa, fb);
+  $('bSub').textContent = `A: ${fa} Hz · B: ${fmt(fb, 2)} Hz = 422 Hz × √(${fmt(S.bt.tb * 100, 1)}%) · each sampled 8000 times a second`;
+  const w0 = S.bt.win, W1 = 0.02;
+  $('bg1T').textContent = `CLOSE-UP: 20 ms STARTING AT t = ${fmt(w0, 3)} s`;
+  const b1y = BG1.y + BG1.h / 2, b1 = (t, y, sc) => (BG1.x + (t - w0) / W1 * BG1.w).toFixed(1) + ' ' + (b1y - y * sc).toFixed(1);
+  let pa = '', pb = '', ps = '';
+  for (let i = 0; i <= 600; i++) {
+    const t = w0 + W1 * i / 600, ya = Math.sin(2 * Math.PI * fa * t), yb = Math.sin(2 * Math.PI * fb * t);
+    pa += (i ? 'L' : 'M') + b1(t, ya, BG1.h / 4.4); pb += (i ? 'L' : 'M') + b1(t, yb, BG1.h / 4.4); ps += (i ? 'L' : 'M') + b1(t, ya + yb, BG1.h / 4.4);
+  }
+  $('bA').setAttribute('d', pa); $('bB').setAttribute('d', pb); $('bS1').setAttribute('d', ps);
+  $('b1Axes').innerHTML = `<line x1="${BG1.x}" y1="${b1y}" x2="${BG1.x + BG1.w}" y2="${b1y}" stroke="#cfc9b8"/>
+    <text x="${BG1.x + BG1.w}" y="${BG1.y - 12}" font-size="11" text-anchor="end"><tspan fill="${TEAL}" font-weight="700">A</tspan><tspan fill="${INK3}"> + </tspan><tspan fill="${ORANGE}" font-weight="700">B</tspan><tspan fill="${INK3}"> = </tspan><tspan fill="${INK}" font-weight="700">sum</tspan></text>`;
+  /* the long view */
+  const {y, fsmp} = beatSignal(fa, fb, 2), n = y.length, b2y = BG2.y + BG2.h / 2, sc2 = BG2.h / 4.4;
+  let s2 = '';
+  const stepPx = 1;                                              // one vertical stroke per pixel: min and max in that slice
+  for (let px = 0; px < BG2.w; px += stepPx) {
+    const i0 = Math.floor(px / BG2.w * n), i1 = Math.floor((px + stepPx) / BG2.w * n);
+    let lo = 9, hi = -9; for (let i = i0; i < i1; i++) { lo = Math.min(lo, y[i]); hi = Math.max(hi, y[i]); }
+    s2 += `M${(BG2.x + px).toFixed(1)} ${(b2y - hi * sc2).toFixed(1)}L${(BG2.x + px).toFixed(1)} ${(b2y - lo * sc2).toFixed(1)}`;
+  }
+  $('bS2').setAttribute('d', s2);
+  $('bEnv').setAttribute('d', mb.env.map((e, k) => (k ? 'L' : 'M') + (BG2.x + (k + 0.5) * (mb.dt || 0.005) / 2 * BG2.w).toFixed(1) + ' ' + (b2y - e * sc2).toFixed(1)).join(''));
+  $('bDips').innerHTML = mb.dips.map(k => `<circle cx="${(BG2.x + (k + 0.5) * (mb.dt || 0.005) / 2 * BG2.w).toFixed(1)}" cy="${(b2y).toFixed(1)}" r="4" fill="${PURPLE}"/>`).join('');
+  let ax = `<line x1="${BG2.x}" y1="${BG2.y + BG2.h}" x2="${BG2.x + BG2.w}" y2="${BG2.y + BG2.h}" stroke="#9aa3a6"/>`;
+  for (let t = 0; t <= 2.0001; t += 0.25) ax += `<text x="${BG2.x + t / 2 * BG2.w}" y="${BG2.y + BG2.h + 16}" font-size="10.5" text-anchor="middle" fill="${INK3}">${fmt(t, 2)} s</text>`;
+  $('b2Axes').innerHTML = ax;
+  const wx = BG2.x + w0 / 2 * BG2.w, ww = Math.max(4, W1 / 2 * BG2.w);
+  $('win').setAttribute('x', wx); $('win').setAttribute('width', ww);
+  $('winHit').setAttribute('x', wx - 14); $('winHit').setAttribute('width', ww + 28);
+  const d = Math.abs(fa - fb);
+  $('bBig').innerHTML = `<text x="${BG2.x}" y="628" class="serif" font-size="22" fill="${INK}">${mb.beats > 0 ? `${mb.dips.length} dips in the sum → <tspan class="m" font-weight="600">${fmt(mb.beats, 2)}</tspan> beats a second` : d < 0.05 ? 'In tune: the sum never dips — no beats' : 'Too few dips in two seconds to count'}</text>
+    <text x="${BG2.x}" y="656" font-size="13" fill="${INK2}" class="m">|f_A − f_B| = |${fa} − ${fmt(fb, 2)}| = ${fmt(d, 2)} Hz</text>`;
+  S.btNow = {beats: mb.beats, d, fb};
+}
+
+/* ---- side panel --------------------------------------------------------------- */
+function paintSide(){
+  if (!S.locked) { $('nums').innerHTML = '<p style="font-size:13px;color:var(--ink-3);margin:0">The measurements appear once you have made a prediction.</p>'; return; }
+  $('whyCard').hidden = false;
+  if (S.tab === 'spring') {
+    const P = OSC ? OSC.P : S.sp, T = OSC ? periodOf(OSC) : null, x = springX(), v = OSC ? OSC.v : 0;
+    const KE = 0.5 * P.m * v * v, PE = springPE(x, P), w0 = Math.sqrt(P.k / P.m);
+    $('numKick').textContent = 'Measured on the block';
+    $('nums').innerHTML = `<div class="readout">
+      <span>Period, measured</span><b>${T ? fmt(T, 4) + ' s' : '—'}</b>
+      <span>2π√(m/k)</span><b>${fmt(2 * Math.PI / w0, 4)} s</b>
+      <span>Released from</span><b>${RELEASE ? fmt(RELEASE.A * 100, 1) + ' cm' : '—'}</b>
+      <i class="sep"></i>
+      <span>x, v</span><b>${fmt(x * 100, 2)} cm, ${fmt(v, 3)} m/s</b>
+      <span>a = F/m</span><b>${fmt(springForce(x, v, P) / P.m, 2)} m/s²</b>
+      <span>KE + PE</span><b>${fmt(KE, 4)} + ${fmt(PE, 4)} = ${fmt(KE + PE, 4)} J</b>
+    </div>`;
+    const recs = S.spRecs.filter(r => r.p === P.p && r.k === P.k && r.m === P.m && r.b < 0.05);
+    let t = `<p>The acceleration is always opposite to the displacement${P.p === 1 ? ' and proportional to it, <span class="mono">a = −(k/m)x</span>: that is SHM, with ω = √(k/m) = ' + fmt(w0, 2) + ' rad/s' : ', but it is <b>not</b> proportional to it when p ≠ 1: this is not SHM'}.
+      Velocity leads the displacement by a quarter cycle; the acceleration is always the mirror image of x.</p>`;
+    if (recs.length >= 2) {
+      const a = recs.reduce((p, q) => q.A < p.A ? q : p), b = recs.reduce((p, q) => q.A > p.A ? q : p);
+      if (b.A / a.A > 1.3) t += `<p>Released from ${fmt(a.A * 100, 0)} cm: T = ${fmt(a.T, 4)} s. From ${fmt(b.A * 100, 0)} cm: T = ${fmt(b.T, 4)} s. ${Math.abs(b.T / a.T - 1) < 0.01 ? 'The same: a bigger swing is faster in just the right proportion.' : `A ${b.T < a.T ? 'shorter' : 'longer'} period for the bigger swing: with p = ${P.p} the spring gets ${P.p > 1 ? 'stiffer' : 'softer'} the further it is stretched.`}</p>`;
+    }
+    if (P.b > 0) t += `<p>With damping the total energy leaks away and the swings shrink; the period hardly changes.</p>`;
+    $('why').innerHTML = t;
+  } else if (S.tab === 'pend') {
+    const L = OSCP ? OSCP.L : S.pe.L, T = OSCP ? periodOf(OSCP) : null, small = S.peRecs.filter(r => r.deg <= 15), fit = small.length >= 2 ? fitG(small) : null;
+    $('numKick').textContent = 'Measured on the pendulum';
+    $('nums').innerHTML = `<div class="readout">
+      <span>Period, measured</span><b>${T ? fmt(T, 4) + ' s' : '—'}</b>
+      <span>2π√(L/g), small swings</span><b>${fmt(2 * Math.PI * Math.sqrt(L / G), 4)} s</b>
+      <span>Released from</span><b>${PREL ? PREL.deg + '°' : '—'}</b>
+      <i class="sep"></i>
+      <span>g fitted from ${small.length} swings</span><b>${fit ? fmt(fit.g, 3) + ' m/s²' : '—'}</b>
+      <span class="eq">T² = (4π²/g) L: the slope of the T² graph</span>
+    </div>`;
+    const big = S.peRecs.filter(r => r.deg >= 45).sort((a, b) => b.deg - a.deg)[0];
+    $('why').innerHTML = `<p>For small swings sin θ ≈ θ, the restoring acceleration is proportional to θ, and the pendulum is an SHM with T = 2π√(L/g), whatever the swing.</p>
+      ${big ? `<p>Released from ${big.deg}°, it took <b>${fmt(big.T, 3)} s</b>, ${fmt((big.T / (2 * Math.PI * Math.sqrt(big.L / G)) - 1) * 100, 1)}% longer than the formula: at large angles sin θ is well below θ, the pull back is weaker, and the swing slows. The formula stops holding.</p>` : ''}
+      <p>A seconds pendulum ticks once a second (T = 2 s): L = gT²/4π² = ${fmt(G * 4 / (4 * Math.PI * Math.PI), 3)} m (Example 13.8: 1 m).</p>`;
+  } else if (S.tab === 'string') {
+    const o = S.st, sw = sweepNow(), res = onResonance(), md = medium(o);
+    const f1 = sw.peaks.length ? sw.peaks[0].f : null;
+    $('numKick').textContent = 'Measured from the model';
+    $('nums').innerHTML = `<div class="readout">
+      <span>Wave speed, v</span><b>${fmt(md.v, 1)} m/s</b>
+      <span>Driver</span><b>${fmt(o.f, 1)} Hz</b>
+      <span>Lowest resonance, f₁ (model)</span><b>${f1 ? fmt(f1, 2) + ' Hz' : '—'}</b>
+      <span class="eq">${o.sys === 'closed' ? `v/4L = ${fmt(md.v, 1)}/(4 × ${o.L}) = ${fmt(md.v / (4 * o.L), 2)} Hz` : `v/2L = ${fmt(md.v, 1)}/(2 × ${o.L}) = ${fmt(md.v / (2 * o.L), 2)} Hz`}</span>
+      <span>Resonances, ÷ f₁</span><b>${sw.peaks.slice(0, 6).map(p => fmt(p.f / f1, 2)).join(', ')}</b>
+      <span>Nodes between the ends</span><b>${S.stNow ? S.stNow.nodes : '—'}</b>
+      <span>On a resonance?</span><b>${res ? 'yes, number ' + res.n : 'no'}</b>
+    </div>`;
+    $('why').innerHTML = `<p>The driver sends waves along; they reflect off the ends and meet themselves coming back. Only at certain frequencies does the reflected wave arrive back in step with the driver, and then the motion builds up: a <b>standing wave</b>, with nodes that never move.</p>
+      <p>${o.sys === 'closed' ? 'A closed end must be a node and an open end an antinode, so a quarter wave, three quarters, five quarters… fit in the tube: <b>only odd multiples</b> of f₁ resonate.' : o.sys === 'open' ? 'Both open ends are antinodes of the air’s motion (and nodes of pressure), so a half wave, two halves, three… fit: every multiple of f₁.' : 'Both ends are fixed nodes, so a half wave, two halves, three… fit on the string: every multiple of f₁.'}</p>`;
+  } else {
+    const n = S.btNow || {};
+    $('numKick').textContent = 'Measured from the sum';
+    $('nums').innerHTML = `<div class="readout">
+      <span>String A</span><b>${S.bt.fa} Hz</b>
+      <span>String B</span><b>${fmt(n.fb, 2)} Hz</b>
+      <span>Beats counted in the sum</span><b>${n.beats ? fmt(n.beats, 2) + ' per s' : 'none'}</b>
+      <span>|f_A − f_B|</span><b>${fmt(n.d, 2)} Hz</b>
+    </div>`;
+    $('why').innerHTML = `<p>When the two waves are in step they add to a big swing; a little later B has fallen half a cycle behind and they cancel. They drift in and out of step |f_A − f_B| times a second: those are the beats. Drag the close-up window from a loud moment to a quiet one and watch.</p>
+      <p>${n.fb < S.bt.fa ? 'B is below A. Tightening B raises its pitch, so the beats slow down as it comes into tune.' : 'B is above A now: tightening it further makes the beats faster.'}</p>`;
+  }
+}
+
+/* ---- paint -------------------------------------------------------------------- */
+const TABS = {spring: 'Spring', pend: 'Pend', string: 'String', beats: 'Beats'};
+function paint(){
+  for (const [t, c] of Object.entries(TABS)) { $('v' + c).setAttribute('display', S.tab === t ? '' : 'none'); $('ctl' + c).hidden = S.tab !== t; $('tab' + c).setAttribute('aria-pressed', S.tab === t); }
+  $('veil').setAttribute('display', S.locked ? 'none' : ''); $('veilT').setAttribute('display', S.locked ? 'none' : '');
+  svg.setAttribute('aria-label', {spring: 'A block on a spring beside its reference circle, with graphs of displacement, velocity and acceleration, and energy bars',
+    pend: 'A swinging pendulum with graphs of period squared against length and period against amplitude', string: 'A driven string or air column showing its standing wave, and its resonance curve',
+    beats: 'Two nearly equal waves and their sum, showing beats'}[S.tab]);
+  if (S.tab === 'spring') paintSpring(); else if (S.tab === 'pend') paintPend(); else if (S.tab === 'string') paintString(); else paintBeats();
+  paintSide();
+}
+function syncControls(){
+  const sp = S.sp;
+  $('kS').value = sp.k; $('kSOut').textContent = sp.k + ' N/m';
+  $('mS').value = sp.m; $('mSOut').textContent = fmt(sp.m, 1) + ' kg';
+  $('aS').value = Math.round(sp.A * 100); $('aSOut').textContent = Math.round(sp.A * 100) + ' cm';
+  $('bS').value = sp.b; $('bSOut').textContent = fmt(sp.b, 2) + ' kg/s';
+  $('pS').value = sp.p; $('pSOut').textContent = sp.p === 1 ? '1 (Hooke)' : String(sp.p);
+  $('lP').value = S.pe.L; $('lPOut').textContent = fmt(S.pe.L, 2) + ' m';
+  $('aP').value = S.pe.deg; $('aPOut').textContent = S.pe.deg + '°';
+  const o = S.st;
+  document.querySelectorAll('#sys button').forEach(b => b.setAttribute('aria-pressed', b.dataset.y === o.sys));
+  $('rowT').hidden = $('rowMu').hidden = o.sys !== 'string'; $('rowV').hidden = o.sys === 'string';
+  $('lW').value = o.L; $('lWOut').textContent = fmt(o.L, 2) + ' m';
+  $('tW').value = o.T; $('tWOut').textContent = o.T + ' N';
+  $('muW').value = fmt(o.mu * 1000, 2); $('muWOut').textContent = fmt(o.mu * 1000, 2) + ' g/m';
+  $('vW').value = o.vs; $('vWOut').textContent = o.vs + ' m/s';
+  const top = fTop(o);
+  $('fW').max = top.toFixed(1); $('fW').step = (top / 4000).toPrecision(2); $('fW').value = o.f; $('fWOut').textContent = fmt(o.f, top < 1000 ? 1 : 0) + ' Hz';
+  $('fA').value = S.bt.fa; $('fAOut').textContent = S.bt.fa + ' Hz';
+  $('tB').value = S.bt.tb; $('tBOut').textContent = fmt(S.bt.tb * 100, 1) + '%';
+}
+
+/* ---- findings ------------------------------------------------------------------ */
+function check(){
+  if (!S.locked) return;
+  /* spring: same law, two amplitudes */
+  const sets = {};
+  for (const r of S.spRecs) { if (r.b > 0.05) continue; const key = [r.k, r.m, r.p].join('|'); (sets[key] = sets[key] || []).push(r); }
+  for (const rs of Object.values(sets)) {
+    if (rs.length < 2) continue;
+    const a = rs.reduce((p, q) => q.A < p.A ? q : p), b = rs.reduce((p, q) => q.A > p.A ? q : p);
+    if (b.A / a.A >= 1.9 && rs[0].p === 1 && Math.abs(b.T / a.T - 1) < 0.01) discover('iso');
+    if (b.A / a.A >= 1.9 && rs[0].p !== 1 && Math.abs(b.T / a.T - 1) > 0.1) discover('break');
+  }
+  /* pendulum */
+  const small = S.peRecs.filter(r => r.deg <= 15);
+  if (small.length >= 3) { const Ls = small.map(r => r.L); if (Math.max(...Ls) / Math.min(...Ls) >= 2 && Math.abs(fitG(small).g / G - 1) < 0.02) discover('gfit'); }
+  if (S.peRecs.some(r => r.deg >= 60 && r.T / (2 * Math.PI * Math.sqrt(r.L / G)) > 1.05)) discover('bigswing');
+  /* string and pipes */
+  if (S.tab === 'string') {
+    const res = onResonance();
+    if (res && S.st.sys === 'string' && res.n >= 3 && S.stNow && S.stNow.nodes === res.n - 1) discover('harm');
+    if (res && S.st.sys === 'closed' && res.n >= 2 && Math.abs(res.ratio - (2 * res.n - 1)) < 0.03) discover('closed');
+  }
+  /* beats */
+  if (S.tab === 'beats' && S.btNow && S.btNow.beats > 0) {
+    const n = S.btNow;
+    if (Math.abs(n.beats - n.d) < 0.2 && n.d >= 1 && n.d <= 12) {
+      if (!S.beatRecs.some(r => Math.abs(r.d - n.d) < 0.5)) S.beatRecs.push({d: n.d, beats: n.beats});
+      if (S.beatRecs.length >= 2) discover('beats');
+    }
+  }
+  maybeExplain();
+}
+let EXPLAINED = false;
+function maybeExplain(){
+  if (EXPLAINED || !POE || !found('iso')) return;
+  EXPLAINED = true;
+  const rs = S.spRecs.filter(r => r.p === 1 && r.b <= 0.05);
+  const a = rs.reduce((p, q) => q.A < p.A ? q : p), b = rs.reduce((p, q) => q.A > p.A ? q : p);
+  POE.explain(`Released from ${fmt(a.A * 100, 0)} cm the block took <b>${fmt(a.T, 4)} s</b>; from ${fmt(b.A * 100, 0)} cm, <b>${fmt(b.T, 4)} s</b>. Twice as far to go, but the spring pulls twice as hard all the way,
+    so it goes twice as fast: the period is 2π√(m/k) = ${fmt(2 * Math.PI * Math.sqrt(a.m / a.k), 4)} s whatever the amplitude. That is what makes SHM special — change the force law (p ≠ 1) and it stops being true.`);
+}
+
+/* ============================================================================
+   Controls
+   ============================================================================ */
+build(); drawSpringAxes();
+const num = id => +$(id).value;
+$('kS').addEventListener('input', () => { S.sp.k = num('kS'); syncControls(); drawSpringAxes(); });
+$('mS').addEventListener('input', () => { S.sp.m = num('mS'); syncControls(); drawSpringAxes(); });
+$('aS').addEventListener('input', () => { S.sp.A = num('aS') / 100; syncControls(); });
+$('bS').addEventListener('input', () => { S.sp.b = num('bS'); syncControls(); });
+$('pS').addEventListener('input', () => { S.sp.p = num('pS'); syncControls(); });
+for (const id of ['kS', 'mS', 'bS', 'pS']) $(id).addEventListener('change', () => { if (OSC) releaseSpring(S.sp.A); track('spring', Object.assign({}, S.sp)); });
+$('btnRelS').addEventListener('click', () => { releaseSpring(S.sp.A); sound('boing'); track('release', {A: S.sp.A}); });
+$('btnBook').addEventListener('click', () => { S.sp = {k: 50, m: 1, A: 0.10, b: 0, p: 1}; syncControls(); drawSpringAxes(); releaseSpring(0.10); sound('tick'); });
+drag($('blockHit'), svg, {
+  start(){ if (!S.locked) return false; DRAGGING = 'block'; S.dragX = OSC ? OSC.x : 0; },
+  move(p){ S.dragX = clamp((p.x - SX0) / SPX, -0.2, 0.2); paint(); },
+  end(){ DRAGGING = null; if (Math.abs(S.dragX) > 0.005) { S.sp.A = Math.round(Math.abs(S.dragX) * 100) / 100; syncControls(); releaseSpring(S.dragX); sound('boing'); track('release', {A: S.dragX, by: 'drag'}); } },
+});
+$('lP').addEventListener('input', () => { S.pe.L = num('lP'); syncControls(); releasePend(S.pe.deg); });
+$('aP').addEventListener('input', () => { S.pe.deg = num('aP'); syncControls(); });
+$('btnRelP').addEventListener('click', () => { releasePend(S.pe.deg); sound('tick'); track('release-pendulum', {L: S.pe.L, deg: S.pe.deg}); });
+drag($('bobHit'), svg, {
+  start(){ if (!S.locked) return false; DRAGGING = 'bob'; S.dragTh = OSCP ? OSCP.x : 0; },
+  move(p){ S.dragTh = clamp(Math.atan2(p.x - PV.x, p.y - PV.y), -170 * Math.PI / 180, 170 * Math.PI / 180); paint(); },
+  end(){ DRAGGING = null; const d = Math.round(Math.abs(S.dragTh) * 180 / Math.PI); if (d >= 1) { S.pe.deg = clamp(d, 2, 170); syncControls(); releasePend(Math.sign(S.dragTh) * S.pe.deg); track('release-pendulum', {L: S.pe.L, deg: S.pe.deg, by: 'drag'}); } },
+});
+function setSt(k, v){ S.st[k] = v; const top = fTop(S.st); if (S.st.f > top) S.st.f = top; syncControls(); paint(); check(); }
+$('sys').addEventListener('click', e => { const b = e.target.closest('[data-y]'); if (!b || !S.locked) return; S.st.sys = b.dataset.y; if (b.dataset.y !== 'string' && S.st.L > 1) S.st.L = 0.3;
+  S.st.f = Math.min(S.st.f, fTop(S.st)); sound('tick'); syncControls(); paint(); check(); track('system', {sys: S.st.sys}); });
+$('lW').addEventListener('input', () => setSt('L', num('lW')));
+$('tW').addEventListener('input', () => setSt('T', num('tW')));
+$('muW').addEventListener('input', () => setSt('mu', num('muW') / 1000));
+$('vW').addEventListener('input', () => setSt('vs', num('vW')));
+$('fW').addEventListener('input', () => setSt('f', num('fW')));
+$('fW').addEventListener('change', () => track('driver', {f: S.st.f, sys: S.st.sys}));
+drag($('resHit'), svg, {start(p){ if (!S.locked) return false; setSt('f', clamp((p.x - RG.x) / RG.w * fTop(S.st), 0, fTop(S.st))); },
+  move(p){ setSt('f', clamp((p.x - RG.x) / RG.w * fTop(S.st), 0, fTop(S.st))); }, end(){ track('driver', {f: S.st.f, sys: S.st.sys, by: 'graph'}); }});
+$('btnHear').addEventListener('click', () => { if (S.st.f >= 20) tone(S.st.f, 1.2, 'sine', 0.12); track('hear', {f: S.st.f}); });
+$('fA').addEventListener('input', () => { S.bt.fa = num('fA'); syncControls(); paint(); check(); });
+$('tB').addEventListener('input', () => { S.bt.tb = num('tB'); syncControls(); paint(); check(); });
+$('tB').addEventListener('change', () => track('tension', {tb: S.bt.tb, fb: fB(S.bt.tb)}));
+$('btnBoth').addEventListener('click', () => { tone(S.bt.fa, 3, 'sine', 0.1); tone(fB(S.bt.tb), 3, 'sine', 0.1); track('play-beats', {fa: S.bt.fa, fb: fB(S.bt.tb)}); });
+$('btnA').addEventListener('click', () => tone(S.bt.fa, 1.2, 'sine', 0.12));
+$('btnB').addEventListener('click', () => tone(fB(S.bt.tb), 1.2, 'sine', 0.12));
+let WGRAB = 0;
+drag($('winHit'), svg, {start(p){ if (!S.locked) return false; WGRAB = p.x - (BG2.x + S.bt.win / 2 * BG2.w); },
+  move(p){ S.bt.win = clamp((p.x - WGRAB - BG2.x) / BG2.w * 2, 0, 1.98); paint(); }});
+function setTab(t){ S.tab = t; sound('tick'); if (t === 'spring') drawSpringAxes(); if (t === 'pend' && !OSCP) releasePend(S.pe.deg); paint(); check(); track('tab', {tab: t}); }
+$('tabSpring').addEventListener('click', () => setTab('spring'));
+$('tabPend').addEventListener('click', () => setTab('pend'));
+$('tabString').addEventListener('click', () => setTab('string'));
+$('tabBeats').addEventListener('click', () => setTab('beats'));
+function lockControls(lock){
+  for (const id of ['tabSpring', 'tabPend', 'tabString', 'tabBeats', 'kS', 'mS', 'aS', 'bS', 'pS', 'btnRelS', 'btnBook', 'lP', 'aP', 'btnRelP',
+    'lW', 'tW', 'muW', 'vW', 'fW', 'btnHear', 'fA', 'tB', 'btnBoth', 'btnA', 'btnB']) $(id).disabled = lock;
+  document.querySelectorAll('#sys button').forEach(b => b.disabled = lock);
+  for (const id of ['blockHit', 'bobHit', 'resHit', 'winHit']) $(id).style.pointerEvents = lock ? 'none' : '';
+  $('gate').hidden = !lock;
+}
+
+/* ============================================================================
+   Start
+   ============================================================================ */
+findings($('finds'), [
+  {id: 'iso',      icon: '⏱', label: 'The period ignores the amplitude', hint: 'Release the block from one distance, then twice as far'},
+  {id: 'break',    icon: '⚡', label: 'Break Hooke’s law, break SHM',      hint: 'Set p ≠ 1 and compare two amplitudes'},
+  {id: 'gfit',     icon: 'g', label: 'g from T² against L',               hint: 'Small swings at three lengths, at least ×2 apart'},
+  {id: 'bigswing', icon: '↺', label: 'Big swings run slow',               hint: 'Let the pendulum go from 60° or more'},
+  {id: 'harm',     icon: '〰', label: 'Harmonics: nodes and n·v/2L',       hint: 'Find the third resonance of the string'},
+  {id: 'closed',   icon: '🎺', label: 'A closed pipe skips the even ones', hint: 'Drive a closed pipe at its second resonance'},
+  {id: 'beats',    icon: '♒', label: 'Beats count |f₁ − f₂|',             hint: 'Count the beats at two different tensions'},
+], () => toast('All seven. You measured SHM, then broke it; found the harmonics; and tuned a string by ear.', 4600));
+
+const POE = predict($('poe'), {
+  id: 'period-amplitude',
+  q: 'You pull the block on the spring twice as far before letting go. The time for one full oscillation…',
+  options: [
+    {id: 'double', text: 'doubles — it has twice as far to go'},
+    {id: 'same',   text: 'stays the same', right: true},
+    {id: 'half',   text: 'halves — the spring pulls harder'},
+    {id: 'root2',  text: 'grows by √2'},
+  ],
+  onLock(){
+    S.locked = true; lockControls(false);
+    say('Now release the block from ten centimetres, then from twenty, and compare the periods.');
+    drawSpringAxes(); releaseSpring(S.sp.A); paint();
+  },
+});
+lockControls(!POE.locked);
+if (!Play.FF('predict')) S.locked = true;
+syncControls(); paint();
+
+/* The oscillators run in real time. Under reduced motion they advance in half-second jumps. */
+const RM = reduced();
+let acc = 0;
+function recordSpring(){
+  const T = periodOf(OSC);
+  if (!T || !RELEASE || OSC.ups.length < 2) return;
+  const P = RELEASE.P, rec = {A: RELEASE.A, T, k: P.k, m: P.m, p: P.p, b: P.b};
+  const last = S.spRecs[S.spRecs.length - 1];
+  if (last && last.rel === RELEASE) Object.assign(last, rec); else S.spRecs.push(Object.assign(rec, {rel: RELEASE}));
+}
+function recordPend(){
+  const T = periodOf(OSCP);
+  if (!T || !PREL || OSCP.ups.length < 2) return;
+  const rec = {L: PREL.L, deg: PREL.deg, T};
+  const last = S.peRecs[S.peRecs.length - 1];
+  if (last && last.rel === PREL) Object.assign(last, rec); else S.peRecs.push(Object.assign(rec, {rel: PREL}));
+}
+loop(dt => {
+  if (!S.locked) return;
+  acc += dt;
+  if (RM && acc < 0.5) return;
+  const step = acc; acc = 0;
+  if (S.tab === 'spring' && OSC && DRAGGING !== 'block') {
+    const n = Math.max(1, Math.round(step * 120));
+    for (let i = 0; i < n; i++) { stepOsc(OSC, step / n); TRACE.push({t: OSC.t, x: OSC.x, v: OSC.v, a: springForce(OSC.x, OSC.v, OSC.P) / OSC.P.m}); }
+    while (TRACE.length && TRACE[0].t < OSC.t - WIN() - 0.5) TRACE.shift();
+    recordSpring();
+  }
+  if (S.tab === 'pend' && OSCP && DRAGGING !== 'bob') {
+    const n = Math.max(1, Math.round(step * 120));
+    for (let i = 0; i < n; i++) { stepOsc(OSCP, step / n); PTRACE.push({t: OSCP.t, th: OSCP.x}); }
+    while (PTRACE.length && PTRACE[0].t < OSCP.t - 20) PTRACE.shift();
+    recordPend();
+  }
+  if (S.tab === 'string') STPH += step * 2 * Math.PI * 0.8;     // the standing wave, strobed to 0.8 Hz
+  paint(); check();
+});
+window.applyFeatures = () => paint();
+window.PG_STATE = () => ({tab: S.tab, locked: S.locked, sp: Object.assign({}, S.sp), pe: Object.assign({}, S.pe), st: Object.assign({}, S.st), bt: Object.assign({}, S.bt),
+  spRecs: S.spRecs.map(r => ({A: r.A, T: r.T, k: r.k, m: r.m, p: r.p, b: r.b})), peRecs: S.peRecs.map(r => ({L: r.L, deg: r.deg, T: r.T})),
+  springT: OSC ? periodOf(OSC) : null, x: OSC ? OSC.x : 0, stNow: S.stNow || null, btNow: S.btNow || null, beatRecs: S.beatRecs.slice(),
+  peaks: S.tab === 'string' && SWEEP ? SWEEP.peaks.map(p => p.f) : null});
+window.PG_MODEL = {G, X0, springForce, springPE, rk4, makeOsc, stepOsc, periodOf, springRun, pendRun, fitG, NS, medium, steady, sweep, nodesOf, fTop, fB, beatSignal, measureBeats};
+</script>
+</body>
+</html>

@@ -1,0 +1,763 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Banks and Interest</title>
+<meta name="description" content="Class 7: grow ₹1,000 in a passbook year by year and see interest earn interest; run a village bank that takes Navdeep's and Anand's deposits and lends them to Rima and Shreya; double rice grains across a chessboard.">
+<link rel="icon" href="../../favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600&family=Inter:wght@400;500;600;700&family=Nunito:wght@500;700;800&family=Newsreader:opsz,wght@6..72,400;6..72,500&family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="../../play.css">
+<style>
+/* Only what this page needs beyond play.css. */
+.pg-stage{align-self:start; min-height:0}
+.gate{position:absolute; inset:0; display:grid; place-items:center; pointer-events:none}
+.gate span{background:rgba(20,40,28,.86); color:#fff; padding:10px 16px; border-radius:99px; font-weight:600; font-size:14px}
+.seg{display:grid; grid-auto-flow:column; grid-auto-columns:1fr; gap:4px; background:var(--sunk); padding:4px; border-radius:var(--radius-sm); margin-bottom:8px}
+.seg button{border:0; background:transparent; border-radius:8px; min-height:34px; font-weight:600; font-size:13px; cursor:pointer; color:var(--ink-2); line-height:1.2; padding:2px 4px}
+.seg button[aria-pressed="true"]{background:var(--card); color:var(--ink); box-shadow:var(--shadow)}
+.seg button:disabled{opacity:.5; cursor:default}
+.seg.small button{min-height:30px; font-size:12.5px}
+.ctl output{min-width:86px}
+.sub{font-size:11.5px; letter-spacing:.06em; text-transform:uppercase; font-weight:700; color:var(--ink-3); margin:10px 0 4px}
+.note{font-size:12.5px; color:var(--ink-3); margin:6px 0 0}
+.nums{display:grid; grid-template-columns:1fr auto; gap:3px 12px; font-size:13.5px}
+.nums span{color:var(--ink-2)}
+.nums b{font-family:var(--font-mono); font-weight:600; font-variant-numeric:tabular-nums; text-align:right}
+.nums .sep{grid-column:1/-1; height:1px; background:var(--hair); margin:3px 0}
+.why p{font-size:14px; margin-bottom:.55em}
+.act{display:grid; grid-template-columns:1fr 1fr; gap:6px}
+.act .btn{font-size:12.5px; min-height:34px; padding:0 8px; line-height:1.2}
+.sq{cursor:pointer}
+svg text.m{font-family:var(--font-mono)}
+</style>
+</head>
+<body>
+<header class="pg-top"></header>
+
+<div class="pg-intro">
+  <h1>Banks and the magic of finance</h1>
+  <p>Put ₹1,000 in a savings account and watch the passbook fill up, year by year, as interest earns interest. Then run the village bank:
+     Navdeep and Anand deposit, Rima and Shreya borrow, and the bank lives on the gap between the two interest rates.
+     Last, the sage’s rice on the king’s chessboard. The examples and numbers come from NCERT Class 7, <i>Banks and the Magic of Finance</i>.</p>
+</div>
+
+<main class="pg-main wide-side">
+  <section class="pg-stage" id="stageWrap">
+    <svg id="stage" viewBox="0 0 1000 640" role="img" aria-label="A bank passbook and a graph of the balance, year by year"></svg>
+    <div class="gate" id="gate"><span>Make your prediction first →</span></div>
+  </section>
+
+  <aside class="pg-side">
+    <div id="poe"></div>
+
+    <div class="card" id="ctlCard">
+      <div class="seg" role="tablist">
+        <button id="tabSave" aria-pressed="true">Savings grow</button>
+        <button id="tabBank" aria-pressed="false">The bank in the middle</button>
+        <button id="tabChess" aria-pressed="false">Rice on a chessboard</button>
+      </div>
+
+      <div id="ctlSave">
+        <div class="seg small" id="acct">
+          <button data-acct="savings" aria-pressed="true">Savings account</button>
+          <button data-acct="current" aria-pressed="false">Current account</button>
+          <button data-acct="fd" aria-pressed="false">Fixed deposit</button>
+        </div>
+        <div class="ctl"><label for="prin">Deposit</label><input type="range" id="prin" min="100" max="20000" step="100" value="1000"><output id="prinOut" class="num">₹1,000</output></div>
+        <div class="ctl"><label for="rate">Interest</label><input type="range" id="rate" min="0" max="15" step="0.5" value="6"><output id="rateOut" class="num">6% a year</output></div>
+        <div class="ctl" id="termRow" hidden><label for="term">Fixed for</label><input type="range" id="term" min="1" max="5" step="1" value="3"><output id="termOut" class="num">3 years</output></div>
+        <div class="row"><button class="btn sm primary" id="btnYear">+1 year</button><button class="btn sm" id="btnGrow">▶ Keep saving</button><button class="btn sm" id="btnReset">Back to year 0</button></div>
+        <div class="sub">From the book</div>
+        <div class="row"><button class="btn sm" id="exBirthday">Birthday ₹1,000 at 6%</button><button class="btn sm" id="exSahil">Sahil’s ₹10,000 at 12%</button></div>
+      </div>
+
+      <div id="ctlBank" hidden>
+        <div class="sub" style="margin-top:2px">People</div>
+        <div class="act">
+          <button class="btn" id="dNav">Navdeep deposits ₹3,000</button>
+          <button class="btn" id="dAnand">Anand deposits ₹200</button>
+          <button class="btn" id="lRima">Rima borrows ₹2,000</button>
+          <button class="btn" id="lShreya">Shreya borrows ₹200</button>
+          <button class="btn" id="wNav">Navdeep withdraws all</button>
+          <button class="btn primary" id="btnYearBank">A year passes</button>
+        </div>
+        <div class="sub">The bank’s rules</div>
+        <div class="ctl"><label for="rDep">Pays savers</label><input type="range" id="rDep" min="0" max="10" step="0.5" value="2"><output id="rDepOut" class="num">2% a year</output></div>
+        <div class="ctl"><label for="rLoan">Charges borrowers</label><input type="range" id="rLoan" min="0" max="15" step="0.5" value="5"><output id="rLoanOut" class="num">5% a year</output></div>
+        <div class="ctl"><label for="resv">Keeps in reserve</label><input type="range" id="resv" min="0" max="50" step="5" value="0"><output id="resvOut" class="num">0% of deposits</output></div>
+        <p class="note">The book’s example lends all of Anand’s ₹200. Real banks keep some money back as reserve.</p>
+        <div class="row" style="margin-top:6px"><button class="btn sm" id="btnBankReset">Start the bank again</button></div>
+      </div>
+
+      <div id="ctlChess" hidden>
+        <p class="note" style="margin-top:0">Click a square to put rice on every square up to it: one grain on the first, and each square doubles the one before.</p>
+        <div class="row" style="margin-top:8px"><button class="btn sm primary" id="btnNextSq">Next square</button><button class="btn sm" id="btnRow">Fill the next row</button><button class="btn sm" id="btnClear">Clear the board</button></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="kicker" id="numKick">The numbers, right now</div>
+      <div id="nums" class="nums"></div>
+    </div>
+
+    <div class="card why" id="whyCard">
+      <div class="kicker">What is happening</div>
+      <div id="why"></div>
+    </div>
+
+    <div class="card"><div class="kicker">To find</div><div id="finds"></div></div>
+  </aside>
+</main>
+
+<script src="../../play.js"></script>
+<script>
+'use strict';
+const {$, esc, clamp, fmt, sound, say, track, toast, predict, findings, discover, found,
+       shareState, sharedState, mount, reduced, tween, loop} = Play;
+mount({thread: 'banking', band: 'tinkerer'});
+
+/* MODEL:start ==================================================================
+   THREE SMALL MACHINES, all stepped by hand; nothing is read off a formula.
+
+   1. A PASSBOOK. Each year the bank credits interest on whatever the balance is:
+        interest = balance × rate,  new balance = balance + interest.
+      Split for the graph: the part earned on the original deposit (P × rate)
+      and the rest, which is interest earned on earlier interest.
+      Book: ₹1,000 at 6% → ₹1,060, then 6% of 1,060 = ₹63.60 → ₹1,123.60;
+      12 years → ₹2,012.20. Sahil: ₹10,000 at 12% for 3 years → ₹14,049.28.
+      A current account earns no interest. A fixed deposit is locked for its term.
+
+   2. A VILLAGE BANK with a ledger. Deposits go into the vault; loans come out
+      of it. A loan is refused if it would leave less cash than the reserve the
+      bank keeps (a share of all deposits). A withdrawal can be paid only from
+      the cash in the vault. When a year passes, borrowers repay the loan plus
+      interest (cash in), and each saver's account is credited with interest.
+      The bank's books always balance:
+        cash + loans (what it has) = deposits (what it owes) + its own earnings.
+      Book: Anand deposits ₹200 at 2%, Shreya borrows ₹200 at 5%:
+      Shreya repays ₹210, Anand's account is ₹204, the bank earns ₹6.
+
+   3. A CHESSBOARD. Square 1 has one grain; every square has double the one
+      before (BigInt, so 64 squares stay exact). Book: square 8 = 128,
+      9 = 256, 16 = 32,768, square 32 = over 210 crore.
+   ============================================================================ */
+function passbook(P, ratePct, years){
+  const r = ratePct / 100, rows = [{year: 0, open: 0, interest: 0, close: P, onDeposit: 0, onInterest: 0}];
+  let bal = P;
+  for (let y = 1; y <= years; y++) {
+    const interest = bal * r, onDeposit = P * r;
+    rows.push({year: y, open: bal, interest, close: bal + interest, onDeposit, onInterest: interest - onDeposit});
+    bal += interest;
+  }
+  return rows;
+}
+const simpleBalance = (P, ratePct, years) => P + P * ratePct / 100 * years;   /* interest on the deposit only: for comparison */
+
+const PEOPLE = {navdeep: 'Navdeep', anand: 'Anand', rima: 'Rima', shreya: 'Shreya'};
+function newBank(){ return {deposits: {navdeep: 0, anand: 0}, loans: {rima: 0, shreya: 0}, vault: 0, earned: 0, year: 0, last: null}; }
+const sum = o => Object.values(o).reduce((a, b) => a + b, 0);
+const reserveNeeded = (bk, resvPct) => sum(bk.deposits) * resvPct / 100;
+function deposit(bk, who, amt){ bk.deposits[who] += amt; bk.vault += amt; return {ok: true}; }
+function lend(bk, who, amt, resvPct){
+  const need = reserveNeeded(bk, resvPct), spare = bk.vault - need;
+  if (amt > spare + 1e-9) return {ok: false, spare: Math.max(0, spare), need};
+  bk.loans[who] += amt; bk.vault -= amt; return {ok: true};
+}
+function withdraw(bk, who){
+  const bal = bk.deposits[who];
+  if (bal <= 0) return {ok: false, why: 'empty'};
+  if (bk.vault + 1e-9 < bal) return {ok: false, why: 'short', bal, vault: bk.vault};
+  bk.deposits[who] = 0; bk.vault -= bal; return {ok: true, bal};
+}
+function yearPasses(bk, rDep, rLoan){
+  const last = {paid: {}, charged: {}, repaid: {}, lent: {}, before: {}};
+  let paid = 0, charged = 0;
+  for (const k in bk.deposits) { const i = bk.deposits[k] * rDep / 100; last.before[k] = bk.deposits[k]; last.paid[k] = i; bk.deposits[k] += i; paid += i; }
+  for (const k in bk.loans) { const i = bk.loans[k] * rLoan / 100; last.lent[k] = bk.loans[k]; last.charged[k] = i; last.repaid[k] = bk.loans[k] + i; bk.vault += bk.loans[k] + i; bk.loans[k] = 0; charged += i; }
+  last.paidTotal = paid; last.chargedTotal = charged; last.gain = charged - paid;
+  bk.earned += charged - paid; bk.year++; bk.last = last;
+  return last;
+}
+const has = bk => bk.vault + sum(bk.loans);
+const owes = bk => sum(bk.deposits);
+
+function grains(n){ let g = 1n; for (let k = 1; k < n; k++) g *= 2n; return g; }   /* square n, by doubling */
+function grainsTotal(n){ let t = 0n, g = 1n; for (let k = 1; k <= n; k++) { t += g; g *= 2n; } return t; }
+/* MODEL:end */
+
+/* ---- Indian number grouping ----------------------------------------------------- */
+function groupIN(s){ const neg = s[0] === '-'; if (neg) s = s.slice(1); if (s.length <= 3) return (neg ? '−' : '') + s; const last = s.slice(-3); let rest = s.slice(0, -3); const parts = []; while (rest.length > 2) { parts.unshift(rest.slice(-2)); rest = rest.slice(0, -2); } if (rest) parts.unshift(rest); return (neg ? '−' : '') + parts.join(',') + ',' + last; }
+function inr(v, dp){
+  if (dp == null) dp = Math.abs(v - Math.round(v)) < 0.005 ? 0 : 2;
+  const s = Math.abs(v).toLocaleString('en-IN', {minimumFractionDigits: dp, maximumFractionDigits: dp});
+  return (v < -0.004 ? '−' : '') + '₹' + s;
+}
+const inr2 = v => inr(v, 2);
+function words(big){   /* a BigInt in lakh / crore words */
+  const n = Number(big);
+  if (n >= 1e7) return fmt(n / 1e7, n >= 1e9 ? 1 : 2) + ' crore';
+  if (n >= 1e5) return fmt(n / 1e5, 2) + ' lakh';
+  return groupIN(String(big));
+}
+
+/* ---- state ------------------------------------------------------------------ */
+const S = {tab: 'save', locked: false,
+  acct: 'savings', P: 1000, rate: 6, term: 3, year: 0, growing: false, seenCompound: false,
+  bank: newBank(), rDep: 2, rLoan: 5, resv: 0, msg: null, pulse: null,
+  squares: 0};
+const shared = sharedState();
+if (shared) {
+  if (['save', 'bank', 'chess'].includes(shared.tab)) S.tab = shared.tab;
+  if (['savings', 'current', 'fd'].includes(shared.acct)) S.acct = shared.acct;
+  if (shared.P) S.P = clamp(Math.round(+shared.P / 100) * 100, 100, 20000);
+  if (shared.rate != null) S.rate = clamp(Math.round(+shared.rate * 2) / 2, 0, 15);
+  if (shared.term) S.term = clamp(Math.round(+shared.term), 1, 5);
+  if (shared.rDep != null) S.rDep = clamp(+shared.rDep, 0, 10);
+  if (shared.rLoan != null) S.rLoan = clamp(+shared.rLoan, 0, 15);
+  if (shared.resv != null) S.resv = clamp(+shared.resv, 0, 50);
+}
+shareState(() => ({tab: S.tab, acct: S.acct, P: S.P, rate: S.rate, term: S.term, rDep: S.rDep, rLoan: S.rLoan, resv: S.resv}));
+const effRate = () => S.acct === 'current' ? 0 : S.rate;
+const maxYear = () => S.acct === 'fd' ? S.term : 20;
+
+/* ============================================================================
+   The stage
+   ============================================================================ */
+const svg = $('stage');
+const G = {x0: 560, x1: 972, y0: 386, y1: 92};    /* the balance graph */
+const BOOK_ROWS = 13;
+const GOLD = '#e0a526', GOLD_D = '#8a5a1c', GREEN = '#2f855a', GREEN_L = '#9fd3b2', INK = '#1d2327', INK2 = '#4a555b', INK3 = '#7c878c';
+
+function build(){
+  let rows = '';
+  for (let i = 0; i < BOOK_ROWS; i++) {
+    const y = 150 + i * 33;
+    rows += `<g id="pr${i}"><rect x="36" y="${y - 21}" width="426" height="33" fill="${i % 2 ? '#fbf6e6' : '#fffdf6'}"/>
+      <text x="58" y="${y}" text-anchor="middle" font-size="12.5" class="m" fill="${INK}"></text>
+      <text x="92" y="${y}" font-size="12.5" fill="${INK2}"></text>
+      <text x="344" y="${y}" text-anchor="end" font-size="12.5" class="m" fill="${GREEN}"></text>
+      <text x="450" y="${y}" text-anchor="end" font-size="12.5" class="m" font-weight="600" fill="${INK}"></text></g>`;
+  }
+  let squares = '';
+  for (let k = 1; k <= 64; k++) {
+    const r = Math.floor((k - 1) / 8), c = (k - 1) % 8, x = 40 + c * 58, y = 86 + r * 58, dark = (r + c) % 2 === 1;
+    squares += `<g class="sq" id="sq${k}" data-k="${k}"><rect x="${x}" y="${y}" width="58" height="58" fill="${dark ? '#b98a57' : '#f1dfbf'}"/>
+      <g class="rice"></g><text x="${x + 29}" y="${y + 53}" text-anchor="middle" font-size="10" class="m" fill="${dark ? '#fff4e0' : '#6b4a22'}"></text>
+      <text x="${x + 5}" y="${y + 13}" font-size="9" fill="${dark ? '#f4e2c4' : '#a07c50'}">${k}</text></g>`;
+  }
+  svg.innerHTML = `
+  <defs>
+    <marker id="mArr" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="${GOLD_D}"/></marker>
+    <linearGradient id="gJar" x1="0" x2="1"><stop offset="0" stop-color="#e6f2ea"/><stop offset=".5" stop-color="#ffffff"/><stop offset="1" stop-color="#dcebe1"/></linearGradient>
+    <clipPath id="clipJar"><path d="M612 470 h92 q10 0 10 10 v112 q0 16 -16 16 h-80 q-16 0 -16 -16 v-112 q0 -10 10 -10z"/></clipPath>
+    <radialGradient id="gCoin"><stop offset="0" stop-color="#ffe08a"/><stop offset="1" stop-color="${GOLD}"/></radialGradient>
+  </defs>
+  <rect x="0" y="0" width="1000" height="640" fill="#fbfaf6"/>
+
+  <!-- ===================== SAVINGS ===================== -->
+  <g id="vSave">
+    <text x="24" y="30" font-size="12" font-weight="700" letter-spacing=".08em" fill="${INK2}">YOUR PASSBOOK</text>
+    <rect x="30" y="44" width="438" height="566" rx="10" fill="#fffdf6" stroke="#d8c9a0" stroke-width="1.4"/>
+    <rect x="30" y="44" width="438" height="56" rx="10" fill="${GREEN}"/><rect x="30" y="86" width="438" height="14" fill="${GREEN}"/>
+    <text x="48" y="70" font-size="17" font-weight="700" fill="#fff" class="serif">Village Bank · Passbook</text>
+    <text id="pbType" x="48" y="90" font-size="12" fill="#e2f3e8"></text>
+    <text id="pbRate" x="450" y="70" text-anchor="end" font-size="12.5" fill="#fff" class="m"></text>
+    <g font-size="11" font-weight="700" fill="${INK3}" letter-spacing=".04em">
+      <text x="58" y="120" text-anchor="middle">YEAR</text><text x="92" y="120">PARTICULARS</text>
+      <text x="344" y="120" text-anchor="end">CREDIT</text><text x="450" y="120" text-anchor="end">BALANCE</text></g>
+    <line x1="36" y1="127" x2="462" y2="127" stroke="#d8c9a0"/>
+    ${rows}
+    <text id="pbMore" x="249" y="600" text-anchor="middle" font-size="11.5" fill="${INK3}"></text>
+
+    <text x="520" y="30" font-size="12" font-weight="700" letter-spacing=".08em" fill="${INK2}">THE BALANCE, YEAR BY YEAR</text>
+    <g id="gAxes"></g><g id="gBars"></g>
+    <path id="gSimple" fill="none" stroke="${INK2}" stroke-width="1.6" stroke-dasharray="6 4"/>
+    <g font-size="11.5" font-weight="600">
+      <rect x="560" y="424" width="12" height="12" fill="${GREEN}"/><text x="578" y="434" fill="${INK2}">your deposit</text>
+      <rect x="668" y="424" width="12" height="12" fill="${GREEN_L}"/><text x="686" y="434" fill="${INK2}">interest on the deposit</text>
+      <rect x="834" y="424" width="12" height="12" fill="${GOLD}"/><text x="852" y="434" fill="${INK2}">interest on interest</text>
+      <line x1="560" y1="452" x2="584" y2="452" stroke="${INK2}" stroke-width="1.6" stroke-dasharray="6 4"/><text x="590" y="456" fill="${INK2}" font-weight="500">if interest were paid on the deposit only</text></g>
+
+    <!-- the jar and this year's sum -->
+    <path d="M612 470 h92 q10 0 10 10 v112 q0 16 -16 16 h-80 q-16 0 -16 -16 v-112 q0 -10 10 -10z" fill="url(#gJar)" stroke="#8fb49b" stroke-width="1.6"/>
+    <g clip-path="url(#clipJar)"><rect id="jarFill" x="600" y="608" width="120" height="0" fill="${GOLD}" opacity=".85"/><rect id="jarDep" x="600" y="608" width="120" height="0" fill="${GREEN}" opacity=".9"/></g>
+    <rect x="604" y="462" width="108" height="12" rx="4" fill="#8fb49b"/>
+    <text id="jarTxt" x="658" y="630" text-anchor="middle" font-size="11.5" class="m" fill="${INK2}"></text>
+    <text id="yrBig" x="740" y="492" font-size="20" fill="${INK}" class="serif"></text>
+    <text id="yrSum1" x="740" y="520" font-size="13.5" fill="${INK}" class="m"></text>
+    <text id="yrSum2" x="740" y="544" font-size="13.5" fill="${INK}" class="m"></text>
+    <text id="yrSum3" x="740" y="572" font-size="12.5" fill="${GOLD_D}" font-weight="600"></text>
+    <text id="yrSum4" x="740" y="594" font-size="12.5" fill="${INK2}"></text>
+  </g>
+
+  <!-- ===================== THE BANK ===================== -->
+  <g id="vBank" hidden>
+    <rect x="0" y="0" width="1000" height="350" fill="#e9f3ee"/>
+    <rect x="0" y="286" width="1000" height="64" fill="#d6e8cf"/>
+    <text x="24" y="30" font-size="12" font-weight="700" letter-spacing=".08em" fill="${INK2}">THE VILLAGE AND ITS BANK</text>
+    <text id="bYear" x="976" y="30" text-anchor="end" font-size="15" fill="${INK}" class="serif"></text>
+    <!-- roads -->
+    <g stroke="#c9b58c" stroke-width="10" fill="none" stroke-linecap="round" opacity=".7">
+      <path d="M210 128 C300 128 320 190 400 205"/><path d="M210 258 C300 258 320 230 400 225"/>
+      <path d="M790 128 C700 128 680 190 600 205"/><path d="M790 258 C700 258 680 230 600 225"/></g>
+    <path id="pNav" d="M210 128 C300 128 320 190 400 205" fill="none"/>
+    <path id="pAnand" d="M210 258 C300 258 320 230 400 225" fill="none"/>
+    <path id="pRima" d="M790 128 C700 128 680 190 600 205" fill="none"/>
+    <path id="pShreya" d="M790 258 C700 258 680 230 600 225" fill="none"/>
+    ${house(40, 80, 'navdeep', 'Navdeep', 'saves from his salary', '#d97b4a')}
+    ${house(40, 210, 'anand', 'Anand', 'saves', '#6f8fd6')}
+    ${house(790, 80, 'rima', 'Rima', 'bamboo products', '#b98a2e', true)}
+    ${house(790, 210, 'shreya', 'Shreya', 'borrows', '#b25f9c')}
+    <!-- the bank -->
+    <g>
+      <rect x="392" y="120" width="216" height="170" fill="#f6f1e4" stroke="#9f8a5c" stroke-width="1.6"/>
+      <path d="M380 122 L500 62 L620 122 Z" fill="#efe6cf" stroke="#9f8a5c" stroke-width="1.6"/>
+      <text x="500" y="110" text-anchor="middle" font-size="16" font-weight="700" fill="${GREEN}" letter-spacing=".12em">BANK</text>
+      ${[410, 446, 536, 572].map(x => `<rect x="${x}" y="132" width="18" height="146" fill="#fffaf0" stroke="#c9b58c"/>`).join('')}
+      <rect x="470" y="140" width="60" height="118" rx="6" fill="#39463f" stroke="#1d2327" stroke-width="1.4"/>
+      <circle cx="500" cy="152" r="4" fill="#9aa3a6"/>
+      <g id="vaultCoins"></g>
+      <text x="500" y="274" text-anchor="middle" font-size="10.5" font-weight="700" fill="#4a3a1a">VAULT</text>
+      <rect x="386" y="288" width="228" height="10" fill="#c9b58c"/>
+    </g>
+    <text id="vaultTxt" x="500" y="320" text-anchor="middle" font-size="13" font-weight="600" fill="${INK}" class="m"></text>
+    <text id="resvTxt" x="500" y="338" text-anchor="middle" font-size="11.5" fill="${INK2}"></text>
+    <g id="coinFly" opacity="0"><circle r="11" fill="url(#gCoin)" stroke="${GOLD_D}"/><text y="4" text-anchor="middle" font-size="11" font-weight="700" fill="${GOLD_D}">₹</text></g>
+    <text id="flyLbl" font-size="12" font-weight="700" fill="${GOLD_D}" class="m" text-anchor="middle"></text>
+    <g id="bMsg" opacity="0"><rect id="bMsgBox" x="300" y="10" width="500" height="32" rx="16" fill="#fff4dc" stroke="#e0a526"/><text id="bMsgTxt" x="590" y="31" text-anchor="middle" font-size="13" font-weight="600" fill="#6b4a12"></text></g>
+
+    <!-- the books -->
+    <text x="24" y="380" font-size="12" font-weight="700" letter-spacing=".08em" fill="${INK2}">THE BANK’S BOOKS</text>
+    <rect x="24" y="392" width="560" height="232" rx="10" fill="#fff" stroke="#e2ded2"/>
+    <line x1="304" y1="404" x2="304" y2="612" stroke="#e2ded2"/>
+    <text x="40" y="418" font-size="13" font-weight="700" fill="${INK}">What it owes: deposits</text>
+    <text x="320" y="418" font-size="13" font-weight="700" fill="${INK}">What it has</text>
+    <g id="books" font-size="12.5"></g>
+    <text x="608" y="380" font-size="12" font-weight="700" letter-spacing=".08em" fill="${INK2}">LAST YEAR’S INTEREST</text>
+    <rect x="600" y="392" width="376" height="232" rx="10" fill="#fff" stroke="#e2ded2"/>
+    <g id="lastYr" font-size="12.5"></g>
+  </g>
+
+  <!-- ===================== CHESSBOARD ===================== -->
+  <g id="vChess" hidden>
+    <text x="24" y="30" font-size="12" font-weight="700" letter-spacing=".08em" fill="${INK2}">THE KING, THE SAGE AND THE CHESSBOARD</text>
+    <text x="40" y="66" font-size="13" fill="${INK2}">One grain on the first square, two on the second, four on the third…</text>
+    <rect x="34" y="80" width="476" height="476" fill="none" stroke="#6b4a22" stroke-width="3"/>
+    ${squares}
+    <text x="560" y="72" font-size="12" font-weight="700" letter-spacing=".08em" fill="${INK2}">GRAINS ON EACH SQUARE SO FAR</text>
+    <g id="cBars"></g>
+    <text id="cBig1" x="560" y="440" font-size="20" fill="${INK}" class="serif"></text>
+    <text id="cBig2" x="560" y="470" font-size="14" fill="${INK}" class="m"></text>
+    <text id="cBig3" x="560" y="496" font-size="14" fill="${INK}" class="m"></text>
+    <text id="cBig4" x="560" y="526" font-size="13" fill="${GOLD_D}" font-weight="600"></text>
+    <text id="cBig5" x="560" y="552" font-size="12.5" fill="${INK2}"></text><text id="cBig6" x="560" y="570" font-size="12.5" fill="${INK2}"></text>
+  </g>
+  <rect id="veil" x="0" y="0" width="1000" height="640" fill="#fbfaf6" opacity="0"/>`;
+}
+function house(x, y, id, name, what, col, shop){
+  return `<g id="h_${id}">
+    <rect x="${x + 20}" y="${y + 30}" width="${shop ? 150 : 130}" height="62" fill="#fffaf0" stroke="#9f8a5c" stroke-width="1.4"/>
+    <path d="M${x + 10} ${y + 32} L${x + (shop ? 95 : 85)} ${y} L${x + (shop ? 180 : 160)} ${y + 32}Z" fill="${col}" opacity=".9"/>
+    <rect x="${x + 36}" y="${y + 52}" width="22" height="40" fill="#8a6a3a"/>
+    <rect x="${x + 70}" y="${y + 46}" width="20" height="18" fill="#cfe4f2" stroke="#9f8a5c"/>
+    ${shop ? `<g stroke="#7a8f3a" stroke-width="3">${[0, 1, 2, 3].map(i => `<line x1="${x + 110 + i * 11}" y1="${y + 92}" x2="${x + 104 + i * 11}" y2="${y + 44}"/>`).join('')}</g>` : ''}
+    <text x="${x + 95}" y="${y + 110}" text-anchor="middle" font-size="13" font-weight="700" fill="#1d2327">${name}</text>
+    <text id="ht_${id}" x="${x + 95}" y="${y + 126}" text-anchor="middle" font-size="11.5" class="m" fill="#4a555b">${what}</text>
+  </g>`;
+}
+
+/* ---- savings ------------------------------------------------------------------ */
+function paintSave(){
+  const rate = effRate(), rows = passbook(S.P, rate, S.year);
+  $('pbType').textContent = S.acct === 'savings' ? 'Savings account · interest credited every year' : S.acct === 'current' ? 'Current account · for payments, no interest' : `Fixed deposit · locked for ${S.term} year${S.term > 1 ? 's' : ''}`;
+  $('pbRate').textContent = S.acct === 'current' ? 'no interest' : `${fmt(rate, rate % 1 ? 1 : 0)}% a year`;
+  const first = Math.max(0, rows.length - BOOK_ROWS);
+  for (let i = 0; i < BOOK_ROWS; i++) {
+    const g = $('pr' + i), row = rows[first + i], t = g.querySelectorAll('text');
+    if (!row) { g.setAttribute('opacity', 0); continue; }
+    g.setAttribute('opacity', 1);
+    t[0].textContent = row.year;
+    t[1].textContent = row.year === 0 ? 'Deposit (cash)' : S.acct === 'fd' && row.year === S.term ? `Interest, then matures` : `Interest @ ${fmt(rate, rate % 1 ? 1 : 0)}% on ${inr2(row.open)}`;
+    t[2].textContent = row.year === 0 ? inr2(S.P).slice(1) : inr2(row.interest).slice(1);
+    t[3].textContent = inr2(row.close).slice(1);
+  }
+  $('pbMore').textContent = first > 0 ? `(years 1–${first} are on the earlier page)` : S.year === 0 ? 'Press +1 year to let a year pass.' : '';
+  /* graph */
+  const N = Math.max(12, S.year), top = Math.max(S.P * 2.2, rows[rows.length - 1].close * 1.08);
+  const step = niceStep(top / 5), hi = Math.ceil(top / step) * step;
+  const gx = y => G.x0 + (y + 0.5) / (N + 1) * (G.x1 - G.x0), gy = v => G.y0 - v / hi * (G.y0 - G.y1), bw = (G.x1 - G.x0) / (N + 1) * 0.72;
+  let a = `<line x1="${G.x0}" y1="${G.y0}" x2="${G.x1}" y2="${G.y0}" stroke="#9aa3a6"/><line x1="${G.x0}" y1="${G.y0}" x2="${G.x0}" y2="${G.y1 - 6}" stroke="#9aa3a6"/>`;
+  for (let v = 0; v <= hi + 1e-9; v += step) a += `<line x1="${G.x0}" y1="${gy(v)}" x2="${G.x1}" y2="${gy(v)}" stroke="#efece3"/><text x="${G.x0 - 6}" y="${gy(v) + 4}" text-anchor="end" font-size="10.5" class="m" fill="${INK3}">${inr(v, 0)}</text>`;
+  for (let y = 0; y <= N; y += N > 14 ? 2 : 1) a += `<text x="${gx(y)}" y="${G.y0 + 15}" text-anchor="middle" font-size="10.5" class="m" fill="${INK3}">${y}</text>`;
+  a += `<text x="${G.x1}" y="${G.y0 + 30}" text-anchor="end" font-size="11" fill="${INK2}">years →</text>`;
+  $('gAxes').innerHTML = a;
+  let b = '', cumDep = 0;
+  rows.forEach(row => {
+    cumDep += row.onDeposit;
+    const dep = S.P, simp = cumDep, comp = row.close - S.P - cumDep, x = gx(row.year) - bw / 2;
+    const y0 = gy(0), y1 = gy(dep), y2 = gy(dep + simp), y3 = gy(dep + simp + comp);
+    b += `<rect x="${x.toFixed(1)}" y="${y1.toFixed(1)}" width="${bw.toFixed(1)}" height="${(y0 - y1).toFixed(1)}" fill="${GREEN}"/>`;
+    if (simp > 0) b += `<rect x="${x.toFixed(1)}" y="${y2.toFixed(1)}" width="${bw.toFixed(1)}" height="${(y1 - y2).toFixed(1)}" fill="${GREEN_L}"/>`;
+    if (comp > 1e-9) b += `<rect x="${x.toFixed(1)}" y="${y3.toFixed(1)}" width="${bw.toFixed(1)}" height="${Math.max(0.6, y2 - y3).toFixed(1)}" fill="${GOLD}"/>`;
+  });
+  if (S.year > 0) { const last = rows[rows.length - 1]; b += `<text x="${gx(S.year)}" y="${gy(last.close) - 8}" text-anchor="middle" font-size="11" font-weight="600" class="m" fill="${INK}">${inr(last.close, 0)}</text>`; }
+  $('gBars').innerHTML = b;
+  $('gSimple').setAttribute('d', Array.from({length: N + 1}, (_, y) => (y ? 'L' : 'M') + gx(y).toFixed(1) + ' ' + gy(simpleBalance(S.P, rate, y)).toFixed(1)).join(''));
+  /* the jar */
+  const last = rows[rows.length - 1], jh = 136, full = hi;
+  const hTot = last.close / full * jh, hDep = S.P / full * jh;
+  $('jarFill').setAttribute('y', 608 - hTot); $('jarFill').setAttribute('height', hTot);
+  $('jarDep').setAttribute('y', 608 - hDep); $('jarDep').setAttribute('height', hDep);
+  $('jarTxt').textContent = inr2(last.close);
+  /* this year's sum */
+  if (S.year === 0) {
+    $('yrBig').textContent = `Year 0: you deposit ${inr(S.P)}`;
+    $('yrSum1').textContent = S.acct === 'current' ? 'A current account pays no interest.' : `Each year the bank adds ${fmt(rate, rate % 1 ? 1 : 0)}%`;
+    $('yrSum2').textContent = S.acct === 'current' ? '' : 'of whatever is in the account.';
+    $('yrSum3').textContent = ''; $('yrSum4').textContent = '';
+  } else {
+    $('yrBig').textContent = `Year ${S.year}`;
+    $('yrSum1').textContent = `${fmt(rate, rate % 1 ? 1 : 0)}% of ${inr2(last.open)} = ${inr2(last.interest)}`;
+    $('yrSum2').textContent = `${inr2(last.open)} + ${inr2(last.interest)} = ${inr2(last.close)}`;
+    $('yrSum3').textContent = last.onInterest > 0.004 ? `${inr2(last.onInterest)} of it is interest on earlier interest` : '';
+    $('yrSum4').textContent = S.acct === 'fd' && S.year >= S.term ? `Matured: the bank returns ${inr2(last.close)}.` : S.year >= 2 ? `Deposit only: ${inr2(simpleBalance(S.P, rate, S.year))}` : '';
+  }
+}
+function niceStep(x){ const p = Math.pow(10, Math.floor(Math.log10(x))), m = x / p; return (m <= 1 ? 1 : m <= 2 ? 2 : m <= 2.5 ? 2.5 : m <= 5 ? 5 : 10) * p; }
+
+/* ---- the bank ---------------------------------------------------------------- */
+function paintBank(){
+  const bk = S.bank;
+  $('bYear').textContent = `Year ${bk.year}`;
+  $('ht_navdeep').textContent = bk.deposits.navdeep ? `has ${inr(bk.deposits.navdeep)} in the bank` : 'saves ₹3,000 a month';
+  $('ht_anand').textContent = bk.deposits.anand ? `has ${inr(bk.deposits.anand)} in the bank` : 'saves';
+  $('ht_rima').textContent = bk.loans.rima ? `owes the bank ${inr(bk.loans.rima)}` : 'needs money for her business';
+  $('ht_shreya').textContent = bk.loans.shreya ? `owes the bank ${inr(bk.loans.shreya)}` : 'needs a loan';
+  $('vaultTxt').textContent = `cash in the vault ${inr(bk.vault)}`;
+  const need = reserveNeeded(bk, S.resv);
+  $('resvTxt').textContent = S.resv ? `must keep ${inr(need)} (${S.resv}% of deposits); can lend ${inr(Math.max(0, bk.vault - need))}` : `keeps no reserve; can lend ${inr(Math.max(0, bk.vault))}`;
+  /* coins in the vault: one per ₹500 (max 44) */
+  const n = clamp(Math.ceil(bk.vault / 500), 0, 44);
+  let c = '';
+  for (let i = 0; i < n; i++) { const col = i % 4, row = Math.floor(i / 4); c += `<ellipse cx="${481 + col * 12.5}" cy="${250 - row * 8}" rx="6" ry="3.4" fill="url(#gCoin)" stroke="${GOLD_D}" stroke-width=".6"/>`; }
+  $('vaultCoins').innerHTML = c;
+  /* the books */
+  const line = (x, y, a, b, bold, col) => `<text x="${x}" y="${y}" fill="${col || INK2}" ${bold ? 'font-weight="700"' : ''}>${a}</text><text x="${x + 250}" y="${y}" text-anchor="end" class="m" fill="${col || INK}" ${bold ? 'font-weight="700"' : ''}>${b}</text>`;
+  let t = '';
+  t += line(40, 448, 'Navdeep’s account', inr2(bk.deposits.navdeep));
+  t += line(40, 474, 'Anand’s account', inr2(bk.deposits.anand));
+  t += `<line x1="40" y1="490" x2="290" y2="490" stroke="#e2ded2"/>`;
+  t += line(40, 510, 'Total deposits', inr2(owes(bk)), true);
+  t += line(40, 540, 'The bank’s own earnings', inr2(bk.earned), false, bk.earned < -0.004 ? '#b3261e' : GREEN);
+  t += `<line x1="40" y1="556" x2="290" y2="556" stroke="#e2ded2"/>`;
+  t += line(40, 576, 'Deposits + earnings', inr2(owes(bk) + bk.earned), true);
+  t += line(320, 448, 'Cash in the vault', inr2(bk.vault));
+  t += line(320, 474, 'Loan to Rima', inr2(bk.loans.rima));
+  t += line(320, 500, 'Loan to Shreya', inr2(bk.loans.shreya));
+  t += `<line x1="320" y1="556" x2="570" y2="556" stroke="#e2ded2"/>`;
+  t += line(320, 576, 'Cash + loans', inr2(has(bk)), true);
+  const bal = Math.abs(has(bk) - owes(bk) - bk.earned) < 0.005;
+  t += `<text x="304" y="606" text-anchor="middle" font-size="12" font-weight="700" fill="${bal ? GREEN : '#b3261e'}">${bal ? '✓ The two sides balance' : '✗ The books do not balance'}</text>`;
+  $('books').innerHTML = t;
+  /* last year, Fig. 8.8 style */
+  const L = bk.last;
+  let s = '';
+  if (!L) s = `<text x="616" y="430" fill="${INK2}">Nothing yet. Let a year pass after</text><text x="616" y="450" fill="${INK2}">someone has deposited or borrowed.</text>
+    <text x="616" y="490" fill="${INK3}" font-size="12">The bank pays savers ${fmt(S.rDep, S.rDep % 1 ? 1 : 0)}% and charges</text><text x="616" y="508" fill="${INK3}" font-size="12">borrowers ${fmt(S.rLoan, S.rLoan % 1 ? 1 : 0)}%.</text>`;
+  else {
+    let y = 426;
+    for (const k of ['navdeep', 'anand']) if (L.before[k] > 0) { s += `<text x="616" y="${y}" fill="${INK2}">${PEOPLE[k]} receives</text><text x="962" y="${y}" text-anchor="end" class="m" fill="${INK}">${inr2(L.before[k])} + ${inr2(L.paid[k])} = ${inr2(L.before[k] + L.paid[k])}</text>`; y += 24; }
+    for (const k of ['rima', 'shreya']) if (L.lent[k] > 0) { s += `<text x="616" y="${y}" fill="${INK2}">${PEOPLE[k]} repays</text><text x="962" y="${y}" text-anchor="end" class="m" fill="${INK}">${inr2(L.lent[k])} + ${inr2(L.charged[k])} = ${inr2(L.repaid[k])}</text>`; y += 24; }
+    if (y === 426) { s += `<text x="616" y="${y}" fill="${INK2}">No deposits and no loans last year.</text>`; y += 24; }
+    y += 10;
+    s += `<line x1="616" y1="${y - 14}" x2="962" y2="${y - 14}" stroke="#e2ded2"/>`;
+    s += `<text x="616" y="${y}" fill="${INK2}">Interest paid to savers</text><text x="962" y="${y}" text-anchor="end" class="m" fill="${INK}">${inr2(L.paidTotal)}</text>`; y += 22;
+    s += `<text x="616" y="${y}" fill="${INK2}">Interest charged to borrowers</text><text x="962" y="${y}" text-anchor="end" class="m" fill="${INK}">${inr2(L.chargedTotal)}</text>`; y += 26;
+    s += `<text x="616" y="${y}" font-weight="700" fill="${L.gain < -0.004 ? '#b3261e' : GREEN}">${L.gain < -0.004 ? 'The bank lost' : 'The bank earned'}</text><text x="962" y="${y}" text-anchor="end" class="m" font-weight="700" fill="${L.gain < -0.004 ? '#b3261e' : GREEN}">${inr2(Math.abs(L.gain))}</text>`;
+  }
+  $('lastYr').innerHTML = s;
+  /* a message from the bank */
+  $('bMsg').setAttribute('opacity', S.msg ? 1 : 0);
+  $('bMsgTxt').textContent = S.msg || '';
+  if (S.msg) { const w = Math.min(600, S.msg.length * 6.9 + 40); $('bMsgBox').setAttribute('x', 590 - w / 2); $('bMsgBox').setAttribute('width', w); }
+}
+let FLY = 0;
+function flyCoin(path, toBank, label){
+  const id = ++FLY, p = $(path), len = p.getTotalLength(), g = $('coinFly'), lb = $('flyLbl');
+  if (reduced()) return Promise.resolve();
+  g.setAttribute('opacity', 1);
+  return tween(0, 1, 700, t => {
+    if (id !== FLY) return;
+    const pt = p.getPointAtLength((toBank ? t : 1 - t) * len);
+    g.setAttribute('transform', `translate(${pt.x.toFixed(1)} ${pt.y.toFixed(1)})`);
+    lb.setAttribute('x', pt.x.toFixed(1)); lb.setAttribute('y', (pt.y - 16).toFixed(1)); lb.textContent = label;
+  }).then(() => { if (id === FLY) { g.setAttribute('opacity', 0); lb.textContent = ''; } });
+}
+
+/* ---- the chessboard -------------------------------------------------------------- */
+function paintChess(){
+  const n = S.squares;
+  for (let k = 1; k <= 64; k++) {
+    const g = $('sq' + k), t = g.querySelectorAll('text')[0], rice = g.querySelector('.rice');
+    const on = k <= n, r = Math.floor((k - 1) / 8), c = (k - 1) % 8, x = 40 + c * 58, y = 86 + r * 58;
+    t.textContent = on ? shortN(grains(k)) : '';
+    if (on && !rice.childNodes.length) {
+      /* a little heap: more dots for bigger squares (log scale) */
+      const dots = clamp(Math.round(Math.log2(Number(grains(k))) + 1), 1, 40), rng = Play.mulberry32(k * 97);
+      let d = '';
+      for (let i = 0; i < dots; i++) { const a = rng() * Math.PI * 2, rr = Math.sqrt(rng()) * Math.min(22, 4 + dots * 0.6); d += `<ellipse cx="${(x + 29 + Math.cos(a) * rr).toFixed(1)}" cy="${(y + 26 + Math.sin(a) * rr * 0.6).toFixed(1)}" rx="2.6" ry="1.5" fill="#fffdf2" stroke="#c8b27a" stroke-width=".5" transform="rotate(${Math.round(rng() * 180)} ${(x + 29 + Math.cos(a) * rr).toFixed(1)} ${(y + 26 + Math.sin(a) * rr * 0.6).toFixed(1)})"/>`; }
+      rice.innerHTML = d;
+    } else if (!on && rice.childNodes.length) rice.innerHTML = '';
+  }
+  /* bars: grains on each filled square, to scale */
+  const X0 = 560, X1 = 972, Y0 = 400, Y1 = 90;
+  let b = `<line x1="${X0}" y1="${Y0}" x2="${X1}" y2="${Y0}" stroke="#9aa3a6"/>`;
+  if (n) {
+    const max = Number(grains(n)), bw = (X1 - X0) / Math.max(8, n);
+    for (let k = 1; k <= n; k++) {
+      const h = Number(grains(k)) / max * (Y0 - Y1);
+      b += `<rect x="${(X0 + (k - 1) * bw + 1).toFixed(1)}" y="${(Y0 - Math.max(h, 0.5)).toFixed(1)}" width="${Math.max(1, bw - 2).toFixed(1)}" height="${Math.max(h, 0.5).toFixed(1)}" fill="${k === n ? GOLD : '#d9c79a'}"/>`;
+    }
+    b += `<text x="${X1}" y="${Y0 + 16}" text-anchor="end" font-size="10.5" fill="${INK3}">squares 1 to ${n}, drawn to scale →</text>`;
+    b += `<text x="${X1}" y="${Y1 - 6}" text-anchor="end" font-size="11" class="m" fill="${GOLD_D}">${groupIN(String(grains(n)))}</text>`;
+  } else b += `<text x="${X0}" y="${Y0 - 12}" font-size="12" fill="${INK3}">Click a square on the board.</text>`;
+  $('cBars').innerHTML = b;
+  if (n) {
+    const g = grains(n), tot = grainsTotal(n);
+    $('cBig1').textContent = `Square ${n}: ${groupIN(String(g))} grain${n > 1 ? 's' : ''}`;
+    $('cBig2').textContent = n > 1 ? `= 2 × ${groupIN(String(grains(n - 1)))} on square ${n - 1}` : 'the first grain';
+    $('cBig3').textContent = `whole board so far: ${groupIN(String(tot))}`;
+    $('cBig4').textContent = Number(g) >= 1e5 ? `That is ${words(g)} grains on one square.` : '';
+    $('cBig5').textContent = n > 1 ? 'Each square holds one grain more than all the' : ''; $('cBig6').textContent = n > 1 ? 'squares before it put together.' : '';
+  } else for (const i of [1, 2, 3, 4, 5, 6]) $('cBig' + i).textContent = '';
+}
+function shortN(big){ const n = Number(big); if (n < 1e4) return groupIN(String(big)); if (n < 1e5) return fmt(n / 1e3, 0) + 'k'; if (n < 1e7) return fmt(n / 1e5, n < 1e6 ? 1 : 0) + 'L'; if (n < 1e12) return fmt(n / 1e7, n < 1e8 ? 1 : 0) + 'Cr'; return '10^' + Math.floor(Math.log10(n)); }
+
+/* ---- side panel ------------------------------------------------------------------ */
+function paintNums(){
+  let h = '';
+  if (S.tab === 'save') {
+    const rows = passbook(S.P, effRate(), S.year), last = rows[rows.length - 1];
+    const totInt = last.close - S.P, onDep = rows.reduce((a, r) => a + r.onDeposit, 0);
+    h = `<span>Deposit</span><b>${inr2(S.P)}</b><span>Interest rate</span><b>${fmt(effRate(), 1)}%</b><span>Years</span><b>${S.year}</b>
+      <i class="sep"></i><span>Balance now</span><b>${inr2(last.close)}</b><span>Interest earned in all</span><b>${inr2(totInt)}</b>
+      <span>…on the deposit itself</span><b>${inr2(onDep)}</b><span>…on earlier interest</span><b>${inr2(totInt - onDep)}</b>`;
+    $('numKick').textContent = 'The passbook, in numbers';
+  } else if (S.tab === 'bank') {
+    const bk = S.bank;
+    h = `<span>Deposits (the bank owes)</span><b>${inr2(owes(bk))}</b><span>Loans (people owe the bank)</span><b>${inr2(sum(bk.loans))}</b>
+      <span>Cash in the vault</span><b>${inr2(bk.vault)}</b><span>Reserve it must keep</span><b>${inr2(reserveNeeded(bk, S.resv))}</b>
+      <i class="sep"></i><span>Rates: pays · charges</span><b>${fmt(S.rDep, 1)}% · ${fmt(S.rLoan, 1)}%</b><span>Bank’s earnings so far</span><b>${inr2(bk.earned)}</b>`;
+    $('numKick').textContent = `The bank, year ${bk.year}`;
+  } else {
+    const n = S.squares;
+    h = `<span>Squares filled</span><b>${n} of 64</b><span>Grains on the last square</span><b>${n ? groupIN(String(grains(n))) : 0}</b>
+      <span>Grains on the board</span><b>${n ? groupIN(String(grainsTotal(n))) : 0}</b>`;
+    $('numKick').textContent = 'The chessboard';
+  }
+  $('nums').innerHTML = h;
+}
+function paintWhy(){
+  let t = '';
+  if (!S.locked) t = `<p>Make your prediction above. Then the passbook opens.</p>`;
+  else if (S.tab === 'save') {
+    const rows = passbook(S.P, effRate(), S.year), last = rows[rows.length - 1];
+    if (S.acct === 'current') t = `<p>A current account is for people who make and receive many payments. It pays <b>no interest</b>, so after ${S.year} year${S.year === 1 ? '' : 's'} the balance is still ${inr2(last.close)}.</p>`;
+    else if (S.year === 0) t = `<p>You have deposited ${inr2(S.P)}. The bank keeps it safe and lends it on, and pays you ${fmt(effRate(), 1)}% of your balance every year you leave it there.</p>`;
+    else if (S.year === 1) t = `<p>After one year: ${inr2(S.P)} + ${fmt(effRate(), 1)}% of ${inr2(S.P)} = <b>${inr2(last.close)}</b>. So far, all the interest was earned on the deposit.</p>`;
+    else t = `<p>This year the interest is ${fmt(effRate(), 1)}% of <b>${inr2(last.open)}</b>, not of ${inr2(S.P)}: the bank pays interest on the whole balance, including last year’s interest. That extra ${inr2(last.onInterest)} is interest on interest: <b>compounding</b>.</p>
+      <p>Interest on the deposit alone would have given ${inr2(simpleBalance(S.P, effRate(), S.year))}; compounding gives ${inr2(last.close)}. The gold part of each bar keeps growing.</p>`;
+    if (S.acct === 'fd') t += `<p>A fixed deposit is one deposit, left for a fixed time (${S.term} year${S.term > 1 ? 's' : ''} here). At the end the bank returns the amount plus interest, usually at a higher rate than a savings account.</p>`;
+  } else if (S.tab === 'bank') {
+    const bk = S.bank;
+    if (!owes(bk) && !bk.year) t = `<p>The bank has nothing yet. Savers bring money in; the bank lends it to people who need it and charges them interest.</p>`;
+    else {
+      t = `<p>The bank owes its savers ${inr2(owes(bk))}. It has lent ${inr2(sum(bk.loans))} of that and keeps ${inr2(bk.vault)} as cash.</p>`;
+      if (bk.last) t += `<p>Last year it paid savers ${inr2(bk.last.paidTotal)} and charged borrowers ${inr2(bk.last.chargedTotal)}. ${bk.last.gain >= 0 ? `The difference, <b>${inr2(bk.last.gain)}</b>, is the bank’s income.` : `It paid out more than it earned: a bank must charge borrowers more than it pays savers.`}</p>`;
+      if (S.lastFail === 'short') t += `<p><b>The vault was short.</b> Navdeep’s money had been lent to Rima and Shreya, so the bank could not pay it all back at once. That is why banks keep reserve money and do not lend all their deposits.</p>`;
+      if (S.lastFail === 'reserve') t += `<p>The bank refused the loan: lending it would have left less cash than the ${S.resv}% reserve it keeps for savers who want their money back.</p>`;
+    }
+  } else {
+    const n = S.squares;
+    t = n < 2 ? `<p>The sage asked for one grain on the first square and double on each square after it. The king thought it a small reward.</p>`
+      : `<p>Square ${n} has ${groupIN(String(grains(n)))} grains, twice square ${n - 1}. Growing by a fixed share of what is already there is what compound interest does too: here the “interest” is 100% per square.</p>` +
+        (n >= 32 ? `<p>By square 32 there are over ${words(grains(32))} grains on one square, as the book says. The king learned how powerful doubling is, but only after paying a heavy price.</p>` : '');
+  }
+  $('why').innerHTML = t;
+}
+
+/* ---- findings ------------------------------------------------------------------ */
+function check(){
+  if (!S.locked) return;
+  const rows = passbook(S.P, effRate(), S.year), last = rows[rows.length - 1];
+  if (S.tab === 'save') {
+    if (S.year >= 2 && effRate() > 0 && last.interest > rows[1].interest + 1e-9) discover('compound');
+    if (effRate() > 0 && last.close >= 2 * S.P - 1e-9) discover('double');
+    if (S.acct === 'current' && S.year >= 1 && Math.abs(last.close - S.P) < 1e-9) discover('current');
+    if (S.P === 1000 && S.rate === 6 && S.acct !== 'current' && S.year >= 2) maybeExplain();
+  }
+  if (S.bank.last && S.bank.last.gain > 0.004 && S.rDep < S.rLoan && sum(S.bank.last.lent) > 0) discover('spread');
+  if (S.lastFail === 'short') discover('vault');
+  if (S.squares >= 32) discover('chess');
+}
+let EXPLAINED = false;
+function maybeExplain(){
+  if (EXPLAINED || !POE || !POE.locked) return;
+  EXPLAINED = true;
+  const r = passbook(1000, 6, 2);
+  POE.explain(`Year 1: 6% of ₹1,000 is ${inr2(r[1].interest)}, so ${inr2(r[1].close)}. Year 2: 6% of <b>${inr2(r[2].open)}</b> is ${inr2(r[2].interest)}, so <b>${inr2(r[2].close)}</b>. The extra ${inr2(r[2].onInterest)} is interest on the first year’s interest.`,
+    POE.choice === 'c');
+}
+
+/* ---- paint ------------------------------------------------------------------------ */
+function paint(){
+  for (const [t, v, c] of [['save', 'vSave', 'ctlSave'], ['bank', 'vBank', 'ctlBank'], ['chess', 'vChess', 'ctlChess']]) {
+    $(v).toggleAttribute('hidden', S.tab !== t); $(c).hidden = S.tab !== t;
+  }
+  $('tabSave').setAttribute('aria-pressed', S.tab === 'save'); $('tabBank').setAttribute('aria-pressed', S.tab === 'bank'); $('tabChess').setAttribute('aria-pressed', S.tab === 'chess');
+  svg.setAttribute('aria-label', S.tab === 'save' ? 'A bank passbook and a graph of the balance, year by year' : S.tab === 'bank' ? 'A village with two savers, two borrowers and a bank, and the bank’s books' : 'A chessboard with rice grains doubling on each square');
+  if (S.tab === 'save') paintSave(); else if (S.tab === 'bank') paintBank(); else paintChess();
+  paintControls(); paintNums(); paintWhy(); check();
+}
+function paintControls(){
+  for (const b of document.querySelectorAll('#acct [data-acct]')) b.setAttribute('aria-pressed', b.dataset.acct === S.acct);
+  $('prin').value = S.P; $('prinOut').textContent = inr(S.P);
+  $('rate').value = S.rate; $('rateOut').textContent = S.acct === 'current' ? 'none' : `${fmt(S.rate, S.rate % 1 ? 1 : 0)}% a year`;
+  $('term').value = S.term; $('termOut').textContent = `${S.term} year${S.term > 1 ? 's' : ''}`;
+  $('termRow').hidden = S.acct !== 'fd';
+  $('rDep').value = S.rDep; $('rDepOut').textContent = `${fmt(S.rDep, S.rDep % 1 ? 1 : 0)}% a year`;
+  $('rLoan').value = S.rLoan; $('rLoanOut').textContent = `${fmt(S.rLoan, S.rLoan % 1 ? 1 : 0)}% a year`;
+  $('resv').value = S.resv; $('resvOut').textContent = `${S.resv}% of deposits`;
+  $('btnGrow').textContent = S.growing ? '❚❚ Pause' : '▶ Keep saving';
+  if (S.locked) {
+    $('rate').disabled = S.acct === 'current';
+    $('btnYear').disabled = S.year >= maxYear();
+    $('btnGrow').disabled = !S.growing && S.year >= maxYear();
+    $('prin').disabled = $('term').disabled = S.acct === 'fd' && S.year > 0;
+    $('btnNextSq').disabled = S.squares >= 64; $('btnRow').disabled = S.squares >= 64;
+  }
+}
+
+/* ============================================================================
+   Controls
+   ============================================================================ */
+build();
+let GROW = null;
+function stopGrow(){ S.growing = false; if (GROW) { GROW.stop(); GROW = null; } }
+function stepYear(){ if (S.year >= maxYear()) return false; S.year++; if (S.year >= 2) S.seenCompound = true; sound('tick'); return true; }
+function grow(){
+  if (S.growing) { stopGrow(); paint(); return; }
+  if (S.year >= maxYear()) return;
+  track('grow', {P: S.P, rate: effRate(), acct: S.acct});
+  if (reduced()) { const end = S.acct === 'fd' ? S.term : Math.max(12, S.year); while (S.year < end && stepYear()); sound('snap'); paint(); return; }
+  S.growing = true; let acc = 0;
+  const end = S.acct === 'fd' ? S.term : Math.max(12, S.year + 1);
+  GROW = loop(dt => {
+    acc += dt; if (acc < 0.45) return; acc = 0;
+    stepYear();
+    if (S.year >= end || S.year >= maxYear()) { stopGrow(); sound('snap'); }
+    paint();
+  });
+  paint();
+}
+function resetYears(){ stopGrow(); S.year = 0; }
+$('btnYear').addEventListener('click', () => { stopGrow(); if (stepYear()) track('year', {year: S.year}); paint(); });
+$('btnGrow').addEventListener('click', grow);
+$('btnReset').addEventListener('click', () => { resetYears(); sound('tick'); paint(); });
+$('prin').addEventListener('input', e => { S.P = +e.target.value; resetYears(); paint(); });
+$('rate').addEventListener('input', e => { S.rate = +e.target.value; resetYears(); paint(); });
+$('term').addEventListener('input', e => { S.term = +e.target.value; resetYears(); paint(); });
+for (const id of ['prin', 'rate', 'term']) $(id).addEventListener('change', () => track('law', {P: S.P, rate: S.rate, term: S.term}));
+for (const b of document.querySelectorAll('#acct [data-acct]')) b.addEventListener('click', () => { S.acct = b.dataset.acct; if (S.acct === 'fd') S.term = S.term || 3; resetYears(); sound('tick'); track('account', {acct: S.acct}); paint(); });
+$('exBirthday').addEventListener('click', () => { S.acct = 'savings'; S.P = 1000; S.rate = 6; resetYears(); sound('pop'); paint(); });
+$('exSahil').addEventListener('click', () => { S.acct = 'savings'; S.P = 10000; S.rate = 12; resetYears(); sound('pop'); paint(); });
+
+/* the bank */
+function bankAct(fn){ if (!S.locked) return; S.msg = null; S.lastFail = null; fn(); paint(); }
+$('dNav').addEventListener('click', () => bankAct(() => { deposit(S.bank, 'navdeep', 3000); sound('pop'); flyCoin('pNav', true, '+₹3,000'); track('deposit', {who: 'navdeep', amt: 3000}); }));
+$('dAnand').addEventListener('click', () => bankAct(() => { deposit(S.bank, 'anand', 200); sound('pop'); flyCoin('pAnand', true, '+₹200'); track('deposit', {who: 'anand', amt: 200}); }));
+function tryLend(who, amt, path){
+  const r = lend(S.bank, who, amt, S.resv);
+  if (r.ok) { sound('whoosh'); flyCoin(path, false, inr(amt)); track('loan', {who, amt}); }
+  else {
+    sound('oops'); S.lastFail = r.need > 0 && S.bank.vault >= amt ? 'reserve' : 'cash';
+    S.msg = r.need > 0 && S.bank.vault >= amt ? `No: lending ${inr(amt)} would leave less than the ${inr(r.need)} reserve. It can lend ${inr(r.spare)}.` : `The bank has only ${inr(Math.max(0, r.spare))} it can lend: it needs more deposits first.`;
+    track('loanRefused', {who, amt});
+  }
+}
+$('lRima').addEventListener('click', () => bankAct(() => tryLend('rima', 2000, 'pRima')));
+$('lShreya').addEventListener('click', () => bankAct(() => tryLend('shreya', 200, 'pShreya')));
+$('wNav').addEventListener('click', () => bankAct(() => {
+  const r = withdraw(S.bank, 'navdeep');
+  if (r.ok) { sound('whoosh'); flyCoin('pNav', false, '−' + inr(r.bal)); track('withdraw', {who: 'navdeep', amt: r.bal}); }
+  else if (r.why === 'empty') { S.msg = 'Navdeep has no money in the bank yet.'; sound('oops'); }
+  else { S.lastFail = 'short'; S.msg = `Navdeep asks for ${inr(r.bal)}, but the vault has only ${inr(r.vault)}. The rest is out on loan.`; sound('oops'); track('withdrawShort', {bal: r.bal, vault: r.vault}); }
+}));
+$('btnYearBank').addEventListener('click', () => bankAct(() => { const L = yearPasses(S.bank, S.rDep, S.rLoan); sound('chime'); track('bankYear', {year: S.bank.year, gain: L.gain}); }));
+$('rDep').addEventListener('input', e => { S.rDep = +e.target.value; paint(); });
+$('rLoan').addEventListener('input', e => { S.rLoan = +e.target.value; paint(); });
+$('resv').addEventListener('input', e => { S.resv = +e.target.value; paint(); });
+$('btnBankReset').addEventListener('click', () => { S.bank = newBank(); S.msg = null; S.lastFail = null; sound('tick'); paint(); });
+
+/* the chessboard */
+function fillTo(k){ if (!S.locked) return; S.squares = clamp(k, 0, 64); sound('note', 300 + Math.min(k, 40) * 18, 0.12); track('chess', {squares: S.squares}); paint(); }
+for (let k = 1; k <= 64; k++) $('sq' + k).addEventListener('click', () => fillTo(k));
+$('btnNextSq').addEventListener('click', () => fillTo(S.squares + 1));
+$('btnRow').addEventListener('click', () => fillTo(Math.min(64, (Math.floor(S.squares / 8) + 1) * 8)));
+$('btnClear').addEventListener('click', () => fillTo(0));
+
+function setTab(t){ S.tab = t; stopGrow(); sound('tick'); track('tab', {tab: t}); paint(); }
+$('tabSave').addEventListener('click', () => setTab('save'));
+$('tabBank').addEventListener('click', () => setTab('bank'));
+$('tabChess').addEventListener('click', () => setTab('chess'));
+
+const ALL = ['tabSave', 'tabBank', 'tabChess', 'prin', 'rate', 'term', 'btnYear', 'btnGrow', 'btnReset', 'exBirthday', 'exSahil',
+  'dNav', 'dAnand', 'lRima', 'lShreya', 'wNav', 'btnYearBank', 'rDep', 'rLoan', 'resv', 'btnBankReset', 'btnNextSq', 'btnRow', 'btnClear'];
+function lockControls(lock){
+  for (const id of ALL) $(id).disabled = lock;
+  for (const b of document.querySelectorAll('#acct [data-acct]')) b.disabled = lock;
+  $('gate').hidden = !lock;
+  $('veil').setAttribute('opacity', lock ? 0.55 : 0); $('veil').style.pointerEvents = lock ? 'auto' : 'none';
+}
+
+/* ============================================================================
+   Start
+   ============================================================================ */
+findings($('finds'), [
+  {id: 'compound', icon: '↻', label: 'Interest earns interest', hint: 'Leave a deposit for two years or more'},
+  {id: 'double',   icon: '×2', label: 'Money doubled', hint: 'Can your savings grow to twice the deposit?'},
+  {id: 'current',  icon: '0', label: 'A current account earns nothing', hint: 'Try each kind of account for a year'},
+  {id: 'spread',   icon: '%', label: 'The bank lives on the gap', hint: 'Lend some savings and let a year pass'},
+  {id: 'vault',    icon: '🔒', label: 'Why banks keep reserve money', hint: 'What if a saver wants all his money back?'},
+  {id: 'chess',    icon: '♟', label: 'Doubling runs away', hint: 'How much rice is on square 32?'},
+], () => toast('All six. Interest on interest, the bank in the middle, and the power of doubling.', 4800));
+
+const POE = predict($('poe'), {
+  id: 'compound',
+  q: 'You deposit ₹1,000 in a savings account at 6% a year and leave it there. How much is in the account after 2 years?',
+  options: [
+    {id: 'a', text: '₹1,060: interest is paid only once.'},
+    {id: 'b', text: '₹1,120: ₹60 of interest each year.'},
+    {id: 'c', text: '₹1,123.60: a little more than ₹60 in the second year.', right: true},
+    {id: 'd', text: '₹1,200: the interest doubles in the second year.'},
+  ],
+  onLock(){
+    S.locked = true; lockControls(false);
+    say('Now let the years pass, and watch the passbook.');
+    paint();
+  },
+});
+lockControls(!POE.locked);
+if (!Play.FF('predict')) S.locked = true;
+paint();
+window.applyFeatures = () => paint();
+window.PG_STATE = () => JSON.parse(JSON.stringify(Object.assign({}, S, {
+  balance: passbook(S.P, effRate(), S.year).slice(-1)[0].close, has: has(S.bank), owes: owes(S.bank),
+  grainsLast: S.squares ? String(grains(S.squares)) : '0'})));
+window.PG_MODEL = {passbook, simpleBalance, newBank, deposit, lend, withdraw, yearPasses, has, owes, reserveNeeded,
+  grains: n => String(grains(n)), grainsTotal: n => String(grainsTotal(n)), inr, groupIN};
+</script>
+</body>
+</html>

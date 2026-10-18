@@ -1,0 +1,642 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mixtures and Chromatography</title>
+<meta name="description" content="Class 9: run a real paper chromatogram and measure each dye's Rf, watch a heating curve separate two liquids by boiling point, and classify a solution, a suspension and a colloid by whether they scatter light.">
+<link rel="icon" href="../../favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600&family=Inter:wght@400;500;600;700&family=Nunito:wght@500;700;800&family=Newsreader:opsz,wght@6..72,400;6..72,500&family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="../../play.css">
+<style>
+.pg-stage{min-height:0}
+.tabs{display:flex; gap:4px; padding:10px 12px 0; border-bottom:1px solid var(--hair); background:var(--card)}
+.tab{border:1px solid transparent; border-bottom:none; background:none; padding:8px 14px; border-radius:10px 10px 0 0; cursor:pointer;
+  font-weight:600; font-size:15px; color:var(--ink-3); margin-bottom:-1px; font-family:var(--font-head)}
+.tab[aria-selected="true"]{background:var(--card); color:var(--ink); border-color:var(--hair); border-bottom:1px solid var(--card)}
+.tab:disabled{cursor:default; opacity:.6}
+.gate{position:absolute; left:0; right:0; top:48px; bottom:0; display:grid; place-items:center; pointer-events:none}
+.gate span{background:rgba(29,35,39,.86); color:#fff; padding:10px 16px; border-radius:99px; font-weight:600; font-size:14px}
+.ctl{grid-template-columns:88px 1fr; margin:6px 0}
+.ctl select{width:100%}
+.why p{font-size:13.5px; margin-bottom:.5em}
+.why b{color:var(--ink)}
+.note{font-size:12.5px; color:var(--ink-3); margin:6px 0 0}
+.nums{display:grid; grid-template-columns:1fr auto; gap:4px 12px; font-size:13.5px}
+.nums b{font-family:var(--font-mono); font-weight:600; font-variant-numeric:tabular-nums}
+.eq{font-family:var(--font-mono); font-size:13px; background:var(--sunk); border-radius:8px; padding:8px 10px; margin:6px 0}
+.hit{cursor:pointer} .hit:hover .hb{stroke:#c2334d; stroke-width:2.2}
+.hit[aria-pressed="true"] .hb{stroke:#c2334d; stroke-width:2.4; fill:rgba(194,51,77,.08)}
+.play{width:40px; min-width:40px; padding:0}
+@media (max-width:1100px) and (min-width:981px){ .pg-main{grid-template-columns:minmax(0,1fr) 320px; padding-inline:12px} }
+</style>
+</head>
+<body>
+<header class="pg-top"></header>
+
+<div class="pg-intro">
+  <h1>Mixtures and chromatography</h1>
+  <p>Run a real paper chromatogram: the solvent front climbs the paper, and every dye rides along at its own share of
+     that speed — its Rf — which you measure yourself. Then separate two liquids by boiling point on a heating curve,
+     and classify a solution, a suspension and a colloid by whether they scatter a beam of light.
+     NCERT Class 9 Science, Chapter 5, Exploring Mixtures and their Separation.</p>
+</div>
+
+<main class="pg-main wide-side">
+  <section class="pg-stage" id="stageWrap">
+    <div class="tabs" role="tablist">
+      <button class="tab" role="tab" id="tabChrom" aria-selected="true">🌈 Chromatography</button>
+      <button class="tab" role="tab" id="tabDist" aria-selected="false">🔥 Distillation</button>
+      <button class="tab" role="tab" id="tabSol" aria-selected="false">🧪 Solutions</button>
+    </div>
+    <svg id="stage" viewBox="0 0 1000 660" role="img" aria-label="A paper chromatogram with a rising solvent front and separating dye spots, linked to a distance-time graph; a heating curve separating two liquids by boiling point; and a beaker of solution, suspension or colloid under a light beam"></svg>
+    <div class="gate" id="gate"><span>Make your prediction first →</span></div>
+  </section>
+
+  <aside class="pg-side">
+    <div id="poe"></div>
+
+    <div class="card" id="ctlChrom">
+      <div class="kicker">The chromatogram</div>
+      <div class="ctl"><label for="selSample">Sample</label>
+        <select id="selSample">
+          <option value="ink">Black sketch-pen ink</option>
+          <option value="green">Green sketch-pen ink</option>
+          <option value="spinach">Spinach leaf extract</option>
+        </select></div>
+      <div class="ctl"><label for="selSolvent">Solvent</label>
+        <select id="selSolvent"><option value="water">Water</option><option value="salt">2% m/v salt solution</option></select></div>
+      <div class="row" style="justify-content:space-between; margin-top:6px">
+        <button class="btn play" id="btnPlayChrom" aria-label="Run the solvent">▶</button>
+        <input type="range" id="timeChrom" min="0" max="64" step="1" value="0" style="flex:1; margin:0 10px">
+        <output id="timeChromOut" class="num">0 s</output>
+      </div>
+      <p class="note">The front climbs as √time (capillary action). Each dye's own line is Rf × the front's line.</p>
+    </div>
+
+    <div class="card" id="ctlDist" hidden>
+      <div class="kicker">The flask</div>
+      <div class="ctl"><label for="selPair">Mixture</label>
+        <select id="selPair"><option value="acetone-water">Acetone + water, 50:50</option><option value="ethanol-water">Ethanol + water, 50:50</option></select></div>
+      <div class="row" style="justify-content:space-between; margin-top:6px">
+        <button class="btn play" id="btnPlayDist" aria-label="Heat the flask">▶</button>
+        <input type="range" id="timeDist" min="0" max="100" step="1" value="0" style="flex:1; margin:0 10px">
+        <output id="timeDistOut" class="num">0 s</output>
+      </div>
+      <p class="note">Heat goes in at a steady rate; the thermometer stalls exactly while a liquid is boiling off.</p>
+    </div>
+
+    <div class="card" id="ctlSol" hidden>
+      <div class="kicker">Shine a light through it</div>
+      <div class="ctl"><label for="selBeaker">Liquid</label>
+        <select id="selBeaker"><option value="salt">Salt and water</option><option value="chalk">Chalk powder and water</option><option value="milk">Milk and water</option></select></div>
+      <div class="row tight"><button class="btn sm" id="btnLaser">Shine the laser</button><button class="btn sm" id="btnWait">Leave it a few minutes</button></div>
+      <hr style="border:none;border-top:1px solid var(--hair); margin:12px 0">
+      <div class="kicker">Concentration</div>
+      <div class="ctl"><label for="selConc">Formula</label>
+        <select id="selConc"><option value="mm">Mass by mass, % m/m</option><option value="mv">Mass by volume, % m/v</option><option value="vv">Volume by volume, % v/v</option></select></div>
+      <div class="ctl"><label for="rngSolute">Solute</label><input type="range" id="rngSolute" min="1" max="60" step="1" value="10"><output id="rngSoluteOut" class="num"></output></div>
+      <div class="ctl"><label for="rngTotal">Total</label><input type="range" id="rngTotal" min="20" max="200" step="1" value="100"><output id="rngTotalOut" class="num"></output></div>
+      <div class="eq" id="concEq"></div>
+      <hr style="border:none;border-top:1px solid var(--hair); margin:12px 0">
+      <div class="kicker">Crystallisation of compound B</div>
+      <div class="ctl"><label for="rngCool">Cool to</label><input type="range" id="rngCool" min="40" max="60" step="1" value="60"><output id="rngCoolOut" class="num">60 °C</output></div>
+      <p class="note" id="crystOut">Prepare it saturated at 60 °C first.</p>
+    </div>
+
+    <div class="card" id="numCard">
+      <div class="kicker">The numbers</div>
+      <div class="nums" id="nums"></div>
+    </div>
+
+    <div class="card why" id="whyCard" hidden>
+      <div class="kicker">What is happening</div>
+      <div id="why"></div>
+    </div>
+
+    <div class="card"><div class="kicker">To find</div><div id="finds"></div></div>
+  </aside>
+</main>
+
+<script src="../../play.js"></script>
+<script>
+'use strict';
+const {$, esc, clamp, fmt, tween, loop, sound, say, track, toast, predict, findings, discover, found,
+       shareState, sharedState, mount, reduced} = Play;
+mount({thread: 'separation', band: 'modeller'});
+
+/* MODEL:start ==================================================================
+   1) CHROMATOGRAPHY. The solvent front climbs by capillary action, whose classic
+   law is distance ∝ √time (Lucas–Washburn). Every dye rides at a fixed share, its
+   retention factor Rf, of wherever the front currently is — that IS the definition
+   of Rf, so the model needs only one number per dye, never a scripted position.
+   Rf itself depends on the dye AND the solvent (the book's own point: water is
+   not always the right solvent), so each dye carries an Rf for each solvent on
+   offer here.
+
+   2) DISTILLATION. A steady rate of heating raises the temperature until a
+   liquid's boiling point, where it plateaus while that liquid boils away (the
+   plateau's length is set by how much of it there is), then rises to the next
+   boiling point. Two liquids close in boiling point would run the two
+   plateaus into one — which is exactly why fractional distillation is needed
+   when they are within about 25°C (the book's own number).
+
+   3) SOLUTIONS, SUSPENSIONS AND COLLOIDS. A beam of light is scattered by
+   particles roughly its own wavelength or bigger (the Tyndall effect): a true
+   solution's particles are too small to scatter it, a suspension's and a
+   colloid's are not. Concentration and crystallisation follow the book's own
+   worked formulas and its own two solubility readings for compound B.
+   ============================================================================ */
+const STRIP_CM = 10, TMAX_CHROM = 64;
+const K_FRONT = STRIP_CM / Math.sqrt(TMAX_CHROM);
+const SAMPLES = {
+  ink: {name: 'Black sketch-pen ink', dyes: [
+    {id: 'y', name: 'Yellow dye', col: '#d9ad1e', rf: {water: 0.82, salt: 0.88}},
+    {id: 'r', name: 'Red dye', col: '#c9453b', rf: {water: 0.55, salt: 0.62}},
+    {id: 'b', name: 'Blue dye', col: '#3560c9', rf: {water: 0.22, salt: 0.24}},
+  ]},
+  green: {name: 'Green sketch-pen ink', dyes: [
+    {id: 'y2', name: 'Yellow dye', col: '#dfc233', rf: {water: 0.78, salt: 0.84}},
+    {id: 'b2', name: 'Blue dye', col: '#3560c9', rf: {water: 0.28, salt: 0.30}},
+  ]},
+  spinach: {name: 'Spinach leaf extract', dyes: [
+    {id: 'x', name: 'Xanthophyll (yellow)', col: '#cdbd2e', rf: {water: 0.85, salt: 0.88}},
+    {id: 'c', name: 'Chlorophyll (green)', col: '#3d7a30', rf: {water: 0.32, salt: 0.36}},
+  ]},
+};
+const frontDist = (t, solvent) => Math.min(STRIP_CM, K_FRONT * (solvent === 'salt' ? 1.18 : 1) * Math.sqrt(t));
+const dyeDist = (dye, t, solvent) => dye.rf[solvent] * frontDist(t, solvent);
+
+const LIQUIDS = {acetone: {name: 'Acetone', bp: 56}, ethanol: {name: 'Ethanol', bp: 78}, water: {name: 'Water', bp: 100}};
+const RISE = 1.6, PLATEAU_K = 34, ROOM = 25;
+function distillPhases(pairId, fracLo){
+  const [aId, bId] = pairId.split('-');
+  const A = LIQUIDS[aId], B = LIQUIDS[bId];
+  const lo = A.bp <= B.bp ? A : B, hi = A.bp <= B.bp ? B : A;
+  const t1 = (lo.bp - ROOM) / RISE;
+  const t2 = t1 + fracLo * PLATEAU_K;
+  const t3 = t2 + (hi.bp - lo.bp) / RISE;
+  const t4 = t3 + (1 - fracLo) * PLATEAU_K;
+  return {lo, hi, t1, t2, t3, t4};
+}
+function distillAt(pairId, fracLo, t){
+  const p = distillPhases(pairId, fracLo);
+  let temp, phase, boiling = null;
+  if (t <= p.t1) { temp = ROOM + RISE * t; phase = 'heating'; }
+  else if (t <= p.t2) { temp = p.lo.bp; phase = 'plateau'; boiling = p.lo; }
+  else if (t <= p.t3) { temp = p.lo.bp + RISE * (t - p.t2); phase = 'heating'; }
+  else if (t <= p.t4) { temp = p.hi.bp; phase = 'plateau'; boiling = p.hi; }
+  else { temp = p.hi.bp; phase = 'dry'; }
+  return {temp, phase, boiling, p};
+}
+
+const TYNDALL = {
+  salt:  {name: 'Salt and water', kind: 'A true solution', tyndall: false, settles: false, note: 'The dissolved ions are far too small to scatter light.'},
+  chalk: {name: 'Chalk powder and water', short: 'Chalk & water', kind: 'A suspension', tyndall: true, settles: true, note: 'Chalk particles are big enough to scatter light — and heavy enough to sink.'},
+  milk:  {name: 'Milk and water', kind: 'A colloid', tyndall: true, settles: false, note: 'Milk’s fat globules scatter light like a suspension, but stay too small and too well spread out to ever settle.'},
+};
+const concPercent = (mode, solute, total) => {
+  if (mode === 'mm') return solute / (solute + total) * 100;   // total here is the water/solvent mass
+  return solute / total * 100;                                  // mv, vv: total is the whole solution
+};
+/* Compound B's solubility (g per 100 g water): the book gives only 287 g at 60°C and
+   241 g at 40°C; between them this is the straight line through those two real points. */
+const solB = T => 241 + (287 - 241) * (T - 40) / 20;
+/* MODEL:end */
+
+/* ---- state ------------------------------------------------------------------ */
+const S = {
+  tab: 'chrom', locked: false,
+  sample: 'ink', solvent: 'water', tChrom: 0, playChrom: false,
+  pair: 'acetone-water', tDist: 0, playDist: false,
+  beaker: 'salt', laser: false, waited: false,
+  conc: 'mm', solute: 10, total: 90, cool: 60, crystallised: false,
+  visitedTab: {chrom: true, dist: false, sol: false},
+};
+const shared = sharedState();
+if (shared) {
+  if (['chrom', 'dist', 'sol'].includes(shared.tab)) S.tab = shared.tab;
+  if (SAMPLES[shared.sample]) S.sample = shared.sample;
+  if (['water', 'salt'].includes(shared.solvent)) S.solvent = shared.solvent;
+  S.tChrom = clamp(+shared.tChrom || 0, 0, TMAX_CHROM);
+  if (['acetone-water', 'ethanol-water'].includes(shared.pair)) S.pair = shared.pair;
+  S.tDist = clamp(+shared.tDist || 0, 0, 100);
+  if (TYNDALL[shared.beaker]) S.beaker = shared.beaker;
+  if (['mm', 'mv', 'vv'].includes(shared.conc)) S.conc = shared.conc;
+  S.solute = clamp(+shared.solute || 10, 1, 60); S.total = clamp(+shared.total || 100, 20, 200);
+  S.cool = clamp(+shared.cool || 60, 40, 60);
+}
+shareState(() => ({tab: S.tab, sample: S.sample, solvent: S.solvent, tChrom: Math.round(S.tChrom),
+  pair: S.pair, tDist: Math.round(S.tDist), beaker: S.beaker, conc: S.conc, solute: S.solute, total: S.total, cool: S.cool}));
+
+/* ============================================================================
+   Stage geometry, drawn once.
+   ============================================================================ */
+const svg = $('stage');
+const STRIP = {x: 150, top: 60, bot: 560, w: 70};       // chromatogram strip
+const CGR = {x: 400, y: 60, w: 540, h: 420};             // chromatography graph
+const FLASK = {x: 170, y: 400};                          // distillation flask
+const DGR = {x: 380, y: 60, w: 560, h: 380};             // distillation graph
+const BEAK = {x: 160, y: 220, w: 180, h: 220};           // tyndall beaker
+
+function px1cm(){ return (STRIP.bot - 20 - STRIP.top) / STRIP_CM; }   // pixels per cm on the strip (2 cm reserved at the bottom)
+function stripY(cm){ return STRIP.bot - 20 - cm * px1cm(); }
+const cgx = t => CGR.x + Math.sqrt(clamp(t, 0, TMAX_CHROM)) / Math.sqrt(TMAX_CHROM) * CGR.w;
+const cgy = cm => CGR.y + CGR.h - cm / STRIP_CM * CGR.h;
+
+function build(){
+  svg.innerHTML = `
+  <g id="gChrom">
+    <rect x="0" y="0" width="1000" height="660" fill="#faf7ef"/>
+    <text x="18" y="30" font-size="13" font-weight="700" fill="#5b6770" letter-spacing=".04em">THE PAPER STRIP</text>
+    <rect x="${STRIP.x - 40}" y="${STRIP.bot}" width="${STRIP.w + 80}" height="40" fill="#dfeaf3" stroke="#9fb9cf" stroke-width="1.6"/>
+    <text x="${STRIP.x + STRIP.w / 2}" y="${STRIP.bot + 26}" text-anchor="middle" font-size="11.5" fill="#3d5b70">solvent</text>
+    <rect id="stripRect" x="${STRIP.x}" y="${STRIP.top}" width="${STRIP.w}" height="${STRIP.bot - STRIP.top}" fill="#fffdf6" stroke="#cbbfa2" stroke-width="1.6"/>
+    <line id="frontLine" x1="${STRIP.x - 6}" x2="${STRIP.x + STRIP.w + 6}" stroke="#3f7fd8" stroke-width="2" stroke-dasharray="4 3"/>
+    <circle id="spotDot" cx="${STRIP.x + STRIP.w / 2}" r="5" fill="#2b3338"/>
+    <g id="dyeSpots"></g>
+    <text id="stripTitle" x="${STRIP.x + STRIP.w / 2}" y="46" text-anchor="middle" font-size="12" font-weight="700" fill="#5b6770"></text>
+
+    <rect x="${CGR.x - 56}" y="${CGR.y - 10}" width="${CGR.w + 90}" height="${CGR.h + 66}" rx="12" fill="#ffffff" stroke="#e2ded2"/>
+    <text x="${CGR.x - 40}" y="${CGR.y + 8}" font-size="13" font-weight="700" fill="#5b6770" letter-spacing=".04em">DISTANCE vs √TIME</text>
+    <g id="cAxes"></g>
+    <path id="cFront" fill="none" stroke="#3f7fd8" stroke-width="2.4"/>
+    <g id="cDyeLines"></g>
+    <line id="cNowLine" y1="${CGR.y}" y2="${CGR.y + CGR.h}" stroke="#1d2327" stroke-width="1.2" stroke-dasharray="3 3"/>
+    <circle id="cNowFront" r="5" fill="#3f7fd8" stroke="#fff" stroke-width="1.6"/>
+    <g id="cNowDyes"></g>
+    <rect id="cVeil" x="${CGR.x - 56}" y="${CGR.y - 10}" width="${CGR.w + 90}" height="${CGR.h + 66}" rx="12" fill="#faf7ef"/>
+    <text id="cVeilT" x="${CGR.x + CGR.w / 2 - 26}" y="${CGR.y + CGR.h / 2}" text-anchor="middle" font-size="14" font-weight="600" fill="#8a8072">The graph appears once you have made a prediction.</text>
+  </g>
+
+  <g id="gDist" hidden>
+    <rect x="0" y="0" width="1000" height="660" fill="#faf7ef"/>
+    <text x="18" y="30" font-size="13" font-weight="700" fill="#5b6770" letter-spacing=".04em">THE FLASK</text>
+    <rect x="${FLASK.x - 60}" y="${FLASK.y + 60}" width="120" height="14" rx="4" fill="#8a6a4a"/>
+    <path id="flaskBody" d="M${FLASK.x - 34},${FLASK.y - 40} L${FLASK.x - 34},${FLASK.y} Q${FLASK.x - 40},${FLASK.y + 60} ${FLASK.x},${FLASK.y + 60} Q${FLASK.x + 40},${FLASK.y + 60} ${FLASK.x + 34},${FLASK.y} L${FLASK.x + 34},${FLASK.y - 40}" fill="#fbfdff" stroke="#8aa2b4" stroke-width="2.4"/>
+    <rect id="flaskLiquid" x="${FLASK.x - 38}" width="76" fill="#cfe3f3" clip-path="url(#flaskClip)"/>
+    <clipPath id="flaskClip"><path d="M${FLASK.x - 34},${FLASK.y - 40} L${FLASK.x - 34},${FLASK.y} Q${FLASK.x - 40},${FLASK.y + 60} ${FLASK.x},${FLASK.y + 60} Q${FLASK.x + 40},${FLASK.y + 60} ${FLASK.x + 34},${FLASK.y} L${FLASK.x + 34},${FLASK.y - 40}Z"/></clipPath>
+    <rect x="${FLASK.x - 10}" y="${FLASK.y - 70}" width="20" height="34" fill="#fbfdff" stroke="#8aa2b4" stroke-width="2"/>
+    <path id="flame" d="M${FLASK.x - 14},${FLASK.y + 74} q14,-26 0,-40 q14,10 8,30 q10,-6 6,-18 q10,16 0,28 Z" fill="#f2a12e"/>
+    <g transform="translate(${FLASK.x} ${FLASK.y - 96})">
+      <rect x="-6" y="0" width="12" height="34" rx="6" fill="#fff" stroke="#8aa2b4" stroke-width="1.6"/>
+      <circle cy="38" r="10" fill="#fff" stroke="#8aa2b4" stroke-width="1.6"/>
+      <rect id="thermFill" x="-2.5" width="5" fill="#c9453b"/>
+      <circle id="thermBall" cy="38" r="6.5" fill="#c9453b"/>
+      <text id="thermLab" x="20" y="42" font-size="16" font-weight="700" fill="#2b3338"></text>
+    </g>
+    <text id="flaskLabel" x="${FLASK.x}" y="${FLASK.y + 110}" text-anchor="middle" font-size="12.5" font-weight="600" fill="#5b6770"></text>
+
+    <text x="20" y="560" font-size="12.5" font-weight="700" fill="#5b6770" letter-spacing=".04em">COLLECTED SO FAR</text>
+    <g id="collectBars"></g>
+
+    <rect x="${DGR.x - 56}" y="${DGR.y - 10}" width="${DGR.w + 86}" height="${DGR.h + 66}" rx="12" fill="#ffffff" stroke="#e2ded2"/>
+    <text x="${DGR.x - 40}" y="${DGR.y + 8}" font-size="13" font-weight="700" fill="#5b6770" letter-spacing=".04em">TEMPERATURE vs TIME</text>
+    <g id="dAxes"></g>
+    <path id="dCurve" fill="none" stroke="#c9453b" stroke-width="2.6"/>
+    <line id="dNowLine" y1="${DGR.y}" y2="${DGR.y + DGR.h}" stroke="#1d2327" stroke-width="1.2" stroke-dasharray="3 3"/>
+    <circle id="dNow" r="6" fill="#c9453b" stroke="#fff" stroke-width="1.8"/>
+  </g>
+
+  <g id="gSol" hidden>
+    <rect x="0" y="0" width="1000" height="660" fill="#faf7ef"/>
+    <text x="18" y="30" font-size="13" font-weight="700" fill="#5b6770" letter-spacing=".04em">A BEAM OF LIGHT THROUGH IT</text>
+    <rect x="${BEAK.x - 12}" y="${BEAK.y - 30}" width="${BEAK.w + 24}" height="${BEAK.h + 60}" rx="10" fill="#ffffff" stroke="#e2ded2"/>
+    <path d="M${BEAK.x},${BEAK.y} L${BEAK.x},${BEAK.y + BEAK.h} L${BEAK.x + BEAK.w},${BEAK.y + BEAK.h} L${BEAK.x + BEAK.w},${BEAK.y} " fill="none" stroke="#8aa2b4" stroke-width="3"/>
+    <rect id="beakFill" x="${BEAK.x + 2}" width="${BEAK.w - 4}" fill="#dfeaf3"/>
+    <g id="beakParticles"></g>
+    <line id="laserBeam" x1="${BEAK.x - 60}" x2="${BEAK.x + BEAK.w + 60}" stroke="#e2231a" stroke-width="2.4" opacity="0"/>
+    <g id="laserScatter" opacity="0"></g>
+    <text id="beakLabel" x="${BEAK.x + BEAK.w / 2}" y="${BEAK.y + BEAK.h + 46}" text-anchor="middle" font-size="13" font-weight="700" fill="#5b6770"></text>
+    <text id="beakKind" x="${BEAK.x + BEAK.w / 2}" y="${BEAK.y + BEAK.h + 64}" text-anchor="middle" font-size="12.5" fill="#8a6a3a"></text>
+    <text x="18" y="558" font-size="12.5" font-weight="700" fill="#5b6770" letter-spacing=".04em">THE THREE GROUPS, SIDE BY SIDE (ACTIVITY 5.1)</text>
+    <g id="threeGroups"></g>
+
+    <rect x="470" y="40" width="510" height="230" rx="12" fill="#ffffff" stroke="#e2ded2"/>
+    <text x="486" y="64" font-size="13" font-weight="700" fill="#5b6770" letter-spacing=".04em">CONCENTRATION</text>
+    <g id="concBars"></g>
+
+    <rect x="470" y="290" width="510" height="330" rx="12" fill="#ffffff" stroke="#e2ded2"/>
+    <text x="486" y="314" font-size="13" font-weight="700" fill="#5b6770" letter-spacing=".04em">SOLUBILITY OF COMPOUND B (g per 100 g water)</text>
+    <g id="solCurve"></g>
+  </g>
+  `;
+}
+
+/* ---- chromatography paint ----------------------------------------------------- */
+function paintChrom(){
+  $('cVeil').setAttribute('opacity', S.locked ? 0 : 1);
+  $('cVeilT').setAttribute('opacity', S.locked ? 0 : 1);
+  const sample = SAMPLES[S.sample];
+  $('stripTitle').textContent = sample.name;
+  const f = frontDist(S.tChrom, S.solvent);
+  $('frontLine').setAttribute('y1', stripY(f).toFixed(1)); $('frontLine').setAttribute('y2', stripY(f).toFixed(1));
+  $('spotDot').setAttribute('cy', stripY(0).toFixed(1));
+  $('spotDot').setAttribute('opacity', S.tChrom < 1 ? 1 : 0.25);
+  const n = sample.dyes.length;
+  $('dyeSpots').innerHTML = sample.dyes.map((d, i) => {
+    const x = STRIP.x + (i + 1) * STRIP.w / (n + 1), y = stripY(dyeDist(d, S.tChrom, S.solvent));
+    return `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="7" fill="${d.col}" stroke="#00000022"/>`;
+  }).join('');
+  /* the graph: straight lines in distance vs √time, because that IS the law */
+  let ax = `<line x1="${CGR.x}" y1="${CGR.y + CGR.h}" x2="${CGR.x + CGR.w}" y2="${CGR.y + CGR.h}" stroke="#9aa3a6"/><line x1="${CGR.x}" y1="${CGR.y}" x2="${CGR.x}" y2="${CGR.y + CGR.h}" stroke="#9aa3a6"/>`;
+  for (let cm = 0; cm <= STRIP_CM; cm += 2) ax += `<text x="${CGR.x - 10}" y="${cgy(cm) + 4}" text-anchor="end" font-size="11.5" fill="#7c878c">${cm}</text>`;
+  for (let s = 0; s <= TMAX_CHROM; s += 16) ax += `<text x="${cgx(s)}" y="${CGR.y + CGR.h + 18}" text-anchor="middle" font-size="11.5" fill="#7c878c">${s}</text>`;
+  ax += `<text x="${CGR.x - 44}" y="${CGR.y - 6}" font-size="11.5" fill="#7c878c">cm</text><text x="${CGR.x + CGR.w - 4}" y="${CGR.y + CGR.h + 40}" font-size="11.5" fill="#7c878c" text-anchor="end">seconds</text>`;
+  $('cAxes').innerHTML = ax;
+  let fp = '';
+  for (let t = 0; t <= TMAX_CHROM; t += 2) fp += (t === 0 ? 'M' : 'L') + cgx(t).toFixed(1) + ' ' + cgy(frontDist(t, S.solvent)).toFixed(1);
+  $('cFront').setAttribute('d', fp);
+  $('cDyeLines').innerHTML = sample.dyes.map(d => {
+    let dp = ''; for (let t = 0; t <= TMAX_CHROM; t += 2) dp += (t === 0 ? 'M' : 'L') + cgx(t).toFixed(1) + ' ' + cgy(dyeDist(d, t, S.solvent)).toFixed(1);
+    return `<path d="${dp}" fill="none" stroke="${d.col}" stroke-width="2"/>`;
+  }).join('');
+  $('cNowLine').setAttribute('x1', cgx(S.tChrom)); $('cNowLine').setAttribute('x2', cgx(S.tChrom));
+  $('cNowFront').setAttribute('cx', cgx(S.tChrom)); $('cNowFront').setAttribute('cy', cgy(f));
+  $('cNowDyes').innerHTML = sample.dyes.map(d => `<circle cx="${cgx(S.tChrom).toFixed(1)}" cy="${cgy(dyeDist(d, S.tChrom, S.solvent)).toFixed(1)}" r="4.5" fill="${d.col}" stroke="#fff" stroke-width="1.4"/>`).join('');
+  $('timeChrom').value = S.tChrom; $('timeChromOut').textContent = Math.round(S.tChrom) + ' s';
+  const nrows = sample.dyes.map(d => {
+    const rf = f > 0.05 ? (dyeDist(d, S.tChrom, S.solvent) / f) : d.rf[S.solvent];
+    return `<div>${esc(d.name)}</div><b>Rf = ${fmt(rf, 2)}</b>`;
+  }).join('');
+  $('nums').innerHTML = !S.locked ? `<div style="grid-column:1/-1;font-size:13px;color:var(--ink-3)">The numbers appear once you have made a prediction.</div>`
+    : `<div>Solvent front</div><b>${fmt(f, 2)} cm</b>` + nrows + `<div>Solvent</div><b>${S.solvent === 'salt' ? '2% m/v salt' : 'water'}</b>`;
+  if (S.locked) {
+    if (f >= 8) discover('separated');
+    if (f >= 8 && n >= 2) discover('rf');
+    if (S.sample === 'spinach' && f >= 6) discover('pigments');
+  }
+  paintWhy();
+  maybeExplain();
+}
+function checkSolventFinding(){
+  if (S.locked && S.solvent === 'salt' && S.tChrom > 4) discover('solvent');
+}
+
+/* ---- distillation paint -------------------------------------------------------- */
+function paintDist(){
+  const d = distillAt(S.pair, 0.5, S.tDist);
+  const TMIN = 20, TMAX = 105;
+  const hFill = (FLASK.y + 60 - (FLASK.y - 20)) * clamp(1 - (d.phase === 'dry' ? 1 : (d.p.t4 > 0 ? S.tDist / d.p.t4 * 0.5 : 0)), 0.15, 1);
+  $('flaskLiquid').setAttribute('y', (FLASK.y + 60 - hFill).toFixed(1)); $('flaskLiquid').setAttribute('height', hFill.toFixed(1));
+  const thermH = 34 * clamp((d.temp - TMIN) / (TMAX - TMIN), 0.04, 1);
+  $('thermFill').setAttribute('y', (34 - thermH).toFixed(1)); $('thermFill').setAttribute('height', thermH.toFixed(1));
+  $('thermLab').textContent = fmt(d.temp, 0) + ' °C';
+  $('flame').setAttribute('opacity', d.phase === 'dry' ? 0.25 : 1);
+  $('flaskLabel').textContent = d.phase === 'heating' ? 'Heating up' : d.phase === 'plateau' ? `Boiling: ${d.boiling.name} (${d.boiling.bp} °C)` : 'The flask has boiled dry';
+  /* how much of each liquid has boiled off and been collected, from the same phase boundaries */
+  const fracLo = clamp((S.tDist - d.p.t1) / (d.p.t2 - d.p.t1), 0, 1);
+  const fracHi = clamp((S.tDist - d.p.t3) / (d.p.t4 - d.p.t3), 0, 1);
+  const bar = (y, label, frac, col) => `<text x="20" y="${y - 6}" font-size="12" fill="#5b6770">${esc(label)}</text>
+    <rect x="20" y="${y}" width="260" height="20" rx="5" fill="#efe9db"/>
+    <rect x="20" y="${y}" width="${(frac * 260).toFixed(1)}" height="20" rx="5" fill="${col}"/>
+    <text x="290" y="${y + 15}" font-size="12" font-weight="700" fill="${col}">${Math.round(frac * 100)}%</text>`;
+  $('collectBars').innerHTML = bar(590, `${d.p.lo.name} collected`, fracLo, '#3f7fd8') + bar(632, `${d.p.hi.name} collected`, fracHi, '#c9453b');
+  /* graph */
+  const dx = t => DGR.x + t / 100 * DGR.w, dy = temp => DGR.y + DGR.h - (temp - TMIN) / (TMAX - TMIN) * DGR.h;
+  let ax = `<line x1="${DGR.x}" y1="${DGR.y + DGR.h}" x2="${DGR.x + DGR.w}" y2="${DGR.y + DGR.h}" stroke="#9aa3a6"/><line x1="${DGR.x}" y1="${DGR.y}" x2="${DGR.x}" y2="${DGR.y + DGR.h}" stroke="#9aa3a6"/>`;
+  for (let temp = 20; temp <= 100; temp += 20) ax += `<text x="${DGR.x - 10}" y="${dy(temp) + 4}" text-anchor="end" font-size="11.5" fill="#7c878c">${temp}</text>`;
+  for (let t = 0; t <= 100; t += 20) ax += `<text x="${dx(t)}" y="${DGR.y + DGR.h + 18}" text-anchor="middle" font-size="11.5" fill="#7c878c">${t}</text>`;
+  ax += `<line x1="${DGR.x}" y1="${dy(d.p.lo.bp).toFixed(1)}" x2="${DGR.x + DGR.w}" y2="${dy(d.p.lo.bp).toFixed(1)}" stroke="#cbbfa2" stroke-dasharray="4 4"/>`;
+  ax += `<line x1="${DGR.x}" y1="${dy(d.p.hi.bp).toFixed(1)}" x2="${DGR.x + DGR.w}" y2="${dy(d.p.hi.bp).toFixed(1)}" stroke="#cbbfa2" stroke-dasharray="4 4"/>`;
+  ax += `<text x="${DGR.x + 6}" y="${dy(d.p.lo.bp) - 6}" font-size="11.5" fill="#8a6a3a">${d.p.lo.name} boils, ${d.p.lo.bp}°C</text>`;
+  ax += `<text x="${DGR.x + 6}" y="${dy(d.p.hi.bp) - 6}" font-size="11.5" fill="#8a6a3a">${d.p.hi.name} boils, ${d.p.hi.bp}°C</text>`;
+  $('dAxes').innerHTML = ax;
+  let cp = ''; for (let t = 0; t <= 100; t += 1) cp += (t === 0 ? 'M' : 'L') + dx(t).toFixed(1) + ' ' + dy(distillAt(S.pair, 0.5, t).temp).toFixed(1);
+  $('dCurve').setAttribute('d', cp);
+  $('dNowLine').setAttribute('x1', dx(S.tDist)); $('dNowLine').setAttribute('x2', dx(S.tDist));
+  $('dNow').setAttribute('cx', dx(S.tDist)); $('dNow').setAttribute('cy', dy(d.temp));
+  $('timeDist').value = S.tDist; $('timeDistOut').textContent = Math.round(S.tDist) + ' s';
+  $('nums').innerHTML = `<div>Temperature</div><b>${fmt(d.temp, 0)} °C</b><div>Now boiling</div><b>${d.boiling ? d.boiling.name : '—'}</b>
+    <div>${d.p.lo.name} boils at</div><b>${d.p.lo.bp} °C</b><div>${d.p.hi.name} boils at</div><b>${d.p.hi.bp} °C</b>
+    <div>Gap between them</div><b>${d.p.hi.bp - d.p.lo.bp} °C</b>`;
+  if (S.locked) {
+    if (S.tDist >= d.p.t4) discover('plateaus');
+    if (d.phase === 'plateau' && d.boiling === d.p.lo) discover('lowfirst');
+  }
+  paintWhy();
+}
+
+/* ---- solutions / tyndall / concentration paint --------------------------------- */
+function paintSol(){
+  const t = TYNDALL[S.beaker];
+  $('beakLabel').textContent = t.name; $('beakKind').textContent = t.kind;
+  const gx0 = i => 20 + i * 150;
+  $('threeGroups').innerHTML = Object.keys(TYNDALL).map((id, i) => {
+    const g = TYNDALL[id], on = id === S.beaker, x = gx0(i);
+    return `<g class="hit" id="grp_${id}" tabindex="0" role="button" aria-label="Load ${esc(g.name)}">
+      <rect class="hb" x="${x}" y="580" width="138" height="70" rx="8" fill="${on ? '#fdf3f0' : '#ffffff'}" stroke="${on ? '#c2334d' : '#e2ded2'}" stroke-width="${on ? 2 : 1.4}"/>
+      <text x="${x + 10}" y="600" font-size="12" font-weight="700" fill="#2b3338">${esc(g.short || g.name)}</text>
+      <text x="${x + 10}" y="616" font-size="11" fill="#8a6a3a">${esc(g.kind)}</text>
+      <text x="${x + 10}" y="634" font-size="10.5" fill="${g.tyndall ? '#c2334d' : '#8a8072'}">${g.tyndall ? '✓ scatters light' : '✗ no scatter'}</text>
+      <text x="${x + 10}" y="646" font-size="10.5" fill="${g.settles ? '#c2334d' : '#8a8072'}">${g.settles ? '✓ settles' : '✗ stays mixed'}</text>
+    </g>`;
+  }).join('');
+  $('beakFill').setAttribute('y', BEAK.y + 4); $('beakFill').setAttribute('height', BEAK.h - 6);
+  $('beakFill').setAttribute('fill', S.beaker === 'milk' ? '#f2efe6' : S.beaker === 'chalk' ? (S.waited ? '#dfeaf3' : '#e7e2d3') : '#dfeaf3');
+  const rnd = Play.mulberry32(S.beaker.length * 13 + 3);
+  let ps = '';
+  if (t.tyndall) {
+    const settled = S.beaker === 'chalk' && S.waited;
+    for (let i = 0; i < 26; i++) {
+      const x = BEAK.x + 10 + rnd() * (BEAK.w - 20);
+      const y = settled ? BEAK.y + BEAK.h - 10 - rnd() * 14 : BEAK.y + 14 + rnd() * (BEAK.h - 24);
+      ps += `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${S.beaker === 'milk' ? 1.6 : 2.4}" fill="${S.beaker === 'milk' ? '#fff' : '#b89a6a'}" opacity=".85"/>`;
+    }
+  }
+  $('beakParticles').innerHTML = ps;
+  $('laserBeam').setAttribute('opacity', S.laser ? 1 : 0);
+  $('laserBeam').setAttribute('y1', BEAK.y + BEAK.h / 2); $('laserBeam').setAttribute('y2', BEAK.y + BEAK.h / 2);
+  let scatter = '';
+  if (S.laser && t.tyndall) {
+    for (let i = 0; i < 14; i++) {
+      const x = BEAK.x + 14 + rnd() * (BEAK.w - 28), y = BEAK.y + BEAK.h / 2 + (rnd() - 0.5) * (BEAK.h - 30);
+      scatter += `<line x1="${x.toFixed(1)}" y1="${(BEAK.y + BEAK.h / 2).toFixed(1)}" x2="${x.toFixed(1)}" y2="${y.toFixed(1)}" stroke="#ff8a80" stroke-width="1.4" opacity=".7"/>`;
+    }
+  }
+  $('laserScatter').innerHTML = scatter;
+  $('laserScatter').setAttribute('opacity', S.laser ? 1 : 0);
+  $('selBeaker').value = S.beaker;
+  /* concentration */
+  const total = S.total;
+  const solventLab = S.conc === 'mm' ? 'g of water' : 'mL of solution';
+  const soluteLab = S.conc === 'vv' ? 'mL' : 'g';
+  const pct = concPercent(S.conc, S.solute, total);
+  $('rngSolute').max = S.conc === 'mm' ? 60 : (S.conc === 'mv' ? 60 : 60);
+  $('rngSolute').value = S.solute; $('rngSoluteOut').textContent = S.solute + ' ' + soluteLab;
+  $('rngTotal').value = S.total; $('rngTotalOut').textContent = S.total + (S.conc === 'mm' ? ' g water' : ' mL solution');
+  const lab = S.conc === 'mm' ? 'mass by mass' : S.conc === 'mv' ? 'mass by volume' : 'volume by volume';
+  $('concEq').textContent = `% ${S.conc.split('').join('/')} = (${S.solute} ${soluteLab} / ${total} ${S.conc === 'mm' ? 'g total' : 'mL solution'}) × 100 = ${fmt(pct, S.conc === 'mm' && S.solute === 10 && total === 100 ? 0 : 2)}%`;
+  let bars = `<text x="486" y="90" font-size="13" fill="#5b6770">${esc(lab)} percentage</text>`;
+  const barY = 130, barW = 460, barH = 26;
+  bars += `<rect x="486" y="${barY}" width="${barW}" height="${barH}" rx="6" fill="#efe9db"/>`;
+  bars += `<rect x="486" y="${barY}" width="${(clamp(pct, 0, 100) / 100 * barW).toFixed(1)}" height="${barH}" rx="6" fill="#c2334d"/>`;
+  bars += `<text x="486" y="${barY + barH + 22}" font-size="20" font-weight="700" fill="#c2334d">${fmt(pct, 2)}%</text>`;
+  bars += `<text x="486" y="${barY + barH + 44}" font-size="12" fill="#8a8072">Example ${S.conc === 'mm' ? '5.1: 10 g salt in 90 g water = 10% m/m' : S.conc === 'mv' ? '5.2: 5 g glucose made up to 100 mL = 5% m/v' : '5.3: 1 mL pesticide made up to 100 mL = 1% v/v'}</text>`;
+  $('concBars').innerHTML = bars;
+  /* crystallisation */
+  const sAt60 = solB(60), sAtCool = solB(S.cool), crystal = sAt60 - sAtCool;
+  $('rngCool').value = S.cool; $('rngCoolOut').textContent = S.cool + ' °C';
+  const CX = 486, CY0 = 336, CW = 460, CH = 220, TLO = 40, THI = 60, SLO = 200, SHI = 300;
+  const cx = T => CX + (T - TLO) / (THI - TLO) * CW, cy = s => CY0 + CH - (s - SLO) / (SHI - SLO) * CH;
+  let sc = `<line x1="${CX}" y1="${CY0 + CH}" x2="${CX + CW}" y2="${CY0 + CH}" stroke="#9aa3a6"/><line x1="${CX}" y1="${CY0}" x2="${CX}" y2="${CY0 + CH}" stroke="#9aa3a6"/>`;
+  sc += `<path d="M${cx(40).toFixed(1)},${cy(solB(40)).toFixed(1)} L${cx(60).toFixed(1)},${cy(solB(60)).toFixed(1)}" stroke="#3d7a30" stroke-width="2.6" fill="none"/>`;
+  sc += `<text x="${cx(40)}" y="${CY0 + CH + 18}" font-size="11.5" fill="#7c878c" text-anchor="middle">40°C</text><text x="${cx(60)}" y="${CY0 + CH + 18}" font-size="11.5" fill="#7c878c" text-anchor="middle">60°C</text>`;
+  sc += `<text x="${CX - 10}" y="${cy(241) + 4}" font-size="11.5" fill="#7c878c" text-anchor="end">241</text><text x="${CX - 10}" y="${cy(287) + 4}" font-size="11.5" fill="#7c878c" text-anchor="end">287</text>`;
+  sc += `<circle cx="${cx(60).toFixed(1)}" cy="${cy(287).toFixed(1)}" r="5" fill="#3d7a30"/>`;
+  sc += `<circle cx="${cx(S.cool).toFixed(1)}" cy="${cy(sAtCool).toFixed(1)}" r="6" fill="#c2334d" stroke="#fff" stroke-width="1.6"/>`;
+  sc += `<text x="${CX}" y="${CY0 + CH + 40}" font-size="11.5" fill="#8a8072">The book gives only the two dots; the line between them is a straight-line estimate.</text>`;
+  $('solCurve').innerHTML = sc;
+  $('crystOut').innerHTML = S.cool === 60 ? 'A saturated solution at 60 °C holds <b>287 g</b> per 100 g of water.'
+    : `Cooling to ${S.cool} °C: only <b>${fmt(sAtCool, 0)} g</b> can stay dissolved, so <b>${fmt(crystal, 0)} g</b> crystallises out.`;
+  $('nums').innerHTML = `<div>${esc(t.name)}</div><b>${esc(t.kind)}</b><div>Scatters the beam?</div><b>${t.tyndall ? 'Yes' : 'No'}</b>
+    <div>Settles on standing?</div><b>${t.settles ? 'Yes' : 'No'}</b><div>Concentration</div><b>${fmt(pct, 2)}%</b>
+    <div>Crystallised at ${S.cool}°C</div><b>${fmt(crystal, 0)} g</b>`;
+  if (S.locked) {
+    if (S.laser && S.beaker === 'salt') discover('tSolution');
+    if (S.laser && S.beaker === 'milk') discover('tColloid');
+    if (S.laser && S.beaker === 'chalk' && S.waited) discover('tSuspension');
+    if ((S.conc === 'mm' && S.solute === 10 && S.total === 90) || (S.conc === 'mv' && S.solute === 5 && S.total === 100) || (S.conc === 'vv' && S.solute === 1 && S.total === 100)) discover('concentration');
+    if (S.cool <= 40) discover('crystals');
+  }
+  paintWhy();
+}
+
+/* ---- why narrator -------------------------------------------------------------- */
+function paintWhy(){
+  if (!S.locked) return;
+  $('whyCard').hidden = false;
+  let h = '';
+  if (S.tab === 'chrom') {
+    const sample = SAMPLES[S.sample], f = frontDist(S.tChrom, S.solvent);
+    if (f < 0.2) h = `<p>Dip the strip and press play, or drag the time slider. The front will climb, and every dye will follow at its own pace.</p>`;
+    else h = `<p>The front has climbed <b>${fmt(f, 1)} cm</b>. ${sample.dyes.map(d => `${d.name} is at ${fmt(dyeDist(d, S.tChrom, S.solvent), 1)} cm (Rf ${fmt(d.rf[S.solvent], 2)})`).join('; ')}.</p>
+        <p>${S.solvent === 'salt' ? 'The salt solution carries every dye a little farther than plain water does — the solvent is part of what Rf measures.' : 'Try the salt solution as the solvent and see if the same dyes move the same amount.'}</p>`;
+  } else if (S.tab === 'dist') {
+    const d = distillAt(S.pair, 0.5, S.tDist);
+    h = `<p>${d.phase === 'heating' ? `Heating up towards ${d.boiling ? d.boiling.bp : (d.temp < d.p.lo.bp ? d.p.lo.bp : d.p.hi.bp)}°C — nothing boils off yet.`
+      : d.phase === 'plateau' ? `The thermometer is stuck at <b>${d.boiling.bp}°C</b> while every last drop of ${d.boiling.name.toLowerCase()} boils away. It cannot rise further until this liquid is gone.`
+      : `Both liquids are gone. The flask is dry.`}</p>
+      <p>The two boiling points are ${d.p.hi.bp - d.p.lo.bp}°C apart — since that is more than 25°C, ordinary distillation gives two clean, separate plateaus.</p>`;
+  } else {
+    const t = TYNDALL[S.beaker];
+    h = `<p><b>${esc(t.name)}</b> is ${esc(t.kind).toLowerCase()}. ${t.note}</p>`;
+    if (S.laser) h += `<p>${t.tyndall ? 'The beam is clearly visible from the side, scattering off the particles — the Tyndall effect.' : 'The beam passes straight through, invisible from the side: the particles are too small to scatter it.'}</p>`;
+    if (S.beaker === 'chalk') h += `<p>${S.waited ? 'Left standing, the chalk has settled to the bottom — a suspension does not stay mixed.' : 'Leave it a few minutes and see whether it settles.'}</p>`;
+  }
+  $('why').innerHTML = h;
+}
+function maybeExplain(){
+  if (EXPLAINED || !POE) return;
+  if (frontDist(S.tChrom, S.solvent) < 8) return;
+  EXPLAINED = true;
+  const sample = SAMPLES.ink;
+  POE.explain(`The colours <b>separate and travel to different heights</b>, because each dye has a different affinity for the paper versus the moving water.
+    In black ink, ${sample.dyes.map(d => `${d.name.toLowerCase()} moves fastest (Rf ${d.rf.water})`)[0]}, ` +
+    `while ${sample.dyes[sample.dyes.length - 1].name.toLowerCase()} lags behind (Rf ${sample.dyes[sample.dyes.length - 1].rf.water}) — that gap between Rf values is exactly what separates them.`);
+}
+let EXPLAINED = false;
+
+/* ============================================================================
+   Controls
+   ============================================================================ */
+build();
+function setTab(t){
+  S.tab = t; S.visitedTab[t] = true;
+  $('tabChrom').setAttribute('aria-selected', t === 'chrom'); $('tabDist').setAttribute('aria-selected', t === 'dist'); $('tabSol').setAttribute('aria-selected', t === 'sol');
+  $('gChrom').toggleAttribute('hidden', t !== 'chrom'); $('gDist').toggleAttribute('hidden', t !== 'dist'); $('gSol').toggleAttribute('hidden', t !== 'sol');
+  $('ctlChrom').hidden = t !== 'chrom'; $('ctlDist').hidden = t !== 'dist'; $('ctlSol').hidden = t !== 'sol';
+  paint();
+}
+function paint(){
+  if (S.tab === 'chrom') paintChrom(); else if (S.tab === 'dist') paintDist(); else paintSol();
+}
+$('tabChrom').addEventListener('click', () => { setTab('chrom'); sound('tick'); track('tab', {tab: 'chrom'}); });
+$('tabDist').addEventListener('click', () => { setTab('dist'); sound('tick'); track('tab', {tab: 'dist'}); });
+$('tabSol').addEventListener('click', () => { setTab('sol'); sound('tick'); track('tab', {tab: 'sol'}); });
+
+let animChrom = null, animDist = null;
+function setPlayChrom(on){
+  S.playChrom = on; $('btnPlayChrom').textContent = on ? '❚❚' : '▶';
+  if (animChrom) { animChrom.stop(); animChrom = null; }
+  if (on) animChrom = loop(dt => { S.tChrom = clamp(S.tChrom + dt * 10, 0, TMAX_CHROM); if (S.tChrom >= TMAX_CHROM) setPlayChrom(false); paint(); checkSolventFinding(); });
+}
+function setPlayDist(on){
+  S.playDist = on; $('btnPlayDist').textContent = on ? '❚❚' : '▶';
+  if (animDist) { animDist.stop(); animDist = null; }
+  if (on) animDist = loop(dt => { S.tDist = clamp(S.tDist + dt * 14, 0, 100); if (S.tDist >= 100) setPlayDist(false); paint(); });
+}
+$('btnPlayChrom').addEventListener('click', () => { setPlayChrom(!S.playChrom); sound('tick'); track('play', {tab: 'chrom'}); });
+$('timeChrom').addEventListener('input', e => { setPlayChrom(false); S.tChrom = +e.target.value; paint(); checkSolventFinding(); });
+$('selSample').addEventListener('change', e => { S.sample = e.target.value; S.tChrom = 0; sound('pop'); paint(); track('sample', {sample: S.sample}); });
+$('selSolvent').addEventListener('change', e => { S.solvent = e.target.value; sound('pop'); paint(); checkSolventFinding(); track('solvent', {solvent: S.solvent}); });
+
+$('btnPlayDist').addEventListener('click', () => { setPlayDist(!S.playDist); sound('tick'); track('play', {tab: 'dist'}); });
+$('timeDist').addEventListener('input', e => { setPlayDist(false); S.tDist = +e.target.value; paint(); });
+$('selPair').addEventListener('change', e => { S.pair = e.target.value; S.tDist = 0; sound('pop'); paint(); track('pair', {pair: S.pair}); });
+
+$('selBeaker').addEventListener('change', e => { S.beaker = e.target.value; S.laser = false; S.waited = false; sound('pop'); paint(); track('beaker', {beaker: S.beaker}); });
+function loadGroup(id){ if (!S.locked) return; S.beaker = id; S.laser = false; S.waited = false; sound('pop'); paint(); track('beaker', {beaker: id}); }
+$('threeGroups').addEventListener('click', e => { const g = e.target.closest('.hit'); if (g) loadGroup(g.id.slice(4)); });
+$('threeGroups').addEventListener('keydown', e => { const g = e.target.closest('.hit'); if (g && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); loadGroup(g.id.slice(4)); } });
+$('btnLaser').addEventListener('click', () => { S.laser = !S.laser; sound(S.laser ? 'chime' : 'tick'); paint(); track('laser', {on: S.laser}); });
+$('btnWait').addEventListener('click', () => { S.waited = true; sound('whoosh'); paint(); track('wait'); });
+$('selConc').addEventListener('change', e => { S.conc = e.target.value;
+  S.solute = S.conc === 'mm' ? 10 : (S.conc === 'mv' ? 5 : 1); S.total = 100; if (S.conc === 'mm') S.total = 90;
+  sound('pop'); paint(); track('conc', {mode: S.conc}); });
+$('rngSolute').addEventListener('input', e => { S.solute = +e.target.value; paint(); });
+$('rngTotal').addEventListener('input', e => { S.total = +e.target.value; paint(); });
+$('rngCool').addEventListener('input', e => { S.cool = +e.target.value; paint(); });
+
+function lockControls(lock){
+  for (const id of ['tabChrom', 'tabDist', 'tabSol', 'selSample', 'selSolvent', 'btnPlayChrom', 'timeChrom',
+                     'selPair', 'btnPlayDist', 'timeDist', 'selBeaker', 'btnLaser', 'btnWait', 'selConc', 'rngSolute', 'rngTotal', 'rngCool'])
+    $(id).disabled = lock;
+  $('threeGroups').style.pointerEvents = lock ? 'none' : '';
+  $('gate').hidden = !lock;
+}
+
+/* ============================================================================
+   Start
+   ============================================================================ */
+findings($('finds'), [
+  {id: 'separated',   icon: '🌈', label: 'The dyes in ink separate as the front rises', hint: 'Run the black ink strip a good way up'},
+  {id: 'rf',          icon: '📏', label: 'Every dye has its own Rf',            hint: 'Let the front climb most of the strip'},
+  {id: 'solvent',     icon: '🧂', label: 'Changing the solvent changes Rf',     hint: 'Try the salt solution instead of water'},
+  {id: 'pigments',    icon: '🌿', label: 'Chlorophyll and xanthophyll separate too', hint: 'Try the spinach extract'},
+  {id: 'plateaus',    icon: '🌡️', label: 'Two boiling points, two plateaus',    hint: 'Run the heating curve all the way'},
+  {id: 'lowfirst',    icon: '⏱️', label: 'The lower-boiling liquid comes off first', hint: 'Watch which liquid is boiling first'},
+  {id: 'tSolution',   icon: '👓', label: 'A true solution does not scatter light', hint: 'Shine the laser through salt and water'},
+  {id: 'tColloid',    icon: '🥛', label: 'A colloid scatters light but never settles', hint: 'Shine the laser through milk'},
+  {id: 'tSuspension', icon: '🌫️', label: 'A suspension scatters light and settles', hint: 'Shine the laser through chalk water, then wait'},
+  {id: 'concentration', icon: '🧮', label: 'Matched the book’s own worked example', hint: 'Set the sliders back to a textbook example'},
+  {id: 'crystals',    icon: '💎', label: 'Cooling a saturated solution grows crystals', hint: 'Cool compound B’s solution to 40°C'},
+], () => toast('All eleven found — you have separated mixtures four different ways.', 4400));
+
+const POE = predict($('poe'), {
+  id: 'ink-strip',
+  q: 'You spot black sketch-pen ink in the middle of a paper strip and dip the bottom in water. As the water rises past the spot, what happens?',
+  options: [
+    {id: 'together', text: 'All the colours in the ink move up together, staying mixed.'},
+    {id: 'separate',  text: 'The colours separate and travel to different heights.', right: true},
+    {id: 'nothing',   text: 'Nothing happens; ink does not move in water.'},
+    {id: 'gone',      text: 'The ink dissolves and disappears completely.'},
+  ],
+  onLock(){
+    S.locked = true;
+    lockControls(false);
+    say('Run the chromatogram, then try the other two tabs.');
+    paint();
+  },
+});
+lockControls(!POE.locked);
+if (!Play.FF('predict')) S.locked = true;
+setTab(S.tab);
+if (!reduced() && !shared && POE.locked) setPlayChrom(true);
+window.applyFeatures = () => paint();
+window.PG_STATE = () => JSON.parse(JSON.stringify(S));
+window.PG_MODEL = {SAMPLES, frontDist, dyeDist, LIQUIDS, distillAt, distillPhases, TYNDALL, concPercent, solB};
+</script>
+</body>
+</html>

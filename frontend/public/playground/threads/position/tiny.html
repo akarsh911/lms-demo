@@ -1,0 +1,400 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Find the Furry Cat</title>
+<meta name="description" content="Class 1: drag the furry cat anywhere in the room and hear where she is — on the shelf, under the bed, inside the backpack, above the hat, near or far from her basket.">
+<link rel="icon" href="../../favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600&family=Inter:wght@400;500;600;700&family=Nunito:wght@500;700;800&display=swap">
+<link rel="stylesheet" href="../../play.css">
+<style>
+.pg-main.tiny-main{grid-template-columns:minmax(0,1fr) 250px; padding-top:12px; padding-bottom:12px}
+.tiny-main .pg-stage{align-self:start; min-height:0}
+.pg-intro{display:flex; align-items:baseline; gap:18px; flex-wrap:wrap; padding-top:12px}
+.pg-intro p{margin:0}
+#stage{background:#fdf3e0}
+#catHit{cursor:grab}
+#catHit.dragging{cursor:grabbing}
+svg [tabindex]:focus{outline:none}
+svg [tabindex]:focus-visible{outline:none; stroke:#5a8de0; stroke-width:4; stroke-dasharray:8 8}
+.hear{width:100%; min-height:76px; font-size:24px; font-family:var(--font-head); border-radius:var(--radius)}
+.hear .ic{font-size:30px}
+.try{padding:10px; text-align:center; cursor:pointer; border:2px solid var(--hair-2); transition:transform .2s var(--spring)}
+.try:hover{border-color:var(--accent)}
+.try:active{transform:scale(.97)}
+.try svg{display:block; width:100%; height:auto}
+.try .kicker{margin:2px 0 0}
+.fade{transition:opacity .35s}
+@media (max-width:980px){ .pg-main.tiny-main{grid-template-columns:1fr} }
+</style>
+</head>
+<body>
+<header class="pg-top"></header>
+
+<div class="pg-intro">
+  <h1>Find the furry cat</h1>
+  <p>Drag the cat anywhere in the room. Listen — where is she hiding?</p>
+</div>
+
+<main class="pg-main tiny-main">
+  <section class="pg-stage" id="stageWrap">
+    <svg id="stage" viewBox="0 0 1000 680" role="img" aria-label="A cosy room with a window shelf, a bed, a backpack on the floor, a hat on a wall hook, and a basket. Drag the furry cat anywhere."></svg>
+  </section>
+
+  <aside class="pg-side">
+    <button class="btn primary hear" id="hear" aria-label="Hear what to do"><span class="ic">🔊</span> Hear it</button>
+    <button class="card try" id="tryCard" aria-label="What to try next. Tap to hear it."><svg id="tryArt" viewBox="-80 -55 160 110"></svg><div class="kicker">Try this</div></button>
+    <div class="card"><h3>⭐ Found</h3><div id="finds"></div></div>
+  </aside>
+</main>
+
+<script src="../../play.js"></script>
+<script>
+'use strict';
+const {$, clamp, lerp, loop, tween, sound, tone, say, track, confetti, findings, discover, found,
+       shareState, sharedState, mount, reduced, drag, svgPoint, ease} = Play;
+mount({thread: 'position', band: 'tiny'});
+
+/* MODEL:start ==================================================================
+   Position words (NCERT Joyful Mathematics Class 1, Ch 1 "Finding the Furry Cat!").
+   The cat's position is a point (x, y). Every phrase spoken about her comes from
+   comparing that point with the real geometry of the room's objects — nothing is
+   looked up from where she was dropped:
+     onShelf(x,y)    — inside the window-sill's rectangle
+     underBed(x,y)   — inside the gap under the bed frame
+     insideBag(x,y)  — inside the backpack's opening
+     aboveHook(x,y)  — higher up the wall than the hat's hook
+     distBasket(x,y) — straight-line distance to her basket, giving near/far
+   The room draws the bed's skirt and the backpack's flap AFTER the cat in the
+   picture, so hiding under or inside is something the geometry (and the
+   drawing order) makes true, not a costume swap.
+   ============================================================================ */
+const Y_FLOOR = 460;
+const SHELF = {x0: 108, y0: 140, x1: 242, y1: 188};
+const BED   = {x0: 650, y0: 340, x1: 892, y1: 452, x0f: 636, x1f: 906, gapTop: 400};
+const BAG   = {x0: 96,  y0: 505, x1: 216, y1: 580, x0f: 82, x1f: 228, top: 470, bottom: 590};
+const HOOK  = {x: 905, y: 104, x0: 828, x1: 982, y0: 8, y1: 98};
+const BASKET = {x: 500, y: 600};
+const NEAR_R = 150, FAR_R = 470;
+const inRect = (x, y, r) => x >= r.x0 && x <= r.x1 && y >= r.y0 && y <= r.y1;
+const onShelf   = (x, y) => inRect(x, y, SHELF);
+const underBed  = (x, y) => inRect(x, y, BED);
+const insideBag = (x, y) => inRect(x, y, BAG);
+const aboveHook = (x, y) => x >= HOOK.x0 && x <= HOOK.x1 && y >= HOOK.y0 && y <= HOOK.y1;
+const distBasket = (x, y) => Math.hypot(x - BASKET.x, y - BASKET.y);
+const isNear = (x, y) => distBasket(x, y) <= NEAR_R;
+const isFar  = (x, y) => distBasket(x, y) >= FAR_R;
+/* The one phrase the model says about where she is right now: the container wins
+   over open space, which wins over a plain distance from her basket. */
+function whereIs(x, y){
+  if (insideBag(x, y)) return 'inside';
+  if (underBed(x, y)) return 'under';
+  if (onShelf(x, y)) return 'on';
+  if (aboveHook(x, y)) return 'above';
+  if (isNear(x, y)) return 'near';
+  if (isFar(x, y)) return 'far';
+  return null;
+}
+/* MODEL:end */
+
+const LINE = {
+  inside: 'Inside the backpack!', under: 'Under the bed!', on: 'On the window shelf!',
+  above: 'Above the hat!', near: 'Near her basket!', far: 'Far, far away!',
+};
+
+/* ---- state: plain data --------------------------------------------------- */
+const S = {x: 500, y: 320, where: null, said: null, dragging: false, hellos: 0};
+const shared = sharedState();
+if (shared && isFinite(+shared.x) && isFinite(+shared.y)) { S.x = clamp(+shared.x, 100, 900); S.y = clamp(+shared.y, 40, 650); }
+shareState(() => ({x: +S.x.toFixed(0), y: +S.y.toFixed(0)}));
+
+/* ============================================================================
+   The stage: built once, then only patched. The cat's VISUAL group is drawn
+   early, so the bed skirt and backpack flap (drawn after it) sit in front of
+   her whenever she is in their zone — pure z-order, no re-parenting.
+   ============================================================================ */
+const svg = $('stage');
+const f1 = n => (+n).toFixed(1);
+
+function catArt(){
+  return `
+  <path id="catTail" d="M20 6 Q56 -6 50 -40 Q46 -60 28 -56" fill="none" stroke="#e8934a" stroke-width="16" stroke-linecap="round"/>
+  <ellipse cx="0" cy="10" rx="34" ry="26" fill="#f2a55c"/>
+  <ellipse cx="0" cy="16" rx="18" ry="14" fill="#fff3e0"/>
+  <circle cx="0" cy="-24" r="27" fill="#f2a55c"/>
+  <path d="M-24 -40 L-32 -66 L-8 -46 Z" fill="#f2a55c"/><path d="M24 -40 L32 -66 L8 -46 Z" fill="#f2a55c"/>
+  <path d="M-22 -40 L-27 -56 L-12 -44 Z" fill="#ffd7b0"/><path d="M22 -40 L27 -56 L12 -44 Z" fill="#ffd7b0"/>
+  <ellipse cx="0" cy="-16" rx="15" ry="11" fill="#fff3e0"/>
+  <g id="catEyes"><ellipse cx="-10" cy="-26" rx="5.4" ry="6.4" fill="#2a1d12"/><ellipse cx="10" cy="-26" rx="5.4" ry="6.4" fill="#2a1d12"/>
+    <circle cx="-8.4" cy="-28" r="1.6" fill="#fff"/><circle cx="11.6" cy="-28" r="1.6" fill="#fff"/></g>
+  <g id="catBlink" opacity="0"><path d="M-16 -26 h12" stroke="#2a1d12" stroke-width="3" stroke-linecap="round"/><path d="M4 -26 h12" stroke="#2a1d12" stroke-width="3" stroke-linecap="round"/></g>
+  <path d="M-3 -18 L3 -18 L0 -14 Z" fill="#c96a4a"/>
+  <path id="catMouth" d="M0 -14 Q-6 -8 -12 -11 M0 -14 Q6 -8 12 -11" stroke="#2a1d12" stroke-width="2" fill="none" stroke-linecap="round"/>
+  <g stroke="#8a5a2b" stroke-width="1.6" stroke-linecap="round" opacity=".8">
+    <path d="M-14 -16 L-40 -20 M-14 -12 L-42 -10 M-14 -8 L-40 0"/>
+    <path d="M14 -16 L40 -20 M14 -12 L42 -10 M14 -8 L40 0"/>
+  </g>
+  <path d="M-16 -50 q16 -8 32 0" stroke="#c96a4a" stroke-width="2.4" fill="none" opacity=".7"/>`;
+}
+/* The bubble is drawn on its own layer (see build()), always on top of every
+   piece of furniture, and flips above/below her so it never sits on the cat
+   or runs off the edge of the room. */
+function bubbleMarkup(flip, text){
+  const bodyTop = flip ? 58 : -150, tailTip = flip ? 40 : -74, textY = flip ? 93 : -117;
+  const tailBase = flip ? bodyTop : bodyTop + 58;
+  return `
+    <path d="M-12 ${tailBase} L12 ${tailBase} L0 ${tailTip} Z" fill="#fff" stroke="#5a8de0" stroke-width="3"/>
+    <rect x="-89" y="${bodyTop}" width="178" height="58" rx="16" fill="#fff" stroke="#5a8de0" stroke-width="3"/>
+    <text x="0" y="${textY}" text-anchor="middle" font-family="Fredoka, Nunito, sans-serif" font-size="19" font-weight="600" fill="#2f4a6e">${text}</text>`;
+}
+
+function build(){
+  svg.innerHTML = `
+  <defs>
+    <linearGradient id="gWall" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffe9c9"/><stop offset="1" stop-color="#fdd9a8"/></linearGradient>
+    <linearGradient id="gSky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#bfe6ff"/><stop offset="1" stop-color="#eaf7ff"/></linearGradient>
+    <linearGradient id="gFloor" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#d8a66a"/><stop offset="1" stop-color="#c08e54"/></linearGradient>
+    <filter id="soft" x="-30%" y="-30%" width="160%" height="160%"><feDropShadow dx="0" dy="4" stdDeviation="4" flood-color="#000" flood-opacity=".25"/></filter>
+  </defs>
+  <rect width="1000" height="${Y_FLOOR}" fill="url(#gWall)"/>
+  <rect y="${Y_FLOOR}" width="1000" height="${680 - Y_FLOOR}" fill="url(#gFloor)"/>
+  ${Array.from({length: 9}, (_, i) => `<path d="M${i * 120} ${Y_FLOOR} V680" stroke="#a97a44" stroke-width="2" opacity=".35"/>`).join('')}
+  <!-- the skirting board: where the wall meets the floor -->
+  <rect x="0" y="${Y_FLOOR - 10}" width="1000" height="14" fill="#8a5a2b"/>
+  <rect x="0" y="${Y_FLOOR - 10}" width="1000" height="4" fill="#a9713c"/>
+
+  <!-- a round rug, with a woven texture and a fringe -->
+  <g>
+    <ellipse cx="500" cy="562" rx="204" ry="36" fill="#000" opacity=".08"/>
+    <ellipse cx="500" cy="556" rx="200" ry="34" fill="#e0567a" opacity=".55"/>
+    <ellipse cx="500" cy="556" rx="158" ry="25" fill="none" stroke="#fff" stroke-width="3" opacity=".4"/>
+    <ellipse cx="500" cy="556" rx="112" ry="17" fill="none" stroke="#fff" stroke-width="3" opacity=".4"/>
+    <g stroke="#b8395f" stroke-width="3" stroke-linecap="round" opacity=".55">${Array.from({length: 20}, (_, i) => {
+      const t = (i / 20) * Math.PI * 2, rx = 200, ry = 34, x0 = 500 + rx * Math.cos(t), y0 = 556 + ry * Math.sin(t),
+            x1 = 500 + (rx + 10) * Math.cos(t), y1 = 556 + (ry + 5) * Math.sin(t);
+      return `<path d="M${f1(x0)} ${f1(y0)} L${f1(x1)} ${f1(y1)}"/>`; }).join('')}</g>
+  </g>
+
+  <!-- window with a shelf/sill: the "on" zone -->
+  <rect x="86" y="46" width="160" height="150" rx="10" fill="#8a5a2b"/>
+  <rect x="98" y="58" width="136" height="100" rx="4" fill="url(#gSky)"/>
+  <path d="M98 58 H234 M166 58 V158" stroke="#8a5a2b" stroke-width="5"/>
+  <circle cx="200" cy="80" r="12" fill="#ffd84a"/><ellipse cx="130" cy="90" rx="16" ry="8" fill="#fff" opacity=".85"/>
+  <rect x="90" y="160" width="156" height="30" rx="4" fill="#a9713c" stroke="#6b4423" stroke-width="3"/>
+  <rect id="shelfZone" x="${SHELF.x0}" y="${SHELF.y0}" width="${SHELF.x1 - SHELF.x0}" height="${SHELF.y1 - SHELF.y0}" fill="#5a8de0" opacity="0" rx="8"/>
+
+  <!-- the hook, mounted on the wall, and the hat that hangs from it: "above" is the wall space over it -->
+  <rect x="${HOOK.x - 15}" y="${HOOK.y - 16}" width="30" height="16" rx="4" fill="#8a5a2b" stroke="#5a3719" stroke-width="2"/>
+  <path d="M${HOOK.x} ${HOOK.y - 2} q13 0 13 13 q0 12 -11 12" fill="none" stroke="#4a3018" stroke-width="6" stroke-linecap="round"/>
+  <path d="M${HOOK.x - 34} ${HOOK.y + 60} Q${HOOK.x - 34} ${HOOK.y + 24} ${HOOK.x} ${HOOK.y + 20} Q${HOOK.x + 34} ${HOOK.y + 24} ${HOOK.x + 34} ${HOOK.y + 60} Z" fill="#5a8de0" stroke="#33578f" stroke-width="3"/>
+  <rect x="${HOOK.x - 42}" y="${HOOK.y + 56}" width="84" height="13" rx="6" fill="#33578f"/>
+  <path d="M${HOOK.x - 6} ${HOOK.y + 22} q6 -8 12 0" fill="none" stroke="#33578f" stroke-width="4" stroke-linecap="round"/>
+  <rect id="hookZone" x="${HOOK.x0}" y="${HOOK.y0}" width="${HOOK.x1 - HOOK.x0}" height="${HOOK.y1 - HOOK.y0}" fill="#5a8de0" opacity="0"/>
+
+  <!-- the bed: headboard behind, mattress on a base that stands on the floor. Its skirt is drawn
+       AFTER the cat, and the dark recess between the skirt and the floor is where she peeks out. -->
+  <ellipse cx="${(BED.x0f + BED.x1f) / 2}" cy="${Y_FLOOR + 6}" rx="150" ry="14" fill="#000" opacity=".16"/>
+  <rect x="${BED.x0f}" y="170" width="${BED.x1f - BED.x0f}" height="100" rx="12" fill="#c9863f" stroke="#6b4423" stroke-width="4"/>
+  <rect x="${BED.x0f + 8}" y="255" width="${BED.x1f - BED.x0f - 16}" height="75" rx="14" fill="#eef4fb" stroke="#c7d6e8" stroke-width="3"/>
+  <rect x="${BED.x0f + 8}" y="255" width="${BED.x1f - BED.x0f - 16}" height="24" rx="14" fill="#5a8de0" opacity=".4"/>
+  <!-- the shadowy gap under the bed: below the skirt (drawn after the cat), open to the floor -->
+  <rect x="${BED.x0f + 10}" y="${BED.gapTop}" width="${BED.x1f - BED.x0f - 20}" height="${Y_FLOOR - BED.gapTop}" rx="4" fill="#2a1c10" opacity=".4"/>
+  <rect id="bedZone" x="${BED.x0}" y="${BED.y0}" width="${BED.x1 - BED.x0}" height="${BED.y1 - BED.y0}" fill="#5a8de0" opacity="0"/>
+
+  <!-- the backpack: straps, a front pocket with a zip, and a flap drawn AFTER her that closes over
+       the opening she hides inside. It stands on the floor like everything else. -->
+  <ellipse cx="${(BAG.x0f + BAG.x1f) / 2}" cy="${BAG.bottom + 8}" rx="82" ry="12" fill="#000" opacity=".16"/>
+  <path d="M${BAG.x0f + 18} ${BAG.top + 8} Q${BAG.x0f + 10} ${BAG.top - 22} ${BAG.x0f + 36} ${BAG.top - 22} Q${BAG.x0f + 54} ${BAG.top - 22} ${BAG.x0f + 46} ${BAG.top + 8}"
+    fill="none" stroke="#6b2119" stroke-width="9" stroke-linecap="round"/>
+  <path d="M${BAG.x1f - 18} ${BAG.top + 8} Q${BAG.x1f - 10} ${BAG.top - 22} ${BAG.x1f - 36} ${BAG.top - 22} Q${BAG.x1f - 54} ${BAG.top - 22} ${BAG.x1f - 46} ${BAG.top + 8}"
+    fill="none" stroke="#6b2119" stroke-width="9" stroke-linecap="round"/>
+  <rect x="${BAG.x0f}" y="${BAG.top}" width="${BAG.x1f - BAG.x0f}" height="${BAG.bottom - BAG.top}" rx="22" fill="#e2453d" stroke="#8f2e22" stroke-width="4"/>
+  <path d="M${(BAG.x0f + BAG.x1f) / 2} ${BAG.top + 12} V${BAG.top + 54}" stroke="#8f2e22" stroke-width="3" stroke-dasharray="3 4"/>
+  <rect x="${BAG.x0f + 14}" y="${BAG.bottom - 56}" width="${BAG.x1f - BAG.x0f - 28}" height="48" rx="12" fill="#c23a30" stroke="#8f2e22" stroke-width="3"/>
+  <path d="M${BAG.x0f + 24} ${BAG.bottom - 44} H${BAG.x1f - 24}" stroke="#8f2e22" stroke-width="3" stroke-dasharray="4 4"/>
+  <rect id="bagZone" x="${BAG.x0}" y="${BAG.y0}" width="${BAG.x1 - BAG.x0}" height="${BAG.y1 - BAG.y0}" fill="#5a8de0" opacity="0"/>
+
+  <!-- her basket: "near" and "far" are measured from here -->
+  <ellipse cx="${BASKET.x}" cy="${BASKET.y + 26}" rx="72" ry="16" fill="#000" opacity=".12"/>
+  <path d="M${BASKET.x - 68} ${BASKET.y - 4} Q${BASKET.x - 68} ${BASKET.y + 36} ${BASKET.x} ${BASKET.y + 40} Q${BASKET.x + 68} ${BASKET.y + 36} ${BASKET.x + 68} ${BASKET.y - 4} Z" fill="#8a5a2b" stroke="#4a2e14" stroke-width="4"/>
+  <g stroke="#6b4423" stroke-width="2" opacity=".8">${Array.from({length: 8}, (_, i) => { const x = BASKET.x - 60 + i * 17; return `<path d="M${x} ${BASKET.y - 2} Q${x + 8} ${BASKET.y + 18} ${x} ${BASKET.y + 36}"/>`; }).join('')}</g>
+  <path d="M${BASKET.x - 68} ${BASKET.y - 4} Q${BASKET.x} ${BASKET.y - 24} ${BASKET.x + 68} ${BASKET.y - 4} Q${BASKET.x} ${BASKET.y + 12} ${BASKET.x - 68} ${BASKET.y - 4} Z" fill="#e0a860" stroke="#6b4423" stroke-width="3"/>
+  <path d="M${BASKET.x - 40} ${BASKET.y - 6} Q${BASKET.x} ${BASKET.y + 10} ${BASKET.x + 40} ${BASKET.y - 6} Q${BASKET.x} ${BASKET.y - 20} ${BASKET.x - 40} ${BASKET.y - 6} Z" fill="#e0567a"/>
+  <circle id="nearRing" cx="${BASKET.x}" cy="${BASKET.y}" r="${NEAR_R}" fill="none" stroke="#2f9e5b" stroke-width="3" stroke-dasharray="6 8" opacity="0"/>
+  <circle id="farRing" cx="${BASKET.x}" cy="${BASKET.y}" r="${FAR_R}" fill="none" stroke="#e0567a" stroke-width="3" stroke-dasharray="6 8" opacity="0"/>
+
+  <!-- the cat: drawn here so later art (the bed's skirt, the backpack's flap) can sit in front of her -->
+  <g id="catArt" transform="translate(${S.x} ${S.y})">${catArt()}</g>
+
+  <!-- the bed's front skirt: sits in front of the cat when she is underneath, low, behind it -->
+  <rect x="${BED.x0f}" y="330" width="${BED.x1f - BED.x0f}" height="${BED.gapTop - 330}" rx="10" fill="#eef4fb" stroke="#c7d6e8" stroke-width="3"/>
+  <path d="M${BED.x0f + 10} 340 H${BED.x1f - 10}" stroke="#c7d6e8" stroke-width="2" opacity=".7"/>
+
+  <!-- the backpack's front flap: sits in front of the cat when she is inside -->
+  <path d="M${BAG.x0f} ${BAG.top + 28} Q${(BAG.x0f + BAG.x1f) / 2} ${BAG.top + 58} ${BAG.x1f} ${BAG.top + 28} L${BAG.x1f} ${BAG.top + 4} Q${(BAG.x0f + BAG.x1f) / 2} ${BAG.top - 18} ${BAG.x0f} ${BAG.top + 4} Z"
+    fill="#d6453d" stroke="#8f2e22" stroke-width="4"/>
+  <circle cx="${(BAG.x0f + BAG.x1f) / 2}" cy="${BAG.top + 18}" r="7" fill="#ffd84a" stroke="#8a5a2b" stroke-width="2"/>
+
+  <!-- her own speech bubble, drawn last so it is always on top of every piece of furniture -->
+  <g id="bubble" opacity="0" class="fade"></g>
+
+  <!-- the "try this" hint hand, until she has been dragged once -->
+  <g id="hint" pointer-events="none" opacity="1"><g id="hintHand" transform="translate(568 358) scale(.85)">
+    <path d="M-6 0 L-6 -34 Q-6 -42 1 -42 Q8 -42 8 -34 L8 -14 L20 -14 Q30 -14 30 -4 L30 16 Q30 30 16 30 L2 30 Q-12 30 -16 18 L-24 4 Q-27 -3 -20 -5 Q-14 -6 -10 2 Z"
+      fill="#fff" stroke="#3a2a1a" stroke-width="3" stroke-linejoin="round"/></g></g>
+
+  <!-- the hit target: never re-parented, always on top, follows the cat's box -->
+  <rect id="catHit" x="${S.x - 60}" y="${S.y - 75}" width="120" height="150" fill="transparent" tabindex="0" role="slider"
+    aria-label="The furry cat. Drag her anywhere in the room."/>
+  `;
+}
+build();
+
+/* ---- juice ------------------------------------------------------------------ */
+function squash(el, ms = 420){
+  return tween(0, 1, ms, t => { const k = Math.sin(t * Math.PI * 3) * (1 - t) * 0.16;
+    el.setAttribute('transform', el._t + ` scale(${(1 + k).toFixed(3)} ${(1 - k).toFixed(3)})`); }, x => x)
+    .then(() => el.setAttribute('transform', el._t));
+}
+function clientOf(x, y){
+  const m = svg.getScreenCTM(); if (!m) return {x: innerWidth / 2, y: innerHeight / 2};
+  const p = svg.createSVGPoint(); p.x = x; p.y = y; const q = p.matrixTransform(m);
+  return {x: q.x, y: q.y};
+}
+const meow = () => { tone(560, 0.1, 'sine', 0.13, 0, 780); tone(700, 0.12, 'sine', 0.11, 0.09, 520); };
+const purr = () => { tone(140, 0.3, 'sawtooth', 0.03, 0, 150); };
+
+/* ---- paint: everything that depends on the cat's position -------------------- */
+function paint(){
+  const t = `translate(${f1(S.x)} ${f1(S.y)})`;
+  $('catArt').setAttribute('transform', t);
+  $('catArt')._t = t;
+  $('catHit').setAttribute('x', S.x - 60); $('catHit').setAttribute('y', S.y - 75);
+  const w = whereIs(S.x, S.y);
+  S.where = w;
+  $('nearRing').setAttribute('opacity', w === 'near' ? 0.7 : 0);
+  $('farRing').setAttribute('opacity', w === 'far' ? 0.5 : 0);
+  for (const z of ['shelfZone', 'bedZone', 'bagZone', 'hookZone']) $(z).setAttribute('opacity', 0);
+  const zoneOf = {on: 'shelfZone', under: 'bedZone', inside: 'bagZone', above: 'hookZone'}[w];
+  if (zoneOf) $(zoneOf).setAttribute('opacity', 0.1);
+  const b = $('bubble');
+  if (w && LINE[w]) {
+    const flip = S.y < 300;
+    b.setAttribute('transform', `translate(${f1(S.x)} ${f1(S.y)})`);
+    b.innerHTML = bubbleMarkup(flip, LINE[w]);
+    b.setAttribute('opacity', 1);
+  } else b.setAttribute('opacity', 0);
+  $('catHit').setAttribute('aria-valuetext', w ? LINE[w] : 'In the middle of the room');
+}
+
+/* ---- speak when the phrase changes, and mark discoveries ---------------------- */
+function react(){
+  const w = S.where;
+  if (w && w !== S.said) {
+    S.said = w;
+    say(LINE[w]);
+    sound(w === 'inside' || w === 'under' ? 'boing' : 'chime');
+    const id = {on: 'onShelf', under: 'underBed', inside: 'insideBag', above: 'aboveHook', near: 'near', far: 'far'}[w];
+    if (discover(id, clientOf(S.x, S.y))) paintTry();
+  } else if (!w) S.said = null;
+}
+
+/* ---- dragging her: never re-parented, always the same hit rect --------------- */
+let dragBase = null;
+drag($('catHit'), svg, {
+  start(p){
+    S.dragging = true;
+    dragBase = {x: p.x - S.x, y: p.y - S.y, sx: p.x, sy: p.y, moved: false};
+    if (!S.hellos) { S.hellos = 1; say('Drag the furry cat anywhere in the room!'); }
+    $('hint').setAttribute('opacity', 0);
+  },
+  move(p){
+    if (Math.hypot(p.x - dragBase.sx, p.y - dragBase.sy) > 6) dragBase.moved = true;
+    S.x = clamp(p.x - dragBase.x, 100, 900);
+    S.y = clamp(p.y - dragBase.y, 40, 650);
+    paint();
+  },
+  end(){
+    S.dragging = false;
+    if (dragBase && !dragBase.moved) { tapCat(); dragBase = null; return; }
+    dragBase = null;
+    react();
+    track('drop', {x: Math.round(S.x), y: Math.round(S.y), where: S.where});
+  },
+});
+$('catHit').addEventListener('keydown', e => {
+  const d = {ArrowLeft: [-24, 0], ArrowRight: [24, 0], ArrowUp: [0, -24], ArrowDown: [0, 24]}[e.key];
+  if (!d) return;
+  e.preventDefault();
+  $('hint').setAttribute('opacity', 0);
+  S.x = clamp(S.x + d[0], 100, 900); S.y = clamp(S.y + d[1], 40, 650);
+  paint(); react();
+});
+
+/* ---- tapping the cat without dragging: she says hello ------------------------- */
+function tapCat(){
+  squash($('catArt'), 380);
+  sound('pop'); meow();
+  say('Meow! Hello!');
+  track('tapCat');
+}
+
+/* ---- try card: what to try next, shown as a small picture --------------------- */
+const GOALS = ['onShelf', 'underBed', 'insideBag', 'aboveHook', 'near', 'far'];
+const TRY = {
+  onShelf:   {line: 'Drag the cat onto the window shelf!', art: '<rect x="-40" y="8" width="80" height="16" rx="4" fill="#8a5a2b"/><circle cx="0" cy="-6" r="16" fill="#f2a55c"/>'},
+  underBed:  {line: 'Hide the cat under the bed!', art: '<rect x="-44" y="-10" width="88" height="30" rx="6" fill="#eef4fb" stroke="#c7d6e8" stroke-width="3"/><circle cx="0" cy="22" r="14" fill="#f2a55c" opacity=".8"/>'},
+  insideBag: {line: 'Pop the cat inside the backpack!', art: '<path d="M-40 20 Q-46 -14 0 -14 Q46 -14 40 20 Z" fill="#e2453d"/><circle cx="0" cy="4" r="12" fill="#f2a55c"/>'},
+  aboveHook: {line: 'Lift the cat above the hat!', art: '<path d="M-24 24 Q0 -6 24 24 Q20 34 0 30 Q-20 34 -24 24 Z" fill="#5a8de0"/><circle cx="0" cy="-22" r="14" fill="#f2a55c"/>'},
+  near:      {line: 'Bring the cat near her basket!', art: '<path d="M-30 14 Q-30 30 0 32 Q30 30 30 14 Z" fill="#c9863f"/><circle cx="0" cy="-2" r="14" fill="#f2a55c"/>'},
+  far:       {line: 'Now send the cat far, far away!', art: '<path d="M-30 20 Q-30 32 0 34 Q30 32 30 20 Z" fill="#c9863f" opacity=".7"/><circle cx="24" cy="-24" r="10" fill="#f2a55c"/>'},
+};
+let shownGoal;
+function currentGoal(){ return GOALS.find(g => !found(g)) || null; }
+function paintTry(){
+  const g = currentGoal();
+  if (g === shownGoal) return;
+  shownGoal = g;
+  $('tryArt').innerHTML = g ? TRY[g].art : '<text x="0" y="14" text-anchor="middle" font-size="46">⭐</text>';
+}
+function sayTry(){ const g = currentGoal(); say(g ? TRY[g].line : 'You found her everywhere! Keep playing.'); sound('tick'); track('hear', {goal: g}); }
+$('hear').addEventListener('click', sayTry);
+$('tryCard').addEventListener('click', sayTry);
+
+/* ---- idle life: blink and tail sway, skipped under reduced motion ------------- */
+let T = 0, blinkT = 2;
+loop(dt => {
+  T += dt;
+  if (reduced()) return;
+  blinkT -= dt;
+  $('catBlink').setAttribute('opacity', blinkT < 0.12 && blinkT > 0 ? 1 : 0);
+  $('catEyes').setAttribute('opacity', blinkT < 0.12 && blinkT > 0 ? 0 : 1);
+  if (blinkT < 0) blinkT = 2 + Math.random() * 3;
+  if (!S.dragging) $('catTail').setAttribute('transform', `rotate(${(10 * Math.sin(T * 1.6)).toFixed(1)})`);
+  if (!S.hellos) $('hintHand').setAttribute('transform', `translate(${f1(S.x + 68)} ${f1(S.y + 38 + Math.sin(T * 2.4) * 8)}) scale(.85)`);
+});
+
+/* ============================================================================
+   Start
+   ============================================================================ */
+findings($('finds'), [
+  {id: 'onShelf',   icon: '🪟', label: 'On the shelf',           say: 'On the window shelf!'},
+  {id: 'underBed',  icon: '🛏️', label: 'Under the bed',   say: 'Under the bed!'},
+  {id: 'insideBag', icon: '🎒', label: 'Inside the backpack',   say: 'Inside the backpack!'},
+  {id: 'aboveHook', icon: '🧢', label: 'Above the hat',         say: 'Above the hat!'},
+  {id: 'near',      icon: '🧺', label: 'Near her basket',       say: 'Near her basket!'},
+  {id: 'far',       icon: '🌍', label: 'Far, far away',         say: 'Far, far away!'},
+], () => { say('You found the furry cat everywhere!'); paintTry(); });
+
+paint();
+paintTry();
+say('Where is the furry cat? Drag her anywhere!');
+window.applyFeatures = () => paint();
+window.PG_STATE = () => ({x: S.x, y: S.y, where: S.where, hellos: S.hellos});
+window.PG_MODEL = {SHELF, BED, BAG, HOOK, BASKET, NEAR_R, FAR_R, onShelf, underBed, insideBag, aboveHook, distBasket, isNear, isFar, whereIs};
+</script>
+</body>
+</html>

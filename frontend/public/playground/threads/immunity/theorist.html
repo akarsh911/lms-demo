@@ -1,0 +1,620 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Immune Response</title>
+<meta name="description" content="Class 12: a clonal model of the acquired immune response. Infect, vaccinate or give antitoxin; measure the primary and secondary responses; take away memory or helper T cells; then vaccinate a population and find the threshold.">
+<link rel="icon" href="../../favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600&family=Inter:wght@400;500;600;700&family=Nunito:wght@500;700;800&family=Newsreader:opsz,wght@6..72,400;6..72,500&family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="../../play.css">
+<style>
+.pg-stage{min-height:0; align-self:start}
+.tabs{display:flex; gap:4px; padding:10px 12px 0; border-bottom:1px solid var(--hair); background:var(--card)}
+.tab{border:1px solid transparent; border-bottom:none; background:none; padding:8px 14px; border-radius:8px 8px 0 0; cursor:pointer;
+  font-weight:500; font-size:16px; color:var(--ink-3); margin-bottom:-1px; font-family:var(--font-head)}
+.tab[aria-selected="true"]{background:var(--card); color:var(--ink); border-color:var(--hair); border-bottom:1px solid var(--card)}
+.gate{position:absolute; left:0; right:0; top:48px; bottom:0; display:grid; place-items:center; pointer-events:none}
+.gate span{background:rgba(29,35,39,.86); color:#fff; padding:10px 16px; border-radius:99px; font-weight:600; font-size:14px}
+svg [hidden]{display:none}
+svg text.m{font-family:var(--font-mono)}
+svg text.serif{font-family:"Newsreader",Georgia,serif}
+.ctl{grid-template-columns:118px 1fr 70px; margin:3px 0}
+.ctl label{font-size:12.5px; line-height:1.2}
+.ctl output{font-family:var(--font-mono); font-size:12px; font-weight:600; text-align:right}
+.acts{display:grid; grid-template-columns:1fr 1fr 1fr; gap:6px; margin:6px 0}
+.acts .btn{padding:0 6px; font-size:12.5px}
+.row.tight{gap:6px}
+.note{font-size:12.5px; color:var(--ink-3); margin:6px 0 0}
+.why p{font-size:13.5px; margin:0 0 .5em}
+.meas{width:100%; border-collapse:collapse; font-size:12px}
+.meas th{font-weight:600; color:var(--ink-3); text-align:right; padding:2px 4px; border-bottom:1px solid var(--hair); font-size:11px}
+.meas th:first-child, .meas td:first-child{text-align:left}
+.meas td{font-family:var(--font-mono); text-align:right; padding:3px 4px; border-bottom:1px solid var(--hair); font-variant-numeric:tabular-nums}
+.meas td.k{font-family:var(--font); font-weight:600}
+</style>
+</head>
+<body>
+<header class="pg-top"></header>
+
+<div class="pg-intro">
+  <h1>The immune response</h1>
+  <p>Acquired immunity is specific and has memory. This body is a clonal model: a pathogen multiplies, innate defences remove some of it, helper T cells expand and help
+     B cells expand, B cells secrete antibodies, and a share of the expanded cells stays behind as memory. Infect it, vaccinate it or give it ready-made antibodies, and measure
+     each response. Then change the rules (no memory, fewer helper T cells) and see what breaks. A second tab takes the vaccine to a whole population.</p>
+</div>
+
+<main class="pg-main wide-side">
+  <section class="pg-stage" id="stageWrap">
+    <div class="tabs" role="tablist">
+      <button class="tab" role="tab" id="tabBody" aria-selected="true">One body</button>
+      <button class="tab" role="tab" id="tabPop" aria-selected="false">A population</button>
+    </div>
+    <svg id="stage" viewBox="0 0 1000 660" role="img" aria-label="A log-scale graph of pathogen, helper T cells, B cells and antibodies against time, with a census of every population; or a population of 400 people and a graph of outbreak size against vaccine coverage"></svg>
+    <div class="gate" id="gate"><span>Make your prediction first →</span></div>
+  </section>
+
+  <aside class="pg-side">
+    <div id="poe"></div>
+
+    <div class="card" id="ctlBody">
+      <div class="row" style="justify-content:space-between">
+        <div class="kicker" style="margin:0">Expose the body</div>
+        <div class="row tight">
+          <button class="btn sm" id="btnPlay" aria-label="Pause time">❚❚ Pause</button>
+          <button class="btn sm" id="btnSkip">⏩ 10 d</button>
+        </div>
+      </div>
+      <div class="acts">
+        <button class="btn sm" id="btnInfect">Infect</button>
+        <button class="btn sm" id="btnVax">Vaccinate</button>
+        <button class="btn sm" id="btnPass">Antitoxin</button>
+      </div>
+      <div class="kicker" style="margin-top:8px">Set the rules</div>
+      <div class="ctl"><label for="sR">Pathogen growth</label><input type="range" id="sR" min="0.5" max="3" step="0.1" value="1.5"><output id="oR"></output></div>
+      <div class="ctl"><label for="sDose">Dose (log₁₀)</label><input type="range" id="sDose" min="0" max="4" step="0.25" value="3"><output id="oDose"></output></div>
+      <div class="ctl"><label for="sInn">Innate clearance</label><input type="range" id="sInn" min="0" max="4" step="0.1" value="2"><output id="oInn"></output></div>
+      <div class="ctl"><label for="sHelp">Helper T cells</label><input type="range" id="sHelp" min="1" max="100" step="1" value="100"><output id="oHelp"></output></div>
+      <div class="ctl"><label for="sMem">Memory share</label><input type="range" id="sMem" min="0" max="0.5" step="0.05" value="0.2"><output id="oMem"></output></div>
+      <div class="ctl"><label for="sHalf">Antibody half-life</label><input type="range" id="sHalf" min="2" max="30" step="1" value="7"><output id="oHalf"></output></div>
+      <div class="row tight" style="margin-top:6px"><button class="btn sm" id="btnReset">New body</button><button class="btn sm" id="btnDefaults">Default rules</button></div>
+      <p class="note">Units are the model's own. The vaccine is inactivated antigen (it cannot multiply); the antitoxin is a dose of preformed antibody.</p>
+    </div>
+
+    <div class="card" id="ctlPop" hidden>
+      <div class="kicker">The population</div>
+      <div class="ctl"><label for="sR0">R₀ (no one immune)</label><input type="range" id="sR0" min="1" max="8" step="0.5" value="4"><output id="oR0"></output></div>
+      <div class="ctl"><label for="sCov">Vaccine coverage</label><input type="range" id="sCov" min="0" max="100" step="5" value="0"><output id="oCov"></output></div>
+      <div class="row tight" style="margin-top:6px"><button class="btn primary sm" id="btnOut">Start an outbreak</button><button class="btn sm" id="btnClear">Clear the record</button></div>
+      <p class="note">400 people, 4 cases to start. Each generation, every susceptible person escapes each case with probability 1 − R₀/399 (Reed–Frost). A vaccinated person here is fully immune.</p>
+    </div>
+
+    <div class="card" id="measCard">
+      <div class="kicker" id="measKick">Responses measured</div>
+      <div id="meas"></div>
+    </div>
+
+    <div class="card why" id="whyCard" hidden>
+      <div class="kicker">What is happening</div>
+      <div id="why"></div>
+    </div>
+
+    <div class="card"><div class="kicker">To find</div><div id="finds"></div></div>
+  </aside>
+</main>
+
+<script src="../../play.js"></script>
+<script>
+'use strict';
+const {$, esc, clamp, fmt, loop, sound, say, track, toast, predict, findings, discover, found,
+       shareState, sharedState, mount, reduced, mulberry32} = Play;
+mount({thread: 'immunity', band: 'theorist'});
+
+/* MODEL:start ==================================================================
+   NCERT Class 12, Ch 7 §7.2: immunity; innate (barriers, phagocytes) and acquired
+   (specific, with memory); B cells make antibodies, helped by T cells; primary and
+   secondary (anamnestic) responses; active vs passive immunity; vaccination; and, in
+   §7.3, the loss of helper T cells in HIV infection.
+
+   One pathogen, integrated with a small time step (0.01 day). All units are model units.
+     P  pathogen:  dP = r·P(1 − P/Pmax) − k·(A + Ap)·P − c·P/(1 + P/Kin)
+                   (growth, antibody neutralisation, saturating innate clearance)
+     V  inactivated vaccine antigen: decays, and is neutralised; it never multiplies.
+     activation: antigen present (P + V ≥ 1) switches the response on; it runs on for
+                 2.5 days after the antigen is gone (a programmed burst).
+     Th helper T:  dTh = gT·act·Th·(1 − Th/(h·Tcap))  − contraction towards memory
+                   h = the share of helper T cells left (HIV removes them)
+     B cells:      dB  = (gB·Th/(Th + KT) − dB)·act·B  − contraction towards memory
+                   (B cells expand only with T-cell help)
+     memory:       MT, MB = m × the largest clone so far (m = memory share)
+     A antibody:   dA  = B·act − ln2/t½ · A        Ap (passive, antitoxin): dAp = −ln2/t½ · Ap
+   The primary response starts from 10 naive cells; the secondary starts from memory.
+   ============================================================================ */
+const K = {pmax: 1e8, ill: 1e5, kin: 1e3, burst: 2.5, ramp: 0.8, gT: 3, tcap: 1e6, kt: 5e4, gB: 3.2, dB: 0.6,
+           contract: 0.35, kill: 1e-6, vax: 1e5, vaxClear: 0.25, passive: 2e9, naive: 10, dt: 0.01};
+const DEFAULTS = {r: 1.5, dose: 3, innate: 2, help: 100, memf: 0.2, half: 7};
+const newBody = () => ({t: 0, P: 0, V: 0, Th: K.naive, B: K.naive, MT: K.naive, MB: K.naive, A: 0, Ap: 0, act: 0, bt: 0});
+function step(s, p, dt = K.dt){
+  const ag = s.P + s.V;
+  s.bt = ag >= 1 ? K.burst : Math.max(0, s.bt - dt);
+  s.act += ((s.bt > 0 ? 1 : 0) - s.act) * dt / K.ramp;
+  const cap = Math.max(1, p.help / 100 * K.tcap);
+  s.Th += (K.gT * s.act * s.Th * (1 - s.Th / cap) - K.contract * (1 - s.act) * (s.Th - s.MT)) * dt;
+  s.MT = Math.min(cap, Math.max(s.MT, p.memf * s.Th));
+  s.Th = clamp(s.Th, Math.min(s.MT, cap), cap);
+  const help = s.Th / (s.Th + K.kt);
+  s.B += ((K.gB * help - K.dB) * s.act * s.B - K.contract * (1 - s.act) * (s.B - s.MB)) * dt;
+  s.MB = Math.max(s.MB, p.memf * s.B);
+  s.B = Math.max(s.B, s.MB, K.naive);
+  const dA = Math.LN2 / p.half;
+  s.A += (s.act * s.B - dA * s.A) * dt;
+  s.Ap += (-dA * s.Ap) * dt;
+  const k = K.kill * (s.A + s.Ap);
+  s.P += (p.r * s.P * (1 - s.P / K.pmax) - k * s.P - p.innate * s.P / (1 + s.P / K.kin)) * dt;
+  s.V += (-K.vaxClear * s.V - k * s.V) * dt;
+  if (s.P < 0.5) s.P = 0;
+  if (s.V < 0.5) s.V = 0;
+  s.t += dt;
+}
+function expose(s, what, p){
+  if (what === 'infect') s.P += Math.pow(10, p.dose);
+  if (what === 'vaccine') s.V += K.vax;
+  if (what === 'passive') s.Ap += K.passive;
+}
+/* A whole story: events [{t, what}], from a new body, to day T. Summaries of each window [t0, t1). */
+function story(events, T, p){
+  p = Object.assign({}, DEFAULTS, p);
+  const s = newBody(), ev = events.slice().sort((a, b) => a.t - b.t), rows = [];
+  let k = 0;
+  for (let i = 0; i * K.dt <= T + 1e-9; i++) {
+    while (k < ev.length && ev[k].t <= s.t + 1e-9) expose(s, ev[k++].what, p);
+    step(s, p);
+    if (i % 10 === 0) rows.push({t: s.t, P: s.P, A: s.A + s.Ap, Ap: s.Ap, Th: s.Th, B: s.B, MB: s.MB});
+  }
+  return rows;
+}
+function measure(rows, t0, t1){
+  let peakA = 0, tPeak = 0, peakP = 0, ill = 0, A0 = null, lastIll = null;
+  for (const r of rows) {
+    if (r.t < t0 || r.t >= t1) continue;
+    if (A0 == null) A0 = r.A;
+    if (r.A > peakA) { peakA = r.A; tPeak = r.t - t0; }
+    peakP = Math.max(peakP, r.P);
+    if (r.P > K.ill) { ill += 0.1; lastIll = r.t; }
+  }
+  return {peakA, tPeak, peakP, ill, fold: A0 > 0 ? peakA / A0 : Infinity, A0};
+}
+
+/* ---- a population: Reed–Frost chain binomial -------------------------------- */
+const POP = 400, SEEDED = 4;
+function outbreak(R0, cov, seed){
+  const rnd = mulberry32(seed), q = R0 / (POP - 1);
+  const st = new Array(POP).fill('S');
+  const idx = [...Array(POP).keys()];
+  for (let i = POP - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [idx[i], idx[j]] = [idx[j], idx[i]]; }
+  for (let k = 0; k < SEEDED; k++) st[idx[k]] = 'I';
+  const nv = Math.min(POP - SEEDED, Math.round(cov * POP));
+  for (let k = SEEDED; k < SEEDED + nv; k++) st[idx[k]] = 'V';
+  const gens = [st.slice()], newCases = [SEEDED];
+  let I = SEEDED;
+  while (I > 0 && gens.length < 200) {
+    const pInf = 1 - Math.pow(1 - q, I);
+    let n = 0;
+    for (let i = 0; i < POP; i++) {
+      if (st[i] === 'I') st[i] = 'R';
+      else if (st[i] === 'S' && rnd() < pInf) { st[i] = 'N'; n++; }
+    }
+    for (let i = 0; i < POP; i++) if (st[i] === 'N') st[i] = 'I';
+    I = n; newCases.push(n); gens.push(st.slice());
+  }
+  const unv = POP - nv - SEEDED, caught = newCases.slice(1).reduce((a, b) => a + b, 0);
+  return {gens, newCases, unv, caught, attack: unv > 0 ? caught / unv : 0, nv};
+}
+/* Theory, for comparison only after the learner has measured it: the final size z among the
+   unvaccinated solves z = 1 − exp(−R0(1 − c)z); it is 0 when R0(1 − c) ≤ 1. */
+function finalSize(R0, c){
+  const Re = R0 * (1 - c);
+  if (Re <= 1) return 0;
+  let z = 0.9; for (let i = 0; i < 200; i++) z = 1 - Math.exp(-Re * z);
+  return z;
+}
+const threshold = R0 => Math.max(0, 1 - 1 / R0);
+/* MODEL:end */
+
+/* ---- state ----------------------------------------------------------------- */
+const S = Object.assign({tab: 'body', locked: false, playing: true, R0: 4, cov: 0}, DEFAULTS);
+const shared = sharedState();
+if (shared) {
+  for (const k in DEFAULTS) if (typeof shared[k] === 'number') S[k] = shared[k];
+  if (typeof shared.R0 === 'number') S.R0 = clamp(shared.R0, 1, 8);
+  if (typeof shared.cov === 'number') S.cov = clamp(shared.cov, 0, 100);
+}
+shareState(() => ({r: S.r, dose: S.dose, innate: S.innate, help: S.help, memf: S.memf, half: S.half, R0: S.R0, cov: S.cov}));
+const rules = () => ({r: S.r, dose: S.dose, innate: S.innate, help: S.help, memf: S.memf, half: S.half});
+let BODY = newBody();
+const HIST = [], MARKS = [], EPIS = [];
+let SAMPLE = 0;
+const REC = [];            // population runs {R0, cov, attack, caught, unv}
+let OUT = null;            // the outbreak being shown
+
+/* ============================================================================
+   The stage
+   ============================================================================ */
+const svg = $('stage');
+const PL = {x: 78, y: 44, w: 880, h: 360, win: 120, lo: 0, hi: 13};
+const COL = {P: '#c2569b', Th: '#e0891a', B: '#2f9e5b', A: '#3f7fd8', Ap: '#3f7fd8', MB: '#2f9e5b', MT: '#e0891a'};
+const lx = t => { const t0 = Math.max(0, BODY.t - PL.win); return PL.x + (t - t0) / PL.win * PL.w; };
+const ly = v => PL.y + PL.h - (clamp(Math.log10(Math.max(v, 1)), PL.lo, PL.hi) - PL.lo) / (PL.hi - PL.lo) * PL.h;
+const CEN = {x: 250, y: 470, w: 700, row: 24};
+const CENSUS = [['P', 'Pathogen'], ['Th', 'Helper T cells'], ['B', 'B cells'], ['MT', 'Memory T cells'], ['MB', 'Memory B cells'], ['A', 'Antibody (own)'], ['Ap', 'Antibody (given)']];
+const DOT = {x: 40, y: 58, gap: 19};
+const HP = {x: 520, y: 60, w: 430, h: 330};
+
+function build(){
+  let cen = '';
+  CENSUS.forEach(([k, lab], i) => {
+    const y = CEN.y + i * CEN.row;
+    cen += `<text x="${CEN.x - 12}" y="${y + 12}" text-anchor="end" fill="#4a555b" font-size="12.5">${lab}</text>
+      <rect x="${CEN.x}" y="${y + 2}" width="${CEN.w - 110}" height="12" rx="2" fill="#efece3"/>
+      <rect id="cb${k}" x="${CEN.x}" y="${y + 2}" width="0" height="12" rx="2" fill="${COL[k]}" opacity="${k[0] === 'M' ? .55 : k === 'Ap' ? .5 : .9}"/>
+      <text id="cv${k}" class="m" x="${CEN.x + CEN.w - 100}" y="${y + 12}" fill="#1d2327" font-size="12">0</text>`;
+  });
+  let dots = '';
+  for (let i = 0; i < POP; i++) dots += `<circle id="d${i}" cx="${DOT.x + (i % 20) * DOT.gap}" cy="${DOT.y + Math.floor(i / 20) * DOT.gap}" r="7" fill="#d9d5ca"/>`;
+  svg.innerHTML = `
+  <rect x="0" y="0" width="1000" height="660" fill="#fbfaf6"/>
+  <!-- ========== one body ========== -->
+  <g id="vBody">
+    <text x="20" y="26" class="serif" fill="#1d2327" font-size="17">Populations against time</text>
+    <text x="${PL.x + PL.w}" y="26" text-anchor="end" fill="#6b7478" font-size="12">log scale · model units</text>
+    <g id="pAxes"></g>
+    <rect id="illZone" x="${PL.x}" width="${PL.w}" fill="#d6453d" opacity=".06"/>
+    <line id="illLine" x1="${PL.x}" x2="${PL.x + PL.w}" stroke="#d6453d" stroke-width="1.2" stroke-dasharray="6 4"/>
+    <text id="illLab" x="${PL.x + PL.w - 6}" text-anchor="end" fill="#b0322b" font-size="11.5">disease: pathogen above 10⁵</text>
+    <g id="pMarks"></g>
+    <g id="pLines" fill="none" stroke-width="2.2" stroke-linejoin="round"></g>
+    <line id="nowLine" y1="${PL.y}" y2="${PL.y + PL.h}" stroke="#1d2327" stroke-width="1" opacity=".4"/>
+    <g id="pLegend" font-size="12"></g>
+    <line x1="20" y1="${CEN.y - 22}" x2="980" y2="${CEN.y - 22}" stroke="#e2ded2"/>
+    <text x="20" y="${CEN.y - 4}" class="serif" fill="#1d2327" font-size="16">Census now</text>
+    <text id="dayNow" x="${CEN.x - 12}" y="${CEN.y - 4}" text-anchor="end" class="m" fill="#4a555b" font-size="12"></text>
+    <text id="status" x="${CEN.x + CEN.w}" y="${CEN.y - 4}" text-anchor="end" font-size="13" font-weight="600"></text>
+    ${cen}
+  </g>
+  <!-- ========== a population ========== -->
+  <g id="vPop" hidden>
+    <text x="20" y="30" class="serif" fill="#1d2327" font-size="17">400 people</text>
+    <text id="genLab" x="${DOT.x + 19 * DOT.gap + 7}" y="30" text-anchor="end" class="m" fill="#4a555b" font-size="12"></text>
+    ${dots}
+    <g font-size="12" transform="translate(30 ${DOT.y + 20 * DOT.gap + 12})">
+      <circle cx="6" cy="0" r="6" fill="#d9d5ca"/><text x="16" y="4" fill="#4a555b">susceptible</text>
+      <circle cx="104" cy="0" r="6" fill="#16a3a3"/><text x="114" y="4" fill="#4a555b">vaccinated</text>
+      <circle cx="196" cy="0" r="6" fill="#c2569b"/><text x="206" y="4" fill="#4a555b">infectious</text>
+      <circle cx="284" cy="0" r="6" fill="#ecc3dc"/><text x="294" y="4" fill="#4a555b">recovered</text>
+    </g>
+    <text x="${HP.x}" y="30" class="serif" fill="#1d2327" font-size="17">Share of the unvaccinated who caught it</text>
+    <g id="hAxes"></g>
+    <g id="hTheory"></g>
+    <g id="hPts"></g>
+    <text x="20" y="500" class="serif" fill="#1d2327" font-size="15">New cases per generation</text>
+    <g id="gBars"></g>
+  </g>`;
+  let ax = '';
+  for (let d = PL.lo; d <= PL.hi; d++) {
+    const y = PL.y + PL.h - (d - PL.lo) / (PL.hi - PL.lo) * PL.h;
+    ax += `<line x1="${PL.x}" y1="${y.toFixed(1)}" x2="${PL.x + PL.w}" y2="${y.toFixed(1)}" stroke="${d % 2 ? '#f1eee6' : '#e6e2d6'}"/>`;
+    if (d % 2 === 0) ax += `<text x="${PL.x - 8}" y="${(y + 4).toFixed(1)}" text-anchor="end" class="m" fill="#7c878c" font-size="11">10${sup(d)}</text>`;
+  }
+  $('pAxes').innerHTML = ax + '<g id="tTicks"></g>';
+  const iy = ly(K.ill);
+  $('illLine').setAttribute('y1', iy); $('illLine').setAttribute('y2', iy);
+  $('illZone').setAttribute('y', PL.y); $('illZone').setAttribute('height', iy - PL.y);
+  $('illLab').setAttribute('y', iy - 5);
+  let lg = '', x = 330;
+  for (const [k, lab, dash] of [['P', 'pathogen', ''], ['Th', 'helper T', ''], ['B', 'B cells', ''], ['A', 'antibody', ''], ['Ap', 'given antibody', '5 4']]) {
+    lg += `<line x1="${x}" y1="22" x2="${x + 20}" y2="22" stroke="${COL[k]}" stroke-width="2.4" stroke-dasharray="${dash}"/><text x="${x + 25}" y="26" fill="#4a555b">${lab}</text>`;
+    x += 34 + lab.length * 6.6;
+  }
+  $('pLegend').innerHTML = lg;
+}
+const SUP = '⁰¹²³⁴⁵⁶⁷⁸⁹';
+const sup = n => String(n).split('').map(c => SUP[+c]).join('');
+const sci = v => { if (v < 1) return v < 0.05 ? '0' : fmt(v, 1); const e = Math.floor(Math.log10(v)); return e < 4 ? fmt(v, 0) : fmt(v / Math.pow(10, e), 1) + '×10' + sup(e); };
+
+/* ---- paint: one body ----------------------------------------------------- */
+function paintBody(){
+  const t0 = Math.max(0, BODY.t - PL.win), vis = HIST.filter(h => h.t >= t0);
+  let tt = '';
+  for (let d = Math.ceil(t0 / 20) * 20; d <= t0 + PL.win + 1e-9; d += 20) tt += `<text x="${lx(d).toFixed(1)}" y="${PL.y + PL.h + 16}" text-anchor="middle" class="m" fill="#7c878c" font-size="11">${d}</text>`;
+  tt += `<text x="${PL.x + PL.w}" y="${PL.y + PL.h + 32}" text-anchor="end" fill="#7c878c" font-size="11.5">day</text>`;
+  $('tTicks').innerHTML = tt;
+  const path = key => vis.map((h, i) => (i ? 'L' : 'M') + lx(h.t).toFixed(1) + ' ' + ly(h[key]).toFixed(1)).join('');
+  $('pLines').innerHTML = [['Th', ''], ['B', ''], ['A', ''], ['Ap', '5 4'], ['P', '']].filter(([k]) => k !== 'Ap' || vis.some(h => h.Ap > 1)).map(([k, d]) =>
+    `<path d="${path(k)}" stroke="${COL[k]}" ${d ? `stroke-dasharray="${d}" stroke-width="1.6"` : ''}${k === 'P' ? ' stroke-width="2.8"' : ''}/>`).join('');
+  $('pMarks').innerHTML = MARKS.filter(m => m.t >= t0).map(m => {
+    const x = lx(m.t).toFixed(1), lab = {infect: 'infection', vaccine: 'vaccine', passive: 'antitoxin'}[m.what];
+    return `<line x1="${x}" y1="${PL.y}" x2="${x}" y2="${PL.y + PL.h}" stroke="#6b7478" stroke-dasharray="2 4"/><text x="${(+x + 4).toFixed(1)}" y="${PL.y + 13}" fill="#4a555b" font-size="11">${m.n} ${lab}</text>`;
+  }).join('');
+  $('nowLine').setAttribute('x1', lx(BODY.t)); $('nowLine').setAttribute('x2', lx(BODY.t));
+  /* census */
+  const now = {P: BODY.P, Th: BODY.Th, B: BODY.B, MT: BODY.MT, MB: BODY.MB, A: BODY.A, Ap: BODY.Ap};
+  for (const [k] of CENSUS) {
+    const v = now[k], f = v <= 1 ? 0 : Math.log10(v) / 13;
+    $('cb' + k).setAttribute('width', (clamp(f, 0, 1) * (CEN.w - 110)).toFixed(1));
+    $('cv' + k).textContent = sci(v);
+  }
+  $('dayNow').textContent = 'day ' + fmt(BODY.t, 1);
+  const ill = BODY.P > K.ill;
+  $('status').textContent = ill ? 'Diseased: pathogen above 10⁵' : BODY.P > 0 ? 'Infected, no disease' : 'Healthy';
+  $('status').setAttribute('fill', ill ? '#b0322b' : BODY.P > 0 ? '#9a5a00' : '#2f7a4f');
+  paintMeas(); paintWhyBody();
+}
+function paintMeas(){
+  if (S.tab !== 'body') return;
+  $('measKick').textContent = 'Responses measured';
+  if (!EPIS.length) { $('meas').innerHTML = '<p class="note" style="margin:0">Each exposure you make is measured here: peak pathogen, days of disease, and the antibody response.</p>'; return; }
+  $('meas').innerHTML = `<table class="meas"><tr><th>#</th><th>day</th><th>peak P</th><th>ill (d)</th><th>peak Ab</th><th>to peak</th></tr>` +
+    EPIS.slice(-6).map(e => `<tr><td class="k">${e.n} ${e.what === 'infect' ? 'infection' : e.what === 'vaccine' ? 'vaccine' : 'antitoxin'}</td><td>${fmt(e.t0, 0)}</td><td>${sci(e.peakP)}</td><td>${fmt(e.ill, 1)}</td><td>${sci(e.peakA)}</td><td>${fmt(e.tPeak, 1)} d</td></tr>`).join('') + '</table>';
+}
+function paintWhyBody(){
+  if (!S.locked || S.tab !== 'body') return;
+  $('whyCard').hidden = false;
+  const b = BODY, p = rules(), capT = p.help / 100 * K.tcap;
+  let h = '';
+  if (b.P > 0) {
+    const grow = p.r * (1 - b.P / K.pmax), killA = K.kill * (b.A + b.Ap), inn = p.innate / (1 + b.P / K.kin), net = grow - killA - inn;
+    h += `<p><b>Pathogen ${sci(b.P)}</b>, ${net > 0 ? 'growing' : 'falling'} at <span class="mono">${fmt(net, 2)}</span> per day: ` +
+         `multiplication <span class="mono">+${fmt(grow, 2)}</span>, innate clearance <span class="mono">−${fmt(inn, 2)}</span>, antibody <span class="mono">−${fmt(killA, 2)}</span>.</p>`;
+  } else if (b.V > 0) h += `<p><b>Vaccine antigen ${sci(b.V)}</b> is being cleared. It cannot multiply, so there is no disease, but it switches on the response.</p>`;
+  else h += `<p>No antigen in the body.</p>`;
+  if (b.act > 0.2) {
+    const help = b.Th / (b.Th + K.kt), gB = K.gB * help - K.dB;
+    h += `<p>The response is <b>on</b>. Helper T cells ${sci(b.Th)}${p.help < 100 ? ` (at most ${sci(capT)} with ${p.help}% left)` : ''}; ` +
+         `B cells grow at <span class="mono">${fmt(gB, 2)}</span> per day with that much help${gB <= 0 ? ', which is not growth at all: without T-cell help the B cells cannot expand' : ''}.</p>`;
+  } else if (b.MB > K.naive * 1.5) h += `<p>Resting. Memory: <b>${sci(b.MB)}</b> B cells and <b>${sci(b.MT)}</b> T cells for this antigen, against ${K.naive} naive cells before any exposure.</p>`;
+  else h += `<p>Resting, with only ${K.naive} naive B and T cells that recognise this antigen. ${p.memf === 0 ? 'Memory share is 0: nothing will be remembered.' : ''}</p>`;
+  if (b.Ap > 1) h += `<p>Given antibody <b>${sci(b.Ap)}</b>, halving every ${p.half} days. It makes no B cells, so it leaves no memory.</p>`;
+  $('why').innerHTML = h;
+}
+
+/* ---- the clock and the episodes ---------------------------------------------- */
+function advance(days){
+  const p = rules(), n = Math.round(days / K.dt);
+  for (let i = 0; i < n; i++) {
+    step(BODY, p);
+    SAMPLE += K.dt;
+    if (SAMPLE >= 0.1 - 1e-9) { SAMPLE = 0; HIST.push({t: BODY.t, P: BODY.P, A: BODY.A + BODY.Ap, Ap: BODY.Ap, Th: BODY.Th, B: BODY.B}); }
+    watch();
+  }
+  while (HIST.length && HIST[0].t < BODY.t - 400) HIST.shift();
+}
+function watch(){
+  const e = EPIS[EPIS.length - 1];
+  if (!e || e.closed) return;
+  const A = BODY.A + BODY.Ap;
+  if (A > e.peakA) { e.peakA = A; e.tPeak = BODY.t - e.t0; }
+  e.peakP = Math.max(e.peakP, BODY.P);
+  if (BODY.P > K.ill) e.ill += K.dt;
+  if (e.what === 'infect' && e.helpCf != null && !found('helper') && e.ill > 2 * e.helpCf + 1) discover('helper');
+  if (BODY.t - e.t0 > 3 && BODY.P === 0 && BODY.V === 0 && BODY.act < 0.05) closeEpisode(e);
+}
+function closeEpisode(e){
+  e.closed = true;
+  const prev = EPIS.slice(0, EPIS.indexOf(e));
+  if (e.what !== 'infect') return;
+  const firstInf = prev.find(x => x.what === 'infect' && x.naive);
+  if (e.naive && e.peakP <= e.dose * 1.001) discover('innate');
+  if (e.naive && e.ill >= 1) discover('primary');
+  if (!e.naive && e.memf > 0 && firstInf && e.ill === 0 && e.peakA >= 5 * firstInf.peakA && e.tPeak < firstInf.tPeak / 2) { discover('secondary'); maybeExplain(firstInf, e); }
+  if (!e.naive && !prev.some(x => x.what === 'infect') && prev.some(x => x.what === 'vaccine') && e.ill === 0) discover('vaccine');
+  if (e.passiveCover && e.ill === 0) discover('passive');
+  if (e.memf === 0 && prev.some(x => x.what === 'infect') && e.peakA < 2 * Math.max(e.A0, 1)) discover('nomemory');
+}
+function act(what){
+  const last = EPIS[EPIS.length - 1];
+  if (last && !last.closed) last.closed = true;          // a new exposure ends the last measurement
+  const p = rules();
+  const e = {n: EPIS.length + 1, what, t0: BODY.t, peakA: BODY.A + BODY.Ap, tPeak: 0, peakP: 0, ill: 0, closed: false,
+             naive: BODY.MB < K.naive * 10, MB0: BODY.MB, A0: BODY.A + BODY.Ap, memf: p.memf, dose: Math.pow(10, p.dose), passiveCover: what === 'infect' && BODY.Ap >= 1e8};
+  /* The counterfactual for a naive infection: the same rules but a full set of helper T cells. */
+  if (what === 'infect' && e.naive && p.help <= 10) {
+    const rows = story([{t: 0, what: 'infect'}], 90, Object.assign({}, p, {help: 100}));
+    e.helpCf = measure(rows, 0, 90).ill;
+  }
+  EPIS.push(e);
+  expose(BODY, what, p);
+  MARKS.push({t: BODY.t, what, n: e.n});
+  track('expose', {what, day: +BODY.t.toFixed(1), rules: p});
+  sound(what === 'infect' ? 'boing' : 'pop');
+  if (reduced()) advance(30);
+  paintBody();
+}
+let LOOP = null;
+function setPlaying(on){
+  S.playing = on;
+  $('btnPlay').textContent = on ? '❚❚ Pause' : '▶ Play';
+  $('btnPlay').setAttribute('aria-label', on ? 'Pause time' : 'Play time');
+  if (LOOP) { LOOP.stop(); LOOP = null; }
+  if (on && S.locked && S.tab === 'body' && !reduced()) LOOP = loop(dt => { advance(Math.min(dt, 0.1) * 4); paintBody(); });
+}
+let EXPLAINED = false;
+function maybeExplain(a, b){
+  if (EXPLAINED || !POE) return;
+  EXPLAINED = true;
+  POE.explain(`Your own measurements: the first infection (${a.n}) caused <b>${fmt(a.ill, 1)} days</b> of disease and the antibody peaked at <b>${sci(a.peakA)}</b> after <b>${fmt(a.tPeak, 1)} days</b>. ` +
+    `The second (${b.n}) caused no disease; the antibody peaked at <b>${sci(b.peakA)}</b>, <b>${fmt(b.peakA / a.peakA, 0)}×</b> higher, after only <b>${fmt(b.tPeak, 1)} days</b>. ` +
+    `It started from ${sci(b.MB0)} memory B cells instead of ${K.naive} naive ones: the anamnestic response.`);
+}
+
+/* ---- paint: a population ------------------------------------------------- */
+const hx = c => HP.x + c * HP.w, hy = z => HP.y + HP.h - z * HP.h;
+const r0col = R0 => `hsl(${(250 - (R0 - 1) / 7 * 250).toFixed(0)} 60% 45%)`;
+function paintPop(gen){
+  const g = OUT ? OUT.gens[Math.min(gen == null ? OUT.gens.length - 1 : gen, OUT.gens.length - 1)] : null;
+  for (let i = 0; i < POP; i++) {
+    const s = g ? g[i] : 'S';
+    $('d' + i).setAttribute('fill', {S: '#d9d5ca', V: '#16a3a3', I: '#c2569b', R: '#ecc3dc'}[s]);
+  }
+  const gi = OUT ? Math.min(gen == null ? OUT.gens.length - 1 : gen, OUT.gens.length - 1) : 0;
+  $('genLab').textContent = OUT ? `generation ${gi} · ${OUT.newCases.slice(1, gi + 1).reduce((a, b) => a + b, 0)} new cases` : '';
+  /* the record */
+  let ax = `<line x1="${HP.x}" y1="${hy(0)}" x2="${HP.x + HP.w}" y2="${hy(0)}" stroke="#9aa3a6"/><line x1="${HP.x}" y1="${hy(0)}" x2="${HP.x}" y2="${hy(1)}" stroke="#9aa3a6"/>`;
+  for (let k = 0; k <= 10; k += 2) {
+    ax += `<text x="${hx(k / 10)}" y="${hy(0) + 16}" text-anchor="middle" class="m" fill="#7c878c" font-size="11">${k * 10}%</text>` +
+          `<line x1="${HP.x}" y1="${hy(k / 10)}" x2="${HP.x + HP.w}" y2="${hy(k / 10)}" stroke="#eeeae0"/><text x="${HP.x - 8}" y="${hy(k / 10) + 4}" text-anchor="end" class="m" fill="#7c878c" font-size="11">${k / 10}</text>`;
+  }
+  ax += `<text x="${HP.x + HP.w}" y="${hy(0) + 32}" text-anchor="end" fill="#7c878c" font-size="11.5">vaccine coverage</text>`;
+  $('hAxes').innerHTML = ax;
+  $('hPts').innerHTML = REC.map((r, i) => `<circle cx="${hx(r.cov).toFixed(1)}" cy="${hy(r.attack).toFixed(1)}" r="${i === REC.length - 1 ? 6 : 4.5}" fill="${r0col(r.R0)}" stroke="#fff" stroke-width="1.2" opacity=".9"/>`).join('') +
+    [...new Set(REC.map(r => r.R0))].map((R0, k) => `<circle cx="${HP.x + HP.w - 70}" cy="${HP.y + 10 + k * 16}" r="4.5" fill="${r0col(R0)}"/><text x="${HP.x + HP.w - 60}" y="${HP.y + 14 + k * 16}" class="m" font-size="11" fill="#4a555b">R₀ ${R0}</text>`).join('');
+  /* theory, once measured */
+  let th = '';
+  for (const R0 of MEASURED) {
+    let d = ''; for (let c = 0; c <= 1.0001; c += 0.01) d += (c ? 'L' : 'M') + hx(c).toFixed(1) + ' ' + hy(finalSize(R0, c)).toFixed(1);
+    const cs = threshold(R0), m = MEAS_T[R0];
+    th += `<path d="${d}" fill="none" stroke="${r0col(R0)}" stroke-width="1.5" stroke-dasharray="5 4" opacity=".8"/>` +
+      `<line x1="${hx(cs)}" y1="${hy(0)}" x2="${hx(cs)}" y2="${hy(1)}" stroke="${r0col(R0)}" stroke-width="1.2"/>` +
+      `<text x="${hx(cs) - 4}" y="${hy(0.92)}" text-anchor="end" class="m" font-size="11" fill="${r0col(R0)}">1 − 1/R₀ = ${fmt(cs, 2)}</text>` +
+      (m != null ? `<text x="${hx(cs) - 4}" y="${hy(0.86)}" text-anchor="end" class="m" font-size="11" fill="#4a555b">measured ≈ ${fmt(m, 2)}</text>` : '');
+  }
+  $('hTheory').innerHTML = th;
+  /* generations */
+  const GB = {x: 60, y: 512, w: 890, h: 118};
+  let bars = `<line x1="${GB.x}" y1="${GB.y + GB.h}" x2="${GB.x + GB.w}" y2="${GB.y + GB.h}" stroke="#9aa3a6"/>`;
+  if (OUT) {
+    const nc = OUT.newCases.slice(0, gi + 1), mx = Math.max(10, ...OUT.newCases), n = Math.max(30, OUT.newCases.length), bw = GB.w / n;
+    nc.forEach((v, i) => { const h = v / mx * GB.h; bars += `<rect x="${(GB.x + i * bw + 1).toFixed(1)}" y="${(GB.y + GB.h - h).toFixed(1)}" width="${(bw - 2).toFixed(1)}" height="${h.toFixed(1)}" fill="#c2569b" opacity=".8"/>`; });
+    bars += `<text x="${GB.x - 8}" y="${GB.y + 8}" text-anchor="end" class="m" fill="#7c878c" font-size="11">${mx}</text><text x="${GB.x - 8}" y="${GB.y + GB.h}" text-anchor="end" class="m" fill="#7c878c" font-size="11">0</text>`;
+  }
+  $('gBars').innerHTML = bars;
+  paintPopMeas(); paintWhyPop(gi);
+}
+function paintPopMeas(){
+  if (S.tab !== 'pop') return;
+  $('measKick').textContent = 'Outbreaks recorded';
+  if (!REC.length) { $('meas').innerHTML = '<p class="note" style="margin:0">Each outbreak is recorded as a point: coverage against the share of the unvaccinated who caught it.</p>'; return; }
+  $('meas').innerHTML = `<table class="meas"><tr><th>#</th><th>R₀</th><th>coverage</th><th>caught</th><th>share</th></tr>` +
+    REC.slice(-7).map((r, i) => `<tr><td class="k">${REC.length - Math.min(7, REC.length) + i + 1}</td><td>${fmt(r.R0, 1)}</td><td>${fmt(r.cov * 100, 0)}%</td><td>${r.caught}/${r.unv}</td><td>${fmt(r.attack, 2)}</td></tr>`).join('') + '</table>';
+}
+function paintWhyPop(gi){
+  if (!S.locked || S.tab !== 'pop') return;
+  $('whyCard').hidden = false;
+  const c = S.cov / 100, Re = S.R0 * (1 - c);
+  let h = `<p>With R₀ = ${fmt(S.R0, 1)} and ${S.cov}% vaccinated, each case meets on average <b>${fmt(Re, 2)}</b> people who can still catch it (R₀ × the unvaccinated share).</p>`;
+  h += Re > 1 ? `<p>That is more than one, so a chain of cases can keep growing.</p>` : `<p>That is one or fewer, so chains of cases tend to die out.</p>`;
+  if (OUT) h += `<p>This outbreak: <b>${OUT.caught}</b> of ${OUT.unv} unvaccinated people caught it (${fmt(OUT.attack * 100, 0)}%), over ${OUT.newCases.length - 2} generations.</p>`;
+  $('why').innerHTML = h;
+}
+let MEASURED = new Set(), MEAS_T = {};
+function checkPop(r){
+  const same = REC.filter(x => x.R0 === r.R0);
+  if (r.cov > 0 && r.cov < 1 && r.attack <= 0.1 && same.some(x => x.cov === 0 && x.attack >= 0.5)) discover('herd');
+  const cs = threshold(r.R0);
+  const below = same.filter(x => x.cov <= cs - 0.05 && x.attack >= 0.2), above = same.filter(x => x.cov >= cs && x.attack <= 0.1);
+  if (same.length >= 4 && below.length && above.length) {
+    const hi = Math.max(...below.map(x => x.cov)), lo = Math.min(...above.filter(x => x.cov > hi).map(x => x.cov).concat([1]));
+    MEAS_T[r.R0] = (hi + lo) / 2;
+    MEASURED.add(r.R0);
+    discover('threshold');
+  }
+}
+let POPANIM = null;
+function runOutbreak(){
+  if (POPANIM) { POPANIM.stop(); POPANIM = null; }
+  const seed = 77 + REC.length * 101;
+  OUT = outbreak(S.R0, S.cov / 100, seed);
+  const rec = {R0: S.R0, cov: S.cov / 100, attack: OUT.attack, caught: OUT.caught, unv: OUT.unv};
+  track('outbreak', rec);
+  const done = () => { REC.push(rec); sound('chime'); checkPop(rec); paintPop(); $('btnOut').disabled = false; };
+  if (reduced()) { done(); return; }
+  $('btnOut').disabled = true;
+  let g = 0, acc = 0;
+  paintPop(0);
+  POPANIM = loop(dt => {
+    acc += dt; if (acc < 0.28) return; acc = 0; g++;
+    if (g >= OUT.gens.length) { POPANIM.stop(); POPANIM = null; done(); return; }
+    paintPop(g); sound('tick');
+  });
+}
+
+/* ============================================================================
+   Wiring
+   ============================================================================ */
+build();
+const SL = [['sR', 'r', v => fmt(v, 1) + '/d'], ['sDose', 'dose', v => sci(Math.pow(10, v))],
+            ['sInn', 'innate', v => fmt(v, 1) + '/d'], ['sHelp', 'help', v => v + '%'], ['sMem', 'memf', v => fmt(v, 2)], ['sHalf', 'half', v => v + ' d']];
+function paintSliders(){ for (const [id, k, f] of SL) { $(id).value = S[k]; $(id.replace('s', 'o')).textContent = f(S[k]); } $('sR0').value = S.R0; $('oR0').textContent = fmt(S.R0, 1); $('sCov').value = S.cov; $('oCov').textContent = S.cov + '%'; }
+for (const [id, k, f] of SL) {
+  $(id).addEventListener('input', e => { S[k] = +e.target.value; $(id.replace('s', 'o')).textContent = f(S[k]); paintWhyBody(); });
+  $(id).addEventListener('change', () => track('rule', {k, v: S[k]}));
+}
+$('sR0').addEventListener('input', e => { S.R0 = +e.target.value; $('oR0').textContent = fmt(S.R0, 1); paintWhyPop(); });
+$('sCov').addEventListener('input', e => { S.cov = +e.target.value; $('oCov').textContent = S.cov + '%'; paintWhyPop(); });
+$('btnInfect').addEventListener('click', () => act('infect'));
+$('btnVax').addEventListener('click', () => act('vaccine'));
+$('btnPass').addEventListener('click', () => act('passive'));
+$('btnSkip').addEventListener('click', () => { advance(10); paintBody(); sound('whoosh'); });
+$('btnPlay').addEventListener('click', () => { if (reduced()) { advance(10); paintBody(); return; } setPlaying(!S.playing); sound('tick'); });
+$('btnReset').addEventListener('click', () => { BODY = newBody(); HIST.length = 0; MARKS.length = 0; EPIS.length = 0; SAMPLE = 0; sound('pop'); paintBody(); });
+$('btnDefaults').addEventListener('click', () => { Object.assign(S, DEFAULTS); paintSliders(); sound('tick'); paintBody(); });
+$('btnOut').addEventListener('click', () => { sound('tick'); runOutbreak(); });
+$('btnClear').addEventListener('click', () => { REC.length = 0; OUT = null; MEASURED = new Set(); MEAS_T = {}; sound('pop'); paintPop(); });
+function setTab(t){
+  S.tab = t;
+  $('tabBody').setAttribute('aria-selected', t === 'body'); $('tabPop').setAttribute('aria-selected', t === 'pop');
+  $('vBody').toggleAttribute('hidden', t !== 'body'); $('vPop').toggleAttribute('hidden', t !== 'pop');
+  $('ctlBody').hidden = t !== 'body'; $('ctlPop').hidden = t !== 'pop';
+  if (t === 'body') { setPlaying(S.playing); paintBody(); }
+  else { if (LOOP) { LOOP.stop(); LOOP = null; } paintPop(); }
+  track('tab', {tab: t});
+}
+$('tabBody').addEventListener('click', () => { sound('tick'); setTab('body'); });
+$('tabPop').addEventListener('click', () => { sound('tick'); setTab('pop'); });
+function lockControls(lock){
+  for (const id of ['btnInfect', 'btnVax', 'btnPass', 'btnSkip', 'btnPlay', 'btnReset', 'btnDefaults', 'btnOut', 'btnClear', 'sR', 'sDose', 'sInn', 'sHelp', 'sMem', 'sHalf', 'sR0', 'sCov']) $(id).disabled = lock;
+  $('gate').hidden = !lock;
+}
+
+/* ============================================================================
+   Start
+   ============================================================================ */
+findings($('finds'), [
+  {id: 'primary',   icon: '1', label: 'The primary response is slow and low',       hint: 'Infect a body that has never met the pathogen'},
+  {id: 'secondary', icon: '2', label: 'The secondary response is fast and large',    hint: 'Infect it again once it has recovered'},
+  {id: 'vaccine',   icon: '◇', label: 'A vaccine gives memory without disease',     hint: 'Vaccinate a new body, then infect it'},
+  {id: 'passive',   icon: '⇢', label: 'Ready-made antibodies protect at once',      hint: 'Antitoxin first, then the pathogen'},
+  {id: 'innate',    icon: '▦', label: 'Innate defences stop a small dose',          hint: 'Try a small dose on a new body'},
+  {id: 'nomemory',  icon: '∅', label: 'No memory, no secondary response',           hint: 'Set the memory share to 0'},
+  {id: 'helper',    icon: 'T', label: 'Without helper T cells, B cells cannot answer', hint: 'Take away most helper T cells, as HIV does'},
+  {id: 'herd',      icon: '⛨', label: 'Vaccinating others protects the unvaccinated', hint: 'A population, with and without vaccine'},
+  {id: 'threshold', icon: '∣', label: 'The threshold is 1 − 1/R₀',                  hint: 'Record outbreaks either side of the threshold'},
+], () => toast('All nine found. You have measured the whole of §7.2.', 4200));
+
+const POE = predict($('poe'), {
+  id: 'anamnestic',
+  q: 'A person recovers from an infection. Months later the same pathogen enters again. Compared with the first time, the antibody response will be…',
+  options: [
+    {id: 'same',   text: 'the same: the body starts from scratch each time.'},
+    {id: 'weaker', text: 'slower and weaker: the immune system is worn out.'},
+    {id: 'faster', text: 'faster and much larger.', right: true},
+    {id: 'none',   text: 'absent: the old antibodies are still there, so no new ones are made.'},
+  ],
+  onLock(){
+    S.locked = true;
+    lockControls(false);
+    say('Now measure it. Infect the body, let it recover, then infect it again.');
+    setPlaying(true);
+    paintBody();
+  },
+});
+paintSliders();
+lockControls(!POE.locked);
+if (!Play.FF('predict')) { S.locked = true; lockControls(false); }
+paintBody();
+window.applyFeatures = () => paintBody();
+window.PG_STATE = () => JSON.parse(JSON.stringify({tab: S.tab, locked: S.locked, rules: rules(), R0: S.R0, cov: S.cov, body: BODY, episodes: EPIS, records: REC}));
+window.PG_MODEL = {K, DEFAULTS, newBody, step, expose, story, measure, outbreak, finalSize, threshold, POP};
+</script>
+</body>
+</html>

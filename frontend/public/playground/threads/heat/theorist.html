@@ -1,0 +1,788 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Thermodynamics Bench</title>
+<meta name="description" content="Class 11: push a piston round a PV diagram under the four ideal processes, keep the first-law ledger, run a Carnot engine, and find the temperature where a reaction turns spontaneous.">
+<link rel="icon" href="../../favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600&family=Inter:wght@400;500;600;700&family=Nunito:wght@500;700;800&family=Newsreader:opsz,wght@6..72,400;6..72,500&family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="../../play.css">
+<style>
+/* Only what this page needs beyond play.css. */
+.pg-stage{align-self:start; min-height:0}
+.seg{display:grid; grid-auto-flow:column; grid-auto-columns:1fr; gap:4px; background:var(--sunk); padding:4px; border-radius:var(--radius-sm)}
+.seg button{border:0; background:transparent; border-radius:7px; min-height:32px; font-weight:600; font-size:12.5px; cursor:pointer; color:var(--ink-2); padding:0 4px}
+.seg button[aria-pressed="true"]{background:var(--card); color:var(--ink); box-shadow:var(--shadow)}
+.seg button:disabled{opacity:.5; cursor:default}
+.stageTabs{padding:8px; border-bottom:1px solid var(--hair); background:var(--sunk)}
+.stageTabs .seg{background:transparent; padding:0}
+.stageTabs .seg button{min-height:40px; font-size:15px; font-family:var(--font-head)}
+.gate{position:absolute; left:0; right:0; top:56px; bottom:0; display:grid; place-items:center; pointer-events:none}
+.gate span{background:rgba(29,35,39,.86); color:#fff; padding:10px 16px; border-radius:99px; font-weight:600; font-size:14px}
+.ctl{grid-template-columns:118px 1fr 86px; margin:2px 0}
+.ctl label{font-size:12.5px; line-height:1.2}
+.ctl output{font-family:var(--font-mono); font-size:12.5px; font-weight:600; min-width:0}
+.readout{display:grid; grid-template-columns:1fr auto; gap:2px 12px; font-size:13px; align-items:baseline}
+.readout span{color:var(--ink-2)}
+.readout b{font-family:var(--font-mono); font-weight:600; font-size:12.5px; font-variant-numeric:tabular-nums; text-align:right}
+.readout .eq{grid-column:1/-1; font-family:var(--font-mono); font-size:11.5px; color:var(--ink-3); margin:-1px 0 3px}
+.readout .sep{grid-column:1/-1; height:1px; background:var(--hair); margin:4px 0}
+.note{font-size:12.5px; color:var(--ink-3); margin:6px 0 0}
+.selrow{display:grid; grid-template-columns:118px 1fr; gap:10px; align-items:center; margin:4px 0}
+.selrow label{font-size:12.5px; font-weight:600; color:var(--ink-2)}
+.chk{display:flex; gap:8px; align-items:center; font-size:13px; margin:6px 0}
+.why p{font-size:14px}
+.hit{cursor:grab} .hit.dragging{cursor:grabbing}
+.nsHit{cursor:ns-resize}
+</style>
+</head>
+<body>
+<header class="pg-top"></header>
+
+<div class="pg-intro">
+  <h1>Thermodynamics</h1>
+  <p>One mole of ideal gas in a cylinder, from NCERT Class 11 Physics, Chapter 11. Every change you make is stepped through the first law, <span class="mono">n C<sub>v</sub> dT = dQ − P dV</span>, so the curves on the PV diagram, the work (the area under them) and the heat all come out of the model: PV<sup>γ</sup> = constant is found, not assumed.
+     Close a cycle and run a Carnot engine between two reservoirs. Then, from the Chemistry chapter on thermodynamics, find the temperature at which ΔG = ΔH − TΔS changes sign and a reaction turns spontaneous.</p>
+</div>
+
+<main class="pg-main wide-side">
+  <section class="pg-stage" id="stageWrap">
+    <div class="stageTabs"><div class="seg" role="tablist">
+      <button id="tabGas" aria-pressed="true">The piston</button>
+      <button id="tabEng" aria-pressed="false">The Carnot engine</button>
+      <button id="tabGib" aria-pressed="false">Spontaneity (ΔG)</button>
+    </div></div>
+    <svg id="gsStage" viewBox="0 0 1000 620" role="img" aria-label="A gas in a cylinder with a piston, a thermometer, and its path on a pressure–volume diagram"></svg>
+    <svg id="enStage" viewBox="0 0 1000 620" role="img" aria-label="A Carnot engine: a cylinder moved between a hot reservoir, an insulating stand and a cold reservoir, with its cycle on a PV diagram" hidden></svg>
+    <svg id="gbStage" viewBox="0 0 1000 620" role="img" aria-label="Gibbs energy of a reaction: the enthalpy and entropy terms, and ΔG against temperature" hidden></svg>
+    <div class="gate" id="gate"><span>Make your prediction first →</span></div>
+  </section>
+
+  <aside class="pg-side">
+    <div id="poe"></div>
+
+    <div class="card" id="ctlGas">
+      <div class="kicker">What the walls and piston allow</div>
+      <div class="seg" id="modeSeg">
+        <button data-m="isoT" aria-pressed="true">Isothermal</button>
+        <button data-m="adia" aria-pressed="false">Adiabatic</button>
+        <button data-m="isoP" aria-pressed="false">Isobaric</button>
+        <button data-m="isoV" aria-pressed="false">Isochoric</button>
+        <button data-m="real" aria-pressed="false">Real wall</button>
+      </div>
+      <p class="note" id="modeNote"></p>
+      <div class="ctl"><label for="vol">Volume (piston)</label><input type="range" id="vol" min="5" max="60" step="0.5" value="20"><output id="volOut">20.0 L</output></div>
+      <div class="ctl"><label for="temp">Temperature (heater)</label><input type="range" id="temp" min="100" max="1500" step="5" value="300"><output id="tempOut">300 K</output></div>
+      <div class="ctl"><label for="gam">γ = Cp/Cv (set it)</label><input type="range" id="gam" min="1.1" max="1.8" step="0.01" value="1.67"><output id="gamOut">1.67</output></div>
+      <div class="ctl" id="tauRow"><label for="tau">Wall’s time constant τ</label><input type="range" id="tau" min="0.1" max="10" step="0.1" value="2"><output id="tauOut">2.0 s</output></div>
+      <div class="row"><button class="btn sm" id="btnNewPath">Start a new path here</button><button class="btn sm" id="btnResetGas">Back to 20 L, 300 K</button></div>
+    </div>
+
+    <div class="card" id="ctlEng" hidden>
+      <div class="kicker">The engine</div>
+      <div class="ctl"><label for="th">Hot reservoir T₁</label><input type="range" id="th" min="350" max="1000" step="10" value="500"><output id="thOut">500 K</output></div>
+      <div class="ctl"><label for="tc">Cold reservoir T₂</label><input type="range" id="tc" min="200" max="400" step="10" value="300"><output id="tcOut">300 K</output></div>
+      <div class="ctl"><label for="ratio">Expansion V₂/V₁</label><input type="range" id="ratio" min="1.2" max="4" step="0.1" value="2"><output id="ratioOut">2.0</output></div>
+      <label class="chk"><input type="checkbox" id="swap"> Replace the two adiabatic steps by constant-volume steps</label>
+      <div class="row"><button class="btn primary" id="btnRun">Run one cycle</button></div>
+    </div>
+
+    <div class="card" id="ctlGib" hidden>
+      <div class="kicker">A reaction</div>
+      <div class="selrow"><label for="rxn">Reaction</label><select id="rxn">
+        <option value="iron">4Fe + 3O₂ → 2Fe₂O₃ (Problem 5.11)</option>
+        <option value="boil">H₂O(l) → H₂O(g), boiling</option>
+        <option value="melt">H₂O(s) → H₂O(l), melting</option>
+        <option value="own">Your own reaction</option></select></div>
+      <div class="ctl" id="dhRow"><label for="dh">ΔH</label><input type="range" id="dh" min="-100" max="100" step="1" value="30"><output id="dhOut">30 kJ</output></div>
+      <div class="ctl" id="dsRow"><label for="ds">ΔS</label><input type="range" id="ds" min="-300" max="300" step="5" value="100"><output id="dsOut">100 J/K</output></div>
+      <div class="ctl"><label for="tg">Temperature T</label><input type="range" id="tg" min="50" max="4000" step="1" value="298"><output id="tgOut">298 K</output></div>
+      <p class="note">ΔH and ΔS are taken as not changing with temperature, as the chapter does. Drag along the graph to change T.</p>
+    </div>
+
+    <div class="card"><div class="kicker" id="numKick">The numbers</div><div id="nums"></div></div>
+    <div class="card why" id="whyCard" hidden><div class="kicker">What is happening</div><div id="why"></div></div>
+    <div class="card"><div class="kicker">To find</div><div id="finds"></div></div>
+  </aside>
+</main>
+
+<script src="../../play.js"></script>
+<script>
+'use strict';
+const {$, esc, clamp, fmt, drag, loop, sound, say, track, toast, predict, findings, discover, found,
+       shareState, sharedState, mount, reduced} = Play;
+mount({thread: 'heat', band: 'theorist'});
+
+/* MODEL:start ==================================================================
+   One mole of ideal gas, PV = nRT. Its internal energy depends only on T, U = n Cv T,
+   with Cv = R/(γ − 1). Every change is stepped in small pieces through the first law
+       n Cv dT = dQ − P dV        (Eq. 11.1, W by the gas = ∫P dV)
+   and what the walls allow decides dQ:
+     isothermal  — a bath supplies exactly what keeps T fixed: dQ = P dV
+     adiabatic   — insulated: dQ = 0          (so T V^(γ−1) and P V^γ stay fixed, found)
+     isobaric    — a fixed weight on the piston holds P; a heater supplies dQ = n Cv dT + P dV
+     isochoric   — the piston is pinned: dV = 0, dQ = n Cv dT
+     real wall   — heat leaks in from a room at Tb at a rate n Cv (Tb − T)/τ, so a fast push
+                   behaves adiabatically and a slow one isothermally.
+   The Carnot engine is the same integrator run through its four steps; each adiabatic step
+   runs until the gas reaches the other reservoir's temperature.
+   Gibbs: ΔG = ΔH − TΔS, with ΔH and ΔS constant, and K = exp(−ΔG/RT).
+   ============================================================================ */
+const R = 8.314, N = 1;
+const Cv = g => R / (g - 1);
+const Pof = (V, T) => N * R * T / V;
+/* advance(st, o): st = {V (m³), T (K)}. o = {mode, dV, dT (isochoric/heater), dt, Tb, tau, g}.
+   Returns the heat taken in, the work done by the gas, and ΔU for this step. */
+function advance(st, o){
+  const g = o.g, cv = N * Cv(g);
+  let Q = 0, W = 0; const T0 = st.T;
+  if (o.mode === 'isoV') { const dT = o.dT || 0; st.T += dT; Q = cv * dT; return {Q, W: 0, dU: cv * (st.T - T0)}; }
+  const dV = o.dV || 0, dt = o.dt || 0;
+  const n = Math.max(1, Math.ceil(Math.abs(dV) / Math.max(2e-5, 1e-3 * st.V)), o.mode === 'real' ? Math.ceil(dt / 0.002) : 1);
+  const h = dV / n, ht = dt / n;
+  const P0 = Pof(st.V, st.T);
+  for (let i = 0; i < n; i++) {
+    if (o.mode === 'isoT') { const Pm = Pof(st.V + h / 2, st.T); W += Pm * h; Q += Pm * h; st.V += h; }
+    else if (o.mode === 'adia') { /* midpoint in T */
+      const dT1 = -Pof(st.V, st.T) * h / cv, Tm = st.T + dT1 / 2, Pm = Pof(st.V + h / 2, Tm);
+      st.T += -Pm * h / cv; W += Pm * h; st.V += h; }
+    else if (o.mode === 'isoP') { const V1 = st.V + h; W += P0 * h; st.T = P0 * V1 / (N * R); st.V = V1; }
+    else if (o.mode === 'real') {
+      const q1 = cv * (o.Tb - st.T) * ht / o.tau;
+      const dT1 = (q1 - Pof(st.V, st.T) * h) / cv, Tm = st.T + dT1 / 2, Pm = Pof(st.V + h / 2, Tm);
+      const qm = cv * (o.Tb - Tm) * ht / o.tau;
+      st.T += (qm - Pm * h) / cv; Q += qm; W += Pm * h; st.V += h; }
+  }
+  const dU = cv * (st.T - T0);
+  if (o.mode === 'isoP') Q = dU + W;
+  if (o.mode === 'adia') Q = 0;
+  return {Q, W, dU};
+}
+/* closed forms from the book, for checking the integrator */
+const W_iso = (T, V1, V2) => N * R * T * Math.log(V2 / V1);                // Eq. 11.12
+const W_adia = (T1, T2, g) => N * R * (T1 - T2) / (g - 1);                   // Eq. 11.16
+const carnotEff = (Th, Tc) => 1 - Tc / Th;                                    // Eq. 11.23
+/* run a whole engine cycle with the integrator; returns the steps and the ledger */
+function runCycle(o){
+  const {Th, Tc, V1, ratio, g, swap} = o, steps = [];
+  const st = {V: V1, T: Th}, pts = [{V: st.V, T: st.T, k: 0}];
+  const go = (k, mode, fn) => { const acc = {Q: 0, W: 0, dU: 0}; let guard = 0;
+    while (fn() && guard++ < 200000) { const r = mode.step(); acc.Q += r.Q; acc.W += r.W; acc.dU += r.dU; if (guard % 25 === 0) pts.push({V: st.V, T: st.T, k}); }
+    pts.push({V: st.V, T: st.T, k}); steps.push(Object.assign({k, name: mode.name}, acc)); };
+  const V2 = V1 * ratio, rel = 2e-3;
+  /* an adiabatic step towards a target temperature: the step shrinks as it closes in, using
+     the local rate dT/T = −(γ−1) dV/V that the first law gives at that moment */
+  const adiaStep = (s, Tt) => { const frac = Math.abs(s.T - Tt) / s.T / (g - 1);
+    const dV = s.V * Math.min(rel, Math.max(1e-9, 0.5 * frac)) * (s.T > Tt ? 1 : -1); return advance(s, {mode: 'adia', dV, g}); };
+  const done = (s, Tt) => Math.abs(s.T - Tt) < 1e-6;
+  /* 1 → 2: isothermal expansion at Th */
+  go(1, {name: 'isothermal expansion at T₁', step: () => advance(st, {mode: 'isoT', dV: Math.min(st.V * rel, V2 - st.V), g})}, () => st.V < V2 - 1e-12);
+  if (!swap) {
+    /* where the adiabat through state 1 meets Tc: found by running it, from state 1, outwards */
+    const probe = {V: V1, T: Th}; let guard = 0; while (!done(probe, Tc) && guard++ < 100000) adiaStep(probe, Tc);
+    const V4 = probe.V;
+    /* 2 → 3: adiabatic expansion until the gas has cooled to Tc */
+    go(2, {name: 'adiabatic expansion', step: () => adiaStep(st, Tc)}, () => !done(st, Tc));
+    /* 3 → 4: isothermal compression at Tc, to V4 */
+    go(3, {name: 'isothermal compression at T₂', step: () => advance(st, {mode: 'isoT', dV: -Math.min(st.V * rel, st.V - V4), g})}, () => st.V > V4 + 1e-12);
+    /* 4 → 1: adiabatic compression back to Th */
+    go(4, {name: 'adiabatic compression', step: () => adiaStep(st, Th)}, () => !done(st, Th));
+  } else {
+    go(2, {name: 'cooling at constant volume', step: () => advance(st, {mode: 'isoV', dT: -Math.min(1, st.T - Tc), g})}, () => st.T > Tc + 1e-9);
+    go(3, {name: 'isothermal compression at T₂', step: () => advance(st, {mode: 'isoT', dV: -Math.min(st.V * rel, st.V - V1), g})}, () => st.V > V1 + 1e-12);
+    go(4, {name: 'heating at constant volume', step: () => advance(st, {mode: 'isoV', dT: Math.min(1, Th - st.T), g})}, () => st.T < Th - 1e-9);
+  }
+  const Qin = steps.reduce((s, x) => s + Math.max(0, x.Q), 0), Qout = steps.reduce((s, x) => s + Math.min(0, x.Q), 0);
+  const Wnet = steps.reduce((s, x) => s + x.W, 0), dU = steps.reduce((s, x) => s + x.dU, 0);
+  return {steps, pts, Qin, Qout, Wnet, dU, eff: Wnet / Qin, end: {V: st.V, T: st.T}};
+}
+/* shoelace area of a closed PV path, in joules */
+function pathArea(pts){ let a = 0; for (let i = 0; i < pts.length; i++) { const p = pts[i], q = pts[(i + 1) % pts.length]; a += p.V * Pof(q.V, q.T) - q.V * Pof(p.V, p.T); } return a / 2; }
+/* Gibbs */
+const RXN = {
+  iron: {name: '4Fe(s) + 3O₂(g) → 2Fe₂O₃(s)', dH: -1648e3, dS: -549.4, src: 'NCERT Chemistry Problem 5.11'},
+  boil: {name: 'H₂O(l) → H₂O(g)', dH: 40.79e3, dS: 40.79e3 / 373, src: 'ΔvapH = 40.79 kJ/mol; ΔS = ΔH/Tb at the boiling point 373 K'},
+  melt: {name: 'H₂O(s) → H₂O(l)', dH: 6.00e3, dS: 6.00e3 / 273, src: 'ΔfusH = 6.00 kJ/mol; ΔS = ΔH/Tf at the melting point 273 K'},
+};
+const dG = (dH, dS, T) => dH - T * dS;
+const crossT = (dH, dS) => dS !== 0 ? dH / dS : Infinity;
+const Keq = (dGv, T) => Math.exp(-dGv / (R * T));
+/* MODEL:end */
+
+/* ---- state: plain data --------------------------------------------------- */
+const S = {
+  tab: 'gas', locked: false,
+  gs: {mode: 'isoT', g: 1.67, tau: 2, Tb: 300, V: 0.020, T: 300, path: [], segs: [], tot: {Q: 0, W: 0, dU: 0}, start: {V: 0.020, T: 300}, seg: null, fast: false, slow: false, lastQ: 0},
+  en: {Th: 500, Tc: 300, ratio: 2, swap: false, t: 0, running: false, done: false},
+  gb: {rxn: 'iron', dH: 30e3, dS: 100, T: 298, seen: {neg: false, pos: false}},
+};
+const shared = sharedState();
+if (shared && ['gas', 'engine', 'gibbs'].includes(shared.tab)) S.tab = shared.tab;
+shareState(() => ({tab: S.tab, en: {Th: S.en.Th, Tc: S.en.Tc, ratio: S.en.ratio, swap: S.en.swap}, gb: {rxn: S.gb.rxn, T: S.gb.T}}));
+S.gs.path = [{V: S.gs.V, T: S.gs.T, m: 'start'}];
+
+const set = (el, a) => { for (const k in a) el.setAttribute(k, a[k]); return el; };
+const f1 = v => (+v).toFixed(1);
+const PANEL = `<rect x="600" y="0" width="400" height="620" fill="#fbfaf6"/><line x1="600" y1="0" x2="600" y2="620" stroke="#e2ded2"/>`;
+const title = (x, y, t) => `<text x="${x}" y="${y}" fill="#4a555b" font-size="12.5" font-weight="700" letter-spacing=".08em">${t}</text>`;
+const MODECOL = {isoT: '#3f7fd8', adia: '#d6453d', isoP: '#2f9e5b', isoV: '#d0791e', real: '#7b5cd6', start: '#1d2327'};
+const MODENAME = {isoT: 'isothermal', adia: 'adiabatic', isoP: 'isobaric', isoV: 'isochoric', real: 'real wall'};
+const tCol = T => { const u = clamp((T - 150) / 900, 0, 1); return `rgb(${Math.round(90 + 165 * u)},${Math.round(150 - 60 * u)},${Math.round(230 - 180 * u)})`; };
+const locked = () => '<p class="note" style="margin:0">The numbers appear once you have made a prediction.</p>';
+const J = v => (Math.abs(v) >= 1000 ? fmt(v / 1000, 3) + ' kJ' : fmt(v, 1) + ' J');
+
+/* ============================================================================
+   The piston
+   ============================================================================ */
+const gs = $('gsStage');
+const CY = {x: 120, w: 200, bot: 520, k: 400 / 0.060};           // cylinder; px per m³ of volume
+const PV = {x: 660, y: 58, w: 300, h: 290};
+let PVSC = {Vmax: 0.060, Pmax: 600e3};
+const DOTS = Array.from({length: 46}, (_, i) => { const r = Play.mulberry32(i + 3); return {x: r(), y: r(), a: r() * 6.28, s: 0.6 + r() * 0.8}; });
+function buildGas(){
+  gs.innerHTML = `
+  <defs>
+    <pattern id="hatch" width="8" height="8" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="8" height="8" fill="#e8e1cf"/><line x1="0" y1="0" x2="0" y2="8" stroke="#bfb190" stroke-width="3"/></pattern>
+    <marker id="aQ" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0L10 5L0 10z" fill="#d6453d"/></marker>
+  </defs>
+  <rect x="0" y="0" width="600" height="620" fill="#f3f1ec"/>
+  <text x="18" y="28" fill="#4a4538" font-size="12.5" font-weight="700" letter-spacing=".08em">ONE MOLE OF GAS IN A CYLINDER</text>
+  <text x="18" y="46" fill="#7a7462" font-size="11.5" id="gsSub"></text>
+  <rect id="bath" x="${CY.x - 40}" y="130" width="${CY.w + 80}" height="${CY.bot - 110}" rx="10" fill="#b9dcf2" opacity=".75"/>
+  <rect id="jacket" x="${CY.x - 26}" y="90" width="${CY.w + 52}" height="${CY.bot - 70}" rx="6" fill="url(#hatch)"/>
+  <g id="burner"><rect x="${CY.x + 40}" y="${CY.bot + 22}" width="120" height="16" rx="4" fill="#5b6470"/><path id="flame" fill="#f29a1f"/></g>
+  <rect id="gasFill" x="${CY.x}" width="${CY.w}" fill="#9fc3ea"/>
+  <g id="dots"></g>
+  <path d="M${CY.x - 5} 80 V${CY.bot + 5} H${CY.x + CY.w + 5} V80" fill="none" stroke="#4d5560" stroke-width="5"/>
+  <g id="piston"><rect x="${CY.x}" y="-16" width="${CY.w}" height="16" fill="#6b7480"/><rect x="${CY.x + CY.w / 2 - 5}" y="-70" width="10" height="54" fill="#6b7480"/><rect x="${CY.x + CY.w / 2 - 40}" y="-82" width="80" height="14" rx="7" fill="#2b2f36"/>
+    <g id="weights"><rect x="${CY.x + 30}" y="-40" width="50" height="24" rx="3" fill="#8a6d3b"/><rect x="${CY.x + 120}" y="-40" width="50" height="24" rx="3" fill="#8a6d3b"/></g></g>
+  <g id="pins"><rect x="${CY.x - 20}" width="30" height="8" rx="3" fill="#d6453d"/><rect x="${CY.x + CY.w - 10}" width="30" height="8" rx="3" fill="#d6453d"/></g>
+  <rect id="pistonHit" class="nsHit" x="${CY.x - 10}" width="${CY.w + 20}" height="100" fill="transparent" role="slider" aria-label="The piston: drag it up or down"/>
+  <line id="qArrow" stroke="#d6453d" stroke-width="4" marker-end="url(#aQ)"/><text id="qLab" fill="#b3302a" font-size="12" font-weight="700" class="m"></text>
+  <!-- thermometer -->
+  <rect x="${CY.x + CY.w + 70}" y="120" width="16" height="360" rx="8" fill="#fff" stroke="#6b7480" stroke-width="2"/>
+  <circle cx="${CY.x + CY.w + 78}" cy="490" r="16" fill="#d6453d" stroke="#6b7480" stroke-width="2"/>
+  <rect id="merc" x="${CY.x + CY.w + 74}" width="8" fill="#d6453d"/>
+  <g id="thTicks"></g>
+  <rect id="thermHit" class="nsHit" x="${CY.x + CY.w + 56}" y="110" width="44" height="380" fill="transparent" role="slider" aria-label="The thermometer: drag it to heat or cool the gas (isochoric)"/>
+  <text id="gsLab" x="300" y="600" fill="#3a3528" font-size="14" font-weight="600" text-anchor="middle"></text>
+  ${PANEL}
+  ${title(618, 30, 'THE PV DIAGRAM')}
+  <g id="pvAx"></g><g id="pvIso"></g><path id="pvArea" fill="#1d2327" opacity=".08"/><g id="pvPath"></g>
+  <circle id="pvDot" r="6.5" fill="#1d2327" stroke="#fff" stroke-width="2"/>
+  <circle id="pvHit" class="hit" r="18" fill="transparent" role="slider" aria-label="The state of the gas: drag it along the diagram"/>
+  <line x1="600" y1="392" x2="1000" y2="392" stroke="#e2ded2"/>
+  ${title(618, 418, 'THE FIRST-LAW LEDGER, THIS PATH')}
+  <g id="ledger"></g>
+  `;
+  let tk = '';
+  for (let T = 200; T <= 1400; T += 200) tk += `<line x1="${CY.x + CY.w + 88}" y1="${thY(T)}" x2="${CY.x + CY.w + 96}" y2="${thY(T)}" stroke="#6b7480"/><text x="${CY.x + CY.w + 100}" y="${thY(T) + 4}" fill="#6b7480" font-size="10.5">${T} K</text>`;
+  $('thTicks').innerHTML = tk;
+}
+const thY = T => 474 - (clamp(T, 100, 1500) - 100) / 1400 * 344;
+const yPiston = V => CY.bot - V * CY.k;
+function pvScale(){
+  const Ps = S.gs.path.map(p => Pof(p.V, p.T)).concat([Pof(S.gs.V, S.gs.T)]);
+  const top = Math.max(...Ps) * 1.1;
+  const Pmax = [200e3, 300e3, 400e3, 600e3, 800e3, 1000e3, 1500e3, 2000e3, 3000e3].find(v => v >= top) || 3000e3;
+  PVSC = {Vmax: 0.060, Pmax};
+}
+const px = V => PV.x + V / PVSC.Vmax * PV.w, py = P => PV.y + PV.h - clamp(P / PVSC.Pmax, 0, 1.03) * PV.h;
+function paintGas(){
+  const g = S.gs, P = Pof(g.V, g.T), yP = yPiston(g.V);
+  pvScale();
+  const m = g.mode;
+  $('bath').toggleAttribute('hidden', m !== 'isoT');
+  $('jacket').toggleAttribute('hidden', m !== 'adia');
+  $('weights').toggleAttribute('hidden', m !== 'isoP');
+  $('pins').toggleAttribute('hidden', m !== 'isoV'); set($('pins'), {transform: `translate(0 ${yP - 26})`});
+  $('burner').toggleAttribute('hidden', !(m === 'isoP' || m === 'isoV'));
+  const fl = clamp(Math.abs(g.lastQ) / 40, 0, 1);
+  $('flame').setAttribute('d', g.lastQ > 0.5 ? `M${CY.x + 70} ${CY.bot + 22} Q${CY.x + 100} ${CY.bot + 22 - 30 * fl - 6} ${CY.x + 130} ${CY.bot + 22}Z` : '');
+  set($('gasFill'), {y: yP, height: CY.bot - yP, fill: tCol(g.T), opacity: .55});
+  set($('piston'), {transform: `translate(0 ${yP})`}); set($('pistonHit'), {y: yP - 90});
+  const hM = 474 - thY(g.T); set($('merc'), {y: thY(g.T), height: hM + 16});
+  /* the heat arrow: into the gas if heat came in on the last step */
+  if (S.locked && Math.abs(g.lastQ) > 0.5 && m !== 'adia') {
+    const into = g.lastQ > 0, ax = CY.x - 60, ay = (yP + CY.bot) / 2;
+    set($('qArrow'), {x1: into ? ax - 30 : ax + 40, y1: ay, x2: into ? ax + 40 : ax - 30, y2: ay, opacity: 1});
+    set($('qLab'), {x: ax - 44, y: ay - 12}); $('qLab').textContent = into ? 'heat in' : 'heat out';
+  } else { set($('qArrow'), {opacity: 0}); $('qLab').textContent = ''; }
+  $('gsSub').textContent = ({isoT: `Standing in a large bath at ${fmt(g.Tb, 0)} K: T cannot change.`, adia: 'Wrapped in insulation: no heat can get in or out.', isoP: `A fixed weight on the piston holds P at ${fmt(P / 1000, 1)} kPa; the burner supplies the heat.`,
+    isoV: 'The piston is pinned: V cannot change. Heat or cool it with the thermometer.', real: `A thin metal wall; the room is at 300 K and heat leaks through it with time constant ${fmt(g.tau, 1)} s.`})[m];
+  $('gsLab').textContent = S.locked ? `V = ${fmt(g.V * 1000, 1)} L · P = ${fmt(P / 1000, 1)} kPa · T = ${fmt(g.T, 0)} K` : '';
+  /* PV: axes, isotherms, path */
+  let ax = `<line x1="${PV.x}" y1="${PV.y + PV.h}" x2="${PV.x + PV.w}" y2="${PV.y + PV.h}" stroke="#9aa3a6"/><line x1="${PV.x}" y1="${PV.y}" x2="${PV.x}" y2="${PV.y + PV.h}" stroke="#9aa3a6"/>`;
+  for (let v = 0; v <= 60; v += 10) ax += `<text x="${px(v / 1000)}" y="${PV.y + PV.h + 15}" fill="#7c878c" font-size="10.5" text-anchor="middle">${v}</text>`;
+  for (let i = 0; i <= 4; i++) { const Pv = PVSC.Pmax * i / 4; ax += `<line x1="${PV.x}" y1="${py(Pv)}" x2="${PV.x + PV.w}" y2="${py(Pv)}" stroke="#ece8dc"/><text x="${PV.x - 6}" y="${py(Pv) + 4}" fill="#7c878c" font-size="10.5" text-anchor="end">${fmt(Pv / 1000, 0)}</text>`; }
+  ax += `<text x="${PV.x + PV.w}" y="${PV.y + PV.h + 30}" fill="#7c878c" font-size="11" text-anchor="end">volume V (litres)</text><text x="${PV.x}" y="${PV.y - 8}" fill="#4a555b" font-size="11" font-weight="600">pressure P (kPa)</text>`;
+  $('pvAx').innerHTML = ax;
+  let iso = '';
+  if (S.locked) for (const T of [150, 300, 600, 1200]) { let d = ''; for (let v = 3; v <= 60; v += 1) { const Pv = Pof(v / 1000, T); if (Pv > PVSC.Pmax * 1.03) continue; d += (d ? 'L' : 'M') + f1(px(v / 1000)) + ' ' + f1(py(Pv)); }
+    const vl = 58 / 1000; iso += `<path d="${d}" fill="none" stroke="#c9c2b0" stroke-dasharray="3 4"/><text x="${px(vl)}" y="${py(Pof(vl, T)) - 4}" fill="#a79f8b" font-size="10" text-anchor="end">${T} K</text>`; }
+  $('pvIso').innerHTML = iso;
+  let pg = '';
+  if (S.locked && g.path.length > 1) {
+    let cur = null, d = '';
+    for (let i = 1; i < g.path.length; i++) { const a = g.path[i - 1], b = g.path[i];
+      if (b.m !== cur) { if (d) pg += `<path d="${d}" fill="none" stroke="${MODECOL[cur]}" stroke-width="2.6" stroke-linejoin="round"/>`; cur = b.m; d = `M${f1(px(a.V))} ${f1(py(Pof(a.V, a.T)))}`; }
+      d += `L${f1(px(b.V))} ${f1(py(Pof(b.V, b.T)))}`; }
+    if (d) pg += `<path d="${d}" fill="none" stroke="${MODECOL[cur]}" stroke-width="2.6" stroke-linejoin="round"/>`;
+    const s0 = g.path[0]; pg += `<circle cx="${f1(px(s0.V))}" cy="${f1(py(Pof(s0.V, s0.T)))}" r="4.5" fill="#fff" stroke="#1d2327" stroke-width="1.5"/>`;
+  }
+  $('pvPath').innerHTML = pg;
+  $('pvArea').setAttribute('d', S.locked && g.closed ? 'M' + g.path.map(p => f1(px(p.V)) + ' ' + f1(py(Pof(p.V, p.T)))).join('L') + 'Z' : '');
+  set($('pvDot'), {cx: px(g.V), cy: py(P), fill: MODECOL[m]}); set($('pvHit'), {cx: px(g.V), cy: py(P)});
+  /* ledger */
+  let L = '';
+  if (S.locked) {
+    L += `<text x="618" y="444" fill="#7c878c" font-size="11">step</text><text x="790" y="444" fill="#7c878c" font-size="11" text-anchor="end">Q in</text><text x="878" y="444" fill="#7c878c" font-size="11" text-anchor="end">W by gas</text><text x="966" y="444" fill="#7c878c" font-size="11" text-anchor="end">ΔU</text>`;
+    const rows = g.segs.slice(-4);
+    rows.forEach((s, i) => { const y = 466 + i * 22;
+      L += `<text x="618" y="${y}" fill="${MODECOL[s.mode]}" font-size="12" font-weight="600">${MODENAME[s.mode]}</text>` +
+        [[790, s.Q], [878, s.W], [966, s.dU]].map(([x, v]) => `<text x="${x}" y="${y}" fill="#1d2327" font-size="12" class="m" text-anchor="end">${fmt(v, 0)}</text>`).join(''); });
+    const y = 466 + 4 * 22 + 8;
+    L += `<line x1="618" y1="${y - 14}" x2="970" y2="${y - 14}" stroke="#e2ded2"/><text x="618" y="${y}" fill="#1d2327" font-size="12" font-weight="700">whole path (J)</text>` +
+      [[790, g.tot.Q], [878, g.tot.W], [966, g.tot.dU]].map(([x, v]) => `<text x="${x}" y="${y}" fill="#1d2327" font-size="12" font-weight="700" class="m" text-anchor="end">${fmt(v, 0)}</text>`).join('');
+    L += `<text x="618" y="${y + 22}" fill="#7c878c" font-size="11" class="m">check: Q − W − ΔU = ${fmt(g.tot.Q - g.tot.W - g.tot.dU, 3)} J${g.closed ? ` · enclosed area ${fmt(Math.abs(pathArea(g.path)), 0)} J` : ''}</text>`;
+  }
+  $('ledger').innerHTML = L;
+  /* the dots: jiggle faster when hot (drawn only, the model is the ledger) */
+  $('vol').value = g.V * 1000; $('volOut').textContent = fmt(g.V * 1000, 1) + ' L';
+  $('temp').value = g.T; $('tempOut').textContent = fmt(g.T, 0) + ' K';
+  $('gam').value = g.g; $('gamOut').textContent = fmt(g.g, 2);
+  $('tau').value = g.tau; $('tauOut').textContent = fmt(g.tau, 1) + ' s';
+  $('tauRow').toggleAttribute('hidden', m !== 'real');
+  $('vol').disabled = !S.locked || m === 'isoV'; $('temp').disabled = !S.locked || m !== 'isoV';
+  $$('#modeSeg [data-m]').forEach(bn => bn.setAttribute('aria-pressed', bn.dataset.m === m));
+  $('modeNote').textContent = ({isoT: 'Drag the piston: T stays fixed, heat flows in or out to keep it so.', adia: 'Drag the piston: nothing flows in or out, whatever you do.', isoP: 'Drag the piston: the burner heats (or cools) it at constant pressure.', isoV: 'Drag the thermometer: heat at constant volume.', real: 'Drag the piston fast, then slowly, and compare.'})[m];
+  if (S.tab === 'gas') { paintGasNums(); paintGasWhy(); }
+}
+const $$ = sel => Array.from(document.querySelectorAll(sel));
+function paintDots(dt, time){
+  const g = S.gs, yP = yPiston(g.V), H = CY.bot - yP, sp = reduced() ? 0 : Math.sqrt(g.T / 300);
+  let s = '';
+  for (const d of DOTS) { d.a += dt * 3 * sp * d.s; const x = CY.x + 8 + (d.x * (CY.w - 16) + Math.cos(d.a) * 6 * sp) , y = yP + 6 + ((d.y + 0.04 * Math.sin(d.a * 1.3) * sp + 1) % 1) * (H - 12);
+    s += `<circle cx="${f1(clamp(x, CY.x + 4, CY.x + CY.w - 4))}" cy="${f1(y)}" r="3" fill="#2b3a55" opacity=".55"/>`; }
+  $('dots').innerHTML = s;
+}
+function paintGasNums(){
+  if (!S.locked) { $('nums').innerHTML = locked(); return; }
+  const g = S.gs, P = Pof(g.V, g.T), s = g.seg || g.segs[g.segs.length - 1];
+  $('numKick').textContent = 'The gas, right now';
+  $('nums').innerHTML = `<div class="readout">
+    <span>Pressure · volume · temperature</span><b>${fmt(P / 1000, 1)} kPa · ${fmt(g.V * 1000, 1)} L · ${fmt(g.T, 0)} K</b>
+    <span class="eq">PV = nRT: ${fmt(P * g.V, 0)} J = 1 × 8.314 × ${fmt(g.T, 0)}</span>
+    <span>Internal energy U = n Cv T</span><b>${J(N * Cv(g.g) * g.T)}</b>
+    <span>PV^γ · TV^(γ−1)</span><b>${fmt(P * Math.pow(g.V, g.g), 2)} · ${fmt(g.T * Math.pow(g.V, g.g - 1), 3)}</b>
+    <span class="eq">both stay fixed in an adiabatic change</span>
+    ${s ? `<div class="sep"></div><span>Last step (${MODENAME[s.mode]})</span><b>Q ${fmt(s.Q, 0)} · W ${fmt(s.W, 0)} · ΔU ${fmt(s.dU, 0)} J</b>
+    <span>…from ${fmt(s.V0 * 1000, 1)} L, ${fmt(s.T0, 0)} K to ${fmt(s.V1 * 1000, 1)} L, ${fmt(s.T1, 0)} K</span><b></b>` : ''}
+  </div>`;
+}
+function paintGasWhy(){
+  if (!S.locked) return;
+  $('whyCard').hidden = false;
+  const g = S.gs, s = g.segs[g.segs.length - 1];
+  let t = '';
+  if (!s) t = `<p>Choose what the walls allow, then move the piston. The gas does work W = ∫P dV on the piston when it expands (the area under its curve), and the first law says where that energy comes from: ΔQ = ΔU + ΔW.</p>`;
+  else if (s.mode === 'isoT') t = `<p>In the bath T stayed at ${fmt(s.T0, 0)} K, so U did not change (ΔU = ${fmt(s.dU, 1)} J). Every joule of work ${s.W >= 0 ? 'the gas did' : 'you did on the gas'}, ${fmt(Math.abs(s.W), 0)} J, ${s.W >= 0 ? 'came in from the bath as heat' : 'went out to the bath as heat'}: Q = W. (The book: W = nRT ln(V₂/V₁) = ${fmt(W_iso(s.T0, s.V0, s.V1), 0)} J.)</p>`;
+  else if (s.mode === 'adia') t = `<p>No heat can cross the insulation, so the work ${s.W < 0 ? 'you did on the gas' : 'the gas did'} (${fmt(Math.abs(s.W), 0)} J) ${s.W < 0 ? 'went into its internal energy: it got hotter' : 'came out of its internal energy: it cooled'}, from ${fmt(s.T0, 0)} K to ${fmt(s.T1, 0)} K. The curve is steeper than an isotherm, and PV^γ stayed fixed without being told to.</p>`;
+  else if (s.mode === 'isoP') t = `<p>At constant pressure the heat does two jobs: it raises U (${fmt(s.dU, 0)} J) and does work P ΔV (${fmt(s.W, 0)} J). That is why Cp is bigger than Cv.</p>`;
+  else if (s.mode === 'isoV') t = `<p>The piston is pinned, so no work is done (W = 0). All the heat, ${fmt(s.Q, 0)} J, goes into internal energy: ΔU = n Cv ΔT.</p>`;
+  else t = `<p>A real wall lets heat through, but not instantly. In that push the gas strayed up to <b>${fmt(s.maxDev, 0)} K</b> from the room’s 300 K. ${s.maxDev > 20 ? 'Pushed faster than heat could flow, it behaved nearly adiabatically.' : 'Pushed slowly, heat kept up, and it stayed close to an isotherm.'}</p>`;
+  if (g.closed) t += `<p><b>The path is closed.</b> The gas is back where it began, so ΔU = ${fmt(g.tot.dU, 1)} J, and the net heat taken in equals the net work done: ${fmt(g.tot.Q, 0)} J against ${fmt(g.tot.W, 0)} J, the area inside the loop.</p>`;
+  $('why').innerHTML = t;
+}
+/* segments: one gesture (or run of slider steps) in one mode */
+function segBegin(){
+  const g = S.gs;
+  if (g.seg && g.seg.mode === g.mode) return;
+  segEnd();
+  g.seg = {mode: g.mode, V0: g.V, T0: g.T, V1: g.V, T1: g.T, Q: 0, W: 0, dU: 0, maxDev: 0, t0: performance.now()};
+}
+function segAdd(r){
+  const g = S.gs, s = g.seg;
+  if (s) { s.Q += r.Q; s.W += r.W; s.dU += r.dU; s.V1 = g.V; s.T1 = g.T;
+    s.maxDev = Math.max(s.maxDev, Math.abs(g.T - (g.mode === 'real' ? 300 : s.T0))); }
+  g.tot.Q += r.Q; g.tot.W += r.W; g.tot.dU += r.dU; g.lastQ = r.Q;
+  const last = g.path[g.path.length - 1];
+  if (Math.abs(last.V - g.V) > 1e-5 || Math.abs(last.T - g.T) > 0.2) g.path.push({V: g.V, T: g.T, m: g.mode});
+  if (g.path.length > 4000) g.path.splice(1, 1);
+}
+let segTimer = 0;
+function segEnd(){
+  const g = S.gs, s = g.seg; if (!s) return;
+  g.seg = null;
+  if (Math.abs(s.Q) + Math.abs(s.W) + Math.abs(s.dU) < 1e-6) return;
+  s.dur = (performance.now() - s.t0) / 1000;
+  g.segs.push(s);
+  track('process', {mode: s.mode, V0: s.V0, V1: s.V1, T0: s.T0, T1: s.T1, Q: s.Q, W: s.W});
+  checkGas(s);
+  paintGas();
+}
+function checkGas(s){
+  if (!S.locked) return;
+  const g = S.gs, dV = Math.abs(s.V1 - s.V0);
+  if (s.mode === 'isoT' && dV >= 0.005) discover('isoT');
+  if (s.mode === 'adia' && s.V1 < s.V0 && s.T1 - s.T0 >= 50) {
+    discover('adheat');
+    if (POE && !POE.explained) POE.explain(`Squeezed from ${fmt(s.V0 * 1000, 1)} L to ${fmt(s.V1 * 1000, 1)} L inside the insulation, the gas took in no heat (Q = 0), yet its temperature rose from <b>${fmt(s.T0, 0)} K to ${fmt(s.T1, 0)} K</b>.
+      The ${fmt(-s.W, 0)} J of work you did on it had nowhere to go but into its internal energy: ΔU = −W. Temperature is not the same thing as heat.`);
+  }
+  if (s.mode === 'isoV' && s.T1 - s.T0 >= 50) discover('isochoric');
+  if (s.mode === 'real' && dV >= 0.005) { if (s.maxDev >= 25) g.fast = true; if (s.maxDev <= 10) g.slow = true; if (g.fast && g.slow) discover('real'); }
+  /* back to the start of the path? */
+  const st = g.path[0];
+  if (g.segs.length >= 3 && Math.abs(g.V - st.V) / st.V < 0.01 && Math.abs(g.T - st.T) / st.T < 0.01 && Math.abs(g.tot.W) > 100) {
+    g.closed = true; discover('cycle');
+  }
+}
+/* the controls act through the model: target a volume or a temperature */
+function moveTo(Vt, Tt){
+  if (!S.locked) return;
+  const g = S.gs;
+  g.closed = false;
+  segBegin();
+  const st = {V: g.V, T: g.T};
+  let r;
+  if (g.mode === 'isoV') { if (Tt == null) return; r = advance(st, {mode: 'isoV', dT: clamp(Tt, 100, 1500) - g.T, g: g.g}); }
+  else { if (Vt == null) return; Vt = clamp(Vt, 0.005, 0.060);
+    /* the heat leak of a real wall is applied continuously by the frame loop; here only the work */
+    r = advance(st, {mode: g.mode, dV: Vt - g.V, dt: 0, Tb: 300, tau: g.tau, g: g.g});
+    if (st.T < 20 || st.T > 3000) { toast('That would take the gas beyond this model’s range.'); return; } }
+  g.V = st.V; g.T = st.T;
+  segAdd(r);
+  clearTimeout(segTimer); segTimer = setTimeout(segEnd, 700);
+  paintGas();
+}
+const snapV = V => Math.round(V * 1000 * 2) / 2 / 1000, snapT = T => Math.round(T / 5) * 5;
+
+/* ============================================================================
+   The Carnot engine
+   ============================================================================ */
+const en = $('enStage');
+const EC = {x: 200, w: 200, bot: 470, k: 330 / 0.060};
+const EP = {x: 660, y: 58, w: 300, h: 290};
+function buildEng(){
+  en.innerHTML = `
+  <defs><pattern id="hatch2" width="8" height="8" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="8" height="8" fill="#e8e1cf"/><line x1="0" y1="0" x2="0" y2="8" stroke="#bfb190" stroke-width="3"/></pattern></defs>
+  <rect x="0" y="0" width="600" height="620" fill="#f3f1ec"/>
+  <text x="18" y="28" fill="#4a4538" font-size="12.5" font-weight="700" letter-spacing=".08em">A HEAT ENGINE, ONE CYCLE</text>
+  <text x="18" y="46" fill="#7a7462" font-size="11.5" id="enSub"></text>
+  <rect id="base" x="${EC.x - 60}" y="${EC.bot + 6}" width="${EC.w + 120}" height="60" rx="8"/>
+  <text id="baseLab" x="${EC.x + EC.w / 2}" y="${EC.bot + 42}" fill="#fff" font-size="14" font-weight="700" text-anchor="middle"></text>
+  <rect id="egas" x="${EC.x}" width="${EC.w}"/>
+  <path d="M${EC.x - 5} 60 V${EC.bot + 5} H${EC.x + EC.w + 5} V60" fill="none" stroke="#4d5560" stroke-width="5"/>
+  <g id="episton"><rect x="${EC.x}" y="-16" width="${EC.w}" height="16" fill="#6b7480"/><rect x="${EC.x + EC.w / 2 - 5}" y="-50" width="10" height="34" fill="#6b7480"/></g>
+  <text id="stepLab" x="300" y="572" fill="#3a3528" font-size="15" font-weight="600" text-anchor="middle"></text>
+  <text id="stepLab2" x="300" y="596" fill="#7a7462" font-size="12.5" text-anchor="middle"></text>
+  ${PANEL}
+  ${title(618, 30, 'THE CYCLE ON THE PV DIAGRAM')}
+  <g id="epAx"></g><path id="epArea" fill="#6a3fc2" opacity=".12"/><path id="epPath" fill="none" stroke="#1d2327" stroke-width="2.4"/><g id="epLabs"></g><circle id="epDot" r="6" fill="#6a3fc2" stroke="#fff" stroke-width="2"/>
+  <line x1="600" y1="392" x2="1000" y2="392" stroke="#e2ded2"/>
+  ${title(618, 418, 'WHERE THE HEAT WENT')}
+  <g id="eLedger"></g>
+  `;
+}
+let CYC = null;
+const engKey = () => JSON.stringify([S.en.Th, S.en.Tc, S.en.ratio, S.en.swap, S.gs.g]);
+function engRun(){ CYC = runCycle({Th: S.en.Th, Tc: S.en.Tc, V1: 0.010, ratio: S.en.ratio, g: S.gs.g, swap: S.en.swap}); CYC.key = engKey(); }
+function paintEng(){
+  const e = S.en;
+  if (!CYC || CYC.key !== engKey()) { engRun(); e.t = 0; e.done = false; e.running = false; }
+  const n = CYC.pts.length, idx = clamp(Math.floor(e.t * (n - 1)), 0, n - 1), p = CYC.pts[idx], k = e.running || e.done ? p.k : 0;
+  const base = k === 1 || (!e.swap && k === 0) ? 'hot' : k === 3 ? 'cold' : (k === 2 || k === 4) ? (e.swap ? (k === 2 ? 'cold' : 'hot') : 'ins') : 'hot';
+  set($('base'), {fill: base === 'hot' ? '#d6453d' : base === 'cold' ? '#3f7fd8' : 'url(#hatch2)'});
+  $('baseLab').textContent = base === 'hot' ? `hot reservoir, ${e.Th} K` : base === 'cold' ? `cold reservoir, ${e.Tc} K` : 'insulating stand';
+  $('baseLab').setAttribute('fill', base === 'ins' ? '#5a4f37' : '#fff');
+  const y = EC.bot - p.V * EC.k;
+  set($('egas'), {y, height: EC.bot - y, fill: tCol(p.T), opacity: .55}); set($('episton'), {transform: `translate(0 ${y})`});
+  $('enSub').textContent = `One mole, γ = ${fmt(S.gs.g, 2)} (set on the piston tab). Starts at 10 L and ${e.Th} K.`;
+  const stp = CYC.steps.find(s => s.k === k);
+  $('stepLab').textContent = !S.locked ? '' : !(e.running || e.done) ? 'Press “Run one cycle”.' : e.done ? `One cycle: efficiency ${fmt(CYC.eff * 100, 2)}%` : `${k} → ${k % 4 + 1}: ${stp ? stp.name : ''}`;
+  $('stepLab2').textContent = S.locked && (e.running || e.done) ? `T = ${fmt(p.T, 0)} K, V = ${fmt(p.V * 1000, 2)} L` : '';
+  /* PV */
+  const Vmax = [0.04, 0.06, 0.08, 0.12, 0.16, 0.24, 0.32].find(v => v >= Math.max(...CYC.pts.map(q => q.V)) * 1.08) || 0.32;
+  const Pmax = [200e3, 300e3, 400e3, 600e3, 800e3, 1000e3].find(v => v >= Math.max(...CYC.pts.map(q => Pof(q.V, q.T))) * 1.08) || 1000e3;
+  const X = V => EP.x + V / Vmax * EP.w, Y = P => EP.y + EP.h - P / Pmax * EP.h;
+  let ax = `<line x1="${EP.x}" y1="${EP.y + EP.h}" x2="${EP.x + EP.w}" y2="${EP.y + EP.h}" stroke="#9aa3a6"/><line x1="${EP.x}" y1="${EP.y}" x2="${EP.x}" y2="${EP.y + EP.h}" stroke="#9aa3a6"/>`;
+  for (let i = 0; i <= 4; i++) ax += `<text x="${EP.x + EP.w * i / 4}" y="${EP.y + EP.h + 15}" fill="#7c878c" font-size="10.5" text-anchor="middle">${fmt(Vmax * 1000 * i / 4, 0)}</text><line x1="${EP.x}" y1="${Y(Pmax * i / 4)}" x2="${EP.x + EP.w}" y2="${Y(Pmax * i / 4)}" stroke="#ece8dc"/><text x="${EP.x - 6}" y="${Y(Pmax * i / 4) + 4}" fill="#7c878c" font-size="10.5" text-anchor="end">${fmt(Pmax * i / 4000, 0)}</text>`;
+  ax += `<text x="${EP.x + EP.w}" y="${EP.y + EP.h + 30}" fill="#7c878c" font-size="11" text-anchor="end">volume (litres)</text><text x="${EP.x}" y="${EP.y - 8}" fill="#4a555b" font-size="11" font-weight="600">pressure (kPa)</text>`;
+  $('epAx').innerHTML = ax;
+  const upto = e.running || e.done ? idx : -1;
+  let d = ''; for (let i = 0; i <= upto; i++) { const q = CYC.pts[i]; d += (d ? 'L' : 'M') + f1(X(q.V)) + ' ' + f1(Y(Pof(q.V, q.T))); }
+  $('epPath').setAttribute('d', S.locked ? d : '');
+  $('epArea').setAttribute('d', S.locked && e.done ? d + 'Z' : '');
+  /* corner labels 1–4 */
+  let labs = '';
+  if (S.locked && (e.running || e.done)) { for (const kk of [1, 2, 3, 4]) { const first = CYC.pts.find(q => q.k === kk); if (!first || CYC.pts.indexOf(first) > idx + 1) continue;
+    const i0 = CYC.pts.indexOf(first) - 1, q = CYC.pts[Math.max(0, i0)]; labs += `<circle cx="${f1(X(q.V))}" cy="${f1(Y(Pof(q.V, q.T)))}" r="3.5" fill="#1d2327"/><text x="${f1(X(q.V) + 7)}" y="${f1(Y(Pof(q.V, q.T)) - 7)}" fill="#1d2327" font-size="12" font-weight="700">${kk}</text>`; } }
+  $('epLabs').innerHTML = labs;
+  set($('epDot'), {cx: X(p.V), cy: Y(Pof(p.V, p.T)), opacity: S.locked && (e.running || e.done) ? 1 : 0});
+  /* ledger */
+  let L = '';
+  if (S.locked && e.done) {
+    CYC.steps.forEach((s, i) => { const yy = 446 + i * 22;
+      L += `<text x="618" y="${yy}" fill="#4a555b" font-size="11.5">${s.k} → ${s.k % 4 + 1} ${esc(s.name)}</text><text x="966" y="${yy}" fill="${s.Q > 0.5 ? '#b3302a' : s.Q < -0.5 ? '#1f5d8a' : '#7c878c'}" font-size="12" class="m" text-anchor="end">Q ${fmt(s.Q, 0)} J</text>`; });
+    const yy = 446 + 4 * 22 + 10;
+    L += `<line x1="618" y1="${yy - 14}" x2="970" y2="${yy - 14}" stroke="#e2ded2"/>
+      <text x="618" y="${yy}" fill="#1d2327" font-size="12" font-weight="700">heat in ${fmt(CYC.Qin, 0)} J · out ${fmt(-CYC.Qout, 0)} J · work ${fmt(CYC.Wnet, 0)} J</text>
+      <text x="618" y="${yy + 22}" fill="#1d2327" font-size="12" class="m">η = W/Q_in = ${fmt(CYC.eff * 100, 2)}%   Carnot 1 − T₂/T₁ = ${fmt(carnotEff(e.Th, e.Tc) * 100, 2)}%</text>`;
+  } else if (S.locked) L = `<text x="618" y="446" fill="#7c878c" font-size="12">Run a cycle to fill the ledger.</text>`;
+  $('eLedger').innerHTML = L;
+  for (const [id, v, u] of [['th', e.Th, ' K'], ['tc', e.Tc, ' K']]) { $(id).value = v; $(id + 'Out').textContent = v + u; }
+  $('ratio').value = e.ratio; $('ratioOut').textContent = fmt(e.ratio, 1); $('swap').checked = e.swap;
+  if (S.tab === 'engine') { paintEngNums(); paintEngWhy(); }
+}
+function paintEngNums(){
+  if (!S.locked) { $('nums').innerHTML = locked(); return; }
+  const e = S.en;
+  $('numKick').textContent = 'The engine';
+  $('nums').innerHTML = `<div class="readout">
+    <span>Heat taken in, Q₁</span><b>${e.done ? J(CYC.Qin) : '—'}</b>
+    ${!e.swap ? `<span class="eq">= nRT₁ ln(V₂/V₁) = 8.314 × ${e.Th} × ln ${fmt(e.ratio, 1)} = ${J(W_iso(e.Th, 1, e.ratio))}</span>` : ''}
+    <span>Heat given out, Q₂</span><b>${e.done ? J(-CYC.Qout) : '—'}</b>
+    <span>Net work, W = Q₁ − Q₂</span><b>${e.done ? J(CYC.Wnet) : '—'}</b>
+    <span>ΔU over the cycle</span><b>${e.done ? fmt(CYC.dU, 3) + ' J' : '—'}</b>
+    <span>Efficiency η = W/Q₁</span><b>${e.done ? fmt(CYC.eff * 100, 2) + '%' : '—'}</b>
+    <span>Carnot’s limit, 1 − T₂/T₁</span><b>${fmt(carnotEff(e.Th, e.Tc) * 100, 2)}%</b>
+  </div>`;
+}
+function paintEngWhy(){
+  if (!S.locked) return;
+  $('whyCard').hidden = false;
+  const e = S.en;
+  let t = `<p>Heat is taken in only on the hot isotherm and given out only on the cold one; the two adiabatic steps carry the gas between the temperatures without any heat flowing. That is Carnot’s reversible engine.</p>`;
+  if (e.swap) t = `<p>With constant-volume steps instead, the gas must be heated from ${e.Tc} K back up to ${e.Th} K by taking heat in while it is cooler than the hot reservoir. That flow across a temperature difference is irreversible, and the efficiency falls below Carnot’s.</p>`;
+  if (e.done) t += `<p>Measured: ${fmt(CYC.eff * 100, 2)}%. ${e.swap ? `Carnot’s limit for these reservoirs is ${fmt(carnotEff(e.Th, e.Tc) * 100, 2)}%.` : `It matches 1 − T₂/T₁ = ${fmt(carnotEff(e.Th, e.Tc) * 100, 2)}%, whatever γ or the expansion ratio: only the two temperatures matter.`}</p>`;
+  $('why').innerHTML = t;
+}
+function checkEng(){
+  if (!S.locked || !CYC) return;
+  if (!S.en.swap && Math.abs(CYC.eff - carnotEff(S.en.Th, S.en.Tc)) < 0.005) discover('carnot');
+  if (S.en.swap && CYC.eff < carnotEff(S.en.Th, S.en.Tc) - 0.01) discover('beat');
+}
+
+/* ============================================================================
+   Gibbs energy
+   ============================================================================ */
+const gb = $('gbStage');
+const GG = {x: 660, y: 70, w: 300, h: 270};
+function buildGib(){
+  gb.innerHTML = `
+  <rect x="0" y="0" width="600" height="620" fill="#f5f3f7"/>
+  <text x="18" y="28" fill="#463e56" font-size="12.5" font-weight="700" letter-spacing=".08em">ΔG = ΔH − TΔS</text>
+  <text x="18" y="48" fill="#6b6280" font-size="14" id="gbRx"></text>
+  <text x="18" y="68" fill="#8a82a0" font-size="11.5" id="gbSrc"></text>
+  <line x1="300" y1="110" x2="300" y2="420" stroke="#8a82a0" stroke-width="1.5"/>
+  <text x="300" y="104" fill="#8a82a0" font-size="11" text-anchor="middle">0</text>
+  <g id="gBars"></g>
+  <text id="verdict" x="300" y="486" font-size="22" font-weight="600" text-anchor="middle" class="serif"></text>
+  <text id="verdict2" x="300" y="512" fill="#5d556f" font-size="13" text-anchor="middle"></text>
+  <text id="verdict3" x="300" y="536" fill="#5d556f" font-size="12.5" text-anchor="middle" class="m"></text>
+  ${PANEL}
+  ${title(618, 30, 'ΔG AGAINST TEMPERATURE')}
+  <g id="ggAx"></g><rect id="ggNeg" fill="#2f9e5b" opacity=".08"/><path id="ggLine" fill="none" stroke="#6a3fc2" stroke-width="2.6"/><g id="ggCross"></g>
+  <line id="ggNow" stroke="#1d2327" stroke-width="1.3"/><circle id="ggDot" r="6" fill="#6a3fc2" stroke="#fff" stroke-width="2"/>
+  <rect id="ggHit" class="hit" x="${GG.x}" y="${GG.y}" width="${GG.w}" height="${GG.h}" fill="transparent" role="slider" aria-label="Drag along the graph to change the temperature"/>
+  <line x1="600" y1="400" x2="1000" y2="400" stroke="#e2ded2"/>
+  ${title(618, 426, 'THE EQUILIBRIUM CONSTANT')}
+  <g id="kBox"></g>
+  `;
+}
+const rxnVals = () => S.gb.rxn === 'own' ? {dH: S.gb.dH, dS: S.gb.dS, name: 'Your own reaction', src: 'Set ΔH and ΔS with the sliders.'} : RXN[S.gb.rxn];
+function gRange(){ const r = rxnVals(), tc = crossT(r.dH, r.dS); return tc > 0 && isFinite(tc) ? clamp(Math.ceil(tc * 1.6 / 100) * 100, 500, 4000) : S.gb.rxn === 'own' ? 2000 : 1000; }
+function paintGib(){
+  const b = S.gb, r = rxnVals(), T = b.T, g = dG(r.dH, r.dS, T), Tmax = gRange();
+  $('tg').max = Tmax; if (b.T > Tmax) { b.T = Tmax; }
+  $('gbRx').textContent = r.name; $('gbSrc').textContent = r.src;
+  /* bars: ΔH, −TΔS, ΔG (kJ) */
+  const vals = [['ΔH', r.dH], ['−TΔS', -T * r.dS], ['ΔG', g]];
+  const mx = Math.max(...vals.map(v => Math.abs(v[1])), 1), k = 250 / mx;
+  let s = '';
+  vals.forEach(([n, v], i) => { const y = 140 + i * 90, w = v * k, col = i === 2 ? (v < 0 ? '#2f9e5b' : v > 0 ? '#d6453d' : '#8a82a0') : i === 0 ? '#d0791e' : '#3f7fd8';
+    s += `<rect x="${f1(Math.min(300, 300 + w))}" y="${y}" width="${f1(Math.max(Math.abs(w), 1.5))}" height="40" rx="4" fill="${col}" opacity="${i === 2 ? 1 : .8}"/>
+      <text x="${v >= 0 ? 290 : 310}" y="${y + 26}" fill="#3a3448" font-size="16" font-weight="700" text-anchor="${v >= 0 ? 'end' : 'start'}">${n}</text>
+      <text x="${v >= 0 ? 306 : 294}" y="${y + 60}" fill="#3a3448" font-size="13" class="m" text-anchor="${v >= 0 ? 'start' : 'end'}">${fmt(v / 1000, 2)} kJ</text>`; });
+  s += `<text x="40" y="440" fill="#8a82a0" font-size="11.5">← favours the change</text><text x="560" y="440" fill="#8a82a0" font-size="11.5" text-anchor="end">works against it →</text>`;
+  $('gBars').innerHTML = S.locked ? s : '';
+  const v1 = Math.abs(g) < 50 ? 'At equilibrium' : g < 0 ? 'Spontaneous' : 'Not spontaneous';
+  $('verdict').textContent = S.locked ? `${v1} at ${fmt(T, 0)} K` : '';
+  $('verdict').setAttribute('fill', Math.abs(g) < 50 ? '#5d556f' : g < 0 ? '#1f7a44' : '#b3302a');
+  const tc = crossT(r.dH, r.dS);
+  $('verdict2').textContent = !S.locked ? '' : r.dH * r.dS > 0 && tc > 0 ? `It changes over at T = ΔH/ΔS = ${fmt(tc, 1)} K.` : r.dH < 0 && r.dS >= 0 ? 'ΔH < 0 and ΔS > 0: spontaneous at every temperature.' : r.dH > 0 && r.dS <= 0 ? 'ΔH > 0 and ΔS < 0: never spontaneous.' : '';
+  $('verdict3').textContent = S.locked ? `ΔG = ${fmt(r.dH / 1000, 2)} − ${fmt(T, 0)} × (${fmt(r.dS / 1000, 4)}) = ${fmt(g / 1000, 2)} kJ` : '';
+  /* graph */
+  const Gs = [0, Tmax].map(t => dG(r.dH, r.dS, t)), gmin = Math.min(0, ...Gs), gmax = Math.max(0, ...Gs), pad = (gmax - gmin) * 0.08 || 1000;
+  const X = t => GG.x + t / Tmax * GG.w, Y = v => GG.y + GG.h - (v - (gmin - pad)) / ((gmax + pad) - (gmin - pad)) * GG.h;
+  let ax = `<line x1="${GG.x}" y1="${GG.y + GG.h}" x2="${GG.x + GG.w}" y2="${GG.y + GG.h}" stroke="#9aa3a6"/><line x1="${GG.x}" y1="${GG.y}" x2="${GG.x}" y2="${GG.y + GG.h}" stroke="#9aa3a6"/>`;
+  for (let i = 0; i <= 4; i++) ax += `<text x="${X(Tmax * i / 4)}" y="${GG.y + GG.h + 15}" fill="#7c878c" font-size="10.5" text-anchor="middle">${fmt(Tmax * i / 4, 0)}</text>`;
+  for (let i = 0; i <= 4; i++) { const v = (gmin - pad) + ((gmax + pad) - (gmin - pad)) * i / 4; ax += `<line x1="${GG.x}" y1="${Y(v)}" x2="${GG.x + GG.w}" y2="${Y(v)}" stroke="#ece8dc"/><text x="${GG.x - 6}" y="${Y(v) + 4}" fill="#7c878c" font-size="10.5" text-anchor="end">${fmt(v / 1000, Math.abs(gmax - gmin) < 20e3 ? 1 : 0)}</text>`; }
+  ax += `<line x1="${GG.x}" y1="${Y(0)}" x2="${GG.x + GG.w}" y2="${Y(0)}" stroke="#1d2327" stroke-width="1"/>`;
+  ax += `<text x="${GG.x + GG.w}" y="${GG.y + GG.h + 30}" fill="#7c878c" font-size="11" text-anchor="end">temperature T (K)</text><text x="${GG.x}" y="${GG.y - 8}" fill="#4a555b" font-size="11" font-weight="600">ΔG (kJ)</text>`;
+  $('ggAx').innerHTML = ax;
+  set($('ggNeg'), {x: GG.x, y: Y(0), width: GG.w, height: Math.max(0, GG.y + GG.h - Y(0))});
+  $('ggLine').setAttribute('d', S.locked ? `M${X(0)} ${f1(Y(Gs[0]))}L${X(Tmax)} ${f1(Y(Gs[1]))}` : '');
+  $('ggCross').innerHTML = S.locked && tc > 0 && tc < Tmax ? `<circle cx="${f1(X(tc))}" cy="${f1(Y(0))}" r="4" fill="#1d2327"/><text x="${f1(X(tc))}" y="${f1(Y(0) + (Gs[1] > Gs[0] ? 18 : -10))}" fill="#1d2327" font-size="11.5" font-weight="700" text-anchor="middle">${fmt(tc, 0)} K</text>` : '';
+  set($('ggNow'), {x1: X(T), x2: X(T), y1: GG.y, y2: GG.y + GG.h, opacity: S.locked ? 1 : 0});
+  set($('ggDot'), {cx: X(T), cy: Y(g), opacity: S.locked ? 1 : 0, fill: g < 0 ? '#2f9e5b' : '#d6453d'});
+  /* K */
+  const lk = -g / (R * T) / Math.LN10;
+  $('kBox').innerHTML = S.locked ? `<text x="618" y="462" fill="#1d2327" font-size="13" class="m">ΔG = −RT ln K  →  K = e^(−ΔG/RT)</text>
+    <text x="618" y="496" fill="#1d2327" font-size="22" font-weight="600" class="m">K ≈ ${Math.abs(lk) < 3 ? fmt(Math.pow(10, lk), 3) : '10^' + fmt(lk, 1)}</text>
+    <text x="618" y="526" fill="#7c878c" font-size="11.5">${lk > 1 ? 'K ≫ 1: at equilibrium, mostly products.' : lk < -1 ? 'K ≪ 1: at equilibrium, mostly reactants.' : 'K near 1: both present in comparable amounts.'}</text>` : '';
+  $('tg').value = T; $('tgOut').textContent = fmt(T, 0) + ' K';
+  $('dh').value = b.dH / 1000; $('dhOut').textContent = fmt(b.dH / 1000, 0) + ' kJ'; $('ds').value = b.dS; $('dsOut').textContent = fmt(b.dS, 0) + ' J/K';
+  $('dhRow').toggleAttribute('hidden', b.rxn !== 'own'); $('dsRow').toggleAttribute('hidden', b.rxn !== 'own');
+  $('rxn').value = b.rxn;
+  if (S.tab === 'gibbs') { paintGibNums(r, g, tc); paintGibWhy(r, g, tc); }
+}
+function paintGibNums(r, g, tc){
+  if (!S.locked) { $('nums').innerHTML = locked(); return; }
+  $('numKick').textContent = 'The reaction';
+  $('nums').innerHTML = `<div class="readout">
+    <span>ΔH</span><b>${fmt(r.dH / 1000, 2)} kJ</b>
+    <span>ΔS</span><b>${fmt(r.dS, 1)} J/K</b>
+    <span>TΔS at ${fmt(S.gb.T, 0)} K</span><b>${fmt(S.gb.T * r.dS / 1000, 2)} kJ</b>
+    <span>ΔG = ΔH − TΔS</span><b>${fmt(g / 1000, 2)} kJ</b>
+    <span>Changes sign at T = ΔH/ΔS</span><b>${tc > 0 && isFinite(tc) ? fmt(tc, 1) + ' K' : 'never'}</b>
+  </div>`;
+}
+function paintGibWhy(r, g, tc){
+  if (!S.locked) return;
+  $('whyCard').hidden = false;
+  let t = `<p>ΔH and TΔS pull in their own directions. ${r.dS < 0 ? 'Here the entropy falls (ΔS < 0), so −TΔS is positive and works against the change, more strongly the hotter it is.' : 'Here the entropy rises (ΔS > 0), so −TΔS is negative and helps the change, more strongly the hotter it is.'}</p>`;
+  if (S.gb.rxn === 'iron') t += `<p>Iron rusts at room temperature despite ΔS being negative, because the enthalpy released is so large. Only above ${fmt(tc, 0)} K would TΔS win (long before that, iron and its oxide would have melted, so take this as what the equation says, not a furnace recipe).</p>`;
+  if (S.gb.rxn === 'boil' || S.gb.rxn === 'melt') t += `<p>At ${fmt(tc, 0)} K, ΔG = 0: liquid and ${S.gb.rxn === 'boil' ? 'vapour' : 'solid'} are in equilibrium. That is exactly what a ${S.gb.rxn === 'boil' ? 'boiling' : 'melting'} point is.</p>`;
+  $('why').innerHTML = t;
+}
+function checkGib(){
+  if (!S.locked) return;
+  const r = rxnVals(), g = dG(r.dH, r.dS, S.gb.T), key = S.gb.rxn + (S.gb.rxn === 'own' ? r.dH + '/' + r.dS : '');
+  if (S.gb.key !== key) { S.gb.key = key; S.gb.seen = {neg: false, pos: false}; }
+  if (g < -50) S.gb.seen.neg = true; if (g > 50) S.gb.seen.pos = true;
+  if (r.dH * r.dS > 0 && S.gb.seen.neg && S.gb.seen.pos) discover('gibbs');
+}
+
+/* ============================================================================
+   Paint, loop, controls
+   ============================================================================ */
+const TABS = [['gas', 'tabGas', 'gsStage', 'ctlGas'], ['engine', 'tabEng', 'enStage', 'ctlEng'], ['gibbs', 'tabGib', 'gbStage', 'ctlGib']];
+function paint(){
+  for (const [k, tb, st, ct] of TABS) { $(st).toggleAttribute('hidden', S.tab !== k); $(ct).toggleAttribute('hidden', S.tab !== k); $(tb).setAttribute('aria-pressed', S.tab === k); }
+  ({gas: paintGas, engine: paintEng, gibbs: paintGib})[S.tab]();
+}
+buildGas(); buildEng(); buildGib();
+
+let idleAcc = 0;
+loop((dt, time) => {
+  const g = S.gs;
+  if (S.tab === 'gas') paintDots(dt, time);
+  /* a real wall keeps leaking heat while you are not touching the piston */
+  if (S.locked && g.mode === 'real' && Math.abs(g.T - 300) > 0.05) {
+    const st = {V: g.V, T: g.T}; const r = advance(st, {mode: 'real', dV: 0, dt, Tb: 300, tau: g.tau, g: g.g}); g.T = st.T; segAdd(r);
+    idleAcc += dt; if (idleAcc > 0.1 && S.tab === 'gas') { idleAcc = 0; paintGas(); }
+  }
+  const e = S.en;
+  if (e.running && CYC) {
+    e.t = Math.min(1, e.t + dt / 7);
+    if (e.t >= 1) { e.running = false; e.done = true; sound('chime'); checkEng(); track('cycle', {Th: e.Th, Tc: e.Tc, swap: e.swap, eff: CYC.eff}); }
+    if (S.tab === 'engine') paintEng();
+  }
+});
+
+/* piston */
+drag($('pistonHit'), gs, {
+  start(p){ if (!S.locked || S.gs.mode === 'isoV') return false; this.off = p.y - yPiston(S.gs.V); },
+  move(p){ moveTo(snapV((CY.bot - (p.y - this.off)) / CY.k), null); },
+  end(){ clearTimeout(segTimer); segEnd(); },
+});
+drag($('thermHit'), gs, {
+  start(){ if (!S.locked || S.gs.mode !== 'isoV') return false; },
+  move(p){ moveTo(null, snapT(100 + (474 - p.y) / 344 * 1400)); },
+  end(){ clearTimeout(segTimer); segEnd(); },
+});
+drag($('pvHit'), gs, {
+  start(){ if (!S.locked) return false; },
+  move(p){ if (S.gs.mode === 'isoV') { const P = clamp((PV.y + PV.h - p.y) / PV.h * PVSC.Pmax, 1e3, PVSC.Pmax); moveTo(null, snapT(P * S.gs.V / (N * R))); }
+           else moveTo(snapV((p.x - PV.x) / PV.w * PVSC.Vmax), null); },
+  end(){ clearTimeout(segTimer); segEnd(); },
+});
+$('vol').addEventListener('input', e => moveTo(+e.target.value / 1000, null));
+$('temp').addEventListener('input', e => moveTo(null, +e.target.value));
+$('gam').addEventListener('input', e => { segEnd(); S.gs.g = +e.target.value; paintGas(); });
+$('tau').addEventListener('input', e => { S.gs.tau = +e.target.value; paintGas(); });
+$('modeSeg').addEventListener('click', e => { const bn = e.target.closest('[data-m]'); if (!bn || bn.disabled) return; segEnd(); S.gs.mode = bn.dataset.m; S.gs.Tb = S.gs.T; S.gs.lastQ = 0; sound('tick'); track('mode', {mode: S.gs.mode}); paintGas(); });
+$('btnNewPath').addEventListener('click', () => { segEnd(); const g = S.gs; g.path = [{V: g.V, T: g.T, m: 'start'}]; g.segs = []; g.tot = {Q: 0, W: 0, dU: 0}; g.closed = false; paintGas(); });
+$('btnResetGas').addEventListener('click', () => { segEnd(); const g = S.gs; g.V = 0.020; g.T = 300; g.Tb = 300; g.path = [{V: g.V, T: g.T, m: 'start'}]; g.segs = []; g.tot = {Q: 0, W: 0, dU: 0}; g.closed = false; g.lastQ = 0; paintGas(); });
+
+/* engine */
+for (const [id, key] of [['th', 'Th'], ['tc', 'Tc'], ['ratio', 'ratio']]) $(id).addEventListener('input', e => { S.en[key] = +e.target.value; paintEng(); });
+$('swap').addEventListener('change', e => { S.en.swap = e.target.checked; paintEng(); });
+$('btnRun').addEventListener('click', () => {
+  if (!CYC || CYC.key !== engKey()) engRun();
+  const e = S.en; e.t = 0; e.done = false; e.running = true; sound('whoosh');
+  if (reduced()) { e.t = 1; e.running = false; e.done = true; checkEng(); }
+  paintEng();
+});
+
+/* gibbs */
+$('rxn').addEventListener('change', e => { S.gb.rxn = e.target.value; const tc = crossT(rxnVals().dH, rxnVals().dS); S.gb.T = 298; paintGib(); checkGib(); });
+$('tg').addEventListener('input', e => { S.gb.T = +e.target.value; checkGib(); paintGib(); });
+$('dh').addEventListener('input', e => { S.gb.dH = +e.target.value * 1000; checkGib(); paintGib(); });
+$('ds').addEventListener('input', e => { S.gb.dS = +e.target.value; checkGib(); paintGib(); });
+const setTfromGraph = p => { S.gb.T = Math.round(clamp((p.x - GG.x) / GG.w * gRange(), 1, gRange())); checkGib(); paintGib(); };
+drag($('ggHit'), gb, {start(p){ if (!S.locked) return false; setTfromGraph(p); }, move: setTfromGraph, end(){ track('temperature', {rxn: S.gb.rxn, T: S.gb.T}); }});
+
+/* tabs */
+for (const [k, tb] of TABS) $(tb).addEventListener('click', () => { S.tab = k; sound('tick'); paint(); track('tab', {tab: k}); });
+
+function lockControls(lock){
+  for (const el of document.querySelectorAll('.pg-side input, .pg-side select, .pg-side .card button, .stageTabs button')) if (!el.closest('#poe')) el.disabled = lock;
+  for (const id of ['pistonHit', 'thermHit', 'pvHit', 'ggHit']) $(id).style.pointerEvents = lock ? 'none' : '';
+  $('gate').hidden = !lock;
+}
+
+/* ============================================================================
+   Start
+   ============================================================================ */
+findings($('finds'), [
+  {id: 'isoT',      icon: '≈', label: 'Isothermal: ΔU = 0, so Q = W',            hint: 'Move the piston in the bath'},
+  {id: 'adheat',    icon: '↑', label: 'Squeezed with no heat, and it got hotter', hint: 'Compress it inside the insulation'},
+  {id: 'isochoric', icon: '▮', label: 'Pinned piston: no work, all heat to U',    hint: 'Heat it at constant volume'},
+  {id: 'real',      icon: '⏱', label: 'Fast is adiabatic, slow is isothermal',    hint: 'Push through a real wall, fast and slow'},
+  {id: 'cycle',     icon: '⟳', label: 'Round a cycle: ΔU = 0, Q = W = the area',  hint: 'Bring the gas back to where it started'},
+  {id: 'carnot',    icon: 'η', label: 'Carnot: η = 1 − T₂/T₁',                     hint: 'Run the engine'},
+  {id: 'beat',      icon: '⊘', label: 'Nothing beats Carnot',                      hint: 'Swap its adiabats for something else'},
+  {id: 'gibbs',     icon: 'G', label: 'Where ΔG changes sign',                      hint: 'Carry a reaction across its turning temperature'},
+], () => toast('All eight found: the first law as a ledger, the second as a limit, and ΔG as the chemist’s version.', 4200));
+
+const POE = predict($('poe'), {
+  id: 'adiabatic-squeeze',
+  q: 'You squash a gas quickly in an insulated cylinder, so no heat can get in or out. What happens to its temperature?',
+  options: [
+    {id: 'up',    text: 'It rises.', right: true},
+    {id: 'same',  text: 'It stays the same: no heat went in.'},
+    {id: 'down',  text: 'It falls, because the molecules are crowded.'},
+    {id: 'none',  text: 'Temperature cannot change without heat.'},
+  ],
+  onLock(){
+    S.locked = true; lockControls(false);
+    $('whyCard').hidden = false;
+    say('Choose the insulation, and push the piston in.');
+    paint();
+  },
+});
+lockControls(!POE.locked);
+if (!Play.FF('predict')) S.locked = true;
+paint();
+window.applyFeatures = () => paint();
+window.PG_STATE = () => JSON.parse(JSON.stringify(Object.assign({}, S, {gs: Object.assign({}, S.gs, {path: S.gs.path.length}),
+  cyc: CYC ? {eff: CYC.eff, Qin: CYC.Qin, Wnet: CYC.Wnet, dU: CYC.dU} : null})));
+window.PG_MODEL = {R, N, Cv, Pof, advance, W_iso, W_adia, carnotEff, runCycle, pathArea, RXN, dG, crossT, Keq};
+</script>
+</body>
+</html>

@@ -1,0 +1,860 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Spinning and Rolling</title>
+<meta name="description" content="Class 11: a skater who conserves angular momentum, a see-saw balanced by moments, and a race between a ring, a disc and a sphere rolling down a slope.">
+<link rel="icon" href="../../favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600&family=Inter:wght@400;500;600;700&family=Nunito:wght@500;700;800&family=Newsreader:opsz,wght@6..72,400;6..72,500&family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="../../play.css">
+<style>
+/* Only what this page needs beyond play.css. */
+.pg-stage{align-self:start; min-height:0}
+.seg{display:grid; grid-auto-flow:column; grid-auto-columns:1fr; gap:4px; background:var(--sunk); padding:4px; border-radius:var(--radius-sm)}
+.seg button{border:0; background:transparent; border-radius:7px; min-height:32px; font-weight:600; font-size:13px; cursor:pointer; color:var(--ink-2)}
+.seg button[aria-pressed="true"]{background:var(--card); color:var(--ink); box-shadow:var(--shadow)}
+.seg button:disabled{opacity:.5; cursor:default}
+.stageTabs{padding:8px; border-bottom:1px solid var(--hair); background:var(--sunk)}
+.stageTabs .seg{background:transparent; padding:0}
+.stageTabs .seg button{min-height:40px; font-size:15px; font-family:var(--font-head)}
+.gate{position:absolute; left:0; right:0; top:56px; bottom:0; display:grid; place-items:center; pointer-events:none}
+.gate span{background:rgba(29,35,39,.86); color:#fff; padding:10px 16px; border-radius:99px; font-weight:600; font-size:14px}
+.ctl{grid-template-columns:118px 1fr 86px; margin:2px 0}
+.ctl label{font-size:12.5px; line-height:1.2}
+.ctl output{font-family:var(--font-mono); font-size:12.5px; font-weight:600; min-width:0}
+.readout{display:grid; grid-template-columns:1fr auto; gap:2px 12px; font-size:13px; align-items:baseline}
+.readout span{color:var(--ink-2)}
+.readout b{font-family:var(--font-mono); font-weight:600; font-size:12.5px; font-variant-numeric:tabular-nums; text-align:right}
+.readout .eq{grid-column:1/-1; font-family:var(--font-mono); font-size:11.5px; color:var(--ink-3); margin:-1px 0 3px}
+.readout .sep{grid-column:1/-1; height:1px; background:var(--hair); margin:4px 0}
+.note{font-size:12.5px; color:var(--ink-3); margin:6px 0 0}
+.chips{display:flex; flex-wrap:wrap; gap:5px; margin:6px 0}
+.chips button{min-height:30px; border-radius:7px; border:1.5px solid var(--hair-2); background:var(--card); cursor:pointer; font-weight:600; font-size:12.5px; color:var(--ink-2); padding:0 9px}
+.chips button[aria-pressed="true"]{border-color:var(--accent); background:var(--accent-soft); color:var(--ink)}
+.chips button:disabled{opacity:.45; cursor:default}
+.lane{display:grid; grid-template-columns:62px 1fr; gap:4px 8px; align-items:center; margin:6px 0}
+.lane > span{font-size:12.5px; font-weight:700}
+.lane select{width:100%; font-size:13px}
+.lane .chips select{width:auto; flex:1}
+.why p{font-size:14px}
+.hit{cursor:grab} .hit.dragging{cursor:grabbing}
+</style>
+</head>
+<body>
+<header class="pg-top"></header>
+
+<div class="pg-intro">
+  <h1>Spinning and rolling</h1>
+  <p>Three experiments from NCERT Class 11 Physics, Chapter 6. A skater (the book’s girl on a swivel chair) pulls her arms in while no outside torque acts, so <span class="mono">L = Iω</span> must stay fixed: watch what that does to her speed and her energy, then add friction and break it.
+     Balance a see-saw by the principle of moments, and find that the plank’s own weight has a moment too. Then race a ring, a disc and a sphere down a slope: every motion here is integrated step by step from the torques on it.
+     The race is a stretch: rolling down a slope was trimmed from the current chapter, and it uses nothing more than the moments of inertia in its Table 6.1.</p>
+</div>
+
+<main class="pg-main wide-side">
+  <section class="pg-stage" id="stageWrap">
+    <div class="stageTabs"><div class="seg" role="tablist">
+      <button id="tabSkate" aria-pressed="true">The spinning skater</button>
+      <button id="tabSaw" aria-pressed="false">The see-saw</button>
+      <button id="tabRace" aria-pressed="false">The rolling race</button>
+    </div></div>
+    <svg id="skStage" viewBox="0 0 1000 620" role="img" aria-label="A skater seen from above, spinning, with her angular speed, angular momentum and kinetic energy plotted against time"></svg>
+    <svg id="swStage" viewBox="0 0 1000 620" role="img" aria-label="A see-saw with children on it, and the moments of every weight about the pivot" hidden></svg>
+    <svg id="rcStage" viewBox="0 0 1000 620" role="img" aria-label="Two round objects rolling down a slope side by side, with distance against time" hidden></svg>
+    <div class="gate" id="gate"><span>Make your prediction first →</span></div>
+  </section>
+
+  <aside class="pg-side">
+    <div id="poe"></div>
+
+    <div class="card" id="ctlSkate">
+      <div class="kicker">The skater</div>
+      <div class="ctl"><label for="reach">Arm reach r</label><input type="range" id="reach" min="0.25" max="0.9" step="0.01" value="0.9"><output id="reachOut">0.90 m</output></div>
+      <div class="ctl"><label for="fric">Friction torque on the skates</label><input type="range" id="fric" min="0" max="8" step="0.2" value="0"><output id="fricOut">0 N m</output></div>
+      <div class="row"><button class="btn primary" id="btnSpin">Spin her at 40 rev/min</button><button class="btn" id="btnStop">Stop</button></div>
+      <p class="note">Drag either hand in or out on the stage, or use the slider. Her body (without arms) has I₀ = 1.2 kg m²; each arm with its weight is 3 kg, treated as a point at the hand.</p>
+    </div>
+
+    <div class="card" id="ctlSaw" hidden>
+      <div class="kicker">The see-saw</div>
+      <div class="chips" id="loadChips">
+        <button data-load="0" aria-pressed="true">Ravi, 30 kg</button>
+        <button data-load="1" aria-pressed="true">Meena, 20 kg</button>
+        <button data-load="2" aria-pressed="false">Bag of rice, 10 kg</button>
+      </div>
+      <div class="ctl"><label for="pivot">Pivot position</label><input type="range" id="pivot" min="0.5" max="3.5" step="0.05" value="2"><output id="pivotOut">2.00 m</output></div>
+      <div class="ctl"><label for="plankM">Mass of the plank</label><input type="range" id="plankM" min="0" max="60" step="1" value="20"><output id="plankMOut">20 kg</output></div>
+      <p class="note">Drag the children and the bag along the plank, or drag the pivot along the ground. The plank is held level while you move things, and let go when you stop.</p>
+    </div>
+
+    <div class="card" id="ctlRace" hidden>
+      <div class="kicker">The race</div>
+      <div class="lane"><span style="color:#7c55d8">Lane A</span><select id="shapeA"></select>
+        <span></span><div class="chips" style="margin:0"><select id="massA" aria-label="Lane A mass"><option value="1">1 kg</option><option value="5">5 kg</option></select><select id="radA" aria-label="Lane A radius"><option value="0.05">radius 5 cm</option><option value="0.15">radius 15 cm</option></select></div></div>
+      <div class="lane"><span style="color:#d0791e">Lane B</span><select id="shapeB"></select>
+        <span></span><div class="chips" style="margin:0"><select id="massB" aria-label="Lane B mass"><option value="1">1 kg</option><option value="5">5 kg</option></select><select id="radB" aria-label="Lane B radius"><option value="0.05">radius 5 cm</option><option value="0.15">radius 15 cm</option></select></div></div>
+      <div class="ctl"><label for="beta">Your own shape: k²/R²</label><input type="range" id="beta" min="0" max="1.5" step="0.05" value="0.7"><output id="betaOut">0.70</output></div>
+      <div class="ctl"><label for="slope">Slope</label><input type="range" id="slope" min="5" max="45" step="1" value="15"><output id="slopeOut">15°</output></div>
+      <div class="ctl"><label for="mu">Friction coefficient μ</label><input type="range" id="mu" min="0" max="1" step="0.01" value="0.6"><output id="muOut">0.60</output></div>
+      <div class="row"><button class="btn primary" id="btnRace">Release both</button></div>
+    </div>
+
+    <div class="card"><div class="kicker" id="numKick">The numbers</div><div id="nums"></div></div>
+    <div class="card why" id="whyCard" hidden><div class="kicker">What is happening</div><div id="why"></div></div>
+    <div class="card"><div class="kicker">To find</div><div id="finds"></div></div>
+  </aside>
+</main>
+
+<script src="../../play.js"></script>
+<script>
+'use strict';
+const {$, esc, clamp, fmt, drag, loop, sound, say, track, toast, predict, findings, discover, found,
+       shareState, sharedState, mount, reduced} = Play;
+mount({thread: 'rotation', band: 'theorist'});
+
+/* MODEL:start ==================================================================
+   Three rigid-body models, each stepped forward in time from the torques on it.
+
+   The skater: about her fixed vertical axis, dL/dt = τ_ext (Eq. 6.43c). Her arms
+   change I; nothing outside her changes L unless the skates' friction torque is on.
+   ω is always L / I, and her kinetic energy of rotation is L² / 2I (Eq. 6.35).
+
+   The see-saw: a rigid plank on a pivot. Each weight m g at a distance d from the
+   pivot has a moment m g d cos φ; the plank's own weight acts at its centre of
+   gravity (its middle). I about the pivot is Σ m d² plus the plank's M L²/12 moved
+   to the pivot. The plank is integrated with I φ'' = τ − damping until an end
+   touches the ground.
+
+   The race: each body rolls with friction at the contact. While the friction the
+   rolling needs, f = m g sinθ · β/(1+β) with β = k²/R², is within μ m g cosθ, it rolls
+   without slipping; otherwise it slides, and friction μ m g cosθ spins it up.
+   Moments of inertia about the rolling axis are from NCERT Table 6.1.
+   ============================================================================ */
+const G = 9.8;
+const TAU = Math.PI * 2;
+const SHAPES = {
+  ring:   {name: 'Thin ring (I = MR²)',            beta: 1},
+  hollow: {name: 'Hollow cylinder (I = MR²)',       beta: 1},
+  disc:   {name: 'Disc / solid cylinder (I = MR²/2)', beta: 0.5},
+  sphere: {name: 'Solid sphere (I = 2MR²/5)',       beta: 0.4},
+  custom: {name: 'Your own shape (k²/R² slider)',   beta: null},
+};
+const inertia = (beta, M, R) => beta * M * R * R;           // I = M k², k² = β R²
+const gyration = (I, M) => Math.sqrt(I / M);                 // radius of gyration k
+
+/* skater */
+const I0 = 1.2, M_ARM = 3;                                    // kg m², kg
+const skI = r => I0 + 2 * M_ARM * r * r;
+const omegaAfter = (w1, I1, I2) => w1 * I1 / I2;              // L conserved
+const keRot = (I, w) => 0.5 * I * w * w;
+const rpm = w => w * 60 / TAU;
+const rad = n => n * TAU / 60;
+function stepSkater(s, dt){
+  /* s: {L, th, r, fric}. Friction on the skates always opposes the spin. */
+  if (s.fric > 0 && s.L !== 0) { const d = Math.min(Math.abs(s.L), s.fric * dt); s.L -= Math.sign(s.L) * d; }
+  const I = skI(s.r), w = s.L / I;
+  s.th += w * dt;
+  return {I, w, L: s.L, K: s.L * s.L / (2 * I)};
+}
+
+/* see-saw: positions x in metres from the plank's left end; +τ turns the left end down */
+const PLANK_L = 4, PIVOT_H = 0.5;
+function seesaw(o){
+  const {Mp, xf} = o, items = [];
+  items.push({name: 'plank', m: Mp, x: PLANK_L / 2});
+  for (const l of o.loads) if (l.on) items.push({name: l.name, m: l.m, x: l.x});
+  let tau = 0, I = Mp * PLANK_L * PLANK_L / 12 + Mp * Math.pow(PLANK_L / 2 - xf, 2), M = 0, Mx = 0, scale = 0;
+  const moments = items.map(it => { const d = xf - it.x, mo = it.m * G * d; tau += mo; scale += Math.abs(mo); if (it.name !== 'plank') I += it.m * d * d; M += it.m; Mx += it.m * it.x; return Object.assign({}, it, {d, moment: mo}); });
+  return {tau, I, M, xcm: M ? Mx / M : xf, moments, scale};
+}
+const cmOf = items => items.reduce((a, it) => a + it.m * it.x, 0) / items.reduce((a, it) => a + it.m, 0);
+/* how far each end can go down before it touches the ground */
+const tiltLimits = xf => ({left: Math.asin(clamp(PIVOT_H / xf, 0, 1)), right: -Math.asin(clamp(PIVOT_H / (PLANK_L - xf), 0, 1))});
+function stepSaw(st, sys, dt){
+  /* st: {phi, om}. tau(φ) = tau0 cos φ for weights on the plank's line. */
+  const lim = tiltLimits(st.xf);
+  const n = Math.max(1, Math.ceil(dt / 0.002)), h = dt / n;
+  for (let i = 0; i < n; i++) {
+    const a = sys.tau * Math.cos(st.phi) / Math.max(sys.I, 1e-6) - 1.2 * st.om;
+    st.om += a * h; st.phi += st.om * h;
+    if (st.phi > lim.left) { st.phi = lim.left; st.om = st.om > 0 ? -0.15 * st.om : st.om; }
+    if (st.phi < lim.right) { st.phi = lim.right; st.om = st.om < 0 ? -0.15 * st.om : st.om; }
+  }
+  return st;
+}
+
+/* the rolling race */
+const rollAccel = (beta, th) => G * Math.sin(th) / (1 + beta);
+const muMin = (beta, th) => Math.tan(th) * beta / (1 + beta);
+function simulateRoll(o){
+  /* o: {beta, m, R, th (rad), mu, D (m)} */
+  const {beta, m, R, th, mu, D} = o, I = inertia(beta, m, R);
+  let t = 0, s = 0, v = 0, w = 0, heat = 0, slipped = false;
+  const dt = 2e-4, S = [{t, s, v, w}], N = m * G * Math.cos(th);
+  while (s < D && t < 60) {
+    let a, al, f;
+    const fNeed = m * G * Math.sin(th) * beta / (1 + beta);
+    const rolling = Math.abs(v - w * R) < 1e-9;
+    if (rolling && fNeed <= mu * N + 1e-12) { a = rollAccel(beta, th); f = fNeed; al = a / R; }
+    else { slipped = true; f = mu * N; a = G * Math.sin(th) - f / m; al = f * R / I; }
+    const vOld = v, wOld = w;
+    v += a * dt; w += al * dt;
+    if (slipped && w * R > v) { const vv = (m * v + I / R * w) / (m + I / (R * R)); v = vv; w = vv / R; }  // grip (not reached from rest)
+    s += 0.5 * (v + vOld) * dt; t += dt;
+    if (slipped) heat += f * Math.abs(0.5 * (v + vOld) - 0.5 * (w + wOld) * R) * dt;
+    S.push({t, s, v, w});
+  }
+  /* back off to exactly D */
+  const last = S[S.length - 1], prev = S[S.length - 2] || last;
+  const f = last.s > prev.s ? clamp((D - prev.s) / (last.s - prev.s), 0, 1) : 1;
+  const end = {t: prev.t + (last.t - prev.t) * f, s: D, v: prev.v + (last.v - prev.v) * f, w: prev.w + (last.w - prev.w) * f};
+  S[S.length - 1] = end;
+  const k = Math.max(1, Math.ceil(S.length / 600));
+  const thin = S.filter((_, i) => i % k === 0); if (thin[thin.length - 1] !== end) thin.push(end);
+  const Kt = 0.5 * m * end.v * end.v, Kr = 0.5 * I * end.w * end.w, PE = m * G * D * Math.sin(th);
+  return {samples: thin, tEnd: end.t, vEnd: end.v, wEnd: end.w, slipped, Kt, Kr, heat, PE, I, m, R, beta};
+}
+function rollAt(sim, t){
+  const S = sim.samples; if (t >= sim.tEnd) return S[S.length - 1];
+  let lo = 0, hi = S.length - 1;
+  while (hi - lo > 1) { const md = (lo + hi) >> 1; if (S[md].t <= t) lo = md; else hi = md; }
+  const a = S[lo], b = S[hi], f = (t - a.t) / ((b.t - a.t) || 1);
+  return {t, s: a.s + (b.s - a.s) * f, v: a.v + (b.v - a.v) * f, w: a.w + (b.w - a.w) * f};
+}
+/* the angle turned, integrated from the samples (for drawing the spokes) */
+function turnedAt(sim, t){
+  const S = sim.samples; let ang = 0;
+  for (let i = 1; i < S.length; i++) { const a = S[i - 1], b = S[i]; if (a.t >= t) break; const tb = Math.min(b.t, t); ang += 0.5 * (a.w + b.w) * (tb - a.t); }
+  return ang;
+}
+/* MODEL:end */
+
+/* ---- state: plain data --------------------------------------------------- */
+const S = {
+  tab: 'skate', locked: false,
+  sk: {L: 0, th: 0, r: 0.9, fric: 0, L0: 0, w0: 0, K0: 0, r0: 0.9, spun: false, hist: [], t: 0},
+  sw: {xf: 2, Mp: 20, phi: 0, om: 0, held: false, loads: [{name: 'Ravi', m: 30, x: 0.5, on: true}, {name: 'Meena', m: 20, x: 3.5, on: true}, {name: 'Bag of rice', m: 10, x: 1.5, on: false}], settled: 0},
+  rc: {A: {shape: 'ring', m: 1, R: 0.05}, B: {shape: 'disc', m: 1, R: 0.05}, beta: 0.7, slope: 15, mu: 0.6, t: 0, running: false, done: false},
+};
+const shared = sharedState();
+if (shared) {
+  if (['skate', 'saw', 'race'].includes(shared.tab)) S.tab = shared.tab;
+  if (shared.sw) { S.sw.xf = clamp(+shared.sw.xf || 2, 0.5, 3.5); S.sw.Mp = clamp(+shared.sw.Mp || 0, 0, 60); (shared.sw.loads || []).forEach((l, i) => { if (S.sw.loads[i]) { S.sw.loads[i].x = clamp(+l.x, 0, PLANK_L); S.sw.loads[i].on = !!l.on; } }); }
+  if (shared.rc) for (const k of ['A', 'B']) if (shared.rc[k] && SHAPES[shared.rc[k].shape]) S.rc[k] = {shape: shared.rc[k].shape, m: +shared.rc[k].m || 1, R: +shared.rc[k].R || 0.05};
+}
+shareState(() => ({tab: S.tab, sw: {xf: S.sw.xf, Mp: S.sw.Mp, loads: S.sw.loads.map(l => ({x: l.x, on: l.on}))}, rc: {A: S.rc.A, B: S.rc.B}}));
+
+const NS = 'http://www.w3.org/2000/svg';
+const set = (el, a) => { for (const k in a) el.setAttribute(k, a[k]); return el; };
+const f1 = v => (+v).toFixed(1);
+const PANEL = `<rect x="600" y="0" width="400" height="620" fill="#fbfaf6"/><line x1="600" y1="0" x2="600" y2="620" stroke="#e2ded2"/>`;
+const title = (x, y, t) => `<text x="${x}" y="${y}" fill="#4a555b" font-size="12.5" font-weight="700" letter-spacing=".08em">${t}</text>`;
+
+/* ============================================================================
+   Skater stage
+   ============================================================================ */
+const sk = $('skStage');
+const SC = {x: 300, y: 318, k: 230};              // centre and px per metre
+const SG = {x: 650, y: 58, w: 320, h: 200};        // ω and L against time
+const KG = {x: 650, y: 368, w: 320, h: 170};       // K against time
+const WIN = 20;                                     // seconds shown
+function buildSkate(){
+  sk.innerHTML = `
+  <defs>
+    <radialGradient id="ice" cx="50%" cy="45%"><stop offset="0" stop-color="#f4fbff"/><stop offset="1" stop-color="#cfe6f3"/></radialGradient>
+    <radialGradient id="skin" cx="40%" cy="35%"><stop offset="0" stop-color="#f3c7a0"/><stop offset="1" stop-color="#c98f62"/></radialGradient>
+  </defs>
+  <rect x="0" y="0" width="600" height="620" fill="#e6f1f8"/>
+  <circle cx="${SC.x}" cy="${SC.y}" r="282" fill="url(#ice)" stroke="#b9d5e6" stroke-width="2"/>
+  <g stroke="#bcd7e8" stroke-width="1" fill="none" opacity=".7">
+    <circle cx="${SC.x}" cy="${SC.y}" r="${0.25 * SC.k}" stroke-dasharray="3 5"/><circle cx="${SC.x}" cy="${SC.y}" r="${0.9 * SC.k}" stroke-dasharray="3 5"/>
+  </g>
+  <text x="${SC.x + 0.9 * SC.k * 0.72}" y="${SC.y - 0.9 * SC.k * 0.72 - 6}" fill="#6f8ea3" font-size="11" text-anchor="middle">r = 0.9 m</text>
+  <text x="18" y="28" fill="#43657c" font-size="12.5" font-weight="700" letter-spacing=".08em">SEEN FROM ABOVE</text>
+  <text x="18" y="46" fill="#6f8ea3" font-size="11.5">No outside torque on her, unless the skates rub.</text>
+  <path id="skTrailL" fill="none" stroke="#6a3fc2" stroke-width="5" stroke-linecap="round" opacity=".25"/>
+  <path id="skTrailR" fill="none" stroke="#6a3fc2" stroke-width="5" stroke-linecap="round" opacity=".25"/>
+  <g id="skBody">
+    <line id="armL" x1="0" y1="${-0.19 * SC.k}" stroke="url(#skin)" stroke-width="13" stroke-linecap="round"/>
+    <line id="armR" x1="0" y1="${0.19 * SC.k}" stroke="url(#skin)" stroke-width="13" stroke-linecap="round"/>
+    <ellipse rx="${0.13 * SC.k}" ry="${0.23 * SC.k}" fill="#6a3fc2"/>
+    <ellipse rx="${0.09 * SC.k}" ry="${0.17 * SC.k}" fill="#7f58d3"/>
+    <circle r="${0.1 * SC.k}" fill="#3b2a1f"/>
+    <path d="M${0.07 * SC.k} -8 Q${0.13 * SC.k} 0 ${0.07 * SC.k} 8" fill="#c98f62"/>
+    <g id="handL"><circle r="15" fill="#3d4450"/><circle r="9" fill="url(#skin)"/></g>
+    <g id="handR"><circle r="15" fill="#3d4450"/><circle r="9" fill="url(#skin)"/></g>
+  </g>
+  <circle id="hitL" class="hit" r="30" fill="transparent" role="slider" aria-label="Her left hand: drag it in or out"/>
+  <circle id="hitR" class="hit" r="30" fill="transparent" role="slider" aria-label="Her right hand: drag it in or out"/>
+  <text id="skLab" x="300" y="596" fill="#2e4a5e" font-size="14.5" font-weight="600" text-anchor="middle"></text>
+  ${PANEL}
+  ${title(618, 30, 'SPIN AND ANGULAR MOMENTUM')}
+  <g id="skAx"></g>
+  <path id="skW" fill="none" stroke="#6a3fc2" stroke-width="2.4" stroke-linejoin="round"/>
+  <path id="skL" fill="none" stroke="#1f7a68" stroke-width="2.4" stroke-dasharray="7 4"/>
+  <line x1="600" y1="318" x2="1000" y2="318" stroke="#e2ded2"/>
+  ${title(618, 344, 'KINETIC ENERGY OF ROTATION, ½Iω²')}
+  <g id="kAx"></g>
+  <path id="skK" fill="none" stroke="#d0791e" stroke-width="2.4" stroke-linejoin="round"/>
+  <text id="skKLab" x="${KG.x + 6}" y="${KG.y + 14}" fill="#a35a10" font-size="11.5"></text>
+  `;
+}
+let SKSC = {w: 200, L: 40, K: 200};
+function niceUp(v){ const p = Math.pow(10, Math.floor(Math.log10(Math.max(v, 1e-9)))); for (const m of [1, 2, 2.5, 5, 10]) if (m * p >= v) return m * p; return 10 * p; }
+function drawSkAxes(){
+  const ax = (G0, ymax, col, lab, lab2, max2, col2) => {
+    let s = `<line x1="${G0.x}" y1="${G0.y + G0.h}" x2="${G0.x + G0.w}" y2="${G0.y + G0.h}" stroke="#9aa3a6"/><line x1="${G0.x}" y1="${G0.y}" x2="${G0.x}" y2="${G0.y + G0.h}" stroke="#9aa3a6"/>`;
+    for (let i = 0; i <= 4; i++) {
+      const y = G0.y + G0.h - G0.h * i / 4;
+      s += `<line x1="${G0.x}" y1="${y}" x2="${G0.x + G0.w}" y2="${y}" stroke="#ece8dc"/><text x="${G0.x - 6}" y="${y + 4}" fill="${col}" font-size="10.5" text-anchor="end" class="m">${+(ymax * i / 4).toFixed(1)}</text>`;
+      if (max2) s += `<text x="${G0.x + G0.w + 5}" y="${y + 4}" fill="${col2}" font-size="10.5" class="m">${+(max2 * i / 4).toFixed(1)}</text>`;
+    }
+    for (let i = 0; i <= 4; i++) { const x = G0.x + G0.w * i / 4; s += `<text x="${x}" y="${G0.y + G0.h + 15}" fill="#7c878c" font-size="10.5" text-anchor="middle">${-WIN + WIN * i / 4} s</text>`; }
+    s += `<text x="${G0.x}" y="${G0.y - 8}" fill="${col}" font-size="11" font-weight="600">${lab}</text>`;
+    if (lab2) s += `<text x="${G0.x + G0.w + 18}" y="${G0.y - 8}" fill="${col2}" font-size="11" font-weight="600" text-anchor="end">${lab2}</text>`;
+    return s;
+  };
+  $('skAx').innerHTML = ax(SG, SKSC.w, '#6a3fc2', 'ω (rev/min)', 'L (kg m²/s)', SKSC.L, '#1f7a68');
+  $('kAx').innerHTML = ax(KG, SKSC.K, '#d0791e', 'K (J)');
+}
+function paintSkate(){
+  const s = S.sk, I = skI(s.r), w = s.L / I, K = s.L * s.L / (2 * I);
+  const rp = s.r * SC.k;
+  const drawTh = reduced() ? 0 : s.th;
+  set($('skBody'), {transform: `translate(${SC.x} ${SC.y}) rotate(${(-drawTh * 180 / Math.PI).toFixed(2)})`});
+  set($('armL'), {x2: 0, y2: -rp}); set($('armR'), {x2: 0, y2: rp});
+  set($('handL'), {transform: `translate(0 ${-rp})`}); set($('handR'), {transform: `translate(0 ${rp})`});
+  /* hit targets sit on the hands but outside the rotating group */
+  const hx = Math.sin(drawTh) * rp, hy = Math.cos(drawTh) * rp;
+  set($('hitL'), {cx: SC.x - hx, cy: SC.y - hy}); set($('hitR'), {cx: SC.x + hx, cy: SC.y + hy});
+  /* the trail behind each hand: the arc swept in the last 0.25 s */
+  const sweep = clamp(w * 0.25, -TAU * 0.45, TAU * 0.45);
+  const arc = sgn => { if (Math.abs(sweep) < 0.02) return ''; const a1 = drawTh, a0 = drawTh - sweep;
+    const p = a => [SC.x + sgn * Math.sin(a) * rp, SC.y + sgn * Math.cos(a) * rp];
+    const [x0, y0] = p(a0), [x1, y1] = p(a1);
+    return `M${f1(x0)} ${f1(y0)} A${f1(rp)} ${f1(rp)} 0 0 ${sweep > 0 ? 0 : 1} ${f1(x1)} ${f1(y1)}`; };
+  $('skTrailL').setAttribute('d', arc(-1)); $('skTrailR').setAttribute('d', arc(1));
+  $('skLab').textContent = !s.spun ? 'Press “Spin her”, then pull her arms in.' : Math.abs(w) < 1e-3 ? 'She has stopped.' : `${fmt(rpm(w), 0)} rev/min`;
+  /* graphs */
+  const hs = s.hist, t1 = s.t;
+  const gx = (G0, t) => G0.x + (t - (t1 - WIN)) / WIN * G0.w;
+  const gy = (G0, v, max) => G0.y + G0.h - clamp(v / max, 0, 1.05) * G0.h;
+  let dW = '', dL = '', dK = '';
+  for (const p of hs) { if (p.t < t1 - WIN) continue;
+    dW += (dW ? 'L' : 'M') + f1(gx(SG, p.t)) + ' ' + f1(gy(SG, rpm(p.w), SKSC.w));
+    dL += (dL ? 'L' : 'M') + f1(gx(SG, p.t)) + ' ' + f1(gy(SG, p.L, SKSC.L));
+    dK += (dK ? 'L' : 'M') + f1(gx(KG, p.t)) + ' ' + f1(gy(KG, p.K, SKSC.K)); }
+  $('skW').setAttribute('d', S.locked ? dW : ''); $('skL').setAttribute('d', S.locked ? dL : ''); $('skK').setAttribute('d', S.locked ? dK : '');
+  $('skKLab').textContent = S.locked && s.spun && s.K0 > 0 ? `now ${fmt(K / s.K0, 2)} × the energy she had at the start of the spin` : '';
+  $('reach').value = s.r; $('reachOut').textContent = fmt(s.r, 2) + ' m';
+  $('fric').value = s.fric; $('fricOut').textContent = fmt(s.fric, 1) + ' N m';
+  if (S.tab === 'skate') { paintSkNums(I, w, K); paintSkWhy(I, w, K); }
+}
+function paintSkNums(I, w, K){
+  if (!S.locked) { $('nums').innerHTML = '<p class="note" style="margin:0">The numbers appear once you have made a prediction.</p>'; return; }
+  const s = S.sk;
+  $('numKick').textContent = 'The skater, right now';
+  $('nums').innerHTML = `<div class="readout">
+    <span>Moment of inertia I</span><b>${fmt(I, 3)} kg m²</b>
+    <span class="eq">I = I₀ + 2 m r² = 1.2 + 2 × 3 × ${fmt(s.r, 2)}²</span>
+    <span>Radius of gyration k</span><b>${fmt(gyration(I, 60), 3)} m</b>
+    <span class="eq">k = √(I/M), taking her whole mass M = 60 kg</span>
+    <span>Angular speed ω</span><b>${fmt(w, 2)} rad/s · ${fmt(rpm(w), 1)} rev/min</b>
+    <span>Angular momentum L = Iω</span><b>${fmt(s.L, 2)} kg m²/s</b>
+    <span>Kinetic energy ½Iω²</span><b>${fmt(K, 1)} J</b>
+    <div class="sep"></div>
+    <span>At the start of this spin</span><b>I ${fmt(skI(s.r0), 2)}, L ${fmt(s.L0, 2)}, K ${fmt(s.K0, 1)} J</b>
+  </div>`;
+}
+function paintSkWhy(I, w, K){
+  if (!S.locked) return;
+  $('whyCard').hidden = false;
+  const s = S.sk;
+  let t;
+  if (!s.spun) t = '<p>Give her a spin at 40 rev/min with her arms out, then pull them in.</p>';
+  else if (s.fric > 0) t = `<p>The skates now rub with a torque of <b>${fmt(s.fric, 1)} N m</b>. That is an outside torque, so L is no longer fixed: it falls by ${fmt(s.fric, 1)} kg m²/s every second, dL/dt = τ. It is at <b>${fmt(100 * s.L / (s.L0 || 1), 0)}%</b> of where it started.</p>`;
+  else if (Math.abs(I - skI(s.r0)) < 1e-3) t = `<p>She spins at ${fmt(rpm(w), 0)} rev/min. Nothing outside her exerts a torque about the axis, so L = Iω = ${fmt(s.L, 2)} kg m²/s will stay put. Now change I: move her hands.</p>`;
+  else t = `<p>I went from <b>${fmt(skI(s.r0), 2)}</b> to <b>${fmt(I, 2)} kg m²</b> (×${fmt(I / skI(s.r0), 2)}). L did not change, so ω went the other way: ×${fmt(skI(s.r0) / I, 2)}, to ${fmt(rpm(w), 0)} rev/min.</p>
+    <p>The energy is L²/2I, so it changed by ×${fmt(skI(s.r0) / I, 2)} too: from ${fmt(s.K0, 1)} J to <b>${fmt(K, 1)} J</b>. ${K > s.K0 ? 'The extra came from her muscles: pulling the weights inwards against their tendency to fly outwards is work.' : 'Letting the weights swing out, she took energy back into her arms.'}</p>`;
+  $('why').innerHTML = t;
+}
+
+/* ============================================================================
+   See-saw stage
+   ============================================================================ */
+const sw = $('swStage');
+const WC = {x0: 60, y: 480, k: 120};        // plank left end x (when level), ground y, px per metre
+const LOAD_COL = ['#6a3fc2', '#d0791e', '#8a6d3b'];
+const MB = {x: 862, y: 70, row: 44};           // moment bars: centre x
+function buildSaw(){
+  let g = '';
+  for (let i = 0; i < 3; i++) {
+    const c = LOAD_COL[i];
+    if (i < 2) {
+      const h = i === 0 ? 1 : 0.86;
+      g += `<g id="ld${i}"><rect x="-14" y="${-78 * h}" width="28" height="${46 * h}" rx="9" fill="${c}"/>
+        <rect x="-11" y="${-34 * h}" width="9" height="${34 * h}" rx="4" fill="#3d4450"/><rect x="2" y="${-34 * h}" width="9" height="${34 * h}" rx="4" fill="#3d4450"/>
+        <circle cy="${-92 * h}" r="${14 * h}" fill="#e2b48a"/><path d="M${-14 * h} ${-96 * h} Q0 ${-116 * h} ${14 * h} ${-96 * h}" fill="#3b2a1f"/>
+        <text y="${-114 * h}" fill="#2a2f33" font-size="12" font-weight="700" text-anchor="middle">${S.sw.loads[i].name} · ${S.sw.loads[i].m} kg</text></g>`;
+    } else {
+      g += `<g id="ld2"><path d="M-20 0 L-24 -34 Q-12 -46 0 -40 Q12 -46 24 -34 L20 0 Z" fill="#d8c29a" stroke="#8a6d3b" stroke-width="1.5"/>
+        <text y="-17" fill="#5a4526" font-size="10" font-weight="700" text-anchor="middle">RICE</text>
+        <text y="-54" fill="#2a2f33" font-size="12" font-weight="700" text-anchor="middle">10 kg</text></g>`;
+    }
+  }
+  sw.innerHTML = `
+  <defs><linearGradient id="sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#dff0fb"/><stop offset="1" stop-color="#f6fbf2"/></linearGradient>
+    <linearGradient id="wood" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#c98f56"/><stop offset="1" stop-color="#9b6433"/></linearGradient></defs>
+  <rect x="0" y="0" width="600" height="620" fill="url(#sky)"/>
+  <rect x="0" y="${WC.y}" width="600" height="${620 - WC.y}" fill="#9ccf7c"/><rect x="0" y="${WC.y}" width="600" height="6" fill="#7fb862"/>
+  <text x="18" y="28" fill="#3d5a3a" font-size="12.5" font-weight="700" letter-spacing=".08em">A PLAYGROUND SEE-SAW, 4 m LONG</text>
+  <text x="18" y="46" fill="#5b7a58" font-size="11.5">Anticlockwise moments turn the left end down.</text>
+  <g id="plankG">
+    <rect x="${WC.x0}" y="-10" width="${PLANK_L * WC.k}" height="12" rx="4" fill="url(#wood)" stroke="#7a4d25"/>
+    <g id="ticks"></g>
+    <g id="cmMark"><line y1="-4" y2="30" stroke="#d6453d" stroke-width="2" stroke-dasharray="3 3"/><circle r="7" fill="#fff" stroke="#d6453d" stroke-width="2"/><path d="M-7 0H7M0 -7V7" stroke="#d6453d" stroke-width="1.6"/></g>
+    <g id="plankW"><line y1="2" y2="34" stroke="#7a4d25" stroke-width="2"/><path d="M-5 28 L0 38 L5 28Z" fill="#7a4d25"/></g>
+    ${g}
+  </g>
+  <path id="fulcrum" fill="#5a6470" stroke="#3a424b" stroke-width="1.5"/>
+  <rect id="pivHit" class="hit" width="60" height="70" fill="transparent" role="slider" aria-label="The pivot: drag it along the ground"/>
+  <g id="ldHits"></g>
+  <text id="swLab" x="300" y="586" fill="#2e4a2b" font-size="14.5" font-weight="600" text-anchor="middle"></text>
+  <text x="300" y="606" fill="#4f6f4b" font-size="11.5" text-anchor="middle" id="swCm"></text>
+  ${PANEL}
+  ${title(618, 30, 'MOMENTS ABOUT THE PIVOT (N m)')}
+  <text x="${MB.x - 8}" y="52" fill="#6a3fc2" font-size="11" text-anchor="end">← anticlockwise</text>
+  <text x="${MB.x + 8}" y="52" fill="#d0791e" font-size="11">clockwise →</text>
+  <line x1="${MB.x}" y1="58" x2="${MB.x}" y2="${MB.y + MB.row * 5 - 8}" stroke="#9aa3a6"/>
+  <g id="mBars"></g>
+  <line x1="600" y1="330" x2="1000" y2="330" stroke="#e2ded2"/>
+  ${title(618, 358, 'WHERE THE WEIGHT IS')}
+  <g id="cmRuler"></g>
+  `;
+  let hits = '';
+  for (let i = 0; i < 3; i++) hits += `<rect id="hit${i}" class="hit" width="56" height="${i < 2 ? 130 : 70}" fill="transparent" role="slider" aria-label="${S.sw.loads[i].name}: drag along the plank"/>`;
+  $('ldHits').innerHTML = hits;
+}
+const swSys = () => seesaw({Mp: S.sw.Mp, xf: S.sw.xf, loads: S.sw.loads});
+const isBalanced = sys => Math.abs(sys.tau) <= 0.01 * Math.max(sys.scale, 1);
+function paintSaw(){
+  const s = S.sw, sys = swSys();
+  const px = WC.x0 + s.xf * WC.k, py = WC.y - PIVOT_H * WC.k;
+  $('fulcrum').setAttribute('d', `M${px} ${py} L${px - 26} ${WC.y} L${px + 26} ${WC.y} Z`);
+  set($('pivHit'), {x: px - 30, y: py - 4});
+  const deg = -s.phi * 180 / Math.PI;
+  set($('plankG'), {transform: `translate(0 ${py}) rotate(${deg.toFixed(3)} ${px} 0)`});
+  let tk = '';
+  for (let m = 0; m <= PLANK_L + 1e-9; m += 0.5) tk += `<line x1="${WC.x0 + m * WC.k}" y1="-10" x2="${WC.x0 + m * WC.k}" y2="${m % 1 ? -5 : -1}" stroke="#5a3a1a" stroke-width="1"/>` + (m % 1 ? '' : `<text x="${WC.x0 + m * WC.k}" y="16" fill="#5a3a1a" font-size="10" text-anchor="middle">${m} m</text>`);
+  $('ticks').innerHTML = tk;
+  set($('cmMark'), {transform: `translate(${WC.x0 + sys.xcm * WC.k} -4)`});
+  set($('plankW'), {transform: `translate(${WC.x0 + PLANK_L / 2 * WC.k} 0)`}); $('plankW').toggleAttribute('hidden', s.Mp === 0);
+  /* loads and their hit boxes (hit boxes follow the tilted plank, in the page's own frame) */
+  s.loads.forEach((l, i) => {
+    const lx = WC.x0 + l.x * WC.k;
+    set($('ld' + i), {transform: `translate(${lx} -10)`}); $('ld' + i).toggleAttribute('hidden', !l.on);
+    const dx = (lx - px), c = Math.cos(s.phi), sn = Math.sin(s.phi);
+    const hx = px + dx * c, hy = py - 10 + dx * sn;
+    const h = i < 2 ? 130 : 70;
+    set($('hit' + i), {x: hx - 28, y: hy - h, transform: `rotate(${deg.toFixed(3)} ${hx} ${hy})`}); $('hit' + i).toggleAttribute('hidden', !l.on);
+  });
+  const bal = isBalanced(sys), lim = tiltLimits(s.xf);
+  $('swLab').textContent = s.held ? 'Held level while you move things.' :
+    bal ? 'Balanced: it stays level.' : (s.phi >= lim.left - 1e-3 ? 'The left end is down.' : s.phi <= lim.right + 1e-3 ? 'The right end is down.' : 'Tipping…');
+  $('swCm').textContent = S.locked ? `The red ⊕ is the centre of mass of everything on the pivot: ${fmt(sys.xcm, 2)} m from the left end; the pivot is at ${fmt(s.xf, 2)} m.` : '';
+  paintMoments(sys);
+  $('pivot').value = s.xf; $('pivotOut').textContent = fmt(s.xf, 2) + ' m';
+  $('plankM').value = s.Mp; $('plankMOut').textContent = s.Mp + ' kg';
+  $$('#loadChips [data-load]').forEach(b => b.setAttribute('aria-pressed', s.loads[+b.dataset.load].on));
+  if (S.tab === 'saw') { paintSwNums(sys); paintSwWhy(sys); }
+}
+const $$ = sel => Array.from(document.querySelectorAll(sel));
+function paintMoments(sys){
+  if (!S.locked) { $('mBars').innerHTML = ''; $('cmRuler').innerHTML = ''; return; }
+  const rows = [...sys.moments, {name: 'Total', moment: sys.tau, total: true}];
+  const maxM = Math.max(200, ...rows.map(r => Math.abs(r.moment)));
+  const k = 118 / maxM;
+  let g = '';
+  rows.forEach((r, i) => {
+    const y = MB.y + i * MB.row, w = r.moment * k;
+    const col = r.total ? (isBalanced(sys) ? '#2f9e5b' : '#1d2327') : r.name === 'plank' ? '#9b6433' : LOAD_COL[S.sw.loads.findIndex(l => l.name === r.name)];
+    if (r.total) g += `<line x1="618" y1="${y - 10}" x2="982" y2="${y - 10}" stroke="#e2ded2"/>`;
+    const label = r.total ? 'net' : r.name === 'plank' ? `plank, ${S.sw.Mp} kg` : r.name;
+    g += `<text x="618" y="${y + 13}" fill="#4a555b" font-size="11.5" ${r.total ? 'font-weight="700"' : ''}>${esc(label)}</text>`;
+    g += `<text x="714" y="${y + 13}" fill="#1d2327" font-size="11.5" font-weight="600" class="m" text-anchor="end">${r.moment > 0.05 ? '+' : r.moment < -0.05 ? '−' : ''}${fmt(Math.abs(r.moment), 0)}</text>`;
+    g += `<rect x="${Math.min(MB.x, MB.x - w).toFixed(1)}" y="${y}" width="${Math.max(Math.abs(w), r.total ? 1.5 : 0).toFixed(1)}" height="18" rx="3" fill="${col}" opacity="${r.total ? 1 : .85}"/>`;
+  });
+  $('mBars').innerHTML = g;
+  /* ruler: 0..4 m, weights as ticks, pivot and CM */
+  const rx = x => 640 + x / PLANK_L * 320, ry = 470;
+  let r = `<line x1="${rx(0)}" y1="${ry}" x2="${rx(PLANK_L)}" y2="${ry}" stroke="#9b6433" stroke-width="6" stroke-linecap="round"/>`;
+  for (let m = 0; m <= PLANK_L; m++) r += `<text x="${rx(m)}" y="${ry + 44}" fill="#7c878c" font-size="10.5" text-anchor="middle">${m} m</text>`;
+  sys.moments.forEach(it => { const col = it.name === 'plank' ? '#9b6433' : LOAD_COL[S.sw.loads.findIndex(l => l.name === it.name)];
+    const hgt = 8 + it.m * 1.6; r += `<rect x="${rx(it.x) - 6}" y="${ry - 4 - hgt}" width="12" height="${hgt}" rx="2" fill="${col}" opacity=".85"/>`; });
+  r += `<path d="M${rx(S.sw.xf)} ${ry + 4} l-10 18 h20z" fill="#5a6470"/>`;
+  r += `<g transform="translate(${rx(sys.xcm)} ${ry})"><circle r="7" fill="#fff" stroke="#d6453d" stroke-width="2"/><path d="M-7 0H7M0 -7V7" stroke="#d6453d" stroke-width="1.6"/></g>`;
+  r += `<text x="618" y="384" fill="#7c878c" font-size="11.5">Bar heights ∝ mass. It balances only when the ⊕ is over the pivot:</text>`;
+  r += `<text x="618" y="400" fill="#7c878c" font-size="11.5">then the weights’ moments about the pivot add to zero.</text>`;
+  r += `<text x="618" y="556" fill="#1d2327" font-size="12.5" class="m">x_cm = Σmx / Σm = ${fmt(sys.xcm, 3)} m</text>`;
+  r += `<text x="618" y="576" fill="#1d2327" font-size="12.5" class="m">pivot at ${fmt(S.sw.xf, 3)} m · gap ${fmt(Math.abs(sys.xcm - S.sw.xf) * 100, 1)} cm</text>`;
+  $('cmRuler').innerHTML = r;
+}
+function paintSwNums(sys){
+  if (!S.locked) { $('nums').innerHTML = '<p class="note" style="margin:0">The numbers appear once you have made a prediction.</p>'; return; }
+  $('numKick').textContent = 'The see-saw, right now';
+  const lines = sys.moments.map(it => `<span>${it.name === 'plank' ? 'Plank' : esc(it.name)}: ${it.m} kg × ${fmt(Math.abs(it.d), 2)} m</span><b>${it.moment >= 0 ? '+' : '−'}${fmt(Math.abs(it.moment), 1)} N m</b>`).join('');
+  $('nums').innerHTML = `<div class="readout">${lines}
+    <div class="sep"></div>
+    <span>Net moment about the pivot</span><b>${fmt(sys.tau, 1)} N m</b>
+    <span>Moment of inertia about the pivot</span><b>${fmt(sys.I, 1)} kg m²</b>
+    <span>Tilt of the plank</span><b>${fmt(S.sw.phi * 180 / Math.PI, 1)}°</b>
+    <span class="eq">+ anticlockwise (left end down) · g = 9.8 m/s²</span></div>`;
+}
+function paintSwWhy(sys){
+  if (!S.locked) return;
+  $('whyCard').hidden = false;
+  const bal = isBalanced(sys), s = S.sw;
+  const plankMo = sys.moments[0].moment;
+  let t = `<p>${bal ? 'The anticlockwise and clockwise moments cancel' : 'The moments do not cancel'}: net <b>${fmt(sys.tau, 1)} N m</b>. `;
+  t += bal ? 'With no net torque there is nothing to start it turning, so it stays level when you let go.</p>' : `An unbalanced torque gives an angular acceleration α = τ/I = ${fmt(sys.tau / sys.I, 2)} rad/s² from level, so it tips.</p>`;
+  if (s.Mp > 0 && Math.abs(plankMo) > 1) t += `<p>The pivot is ${fmt(Math.abs(s.xf - 2), 2)} m from the middle of the plank, so the plank’s own ${s.Mp} kg has a moment of <b>${fmt(Math.abs(plankMo), 1)} N m</b> too, acting at its centre of gravity.</p>`;
+  $('why').innerHTML = t;
+}
+
+/* ============================================================================
+   Race stage
+   ============================================================================ */
+const rc = $('rcStage');
+const RG = {x: 660, y: 64, w: 300, h: 210};
+const LANE_COL = {A: '#6a3fc2', B: '#d0791e'};
+const D_SLOPE = 3;
+function buildRace(){
+  rc.innerHTML = `
+  <rect x="0" y="0" width="600" height="620" fill="#f1eee6"/>
+  <text x="18" y="28" fill="#5b5245" font-size="12.5" font-weight="700" letter-spacing=".08em">A 3 m SLOPE, TWO LANES</text>
+  <text x="18" y="46" fill="#7d7364" font-size="11.5" id="rcSub"></text>
+  <line id="floor" stroke="#a89d88" stroke-width="2"/>
+  <path id="rampB" fill="#e2dbcc" stroke="#b3a892"/>
+  <path id="rampA" fill="#cbbfa8" stroke="#a89d88"/>
+  <text id="labA" fill="#6a3fc2" font-size="13" font-weight="700">A</text><text id="labB" fill="#b8651a" font-size="13" font-weight="700">B</text>
+  <line id="finish" stroke="#1d2327" stroke-width="2" stroke-dasharray="5 4"/>
+  <text id="finLab" fill="#1d2327" font-size="11" font-weight="700" text-anchor="middle">FINISH</text>
+  <g id="bodyB"></g><g id="bodyA"></g>
+  <rect x="60" y="506" width="480" height="62" rx="10" fill="#2b2f36"/>
+  <text x="84" y="530" fill="#9aa3a6" font-size="11" font-weight="700" letter-spacing=".08em">LANE A</text>
+  <text x="324" y="530" fill="#9aa3a6" font-size="11" font-weight="700" letter-spacing=".08em">LANE B</text>
+  <text id="clkA" x="84" y="556" fill="#b69cf0" font-size="22" font-weight="600" class="m">0.000 s</text>
+  <text id="clkB" x="324" y="556" fill="#f0a860" font-size="22" font-weight="600" class="m">0.000 s</text>
+  <text id="rcLab" x="300" y="596" fill="#3a332a" font-size="14.5" font-weight="600" text-anchor="middle"></text>
+  ${PANEL}
+  ${title(618, 30, 'DISTANCE DOWN THE SLOPE AGAINST TIME')}
+  <g id="rcAx"></g>
+  <path id="curB" fill="none" stroke="${LANE_COL.B}" stroke-width="2.4"/>
+  <path id="curA" fill="none" stroke="${LANE_COL.A}" stroke-width="2.4"/>
+  <line x1="600" y1="318" x2="1000" y2="318" stroke="#e2ded2"/>
+  ${title(618, 344, 'WHERE THE ENERGY WENT, AT THE BOTTOM')}
+  <g id="eBars"></g>
+  `;
+}
+function rampGeom(){
+  const th = S.rc.slope * Math.PI / 180;
+  const k = Math.min(470 / (D_SLOPE * Math.cos(th)), 340 / (D_SLOPE * Math.sin(th)));
+  const x0 = 70, y0 = Math.max(110, 290 - D_SLOPE * Math.sin(th) * k / 2);
+  return {th, k, x0, y0, x1: x0 + D_SLOPE * Math.cos(th) * k, y1: y0 + D_SLOPE * Math.sin(th) * k};
+}
+const laneBeta = L => S.rc[L].shape === 'custom' ? S.rc.beta : SHAPES[S.rc[L].shape].beta;
+let SIMS = null;
+function runSims(){
+  const th = S.rc.slope * Math.PI / 180;
+  SIMS = {};
+  for (const L of ['A', 'B']) SIMS[L] = simulateRoll({beta: laneBeta(L), m: S.rc[L].m, R: S.rc[L].R, th, mu: S.rc.mu, D: D_SLOPE});
+  SIMS.slope = S.rc.slope; SIMS.mu = S.rc.mu;
+  SIMS.key = raceKey();
+}
+const raceKey = () => JSON.stringify([S.rc.A, S.rc.B, S.rc.slope, S.rc.mu, S.rc.beta]);
+function drawBody(L, st, sim, geo){
+  const lane = L === 'A' ? 0 : -46;            // lane B sits behind, further up the page
+  const Rpx = S.rc[L].R > 0.1 ? 22 : 12;            // drawn size: bigger or smaller, not to scale
+  const s = st ? st.s : 0;
+  const cx = geo.x0 + s * Math.cos(geo.th) * geo.k + Math.sin(geo.th) * Rpx;
+  const cy = geo.y0 + lane + s * Math.sin(geo.th) * geo.k - Math.cos(geo.th) * Rpx;
+  const ang = st && sim ? (reduced() ? 0 : turnedAt(sim, st.t)) * 180 / Math.PI : 0;
+  const shape = S.rc[L].shape, col = LANE_COL[L];
+  const heavy = S.rc[L].m > 2;
+  let inner;
+  if (shape === 'ring' || shape === 'hollow') inner = `<circle r="${Rpx - 2.5}" fill="none" stroke="${col}" stroke-width="5"/><line x1="0" y1="0" x2="${Rpx - 3}" y2="0" stroke="${col}" stroke-width="1.5"/>`;
+  else if (shape === 'disc') inner = `<circle r="${Rpx}" fill="${col}" opacity=".9"/><line x1="0" y1="0" x2="${Rpx}" y2="0" stroke="#fff" stroke-width="2.5"/>`;
+  else if (shape === 'sphere') inner = `<circle r="${Rpx}" fill="${col}"/><ellipse rx="${Rpx}" ry="${Rpx * 0.35}" fill="none" stroke="#fff" stroke-width="1.5" opacity=".7"/><line x1="0" y1="0" x2="${Rpx}" y2="0" stroke="#fff" stroke-width="2.5"/>`;
+  else inner = `<circle r="${Rpx}" fill="${col}" opacity=".45"/><circle r="${Rpx * Math.sqrt(clamp(S.rc.beta, 0, 1.5) / 1.5)}" fill="none" stroke="${col}" stroke-width="3"/><line x1="0" y1="0" x2="${Rpx}" y2="0" stroke="#fff" stroke-width="2.5"/>`;
+  $('body' + L).innerHTML = `<g transform="translate(${f1(cx)} ${f1(cy)}) rotate(${ang.toFixed(1)})">${inner}${heavy ? `<circle r="3.5" fill="#1d2327"/>` : ''}</g>`;
+}
+function paintRace(){
+  const geo = rampGeom(), r = S.rc;
+  const ramp = lane => `M${geo.x0 - 20} ${geo.y0 + lane} L${f1(geo.x1 + 24)} ${f1(geo.y1 + lane + 24 * Math.tan(geo.th))} L${geo.x0 - 20} ${f1(geo.y1 + lane + 24 * Math.tan(geo.th))} Z`;
+  set($('floor'), {x1: 0, x2: 600, y1: f1(geo.y1 + 24 * Math.tan(geo.th)), y2: f1(geo.y1 + 24 * Math.tan(geo.th))});
+  set($('labA'), {x: geo.x0 - 8, y: geo.y0 + 22}); set($('labB'), {x: geo.x0 - 8, y: geo.y0 - 24});
+  $('rampA').setAttribute('d', ramp(0)); $('rampB').setAttribute('d', ramp(-46));
+  set($('finish'), {x1: geo.x1 + 4 * Math.sin(geo.th), y1: geo.y1 - 70, x2: geo.x1 + 4 * Math.sin(geo.th), y2: geo.y1 + 8});
+  set($('finLab'), {x: geo.x1, y: geo.y1 - 76});
+  $('rcSub').textContent = `slope ${r.slope}°, friction μ = ${fmt(r.mu, 2)}. Released together. Sizes not to scale.`;
+  const cur = SIMS && SIMS.key === raceKey() ? SIMS : null;
+  for (const L of ['A', 'B']) drawBody(L, cur ? rollAt(cur[L], r.t) : null, cur && cur[L], geo);
+  /* distance–time graph */
+  const tMax = cur ? [1, 2, 3, 4, 6, 8, 12, 16, 20, 40, 60].find(v => v >= Math.max(cur.A.tEnd, cur.B.tEnd) * 1.02) || 60 : 2;
+  let ax = `<line x1="${RG.x}" y1="${RG.y + RG.h}" x2="${RG.x + RG.w}" y2="${RG.y + RG.h}" stroke="#9aa3a6"/><line x1="${RG.x}" y1="${RG.y}" x2="${RG.x}" y2="${RG.y + RG.h}" stroke="#9aa3a6"/>`;
+  for (let i = 0; i <= 4; i++) { const y = RG.y + RG.h - RG.h * i / 4, x = RG.x + RG.w * i / 4;
+    ax += `<line x1="${RG.x}" y1="${y}" x2="${RG.x + RG.w}" y2="${y}" stroke="#ece8dc"/><text x="${RG.x - 6}" y="${y + 4}" fill="#7c878c" font-size="10.5" text-anchor="end">${+(D_SLOPE * i / 4).toFixed(2)}</text>
+           <text x="${x}" y="${RG.y + RG.h + 15}" fill="#7c878c" font-size="10.5" text-anchor="middle">${+(tMax * i / 4).toFixed(2)}</text>`; }
+  ax += `<text x="${RG.x + RG.w}" y="${RG.y + RG.h + 30}" fill="#7c878c" font-size="11" text-anchor="end">time (s)</text><text x="${RG.x}" y="${RG.y - 8}" fill="#4a555b" font-size="11" font-weight="600">distance (m)</text>`;
+  $('rcAx').innerHTML = ax;
+  for (const L of ['A', 'B']) {
+    if (!cur || !S.locked) { $('cur' + L).setAttribute('d', ''); continue; }
+    let d = ''; for (const p of cur[L].samples) { if (p.t > r.t) break; d += (d ? 'L' : 'M') + f1(RG.x + p.t / tMax * RG.w) + ' ' + f1(RG.y + RG.h - p.s / D_SLOPE * RG.h); }
+    const p = rollAt(cur[L], r.t); d += (d ? 'L' : 'M') + f1(RG.x + p.t / tMax * RG.w) + ' ' + f1(RG.y + RG.h - p.s / D_SLOPE * RG.h);
+    $('cur' + L).setAttribute('d', d);
+  }
+  /* energy bars at the bottom: translational, rotational, lost to sliding friction */
+  let e = '';
+  if (cur && r.done && S.locked) {
+    ['A', 'B'].forEach((L, i) => {
+      const sm = cur[L], y = 380 + i * 90, W = 330, x = 640;
+      const kt = sm.Kt / sm.PE, kr = sm.Kr / sm.PE, q = Math.max(0, 1 - kt - kr);
+      e += `<text x="${x}" y="${y - 8}" fill="${LANE_COL[L]}" font-size="12" font-weight="700">Lane ${L}: ${esc(SHAPES[S.rc[L].shape].name.split(' (')[0])}${S.rc[L].shape === 'custom' ? ', k²/R² = ' + fmt(S.rc.beta, 2) : ''}</text>
+        <rect x="${x}" y="${y}" width="${(W * kt).toFixed(1)}" height="22" fill="${LANE_COL[L]}"/>
+        <rect x="${(x + W * kt).toFixed(1)}" y="${y}" width="${(W * kr).toFixed(1)}" height="22" fill="${LANE_COL[L]}" opacity=".45"/>
+        <rect x="${(x + W * (kt + kr)).toFixed(1)}" y="${y}" width="${(W * q).toFixed(1)}" height="22" fill="#d6453d" opacity=".55"/>
+        <text x="${x}" y="${y + 38}" fill="#4a555b" font-size="11" class="m">moving ${fmt(kt * 100, 0)}% · spinning ${fmt(kr * 100, 0)}%${q > 0.005 ? ' · heat ' + fmt(q * 100, 0) + '%' : ''}</text>`;
+    });
+    e += `<text x="640" y="580" fill="#7c878c" font-size="11">Each bar is the whole mgh it started with.</text>`;
+  } else if (S.locked) e = `<text x="640" y="392" fill="#7c878c" font-size="12">Release the two and see where the height energy goes.</text>`;
+  $('eBars').innerHTML = e;
+  for (const L of ['A', 'B']) $('clk' + L).textContent = (cur ? fmt(Math.min(r.t, cur[L].tEnd), 3) : '0.000') + ' s' + (cur && r.t >= cur[L].tEnd ? '  ✓' : '');
+  let lab = '';
+  if (cur && r.done) { const a = cur.A.tEnd, b = cur.B.tEnd; lab = Math.abs(a - b) < 1e-3 ? `A dead heat: both ${fmt(a, 3)} s.` : `Lane ${a < b ? 'A' : 'B'} wins by ${fmt(Math.abs(a - b) * 1000, 0)} ms (${fmt(Math.min(a, b), 3)} s against ${fmt(Math.max(a, b), 3)} s).`; }
+  else if (!r.running) lab = 'Choose two shapes and release them together.';
+  $('rcLab').textContent = lab;
+  $('beta').value = r.beta; $('betaOut').textContent = fmt(r.beta, 2);
+  $('slope').value = r.slope; $('slopeOut').textContent = r.slope + '°';
+  $('mu').value = r.mu; $('muOut').textContent = fmt(r.mu, 2);
+  if (S.tab === 'race') { paintRcNums(cur); paintRcWhy(cur); }
+}
+function paintRcNums(cur){
+  if (!S.locked) { $('nums').innerHTML = '<p class="note" style="margin:0">The numbers appear once you have made a prediction.</p>'; return; }
+  $('numKick').textContent = 'The race';
+  const th = S.rc.slope * Math.PI / 180;
+  const row = L => { const b = laneBeta(L), sm = cur && cur[L];
+    return `<span style="color:${L === 'A' ? '#7c55d8' : LANE_COL[L]};font-weight:700">Lane ${L}: k²/R² = ${fmt(b, 2)}</span><b>${S.rc[L].m} kg, ${S.rc[L].R * 100} cm</b>
+      <span>I about its axis</span><b>${fmt(inertia(b, S.rc[L].m, S.rc[L].R) * 1e4, 1)} × 10⁻⁴ kg m²</b>
+      <span>Friction needed to roll · available</span><b>${fmt(muMin(b, th), 3)} · ${fmt(S.rc.mu, 2)}</b>
+      <span>Acceleration down the slope</span><b>${sm ? fmt(sm.slipped ? G * Math.sin(th) - S.rc.mu * G * Math.cos(th) : rollAccel(b, th), 3) : fmt(rollAccel(b, th), 3)} m/s²</b>
+      <span>Time for 3 m${sm && sm.slipped ? ' (sliding)' : ''}</span><b>${sm && S.rc.done ? fmt(sm.tEnd, 3) + ' s' : '—'}</b>`; };
+  $('nums').innerHTML = `<div class="readout">${row('A')}<div class="sep"></div>${row('B')}
+    <span class="eq">rolling: a = g sinθ / (1 + k²/R²); it needs μ ≥ tanθ · (k²/R²)/(1 + k²/R²)</span></div>`;
+}
+function paintRcWhy(cur){
+  if (!S.locked) return;
+  $('whyCard').hidden = false;
+  if (!cur || !S.rc.done) { $('why').innerHTML = '<p>Each body starts with the same mgh per kilogram. The question is how much of it has to go into spinning.</p>'; return; }
+  const bA = laneBeta('A'), bB = laneBeta('B');
+  let t = `<p>Rolling without slipping, v = ωR, so its energy is ½mv²(1 + k²/R²). A ring (k²/R² = 1) must put half its energy into spinning; a disc a third; a sphere 2/7. Whatever is left moves it downhill.</p>`;
+  if (Math.abs(bA - bB) < 1e-9 && !cur.A.slipped && !cur.B.slipped) t += `<p>Same shape: mass and radius cancel out of a = g sinθ/(1 + k²/R²), so they tie, whatever their size.</p>`;
+  if (cur.A.slipped || cur.B.slipped) t += `<p>With μ = ${fmt(S.rc.mu, 2)} the ground cannot supply the friction rolling needs, so ${cur.A.slipped && cur.B.slipped ? 'both slide' : 'lane ' + (cur.A.slipped ? 'A' : 'B') + ' slides'}: it spins too slowly for its speed, and sliding turns some energy into heat.</p>`;
+  $('why').innerHTML = t;
+}
+
+/* ============================================================================
+   Findings, reached by the models
+   ============================================================================ */
+function checkSkate(){
+  if (!S.locked) return;
+  const s = S.sk, I = skI(s.r), w = s.L / I;
+  if (!s.spun || s.w0 <= 0) return;
+  if (s.fric === 0 && s.noFricSince && w >= 2 * s.w0 && Math.abs(s.L - s.L0) / s.L0 < 0.01) {
+    discover('spinup');
+    if (POE && !POE.explained) {
+      const K = s.L * s.L / (2 * I), I1 = skI(s.r0);
+      POE.explain(`She pulled her arms in: I fell from ${fmt(I1, 2)} to ${fmt(I, 2)} kg m². With no outside torque L stayed at ${fmt(s.L, 2)} kg m²/s, so ω rose ×${fmt(I1 / I, 2)}.
+        Her kinetic energy L²/2I rose by the same factor, from <b>${fmt(s.K0, 1)} J to ${fmt(K, 1)} J</b>. Angular momentum is conserved; kinetic energy is not — her arms did work pulling the weights in.`);
+    }
+  }
+  if (s.fric > 0 && s.L0 > 0 && s.L < 0.5 * s.L0) discover('torque');
+}
+function checkSaw(release){
+  if (!S.locked || !release) return;
+  const sys = swSys(), on = S.sw.loads.filter(l => l.on);
+  if (!isBalanced(sys)) return;
+  const left = on.filter(l => l.x < S.sw.xf - 0.01), right = on.filter(l => l.x > S.sw.xf + 0.01);
+  const mL = left.reduce((a, l) => a + l.m, 0), mR = right.reduce((a, l) => a + l.m, 0);
+  if (left.length && right.length && Math.abs(mL - mR) > 0.5) discover('moments');
+  if (S.sw.Mp >= 5 && Math.abs(S.sw.xf - PLANK_L / 2) >= 0.25) discover('plank');
+}
+function checkRace(){
+  if (!S.locked || !SIMS || !S.rc.done) return;
+  const bA = laneBeta('A'), bB = laneBeta('B');
+  const shapes = [S.rc.A.shape, S.rc.B.shape];
+  if (shapes.includes('ring') && shapes.includes('disc') && !SIMS.A.slipped && !SIMS.B.slipped) {
+    const ring = S.rc.A.shape === 'ring' ? SIMS.A : SIMS.B, disc = S.rc.A.shape === 'disc' ? SIMS.A : SIMS.B;
+    if (disc.tEnd < ring.tEnd) discover('disc');
+  }
+  if (Math.abs(bA - bB) < 1e-9 && (S.rc.A.m !== S.rc.B.m || S.rc.A.R !== S.rc.B.R) && Math.abs(SIMS.A.tEnd - SIMS.B.tEnd) < 1e-3 && !SIMS.A.slipped && !SIMS.B.slipped) discover('sizefree');
+  if (SIMS.A.slipped || SIMS.B.slipped) discover('slip');
+}
+
+/* ============================================================================
+   Paint and loop
+   ============================================================================ */
+function paint(){
+  for (const [id, k] of [['skStage', 'skate'], ['swStage', 'saw'], ['rcStage', 'race']]) $(id).toggleAttribute('hidden', S.tab !== k);
+  for (const [id, k] of [['ctlSkate', 'skate'], ['ctlSaw', 'saw'], ['ctlRace', 'race']]) $(id).toggleAttribute('hidden', S.tab !== k);
+  $('tabSkate').setAttribute('aria-pressed', S.tab === 'skate'); $('tabSaw').setAttribute('aria-pressed', S.tab === 'saw'); $('tabRace').setAttribute('aria-pressed', S.tab === 'race');
+  if (S.tab === 'skate') paintSkate(); else if (S.tab === 'saw') paintSaw(); else paintRace();
+}
+
+buildSkate(); buildSaw(); buildRace();
+drawSkAxes();
+for (const id of ['shapeA', 'shapeB']) $(id).innerHTML = Object.entries(SHAPES).map(([k, v]) => `<option value="${k}">${esc(v.name)}</option>`).join('');
+$('shapeA').value = S.rc.A.shape; $('shapeB').value = S.rc.B.shape;
+$('massA').value = S.rc.A.m; $('massB').value = S.rc.B.m; $('radA').value = S.rc.A.R; $('radB').value = S.rc.B.R;
+
+let histAcc = 0;
+loop(dt => {
+  /* the skater lives all the time, even on another tab */
+  const s = S.sk;
+  if (s.spun) {
+    stepSkater(s, dt); s.t += dt; histAcc += dt;
+    if (histAcc >= 0.05) { histAcc = 0; const I = skI(s.r); s.hist.push({t: s.t, w: s.L / I, L: s.L, K: s.L * s.L / (2 * I)}); if (s.hist.length > 600) s.hist.shift(); }
+    if (s.fric > 0) s.noFricSince = false;
+    checkSkate();
+    if (S.tab === 'skate') paintSkate();
+  }
+  /* the see-saw */
+  const w = S.sw;
+  if (!w.held && S.locked) {
+    const sys = swSys();
+    const before = w.phi;
+    if (!isBalanced(sys) || Math.abs(w.om) > 1e-4) { stepSaw(w, sys, dt); }
+    if (S.tab === 'saw' && (Math.abs(w.phi - before) > 1e-6 || w.settled < 2)) { w.settled++; paintSaw(); }
+  }
+  /* the race */
+  const r = S.rc;
+  if (r.running && SIMS) {
+    r.t = Math.min(r.t + dt * 0.6, Math.max(SIMS.A.tEnd, SIMS.B.tEnd));
+    if (r.t >= Math.max(SIMS.A.tEnd, SIMS.B.tEnd)) { r.running = false; r.done = true; sound('drum', true); checkRace(); track('race', {A: r.A, B: r.B, slope: r.slope, mu: r.mu, tA: SIMS.A.tEnd, tB: SIMS.B.tEnd}); }
+    if (S.tab === 'race') paintRace();
+  }
+});
+
+/* ---- skater controls ---- */
+function setReach(r){
+  const s = S.sk; s.r = clamp(Math.round(r * 100) / 100, 0.25, 0.9);
+  checkSkate(); paintSkate();
+}
+$('reach').addEventListener('input', e => setReach(+e.target.value));
+$('fric').addEventListener('input', e => { S.sk.fric = +e.target.value; if (S.sk.fric > 0) S.sk.noFricSince = false; paintSkate(); });
+$('btnSpin').addEventListener('click', () => {
+  const s = S.sk; s.r0 = s.r; s.w0 = rad(40); s.L = skI(s.r) * s.w0; s.L0 = s.L; s.K0 = keRot(skI(s.r), s.w0); s.spun = true; s.noFricSince = s.fric === 0;
+  s.hist = [{t: s.t, w: s.w0, L: s.L, K: s.K0}];
+  SKSC = {w: niceUp(rpm(s.L / skI(0.25)) * 1.05), L: niceUp(s.L * 1.1), K: niceUp(s.L * s.L / (2 * skI(0.25)) * 1.05)};
+  drawSkAxes(); sound('whoosh'); track('spin', {r: s.r}); paintSkate();
+});
+$('btnStop').addEventListener('click', () => { const s = S.sk; s.L = 0; s.L0 = 0; s.spun = false; s.hist = []; paintSkate(); });
+for (const id of ['hitL', 'hitR']) drag($(id), sk, {
+  start(){ if (!S.locked) return false; },
+  move(p){ setReach(Math.hypot(p.x - SC.x, p.y - SC.y) / SC.k); },
+  end(){ track('reach', {r: S.sk.r}); },
+});
+
+/* ---- see-saw controls ---- */
+function release(){
+  S.sw.held = false; S.sw.phi = 0; S.sw.om = 0; S.sw.settled = 0;
+  if (reduced()) { const sys = swSys(); if (!isBalanced(sys)) { const lim = tiltLimits(S.sw.xf); S.sw.phi = sys.tau > 0 ? lim.left : lim.right; } }
+  checkSaw(true); paintSaw();
+}
+function hold(){ S.sw.held = true; S.sw.phi = 0; S.sw.om = 0; }
+const snap = x => Math.round(x / 0.05) * 0.05;
+for (let i = 0; i < 3; i++) drag($('hit' + i), sw, {
+  start(){ if (!S.locked) return false; hold(); },
+  move(p){ S.sw.loads[i].x = clamp(snap((p.x - WC.x0) / WC.k), 0.1, PLANK_L - 0.1); paintSaw(); },
+  end(){ track('load', {who: S.sw.loads[i].name, x: S.sw.loads[i].x}); release(); },
+});
+drag($('pivHit'), sw, {
+  start(){ if (!S.locked) return false; hold(); },
+  move(p){ S.sw.xf = clamp(snap((p.x - WC.x0) / WC.k), 0.5, 3.5); paintSaw(); },
+  end(){ track('pivot', {xf: S.sw.xf}); release(); },
+});
+$('pivot').addEventListener('input', e => { hold(); S.sw.xf = +e.target.value; paintSaw(); });
+$('pivot').addEventListener('change', release);
+$('plankM').addEventListener('input', e => { hold(); S.sw.Mp = +e.target.value; paintSaw(); });
+$('plankM').addEventListener('change', release);
+/* keyboard changes fire input but may not fire change until blur: release shortly after */
+let relT = 0; for (const id of ['pivot', 'plankM']) $(id).addEventListener('input', () => { clearTimeout(relT); relT = setTimeout(release, 350); });
+$('loadChips').addEventListener('click', e => { const b = e.target.closest('[data-load]'); if (!b || b.disabled) return; const l = S.sw.loads[+b.dataset.load]; l.on = !l.on; sound('tick'); hold(); release(); });
+
+/* ---- race controls ---- */
+function raceChanged(){ S.rc.running = false; S.rc.done = false; S.rc.t = 0; paintRace(); }
+for (const L of ['A', 'B']) {
+  $('shape' + L).addEventListener('change', e => { S.rc[L].shape = e.target.value; raceChanged(); });
+  $('mass' + L).addEventListener('change', e => { S.rc[L].m = +e.target.value; raceChanged(); });
+  $('rad' + L).addEventListener('change', e => { S.rc[L].R = +e.target.value; raceChanged(); });
+}
+$('beta').addEventListener('input', e => { S.rc.beta = +e.target.value; raceChanged(); });
+$('slope').addEventListener('input', e => { S.rc.slope = +e.target.value; raceChanged(); });
+$('mu').addEventListener('input', e => { S.rc.mu = +e.target.value; raceChanged(); });
+$('btnRace').addEventListener('click', () => {
+  runSims(); S.rc.t = 0; S.rc.done = false; S.rc.running = true; sound('whoosh');
+  if (reduced()) { S.rc.t = Math.max(SIMS.A.tEnd, SIMS.B.tEnd); S.rc.running = false; S.rc.done = true; checkRace(); }
+  paintRace();
+});
+
+/* ---- tabs ---- */
+const tab = t => { S.tab = t; sound('tick'); $('whyCard').hidden = !S.locked; paint(); track('tab', {tab: t}); };
+$('tabSkate').addEventListener('click', () => tab('skate'));
+$('tabSaw').addEventListener('click', () => tab('saw'));
+$('tabRace').addEventListener('click', () => tab('race'));
+
+function lockControls(lock){
+  for (const el of document.querySelectorAll('.pg-side input, .pg-side select, #ctlSkate button, #ctlRace button, #loadChips button, .stageTabs button')) el.disabled = lock;
+  for (const id of ['hitL', 'hitR', 'pivHit', 'hit0', 'hit1', 'hit2']) $(id).style.pointerEvents = lock ? 'none' : '';
+  $('gate').hidden = !lock;
+}
+
+/* ============================================================================
+   Start
+   ============================================================================ */
+findings($('finds'), [
+  {id: 'spinup',   icon: '↻', label: 'Arms in, spin up: L stays, ω rises', hint: 'Spin her, then pull her arms in'},
+  {id: 'torque',   icon: '⟲', label: 'An outside torque changes L',          hint: 'Let the skates rub'},
+  {id: 'moments',  icon: '⚖', label: 'Balanced by moments, not by weights',  hint: 'Balance two unequal children'},
+  {id: 'plank',    icon: '▭', label: 'The plank’s own weight has a moment',  hint: 'Balance it with the pivot off-centre'},
+  {id: 'disc',     icon: '◉', label: 'The disc beats the ring',              hint: 'Race a ring against a disc'},
+  {id: 'sizefree', icon: '=', label: 'Mass and size do not matter, shape does', hint: 'Race two of the same shape, different sizes'},
+  {id: 'slip',     icon: '⇢', label: 'Too little friction: it slides',       hint: 'Make the slope steep, or the ground slippery'},
+], () => toast('All seven found: torque changes angular momentum, and how mass is spread decides how it turns.', 4200));
+
+const POE = predict($('poe'), {
+  id: 'skater-energy',
+  q: 'A skater spinning with her arms out pulls them in, and spins faster. What happens to her kinetic energy of rotation?',
+  options: [
+    {id: 'same',  text: 'It stays the same: energy is conserved.'},
+    {id: 'up',    text: 'It goes up.', right: true},
+    {id: 'down',  text: 'It goes down, because her moment of inertia is smaller.'},
+    {id: 'zero',  text: 'Only angular momentum matters; kinetic energy is not defined for spinning.'},
+  ],
+  onLock(){
+    S.locked = true; lockControls(false);
+    $('whyCard').hidden = false;
+    say('Spin her, then pull her arms in.');
+    paint();
+  },
+});
+lockControls(!POE.locked);
+if (!Play.FF('predict')) S.locked = true;
+paint();
+window.applyFeatures = () => paint();
+window.PG_STATE = () => JSON.parse(JSON.stringify(Object.assign({}, S, {sk: Object.assign({}, S.sk, {hist: S.sk.hist.length}),
+  sims: SIMS ? {A: {tEnd: SIMS.A.tEnd, slipped: SIMS.A.slipped}, B: {tEnd: SIMS.B.tEnd, slipped: SIMS.B.slipped}} : null})));
+window.PG_MODEL = {G, SHAPES, inertia, gyration, I0, M_ARM, skI, omegaAfter, keRot, rpm, rad, stepSkater, seesaw, cmOf, tiltLimits, stepSaw, rollAccel, muMin, simulateRoll};
+</script>
+</body>
+</html>

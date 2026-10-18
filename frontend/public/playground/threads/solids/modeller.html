@@ -1,0 +1,870 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Surface Area And Volume</title>
+<meta name="description" content="Class 9–10: turn a cylinder, cone or sphere in 3-D, unfold it into its net and read its surface area off the net; pour cones of water into a cylinder; join two solids and watch faces vanish from the surface area; sweep a sector and cut a segment.">
+<link rel="icon" href="../../favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="../../play.css">
+<style>
+/* Only what this page needs beyond play.css. */
+.pg-stage{min-height:0}
+.tabs{display:flex; gap:4px; padding:10px 12px 0; border-bottom:1px solid var(--hair); background:var(--card); flex-wrap:wrap}
+.tab{border:1px solid transparent; border-bottom:none; background:none; padding:8px 15px; border-radius:8px 8px 0 0; cursor:pointer;
+  font-weight:600; font-size:15px; color:var(--ink-3); margin-bottom:-1px}
+.tab[aria-selected="true"]{background:var(--card); border-color:var(--hair); color:var(--ink); border-bottom:1px solid var(--card); box-shadow:inset 0 3px 0 #8a6d3b}
+.gate{position:absolute; left:0; right:0; top:48px; bottom:0; display:grid; place-items:center; pointer-events:none}
+.gate span{background:rgba(29,35,39,.85); color:#fff; padding:10px 16px; border-radius:99px; font-weight:600; font-size:14px}
+.hit{cursor:grab} .hit.dragging{cursor:grabbing}
+.chips{display:flex; flex-wrap:wrap; gap:6px; margin:2px 0 6px}
+.chip{border:1px solid var(--hair-2); background:var(--card); border-radius:99px; padding:5px 11px; font-size:13px; cursor:pointer; font-weight:600; color:var(--ink-2)}
+.chip[aria-pressed="true"]{background:#8a6d3b; border-color:#8a6d3b; color:#fff}
+.chip:disabled,.btn:disabled{opacity:.45; cursor:default}
+.ctl output{min-width:70px; font-family:var(--font-mono); font-size:13.5px}
+.readout{display:grid; grid-template-columns:auto 1fr; gap:3px 12px; font-size:13px; align-items:baseline; margin-top:6px}
+.readout span{color:var(--ink-2)}
+.readout b{font-family:var(--font-mono); font-weight:600; font-size:12.5px; text-align:right; font-variant-numeric:tabular-nums}
+.readout .sep{grid-column:1/-1; height:1px; background:var(--hair); margin:3px 0}
+.faces{width:100%; border-collapse:collapse; font-size:12.5px; margin-top:6px}
+.faces td{padding:3px 4px; border-bottom:1px solid var(--hair)}
+.faces td:last-child{text-align:right; font-family:var(--font-mono)}
+.faces tr.hid td{color:var(--ink-3); text-decoration:line-through}
+.faces tr.ring td{color:#b35a00}
+.faces tr.tot td{font-weight:700; border-bottom:none}
+.faces i{display:inline-block; width:10px; height:10px; border-radius:3px; margin-right:6px; vertical-align:-1px}
+.why p{font-size:13.5px; margin-bottom:.55em}
+.note{font-size:12.5px; color:var(--ink-3); margin:6px 0 0}
+.pisel{display:flex; gap:6px; align-items:center; font-size:13px; color:var(--ink-2); margin-top:6px}
+.pisel select{width:auto}
+svg text{pointer-events:none}
+svg .m{font-family:var(--font-mono)}
+@media (max-width:1240px) and (min-width:981px){ .pg-main.wide-side{grid-template-columns:minmax(0,1fr) 340px} }
+</style>
+</head>
+<body>
+<header class="pg-top"></header>
+
+<div class="pg-intro">
+  <h1>Surface area and volume</h1>
+  <p>Turn a cylinder, a cone or a sphere, then unfold it: its surface area is the area of the flat net. Fill a cone with water and pour it into the
+     cylinder it fits in. Join two solids, as the book’s toys and rockets are joined, and watch which faces disappear from the surface while the volumes
+     simply add. Then sweep a sector of a circle and cut off its segment.
+     NCERT Class 10, Chapter 12, <i>Surface Areas and Volumes</i>, and Chapter 11, <i>Areas Related to Circles</i>.</p>
+</div>
+
+<main class="pg-main wide-side">
+  <section class="pg-stage">
+    <div class="tabs" role="tablist">
+      <button class="tab" role="tab" id="tabU" aria-selected="true">Unfold and fill</button>
+      <button class="tab" role="tab" id="tabJ" aria-selected="false">Join two solids</button>
+      <button class="tab" role="tab" id="tabC" aria-selected="false">Sectors and segments</button>
+    </div>
+    <svg id="stU" viewBox="0 0 1000 620" role="img" aria-label="A solid in 3-D that can be turned and unfolded into its net, two vessels for pouring water, and a graph of volume against water height"></svg>
+    <svg id="stJ" viewBox="0 0 1000 620" role="img" aria-label="Two or three solids that can be joined, in 3-D, and bars comparing the surface areas and volumes before and after joining" hidden></svg>
+    <svg id="stC" viewBox="0 0 1000 620" role="img" aria-label="A circle with a sector whose angle can be dragged, the triangle and segment it makes, and a graph of their areas against the angle" hidden></svg>
+    <div class="gate" id="gate"><span>Make your prediction first →</span></div>
+  </section>
+
+  <aside class="pg-side">
+    <div id="poe"></div>
+
+    <div class="card" id="cardU">
+      <div class="kicker">The solid</div>
+      <div class="chips" id="kinds">
+        <button class="chip" data-k="cyl" aria-pressed="true">Cylinder</button>
+        <button class="chip" data-k="cone" aria-pressed="false">Cone</button>
+        <button class="chip" data-k="sphere" aria-pressed="false">Sphere</button>
+        <button class="chip" data-k="hemi" aria-pressed="false">Hemisphere</button>
+      </div>
+      <div class="ctl"><label for="ur">Radius r</label><input type="range" id="ur" min="1" max="10" step="0.5" value="3.5"><output id="urOut">3.5 cm</output></div>
+      <div class="ctl" id="uhRow"><label for="uh">Height h</label><input type="range" id="uh" min="1" max="20" step="0.5" value="8"><output id="uhOut">8 cm</output></div>
+      <div class="ctl"><label for="ut">Unfold</label><input type="range" id="ut" min="0" max="1" step="0.01" value="0"><output id="utOut">0%</output></div>
+      <div class="row" style="margin-top:4px">
+        <button class="btn sm" id="btnPour">Fill it and pour into the cylinder</button>
+        <button class="btn sm" id="btnEmpty">Empty the cylinder</button>
+      </div>
+      <div class="readout" id="uRead"></div>
+      <p class="note">Drag the solid to turn it.</p>
+    </div>
+
+    <div class="card" id="cardJ" hidden>
+      <div class="kicker">A solid from the book</div>
+      <div class="chips" id="combos"></div>
+      <div id="jSliders"></div>
+      <div class="ctl"><label for="jg">Apart</label><input type="range" id="jg" min="0" max="1" step="0.05" value="1"><output id="jgOut">apart</output></div>
+      <table class="faces" id="jFaces"></table>
+      <p class="note">Slide “Apart” to 0 to join the pieces. Drag the solid to turn it.</p>
+    </div>
+
+    <div class="card" id="cardC" hidden>
+      <div class="kicker">The circle</div>
+      <div class="chips" id="cPresets"></div>
+      <div class="ctl"><label for="cr">Radius r</label><input type="range" id="cr" min="1" max="30" step="0.5" value="7"><output id="crOut">7 cm</output></div>
+      <div class="ctl"><label for="cth">Angle θ</label><input type="range" id="cth" min="1" max="359" step="1" value="60"><output id="cthOut">60°</output></div>
+      <div class="readout" id="cRead"></div>
+      <p class="note">Drag the point B round the circle, or drag along the graph.</p>
+    </div>
+
+    <div class="card">
+      <label class="pisel">Take π as <select id="pi"><option value="22/7">22/7</option><option value="3.14">3.14</option><option value="pi">π (3.14159…)</option></select></label>
+    </div>
+
+    <div class="card why" id="whyCard" hidden>
+      <div class="kicker">What is happening</div>
+      <div id="why"></div>
+    </div>
+
+    <div class="card"><div class="kicker">To find</div><div id="finds"></div></div>
+  </aside>
+</main>
+
+<script src="../../play.js"></script>
+<script>
+'use strict';
+const {$, esc, clamp, fmt, drag, sound, say, track, toast, predict, findings, discover, found,
+       shareState, sharedState, mount, reduced, tween} = Play;
+mount({thread: 'solids', band: 'modeller'});
+
+/* MODEL:start ==================================================================
+   The solids are meshes of flat faces, built from the true shapes.
+
+   NETS. A cylinder's curved surface is a sheet that is rolled up: to unfold it the
+   sheet is curled round a circle whose radius grows without limit, so it never
+   stretches (arc length is kept). The caps swing out on a hinge. A cone's curved
+   surface is a sector of radius l (the slant height) rolled round the cone's axis;
+   it is unrolled the same way, keeping its angle 360° × r / l. A sphere has no
+   net: nothing flat bends onto it without stretching. Archimedes' map pushes each
+   point straight out, sideways, onto the cylinder round the sphere; it stretches
+   sideways and squeezes upwards by the same factor, so area is kept; then the
+   cylinder unrolls into a 2πr × 2r rectangle: 4πr².
+   The surface area is then MEASURED on the flattened net (widths along the mesh).
+
+   VOLUME. A vessel's volume up to a water height y is found by slicing it into thin
+   discs, V(y) = ∫ π R(y)² dy (Simpson's rule), with R(y) the vessel's radius at that
+   height. Pouring moves volume, and the water height is found by inverting V(y).
+
+   JOINING (Ch 12.2). Every part has faces with areas. When two parts are joined,
+   the part of each touching face that the other covers disappears from the outside:
+   the overlap is taken off BOTH. A bigger face keeps a ring. Volumes just add.
+
+   SECTORS (Ch 11). A sector of angle θ is θ/360 of the disc (the unitary method),
+   and the arc θ/360 of the circumference. The segment is the sector less the
+   triangle OAB, ½ r² sin θ. The page also counts the sector square by square.
+   ============================================================================ */
+const PIS = {'22/7': 22 / 7, '3.14': 3.14, pi: Math.PI};
+const D2R = Math.PI / 180;
+
+/* ---- vessels, sliced ---------------------------------------------------------- */
+/* the radius of each vessel at height y above its bottom, and its full height */
+function vessel(kind, r, h){
+  if (kind === 'cyl') return {H: h, R: () => r};
+  if (kind === 'cone') return {H: h, R: y => r * y / h};                     // a cone held point-down, open at the top
+  if (kind === 'hemi') return {H: r, R: y => Math.sqrt(Math.max(0, r * r - (r - y) * (r - y)))};   // a bowl
+  return {H: 2 * r, R: y => Math.sqrt(Math.max(0, r * r - (r - y) * (r - y)))};                    // a sphere
+}
+/* the volume up to water height y, by slicing (Simpson's rule, 400 slices) */
+function volumeTo(v, y, pi = Math.PI){
+  y = clamp(y, 0, v.H); if (y <= 0) return 0;
+  const n = 400, dy = y / n;
+  let s = 0;
+  for (let i = 0; i <= n; i++) { const R = v.R(i * dy), f = pi * R * R; s += f * (i === 0 || i === n ? 1 : i % 2 ? 4 : 2); }
+  return s * dy / 3;
+}
+function levelFor(v, V, pi = Math.PI){
+  const full = volumeTo(v, v.H, pi); if (V <= 0) return 0; if (V >= full) return v.H;
+  let lo = 0, hi = v.H;
+  for (let i = 0; i < 50; i++) { const m = (lo + hi) / 2; if (volumeTo(v, m, pi) < V) lo = m; else hi = m; }
+  return (lo + hi) / 2;
+}
+/* the cylinder each vessel fits in exactly */
+const partnerOf = (kind, r, h) => ({cyl: h, cone: h, hemi: r, sphere: 2 * r})[kind];
+
+/* ---- 3-D meshes ------------------------------------------------------------------ */
+const mm = (A, B) => A.map(r => [0, 1, 2].map(j => r[0] * B[0][j] + r[1] * B[1][j] + r[2] * B[2][j]));
+const mv = (A, v) => A.map(r => r[0] * v[0] + r[1] * v[1] + r[2] * v[2]);
+const rotX = a => [[1, 0, 0], [0, Math.cos(a), -Math.sin(a)], [0, Math.sin(a), Math.cos(a)]];
+const rotY = a => [[Math.cos(a), 0, Math.sin(a)], [0, 1, 0], [-Math.sin(a), 0, Math.cos(a)]];
+const add = (a, b) => [a[0] + b[0], a[1] + b[1], a[2] + b[2]];
+const scl = (a, k) => [a[0] * k, a[1] * k, a[2] * k];
+/* a sheet point at arc length s along a circle of radius r, height y, unrolled by v (0 rolled … 1 flat) */
+function curl(s, y, r, v){
+  if (v < 1e-6) return [r * Math.sin(s / r), y, r * Math.cos(s / r)];
+  const rho = r / (1 - v * 0.99999), a = s / rho;
+  return [rho * Math.sin(a), y, r - rho * (1 - Math.cos(a))];
+}
+/* a disc hinged at H (on the front line), swung by angle a about the x-axis */
+function hingedDisc(H, r, a, n){
+  const R = rotX(a), pts = [];
+  for (let k = 0; k < n; k++) { const th = 2 * Math.PI * k / n; pts.push(add(H, mv(R, [r * Math.sin(th), 0, r * Math.cos(th) - r]))); }
+  return pts;
+}
+const N = 48;
+function cylinderMesh(r, h, t, col){
+  const f = [];
+  for (let k = 0; k < N; k++) {
+    const s0 = -Math.PI * r + 2 * Math.PI * r * k / N, s1 = s0 + 2 * Math.PI * r / N;
+    f.push({p: [curl(s0, 0, r, t), curl(s1, 0, r, t), curl(s1, h, r, t), curl(s0, h, r, t)], c: col.curved, part: 'curved'});
+  }
+  f.push({p: hingedDisc([0, h, r], r, Math.PI / 2 * t, N), c: col.base, part: 'top'});
+  f.push({p: hingedDisc([0, 0, r], r, -Math.PI / 2 * t, N), c: col.base, part: 'bottom'});
+  return f;
+}
+function coneMesh(r, h, t, col){
+  const l = Math.hypot(r, h), TH = 2 * Math.PI * r / l, sb = r / l + (1 - r / l) * t, cb = Math.sqrt(Math.max(0, 1 - sb * sb));
+  const post = rotX(Math.PI / 2 * t);
+  const sheet = (u, psi) => { const th = psi / sb; return [u * sb * Math.sin(th), -u * cb, u * sb * Math.cos(th)]; };
+  const fin = p => add(mv(post, p), [0, h, 0]);
+  const f = [], apex = fin([0, 0, 0]);
+  for (let k = 0; k < N; k++) {
+    const p0 = -TH / 2 + TH * k / N, p1 = p0 + TH / N;
+    f.push({p: [apex, fin(sheet(l, p0)), fin(sheet(l, p1))], c: col.curved, part: 'curved'});
+  }
+  const Hh = sheet(l, 0), e2 = [0, -Math.sin(Math.PI * t), -Math.cos(Math.PI * t)], C = add(Hh, scl(e2, r)), disc = [];
+  for (let k = 0; k < N; k++) { const ph = 2 * Math.PI * k / N; disc.push(fin(add(C, add([r * Math.sin(ph), 0, 0], scl(e2, -r * Math.cos(ph)))))); }
+  f.push({p: disc, c: col.base, part: 'bottom'});
+  return {faces: f, l, TH};
+}
+function sphereMesh(r, t, hemi, col){
+  const u = Math.min(1, 2 * t), v = Math.max(0, 2 * t - 1), NL = 36, NM = hemi ? 9 : 18;
+  const vert = (ph, la) => {
+    const y = r * Math.sin(ph);
+    if (v <= 0) { const rho = r * Math.cos(ph) + (r - r * Math.cos(ph)) * u; return [rho * Math.sin(la), y, rho * Math.cos(la)]; }
+    return curl(r * la, y, r, v);
+  };
+  const f = [], ph0 = hemi ? 0 : -Math.PI / 2;
+  for (let i = 0; i < NM; i++) for (let j = 0; j < NL; j++) {
+    const a0 = ph0 + (Math.PI / 2 - ph0) * i / NM, a1 = ph0 + (Math.PI / 2 - ph0) * (i + 1) / NM, l0 = -Math.PI + 2 * Math.PI * j / NL, l1 = l0 + 2 * Math.PI / NL;
+    f.push({p: [vert(a0, l0), vert(a0, l1), vert(a1, l1), vert(a1, l0)], c: col.curved, part: 'curved'});
+  }
+  if (hemi) f.push({p: hingedDisc([0, 0, r], r, -Math.PI / 2 * t, N), c: col.base, part: 'bottom'});
+  return f;
+}
+/* What the flattened (or partly flattened) net measures, read off the mesh. */
+function netOf(kind, r, h, t){
+  if (kind === 'cyl') {
+    let W = 0; for (let k = 0; k < N; k++) { const s0 = -Math.PI * r + 2 * Math.PI * r * k / N, a = curl(s0, 0, r, t), b = curl(s0 + 2 * Math.PI * r / N, 0, r, t); W += Math.hypot(b[0] - a[0], b[1] - a[1], b[2] - a[2]); }
+    const ends = [curl(-Math.PI * r, 0, r, t), curl(Math.PI * r, 0, r, t)], span = Math.hypot(ends[1][0] - ends[0][0], ends[1][2] - ends[0][2]);
+    return {W, span, H: h, curved: W * h, circles: 2};
+  }
+  if (kind === 'cone') {
+    const m = coneMesh(r, h, t, {curved: '', base: ''}), apex = m.faces[0].p[0], e0 = m.faces[0].p[1], e1 = m.faces[N - 1].p[2];
+    const u0 = [e0[0] - apex[0], e0[1] - apex[1], e0[2] - apex[2]], u1 = [e1[0] - apex[0], e1[1] - apex[1], e1[2] - apex[2]];
+    const ang = Math.acos(clamp((u0[0] * u1[0] + u0[1] * u1[1] + u0[2] * u1[2]) / (Math.hypot(...u0) * Math.hypot(...u1)), -1, 1)) / D2R;
+    /* the sector's angle, measured: the apex angles of all the thin triangles, added up */
+    let sum = 0;
+    for (const f of m.faces.slice(0, N)) { const [a, b, c] = f.p, x = [b[0] - a[0], b[1] - a[1], b[2] - a[2]], y = [c[0] - a[0], c[1] - a[1], c[2] - a[2]];
+      sum += Math.acos(clamp((x[0] * y[0] + x[1] * y[1] + x[2] * y[2]) / (Math.hypot(...x) * Math.hypot(...y)), -1, 1)) / D2R; }
+    return {L: Math.hypot(...u0), gap: ang, sector: sum, circles: 1};
+  }
+  const hemi = kind === 'hemi', f = sphereMesh(r, t, hemi, {curved: '', base: ''});
+  let W = 0; const NL = 36; for (let j = 0; j < NL; j++) { const a = f[j].p[0], b = f[j].p[1]; W += Math.hypot(b[0] - a[0], b[1] - a[1], b[2] - a[2]); }
+  const ys = f.flatMap(x => x.p.map(p => p[1])).filter((y, i) => true);
+  return {W, H: hemi ? r : 2 * r, circles: hemi ? 1 : 0};
+}
+/* the surface area and volume by the book's formulas, for the chosen π */
+function formulas(kind, r, h, pi){
+  const l = Math.hypot(r, h);
+  if (kind === 'cyl') return {curved: 2 * pi * r * h, flat: 2 * pi * r * r, V: pi * r * r * h, l};
+  if (kind === 'cone') return {curved: pi * r * l, flat: pi * r * r, V: pi * r * r * h / 3, l};
+  if (kind === 'hemi') return {curved: 2 * pi * r * r, flat: pi * r * r, V: 2 / 3 * pi * r ** 3, l};
+  return {curved: 4 * pi * r * r, flat: 0, V: 4 / 3 * pi * r ** 3, l};
+}
+
+/* ---- joined solids ---------------------------------------------------------------- */
+/* parts stacked bottom to top; each has a bottom face and a top face (or none) */
+function partFaces(p, pi){
+  const l = p.k === 'cone' ? Math.hypot(p.r, p.h) : 0;
+  switch (p.k) {
+    case 'cyl':   return {H: p.h, bot: {shape: 'disc', r: p.r, A: pi * p.r * p.r}, top: {shape: 'disc', r: p.r, A: pi * p.r * p.r}, curved: 2 * pi * p.r * p.h, curvedName: 'curved surface 2πrh', V: pi * p.r * p.r * p.h};
+    case 'cone':  return {H: p.h, bot: {shape: 'disc', r: p.r, A: pi * p.r * p.r}, top: null, curved: pi * p.r * l, curvedName: 'curved surface πrl', V: pi * p.r * p.r * p.h / 3, l};
+    case 'hemiUp':   return {H: p.r, bot: {shape: 'disc', r: p.r, A: pi * p.r * p.r}, top: null, curved: 2 * pi * p.r * p.r, curvedName: 'curved surface 2πr²', V: 2 / 3 * pi * p.r ** 3};
+    case 'hemiDown': return {H: p.r, bot: null, top: {shape: 'disc', r: p.r, A: pi * p.r * p.r}, curved: 2 * pi * p.r * p.r, curvedName: 'curved surface 2πr²', V: 2 / 3 * pi * p.r ** 3};
+    case 'cube':  return {H: p.a, bot: {shape: 'square', a: p.a, A: p.a * p.a}, top: {shape: 'square', a: p.a, A: p.a * p.a}, curved: 4 * p.a * p.a, curvedName: 'four side faces', V: p.a ** 3};
+  }
+}
+/* the area two touching faces share */
+function overlap(f1, f2){
+  if (!f1 || !f2) return 0;
+  if (f1.shape === 'disc' && f2.shape === 'disc') return Math.min(f1.A, f2.A);
+  const d = f1.shape === 'disc' ? f1 : f2, s = f1.shape === 'disc' ? f2 : f1;
+  if (d.r <= s.a / 2) return d.A;                  // the disc sits inside the square
+  return Math.min(d.A, s.A);                        // (the book's solids never need more)
+}
+/* the whole combination: every face, what is hidden, the totals */
+function combine(parts, joined, pi){
+  const F = parts.map(p => partFaces(p, pi));
+  const rows = [];
+  F.forEach((f, i) => {
+    const below = i > 0 && joined ? overlap(F[i - 1].top, f.bot) : 0, above = i < F.length - 1 && joined ? overlap(f.top, F[i + 1].bot) : 0;
+    rows.push({part: i, name: f.curvedName, A: f.curved, shown: f.curved});
+    if (f.bot) rows.push({part: i, name: f.bot.shape === 'disc' ? 'bottom circle πr²' : 'bottom face', A: f.bot.A, shown: f.bot.A - below, hid: below});
+    if (f.top) rows.push({part: i, name: f.top.shape === 'disc' ? 'top circle πr²' : 'top face', A: f.top.A, shown: f.top.A - above, hid: above});
+  });
+  const sumTSA = rows.reduce((s, r) => s + r.A, 0), TSA = rows.reduce((s, r) => s + r.shown, 0);
+  const byPart = F.map((f, i) => rows.filter(r => r.part === i).reduce((s, r) => s + r.shown, 0));
+  return {rows, sumTSA, TSA, hidden: sumTSA - TSA, V: F.reduce((s, f) => s + f.V, 0), byPart, F};
+}
+/* ---- sectors -------------------------------------------------------------------------- */
+function sector(r, th, pi){
+  const sec = th / 360 * pi * r * r, arc = th / 360 * 2 * pi * r, tri = 0.5 * r * r * Math.sin(th * D2R);
+  return {sec, arc, tri, seg: sec - tri, majorSec: pi * r * r - sec, majorSeg: pi * r * r - (sec - tri), circle: pi * r * r};
+}
+/* count the sector square by square: grid points inside the sector, each standing for one small square */
+function countSector(r, th, n = 300){
+  const step = 2 * r / n; let inside = 0;
+  const a = th * D2R;
+  for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) {
+    const x = -r + (i + .5) * step, y = -r + (j + .5) * step;
+    if (x * x + y * y > r * r) continue;
+    let ang = Math.atan2(y, x); if (ang < 0) ang += 2 * Math.PI;
+    if (ang <= a) inside++;
+  }
+  return inside * step * step;
+}
+/* MODEL:end */
+
+/* ---- state ------------------------------------------------------------------------ */
+const INK = '#1d2327', WOOD = '#8a6d3b', BLUE = '#3f7fd8', WATER = '#5aa9e6';
+const COLU = {curved: '#e0a54a', base: '#6f9fd8'};
+const COMBOS = {
+  lattu:   {name: 'Lattu (Ex. 1)', pi: '22/7', unit: 'cm', desc: 'A top: a cone standing on a hemisphere. Total height 5 cm, diameter 3.5 cm.',
+            params: [{k: 'd', label: 'Diameter', min: 1, max: 8, step: 0.5, v: 3.5}, {k: 'H', label: 'Total height', min: 2, max: 12, step: 0.5, v: 5}],
+            parts: q => [{k: 'hemiDown', r: q.d / 2, col: '#6f9fd8', nm: 'hemisphere'}, {k: 'cone', r: q.d / 2, h: Math.max(0.2, q.H - q.d / 2), col: '#e0a54a', nm: 'cone'}]},
+  block:   {name: 'Block (Ex. 2)', pi: '22/7', unit: 'cm', desc: 'A cube of edge 5 cm with a hemisphere of diameter 4.2 cm fixed on top.',
+            params: [{k: 'a', label: 'Cube edge', min: 2, max: 8, step: 0.5, v: 5}, {k: 'd', label: 'Hemisphere diameter', min: 0.6, max: 8, step: 0.1, v: 4.2}],
+            parts: q => [{k: 'cube', a: q.a, col: '#b5a38a', nm: 'cube'}, {k: 'hemiUp', r: Math.min(q.d, q.a) / 2, col: '#6f9fd8', nm: 'hemisphere'}]},
+  rocket:  {name: 'Rocket (Ex. 3)', pi: '3.14', unit: 'cm', desc: 'A cone (base diameter 5 cm, height 6 cm) on a cylinder (diameter 3 cm); the whole rocket is 26 cm tall.',
+            params: [{k: 'dc', label: 'Cone diameter', min: 1, max: 8, step: 0.5, v: 5}, {k: 'hc', label: 'Cone height', min: 1, max: 12, step: 0.5, v: 6},
+                     {k: 'dy', label: 'Cylinder diameter', min: 1, max: 8, step: 0.5, v: 3}, {k: 'hy', label: 'Cylinder height', min: 2, max: 30, step: 0.5, v: 20}],
+            parts: q => [{k: 'cyl', r: q.dy / 2, h: q.hy, col: '#f2c230', nm: 'cylinder (yellow)'}, {k: 'cone', r: q.dc / 2, h: q.hc, col: '#f08a24', nm: 'cone (orange)'}]},
+  toy:     {name: 'Toy (Ex. 7)', pi: '3.14', unit: 'cm', desc: 'A hemisphere with a cone on it: cone height 2 cm, base diameter 4 cm.',
+            params: [{k: 'd', label: 'Diameter', min: 1, max: 8, step: 0.5, v: 4}, {k: 'h', label: 'Cone height', min: 0.5, max: 10, step: 0.5, v: 2}],
+            parts: q => [{k: 'hemiDown', r: q.d / 2, col: '#6f9fd8', nm: 'hemisphere'}, {k: 'cone', r: q.d / 2, h: q.h, col: '#e0a54a', nm: 'cone'}]},
+  capsule: {name: 'Capsule (Ex. 12.1 Q6)', pi: '22/7', unit: 'mm', desc: 'A cylinder with a hemisphere on each end: 14 mm long, 5 mm across.',
+            params: [{k: 'L', label: 'Length', min: 6, max: 30, step: 0.5, v: 14}, {k: 'd', label: 'Diameter', min: 1, max: 10, step: 0.5, v: 5}],
+            parts: q => [{k: 'hemiDown', r: q.d / 2, col: '#6fbf8a', nm: 'hemisphere'}, {k: 'cyl', r: q.d / 2, h: Math.max(0.2, q.L - q.d), col: '#e8c07a', nm: 'cylinder'},
+                         {k: 'hemiUp', r: q.d / 2, col: '#6fbf8a', nm: 'hemisphere'}]},
+};
+const CPRESETS = [
+  {id: 'ex1', name: 'Ex. 1', r: 4, th: 30, pi: '3.14', unit: 'cm'}, {id: 'ex2', name: 'Ex. 2', r: 21, th: 120, pi: '22/7', unit: 'cm'},
+  {id: 'q3', name: 'Minute hand, 5 min', r: 14, th: 30, pi: '22/7', unit: 'cm'}, {id: 'q4', name: 'Q4 chord at 90°', r: 10, th: 90, pi: '3.14', unit: 'cm'},
+  {id: 'q11', name: 'Wiper', r: 25, th: 115, pi: '22/7', unit: 'cm'}, {id: 'q12', name: 'Lighthouse', r: 16.5, th: 80, pi: '3.14', unit: 'km'},
+];
+const S = {tab: 'u', locked: false, pi: '22/7',
+  u: {kind: 'cyl', r: 3.5, h: 8, t: 0, yaw: 0.55, pitch: 0.42, water: 0, pours: 0, pouring: false, vLevel: 0, spilt: 0},
+  j: {combo: 'lattu', q: {}, gap: 1, yaw: 0.5, pitch: 0.35},
+  c: {r: 7, th: 60, unit: 'cm', thMin: 60, thMax: 60}};
+Object.keys(COMBOS).forEach(k => { S.j.q[k] = Object.fromEntries(COMBOS[k].params.map(p => [p.k, p.v])); });
+const shared = sharedState();
+if (shared) {
+  if (['u', 'j', 'c'].includes(shared.tab)) S.tab = shared.tab;
+  if (PIS[shared.pi]) S.pi = shared.pi;
+  if (shared.u && ['cyl', 'cone', 'sphere', 'hemi'].includes(shared.u.kind)) { S.u.kind = shared.u.kind; S.u.r = clamp(+shared.u.r || 3.5, 1, 10); S.u.h = clamp(+shared.u.h || 8, 1, 20); }
+  if (shared.j && COMBOS[shared.j.combo]) S.j.combo = shared.j.combo;
+  if (shared.c) { S.c.r = clamp(+shared.c.r || 7, 1, 30); S.c.th = clamp(+shared.c.th || 60, 1, 359); }
+}
+shareState(() => ({tab: S.tab, pi: S.pi, u: {kind: S.u.kind, r: S.u.r, h: S.u.h}, j: {combo: S.j.combo}, c: {r: S.c.r, th: S.c.th}}));
+const PI = () => PIS[S.pi];
+const f2 = v => fmt(v, 2);
+
+/* ============================================================================
+   The 3-D renderer: a pool of paths, painted far to near, never re-created.
+   ============================================================================ */
+function makePool(g, n){ const out = []; for (let i = 0; i < n; i++) { const p = document.createElementNS('http://www.w3.org/2000/svg', 'path'); g.appendChild(p); out.push(p); } return out; }
+const hex = c => [1, 3, 5].map(i => parseInt(c.slice(i, i + 2), 16));
+const shade = (c, k) => '#' + hex(c).map(v => clamp(Math.round(v * k), 0, 255).toString(16).padStart(2, '0')).join('');
+const LIGHT = (() => { const l = [-0.45, 0.6, 0.66], m = Math.hypot(...l); return l.map(x => x / m); })();
+function render(pool, faces, view, box){
+  /* fit: centre the mesh and scale its bounding sphere into the box */
+  let lo = [1e9, 1e9, 1e9], hi = [-1e9, -1e9, -1e9];
+  for (const f of faces) for (const p of f.p) for (let q = 0; q < 3; q++) { lo[q] = Math.min(lo[q], p[q]); hi[q] = Math.max(hi[q], p[q]); }
+  const c = [0, 1, 2].map(q => (lo[q] + hi[q]) / 2);
+  let Rb = 1e-6; for (const f of faces) for (const p of f.p) Rb = Math.max(Rb, Math.hypot(p[0] - c[0], p[1] - c[1], p[2] - c[2]));
+  const K = (Math.min(box.w, box.h) / 2 - 14) / Rb, CAM = 2400;
+  const drawn = faces.map(f => {
+    const w = f.p.map(p => mv(view, [p[0] - c[0], p[1] - c[1], p[2] - c[2]]));
+    const P = w.map(v => { const s = CAM / (CAM - v[2] * K); return [box.x + box.w / 2 + v[0] * K * s, box.y + box.h / 2 - v[1] * K * s]; });
+    let n = [0, 0, 0];
+    for (let i = 0; i < w.length; i++) { const a = w[i], b = w[(i + 1) % w.length]; n[0] += (a[1] - b[1]) * (a[2] + b[2]); n[1] += (a[2] - b[2]) * (a[0] + b[0]); n[2] += (a[0] - b[0]) * (a[1] + b[1]); }
+    const nm = Math.hypot(...n) || 1, lit = Math.abs((n[0] * LIGHT[0] + n[1] * LIGHT[1] + n[2] * LIGHT[2]) / nm);
+    return {P, z: w.reduce((s, v) => s + v[2], 0) / w.length, col: shade(f.c, 0.62 + 0.45 * lit), hid: f.hid};
+  }).sort((a, b) => a.z - b.z);
+  for (let i = 0; i < pool.length; i++) {
+    const e = pool[i], d = drawn[i];
+    if (!d) { e.setAttribute('d', ''); continue; }
+    e.setAttribute('d', 'M' + d.P.map(p => p[0].toFixed(1) + ' ' + p[1].toFixed(1)).join('L') + 'Z');
+    e.setAttribute('fill', d.col); e.setAttribute('stroke', d.hid ? '#c2362f' : d.col); e.setAttribute('stroke-width', d.hid ? 1.4 : 0.7);
+    e.setAttribute('stroke-linejoin', 'round');
+  }
+  return {K};
+}
+const viewOf = (yaw, pitch, t = 0) => mm(rotX(pitch * (1 - t)), rotY(yaw * (1 - t)));
+
+/* ============================================================================
+   Tab U: unfold and fill
+   ============================================================================ */
+const sU = $('stU');
+const BOXU = {x: 10, y: 40, w: 540, h: 560};
+const VS = {y0: 70, y1: 300};                      // vessel drawing band
+const GU = {x: 640, y: 398, w: 320, h: 165};       // volume against height
+let POOLU = null;
+function buildU(){
+  sU.innerHTML = `
+  <rect x="0" y="0" width="1000" height="620" fill="#fbfaf6"/>
+  <rect x="10" y="10" width="550" height="600" rx="8" fill="#fff"/>
+  <text x="26" y="34" fill="#4a555b" font-size="12.5" font-weight="700" letter-spacing=".08em" id="uTitle">THE SOLID</text>
+  <g id="meshU"></g>
+  <text id="netLab" x="285" y="596" fill="${WOOD}" font-size="13.5" font-weight="700" text-anchor="middle"></text>
+  <rect id="rotHitU" class="hit" x="10" y="40" width="550" height="540" fill="transparent" tabindex="0" aria-label="Drag to turn the solid"/>
+  <text x="580" y="34" fill="#4a555b" font-size="12.5" font-weight="700" letter-spacing=".08em">FILL IT, POUR IT</text>
+  <g id="vessels"></g>
+  <line x1="570" y1="338" x2="990" y2="338" stroke="#e3dfd3"/>
+  <text x="580" y="362" fill="#4a555b" font-size="12.5" font-weight="700" letter-spacing=".08em">VOLUME UP TO EACH WATER HEIGHT</text>
+  <g id="gUax"></g>
+  <path id="gUcyl" fill="none" stroke="${BLUE}" stroke-width="2.6"/>
+  <path id="gUves" fill="none" stroke="${WOOD}" stroke-width="3"/>
+  <circle id="gUd1" r="6" fill="${BLUE}" stroke="#fff" stroke-width="2"/>
+  <circle id="gUd2" r="6" fill="${WOOD}" stroke="#fff" stroke-width="2"/>`;
+  POOLU = makePool($('meshU'), 720);
+}
+function meshU(){
+  const u = S.u;
+  if (u.kind === 'cyl') return cylinderMesh(u.r, u.h, u.t, COLU);
+  if (u.kind === 'cone') return coneMesh(u.r, u.h, u.t, COLU).faces;
+  return sphereMesh(u.r, u.t, u.kind === 'hemi', COLU);
+}
+const NAMES = {cyl: 'cylinder', cone: 'cone', sphere: 'sphere', hemi: 'hemisphere'};
+function paintU(){
+  const u = S.u;
+  render(POOLU, meshU(), viewOf(u.yaw, u.pitch, u.t), BOXU);
+  $('uTitle').textContent = u.t > 0.99 ? 'ITS NET' : u.t > 0 ? 'UNFOLDING…' : 'THE SOLID';
+  const n = netOf(u.kind, u.r, u.h, u.t), pi = PI(), F = formulas(u.kind, u.r, u.h, pi);
+  let lab = '';
+  if (S.locked && u.t > 0.99) {
+    if (u.kind === 'cyl') lab = `rectangle ${f2(n.W)} × ${f2(u.h)} cm and two circles of radius ${u.r} cm`;
+    else if (u.kind === 'cone') lab = `a sector of radius ${f2(n.L)} cm and angle ${fmt(n.sector, 1)}°, and a circle of radius ${u.r} cm`;
+    else lab = `Archimedes’ rectangle ${f2(n.W)} × ${f2(n.H)} cm` + (u.kind === 'hemi' ? ', and the flat circle' : '');
+  }
+  $('netLab').textContent = lab;
+  paintVessels(); paintSideU(n, F);
+}
+function paintVessels(){
+  const u = S.u, pi = PI(), vs = vessel(u.kind, u.r, u.h), Hc = partnerOf(u.kind, u.r, u.h), cy = vessel('cyl', u.r, Hc);
+  const cap = volumeTo(cy, Hc, pi), full = volumeTo(vs, vs.H, pi);
+  const k = Math.min(150 / (2 * u.r), (VS.y1 - VS.y0) / Math.max(vs.H, Hc));
+  const draw = (v, cx, level, label, col) => {
+    const yb = VS.y1, pts = [];
+    for (let i = 0; i <= 60; i++) { const y = v.H * i / 60; pts.push([v.R(y), y]); }
+    const L = pts.map(([R, y]) => `${(cx - R * k).toFixed(1)} ${(yb - y * k).toFixed(1)}`), Rr = pts.slice().reverse().map(([R, y]) => `${(cx + R * k).toFixed(1)} ${(yb - y * k).toFixed(1)}`);
+    const wat = []; for (let i = 0; i <= 60; i++) { const y = Math.min(level, v.H) * i / 60; wat.push([v.R(y), y]); }
+    const W = level > 1e-6 ? 'M' + wat.map(([R, y]) => `${(cx - R * k).toFixed(1)} ${(yb - y * k).toFixed(1)}`).join('L') + 'L' + wat.slice().reverse().map(([R, y]) => `${(cx + R * k).toFixed(1)} ${(yb - y * k).toFixed(1)}`).join('L') + 'Z' : '';
+    return `<path d="${W}" fill="${WATER}" opacity=".75"/>` +
+      `<path d="M${L.join('L')}M${Rr.join('L')}" fill="none" stroke="${col}" stroke-width="3" stroke-linejoin="round"/>` +
+      (v.R(0) > 0 ? `<line x1="${cx - v.R(0) * k}" y1="${yb}" x2="${cx + v.R(0) * k}" y2="${yb}" stroke="${col}" stroke-width="3"/>` : '') +
+      `<text x="${cx}" y="${yb + 22}" fill="${col}" font-size="13" font-weight="700" text-anchor="middle">${label}</text>`;
+  };
+  const cl = levelFor(cy, Math.min(u.water, cap), pi);
+  let out = draw(vs, 680, u.vLevel, 'the ' + NAMES[u.kind], WOOD) + draw(cy, 880, cl, 'its cylinder', BLUE);
+  if (S.locked) {
+    out += `<text x="880" y="${VS.y1 + 40}" fill="${BLUE}" font-size="12.5" text-anchor="middle" class="m">${f2(u.water)} of ${f2(cap)} cm³</text>`;
+    out += `<text x="680" y="${VS.y1 + 40}" fill="${WOOD}" font-size="12.5" text-anchor="middle" class="m">holds ${f2(full)} cm³</text>`;
+    out += `<text x="780" y="56" fill="${INK}" font-size="13.5" font-weight="700" text-anchor="middle">${u.pours ? `${u.pours} pour${u.pours > 1 ? 's' : ''}: the cylinder is ${fmt(100 * Math.min(u.water, cap) / cap, 1)}% full` : 'Nothing poured yet'}${u.spilt > 1e-9 ? ` (${f2(u.spilt)} cm³ spilt)` : ''}</text>`;
+  }
+  $('vessels').innerHTML = out;
+  /* the graph: V(y) for both, with the current levels */
+  const Hm = Math.max(vs.H, Hc), gx = y => GU.x + y / Hm * GU.w, gy = V => GU.y + GU.h - V / cap * GU.h;
+  let a = `<rect x="${GU.x}" y="${GU.y}" width="${GU.w}" height="${GU.h}" fill="#fff" stroke="#e3dfd3"/>`;
+  for (const fr of [0, 1 / 3, 2 / 3, 1]) a += `<line x1="${GU.x}" y1="${gy(fr * cap)}" x2="${GU.x + GU.w}" y2="${gy(fr * cap)}" stroke="#eeebe2"/><text x="${GU.x - 6}" y="${gy(fr * cap) + 4}" fill="#7c878c" font-size="11" text-anchor="end">${['0', '⅓', '⅔', '1'][[0, 1 / 3, 2 / 3, 1].indexOf(fr)]}</text>`;
+  a += `<text x="${GU.x + GU.w}" y="${GU.y + GU.h + 16}" fill="#4a555b" font-size="11.5" text-anchor="end">water height (0 to ${f2(Hm)} cm)</text>`;
+  a += `<text x="${GU.x - 30}" y="${GU.y - 8}" fill="#4a555b" font-size="11.5">× the cylinder’s volume</text>`;
+  $('gUax').innerHTML = a;
+  if (!S.locked) { ['gUcyl', 'gUves'].forEach(id => $(id).setAttribute('d', '')); ['gUd1', 'gUd2'].forEach(id => $(id).setAttribute('opacity', 0)); return; }
+  let pc = '', pv = '';
+  for (let i = 0; i <= 80; i++) { const y = Hc * i / 80; pc += (i ? 'L' : 'M') + gx(y).toFixed(1) + ' ' + gy(volumeTo(cy, y, pi)).toFixed(1); }
+  for (let i = 0; i <= 80; i++) { const y = vs.H * i / 80; pv += (i ? 'L' : 'M') + gx(y).toFixed(1) + ' ' + gy(volumeTo(vs, y, pi)).toFixed(1); }
+  $('gUcyl').setAttribute('d', pc); $('gUves').setAttribute('d', pv);
+  $('gUd1').setAttribute('cx', gx(cl)); $('gUd1').setAttribute('cy', gy(Math.min(u.water, cap))); $('gUd1').setAttribute('opacity', 1);
+  $('gUd2').setAttribute('cx', gx(u.vLevel)); $('gUd2').setAttribute('cy', gy(volumeTo(vs, u.vLevel, pi))); $('gUd2').setAttribute('opacity', 1);
+}
+function paintSideU(n, F){
+  const u = S.u, pi = PI();
+  $('kinds').querySelectorAll('.chip').forEach(b => b.setAttribute('aria-pressed', b.dataset.k === u.kind));
+  $('ur').value = u.r; $('urOut').textContent = u.r + ' cm'; $('uh').value = u.h; $('uhOut').textContent = u.h + ' cm';
+  $('uhRow').hidden = u.kind === 'sphere' || u.kind === 'hemi';
+  $('ut').value = u.t; $('utOut').textContent = Math.round(u.t * 100) + '%';
+  if (!S.locked) { $('uRead').innerHTML = '<span>The numbers appear once you have made a prediction.</span><b></b>'; return; }
+  let r = '';
+  if (u.kind === 'cyl') r = `<span>Sheet width, measured on the mesh</span><b>${f2(n.W)} cm</b><span>2πr, with your π</span><b>${f2(2 * pi * u.r)} cm</b><span>Curved surface 2πrh</span><b>${f2(F.curved)} cm²</b>`;
+  else if (u.kind === 'cone') r = `<span>Slant height l, measured</span><b>${f2(n.L)} cm</b><span>Sector angle 360° × r ⁄ l</span><b>${fmt(n.sector, 1)}°</b><span>Curved surface πrl</span><b>${f2(F.curved)} cm²</b>`;
+  else r = `<span>Rectangle, measured</span><b>${f2(n.W)} × ${f2(n.H)} cm</b><span>Curved surface ${u.kind === 'hemi' ? '2πr²' : '4πr²'}</span><b>${f2(F.curved)} cm²</b>`;
+  r += `<span>Flat circles</span><b>${n.circles ? n.circles + ' × ' + f2(pi * u.r * u.r) : 'none'}</b><div class="sep"></div>`;
+  r += `<span>Total surface area</span><b>${f2(F.curved + F.flat)} cm²</b><span>Volume, by slicing</span><b>${f2(volumeTo(vessel(u.kind, u.r, u.h), vessel(u.kind, u.r, u.h).H, pi))} cm³</b>`;
+  $('uRead').innerHTML = r;
+  $('btnPour').textContent = `Fill the ${NAMES[u.kind]} and pour it in`;
+  $('btnPour').disabled = u.pouring; $('btnEmpty').disabled = u.pouring || u.water <= 0;
+  if (S.tab === 'u') paintWhyU(n, F);
+}
+function paintWhyU(n, F){
+  const u = S.u, pi = PI(), vs = vessel(u.kind, u.r, u.h), Hc = partnerOf(u.kind, u.r, u.h), cy = vessel('cyl', u.r, Hc);
+  const V = volumeTo(vs, vs.H, pi), C = volumeTo(cy, Hc, pi);
+  let t = '';
+  if (u.t > 0.99) {
+    if (u.kind === 'cyl') t += `<p>Unrolled, the curved surface is a rectangle. Its width is the distance round the circle, <b>${f2(n.W)} cm</b> = 2πr, and its height is h, so it has area 2πrh = <b>${f2(F.curved)} cm²</b>. Add the two circles: TSA = 2πr(r + h).</p>`;
+    else if (u.kind === 'cone') t += `<p>Unrolled, the curved surface is a sector of a circle of radius l = <b>${f2(n.L)} cm</b>. Its arc is the rim of the base, 2πr, so its angle is 360° × r ⁄ l = <b>${fmt(n.sector, 1)}°</b> and its area is ½ × l × 2πr = πrl = <b>${f2(F.curved)} cm²</b>.</p>`;
+    else t += `<p>A sphere cannot be flattened without stretching. Archimedes’ map pushes it sideways onto the cylinder around it; it stretches sideways just as much as it squeezes upwards, so the area is kept. Unrolled: a rectangle <b>${f2(n.W)} × ${f2(n.H)} cm</b> = ${u.kind === 'hemi' ? '2πr²' : '4πr²'} = <b>${f2(F.curved)} cm²</b>.</p>`;
+  } else t += `<p>Slide <b>Unfold</b> to open the ${NAMES[u.kind]} out flat. Nothing is stretched, so the net has exactly the solid’s surface area.</p>`;
+  t += `<p>Sliced into thin discs, the ${NAMES[u.kind]} holds <b>${f2(V)} cm³</b>; its cylinder (radius ${u.r} cm, height ${f2(Hc)} cm) holds <b>${f2(C)} cm³</b>: a ratio of <b>${fmt(V / C, 4)}</b>.</p>`;
+  $('why').innerHTML = t;
+}
+function checkU(){
+  if (!S.locked) return;
+  const u = S.u;
+  if (u.t > 0.99) { if (u.kind === 'cyl') discover('netCyl'); if (u.kind === 'cone') discover('coneSector'); if (u.kind === 'sphere' || u.kind === 'hemi') discover('sphere4'); }
+  const Hc = partnerOf(u.kind, u.r, u.h), cap = volumeTo(vessel('cyl', u.r, Hc), Hc, PI());
+  if (u.kind === 'cone' && u.pours === 3 && Math.abs(u.water - cap) < 1e-6 * cap && u.spilt < 1e-6 * cap) discover('third');
+  maybeExplain();
+}
+/* pouring: the vessel is filled to the brim, and its water moves across */
+async function pour(){
+  const u = S.u; if (u.pouring || !S.locked) return;
+  const pi = PI(), vs = vessel(u.kind, u.r, u.h), Hc = partnerOf(u.kind, u.r, u.h), cy = vessel('cyl', u.r, Hc);
+  const V = volumeTo(vs, vs.H, pi), cap = volumeTo(cy, Hc, pi), start = u.water;
+  u.pouring = true; u.vLevel = vs.H; sound('whoosh'); paintU();
+  const step = q => { u.vLevel = levelFor(vs, V - q, pi); u.water = Math.min(cap, start + q); u.spilt += 0; paintVessels(); };
+  await tween(0, V, 1100, step);
+  u.vLevel = 0; u.spilt += Math.max(0, start + V - cap); u.water = Math.min(cap, start + V); u.pours++; u.pouring = false;
+  if (u.spilt > 1e-9) sound('oops'); else sound('pop');
+  paintU(); checkU(); track('pour', {kind: u.kind, pours: u.pours, water: u.water, cap});
+}
+
+/* ============================================================================
+   Tab J: join two solids
+   ============================================================================ */
+const sJ = $('stJ');
+const BOXJ = {x: 10, y: 40, w: 560, h: 560};
+let POOLJ = null;
+function buildJ(){
+  sJ.innerHTML = `
+  <rect x="0" y="0" width="1000" height="620" fill="#fbfaf6"/>
+  <rect x="10" y="10" width="570" height="600" rx="8" fill="#fff"/>
+  <text x="26" y="34" fill="#4a555b" font-size="12.5" font-weight="700" letter-spacing=".08em" id="jTitle">THE PIECES</text>
+  <g id="meshJ"></g>
+  <rect id="rotHitJ" class="hit" x="10" y="40" width="570" height="560" fill="transparent" tabindex="0" aria-label="Drag to turn the solid"/>
+  <text x="600" y="34" fill="#4a555b" font-size="12.5" font-weight="700" letter-spacing=".08em">SURFACE AREA AND VOLUME</text>
+  <g id="bars"></g>`;
+  POOLJ = makePool($('meshJ'), 900);
+}
+function partMesh(p, y0, pi){
+  const f = [], n = 40;
+  const disc = (y, r, flag) => ({p: Array.from({length: n}, (_, k) => [r * Math.sin(2 * Math.PI * k / n), y, r * Math.cos(2 * Math.PI * k / n)]), c: shade(p.col, 0.9), hid: flag});
+  if (p.k === 'cyl') {
+    for (let k = 0; k < n; k++) { const a0 = 2 * Math.PI * k / n, a1 = a0 + 2 * Math.PI / n; f.push({p: [[p.r * Math.sin(a0), y0, p.r * Math.cos(a0)], [p.r * Math.sin(a1), y0, p.r * Math.cos(a1)], [p.r * Math.sin(a1), y0 + p.h, p.r * Math.cos(a1)], [p.r * Math.sin(a0), y0 + p.h, p.r * Math.cos(a0)]], c: p.col}); }
+    f.push(Object.assign(disc(y0, p.r), {face: 'bot'}), Object.assign(disc(y0 + p.h, p.r), {face: 'top'}));
+  } else if (p.k === 'cone') {
+    for (let k = 0; k < n; k++) { const a0 = 2 * Math.PI * k / n, a1 = a0 + 2 * Math.PI / n; f.push({p: [[0, y0 + p.h, 0], [p.r * Math.sin(a0), y0, p.r * Math.cos(a0)], [p.r * Math.sin(a1), y0, p.r * Math.cos(a1)]], c: p.col}); }
+    f.push(Object.assign(disc(y0, p.r), {face: 'bot'}));
+  } else if (p.k === 'hemiUp' || p.k === 'hemiDown') {
+    const up = p.k === 'hemiUp', yF = up ? y0 : y0 + p.r, m = 8;
+    for (let i = 0; i < m; i++) for (let k = 0; k < n; k++) {
+      const b0 = Math.PI / 2 * i / m, b1 = Math.PI / 2 * (i + 1) / m, a0 = 2 * Math.PI * k / n, a1 = a0 + 2 * Math.PI / n, sg = up ? 1 : -1;
+      const V = (b, a) => [p.r * Math.cos(b) * Math.sin(a), yF + sg * p.r * Math.sin(b), p.r * Math.cos(b) * Math.cos(a)];
+      f.push({p: [V(b0, a0), V(b0, a1), V(b1, a1), V(b1, a0)], c: p.col});
+    }
+    f.push(Object.assign(disc(yF, p.r), {face: up ? 'bot' : 'top'}));
+  } else if (p.k === 'cube') {
+    const a = p.a / 2, y1 = y0 + p.a, c = [[-a, -a], [a, -a], [a, a], [-a, a]];
+    for (let i = 0; i < 4; i++) { const [x0, z0] = c[i], [x1, z1] = c[(i + 1) % 4]; f.push({p: [[x0, y0, z0], [x1, y0, z1], [x1, y1, z1], [x0, y1, z0]], c: p.col}); }
+    f.push({p: c.map(([x, z]) => [x, y0, z]), c: shade(p.col, .9), face: 'bot'}, {p: c.map(([x, z]) => [x, y1, z]), c: shade(p.col, .9), face: 'top'});
+  }
+  return f;
+}
+function comboNow(){ const C = COMBOS[S.j.combo]; return {C, parts: C.parts(S.j.q[S.j.combo])}; }
+function paintJ(){
+  const {C, parts} = comboNow(), pi = PI(), F = parts.map(p => partFaces(p, pi)), joined = S.j.gap < 1e-9;
+  /* stack the parts, with gaps */
+  const gapCm = S.j.gap * Math.max(1.5, 0.25 * F.reduce((s, f) => s + f.H, 0));
+  let y = 0, faces = [];
+  parts.forEach((p, i) => {
+    let pf = partMesh(p, y, pi);
+    /* a face fully covered by its neighbour is inside the solid once joined: not drawn */
+    if (joined) pf = pf.filter(fc => {
+      if (fc.face === 'top' && i < parts.length - 1) { const o = overlap(F[i].top, F[i + 1].bot); return o < F[i].top.A - 1e-9; }
+      if (fc.face === 'bot' && i > 0) { const o = overlap(F[i - 1].top, F[i].bot); return o < F[i].bot.A - 1e-9; }
+      return true;
+    });
+    faces = faces.concat(pf); y += F[i].H + gapCm;
+  });
+  render(POOLJ, faces, viewOf(S.j.yaw, S.j.pitch), BOXJ);
+  $('jTitle').textContent = joined ? 'JOINED: ' + C.name.toUpperCase() : 'THE PIECES, APART';
+  const cb = combine(parts, joined, pi), apart = combine(parts, false, pi);
+  paintBars(cb, apart, C);
+  paintSideJ(cb, C, parts);
+}
+function paintBars(cb, apart, C){
+  if (!S.locked) { $('bars').innerHTML = `<text x="790" y="300" fill="#9aa3a6" font-size="14" font-weight="600" text-anchor="middle">Predict first.</text>`; return; }
+  const u = C.unit, X = 610, W = 360, max = apart.sumTSA * 1.02, bw = v => v / max * W;
+  let out = `<text x="${X}" y="70" fill="${INK}" font-size="13" font-weight="700">Sum of the pieces’ total surface areas</text>`;
+  let x = X;
+  apart.rows.forEach(r => { const w = bw(r.A); out += `<rect x="${x.toFixed(1)}" y="80" width="${Math.max(0, w - 1).toFixed(1)}" height="26" fill="${cbCol(r)}"/>`; x += w; });
+  out += `<text x="${X + W}" y="124" fill="${INK}" font-size="13" text-anchor="end" class="m">${f2(apart.sumTSA)} ${u}²</text>`;
+  out += `<text x="${X}" y="160" fill="${INK}" font-size="13" font-weight="700">${S.j.gap < 1e-9 ? 'Total surface area once joined' : 'Join them to see what is left'}</text>`;
+  x = X;
+  cb.rows.forEach(r => { const w = bw(r.shown), wh = bw(r.hid || 0); out += `<rect x="${x.toFixed(1)}" y="170" width="${Math.max(0, w - 1).toFixed(1)}" height="26" fill="${cbCol(r)}"/>`; x += w;
+    if (wh > 0) { out += `<rect x="${x.toFixed(1)}" y="170" width="${Math.max(0, wh - 1).toFixed(1)}" height="26" fill="none" stroke="#c2362f" stroke-dasharray="3 3"/>`; x += wh; } });
+  out += `<text x="${X + W}" y="214" fill="${INK}" font-size="13" text-anchor="end" class="m">${f2(cb.TSA)} ${u}²${cb.hidden > 1e-9 ? `  (−${f2(cb.hidden)} hidden)` : ''}</text>`;
+  /* volumes */
+  const vmax = cb.V * 1.02, vw = v => v / vmax * W;
+  out += `<text x="${X}" y="270" fill="${INK}" font-size="13" font-weight="700">Volumes: they simply add</text>`;
+  x = X;
+  cb.F.forEach((f, i) => { const w = vw(f.V); out += `<rect x="${x.toFixed(1)}" y="280" width="${Math.max(0, w - 1).toFixed(1)}" height="26" fill="${comboNow().parts[i].col}"/>`; x += w; });
+  out += `<text x="${X + W}" y="324" fill="${INK}" font-size="13" text-anchor="end" class="m">${cb.F.map(f => f2(f.V)).join(' + ')} = ${f2(cb.V)} ${u}³</text>`;
+  /* per-part paint, for the rocket */
+  out += `<text x="${X}" y="380" fill="${INK}" font-size="13" font-weight="700">Paint needed for each piece</text>`;
+  comboNow().parts.forEach((p, i) => { out += `<rect x="${X}" y="${392 + i * 30}" width="18" height="18" rx="4" fill="${p.col}"/><text x="${X + 28}" y="${406 + i * 30}" fill="${INK}" font-size="13">${esc(p.nm)}</text><text x="${X + W}" y="${406 + i * 30}" fill="${INK}" font-size="13" text-anchor="end" class="m">${f2(cb.byPart[i])} ${u}²</text>`; });
+  out += `<text x="${X}" y="${420 + comboNow().parts.length * 30}" fill="#6b7479" font-size="12">π taken as ${S.pi === 'pi' ? 'π' : S.pi}</text>`;
+  $('bars').innerHTML = out;
+}
+function cbCol(r){ const p = comboNow().parts[r.part]; return /circle|face/.test(r.name) ? shade(p.col, 0.8) : p.col; }
+function paintSideJ(cb, C, parts){
+  $('combos').querySelectorAll('.chip').forEach(b => b.setAttribute('aria-pressed', b.dataset.c === S.j.combo));
+  const q = S.j.q[S.j.combo];
+  C.params.forEach(p => { const el = $('jp-' + p.k); if (el) { el.value = q[p.k]; $('jp-' + p.k + 'Out').textContent = q[p.k] + ' ' + C.unit; } });
+  $('jg').value = S.j.gap; $('jgOut').textContent = S.j.gap < 1e-9 ? 'joined' : 'apart';
+  if (!S.locked) { $('jFaces').innerHTML = ''; return; }
+  const u = C.unit;
+  $('jFaces').innerHTML = cb.rows.map(r => {
+    const cls = r.hid > 1e-9 ? (r.shown > 1e-9 ? 'ring' : 'hid') : '';
+    return `<tr class="${cls}"><td><i style="background:${cbCol(r)}"></i>${esc(parts[r.part].nm)}: ${esc(r.name)}${cls === 'ring' ? ' (a ring is left)' : ''}</td><td>${f2(r.shown > 1e-9 || !r.hid ? r.shown : r.A)}</td></tr>`;
+  }).join('') + `<tr class="tot"><td>Total surface area</td><td>${f2(cb.TSA)} ${u}²</td></tr><tr class="tot"><td>Volume</td><td>${f2(cb.V)} ${u}³</td></tr>`;
+  if (S.tab === 'j') paintWhyJ(cb, C, parts);
+}
+function paintWhyJ(cb, C, parts){
+  const u = C.unit, joined = S.j.gap < 1e-9;
+  let t = `<p>${esc(C.desc)}</p>`;
+  if (!joined) t += `<p>Apart, the pieces have ${f2(cb.sumTSA)} ${u}² of surface between them. Slide them together.</p>`;
+  else {
+    t += `<p>Joined, the faces that touch are inside the solid: <b>${f2(cb.hidden / 2)} ${u}²</b> is covered on each of them, so <b>${f2(cb.hidden)} ${u}²</b> leaves the surface. The total surface area is <b>${f2(cb.TSA)} ${u}²</b>, not the ${f2(cb.sumTSA)} ${u}² of the pieces.</p>`;
+    const ring = cb.rows.find(r => r.hid > 1e-9 && r.shown > 1e-9);
+    if (ring) t += `<p>The ${esc(parts[ring.part].nm)}’s circle is bigger than the face it rests on, so a <b>ring of ${f2(ring.shown)} ${u}²</b> is still outside and must be painted.</p>`;
+    t += `<p>The volume is just the sum: <b>${f2(cb.V)} ${u}³</b>. Nothing inside is lost when pieces are joined.</p>`;
+  }
+  $('why').innerHTML = t;
+}
+function checkJ(){
+  if (!S.locked || S.j.gap > 1e-9) return;
+  const {parts} = comboNow(), cb = combine(parts, true, PI());
+  if (cb.hidden > 1e-9) discover('hidden');
+  if (cb.rows.some(r => r.hid > 1e-9 && r.shown > 1e-9)) discover('ring');
+}
+
+/* ============================================================================
+   Tab C: sectors and segments
+   ============================================================================ */
+const sC = $('stC');
+const CC = {x: 290, y: 320, R: 230};
+const GC = {x: 620, y: 110, w: 340, h: 380};
+function buildC(){
+  sC.innerHTML = `
+  <rect x="0" y="0" width="1000" height="620" fill="#fbfaf6"/>
+  <rect x="10" y="10" width="560" height="600" rx="8" fill="#fff"/>
+  <circle cx="${CC.x}" cy="${CC.y}" r="${CC.R}" fill="#f7f1e6" stroke="${WOOD}" stroke-width="3"/>
+  <path id="cSec" fill="#e9d3a4" stroke="none"/>
+  <path id="cSeg" fill="#e0a54a" opacity=".85"/>
+  <path id="cTri" fill="none" stroke="${INK}" stroke-width="2"/>
+  <path id="cArc" fill="none" stroke="#c2362f" stroke-width="5" stroke-linecap="round"/>
+  <path id="cAng" fill="none" stroke="${INK}" stroke-width="1.8"/>
+  <text id="cAngT" fill="${INK}" font-size="15" font-weight="700" text-anchor="middle"></text>
+  <circle cx="${CC.x}" cy="${CC.y}" r="5" fill="${INK}"/><text x="${CC.x - 10}" y="${CC.y + 22}" fill="${INK}" font-size="16" font-weight="700">O</text>
+  <circle id="cA" r="6" fill="${INK}"/><text id="cAl" fill="${INK}" font-size="16" font-weight="700">A</text>
+  <text id="cBl" fill="${INK}" font-size="16" font-weight="700">B</text>
+  <text id="cLab" x="290" y="596" fill="#4a555b" font-size="13" text-anchor="middle"></text>
+  <circle id="cB" class="hit" r="13" fill="#d9822b" stroke="#fff" stroke-width="3" tabindex="0" role="slider" aria-label="Point B: drag round the circle to change the angle"/>
+  <text x="600" y="34" fill="#4a555b" font-size="12.5" font-weight="700" letter-spacing=".08em">AREA AGAINST THE ANGLE θ</text>
+  <g id="gCax"></g>
+  <path id="gCsec" fill="none" stroke="#b8862f" stroke-width="3"/>
+  <path id="gCtri" fill="none" stroke="${INK}" stroke-width="1.8" stroke-dasharray="5 4"/>
+  <path id="gCseg" fill="none" stroke="#d9822b" stroke-width="3"/>
+  <line id="gCnow" stroke="${INK}" stroke-width="1.2" stroke-dasharray="4 4"/>
+  <circle id="gCd" r="6.5" fill="#b8862f" stroke="#fff" stroke-width="2"/>
+  <circle id="gCd2" r="6" fill="#d9822b" stroke="#fff" stroke-width="2"/>
+  <rect id="gCHit" class="hit" x="${GC.x - 8}" y="${GC.y - 8}" width="${GC.w + 16}" height="${GC.h + 16}" fill="transparent" tabindex="0" role="slider" aria-label="Graph: drag sideways to change the angle"/>`;
+}
+const cpt = (th, R = CC.R) => ({x: CC.x + R * Math.cos(th * D2R), y: CC.y - R * Math.sin(th * D2R)});
+function paintC(){
+  const c = S.c, pi = PI(), s = sector(c.r, c.th, pi), A = cpt(0), B = cpt(c.th), big = c.th > 180 ? 1 : 0;
+  $('cSec').setAttribute('d', `M${CC.x} ${CC.y}L${A.x} ${A.y}A${CC.R} ${CC.R} 0 ${big} 0 ${B.x.toFixed(1)} ${B.y.toFixed(1)}Z`);
+  $('cSeg').setAttribute('d', S.locked ? `M${A.x} ${A.y}A${CC.R} ${CC.R} 0 ${big} 0 ${B.x.toFixed(1)} ${B.y.toFixed(1)}Z` : '');
+  $('cTri').setAttribute('d', `M${CC.x} ${CC.y}L${A.x} ${A.y}L${B.x.toFixed(1)} ${B.y.toFixed(1)}Z`);
+  $('cArc').setAttribute('d', `M${A.x} ${A.y}A${CC.R} ${CC.R} 0 ${big} 0 ${B.x.toFixed(1)} ${B.y.toFixed(1)}`);
+  const a0 = cpt(0, 36), a1 = cpt(c.th, 36);
+  $('cAng').setAttribute('d', `M${a0.x} ${a0.y}A36 36 0 ${big} 0 ${a1.x.toFixed(1)} ${a1.y.toFixed(1)}`);
+  const mid = cpt(c.th / 2, 60); $('cAngT').setAttribute('x', mid.x.toFixed(1)); $('cAngT').setAttribute('y', (mid.y + 5).toFixed(1)); $('cAngT').textContent = c.th + '°';
+  $('cA').setAttribute('cx', A.x); $('cA').setAttribute('cy', A.y); $('cAl').setAttribute('x', A.x + 14); $('cAl').setAttribute('y', A.y + 6);
+  $('cB').setAttribute('cx', B.x.toFixed(1)); $('cB').setAttribute('cy', B.y.toFixed(1));
+  const bl = cpt(c.th, CC.R + 26); $('cBl').setAttribute('x', (bl.x - 5).toFixed(1)); $('cBl').setAttribute('y', (bl.y + 6).toFixed(1));
+  $('cLab').textContent = S.locked ? `r = ${c.r} ${c.unit}   ·   shaded light: the sector   ·   orange: the segment   ·   red: the arc` : '';
+  /* graph */
+  const top = s.circle, gx = th => GC.x + th / 360 * GC.w, gy = v => GC.y + GC.h - v / top * GC.h * 0.95;
+  let ax = `<rect x="${GC.x}" y="${GC.y}" width="${GC.w}" height="${GC.h}" fill="#fff" stroke="#e3dfd3"/>`;
+  for (const th of [0, 90, 180, 270, 360]) ax += `<line x1="${gx(th)}" y1="${GC.y}" x2="${gx(th)}" y2="${GC.y + GC.h}" stroke="#eeebe2"/><text x="${gx(th)}" y="${GC.y + GC.h + 16}" fill="#7c878c" font-size="11" text-anchor="middle">${th}°</text>`;
+  ax += `<line x1="${GC.x}" y1="${gy(top)}" x2="${GC.x + GC.w}" y2="${gy(top)}" stroke="#eeebe2" stroke-dasharray="3 3"/><text x="${GC.x - 6}" y="${gy(top) + 4}" fill="#7c878c" font-size="11" text-anchor="end">πr²</text><text x="${GC.x - 6}" y="${gy(0) + 4}" fill="#7c878c" font-size="11" text-anchor="end">0</text>`;
+  ax += `<line x1="610" y1="72" x2="632" y2="72" stroke="#b8862f" stroke-width="3"/><text x="638" y="76" fill="#7a5a1d" font-size="12.5" font-weight="600">sector</text>`;
+  ax += `<line x1="700" y1="72" x2="722" y2="72" stroke="${INK}" stroke-width="1.8" stroke-dasharray="5 4"/><text x="728" y="76" fill="${INK}" font-size="12.5" font-weight="600">triangle OAB</text>`;
+  ax += `<line x1="830" y1="72" x2="852" y2="72" stroke="#d9822b" stroke-width="3"/><text x="858" y="76" fill="#9a5413" font-size="12.5" font-weight="600">segment</text>`;
+  $('gCax').innerHTML = ax;
+  if (!S.locked) { ['gCsec', 'gCtri', 'gCseg'].forEach(id => $(id).setAttribute('d', '')); ['gCd', 'gCd2', 'gCnow'].forEach(id => $(id).setAttribute('opacity', 0)); }
+  else {
+    let ps = '', pt = '', pg = '';
+    for (let th = 0; th <= 360; th += 2) { const v = sector(c.r, th, pi); ps += (th ? 'L' : 'M') + gx(th).toFixed(1) + ' ' + gy(v.sec).toFixed(1); pg += (th ? 'L' : 'M') + gx(th).toFixed(1) + ' ' + gy(v.seg).toFixed(1); if (th <= 180) pt += (th ? 'L' : 'M') + gx(th).toFixed(1) + ' ' + gy(v.tri).toFixed(1); }
+    $('gCsec').setAttribute('d', ps); $('gCtri').setAttribute('d', pt); $('gCseg').setAttribute('d', pg);
+    $('gCnow').setAttribute('x1', gx(c.th)); $('gCnow').setAttribute('x2', gx(c.th)); $('gCnow').setAttribute('y1', GC.y); $('gCnow').setAttribute('y2', GC.y + GC.h);
+    $('gCd').setAttribute('cx', gx(c.th)); $('gCd').setAttribute('cy', gy(s.sec)); $('gCd2').setAttribute('cx', gx(c.th)); $('gCd2').setAttribute('cy', gy(s.seg));
+    ['gCd', 'gCd2', 'gCnow'].forEach(id => $(id).setAttribute('opacity', 1));
+  }
+  paintSideC(s);
+}
+function paintSideC(s){
+  const c = S.c, u = c.unit;
+  $('cr').value = c.r; $('crOut').textContent = c.r + ' ' + u; $('cth').value = c.th; $('cthOut').textContent = c.th + '°';
+  if (!S.locked) { $('cRead').innerHTML = '<span>The numbers appear once you have made a prediction.</span><b></b>'; return; }
+  const cnt = countSector(c.r, c.th);
+  $('cRead').innerHTML = `<span>Arc length θ⁄360 × 2πr</span><b>${f2(s.arc)} ${u}</b><span>Sector θ⁄360 × πr²</span><b>${f2(s.sec)} ${u}²</b>
+    <span>…counted square by square</span><b>${f2(cnt * PI() / Math.PI)} ${u}²</b><span>Triangle OAB ½r² sin θ</span><b>${f2(Math.abs(s.tri))} ${u}²</b>
+    <span>Segment = sector ${s.tri < 0 ? '+' : '−'} triangle</span><b>${f2(s.seg)} ${u}²</b><div class="sep"></div>
+    <span>Major sector</span><b>${f2(s.majorSec)} ${u}²</b><span>Major segment</span><b>${f2(s.majorSeg)} ${u}²</b>`;
+  if (S.tab === 'c') paintWhyC(s);
+}
+function paintWhyC(s){
+  const c = S.c, u = c.unit;
+  const tri = Math.abs(s.tri);
+  let t = `<p>A full turn of 360° sweeps the whole disc, πr² = ${f2(s.circle)} ${u}². So each degree sweeps 1⁄360 of it, and <b>${c.th}°</b> sweeps ${c.th}⁄360 × ${f2(s.circle)} = <b>${f2(s.sec)} ${u}²</b>. That is why the sector line on the graph is straight.</p>`;
+  t += `<p>The chord AB and the radii make the triangle OAB (${f2(tri)} ${u}²). The segment is the part between the chord and the arc: ${f2(s.sec)} ${s.tri < 0 ? '+' : '−'} ${f2(tri)} = <b>${f2(s.seg)} ${u}²</b>.` +
+       (c.th > 180 ? ' Past 180°, the centre O is on the arc’s side of the chord: the triangle now lies outside the sector, so the segment is the sector <b>plus</b> the triangle.' : '') + `</p>`;
+  $('why').innerHTML = t;
+}
+function checkC(){
+  if (!S.locked) return;
+  const c = S.c;
+  c.thMin = Math.min(c.thMin, c.th); c.thMax = Math.max(c.thMax, c.th);
+  if (c.r === 21 && c.th === 120 && S.pi === '22/7') discover('segment');
+}
+
+/* ============================================================================
+   Controls
+   ============================================================================ */
+buildU(); buildJ(); buildC();
+$('combos').innerHTML = Object.entries(COMBOS).map(([k, c]) => `<button class="chip" data-c="${k}" aria-pressed="false">${esc(c.name)}</button>`).join('');
+$('cPresets').innerHTML = CPRESETS.map(p => `<button class="chip" data-cp="${p.id}">${esc(p.name)}</button>`).join('');
+function buildJSliders(){
+  const C = COMBOS[S.j.combo];
+  $('jSliders').innerHTML = C.params.map(p => `<div class="ctl"><label for="jp-${p.k}">${esc(p.label)}</label><input type="range" id="jp-${p.k}" min="${p.min}" max="${p.max}" step="${p.step}" value="${S.j.q[S.j.combo][p.k]}"${S.locked ? '' : ' disabled'}><output id="jp-${p.k}Out"></output></div>`).join('');
+  C.params.forEach(p => $('jp-' + p.k).addEventListener('input', e => { S.j.q[S.j.combo][p.k] = +e.target.value; paintJ(); checkJ(); }));
+}
+$('kinds').addEventListener('click', e => { const b = e.target.closest('[data-k]'); if (!b || !S.locked || S.u.pouring) return; S.u.kind = b.dataset.k; S.u.water = 0; S.u.pours = 0; S.u.spilt = 0; S.u.vLevel = 0; sound('pop'); paintU(); checkU(); track('solid', {kind: S.u.kind}); });
+$('ur').addEventListener('input', e => { if (S.u.pouring) return; S.u.r = +e.target.value; S.u.water = 0; S.u.pours = 0; S.u.spilt = 0; paintU(); checkU(); });
+$('uh').addEventListener('input', e => { if (S.u.pouring) return; S.u.h = +e.target.value; S.u.water = 0; S.u.pours = 0; S.u.spilt = 0; paintU(); checkU(); });
+$('ut').addEventListener('input', e => { S.u.t = +e.target.value; paintU(); checkU(); });
+$('ut').addEventListener('change', () => track('unfold', {kind: S.u.kind, t: S.u.t}));
+$('btnPour').addEventListener('click', pour);
+$('btnEmpty').addEventListener('click', () => { S.u.water = 0; S.u.pours = 0; S.u.spilt = 0; sound('tick'); paintU(); });
+$('pi').addEventListener('change', e => { S.pi = e.target.value; sound('tick'); paintAll(); checkC(); track('pi', {pi: S.pi}); });
+$('combos').addEventListener('click', e => { const b = e.target.closest('[data-c]'); if (!b || !S.locked) return; S.j.combo = b.dataset.c; S.pi = COMBOS[S.j.combo].pi; $('pi').value = S.pi; S.j.gap = 1; buildJSliders(); sound('pop'); paintAll(); track('combo', {combo: S.j.combo}); });
+$('jg').addEventListener('input', e => { S.j.gap = +e.target.value; if (S.j.gap < 1e-9) sound('snap'); paintJ(); checkJ(); });
+$('cPresets').addEventListener('click', e => { const b = e.target.closest('[data-cp]'); if (!b || !S.locked) return; const p = CPRESETS.find(x => x.id === b.dataset.cp); Object.assign(S.c, {r: p.r, th: p.th, unit: p.unit}); S.pi = p.pi; $('pi').value = S.pi; sound('pop'); paintAll(); checkC(); track('preset', {id: p.id}); });
+$('cr').addEventListener('input', e => { S.c.r = +e.target.value; paintC(); checkC(); });
+$('cth').addEventListener('input', e => { S.c.th = +e.target.value; paintC(); checkC(); });
+/* turning the 3-D views */
+function rotator(hit, svg, get){
+  let last = null;
+  drag(hit, svg, {
+    start(p){ if (!S.locked) return false; last = p; },
+    move(p){ const o = get(); o.yaw += (p.x - last.x) * 0.012; o.pitch = clamp(o.pitch + (p.y - last.y) * 0.012, -1.45, 1.45); last = p; (o === S.u ? paintU : paintJ)(); },
+    end(){ track('turn'); },
+  });
+}
+rotator($('rotHitU'), sU, () => S.u);
+rotator($('rotHitJ'), sJ, () => S.j);
+drag($('cB'), sC, {
+  start(){ if (!S.locked) return false; },
+  move(p){ let a = Math.atan2(CC.y - p.y, p.x - CC.x) / D2R; if (a < 0) a += 360; const th = clamp(Math.round(a), 1, 359); if (th !== S.c.th) { S.c.th = th; paintC(); checkC(); } },
+  end(){ track('angle', {th: S.c.th}); },
+});
+drag($('gCHit'), sC, {
+  start(p){ if (!S.locked) return false; setThFromGraph(p); },
+  move(p){ setThFromGraph(p); },
+  end(){ track('angleGraph', {th: S.c.th}); },
+});
+function setThFromGraph(p){ const th = clamp(Math.round((p.x - GC.x) / GC.w * 360), 1, 359); if (th !== S.c.th) { S.c.th = th; paintC(); checkC(); } }
+
+function paintAll(){ paintU(); paintJ(); paintC(); }
+function showTab(tab){
+  S.tab = tab;
+  [['u', 'U'], ['j', 'J'], ['c', 'C']].forEach(([k, K]) => {
+    $('tab' + K).setAttribute('aria-selected', tab === k);
+    $('st' + K).toggleAttribute('hidden', tab !== k);
+    $('card' + K).hidden = tab !== k;
+  });
+  if (tab === 'u') paintU(); else if (tab === 'j') paintJ(); else paintC();
+}
+$('tabU').addEventListener('click', () => { sound('tick'); showTab('u'); track('tab', {tab: 'u'}); });
+$('tabJ').addEventListener('click', () => { sound('tick'); showTab('j'); track('tab', {tab: 'j'}); });
+$('tabC').addEventListener('click', () => { sound('tick'); showTab('c'); track('tab', {tab: 'c'}); });
+function lockControls(lock){
+  ['ur', 'uh', 'ut', 'btnPour', 'btnEmpty', 'jg', 'cr', 'cth', 'pi'].forEach(id => { $(id).disabled = lock; });
+  document.querySelectorAll('#kinds .chip, #combos .chip, #cPresets .chip, #jSliders input').forEach(b => { b.disabled = lock; });
+  $('gate').hidden = !lock;
+}
+
+/* ============================================================================
+   Start
+   ============================================================================ */
+findings($('finds'), [
+  {id: 'netCyl',     icon: '▭', label: 'A cylinder unrolls into a 2πr × h rectangle', hint: 'Unfold a cylinder all the way'},
+  {id: 'coneSector', icon: '◔', label: 'A cone unrolls into a sector of radius l', hint: 'Unfold a cone'},
+  {id: 'sphere4',    icon: '◯', label: 'A sphere’s surface is a 2πr × 2r rectangle: 4πr²', hint: 'Try to unfold a sphere'},
+  {id: 'third',      icon: '⅓', label: 'Three cones fill the cylinder exactly', hint: 'Pour cones into their cylinder'},
+  {id: 'hidden',     icon: '⧉', label: 'Joining hides faces; volumes just add', hint: 'Join two pieces'},
+  {id: 'ring',       icon: '◎', label: 'The rocket’s ring still needs paint', hint: 'A bigger face on a smaller one'},
+  {id: 'segment',    icon: '◗', label: 'Segment = sector − triangle (Example 2)', hint: 'Radius 21 cm, 120°, π = 22/7'},
+], () => toast('All seven found. Surface area is a net you can lay flat; volume is water you can pour.', 4200));
+
+let EXPLAINED = false;
+function maybeExplain(){
+  if (EXPLAINED || !POE || !found('third')) return;
+  EXPLAINED = true;
+  const u = S.u, pi = PI(), vc = volumeTo(vessel('cone', u.r, u.h), u.h, pi), vy = volumeTo(vessel('cyl', u.r, u.h), u.h, pi);
+  POE.explain(`Sliced into 400 thin discs, your cone (r = ${u.r} cm, h = ${u.h} cm) holds <b>${f2(vc)} cm³</b> and its cylinder <b>${f2(vy)} cm³</b>:
+    a ratio of <b>${fmt(vc / vy, 6)}</b>. Three pours filled it to the brim with nothing spilt. So the volume of a cone is <b>⅓ πr²h</b>, whatever its size: try another radius and height.`);
+}
+const POE = predict($('poe'), {
+  id: 'cones-in-cylinder',
+  q: 'A cone and a cylinder have the same base and the same height. How many cones full of water will fill the cylinder?',
+  options: [
+    {id: 'two',   text: '2: a cone is half a cylinder.'},
+    {id: 'three', text: '3.', right: true},
+    {id: 'four',  text: '4.'},
+    {id: 'pi',    text: 'About 3.14, because of π.'},
+  ],
+  onLock(){
+    S.locked = true; lockControls(false); $('whyCard').hidden = false;
+    say('Now pour and see. You can also unfold the solids.');
+    paintAll();
+  },
+});
+lockControls(!POE.locked);
+if (!Play.FF('predict')) { S.locked = true; lockControls(false); $('whyCard').hidden = false; }
+$('pi').value = S.pi;
+buildJSliders();
+if (!POE.locked) lockControls(true);
+paintAll();
+showTab(S.tab);
+window.applyFeatures = () => paintAll();
+window.PG_STATE = () => JSON.parse(JSON.stringify({tab: S.tab, locked: S.locked, pi: S.pi, u: S.u, j: {combo: S.j.combo, gap: S.j.gap, q: S.j.q[S.j.combo]}, c: S.c,
+  combo: combine(comboNow().parts, S.j.gap < 1e-9, PI()), net: netOf(S.u.kind, S.u.r, S.u.h, S.u.t)}));
+window.PG_MODEL = {vessel, volumeTo, levelFor, partnerOf, curl, cylinderMesh, coneMesh, sphereMesh, netOf, formulas, partFaces, combine, overlap, sector, countSector, COMBOS, PIS};
+</script>
+</body>
+</html>

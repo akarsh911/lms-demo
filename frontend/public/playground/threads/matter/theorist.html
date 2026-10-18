@@ -1,0 +1,626 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kinetic Theory of Gases</title>
+<meta name="description" content="Class 11: a box of real-sized molecules simulated collision by collision. Pressure is measured from the hits on the walls, temperature from their kinetic energy; find Boyle's and Charles's laws, the rms speed, Maxwell's spread of speeds, the mean free path, and where a real gas stops being ideal.">
+<link rel="icon" href="../../favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600&family=Inter:wght@400;500;600;700&family=Nunito:wght@500;700;800&family=Newsreader:opsz,wght@6..72,400;6..72,500&family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="../../play.css">
+<style>
+/* Only what this page needs beyond play.css. */
+.pg-stage{align-self:start; min-height:0}
+.gate{position:absolute; inset:0; display:grid; place-items:center; pointer-events:none}
+.gate span{background:rgba(29,35,39,.86); color:#fff; padding:10px 16px; border-radius:99px; font-weight:600; font-size:14px}
+.seg{display:grid; grid-template-columns:repeat(4,1fr); gap:4px; background:var(--sunk); padding:4px; border-radius:var(--radius-sm); margin-bottom:6px}
+.seg.two{grid-template-columns:1fr 1fr} .seg.three{grid-template-columns:repeat(3,1fr)}
+.seg button{border:0; background:transparent; border-radius:7px; min-height:30px; font-weight:600; font-size:12.5px; cursor:pointer; color:var(--ink-2); padding:0 4px}
+.seg button[aria-pressed="true"]{background:var(--card); color:var(--ink); box-shadow:var(--shadow)}
+.seg button:disabled{opacity:.5; cursor:default}
+.ctl{grid-template-columns:100px 1fr 82px; margin:2px 0}
+.ctl label{font-size:12.5px; line-height:1.2}
+.ctl output{font-family:var(--font-mono); font-size:12.5px; font-weight:600; min-width:0}
+.kicker2{font-size:11px; letter-spacing:.07em; text-transform:uppercase; font-weight:700; color:var(--ink-3); margin:8px 0 3px}
+.why p{font-size:13.5px; margin-bottom:.5em}
+.note{font-size:12.5px; color:var(--ink-3); margin:6px 0 0}
+table.recs{width:100%; border-collapse:collapse; font-size:12px; font-family:var(--font-mono); font-variant-numeric:tabular-nums}
+table.recs th{font-family:var(--font); font-weight:700; font-size:11px; color:var(--ink-3); text-align:right; padding:2px 4px; border-bottom:1px solid var(--hair)}
+table.recs td{text-align:right; padding:2px 4px; border-bottom:1px solid var(--hair)}
+table.recs th:first-child, table.recs td:first-child{text-align:left}
+#pistonHit{cursor:ew-resize}
+#pistonHit.dragging{cursor:grabbing}
+</style>
+</head>
+<body>
+<header class="pg-top"></header>
+
+<div class="pg-intro">
+  <h1>Kinetic theory of gases</h1>
+  <p>A box of molecules at their real size and speed, a few nanometres across. Each molecule flies straight until it hits another or a wall, and the walls are held at a temperature you set.
+     Nothing here is the gas law: the pressure is <em>measured</em> from the momentum the molecules hand to the walls, and the temperature from their kinetic energy.
+     Find PV = NkT in what they do, and then make the molecules big and sticky until it fails.</p>
+</div>
+
+<main class="pg-main wide-side">
+  <section class="pg-stage" id="stageWrap">
+    <svg id="stage" viewBox="0 0 1000 700" role="img" aria-label="A box of gas molecules with a movable piston, a histogram of their speeds and a graph of the gas law"></svg>
+    <div class="gate" id="gate"><span>Make your prediction first →</span></div>
+  </section>
+
+  <aside class="pg-side">
+    <div id="poe"></div>
+
+    <div class="card" id="ctlCard">
+      <div class="kicker2" style="margin-top:0">The gas</div>
+      <div class="seg" id="gas">
+        <button data-g="He" aria-pressed="false">He</button>
+        <button data-g="N2" aria-pressed="true">N₂</button>
+        <button data-g="Ar" aria-pressed="false">Ar</button>
+        <button data-g="Cl2" aria-pressed="false">Cl₂</button>
+      </div>
+      <div class="ctl"><label for="temp">Walls held at</label><input type="range" id="temp" min="100" max="1000" step="10" value="300"><output id="tempOut">300 K</output></div>
+      <div class="ctl"><label for="num">Molecules, N</label><input type="range" id="num" min="30" max="300" step="10" value="250"><output id="numOut">250</output></div>
+      <div class="kicker2">The piston</div>
+      <div class="seg two" id="pmode">
+        <button data-p="held" aria-pressed="true">Held still</button>
+        <button data-p="free" aria-pressed="false">Free, weighted</button>
+      </div>
+      <div class="ctl" id="rowVol"><label for="vol">Box length</label><input type="range" id="vol" min="6" max="24" step="0.5" value="16"><output id="volOut">16 nm</output></div>
+      <div class="ctl" id="rowPext" hidden><label for="pext">Weight presses with</label><input type="range" id="pext" min="40" max="500" step="5" value="150"><output id="pextOut">150 kPa</output></div>
+      <div class="kicker2">Make it a real gas</div>
+      <div class="ctl"><label for="dia">Molecule size, d</label><input type="range" id="dia" min="0.2" max="2" step="0.05" value="0.3"><output id="diaOut">0.30 nm</output></div>
+      <div class="ctl"><label for="eps">Stickiness</label><input type="range" id="eps" min="0" max="1.2" step="0.1" value="0"><output id="epsOut">0</output></div>
+      <div class="row" style="margin-top:6px">
+        <button class="btn primary sm" id="btnRec">Record a point</button>
+        <button class="btn sm" id="btnSame">All the same speed</button>
+      </div>
+      <p class="note">Drag the piston to change the volume. Stickiness is the depth of a short-range pull between molecules, in units of k × 300 K.</p>
+    </div>
+
+    <div class="card" id="recCard">
+      <div class="row" style="justify-content:space-between; margin-bottom:6px">
+        <div class="kicker" style="margin:0">Your measurements</div>
+        <div class="seg three" id="gtype" style="margin:0; min-width:190px">
+          <button data-t="boyle" aria-pressed="true">P, 1/V</button>
+          <button data-t="charles" aria-pressed="false">V, T</button>
+          <button data-t="gay" aria-pressed="false">P, T</button>
+        </div>
+      </div>
+      <div id="recs"><p class="note" style="margin:0">Record points to fill the graph.</p></div>
+    </div>
+
+    <div class="card why" id="whyCard" hidden>
+      <div class="kicker">What the model says</div>
+      <div id="why"></div>
+    </div>
+
+    <div class="card"><div class="kicker">To find</div><div id="finds"></div></div>
+  </aside>
+</main>
+
+<script src="../../play.js"></script>
+<script>
+'use strict';
+const {$, esc, clamp, lerp, fmt, drag, loop, sound, tone, say, track, toast, predict, findings, discover, found,
+       shareState, sharedState, mount, reduced} = Play;
+mount({thread: 'matter', band: 'theorist'});
+
+/* MODEL:start ==================================================================
+   N hard spheres of diameter d in a box L × 16 nm × 16 nm, in three dimensions. Each
+   step (0.1 ps) every molecule moves in a straight line; two that touch while
+   approaching bounce elastically (equal masses swap the velocity components along the
+   line of centres). With "stickiness" ε > 0 each pair within 1.8 d also pulls with a
+   short-range well U(r) = −ε(1 − s²)², s = (r − d)/(0.8 d), integrated by velocity Verlet.
+
+   The walls are held at temperature T: a molecule that hits one leaves with a fresh
+   velocity drawn from the gas distribution of the wall (a “thermal wall”) — that is how
+   heat gets in and out. The right wall is a piston: held still, or pushed by a weight
+   (it then moves until the gas pushes back as hard; it is heavily damped).
+
+   MEASURED, never assumed:
+     pressure P  = Σ (momentum handed to the walls) / (wall area × time)
+     temperature = m⟨v²⟩ / 3k       rms speed = √⟨v²⟩
+     mean free path λ = (distance flown) / (number of free paths ended by a collision),
+                        counted for molecules more than d from any wall
+   and then compared with P = NkT/V, v_rms = √(3kT/m), λ = 1/(√2 n π d²).
+   ============================================================================ */
+const kB = 1.380649e-23, AMU = 1.66054e-27, NA = 6.02214e23, RG = 8.314;
+const GASES = {He: {m: 4.0, name: 'helium'}, N2: {m: 28.0, name: 'nitrogen'}, Ar: {m: 39.9, name: 'argon'}, Cl2: {m: 70.9, name: 'chlorine'}};
+const L0 = 16e-9, DT = 1e-13, BIN = 1e-11, RC = 1.8;
+const massOf = g => GASES[g].m * AMU;
+const vrmsTheory = (T, g) => Math.sqrt(3 * kB * T / massOf(g));
+const pIdeal = (N, T, V) => N * kB * T / V;
+const mfpTheory = (n, d) => 1 / (Math.SQRT2 * n * Math.PI * d * d);
+const maxwell = (v, T, m) => 4 * Math.PI * Math.pow(m / (2 * Math.PI * kB * T), 1.5) * v * v * Math.exp(-m * v * v / (2 * kB * T));
+
+function gauss(rng){ let u = 0; while (u < 1e-12) u = rng(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * rng()); }
+function makeGas(o){
+  const rng = Play.mulberry32(o.seed || 7), N = o.N, m = massOf(o.gas);
+  const G = {N, gas: o.gas, m, T: o.T, Lx: o.Lx, d: o.d, eps: o.eps || 0, rng, t: 0, tChange: 0,
+    x: new Float64Array(N), y: new Float64Array(N), z: new Float64Array(N), vx: new Float64Array(N), vy: new Float64Array(N), vz: new Float64Array(N),
+    ax: new Float64Array(N), ay: new Float64Array(N), az: new Float64Array(N),
+    pmode: o.pmode || 'held', pext: o.pext || 1.5e5, vp: 0, Fp: 0, bins: [], cur: null};
+  for (let i = 0; i < N; i++) {
+    for (let tries = 0; tries < 400; tries++) {
+      G.x[i] = rng() * G.Lx; G.y[i] = rng() * L0; G.z[i] = rng() * L0;
+      let okp = true;
+      for (let j = 0; j < i && okp; j++) { const dx = G.x[i] - G.x[j], dy = G.y[i] - G.y[j], dz = G.z[i] - G.z[j]; if (dx * dx + dy * dy + dz * dz < G.d * G.d * 1.05) okp = false; }
+      if (okp) break;
+    }
+  }
+  setVelocities(G, o.same);
+  forces(G);
+  newBin(G);
+  return G;
+}
+function setVelocities(G, same){
+  const s = Math.sqrt(kB * G.T / G.m);
+  for (let i = 0; i < G.N; i++) {
+    if (same) {                                   // every molecule at the same speed, in a random direction
+      const v = Math.sqrt(3) * s, c = 2 * G.rng() - 1, ph = 2 * Math.PI * G.rng(), q = Math.sqrt(1 - c * c);
+      G.vx[i] = v * q * Math.cos(ph); G.vy[i] = v * q * Math.sin(ph); G.vz[i] = v * c;
+    } else { G.vx[i] = s * gauss(G.rng); G.vy[i] = s * gauss(G.rng); G.vz[i] = s * gauss(G.rng); }
+  }
+}
+function newBin(G){
+  G.cur = {t0: G.t, dt: 0, imp: 0, at: 0, v2: 0, nv: 0, coll: 0, ends: 0, dist: 0, V: 0};
+  G.bins.push(G.cur);
+  if (G.bins.length > 80) G.bins.shift();
+}
+/* the attractive well: forces on every pair within reach */
+function forces(G){
+  const {N, x, y, z, ax, ay, az} = G;
+  ax.fill(0); ay.fill(0); az.fill(0);
+  if (!(G.eps > 0)) return;
+  const d = G.d, rc = RC * d, rc2 = rc * rc, w = rc - d, e = G.eps * kB * 300, im = 1 / G.m;
+  for (let i = 0; i < N; i++) for (let j = i + 1; j < N; j++) {
+    const dx = x[i] - x[j]; if (dx > rc || dx < -rc) continue;
+    const dy = y[i] - y[j], dz = z[i] - z[j], r2 = dx * dx + dy * dy + dz * dz;
+    if (r2 >= rc2) continue;
+    const r = Math.sqrt(r2); if (r < d) continue;
+    const s = (r - d) / w, f = 4 * e * s * (1 - s * s) / w;       // |dU/dr|, pulling i towards j
+    const fx = -f * dx / r * im, fy = -f * dy / r * im, fz = -f * dz / r * im;
+    ax[i] += fx; ay[i] += fy; az[i] += fz; ax[j] -= fx; ay[j] -= fy; az[j] -= fz;
+  }
+}
+/* a molecule leaving a wall at temperature T: normal speed from the flux distribution */
+/* a molecule at least one diameter from every wall: its collisions are not cut short by a wall */
+const inBulk = (G, i) => +(G.x[i] > G.d && G.x[i] < G.Lx - G.d && G.y[i] > G.d && G.y[i] < L0 - G.d && G.z[i] > G.d && G.z[i] < L0 - G.d);
+const wallNormal = G => Math.sqrt(kB * G.T / G.m) * Math.sqrt(-2 * Math.log(Math.max(1e-12, G.rng())));
+const wallTang = G => Math.sqrt(kB * G.T / G.m) * gauss(G.rng);
+function stepGas(G){
+  const {N, x, y, z, vx, vy, vz, ax, ay, az, m} = G, h = DT, d = G.d, d2 = d * d;
+  let imp = 0, impP = 0, dist = 0, coll = 0, ends = 0;
+  for (let i = 0; i < N; i++) {
+    vx[i] += ax[i] * h / 2; vy[i] += ay[i] * h / 2; vz[i] += az[i] * h / 2;
+    x[i] += vx[i] * h; y[i] += vy[i] * h; z[i] += vz[i] * h;
+    if (inBulk(G, i)) dist += Math.sqrt(vx[i] * vx[i] + vy[i] * vy[i] + vz[i] * vz[i]) * h;     // for the mean free path: away from the walls
+    /* walls: the molecule's centre reaches the wall; it leaves with the wall's temperature */
+    if (x[i] < 0) { const vo = vx[i], vn = wallNormal(G); x[i] = -x[i]; vx[i] = vn; vy[i] = wallTang(G); vz[i] = wallTang(G); imp += m * (vn - vo); }
+    else if (x[i] > G.Lx) { const vo = vx[i], vn = wallNormal(G); x[i] = 2 * G.Lx - x[i]; vx[i] = G.vp - vn; vy[i] = wallTang(G); vz[i] = wallTang(G); const J = m * (vo - vx[i]); imp += J; impP += J; }
+    if (y[i] < 0) { const vo = vy[i], vn = wallNormal(G); y[i] = -y[i]; vy[i] = vn; vx[i] = wallTang(G) + 0; vz[i] = wallTang(G); imp += m * (vn - vo); }
+    else if (y[i] > L0) { const vo = vy[i], vn = wallNormal(G); y[i] = 2 * L0 - y[i]; vy[i] = -vn; vx[i] = wallTang(G); vz[i] = wallTang(G); imp += m * (vo + vn); }
+    if (z[i] < 0) { const vo = vz[i], vn = wallNormal(G); z[i] = -z[i]; vz[i] = vn; vx[i] = wallTang(G); vy[i] = wallTang(G); imp += m * (vn - vo); }
+    else if (z[i] > L0) { const vo = vz[i], vn = wallNormal(G); z[i] = 2 * L0 - z[i]; vz[i] = -vn; vx[i] = wallTang(G); vy[i] = wallTang(G); imp += m * (vo + vn); }
+    x[i] = clamp(x[i], 0, G.Lx); y[i] = clamp(y[i], 0, L0); z[i] = clamp(z[i], 0, L0);
+  }
+  /* hard-sphere collisions: touching and approaching → swap the velocity along the line of centres */
+  for (let i = 0; i < N; i++) for (let j = i + 1; j < N; j++) {
+    const dx = x[i] - x[j]; if (dx > d || dx < -d) continue;
+    const dy = y[i] - y[j]; if (dy > d || dy < -d) continue;
+    const dz = z[i] - z[j], r2 = dx * dx + dy * dy + dz * dz;
+    if (r2 >= d2 || r2 === 0) continue;
+    const dvx = vx[i] - vx[j], dvy = vy[i] - vy[j], dvz = vz[i] - vz[j], dot = dvx * dx + dvy * dy + dvz * dz;
+    if (dot >= 0) continue;
+    const k = dot / r2;
+    vx[i] -= k * dx; vy[i] -= k * dy; vz[i] -= k * dz; vx[j] += k * dx; vy[j] += k * dy; vz[j] += k * dz;
+    /* move them apart to touching, along the line of centres */
+    const r = Math.sqrt(r2), push = (d - r) / (2 * r);
+    x[i] += dx * push; y[i] += dy * push; z[i] += dz * push; x[j] -= dx * push; y[j] -= dy * push; z[j] -= dz * push;
+    coll++; ends += inBulk(G, i) + inBulk(G, j);
+  }
+  forces(G);
+  let v2 = 0;
+  for (let i = 0; i < N; i++) { vx[i] += ax[i] * h / 2; vy[i] += ay[i] * h / 2; vz[i] += az[i] * h / 2; v2 += vx[i] * vx[i] + vy[i] * vy[i] + vz[i] * vz[i]; }
+  /* the piston: held, or pushed by the weight and damped (it settles in about 40 ps) */
+  const A = L0 * L0;
+  G.Fp += (impP / h - G.Fp) * (h / 5e-12);
+  if (G.pmode === 'free') {
+    const c = G.pext * A * 4e-11 / G.Lx;
+    G.vp = (G.Fp - G.pext * A) / c;
+    G.vp = clamp(G.vp, -300, 300);
+    G.Lx = clamp(G.Lx + G.vp * h, 6e-9, 24e-9);
+    if (G.Lx <= 6e-9 || G.Lx >= 24e-9) G.vp = 0;
+  } else G.vp = 0;
+  /* measurement */
+  const c = G.cur, area = 4 * G.Lx * L0 + 2 * L0 * L0;
+  c.imp += imp; c.at += area * h; c.v2 += v2; c.nv += N; c.coll += coll; c.ends += ends; c.dist += dist; c.V += G.Lx * A * h; c.dt += h;
+  G.t += h;
+  if (G.t - c.t0 >= BIN) newBin(G);
+}
+function runFor(G, T){ const n = Math.round(T / DT); for (let s = 0; s < n; s++) stepGas(G); }
+const SETTLE = 1e-10, SETTLE_FREE = 2.5e-10, WINDOW = 6e-10;   // a moving piston takes longer to settle
+/* average everything measured since the gas last settled (at most the last 300 ps) */
+function measure(G){
+  let imp = 0, at = 0, v2 = 0, nv = 0, coll = 0, ends = 0, dist = 0, V = 0, dt = 0;
+  for (const b of G.bins) {
+    if (b.t0 < G.tChange + (G.pmode === 'free' ? SETTLE_FREE : SETTLE) || b.t0 < G.t - WINDOW || b === G.cur) continue;
+    imp += b.imp; at += b.at; v2 += b.v2; nv += b.nv; coll += b.coll; ends += b.ends; dist += b.dist; V += b.V; dt += b.dt;
+  }
+  if (dt <= 0) return {ready: false, dt: 0};
+  const Vm = V / dt, P = imp / at, msq = v2 / nv, Tg = G.m * msq / (3 * kB), n = G.N / Vm;
+  return {ready: dt >= 2e-10, dt, P, V: Vm, vrms: Math.sqrt(msq), Tgas: Tg, Pideal: pIdeal(G.N, G.T, Vm), Z: P * Vm / (G.N * kB * G.T),
+          coll, ends, mfp: ends > 0 ? dist / ends : null, mfpTheory: mfpTheory(n, G.d), n};
+}
+/* speeds right now, for the histogram */
+function speeds(G){ const out = new Float64Array(G.N); for (let i = 0; i < G.N; i++) out[i] = Math.hypot(G.vx[i], G.vy[i], G.vz[i]); return out; }
+/* how closely a set of speeds follows Maxwell's curve: the shared area, 0 to 1 */
+function maxwellOverlap(sp, T, m, bins = 24){
+  const vmax = 3.2 * Math.sqrt(2 * kB * T / m), w = vmax / bins, h = new Float64Array(bins);
+  let n = 0;
+  for (const v of sp) { const k = Math.floor(v / w); if (k < bins) { h[k]++; } n++; }
+  let o = 0;
+  for (let k = 0; k < bins; k++) {
+    const f = (maxwell((k + 0.5) * w, T, m)) * w;
+    o += Math.min(h[k] / n, f);
+  }
+  return o;
+}
+/* run a gas on its own and measure it: for a test or a check */
+function runGas(o){
+  const G = makeGas(Object.assign({N: 150, T: 300, Lx: 16e-9, gas: 'N2', d: 0.3e-9, seed: 11}, o));
+  runFor(G, o.settle || 1.2e-10);
+  G.tChange = G.t - SETTLE;
+  runFor(G, o.time || 3e-10);
+  const m = measure(G);
+  return Object.assign(m, {Lx: G.Lx, N: G.N, T: G.T, vrmsTheory: vrmsTheory(G.T, G.gas)});
+}
+/* MODEL:end */
+
+/* ---- state ------------------------------------------------------------------- */
+const S = {gas: 'N2', T: 300, N: 250, Lx: 16, pmode: 'held', pext: 150, d: 0.3, eps: 0, graph: 'boyle', locked: false,
+  recs: [], same: null, ring: [], seenBig: false};
+const shared = sharedState();
+if (shared) { if (GASES[shared.gas]) S.gas = shared.gas; S.T = clamp(+shared.T || 300, 100, 1000); S.N = clamp(+shared.N || 250, 30, 300); S.Lx = clamp(+shared.Lx || 16, 6, 24);
+  S.d = clamp(+shared.d || 0.3, 0.2, 2); S.eps = clamp(+shared.eps || 0, 0, 1.2); }
+shareState(() => ({gas: S.gas, T: S.T, N: S.N, Lx: S.Lx, d: S.d, eps: S.eps}));
+let GS = null;
+function newGas(same){
+  GS = makeGas({N: S.N, T: S.T, Lx: S.Lx * 1e-9, gas: S.gas, d: S.d * 1e-9, eps: S.eps, pmode: S.pmode, pext: S.pext * 1e3, seed: 1 + Math.floor(Math.random() * 1e6), same});
+  S.ring = [];
+  buildDots();
+}
+const changed = () => { if (GS) GS.tChange = GS.t; };
+
+/* ============================================================================
+   The stage
+   ============================================================================ */
+const svg = $('stage');
+const INK = '#1d2327', INK2 = '#4a555b', INK3 = '#7c878c', HAIR = '#e4e0d6', PURPLE = '#7b5cd6', BLUE = '#2f6fd0', RED = '#d6453d';
+const BX = 40, BY = 92, SC = 25;                      // box origin, px per nm
+const HG = {x: 735, y: 96, w: 235, h: 190};           // speed histogram
+const LG = {x: 735, y: 384, w: 235, h: 196};          // gas-law graph
+function build(){
+  svg.innerHTML = `
+  <defs>
+    <linearGradient id="gPist" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#8f979c"/><stop offset="1" stop-color="#5e666b"/></linearGradient>
+    <clipPath id="clipBox"><rect id="clipR" x="${BX}" y="${BY}" width="400" height="400"/></clipPath>
+  </defs>
+  <rect x="0" y="0" width="1000" height="700" fill="#fbfaf6"/>
+  <text x="24" y="32" class="serif" font-size="19" fill="${INK}">A box of molecules</text>
+  <text id="sub" x="24" y="50" font-size="11.5" fill="${INK3}"></text>
+  <rect id="boxBg" x="${BX}" y="${BY}" height="400" fill="#f1eff8"/>
+  <g clip-path="url(#clipBox)"><g id="dots"></g></g>
+  <rect id="boxWall" x="${BX}" y="${BY}" height="400" fill="none" stroke-width="5"/>
+  <rect id="piston" y="${BY - 10}" width="14" height="420" rx="3" fill="url(#gPist)"/>
+  <rect id="rod" y="${BY + 194}" width="30" height="12" fill="#7b8388"/>
+  <circle id="knob" cy="${BY + 200}" r="11" fill="#fff" stroke="#5e666b" stroke-width="3"/>
+  <g id="weight"></g>
+  <rect id="pistonHit" y="${BY - 10}" width="60" height="420" fill="transparent" role="slider" aria-label="The piston: drag to change the volume"/>
+  <g id="scaleBar"></g>
+  <g id="meas"></g>
+
+  <text x="${HG.x}" y="${HG.y - 36}" class="serif" font-size="15" fill="${INK}">How fast they are going</text>
+  <text x="${HG.x}" y="${HG.y - 20}" font-size="11" fill="${INK3}" id="hgSub">bars: speeds now · curve: Maxwell’s law</text>
+  <g id="hAxes"></g><g id="hBars"></g>
+  <path id="hCurve" fill="none" stroke="${RED}" stroke-width="2"/>
+  <text x="${LG.x}" y="${LG.y - 36}" class="serif" font-size="15" fill="${INK}" id="lgTitle"></text>
+  <text x="${LG.x}" y="${LG.y - 20}" font-size="11" fill="${INK3}" id="lgSub"></text>
+  <g id="lAxes"></g><g id="lPts"></g>
+  <rect id="veil" x="${BX + 10}" y="500" width="960" height="200" fill="#fbfaf6" opacity=".94"/>
+  <rect id="veil2" x="690" y="40" width="310" height="660" fill="#fbfaf6" opacity=".94"/>
+  <text id="veilT" x="840" y="330" font-size="14" text-anchor="middle" fill="${INK3}">The measurements appear</text>
+  <text id="veilT2" x="840" y="350" font-size="14" text-anchor="middle" fill="${INK3}">once you have made a prediction.</text>
+  `;
+}
+function buildDots(){
+  let s = '';
+  for (let i = 0; i < GS.N; i++) s += `<circle class="mol"/>`;
+  $('dots').innerHTML = s;
+}
+const speedCol = r => {           // slow → blue, typical → purple, fast → red
+  const t = clamp((r - 0.4) / 1.4, 0, 1);
+  const a = [63, 127, 216], b = [123, 92, 214], c = [214, 69, 61];
+  const q = t < .5 ? a.map((v, i) => v + (b[i] - v) * t * 2) : b.map((v, i) => v + (c[i] - v) * (t - .5) * 2);
+  return `rgb(${q.map(Math.round).join(',')})`;
+};
+const tempCol = T => { const t = clamp((T - 100) / 900, 0, 1); return `rgb(${Math.round(63 + 151 * t)},${Math.round(127 - 58 * t)},${Math.round(216 - 155 * t)})`; };
+function paintBox(){
+  const Lpx = GS.Lx * 1e9 * SC, vmp = Math.sqrt(2 * kB * GS.T / GS.m), r = Math.max(2.2, GS.d * 1e9 * SC / 2);
+  $('boxBg').setAttribute('width', Lpx); $('boxWall').setAttribute('width', Lpx); $('clipR').setAttribute('width', Lpx);
+  $('boxWall').setAttribute('stroke', tempCol(GS.T));
+  const px = BX + Lpx;
+  $('piston').setAttribute('x', px); $('rod').setAttribute('x', px + 14); $('knob').setAttribute('cx', px + 50); $('pistonHit').setAttribute('x', px - 10);
+  const stop = GS.pmode === 'free' && (GS.Lx >= 23.99e-9 || GS.Lx <= 6.01e-9);
+  $('weight').innerHTML = GS.pmode === 'free' ? `<rect x="${px + 16}" y="${BY + 132}" width="46" height="56" rx="5" fill="#4a555b"/><text x="${px + 39}" y="${BY + 163}" font-size="11" font-weight="700" fill="#fff" text-anchor="middle">${Math.round(GS.pext / 1000)}</text><text x="${px + 39}" y="${BY + 176}" font-size="9" fill="#dfe3e5" text-anchor="middle">kPa</text>
+    <line x1="${px + 39}" y1="${BY + 188}" x2="${px + 39}" y2="${BY + 194}" stroke="#4a555b" stroke-width="3"/>${stop ? `<text x="${px + 16}" y="${BY + 124}" font-size="11" font-weight="700" fill="${RED}">at its stop</text>` : ''}` : '';
+  const dots = $('dots').children;
+  for (let i = 0; i < GS.N; i++) {
+    const c = dots[i], sp = Math.hypot(GS.vx[i], GS.vy[i], GS.vz[i]) / vmp, depth = GS.z[i] / L0;
+    c.setAttribute('cx', (BX + GS.x[i] * 1e9 * SC).toFixed(1)); c.setAttribute('cy', (BY + 400 - GS.y[i] * 1e9 * SC).toFixed(1));
+    c.setAttribute('r', r.toFixed(1)); c.setAttribute('fill', speedCol(sp)); c.setAttribute('opacity', (0.45 + 0.55 * depth).toFixed(2));
+  }
+  let sb = `<line x1="${BX}" y1="${BY + 414}" x2="${BX + 5 * SC}" y2="${BY + 414}" stroke="${INK2}" stroke-width="2"/><text x="${BX}" y="${BY + 430}" font-size="10.5" fill="${INK3}">5 nm</text>`;
+  sb += `<text x="${BX + 5 * SC + 10}" y="${BY + 418}" font-size="10.5" fill="${INK3}">box ${fmt(GS.Lx * 1e9, 1)} × 16 × 16 nm = ${fmt(GS.Lx * L0 * L0 * 1e27, 0)} nm³ · walls at ${GS.T} K</text>`;
+  $('scaleBar').innerHTML = sb;
+  $('sub').textContent = `${GS.N} ${GASES[GS.gas].name} molecules, drawn to scale (d = ${fmt(GS.d * 1e9, 2)} nm), coloured by speed · simulated time ${fmt(GS.t * 1e9, 2)} ns`;
+}
+function paintMeasure(m){
+  if (!S.locked) { $('meas').innerHTML = ''; return; }
+  const y0 = 580, row = (i, lab, a, b, c) => `<text x="${BX}" y="${y0 + i * 25}" font-size="12.5" fill="${INK2}">${lab}</text>
+    <text x="330" y="${y0 + i * 25}" font-size="13" font-weight="600" fill="${INK}" class="m" text-anchor="end">${a}</text>
+    <text x="350" y="${y0 + i * 25}" font-size="12" fill="${INK3}">${b}</text><text x="660" y="${y0 + i * 25}" font-size="12.5" fill="${INK}" class="m" text-anchor="end">${c}</text>`;
+  let s = `<text x="${BX}" y="${y0 - 26}" font-size="11" font-weight="700" letter-spacing=".06em" fill="${INK2}">MEASURED${m.ready ? `, OVER ${fmt(m.dt * 1e12, 0)} ps` : ''}</text>`;
+  s += `<text x="350" y="${y0 - 26}" font-size="11" font-weight="700" letter-spacing=".06em" fill="${INK3}">KINETIC THEORY SAYS</text>`;
+  if (!m.ready) s += `<text x="${BX}" y="${y0 + 10}" font-size="13" fill="${INK3}">Settling… the molecules need a moment to feel the change.</text>`;
+  else {
+    s += row(0, 'Pressure, from the hits on the walls', `${fmt(m.P / 1000, 1)} kPa`, 'NkT/V =', `${fmt(m.Pideal / 1000, 1)} kPa`);
+    s += row(1, 'Z = PV/NkT', fmt(m.Z, 3), 'an ideal gas:', '1.000');
+    s += row(2, 'rms speed, √⟨v²⟩', `${fmt(m.vrms, 0)} m/s`, '√(3kT/m) =', `${fmt(vrmsTheory(GS.T, GS.gas), 0)} m/s`);
+    s += row(3, 'Temperature, m⟨v²⟩/3k', `${fmt(m.Tgas, 0)} K`, 'the walls:', `${GS.T} K`);
+    s += row(4, `Mean free path (${m.ends} free paths)`, m.mfp ? (m.mfp < 1e-7 ? fmt(m.mfp * 1e9, 1) + ' nm' : fmt(m.mfp * 1e9, 0) + ' nm') : '—', '1/(√2 nπd²) =', `${fmt(m.mfpTheory * 1e9, m.mfpTheory < 1e-7 ? 1 : 0)} nm`);
+  }
+  $('meas').innerHTML = s;
+}
+function paintHist(){
+  if (!S.locked) return;
+  const vmax = 3.2 * Math.sqrt(2 * kB * GS.T / GS.m), nb = 24, w = vmax / nb, h = new Float64Array(nb);
+  let n = 0;
+  for (const sp of S.ring) for (const v of sp) { const k = Math.floor(v / w); if (k < nb) h[k]++; n++; }
+  const f = v => maxwell(v, GS.T, GS.m) * w;
+  let top = 0; for (let k = 0; k < nb; k++) top = Math.max(top, h[k] / (n || 1), f((k + .5) * w));
+  top *= 1.1;
+  const X = v => HG.x + v / vmax * HG.w, Y = q => HG.y + HG.h - q / top * HG.h;
+  let bars = '';
+  for (let k = 0; k < nb; k++) { const q = h[k] / (n || 1); if (q > 0) bars += `<rect x="${X(k * w) + 0.5}" y="${Y(q)}" width="${Math.max(0, HG.w / nb - 1)}" height="${HG.y + HG.h - Y(q)}" fill="${PURPLE}" opacity=".55"/>`; }
+  $('hBars').innerHTML = bars;
+  let d = ''; for (let k = 0; k <= 80; k++) { const v = vmax * k / 80; d += (k ? 'L' : 'M') + X(v).toFixed(1) + ' ' + Y(maxwell(v, GS.T, GS.m) * w).toFixed(1); }
+  $('hCurve').setAttribute('d', d);
+  const step = vmax > 3000 ? 1000 : vmax > 1500 ? 500 : 200;
+  let ax = `<line x1="${HG.x}" y1="${HG.y + HG.h}" x2="${HG.x + HG.w}" y2="${HG.y + HG.h}" stroke="#9aa3a6"/>`;
+  for (let v = 0; v <= vmax; v += step) ax += `<text x="${X(v)}" y="${HG.y + HG.h + 15}" font-size="10" text-anchor="middle" fill="${INK3}">${v}</text>`;
+  ax += `<text x="${HG.x + HG.w}" y="${HG.y + HG.h + 30}" font-size="10.5" text-anchor="end" fill="${INK3}">speed (m/s)</text>`;
+  const vr = vrmsTheory(GS.T, GS.gas);
+  ax += `<line x1="${X(vr)}" y1="${HG.y}" x2="${X(vr)}" y2="${HG.y + HG.h}" stroke="${INK}" stroke-dasharray="3 3"/><text x="${X(vr) + 4}" y="${HG.y + 10}" font-size="10.5" fill="${INK}">v_rms</text>`;
+  const ov = S.ring.length ? maxwellOverlap(S.ring.flatMap(a => Array.from(a)), GS.T, GS.m) : 0;
+  ax += `<text x="${HG.x + HG.w}" y="${HG.y + 10}" font-size="10.5" text-anchor="end" fill="${RED}">match ${Math.round(ov * 100)}%</text>`;
+  $('hAxes').innerHTML = ax;
+  S.overlap = ov;
+}
+const GT = {
+  boyle:   {title: 'Boyle: P against 1/V', sub: 'fixed N and T: a straight line through 0', x: r => 1e-24 / r.V, xl: '1/V  (per 10⁻²⁴ m³)', y: r => r.P / 1000, yl: 'P (kPa)', fam: r => [r.gas, r.N, r.T, r.d, r.eps].join('|')},
+  charles: {title: 'Charles: V against T', sub: 'fixed N and P (piston free): a line through 0 K', x: r => r.T, xl: 'T (K)', y: r => r.V * 1e24, yl: 'V (10⁻²⁴ m³)', fam: r => [r.gas, r.N, r.pext, r.d, r.eps, r.pmode].join('|')},
+  gay:     {title: 'Gay-Lussac: P against T', sub: 'fixed N and V (piston held): a line through 0 K', x: r => r.T, xl: 'T (K)', y: r => r.P / 1000, yl: 'P (kPa)', fam: r => [r.gas, r.N, Math.round(r.V * 1e26), r.d, r.eps, r.pmode].join('|')},
+};
+function paintLaw(){
+  if (!S.locked) return;
+  const g = GT[S.graph];
+  $('lgTitle').textContent = g.title; $('lgSub').textContent = g.sub;
+  const rs = S.recs;
+  if (!rs.length) { $('lAxes').innerHTML = `<rect x="${LG.x}" y="${LG.y}" width="${LG.w}" height="${LG.h}" fill="none" stroke="${HAIR}" stroke-dasharray="4 4"/><text x="${LG.x + LG.w / 2}" y="${LG.y + LG.h / 2}" font-size="12.5" text-anchor="middle" fill="${INK3}">Record points to fill this graph</text>`; $('lPts').innerHTML = ''; return; }
+  const xs = rs.map(g.x), ys = rs.map(g.y);
+  const xm = niceMax(Math.max(1e-9, ...xs) * 1.15), ym = niceMax(Math.max(1e-9, ...ys) * 1.15);
+  const X = v => LG.x + v / xm * LG.w, Y = v => LG.y + LG.h - v / ym * LG.h;
+  let ax = `<line x1="${LG.x}" y1="${LG.y + LG.h}" x2="${LG.x + LG.w}" y2="${LG.y + LG.h}" stroke="#9aa3a6"/><line x1="${LG.x}" y1="${LG.y}" x2="${LG.x}" y2="${LG.y + LG.h}" stroke="#9aa3a6"/>`;
+  for (let k = 0; k <= 4; k++) {
+    ax += `<text x="${X(xm * k / 4)}" y="${LG.y + LG.h + 15}" font-size="10" text-anchor="middle" fill="${INK3}">${short(xm * k / 4)}</text>`;
+    ax += `<line x1="${LG.x}" y1="${Y(ym * k / 4)}" x2="${LG.x + LG.w}" y2="${Y(ym * k / 4)}" stroke="${HAIR}"/><text x="${LG.x - 5}" y="${Y(ym * k / 4) + 4}" font-size="10" text-anchor="end" fill="${INK3}">${short(ym * k / 4)}</text>`;
+  }
+  ax += `<text x="${LG.x + LG.w}" y="${LG.y + LG.h + 30}" font-size="10.5" text-anchor="end" fill="${INK3}">${g.xl}</text><text x="${LG.x - 28}" y="${LG.y - 6}" font-size="10.5" fill="${INK3}">${g.yl}</text>`;
+  $('lAxes').innerHTML = ax;
+  /* the latest family of points, with a line through the origin fitted to them */
+  let pts = '';
+  const last = rs[rs.length - 1], fam = last ? rs.filter(r => g.fam(r) === g.fam(last)) : [];
+  rs.forEach((r, i) => { const inF = fam.includes(r); pts += `<circle cx="${X(xs[i])}" cy="${Y(ys[i])}" r="${inF ? 5.5 : 4}" fill="${inF ? PURPLE : '#b8b2a4'}" stroke="#fff" stroke-width="1.5"/>`; });
+  if (fam.length >= 2) {
+    let sxy = 0, sxx = 0; for (const r of fam) { sxy += g.x(r) * g.y(r); sxx += g.x(r) ** 2; }
+    const k = sxy / sxx;
+    pts = `<line x1="${X(0)}" y1="${Y(0)}" x2="${X(xm)}" y2="${Y(k * xm)}" stroke="${PURPLE}" stroke-dasharray="6 4" opacity=".6"/>` + pts;
+    const spread = Math.max(...fam.map(r => g.y(r) / g.x(r))) / Math.min(...fam.map(r => g.y(r) / g.x(r)));
+    pts += `<text x="${LG.x + 6}" y="${LG.y + 12}" font-size="11" fill="${INK}">${fam.length} points in a row: slopes agree to ${fmt((spread - 1) * 100, 1)}%</text>`;
+  }
+  $('lPts').innerHTML = pts;
+}
+const niceMax = x => { const p = Math.pow(10, Math.floor(Math.log10(x))), m = x / p; return (m <= 1 ? 1 : m <= 2 ? 2 : m <= 2.5 ? 2.5 : m <= 5 ? 5 : 10) * p; };
+const short = v => v === 0 ? '0' : v >= 100 ? fmt(v, 0) : v >= 10 ? fmt(v, 0) : v >= 1 ? fmt(v, 1) : fmt(v, 2);
+
+/* ---- side panel ---------------------------------------------------------------- */
+function paintRecs(){
+  if (!S.recs.length) { $('recs').innerHTML = '<p class="note" style="margin:0">Record points to fill the graph.</p>'; return; }
+  $('recs').innerHTML = `<table class="recs"><thead><tr><th>gas</th><th>N</th><th>T/K</th><th>V/nm³</th><th>P/kPa</th><th>v_rms</th><th>Z</th></tr></thead><tbody>${
+    S.recs.slice(-7).map(r => `<tr><td>${r.gas.replace('2', '₂')}</td><td>${r.N}</td><td>${r.T}</td><td>${fmt(r.V * 1e27, 0)}</td><td>${fmt(r.P / 1000, 1)}</td><td>${fmt(r.vrms, 0)}</td><td>${fmt(r.Z, 3)}</td></tr>`).join('')}</tbody></table>`;
+}
+function paintWhy(m){
+  if (!S.locked) return;
+  $('whyCard').hidden = false;
+  if (!m.ready) { $('why').innerHTML = '<p>The gas is settling after the change. Every molecule that touches a wall leaves at the wall’s temperature; in a few tens of picoseconds they all have.</p>'; return; }
+  let t = `<p>Each hit hands the wall 2m v⊥ of momentum. Added up over ${fmt(m.dt * 1e12, 0)} ps and divided by the wall area and the time, that is the pressure: <b>${fmt(m.P / 1000, 1)} kPa</b>, against NkT/V = ${fmt(m.Pideal / 1000, 1)} kPa.
+    Squeeze the box and the same molecules hit the walls more often; heat it and they hit harder <i>and</i> more often.</p>`;
+  if (Math.abs(m.Z - 1) > 0.05) t += `<p>Z = ${fmt(m.Z, 3)}: ${m.Z > 1 ? 'the molecules take up room of their own, so there is less space to fly in and they hit the walls more often than an ideal gas would — the <i>b</i> of van der Waals.' : 'the molecules pull on each other: one about to hit the wall is tugged back by those behind it and hits more softly — the <i>a</i> of van der Waals.'}</p>`;
+  else t += `<p>With small molecules that do not attract, this gas is ideal to within ${fmt(Math.abs(m.Z - 1) * 100, 1)}%: PV = NkT, and the average kinetic energy is (3/2)kT = ${(1.5 * kB * GS.T).toExponential(2)} J per molecule, whatever the gas.</p>`;
+  $('why').innerHTML = t;
+}
+
+/* ---- findings -------------------------------------------------------------------- */
+function check(m){
+  if (!S.locked) return;
+  if (m.ready && m.dt >= 2e-10 && GS.d <= 0.5e-9 && GS.eps === 0 && Math.abs(m.Z - 1) < 0.03) discover('pressure');
+  if (m.ready && m.dt >= 2e-10 && Math.abs(m.Z - 1) > 0.08) discover('real');
+  if (m.ready && m.ends >= 2000 && m.mfp && Math.abs(m.mfp / m.mfpTheory - 1) < 0.12) discover('mfp');
+  if (S.same && S.same.low && S.overlap >= 0.88 && GS.t - S.same.t > 5e-11) discover('maxwell');
+  const ideal = S.recs.filter(r => r.d <= 0.5e-9 && r.eps === 0);
+  /* Boyle: same gas, N, T, piston held, V over ×1.8, PV the same */
+  const fams = {};
+  for (const r of ideal.filter(r => r.pmode === 'held')) (fams[[r.gas, r.N, r.T].join('|')] = fams[[r.gas, r.N, r.T].join('|')] || []).push(r);
+  for (const rs of Object.values(fams)) if (rs.length >= 3) {
+    const V = rs.map(r => r.V), PV = rs.map(r => r.P * r.V);
+    if (Math.max(...V) / Math.min(...V) >= 1.8 && Math.max(...PV) / Math.min(...PV) < 1.05) discover('boyle');
+  }
+  const famC = {};
+  for (const r of ideal.filter(r => r.pmode === 'free')) (famC[[r.gas, r.N, r.pext].join('|')] = famC[[r.gas, r.N, r.pext].join('|')] || []).push(r);
+  for (const rs of Object.values(famC)) if (rs.length >= 2) {
+    const T = rs.map(r => r.T), VT = rs.map(r => r.V / r.T);
+    if (Math.max(...T) / Math.min(...T) >= 1.5 && Math.max(...VT) / Math.min(...VT) < 1.06) discover('charles');
+  }
+  for (const a of S.recs) for (const b of S.recs) if (a.gas === b.gas && b.T / a.T >= 1.8 && Math.abs((b.vrms / a.vrms) / Math.sqrt(b.T / a.T) - 1) < 0.03) { discover('rms'); S.rmsPair = [a, b]; }
+  maybeExplain();
+}
+let EXPLAINED = false;
+function maybeExplain(){
+  if (EXPLAINED || !POE || !found('rms') || !S.rmsPair) return;
+  EXPLAINED = true;
+  const [a, b] = S.rmsPair;
+  POE.explain(`At ${a.T} K the molecules’ rms speed measured <b>${fmt(a.vrms, 0)} m/s</b>; at ${b.T} K, <b>${fmt(b.vrms, 0)} m/s</b> — ${fmt(b.vrms / a.vrms, 2)} times faster for ${fmt(b.T / a.T, 2)} times the temperature.
+    Temperature measures the average <i>kinetic energy</i>, ½m⟨v²⟩ = (3/2)kT, so the speed goes as √T: ×√${fmt(b.T / a.T, 1)} = ×${fmt(Math.sqrt(b.T / a.T), 2)}.`);
+}
+
+/* ============================================================================
+   Controls
+   ============================================================================ */
+build();
+function syncControls(){
+  document.querySelectorAll('#gas button').forEach(b => b.setAttribute('aria-pressed', b.dataset.g === S.gas));
+  document.querySelectorAll('#pmode button').forEach(b => b.setAttribute('aria-pressed', b.dataset.p === S.pmode));
+  document.querySelectorAll('#gtype button').forEach(b => b.setAttribute('aria-pressed', b.dataset.t === S.graph));
+  $('temp').value = S.T; $('tempOut').textContent = S.T + ' K';
+  $('num').value = S.N; $('numOut').textContent = S.N;
+  $('vol').value = S.Lx; $('volOut').textContent = fmt(S.Lx, 1) + ' nm';
+  $('pext').value = S.pext; $('pextOut').textContent = S.pext + ' kPa';
+  $('rowVol').hidden = S.pmode !== 'held'; $('rowPext').hidden = S.pmode !== 'free';
+  $('dia').value = S.d; $('diaOut').textContent = fmt(S.d, 2) + ' nm';
+  $('eps').value = S.eps; $('epsOut').textContent = S.eps ? fmt(S.eps, 1) + ' kT₃₀₀' : '0';
+}
+$('gas').addEventListener('click', e => { const b = e.target.closest('[data-g]'); if (!b || !S.locked || b.dataset.g === S.gas) return;
+  S.gas = b.dataset.g; S.Lx = GS.Lx * 1e9; newGas(); sound('pop'); syncControls(); track('gas', {gas: S.gas}); });
+$('temp').addEventListener('input', e => { S.T = +e.target.value; GS.T = S.T; changed(); syncControls(); });
+$('temp').addEventListener('change', () => track('temperature', {T: S.T}));
+$('num').addEventListener('change', e => { S.N = +e.target.value; S.Lx = GS.Lx * 1e9; newGas(); syncControls(); track('molecules', {N: S.N}); });
+$('num').addEventListener('input', e => { $('numOut').textContent = e.target.value; });
+$('pmode').addEventListener('click', e => { const b = e.target.closest('[data-p]'); if (!b || !S.locked || b.dataset.p === S.pmode) return;
+  S.pmode = b.dataset.p; GS.pmode = S.pmode;
+  if (S.pmode === 'free') { const m = measure(GS); S.pext = clamp(Math.round((m.ready ? m.P : pIdeal(GS.N, GS.T, GS.Lx * L0 * L0)) / 5000) * 5, 40, 500); GS.pext = S.pext * 1e3; }
+  else S.Lx = Math.round(GS.Lx * 2e9) / 2;
+  changed(); sound('tick'); syncControls(); track('piston', {mode: S.pmode}); });
+$('vol').addEventListener('input', e => { S.Lx = +e.target.value; GS.Lx = S.Lx * 1e-9; changed(); syncControls(); });
+$('pext').addEventListener('input', e => { S.pext = +e.target.value; GS.pext = S.pext * 1e3; changed(); syncControls(); });
+$('dia').addEventListener('input', e => { S.d = +e.target.value; syncControls(); });
+$('dia').addEventListener('change', () => { S.Lx = GS.Lx * 1e9; newGas(); track('size', {d: S.d}); });
+$('eps').addEventListener('input', e => { S.eps = +e.target.value; GS.eps = S.eps; changed(); syncControls(); });
+$('eps').addEventListener('change', () => track('stickiness', {eps: S.eps}));
+$('gtype').addEventListener('click', e => { const b = e.target.closest('[data-t]'); if (!b || !S.locked) return; S.graph = b.dataset.t; sound('tick'); syncControls(); paintLaw(); });
+$('btnSame').addEventListener('click', () => {
+  setVelocities(GS, true); S.ring = [];
+  S.same = {t: GS.t, low: maxwellOverlap(speeds(GS), GS.T, GS.m) < 0.6};
+  changed(); sound('whoosh'); track('same-speed');
+});
+$('btnRec').addEventListener('click', () => {
+  const m = measure(GS);
+  if (!m.ready) { toast('Still settling — record in a moment.'); return; }
+  const r = {gas: GS.gas, N: GS.N, T: GS.T, V: m.V, P: m.P, vrms: m.vrms, Tgas: m.Tgas, Z: m.Z, d: GS.d, eps: GS.eps, pmode: GS.pmode, pext: GS.pmode === 'free' ? S.pext : null};
+  S.recs.push(r); sound('snap');
+  if (S.pmode === 'free' && S.graph === 'boyle') S.graph = 'charles';
+  syncControls(); paintRecs(); paintLaw(); check(m);
+  track('record', {T: r.T, V: r.V, P: r.P, N: r.N, gas: r.gas});
+});
+let GRAB = 0;
+drag($('pistonHit'), svg, {
+  start(p){ if (!S.locked || S.pmode !== 'held') return false; GRAB = p.x - (BX + GS.Lx * 1e9 * SC); },
+  move(p){ S.Lx = clamp(Math.round((p.x - GRAB - BX) / SC * 2) / 2, 6, 24); GS.Lx = S.Lx * 1e-9; changed(); syncControls(); },
+  end(){ track('volume', {Lx: S.Lx, by: 'drag'}); },
+});
+function lockControls(lock){
+  for (const id of ['temp', 'num', 'vol', 'pext', 'dia', 'eps', 'btnRec', 'btnSame']) $(id).disabled = lock;
+  document.querySelectorAll('#gas button, #pmode button, #gtype button').forEach(b => b.disabled = lock);
+  $('pistonHit').style.pointerEvents = lock ? 'none' : '';
+  $('gate').hidden = !lock;
+  for (const id of ['veil', 'veil2', 'veilT', 'veilT2']) $(id).setAttribute('display', lock ? '' : 'none');
+}
+
+/* ============================================================================
+   Start
+   ============================================================================ */
+findings($('finds'), [
+  {id: 'pressure', icon: '⇥', label: 'Pressure is molecules hitting the walls', hint: 'Let the gas settle and compare P with NkT/V'},
+  {id: 'boyle',    icon: 'P', label: 'Boyle: PV stays the same',              hint: 'Record three volumes (×1.8 apart) at one temperature'},
+  {id: 'charles',  icon: 'V', label: 'Charles: V grows with T',               hint: 'Free the piston; record at two temperatures'},
+  {id: 'rms',      icon: '√', label: 'Twice as hot is √2 times as fast',      hint: 'Record at one temperature, then at about twice it'},
+  {id: 'maxwell',  icon: '∿', label: 'Maxwell’s spread of speeds',            hint: 'Give every molecule the same speed and wait'},
+  {id: 'mfp',      icon: '↝', label: 'The mean free path',                    hint: 'Make the molecules bigger so they collide often'},
+  {id: 'real',     icon: '⚛', label: 'A real gas is not ideal',              hint: 'Big or sticky molecules: watch Z = PV/NkT'},
+], () => toast('All seven. The gas laws are what molecules do on average — until they are big and sticky.', 4600));
+
+const POE = predict($('poe'), {
+  id: 'rms-temperature',
+  q: 'You heat the gas from 300 K to 600 K. The molecules’ rms speed…',
+  options: [
+    {id: 'double', text: 'doubles'},
+    {id: 'root2',  text: 'goes up about 1.4 times (√2)', right: true},
+    {id: 'four',   text: 'goes up four times'},
+    {id: 'same',   text: 'stays the same: only the energy goes up'},
+  ],
+  onLock(){
+    S.locked = true; lockControls(false);
+    say('Record a point at 300 kelvin, then heat the walls to 600 and record again.');
+    paintAll();
+  },
+});
+lockControls(!POE.locked);
+if (!Play.FF('predict')) { S.locked = true; lockControls(false); }
+syncControls();
+newGas();
+function paintAll(){
+  paintBox();
+  const m = measure(GS);
+  paintMeasure(m); paintHist(); paintLaw(); paintRecs(); paintWhy(m);
+  $('btnRec').disabled = !S.locked || !m.ready;
+  $('btnRec').textContent = m.ready ? 'Record a point' : 'Settling…';
+  return m;
+}
+paintAll();
+
+/* 17 steps of 0.1 ps per frame: about 100 ps of the gas each second. Under reduced
+   motion it moves in half-second jumps. */
+const RM = reduced();
+let acc = 0, frames = 0;
+loop(dt => {
+  acc += dt;
+  if (RM && acc < 0.5) return;
+  const n = Math.max(1, Math.round(acc * 1000)), steps = Math.min(600, n);
+  acc = 0;
+  for (let s = 0; s < steps; s++) stepGas(GS);
+  if (S.pmode === 'free') S.Lx = GS.Lx * 1e9;
+  S.ring.push(speeds(GS)); if (S.ring.length > 25) S.ring.shift();
+  frames++;
+  const m = paintAll();
+  if (S.pmode === 'free' && frames % 10 === 0) syncControls();
+  check(m);
+});
+window.applyFeatures = () => paintAll();
+window.PG_STATE = () => { const m = measure(GS); return {gas: S.gas, T: S.T, N: S.N, Lx: GS.Lx * 1e9, pmode: S.pmode, pext: S.pext, d: S.d, eps: S.eps, locked: S.locked, t: GS.t,
+  meas: m, recs: S.recs.map(r => Object.assign({}, r)), overlap: S.overlap || 0, graph: S.graph}; };
+window.PG_MODEL = {kB, AMU, NA, RG, GASES, L0, DT, massOf, vrmsTheory, pIdeal, mfpTheory, maxwell, makeGas, stepGas, runFor, measure, speeds, maxwellOverlap, runGas};
+</script>
+</body>
+</html>

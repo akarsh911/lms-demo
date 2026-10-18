@@ -1,0 +1,535 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Materials Around Us</title>
+<meta name="description" content="Class 6: weigh, float, light and bend equal-sized blocks of wood, iron, plastic and glass. The bench computes every result from the material's own properties.">
+<link rel="icon" href="../../favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="../../play.css">
+<style>
+/* Only what this page needs beyond play.css. */
+.blk{cursor:grab}
+.blk.dragging{cursor:grabbing}
+.gate{position:absolute; inset:auto 0 0 0; top:0; display:grid; place-items:center; pointer-events:none}
+.gate span{background:rgba(15,26,43,.82); color:#fff; padding:10px 16px; border-radius:99px; font-weight:600; font-size:14px}
+.why p{font-size:13.5px; margin:0 0 8px}
+.why b{color:var(--ink)}
+table.notebook{width:100%; border-collapse:collapse; font-size:12.5px}
+table.notebook th{text-align:left; font-size:10.5px; letter-spacing:.04em; text-transform:uppercase; color:var(--ink-3); padding:3px 4px; border-bottom:1px solid var(--hair)}
+table.notebook td{padding:5px 4px; border-bottom:1px solid var(--hair); vertical-align:middle}
+table.notebook tr.pending td{color:var(--ink-3); font-style:italic}
+.bar-mini{display:inline-block; height:7px; border-radius:99px; background:var(--accent); vertical-align:middle; margin-left:4px}
+.matdot{display:inline-block; width:10px; height:10px; border-radius:3px; margin-right:5px; vertical-align:middle}
+</style>
+</head>
+<body>
+<header class="pg-top"></header>
+
+<div class="pg-intro">
+  <h1>Materials around us</h1>
+  <p>Four blocks, exactly the same size — wood, iron, plastic and glass. Drag each one onto a station on the bench:
+     the balance, the water tank, the torch, or the bending clamp. Every reading comes from that material's own
+     properties, not from a script.</p>
+</div>
+
+<main class="pg-main wide-side">
+  <section class="pg-stage" id="stageWrap">
+    <svg id="stage" viewBox="0 0 1240 700" role="img" aria-label="A workbench with four material blocks on a shelf, and four evenly spaced stations: a balance, a water tank, a torch and a bending clamp"></svg>
+    <div class="gate" id="gate"><span>Make your prediction first →</span></div>
+  </section>
+
+  <aside class="pg-side">
+    <div id="poe"></div>
+
+    <div class="card" id="whyCard">
+      <div class="kicker">What is happening</div>
+      <div class="why" id="why"><p>Drag a block onto a station to begin.</p></div>
+    </div>
+
+    <div class="card">
+      <div class="kicker">The book's grouping table</div>
+      <table class="notebook" id="notebook"></table>
+      <div class="row" style="margin-top:10px"><button class="btn sm" id="btnReset">Reset the bench</button></div>
+    </div>
+
+    <div class="card"><div class="kicker">To find</div><div id="finds"></div></div>
+  </aside>
+</main>
+
+<script src="../../play.js"></script>
+<script>
+'use strict';
+const {$, $$, esc, clamp, fmt, drag, sound, say, track, toast, tween, findings, discover, found,
+       shareState, sharedState, mount, reduced} = Play;
+mount({thread: 'materials', band: 'tinkerer'});
+
+/* MODEL:start ================================================================
+   Four equal-sized blocks (100 cm3 each — about the size of a small matchbox
+   cube), and four real properties per material. Everything the bench shows —
+   the mass on the balance, how much of the block sits under water, how much
+   light gets through, and how the block behaves when bent — is COMPUTED from
+   these properties, never looked up per interaction.
+
+   Density (g/cm3) is real-world average density for the material named.
+   The chapter (Curiosity Gr.6 Ch.6 "Materials Around Us") teaches appearance
+   (lustrous/non-lustrous), hardness, transparency and "heavy or light" (mass)
+   as separate observations of the SAME four kinds of materials; density is
+   the one number underneath mass, floating and sinking, so the bench uses it
+   for both the balance and the tank. The elastic/yield/break angles for the
+   bending clamp are illustrative (a thin strip of each material bent by
+   hand), not measured — the ORDER (glass snaps first, iron bends and stays
+   bent, wood snaps, plastic springs back over the widest range) is real.
+   ============================================================================ */
+const VOLUME_CM3 = 100;
+const MATERIALS = {
+  wood:    {label: 'Wood',    density: 0.60, lustre: false, transparency: 'opaque',      hard: false, elastic: 8,  yield: 0,  break: 22, ductile: false, fill: '#c9995c', grain: '#a9754a'},
+  iron:    {label: 'Iron',    density: 7.80, lustre: true,  transparency: 'opaque',      hard: true,  elastic: 10, yield: 10, break: 70, ductile: true,  fill: '#8b95a3', grain: '#5f6875'},
+  plastic: {label: 'Plastic', density: 0.90, lustre: false, transparency: 'translucent', hard: false, elastic: 45, yield: 0,  break: 75, ductile: false, fill: '#ff8c42', grain: '#e0722c'},
+  glass:   {label: 'Glass',   density: 2.50, lustre: false, transparency: 'transparent', hard: true,  elastic: 2,  yield: 0,  break: 6,  ductile: false, fill: '#bfe4f2', grain: '#8fc7dd'},
+};
+const ORDER = ['wood', 'iron', 'plastic', 'glass'];
+const WATER = 1.0;
+const mass = k => MATERIALS[k].density * VOLUME_CM3;                              // grams
+/* Fraction of the block that sits under the waterline (Archimedes, simplified for Class 6:
+   a floating object sinks until it displaces its own weight of water). */
+const submergedFrac = k => Math.min(1, MATERIALS[k].density / WATER);
+const floats = k => MATERIALS[k].density < WATER;
+const lightThrough = k => ({transparent: 92, translucent: 38, opaque: 3})[MATERIALS[k].transparency];
+/* Bending a thin strip, held at one end, pushed down at the free end by `angle` degrees.
+   Below its elastic limit every material springs back. A ductile material (iron) takes a
+   permanent set once past that. Past the break angle, it snaps. */
+function bendState(k, angle){
+  const m = MATERIALS[k];
+  angle = clamp(angle, 0, 90);
+  if (angle >= m.break) return {angle: m.break, mode: 'snap'};
+  if (m.ductile && angle > m.elastic) return {angle, mode: 'bent', permanent: +(angle - m.elastic).toFixed(0)};
+  return {angle, mode: 'spring'};
+}
+/* MODEL:end */
+
+const NOTE_ROWS = [
+  {k: 'appearance',  h: 'Appearance',   v: k => MATERIALS[k].lustre ? 'Lustrous (shiny, like a metal)' : 'Non-lustrous (dull)'},
+  {k: 'bend',        h: 'Bend test',    v: k => ({wood: 'Bends a little, then snaps', iron: 'Bends and stays bent', plastic: 'Bends a lot, springs back', glass: 'Barely bends before it snaps'})[k]},
+  {k: 'see',         h: 'See-through',  v: k => MATERIALS[k].transparency},
+  {k: 'water',       h: 'In water',     v: k => floats(k) ? `Floats (${fmt(submergedFrac(k) * 100, 0)}% under water)` : 'Sinks to the bottom'},
+  {k: 'mass',        h: 'Mass, same size', v: k => fmt(mass(k), 0) + ' g'},
+];
+
+/* ---- state: plain data ----------------------------------------------------- */
+/* S.blocks[k] = {x, y, station: null|'balL'|'balR'|'tank'|'torch'|'bend', clamped, angle, permanent, broken} */
+const SHELF_X = [155, 465, 775, 1085];     // four columns, evenly spaced, one per station below
+const SHELF_Y = 100;
+const home = k => ({x: SHELF_X[ORDER.indexOf(k)], y: SHELF_Y});
+const S = {blocks: {}, tested: {}, locked: false, lastStation: null};
+for (const k of ORDER) S.blocks[k] = Object.assign({station: null, clamped: false, angle: 0, permanent: 0, broken: false}, home(k));
+const shared = sharedState();
+if (shared && shared.tested) S.tested = shared.tested;
+shareState(() => ({tested: S.tested}));
+
+/* ============================================================================
+   Stations, in scene coordinates. Four columns of equal width (310 px, edge
+   to edge across the whole viewBox), each holding one shelf slot above one
+   station, so the bench is used evenly and every station has its own room
+   for a label and a readout. The bench is one continuous floor: nothing
+   floats free of it, and every block's path from the shelf to a station is a
+   straight drag a finger can trace.
+   ============================================================================ */
+const BENCH_TOP = 560, BENCH_BOTTOM = 700;
+const BAL = {x: 155, pivotY: 260, spread: 95, pan: 360};
+const TANK = {x: 465, top: 280, bottom: BENCH_TOP, w: 180};
+const TORCH = {x: 775, y: 400, reach: 100};
+const BEND = {x: 1010, y: BENCH_TOP, len: 150};
+const VB_W = 1240;
+
+const svg = $('stage');
+function build(){
+  let dust = '';
+  const rnd = Play.mulberry32(3);
+  for (let i = 0; i < 18; i++) dust += `<circle cx="${(rnd() * VB_W).toFixed(0)}" cy="${(20 + rnd() * (BENCH_TOP - 30)).toFixed(0)}" r="${(rnd() * 1.4 + .4).toFixed(1)}" fill="#fff" opacity="${(rnd() * .2).toFixed(2)}"/>`;
+  svg.innerHTML = `
+  <defs>
+    <linearGradient id="gWall" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#efe6d6"/><stop offset="1" stop-color="#e3d7bf"/></linearGradient>
+    <linearGradient id="gBench" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#8a5a2b"/><stop offset="1" stop-color="#6b4420"/></linearGradient>
+    <linearGradient id="gWater" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#7fd0ea" stop-opacity=".85"/><stop offset="1" stop-color="#1f7fa8" stop-opacity=".9"/></linearGradient>
+    <radialGradient id="gBeam" cx="0" cy="50%"><stop offset="0" stop-color="#fff3b0" stop-opacity=".85"/><stop offset="1" stop-color="#fff3b0" stop-opacity="0"/></radialGradient>
+    <clipPath id="clipTank"><rect x="${TANK.x - TANK.w / 2 + 4}" y="${TANK.top + 4}" width="${TANK.w - 8}" height="${TANK.bottom - TANK.top - 4}"/></clipPath>
+  </defs>
+  <rect width="${VB_W}" height="${BENCH_TOP}" fill="url(#gWall)"/>
+  <g opacity=".9">${dust}</g>
+  <text x="30" y="26" fill="#8a7757" font-size="13" font-weight="700" letter-spacing=".08em">THE MATERIALS BENCH</text>
+  <!-- four evenly spaced columns of light shading, so it reads as one bench with four bays -->
+  <g opacity=".5">${SHELF_X.map(x => `<rect x="${x - 145}" y="60" width="290" height="${BENCH_TOP - 60}" fill="#fff" opacity=".14"/>`).join('')}</g>
+
+  <!-- shelf: one continuous plank, a slot above each station -->
+  <rect x="20" y="140" width="${VB_W - 40}" height="12" rx="3" fill="#6b4426"/>
+  <rect x="20" y="152" width="${VB_W - 40}" height="6" fill="#4c3018"/>
+
+  <!-- bench top -->
+  <rect x="0" y="${BENCH_TOP}" width="${VB_W}" height="34" fill="url(#gBench)"/>
+  <rect x="0" y="${BENCH_TOP + 34}" width="${VB_W}" height="${BENCH_BOTTOM - BENCH_TOP - 34}" fill="#4a2f16"/>
+  <rect x="0" y="${BENCH_TOP + 34}" width="${VB_W}" height="6" fill="#5c3a1d"/>
+  <!-- bench front: one drawer per column, so the lower frame is not a flat band -->
+  <g stroke="#3a2410" stroke-width="1" opacity=".5">${[1, 2, 3].map(i => `<line x1="${i * VB_W / 4}" y1="${BENCH_TOP + 40}" x2="${i * VB_W / 4}" y2="${BENCH_BOTTOM - 6}"/>`).join('')}</g>
+  ${SHELF_X.map(x => `<g><rect x="${x - 110}" y="${BENCH_TOP + 50}" width="220" height="${BENCH_BOTTOM - BENCH_TOP - 62}" rx="6" fill="#5c3a1d" stroke="#3a2410" stroke-width="2"/>
+    <rect x="${x - 18}" y="${BENCH_TOP + 74}" width="36" height="8" rx="4" fill="#d0a24c"/></g>`).join('')}
+
+  <!-- balance -->
+  <g id="balanceG">
+    <rect x="${BAL.x - 6}" y="${BAL.pivotY}" width="12" height="${BENCH_TOP - BAL.pivotY}" fill="#5a6472"/>
+    <circle cx="${BAL.x}" cy="${BAL.pivotY}" r="10" fill="#3d4650"/>
+    <g id="beamG">
+      <rect x="${-BAL.spread - 12}" y="-5" width="${2 * BAL.spread + 24}" height="10" rx="4" fill="#7b8794"/>
+      <line id="stringL" x1="${-BAL.spread}" y1="0" x2="${-BAL.spread}" y2="${BAL.pan - BAL.pivotY}" stroke="#3d4650" stroke-width="2.5"/>
+      <line id="stringL2" x1="${-BAL.spread + 26}" y1="0" x2="${-BAL.spread}" y2="${BAL.pan - BAL.pivotY}" stroke="#3d4650" stroke-width="2.5"/>
+      <line id="stringR" x1="${BAL.spread}" y1="0" x2="${BAL.spread}" y2="${BAL.pan - BAL.pivotY}" stroke="#3d4650" stroke-width="2.5"/>
+      <line id="stringR2" x1="${BAL.spread - 26}" y1="0" x2="${BAL.spread}" y2="${BAL.pan - BAL.pivotY}" stroke="#3d4650" stroke-width="2.5"/>
+      <g id="panL" transform="translate(${-BAL.spread} ${BAL.pan - BAL.pivotY})"><path d="M-36 0 L36 0 L28 17 L-28 17 Z" fill="#9aa7b8" stroke="#6b7684" stroke-width="1.5"/></g>
+      <g id="panR" transform="translate(${BAL.spread} ${BAL.pan - BAL.pivotY})"><path d="M-36 0 L36 0 L28 17 L-28 17 Z" fill="#9aa7b8" stroke="#6b7684" stroke-width="1.5"/></g>
+    </g>
+    <rect id="dropL" x="${BAL.x - BAL.spread - 38}" y="${BAL.pan - 28}" width="76" height="58" fill="transparent"/>
+    <rect id="dropR" x="${BAL.x + BAL.spread - 38}" y="${BAL.pan - 28}" width="76" height="58" fill="transparent"/>
+    <text id="massL" x="${BAL.x - BAL.spread}" y="${BAL.pan + 52}" text-anchor="middle" font-size="14" font-weight="700" fill="#3d4650" font-family="JetBrains Mono, monospace"></text>
+    <text id="massR" x="${BAL.x + BAL.spread}" y="${BAL.pan + 52}" text-anchor="middle" font-size="14" font-weight="700" fill="#3d4650" font-family="JetBrains Mono, monospace"></text>
+    <text x="${BAL.x}" y="195" text-anchor="middle" font-size="14" font-weight="700" fill="#5a4a34" letter-spacing=".03em">BALANCE</text>
+  </g>
+
+  <!-- water tank -->
+  <g id="tankG">
+    <rect x="${TANK.x - TANK.w / 2}" y="${TANK.top}" width="${TANK.w}" height="${TANK.bottom - TANK.top}" fill="#eaf6fb" opacity=".5" stroke="#8fc7dd" stroke-width="4" rx="6"/>
+    <rect x="${TANK.x - TANK.w / 2}" y="${TANK.top + (TANK.bottom - TANK.top) * .3}" width="${TANK.w}" height="${(TANK.bottom - TANK.top) * .7}" fill="url(#gWater)"/>
+    <line x1="${TANK.x - TANK.w / 2}" y1="${TANK.top + (TANK.bottom - TANK.top) * .3}" x2="${TANK.x + TANK.w / 2}" y2="${TANK.top + (TANK.bottom - TANK.top) * .3}" stroke="#dff4fb" stroke-width="3"/>
+    <rect id="dropTank" x="${TANK.x - 55}" y="${TANK.top - 45}" width="110" height="70" fill="transparent"/>
+    <text x="${TANK.x}" y="${TANK.top - 20}" text-anchor="middle" font-size="14" font-weight="700" fill="#5a4a34" letter-spacing=".03em">WATER TANK</text>
+  </g>
+
+  <!-- torch -->
+  <g id="torchG">
+    <path d="M${TORCH.x - TORCH.reach} ${TORCH.y - 18} L${TORCH.x - TORCH.reach + 42} ${TORCH.y - 34} L${TORCH.x - TORCH.reach + 42} ${TORCH.y + 34} L${TORCH.x - TORCH.reach} ${TORCH.y + 18}Z" fill="#4a4f57"/>
+    <circle cx="${TORCH.x - TORCH.reach}" cy="${TORCH.y}" r="19" fill="#ffe066"/>
+    <rect id="dropTorch" x="${TORCH.x - 38}" y="${TORCH.y - 34}" width="76" height="68" fill="transparent"/>
+    <path id="beamPre" d="M${TORCH.x - TORCH.reach + 42} ${TORCH.y - 26} L${TORCH.x - 6} ${TORCH.y - 26} L${TORCH.x - 6} ${TORCH.y + 26} L${TORCH.x - TORCH.reach + 42} ${TORCH.y + 26}Z" fill="url(#gBeam)"/>
+    <rect id="screen" x="${TORCH.x + 62}" y="${TORCH.y - 38}" width="16" height="76" fill="#f6f2e8" stroke="#cfc6b3" stroke-width="1.5"/>
+    <path id="beamPost" d="M${TORCH.x + 6} ${TORCH.y - 26} L${TORCH.x + 62} ${TORCH.y - 34} L${TORCH.x + 62} ${TORCH.y + 34} L${TORCH.x + 6} ${TORCH.y + 26}Z" fill="url(#gBeam)" opacity="0"/>
+    <rect id="screenLit" x="${TORCH.x + 62}" y="${TORCH.y - 34}" width="16" height="68" fill="#fff6c9" opacity="0"/>
+    <text x="${TORCH.x}" y="${TORCH.y - 52}" text-anchor="middle" font-size="14" font-weight="700" fill="#5a4a34" letter-spacing=".03em">TORCH AND SCREEN</text>
+  </g>
+
+  <!-- bend clamp -->
+  <g id="bendG">
+    <rect x="${BEND.x - 26}" y="${BEND.y - 30}" width="52" height="36" rx="5" fill="#5a6472"/>
+    <rect x="${BEND.x - 30}" y="${BEND.y - 8}" width="60" height="12" rx="4" fill="#3d4650"/>
+    <rect id="dropBend" x="${BEND.x - 14}" y="${BEND.y - 74}" width="${BEND.len + 28}" height="72" fill="transparent"/>
+    <g id="stripHolder"></g>
+    <text x="${BEND.x + BEND.len / 2}" y="${BEND.y - 88}" text-anchor="middle" font-size="14" font-weight="700" fill="#5a4a34" letter-spacing=".03em">BENDING CLAMP</text>
+    <text id="angleLab" x="${BEND.x + BEND.len / 2}" y="${BEND.y + 44}" text-anchor="middle" font-size="14" font-weight="700" fill="#3d4650" font-family="JetBrains Mono, monospace"></text>
+  </g>
+
+  <g id="blocksLayer"></g>
+  <!-- the water's surface, drawn again IN FRONT of the blocks layer: whatever is under
+       water is really behind it, so a sunk or floating block reads as tinted and dimmed. -->
+  <rect x="${TANK.x - TANK.w / 2}" y="${TANK.top + (TANK.bottom - TANK.top) * .3}" width="${TANK.w}" height="${(TANK.bottom - TANK.top) * .7}" fill="url(#gWater)" opacity=".55" pointer-events="none"/>
+  <line x1="${TANK.x - TANK.w / 2}" y1="${TANK.top + (TANK.bottom - TANK.top) * .3}" x2="${TANK.x + TANK.w / 2}" y2="${TANK.top + (TANK.bottom - TANK.top) * .3}" stroke="#dff4fb" stroke-width="2.5" opacity=".8" pointer-events="none"/>
+  <rect x="${TANK.x - TANK.w / 2}" y="${TANK.top}" width="${TANK.w}" height="${TANK.bottom - TANK.top}" fill="none" stroke="#8fc7dd" stroke-width="4" rx="6" pointer-events="none"/>
+  <g id="snapFx" pointer-events="none"></g>
+  `;
+  buildBlocks();
+}
+
+/* A block, drawn once per material: a cube for the shelf/balance/tank/torch, or (while
+   clamped) a thin strip for the bending test. Built once; only its transform is patched. */
+const LABEL_DARK = new Set(['wood', 'plastic', 'glass']);   // pick text colour for contrast on each fill
+function blockCube(k){
+  const m = MATERIALS[k];
+  const glassy = k === 'glass';
+  return `<g class="cubeArt">
+    <path d="M-28 -28 L28 -28 L42 -42 L-14 -42 Z" fill="${m.grain}" opacity="${glassy ? .55 : 1}"/>
+    <rect x="-28" y="-28" width="56" height="56" fill="${m.fill}" opacity="${glassy ? .55 : 1}"/>
+    <path d="M28 -28 L42 -42 L42 14 L28 28 Z" fill="${m.grain}" opacity="${glassy ? .7 : 1}"/>
+    ${k === 'wood' ? `<path d="M-20 -14 L20 -14 M-20 0 L20 0 M-20 14 L20 14" stroke="${m.grain}" stroke-width="2" opacity=".7"/>` : ''}
+    ${k === 'iron' ? `<rect x="-20" y="-22" width="8" height="40" fill="#fff" opacity=".3"/>` : ''}
+    ${k === 'glass' ? `<path d="M-18 -20 L-4 -6" stroke="#fff" stroke-width="3" opacity=".8"/><path d="M4 -22 L14 -12" stroke="#fff" stroke-width="2.5" opacity=".7"/>` : ''}
+    ${k === 'plastic' ? `<ellipse cx="-10" cy="-16" rx="10" ry="5" fill="#fff" opacity=".35"/>` : ''}
+    <text x="0" y="19" text-anchor="middle" font-size="${k === 'plastic' ? 10 : 12}" font-weight="800" letter-spacing=".02em"
+      fill="${LABEL_DARK.has(k) ? '#3d2a14' : '#fff'}" opacity=".92" pointer-events="none">${m.label.toUpperCase()}</text>
+  </g>`;
+}
+function blockStrip(k){
+  const m = MATERIALS[k];
+  return `<g class="stripArt"><rect x="0" y="-10" width="${BEND.len}" height="20" rx="4" fill="${m.fill}" opacity="${k === 'glass' ? .6 : 1}" stroke="${m.grain}" stroke-width="2"/>
+    <text x="${BEND.len / 2}" y="5" text-anchor="middle" font-size="11" font-weight="800" letter-spacing=".02em"
+      fill="${LABEL_DARK.has(k) ? '#3d2a14' : '#fff'}" opacity=".9" pointer-events="none">${m.label.toUpperCase()}</text></g>`;
+}
+function buildBlocks(){
+  let h = '';
+  for (const k of ORDER) h += `<g class="blk" id="blk_${k}" data-mat="${k}"><g class="art">${blockCube(k)}</g></g>`;
+  $('blocksLayer').innerHTML = h;
+  for (const k of ORDER) wireBlock(k);
+}
+
+/* ---- rendering: patch attributes from state, never rebuild the block nodes -------- */
+function paintBlock(k){
+  const b = S.blocks[k], el = $('blk_' + k);
+  el.setAttribute('transform', `translate(${b.x.toFixed(1)} ${b.y.toFixed(1)}) rotate(${b.station === 'bend' ? b.angle : 0})`);
+  el.classList.toggle('dragging', b.dragging);
+  const art = el.querySelector('.art');
+  const wantStrip = b.station === 'bend';
+  if (wantStrip !== !!el.dataset.strip) {
+    art.innerHTML = wantStrip ? blockStrip(k) : blockCube(k);
+    el.dataset.strip = wantStrip ? '1' : '';
+  }
+  if (wantStrip) {
+    const snapped = b.broken;
+    art.querySelector('rect').setAttribute('opacity', snapped ? 0 : (k === 'glass' ? .6 : 1));
+  }
+  el.style.opacity = (b.station === 'bend' && b.broken) ? 0 : 1;
+}
+function paintAll(){ for (const k of ORDER) paintBlock(k); paintBalance(); paintTank(); paintTorch(); paintBend(); paintNotebook(); }
+
+function panContents(side){ return ORDER.find(k => S.blocks[k].station === (side === 'L' ? 'balL' : 'balR')); }
+/* The pan a block sits in swings with the beam, so the block's own on-screen position must
+   be re-derived from the beam's rotation every time it changes — it is not free-standing. */
+function paintBalance(){
+  const kL = panContents('L'), kR = panContents('R');
+  const mL = kL ? mass(kL) : null, mR = kR ? mass(kR) : null;
+  const maxDiff = 780;
+  const diff = (mL || 0) - (mR || 0);
+  /* Negative because a heavier LEFT pan must swing DOWN (larger y), and in SVG's rotate()
+     a positive angle turns the local -x side (left) up, not down. */
+  const angle = clamp(-diff / maxDiff * 15, -15, 15);
+  $('beamG').setAttribute('transform', `translate(${BAL.x} ${BAL.pivotY}) rotate(${angle.toFixed(1)})`);
+  $('massL').textContent = kL ? fmt(mL, 0) + ' g' : '';
+  $('massR').textContent = kR ? fmt(mR, 0) + ' g' : '';
+  const rad = angle * Math.PI / 180, localY = BAL.pan - BAL.pivotY;
+  const pos = localX => ({x: BAL.x + localX * Math.cos(rad) - localY * Math.sin(rad), y: BAL.pivotY + localX * Math.sin(rad) + localY * Math.cos(rad)});
+  if (kL && !S.blocks[kL].dragging) { const p = pos(-BAL.spread); S.blocks[kL].x = p.x; S.blocks[kL].y = p.y; paintBlock(kL); }
+  if (kR && !S.blocks[kR].dragging) { const p = pos(BAL.spread); S.blocks[kR].x = p.x; S.blocks[kR].y = p.y; paintBlock(kR); }
+  $('massL').setAttribute('x', pos(-BAL.spread).x.toFixed(1)); $('massL').setAttribute('y', (pos(-BAL.spread).y + 46).toFixed(1));
+  $('massR').setAttribute('x', pos(BAL.spread).x.toFixed(1)); $('massR').setAttribute('y', (pos(BAL.spread).y + 46).toFixed(1));
+}
+/* The block IN the tank is the same node as on the shelf — moved to its real floating or
+   sunk depth, with a translucent "water front" (drawn after it in the DOM) giving real
+   occlusion: the submerged part reads as being behind the water's surface. */
+function paintTank(){
+  const k = ORDER.find(x => S.blocks[x].station === 'tank');
+  if (k && !S.blocks[k].dragging) {
+    const frac = submergedFrac(k);
+    const waterY = TANK.top + (TANK.bottom - TANK.top) * .3;      // the waterline drawn on the tank
+    const restY = TANK.bottom - 30;                                              // resting on the tank floor
+    const floatY = waterY + 28 - frac * 56;                                      // riding the waterline, frac of the block's own height submerged
+    S.blocks[k].y = floats(k) ? floatY : restY;
+    S.blocks[k].x = TANK.x;
+    paintBlock(k);
+  }
+}
+function paintTorch(){
+  const k = ORDER.find(x => S.blocks[x].station === 'torch');
+  const pct = k ? lightThrough(k) : 0;
+  $('beamPost').setAttribute('opacity', k ? pct / 100 : 0);
+  $('screenLit').setAttribute('opacity', k ? Math.max(.06, pct / 100) : 0);
+}
+function paintBend(){
+  const k = ORDER.find(x => S.blocks[x].station === 'bend');
+  $('angleLab').textContent = k ? MATERIALS[k].label + (S.blocks[k].broken ? ': snapped!' : `: bent ${fmt(S.blocks[k].angle, 0)}°`) : '';
+}
+function paintNotebook(){
+  let h = `<tr><th>Material</th>${NOTE_ROWS.map(r => `<th>${esc(r.h)}</th>`).join('')}</tr>`;
+  for (const k of ORDER) {
+    const done = S.tested[k];
+    h += `<tr class="${done ? '' : 'pending'}"><td><span class="matdot" style="background:${MATERIALS[k].fill}"></span>${MATERIALS[k].label}</td>` +
+      NOTE_ROWS.map(r => `<td>${done ? esc(r.v(k)) : '?'}</td>`).join('') + '</tr>';
+  }
+  $('notebook').innerHTML = h;
+}
+function markTested(k){ if (!S.tested[k]) { S.tested[k] = true; sound('tick'); } }
+
+/* ---- drag: shelf <-> stations. The hit target is the block itself; it never
+   changes layer, so a click or drag in progress never loses pointer capture. --------- */
+function zoneRect(id){ return $(id).getBoundingClientRect ? null : null; } // unused placeholder
+function inZone(p, x, y, w, h){ return p.x >= x && p.x <= x + w && p.y >= y && p.y <= y + h; }
+function wireBlock(k){
+  const el = $('blk_' + k);
+  let startPan = {x: 0, y: 0};
+  drag(el, svg, {
+    start(p){
+      if (!S.locked) return false;
+      const b = S.blocks[k];
+      if (b.station === 'bend' && b.broken) return false;
+      b.dragging = true;
+      if (b.station === 'bend') { startPan = {x: BEND.x + BEND.len, y: BEND.y}; }
+      sound('tick');
+    },
+    move(p){
+      const b = S.blocks[k];
+      if (b.station === 'bend') {
+        const dx = p.x - BEND.x, dy = p.y - BEND.y;
+        const ang = clamp(Math.atan2(dy, Math.max(dx, 1)) * 180 / Math.PI, -5, 90);
+        b.angle = ang;
+        const st = bendState(k, ang);
+        if (st.mode === 'snap') { b.angle = st.angle; }
+        $('angleLab').textContent = MATERIALS[k].label + `: bending ${fmt(b.angle, 0)}°`;
+      } else {
+        b.x = p.x; b.y = p.y;
+      }
+      paintBlock(k); paintBalance(); paintTank(); paintTorch();
+    },
+    end(p){
+      const b = S.blocks[k];
+      b.dragging = false;
+      if (b.station === 'bend') { resolveBend(k); return; }
+      /* which station (if any) did we drop on? */
+      let placed = false;
+      /* Only one block may occupy the tank, the torch or the bending clamp at a time: dropping
+         a new one there sends whichever block was already there back to its shelf slot. */
+      const evict = station => { const prev = ORDER.find(x => x !== k && S.blocks[x].station === station); if (prev) { const h = home(prev); Object.assign(S.blocks[prev], h, {station: null, angle: 0, permanent: 0}); } };
+      if (inZone(p, BAL.x - BAL.spread - 38, BAL.pan - 28, 76, 58) && !panContents('L')) { b.station = 'balL'; b.x = BAL.x - BAL.spread; b.y = BAL.pan; placed = true; }
+      else if (inZone(p, BAL.x + BAL.spread - 38, BAL.pan - 28, 76, 58) && !panContents('R')) { b.station = 'balR'; b.x = BAL.x + BAL.spread; b.y = BAL.pan; placed = true; }
+      else if (inZone(p, TANK.x - 55, TANK.top - 45, 110, 70)) { evict('tank'); b.station = 'tank'; b.x = TANK.x; b.y = TANK.top - 20; placed = true; splash(); }
+      else if (inZone(p, TORCH.x - 38, TORCH.y - 34, 76, 68)) { evict('torch'); b.station = 'torch'; b.x = TORCH.x; b.y = TORCH.y; placed = true; }
+      else if (inZone(p, BEND.x - 14, BEND.y - 74, BEND.len + 28, 72)) { evict('bend'); b.station = 'bend'; b.clamped = true; b.angle = 0; b.x = BEND.x; b.y = BEND.y; placed = true; }
+      if (!placed) { const h = home(k); b.station = null; b.x = h.x; b.y = h.y; }
+      else { markTested(k); sound(b.station === 'tank' ? 'whoosh' : 'pop'); track('place', {material: k, station: b.station}); afterPlace(k, b.station); }
+      paintAll();
+    },
+  });
+}
+function splash(){
+  if (reduced()) return;
+  const g = $('snapFx');
+  g.innerHTML = `<circle cx="${TANK.x}" cy="${TANK.top + 20}" r="6" fill="#bfe4f2" opacity=".8"/>`;
+  tween(0, 1, 400, k => { g.firstChild && g.firstChild.setAttribute('r', 6 + k * 26); g.firstChild && g.firstChild.setAttribute('opacity', .8 * (1 - k)); }).then(() => g.innerHTML = '');
+}
+function resolveBend(k){
+  const b = S.blocks[k];
+  const st = bendState(k, b.angle);
+  if (st.mode === 'snap') {
+    b.broken = true; b.angle = st.angle;
+    sound('snap');
+    if (!reduced()) { const g = $('snapFx'); g.innerHTML = `<text x="${BEND.x + BEND.len / 2}" y="${BEND.y - 40}" font-size="30" text-anchor="middle">💥</text>`; setTimeout(() => g.innerHTML = '', 500); }
+    toast(`${MATERIALS[k].label} snapped at ${fmt(st.angle, 0)}°.`);
+    discover('bendsDifferently');
+  } else if (st.mode === 'bent') {
+    b.permanent = st.permanent; b.angle = MATERIALS[k].elastic + st.permanent;
+    sound('boing');
+    toast(`${MATERIALS[k].label} bent and stayed that way — it does not spring back.`);
+    discover('bendsDifferently');
+  } else {
+    sound('boing');
+    tween(b.angle, 0, 380, v => { b.angle = v; paintBlock(k); $('angleLab').textContent = MATERIALS[k].label + `: bent ${fmt(v, 0)}°`; });
+  }
+  markTested(k);
+  paintBend();
+  paintWhy('bend', k);
+  check();
+}
+function afterPlace(k, station){
+  if (station === 'balL' || station === 'balR') tween(0, 1, 260, () => paintBalance());
+  paintWhy(station, k);
+  check();
+}
+
+/* ---- the live narrator ------------------------------------------------------------- */
+function paintWhy(station, k){
+  const w = $('why'); const m = MATERIALS[k];
+  let html = '';
+  if (station === 'balL' || station === 'balR') {
+    const other = panContents(station === 'balL' ? 'R' : 'L');
+    if (other) {
+      const mHere = mass(k), mOther = mass(other);
+      const big = mHere >= mOther ? k : other, small = big === k ? other : k;
+      html = `<p><b>${MATERIALS[big].label} is heavier</b> than ${MATERIALS[small].label}, even though the blocks are the exact same size. ` +
+        `${MATERIALS[big].label} packs <b>${fmt(MATERIALS[big].density, 1)} g</b> into every cubic centimetre; ${MATERIALS[small].label} packs only <b>${fmt(MATERIALS[small].density, 1)} g</b>. ` +
+        `So the same 100 cm³ block is ${fmt(mass(big), 0)} g of ${MATERIALS[big].label} but only ${fmt(mass(small), 0)} g of ${MATERIALS[small].label}.</p>`;
+    } else html = `<p>${m.label} weighs <b>${fmt(mass(k), 0)} g</b> for this 100 cm³ block. Put another block on the other pan to compare.</p>`;
+  } else if (station === 'tank') {
+    html = floats(k) ? `<p><b>${m.label} floats.</b> Its density, ${fmt(m.density, 2)} g/cm³, is less than water's 1.00 g/cm³, so about <b>${fmt(submergedFrac(k) * 100, 0)}%</b> of the block sits below the waterline and the rest pokes out.</p>`
+      : `<p><b>${m.label} sinks.</b> Its density, ${fmt(m.density, 2)} g/cm³, is more than water's 1.00 g/cm³ — there just isn't enough water pushing back to hold it up.</p>`;
+  } else if (station === 'torch') {
+    html = `<p><b>${m.label} is ${m.transparency}.</b> About <b>${lightThrough(k)}%</b> of the torchlight reaches the screen through it.</p>`;
+  } else if (station === 'bend') {
+    const st = bendState(k, S.blocks[k].angle);
+    html = st.mode === 'snap' ? `<p><b>${m.label} snapped</b> at about ${m.break}°. It has almost no give before it breaks — that is what "brittle" means.</p>`
+      : st.mode === 'bent' ? `<p><b>${m.label} stayed bent</b> — it took a permanent set of about ${fmt(S.blocks[k].permanent, 0)}°. Metals like iron can be bent into a new shape and keep it: that is what "ductile" means.</p>`
+      : `<p><b>${m.label} sprang back</b> to straight. Inside its elastic limit, bending it costs no permanent change at all.</p>`;
+  }
+  if (html) w.innerHTML = html;
+}
+
+/* ---- findings ---------------------------------------------------------------------- */
+function check(){
+  if (!S.locked) return;
+  const kL = panContents('L'), kR = panContents('R');
+  if (kL && kR) { const r = mass(kL) > mass(kR) ? mass(kL) / mass(kR) : mass(kR) / mass(kL); if (r >= 3) discover('heavier'); }
+  for (const k of ORDER) {
+    if (S.blocks[k].station === 'tank') { if (floats(k)) discover('floats'); else discover('sinks'); }
+    if (S.blocks[k].station === 'torch') { if (MATERIALS[k].transparency === 'transparent') discover('seeThrough'); if (MATERIALS[k].transparency === 'translucent') discover('hazy'); }
+  }
+}
+
+/* ============================================================================
+   Controls
+   ============================================================================ */
+build();
+$('btnReset').addEventListener('click', () => {
+  for (const k of ORDER) Object.assign(S.blocks[k], home(k), {station: null, clamped: false, angle: 0, permanent: 0, broken: false, dragging: false});
+  paintAll();
+  $('why').innerHTML = '<p>Drag a block onto a station to begin.</p>';
+  sound('tick'); track('reset');
+});
+function lockControls(lock){
+  for (const k of ORDER) $('blk_' + k).style.pointerEvents = lock ? 'none' : '';
+  $('gate').hidden = !lock;
+}
+
+findings($('finds'), [
+  {id: 'heavier',          icon: '⚖', label: 'Same size, very different weight', hint: 'Weigh two blocks together on the balance'},
+  {id: 'floats',           icon: '☁', label: 'Something that floats',            hint: 'Try a block in the water tank'},
+  {id: 'sinks',            icon: '●', label: 'Something that sinks like a stone',hint: 'Not every block floats'},
+  {id: 'seeThrough',       icon: '🔍', label: 'See clean through it',        hint: 'Shine the torch through each block'},
+  {id: 'hazy',             icon: '▒', label: 'Blurry, not clear',                hint: 'One block only lets some light through'},
+  {id: 'bendsDifferently', icon: '↪', label: 'Bends, stays bent, or snaps — never the same way twice', hint: 'Try the bending clamp on every block'},
+], () => toast('All six found. You have rebuilt the chapter’s grouping table with your own hands.', 4200));
+
+const POE = Play.predict($('poe'), {
+  id: 'materials-mass',
+  q: 'These four blocks are exactly the same size. Do you think they weigh the same?',
+  options: [
+    {id: 'same', text: 'Yes — same size means same weight.'},
+    {id: 'packed', text: 'No — whichever one packs the most matter into that space will be heaviest.', right: true},
+    {id: 'shiny', text: 'No — the shiniest one is always the heaviest.'},
+    {id: 'cant', text: "You can't tell without weighing them."},
+  ],
+  onLock(){
+    S.locked = true;
+    lockControls(false);
+    say('Drag a block onto the balance, the water tank, the torch, or the bending clamp, and find out.');
+    paintAll();
+  },
+});
+lockControls(!POE.locked);
+if (!Play.FF('predict')) S.locked = true;
+paintAll();
+
+let EXPLAINED = false;
+const origCheck = check;
+check = function(){
+  origCheck();
+  if (!EXPLAINED && found('heavier')) {
+    EXPLAINED = true;
+    POE.explain(`Iron packs <b>${fmt(MATERIALS.iron.density, 1)} g</b> into every cubic centimetre, wood only <b>${fmt(MATERIALS.wood.density, 1)} g</b>. ` +
+      `So a 100 cm³ block of iron is <b>${fmt(mass('iron'), 0)} g</b> while the same-sized block of wood is only <b>${fmt(mass('wood'), 0)} g</b> — about ${fmt(mass('iron') / mass('wood'), 1)}× lighter. Same size, very different weight.`);
+  }
+};
+
+window.applyFeatures = () => paintAll();
+window.PG_STATE = () => ({
+  blocks: Object.fromEntries(ORDER.map(k => [k, {station: S.blocks[k].station, angle: +S.blocks[k].angle.toFixed(1), broken: S.blocks[k].broken, permanent: S.blocks[k].permanent}])),
+  tested: Object.assign({}, S.tested), locked: S.locked,
+});
+window.PG_MODEL = {MATERIALS, VOLUME_CM3, mass, submergedFrac, floats, lightThrough, bendState};
+</script>
+</body>
+</html>

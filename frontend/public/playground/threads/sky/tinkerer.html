@@ -1,0 +1,897 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Moon And Eclipses</title>
+<meta name="description" content="Class 6–8: run the Sun, Earth and Moon forward in time and find out why there is not an eclipse every month; count lunar months against the solar year and add an Adhika Maasa; watch the Saptarishi turn round the Pole Star.">
+<link rel="icon" href="../../favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600&family=Inter:wght@400;500;600;700&family=Nunito:wght@500;700;800&family=Newsreader:opsz,wght@6..72,400;6..72,500&family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="../../play.css">
+<style>
+/* Only what this page needs beyond play.css. */
+.pg-stage{background:#0d1726}
+.tabs{display:flex; gap:4px; padding:8px; background:var(--sunk); border-bottom:1px solid var(--hair)}
+.tabs button{flex:1; border:0; background:transparent; border-radius:10px; padding:8px 10px; font-weight:600; font-size:14px; cursor:pointer; color:var(--ink-2)}
+.tabs button[aria-selected="true"]{background:var(--card); color:var(--ink); box-shadow:var(--shadow)}
+.gate{position:absolute; inset:52px 0 0 0; display:grid; place-items:center; pointer-events:none}
+.gate span{background:rgba(15,26,43,.86); color:#fff; padding:10px 16px; border-radius:99px; font-weight:600; font-size:14px}
+.seg{display:flex; flex-wrap:wrap; background:var(--sunk); border-radius:12px; padding:3px; gap:3px; margin:6px 0}
+.seg button{flex:1 1 auto; border:0; background:transparent; border-radius:9px; padding:6px 8px; font-weight:600; font-size:13px; cursor:pointer; color:var(--ink-2)}
+.seg button[aria-pressed="true"]{background:var(--card); color:var(--ink); box-shadow:var(--shadow)}
+.seg button:disabled{cursor:default; opacity:.5}
+.ctl{grid-template-columns:70px 1fr 74px; margin:4px 0}
+.hint{font-size:12.5px; color:var(--ink-3); margin:6px 0 0}
+.why p{font-size:14px; margin-bottom:.55em}
+.why b{color:var(--ink)}
+.readout{display:grid; grid-template-columns:1fr auto; gap:3px 12px; font-size:13.5px}
+.readout span{color:var(--ink-2)} .readout b{font-variant-numeric:tabular-nums; text-align:right}
+.bigdate{font-family:"Fredoka",var(--font-head); font-size:24px; font-weight:600; line-height:1.1}
+.log{list-style:none; margin:6px 0 0; padding:0; display:grid; gap:4px; font-size:13px; max-height:190px; overflow:auto}
+.log li{display:grid; grid-template-columns:22px 1fr; gap:6px; align-items:baseline}
+.log li i{font-style:normal; text-align:center}
+.log .miss{color:var(--ink-3)}
+#earthHit, #moonHit{cursor:grab}
+#earthHit.dragging, #moonHit.dragging{cursor:grabbing}
+@media (max-width:1180px) and (min-width:981px){ .pg-main.wide-side{grid-template-columns:minmax(0,1fr) 340px} }
+</style>
+</head>
+<body>
+<header class="pg-top"></header>
+
+<div class="pg-intro">
+  <h1>Moon, eclipses and calendars</h1>
+  <p>The Moon goes round the Earth every month, so why is there not an eclipse every month? Run the Sun, the Earth and the Moon forward from January 2026
+     and see for yourself. Then count months by the Moon against the year of the seasons, and watch the stars turn round the Pole Star.</p>
+</div>
+
+<main class="pg-main wide-side">
+  <section class="pg-stage" id="stageWrap">
+    <div class="tabs" role="tablist" aria-label="Three ways the sky keeps time">
+      <button role="tab" id="tabEcl" data-tab="ecl" aria-selected="true">🌘 Eclipses</button>
+      <button role="tab" id="tabCal" data-tab="cal" aria-selected="false">📅 Months and years</button>
+      <button role="tab" id="tabStars" data-tab="stars" aria-selected="false">✨ The night sky</button>
+    </div>
+    <svg id="eclStage" viewBox="0 0 1000 640" role="img" aria-label="The Sun, Earth and Moon from above; side views of the last new Moon and full Moon; a graph of the Moon's height above the Earth's orbit"></svg>
+    <svg id="calStage" viewBox="0 0 1000 640" role="img" aria-label="A spiral of years with the calendar's New Year marked each year, the Moon's phases this month, and where New Year falls each year" hidden></svg>
+    <svg id="starStage" viewBox="0 0 1000 640" role="img" aria-label="The whole night sky over Delhi with the Pole Star, the Saptarishi and Orion, and a graph of how high they are through the night" hidden></svg>
+    <div class="gate" id="gate"><span>Make your prediction first →</span></div>
+  </section>
+
+  <aside class="pg-side">
+    <div id="poe"></div>
+
+    <!-- eclipses -->
+    <div class="card" id="ctlEcl">
+      <div class="row" style="justify-content:space-between; align-items:flex-start">
+        <div><div class="kicker">Date and time in India</div><div class="bigdate num" id="eclDate">1 Jan 2026</div></div>
+        <button class="btn" id="btnRun" aria-label="Run time forward">▶ Run</button>
+      </div>
+      <div class="ctl"><label for="days">Date</label><input type="range" id="days" min="0" max="1095" step="0.25" value="0"><output id="daysOut" class="num">Jan 2026</output></div>
+      <div class="row">
+        <button class="btn sm" id="btnNew">⏭ Next new Moon</button>
+        <button class="btn sm" id="btnFull">⏭ Next full Moon</button>
+      </div>
+      <div class="ctl" style="margin-top:8px"><label for="tilt">Tilt</label><input type="range" id="tilt" min="0" max="10" step="0.1" value="5.1"><output id="tiltOut" class="num">5.1°</output></div>
+      <p class="hint">Tilt is the angle between the Moon’s path and the Earth’s. You can drag the Earth round the Sun, or the Moon round the Earth.</p>
+    </div>
+
+    <!-- calendars -->
+    <div class="card" id="ctlCal" hidden>
+      <div class="kicker">The calendar you are keeping</div>
+      <div class="seg" id="calSeg">
+        <button data-cal="lunar" aria-pressed="true">Lunar: 12 months a year</button>
+        <button data-cal="luni" aria-pressed="false">Luni-solar</button>
+      </div>
+      <div class="row">
+        <button class="btn sm" id="btnMonth">Next month ▸</button>
+        <button class="btn sm" id="btnYear">Next year: 12 months ▸▸</button>
+        <button class="btn sm" id="btnAdhik">Next year with an Adhika Maasa: 13 months</button>
+        <button class="btn sm" id="btnCalReset">↺ Start again</button>
+      </div>
+      <p class="hint">Every month runs from one new Moon to the next, as the model’s Moon really moves. The first New Year is the new Moon of 19 March 2026.</p>
+    </div>
+
+    <!-- stars -->
+    <div class="card" id="ctlStars" hidden>
+      <div class="row" style="justify-content:space-between; align-items:flex-start">
+        <div><div class="kicker">The sky over Delhi</div><div class="bigdate num" id="starDate">15 Jan, 9:00 pm</div></div>
+        <button class="btn" id="btnNight" aria-label="Run the night">▶ Run the night</button>
+      </div>
+      <div class="ctl"><label for="month">Month</label><input type="range" id="month" min="0" max="11" step="1" value="0"><output id="monthOut" class="num">Jan</output></div>
+      <div class="ctl"><label for="hour">Time</label><input type="range" id="hour" min="18" max="30" step="0.25" value="21"><output id="hourOut" class="num">9:00 pm</output></div>
+      <p class="hint">Looking straight up: north is at the top and east on the left, as on a sky map you hold over your head.</p>
+    </div>
+
+    <div class="card" id="meterCard">
+      <div class="kicker" id="meterKick">Readings</div>
+      <div id="meters"></div>
+    </div>
+
+    <div class="card why" id="whyCard" hidden>
+      <div class="kicker">What is happening</div>
+      <div id="why"></div>
+    </div>
+
+    <div class="card"><div class="kicker">To find</div><div id="finds"></div></div>
+  </aside>
+</main>
+
+<script src="../../play.js"></script>
+<script>
+'use strict';
+const {$, esc, clamp, fmt, drag, loop, sound, say, track, toast, predict, findings, discover, found,
+       shareState, sharedState, mount, reduced} = Play;
+mount({thread: 'sky', band: 'tinkerer'});
+const $$ = s => Array.from(document.querySelectorAll(s));
+
+/* MODEL:start ==================================================================
+   The real Sun and Moon, from their mean motions plus the largest wobbles
+   (Meeus, Astronomical Algorithms, ch. 25 and 47). t is days from 1 Jan 2000, 12:00 UT.
+
+   The Moon's height above the Earth's orbit (its latitude β) comes from the
+   argument of latitude F: β is zero at the two NODES, where the Moon's tilted path
+   crosses the Earth's. Scaling β by tilt / 5.145° lets the learner change the tilt.
+
+   New and full Moons are found by solving for the moment the Moon's longitude is
+   0° or 180° from the Sun's. At each one the page asks a question of geometry:
+     new Moon  — does the Moon's shadow reach the Earth?  It does if the Moon's
+                 centre is less than πM + sS + sM from the Sun's centre (as seen from
+                 the Earth's centre); it is total if the shadow's core reaches the
+                 Earth and the Moon looks bigger than the Sun, a ring (annular) if smaller.
+     full Moon — does the Moon enter the Earth's shadow? The core of the shadow at
+                 the Moon's distance has radius 1.02(πM + πS − sS).
+   π = parallax (the Earth's radius seen from there), s = angular radius.
+   Nothing is looked up: the eclipses of 2026–2028 fall out of the arithmetic.
+   ============================================================================ */
+const D2R = Math.PI / 180, R2D = 180 / Math.PI;
+const J2000 = Date.UTC(2000, 0, 1, 12);
+const T0 = (Date.UTC(2025, 11, 31, 18, 30) - J2000) / 864e5;         // 1 Jan 2026, 00:00 IST
+const TILT0 = 5.145;
+const norm = a => ((a % 360) + 360) % 360, sgn180 = a => ((a % 360) + 540) % 360 - 180;
+const S_ = x => Math.sin(x * D2R), C_ = x => Math.cos(x * D2R);
+function sunMoon(t, tilt = TILT0){
+  const Lm = 218.3164477 + 13.17639648 * t, Mm = 134.9633964 + 13.06499295 * t, F = 93.2720950 + 13.22935024 * t;
+  const Ls = 280.46646 + 0.98564736 * t, Ms = 357.52911 + 0.98560028 * t, D = 297.8501921 + 12.19074912 * t;
+  const lamS = Ls + 1.914602 * S_(Ms) + 0.019993 * S_(2 * Ms);
+  const dl = 6.288774 * S_(Mm) + 1.274027 * S_(2 * D - Mm) + 0.658314 * S_(2 * D) + 0.213618 * S_(2 * Mm) - 0.185116 * S_(Ms) - 0.114332 * S_(2 * F);
+  const b0 = 5.128122 * S_(F) + 0.280602 * S_(Mm + F) + 0.277693 * S_(Mm - F) + 0.173237 * S_(2 * D - F) +
+             0.055413 * S_(2 * D - Mm + F) + 0.046271 * S_(2 * D - Mm - F) + 0.032573 * S_(2 * D + F) + 0.017198 * S_(2 * Mm + F);
+  const r = 385000.56 - 20905.355 * C_(Mm) - 3699.111 * C_(2 * D - Mm) - 2955.968 * C_(2 * D);   // km
+  const rs = 149598023 * (1 - 0.016708 * C_(Ms));                                               // km
+  const node = norm(125.0445479 - 0.0529538083 * t);                                            // ascending node
+  const lamM = norm(Lm + dl);
+  return {lamS: norm(lamS), lamM, beta: b0 * tilt / TILT0, r, rs, node, elong: norm(lamM - norm(lamS))};
+}
+/* The moment near t0 when the Moon is `target` degrees (0 new, 180 full) from the Sun. */
+function syzygy(t0, target){
+  let t = t0;
+  for (let i = 0; i < 20; i++) { const d = sgn180(sunMoon(t).elong - target); t -= d / 12.19; if (Math.abs(d) < 1e-7) break; }
+  return t;
+}
+const RE = 6378.14, RS = 696000, RM = 1737.4;
+function eclipseAt(t, type, tilt = TILT0){
+  const e = sunMoon(t, tilt);
+  const piM = Math.asin(RE / e.r) * R2D, sM = Math.asin(RM / e.r) * R2D, sS = Math.asin(RS / e.rs) * R2D, piS = Math.asin(RE / e.rs) * R2D;
+  const sep = Math.abs(e.beta);
+  /* the same geometry in Earth radii, for the side views */
+  const h = e.r * Math.sin(e.beta * D2R) / RE;                      // Moon's height above the Earth's orbit plane
+  const ru = 1.02 * (piM + piS - sS), rp = 1.02 * (piM + piS + sS);
+  let kind = 'none';
+  if (type === 'new') {
+    if (sep < piM + sS + sM) kind = sep < 0.997 * piM ? (sM > sS ? 'total' : 'annular') : 'partial';
+  } else {
+    if (sep <= ru - sM) kind = 'total'; else if (sep < ru + sM) kind = 'partial'; else if (sep < rp + sM) kind = 'penumbral';
+  }
+  return {t, type, kind, sep, h, piM, sM, sS, ru, rp, beta: e.beta, r: e.r,
+          limit: type === 'new' ? piM + sS + sM : ru + sM,
+          /* shadow sizes in Earth radii: the Moon's at the Earth, and the Earth's at the Moon */
+          moonPen: (sS + sM) / piM, moonUmb: (sM - sS) / piM, earthUmb: ru / piM, earthPen: rp / piM, moonR: sM / piM};
+}
+/* Every new and full Moon between two times, each with its verdict. */
+function syzygies(ta, tb, tilt = TILT0){
+  const out = [];
+  let tn = syzygy(ta - 15, 0);
+  while (tn < tb + 30) {
+    const tf = syzygy(tn + 14.77, 180);
+    if (tn >= ta && tn <= tb) out.push(eclipseAt(tn, 'new', tilt));
+    if (tf >= ta && tf <= tb) out.push(eclipseAt(tf, 'full', tilt));
+    tn = syzygy(tn + 29.53, 0);
+  }
+  return out.sort((a, b) => a.t - b.t);
+}
+const isEclipse = s => s.kind === 'total' || s.kind === 'annular' || s.kind === 'partial';
+
+/* ---- calendars ----------------------------------------------------------- */
+const TROPICAL_YEAR = 365.2422;
+const CAL_START = syzygy((Date.UTC(2026, 2, 19) - J2000) / 864e5, 0);        // the new Moon of 19 March 2026
+/* The first n lunations from the start: each is a real new Moon found by the model. */
+function lunations(n){ const out = [CAL_START]; for (let i = 1; i <= n; i++) out.push(syzygy(out[i - 1] + 29.53, 0)); return out; }
+const LUN = lunations(40 * 13 + 2);
+/* years = [12, 13, 12, ...] months in each year so far. Where New Year of year y falls, and how far it has
+   drifted from the same point in the seasons (days: negative = early). */
+function newYears(years){
+  const out = []; let m = 0;
+  for (let y = 0; y <= years.length; y++) {
+    const t = LUN[m], drift = t - (CAL_START + y * TROPICAL_YEAR);
+    out.push({y, t, month: m, drift});
+    if (y < years.length) m += years[y];
+  }
+  return out;
+}
+
+/* ---- the night sky over Delhi ------------------------------------------- */
+const DELHI = {lat: 28.61, lon: 77.21};
+const STARS = {
+  polaris: {ra: 2.530, dec: 89.264, mag: 2.0, name: 'Pole Star (Dhruva Tara)'},
+  dubhe: {ra: 11.062, dec: 61.751, mag: 1.8}, merak: {ra: 11.031, dec: 56.382, mag: 2.3}, phecda: {ra: 11.897, dec: 53.695, mag: 2.4},
+  megrez: {ra: 12.257, dec: 57.033, mag: 3.3}, alioth: {ra: 12.900, dec: 55.960, mag: 1.8}, mizar: {ra: 13.399, dec: 54.925, mag: 2.2}, alkaid: {ra: 13.792, dec: 49.313, mag: 1.9},
+  kochab: {ra: 14.845, dec: 74.156, mag: 2.1}, pherkad: {ra: 15.345, dec: 71.834, mag: 3.0}, yildun: {ra: 17.537, dec: 86.586, mag: 4.4},
+  epsumi: {ra: 16.766, dec: 82.037, mag: 4.2}, zetumi: {ra: 15.734, dec: 77.795, mag: 4.3}, etaumi: {ra: 16.292, dec: 75.755, mag: 5.0},
+  betelgeuse: {ra: 5.919, dec: 7.407, mag: 0.5}, rigel: {ra: 5.242, dec: -8.202, mag: 0.1}, bellatrix: {ra: 5.419, dec: 6.350, mag: 1.6},
+  saiph: {ra: 5.796, dec: -9.670, mag: 2.1}, alnitak: {ra: 5.679, dec: -1.943, mag: 1.8}, alnilam: {ra: 5.603, dec: -1.202, mag: 1.7}, mintaka: {ra: 5.533, dec: -0.299, mag: 2.2},
+  sirius: {ra: 6.752, dec: -16.716, mag: -1.5, name: 'Sirius'}, aldebaran: {ra: 4.599, dec: 16.509, mag: 0.9, name: 'Aldebaran'},
+};
+const FIGURES = {
+  saptarishi: [['dubhe', 'merak'], ['merak', 'phecda'], ['phecda', 'megrez'], ['megrez', 'dubhe'], ['megrez', 'alioth'], ['alioth', 'mizar'], ['mizar', 'alkaid']],
+  littledipper: [['polaris', 'yildun'], ['yildun', 'epsumi'], ['epsumi', 'zetumi'], ['zetumi', 'etaumi'], ['etaumi', 'pherkad'], ['pherkad', 'kochab'], ['kochab', 'zetumi']],
+  orion: [['betelgeuse', 'alnitak'], ['bellatrix', 'mintaka'], ['alnitak', 'alnilam'], ['alnilam', 'mintaka'], ['alnitak', 'saiph'], ['mintaka', 'rigel'], ['betelgeuse', 'bellatrix'], ['saiph', 'rigel']],
+};
+/* Local sidereal time (degrees) in Delhi on day-of-year doy of 2026 at IST hour h (may run past 24). */
+function lst(doy, h){
+  const d = (Date.UTC(2026, 0, 1) - J2000) / 864e5 + (doy - 1) + (h - 5.5) / 24;
+  return norm(280.46061837 + 360.98564736629 * d + DELHI.lon);
+}
+function altAz(star, doy, h){
+  const H = (lst(doy, h) - star.ra * 15) * D2R, dec = star.dec * D2R, phi = DELHI.lat * D2R;
+  const sa = Math.sin(phi) * Math.sin(dec) + Math.cos(phi) * Math.cos(dec) * Math.cos(H);
+  const alt = Math.asin(clamp(sa, -1, 1));
+  const az = Math.atan2(-Math.cos(dec) * Math.sin(H), Math.sin(dec) * Math.cos(phi) - Math.cos(dec) * Math.sin(phi) * Math.cos(H));
+  return {alt: alt * R2D, az: norm(az * R2D)};
+}
+/* MODEL:end */
+
+/* ---- helpers ---------------------------------------------------------------- */
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const MONTHS_L = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+const istDate = t => new Date(J2000 + t * 864e5 + 5.5 * 3600e3);
+function dateStr(t, withTime){
+  const d = istDate(t), s = d.getUTCDate() + ' ' + MONTHS[d.getUTCMonth()] + ' ' + d.getUTCFullYear();
+  if (!withTime) return s;
+  let h = d.getUTCHours(), m = d.getUTCMinutes();
+  return s + ', ' + ((h % 12) || 12) + ':' + String(m).padStart(2, '0') + (h < 12 ? ' am' : ' pm');
+}
+const clock12 = h => { h = ((h % 24) + 24) % 24; const H = Math.floor(h + 1e-9), M = Math.round((h - H) * 60) % 60; return ((H % 12) || 12) + ':' + String(M).padStart(2, '0') + (H < 12 ? ' am' : ' pm'); };
+const dayOfYear = t => { const d = istDate(t); return (Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()) - Date.UTC(d.getUTCFullYear(), 0, 1)) / 864e5 + 1; };
+const KIND = {total: 'Total', annular: 'Ring (annular)', partial: 'Partial', penumbral: 'Only a faint shading', none: 'No eclipse'};
+/* the lit part of a Moon disc (as the sun-earth explorer draws it) for Sun–Earth–Moon angle phi */
+function phasePath(cx, cy, r, phi){
+  const p = norm(phi), c = Math.cos(p * D2R), rx = Math.abs(c) * r, right = p <= 180;
+  const f = v => v.toFixed(2);
+  return `M${f(cx)} ${f(cy - r)} A${f(r)} ${f(r)} 0 0 ${right ? 1 : 0} ${f(cx)} ${f(cy + r)} A${f(rx)} ${f(r)} 0 0 ${right ? (c > 0 ? 0 : 1) : (c > 0 ? 1 : 0)} ${f(cx)} ${f(cy - r)}Z`;
+}
+
+/* ---- state: plain data --------------------------------------------------- */
+const S = {tab: 'ecl', locked: false, day: 0, running: false, tilt: 5.1, visited: [], lastT: 0,
+  cal: 'lunar', years: [], month: 0,
+  sMonth: 0, sHour: 21, night: false, pole0: null, orionUp: false, orionDown: false};
+const shared = sharedState();
+if (shared) {
+  S.day = clamp(+shared.day || 0, 0, 1095); S.tilt = clamp(shared.tilt == null ? 5.1 : +shared.tilt, 0, 10);
+  if (['ecl', 'cal', 'stars'].includes(shared.tab)) S.tab = shared.tab;
+  S.sMonth = clamp(+shared.sMonth || 0, 0, 11); S.sHour = clamp(+shared.sHour || 21, 18, 30);
+}
+shareState(() => ({tab: S.tab, day: S.day, tilt: S.tilt, sMonth: S.sMonth, sHour: S.sHour}));
+let SYZ = syzygies(T0, T0 + 1096, S.tilt);
+const tNow = () => T0 + S.day;
+
+/* ============================================================================
+   Stage 1: eclipses. Built once, then patched.
+   ============================================================================ */
+const eclSvg = $('eclStage');
+const TV = {x: 262, y: 200, R: 150, mR: 48};           // top view
+const SV = {x0: 536, x1: 994, sy: [16, 208], h: 184, k: 13};   // side views; k = px per Earth radius (heights to scale)
+const BG = {x0: 70, x1: 960, y0: 458, y1: 610, span: 360, bmax: 6};
+const earthXY = t => { const e = sunMoon(t); const L = (e.lamS + 180) * D2R; return {x: TV.x + TV.R * Math.cos(L), y: TV.y - TV.R * Math.sin(L), e}; };
+function buildEcl(){
+  const rnd = Play.mulberry32(3);
+  let stars = '';
+  for (let i = 0; i < 80; i++) stars += `<circle cx="${(rnd() * 1000).toFixed(1)}" cy="${(rnd() * 400).toFixed(1)}" r="${(rnd() * 1.1 + .3).toFixed(2)}" fill="#fff" opacity="${(rnd() * .5 + .2).toFixed(2)}"/>`;
+  const side = (i, title) => {
+    const y = SV.sy[i], cy = y + SV.h / 2;
+    return `<g id="side${i}">
+      <rect x="${SV.x0}" y="${y}" width="${SV.x1 - SV.x0}" height="${SV.h}" rx="12" fill="#101d31" stroke="#243650"/>
+      <clipPath id="clipSide${i}"><rect x="${SV.x0}" y="${y}" width="${SV.x1 - SV.x0}" height="${SV.h}" rx="12"/></clipPath>
+      <g clip-path="url(#clipSide${i})">
+        ${Array.from({length: 5}, (_, k) => `<line x1="${SV.x0}" y1="${cy - 60 + k * 30}" x2="${SV.x0 + 60}" y2="${cy - 60 + k * 30}" stroke="#ffd36b" stroke-width="2" opacity=".6"/>`).join('')}
+        <line x1="${SV.x0 + 20}" y1="${cy}" x2="${SV.x1}" y2="${cy}" stroke="#3d5573" stroke-dasharray="4 5"/>
+        <path id="pen${i}" fill="#8ea3c2" opacity=".22"/><path id="umb${i}" fill="#050b16" opacity=".85"/>
+        <circle id="sE${i}" r="${SV.k}" fill="url(#gEarthE)"/>
+        <circle id="sM${i}" r="4" fill="#f4efd8"/>
+        <circle id="spot${i}" r="3" fill="#050b16" opacity="0"/>
+      </g>
+      <text x="${SV.x0 + 68}" y="${cy - 56}" fill="#ffd36b" font-size="11" font-weight="700">sunlight →</text>
+      <text id="lm${i}" fill="#e8e2c8" font-size="11" font-weight="700" text-anchor="middle">Moon</text><text id="le${i}" fill="#9fd0ff" font-size="11" font-weight="700" text-anchor="middle">Earth</text>
+      <text x="${SV.x0 + 14}" y="${y + 20}" fill="#cfe0f5" font-size="12.5" font-weight="700" id="sideT${i}">${title}</text>
+      <text x="${SV.x0 + 14}" y="${y + SV.h - 12}" fill="#8ea3c2" font-size="11">Heights to scale; distances squeezed.</text>
+      <text id="sideV${i}" x="${SV.x1 - 14}" y="${y + SV.h - 12}" text-anchor="end" fill="#ffd36b" font-size="13" font-weight="700"></text>
+    </g>`;
+  };
+  eclSvg.innerHTML = `
+  <defs>
+    <radialGradient id="gSunE" cx="45%" cy="40%"><stop offset="0" stop-color="#fff4c2"/><stop offset=".55" stop-color="#ffc53d"/><stop offset="1" stop-color="#f28a12"/></radialGradient>
+    <radialGradient id="gGlowE"><stop offset="0" stop-color="#ffcf5a" stop-opacity=".55"/><stop offset="1" stop-color="#ffcf5a" stop-opacity="0"/></radialGradient>
+    <radialGradient id="gEarthE" cx="40%" cy="38%"><stop offset="0" stop-color="#6fc1ff"/><stop offset=".7" stop-color="#2471c9"/><stop offset="1" stop-color="#174d93"/></radialGradient>
+    <clipPath id="clipE"><circle r="13"/></clipPath><clipPath id="clipM"><circle r="7"/></clipPath>
+  </defs>
+  <rect width="1000" height="410" fill="#0d1726"/>
+  <g>${stars}</g>
+  <text x="18" y="26" fill="#9fb3c8" font-size="13" font-weight="700" letter-spacing=".08em">LOOKING DOWN ON THE SOLAR SYSTEM</text>
+  <text x="18" y="44" fill="#6f8399" font-size="11.5">The Moon’s orbit is drawn much bigger than it is.</text><text x="18" y="60" fill="#ff9cc5" font-size="11.5">Pink dots: the nodes, where its path crosses the Earth’s.</text>
+  <circle cx="${TV.x}" cy="${TV.y}" r="${TV.R}" fill="none" stroke="#3d5573" stroke-width="1.5" stroke-dasharray="3 6"/>
+  <circle cx="${TV.x}" cy="${TV.y}" r="64" fill="url(#gGlowE)"/><circle cx="${TV.x}" cy="${TV.y}" r="26" fill="url(#gSunE)"/>
+  <line id="nodeLine" stroke="#ff7ab0" stroke-width="1.6" stroke-dasharray="6 5" opacity=".85"/>
+  <path id="orbUp" fill="none" stroke="#cfe0f5" stroke-width="2"/>
+  <path id="orbDn" fill="none" stroke="#5d7593" stroke-width="2" stroke-dasharray="3 5"/>
+  <circle id="nodeA" r="4.5" fill="#ff7ab0"/><circle id="nodeD" r="4.5" fill="none" stroke="#ff7ab0" stroke-width="2"/>
+  <line id="sunRay" stroke="#ffd36b" stroke-width="1" stroke-dasharray="2 5" opacity=".45"/>
+  <g id="earthB"><circle r="13" fill="url(#gEarthE)"/><path id="earthNight" fill="#050b16" opacity=".72" clip-path="url(#clipE)"/></g>
+  <g id="moonB"><circle r="7" fill="#3a4152"/><path id="moonDay" fill="#f4efd8" clip-path="url(#clipM)"/></g>
+  <text id="upLab" fill="#cfe0f5" font-size="11" font-weight="600" text-anchor="middle">above</text>
+  <text id="dnLab" fill="#7d93ad" font-size="11" font-weight="600" text-anchor="middle">below</text>
+  <text id="nodeLab" fill="#ff9cc5" font-size="11" font-weight="700" text-anchor="middle">node</text>
+  <text id="seasonLab" x="${TV.x}" y="392" text-anchor="middle" fill="#ff9cc5" font-size="13" font-weight="700"></text>
+  <circle id="earthHit" r="26" fill="transparent" tabindex="0" role="slider" aria-label="The Earth: drag it round the Sun to move the date"/>
+  <circle id="moonHit" r="16" fill="transparent" tabindex="0" role="slider" aria-label="The Moon: drag it round the Earth to move the date"/>
+  
+  ${side(0, 'At the last new Moon')}${side(1, 'At the last full Moon')}
+  <!-- graph -->
+  <rect y="410" width="1000" height="230" fill="#fbfaf6"/>
+  <text x="18" y="430" fill="#4a555b" font-size="13" font-weight="700" letter-spacing=".08em">THE MOON’S HEIGHT ABOVE THE EARTH’S ORBIT</text>
+  <g id="bgAxes"></g>
+  <rect id="bandSolar" x="${BG.x0}" width="${BG.x1 - BG.x0}" fill="#ffd36b" opacity=".32"/>
+  <rect id="bandLunar" x="${BG.x0}" width="${BG.x1 - BG.x0}" fill="#e05a47" opacity=".16"/>
+  <line x1="${BG.x0}" x2="${BG.x1}" y1="${(BG.y0 + BG.y1) / 2}" y2="${(BG.y0 + BG.y1) / 2}" stroke="#9aa3a6"/>
+  <path id="betaCurve" fill="none" stroke="#3057c9" stroke-width="2.2"/>
+  <g id="syzDots"></g>
+  <line id="bgNow" y1="${BG.y0}" y2="${BG.y1}" stroke="#1d2327" stroke-width="1.5"/>
+  <circle id="bgNowDot" r="5" fill="#3057c9" stroke="#fff" stroke-width="2"/>
+  <g font-size="11.5" font-weight="600">
+    <circle cx="600" cy="428" r="5" fill="#1d2327"/><text x="610" y="432" fill="#4a555b">new Moon</text>
+    <circle cx="690" cy="428" r="5" fill="#fff" stroke="#1d2327"/><text x="700" y="432" fill="#4a555b">full Moon</text>
+    <rect x="775" y="422" width="14" height="10" fill="#ffd36b" opacity=".6"/><text x="793" y="432" fill="#4a555b">eclipse zone</text>
+    <text x="880" y="432" fill="#c0392b">★ eclipse</text>
+  </g>
+  <rect id="bgVeil" x="0" y="440" width="1000" height="200" fill="#fbfaf6" opacity=".94"/>
+  <text id="bgVeilT" x="500" y="540" text-anchor="middle" fill="#7c878c" font-size="15" font-weight="600">The graph appears once you have made a prediction.</text>
+  `;
+}
+const bgy = b => (BG.y0 + BG.y1) / 2 - clamp(b, -BG.bmax, BG.bmax) / BG.bmax * (BG.y1 - BG.y0) / 2;
+function paintEcl(){
+  const t = tNow(), p = earthXY(t), e = p.e;
+  $('earthB').setAttribute('transform', `translate(${p.x.toFixed(1)} ${p.y.toFixed(1)})`);
+  $('earthHit').setAttribute('cx', p.x.toFixed(1)); $('earthHit').setAttribute('cy', p.y.toFixed(1));
+  /* night half: away from the Sun */
+  const nightPath = (R, ax, ay) => { const nx = -ax, ny = -ay, px = -ny * R, py = nx * R;
+    return `M${px.toFixed(2)} ${py.toFixed(2)} A${R} ${R} 0 0 1 ${(-px).toFixed(2)} ${(-py).toFixed(2)} L${(-px + nx * R * 2).toFixed(2)} ${(-py + ny * R * 2).toFixed(2)} L${(px + nx * R * 2).toFixed(2)} ${(py + ny * R * 2).toFixed(2)}Z`; };
+  const toSun = Math.atan2(TV.y - p.y, TV.x - p.x);
+  $('earthNight').setAttribute('d', nightPath(13, Math.cos(toSun), Math.sin(toSun)));
+  const mA = e.lamM * D2R, mx = p.x + TV.mR * Math.cos(mA), my = p.y - TV.mR * Math.sin(mA);
+  $('moonB').setAttribute('transform', `translate(${mx.toFixed(1)} ${my.toFixed(1)})`);
+  $('moonHit').setAttribute('cx', mx.toFixed(1)); $('moonHit').setAttribute('cy', my.toFixed(1));
+  const mts = Math.atan2(TV.y - my, TV.x - mx);
+  /* the day half of the Moon: the half facing the Sun */
+  const dx = Math.cos(mts), dy = Math.sin(mts), qx = -dy * 7, qy = dx * 7;
+  $('moonDay').setAttribute('d', `M${qx.toFixed(2)} ${qy.toFixed(2)} A7 7 0 0 0 ${(-qx).toFixed(2)} ${(-qy).toFixed(2)} L${(-qx + dx * 14).toFixed(2)} ${(-qy + dy * 14).toFixed(2)} L${(qx + dx * 14).toFixed(2)} ${(qy + dy * 14).toFixed(2)}Z`);
+  /* the Moon's orbit: the half above the Earth's orbit (from the ascending node) solid */
+  const arc = (a0, a1) => { const x0 = p.x + TV.mR * Math.cos(a0 * D2R), y0 = p.y - TV.mR * Math.sin(a0 * D2R), x1 = p.x + TV.mR * Math.cos(a1 * D2R), y1 = p.y - TV.mR * Math.sin(a1 * D2R);
+    return `M${x0.toFixed(1)} ${y0.toFixed(1)} A${TV.mR} ${TV.mR} 0 0 0 ${x1.toFixed(1)} ${y1.toFixed(1)}`; };
+  const flat = S.tilt < 0.05;
+  $('orbUp').setAttribute('d', arc(e.node, e.node + 180)); $('orbDn').setAttribute('d', flat ? '' : arc(e.node + 180, e.node + 360));
+  if (flat) $('orbDn').setAttribute('d', arc(e.node + 180, e.node + 359.9));
+  $('orbDn').setAttribute('stroke', flat ? '#cfe0f5' : '#5d7593');
+  const nA = e.node * D2R, L = 80;
+  $('nodeLine').setAttribute('x1', (p.x + L * Math.cos(nA)).toFixed(1)); $('nodeLine').setAttribute('y1', (p.y - L * Math.sin(nA)).toFixed(1));
+  $('nodeLine').setAttribute('x2', (p.x - L * Math.cos(nA)).toFixed(1)); $('nodeLine').setAttribute('y2', (p.y + L * Math.sin(nA)).toFixed(1));
+  $('nodeLine').setAttribute('opacity', flat ? 0 : .85);
+  $('nodeA').setAttribute('cx', (p.x + TV.mR * Math.cos(nA)).toFixed(1)); $('nodeA').setAttribute('cy', (p.y - TV.mR * Math.sin(nA)).toFixed(1));
+  $('nodeD').setAttribute('cx', (p.x - TV.mR * Math.cos(nA)).toFixed(1)); $('nodeD').setAttribute('cy', (p.y + TV.mR * Math.sin(nA)).toFixed(1));
+  $('nodeLab').setAttribute('x', (p.x + (TV.mR + 64) * Math.cos(nA)).toFixed(1)); $('nodeLab').setAttribute('y', (p.y - (TV.mR + 64) * Math.sin(nA) + 4).toFixed(1)); $('nodeLab').setAttribute('opacity', flat ? 0 : 1);
+  $('nodeA').setAttribute('opacity', flat ? 0 : 1); $('nodeD').setAttribute('opacity', flat ? 0 : 1);
+  const up = (e.node + 90) * D2R, dn = (e.node - 90) * D2R;
+  $('upLab').setAttribute('x', (p.x + (TV.mR + 16) * Math.cos(up)).toFixed(1)); $('upLab').setAttribute('y', (p.y - (TV.mR + 16) * Math.sin(up) + 4).toFixed(1));
+  $('dnLab').setAttribute('x', (p.x + (TV.mR + 16) * Math.cos(dn)).toFixed(1)); $('dnLab').setAttribute('y', (p.y - (TV.mR + 16) * Math.sin(dn) + 4).toFixed(1));
+  $('upLab').setAttribute('opacity', flat ? 0 : 1); $('dnLab').setAttribute('opacity', flat ? 0 : 1);
+  $('sunRay').setAttribute('x1', TV.x); $('sunRay').setAttribute('y1', TV.y); $('sunRay').setAttribute('x2', p.x.toFixed(1)); $('sunRay').setAttribute('y2', p.y.toFixed(1));
+  const nodeToSun = Math.abs(Math.sin((e.lamS - e.node) * D2R));
+  $('seasonLab').textContent = S.locked && !flat && nodeToSun < Math.sin(17 * D2R) ? 'The line of nodes points at the Sun: eclipse season' : '';
+  /* side views */
+  const lastN = [...SYZ].reverse().find(s => s.type === 'new' && s.t <= t + 1e-6), lastF = [...SYZ].reverse().find(s => s.type === 'full' && s.t <= t + 1e-6);
+  paintSide(0, lastN); paintSide(1, lastF);
+  /* graph */
+  if (S.locked) paintBeta(t);
+  $('eclDate').textContent = dateStr(t, true);
+  $('days').value = S.day; $('daysOut').textContent = MONTHS[istDate(t).getUTCMonth()] + ' ' + istDate(t).getUTCFullYear();
+  $('tilt').value = S.tilt; $('tiltOut').textContent = fmt(S.tilt, 1) + '°';
+}
+function paintSide(i, s){
+  const y = SV.sy[i], cy = y + SV.h / 2, k = SV.k;
+  if (!s) { $('sideT' + i).textContent = i ? 'Full Moons will appear here' : 'New Moons will appear here'; $('sM' + i).setAttribute('opacity', 0); $('sE' + i).setAttribute('opacity', 0); $('pen' + i).setAttribute('d', ''); $('umb' + i).setAttribute('d', ''); $('sideV' + i).textContent = ''; return; }
+  $('sM' + i).setAttribute('opacity', 1); $('sE' + i).setAttribute('opacity', 1);
+  $('sideT' + i).textContent = (i ? 'At the full Moon of ' : 'At the new Moon of ') + dateStr(s.t);
+  const hy = cy - s.h * k;                                   // the Moon's height, to scale
+  const xA = SV.x0 + 150, xB = SV.x1 - 70;                   // near body, far body
+  const f = v => v.toFixed(1);
+  if (i === 0) {
+    /* the Moon's shadow falls towards the Earth */
+    $('sM0').setAttribute('cx', xA); $('sM0').setAttribute('cy', f(hy)); $('sM0').setAttribute('r', Math.max(2.5, s.moonR * k));
+    $('sE0').setAttribute('cx', xB); $('sE0').setAttribute('cy', cy);
+    const mr = s.moonR * k, pr = s.moonPen * k, ur = Math.abs(s.moonUmb) * k;
+    $('pen0').setAttribute('d', `M${xA} ${f(hy - mr)} L${xB + 30} ${f(hy - pr * (1 + 30 / (xB - xA)))} L${xB + 30} ${f(hy + pr * (1 + 30 / (xB - xA)))} L${xA} ${f(hy + mr)}Z`);
+    $('umb0').setAttribute('d', `M${xA} ${f(hy - mr)} L${xB} ${f(hy - Math.max(0.6, ur))} L${xB} ${f(hy + Math.max(0.6, ur))} L${xA} ${f(hy + mr)}Z`);
+    const onEarth = Math.abs(s.h) < 1 + s.moonPen;
+    $('spot0').setAttribute('cx', xB - Math.sqrt(Math.max(0, k * k - (hy - cy) ** 2))); $('spot0').setAttribute('cy', f(clamp(hy, cy - k, cy + k)));
+    $('spot0').setAttribute('opacity', onEarth && Math.abs(s.h) < 1 ? .9 : 0);
+  } else {
+    /* the Earth's shadow reaches out to the Moon */
+    $('sE1').setAttribute('cx', xA); $('sE1').setAttribute('cy', cy);
+    $('sM1').setAttribute('cx', xB); $('sM1').setAttribute('cy', f(hy)); $('sM1').setAttribute('r', Math.max(3, s.moonR * k));
+    const ur = s.earthUmb * k, pr = s.earthPen * k;
+    $('pen1').setAttribute('d', `M${xA} ${cy - k} L${xB + 40} ${f(cy - pr * 1.05)} L${xB + 40} ${f(cy + pr * 1.05)} L${xA} ${cy + k}Z`);
+    $('umb1').setAttribute('d', `M${xA} ${cy - k} L${xB + 40} ${f(cy - ur * 0.97)} L${xB + 40} ${f(cy + ur * 0.97)} L${xA} ${cy + k}Z`);
+    $('sM1').setAttribute('fill', s.kind === 'total' ? '#b3402a' : s.kind === 'partial' ? '#c9a58c' : '#f4efd8');
+  }
+  const mEl = i === 0 ? {x: xA, y: hy} : {x: xB, y: hy}, eEl = i === 0 ? {x: xB, y: cy} : {x: xA, y: cy};
+  $('lm' + i).setAttribute('x', mEl.x); $('lm' + i).setAttribute('y', f(clamp(mEl.y + (s.h >= 0 ? -12 : 20), y + 34, y + SV.h - 26)));
+  $('le' + i).setAttribute('x', eEl.x); $('le' + i).setAttribute('y', f(cy + k + 16));
+  $('sideV' + i).textContent = S.locked ? (isEclipse(s) ? `${KIND[s.kind]} ${i ? 'lunar' : 'solar'} eclipse` : s.kind === 'penumbral' ? 'Only a faint shading' : `Missed: ${fmt(Math.abs(s.beta), 1)}° ${s.beta > 0 ? 'above' : 'below'}`) : '';
+}
+function paintBeta(t){
+  const x = tt => BG.x0 + (tt - (t - BG.span / 2)) / BG.span * (BG.x1 - BG.x0);
+  let d = '';
+  for (let k = 0; k <= 360; k++) { const tt = t - BG.span / 2 + k * BG.span / 360; d += (k ? 'L' : 'M') + x(tt).toFixed(1) + ' ' + bgy(sunMoon(tt, S.tilt).beta).toFixed(1); }
+  $('betaCurve').setAttribute('d', d);
+  /* the zones: a typical limit, from the model at mean distances */
+  const sL = 1.48 * 1, lL = 0.96;
+  $('bandSolar').setAttribute('y', bgy(sL)); $('bandSolar').setAttribute('height', bgy(-sL) - bgy(sL));
+  $('bandLunar').setAttribute('y', bgy(lL)); $('bandLunar').setAttribute('height', bgy(-lL) - bgy(lL));
+  let dots = '';
+  for (const s of SYZ) {
+    if (s.t < t - BG.span / 2 || s.t > t + BG.span / 2) continue;
+    const X = x(s.t).toFixed(1), Y = bgy(s.beta).toFixed(1);
+    dots += s.type === 'new' ? `<circle cx="${X}" cy="${Y}" r="4.5" fill="#1d2327"/>` : `<circle cx="${X}" cy="${Y}" r="4.5" fill="#fff" stroke="#1d2327" stroke-width="1.3"/>`;
+    if (isEclipse(s)) dots += `<text x="${X}" y="${(+Y - 9).toFixed(1)}" text-anchor="middle" font-size="14" fill="#c0392b">★</text>`;
+  }
+  $('syzDots').innerHTML = dots;
+  $('bgNow').setAttribute('x1', x(t)); $('bgNow').setAttribute('x2', x(t));
+  $('bgNowDot').setAttribute('cx', x(t)); $('bgNowDot').setAttribute('cy', bgy(sunMoon(t, S.tilt).beta));
+  let ax = '';
+  for (const b of [-6, -3, 0, 3, 6]) ax += `<text x="${BG.x0 - 8}" y="${(bgy(b) + 4).toFixed(1)}" text-anchor="end" font-size="11" fill="#6a767c">${b > 0 ? '+' : ''}${b}°</text>`;
+  ax += `<text x="${BG.x0 - 8}" y="${BG.y0 - 6}" text-anchor="end" font-size="10.5" fill="#6a767c">above</text><text x="${BG.x0 - 8}" y="${BG.y1 + 14}" text-anchor="end" font-size="10.5" fill="#6a767c">below</text>`;
+  /* month ticks */
+  const d0 = istDate(t - BG.span / 2);
+  for (let m = 0; m < 14; m++) {
+    const md = Date.UTC(d0.getUTCFullYear(), d0.getUTCMonth() + m, 1), tt = (md - J2000) / 864e5 - 5.5 / 24;
+    const X = x(tt); if (X < BG.x0 || X > BG.x1) continue;
+    const dd = new Date(md);
+    ax += `<line x1="${X.toFixed(1)}" y1="${BG.y1}" x2="${X.toFixed(1)}" y2="${BG.y1 + 5}" stroke="#9aa3a6"/><text x="${(X + 3).toFixed(1)}" y="${BG.y1 + 18}" font-size="10.5" fill="#6a767c">${MONTHS[dd.getUTCMonth()]}${dd.getUTCMonth() === 0 ? ' ' + dd.getUTCFullYear() : ''}</text>`;
+  }
+  $('bgAxes').innerHTML = ax;
+}
+
+/* ============================================================================
+   Stage 2: months and years.
+   ============================================================================ */
+const calSvg = $('calStage');
+const RING = {x: 262, y: 350, r0: 52, dr: 5.4, years: 30};
+const SEASONS = [{name: 'Winter', from: 0, to: 59, col: '#6fa8dc'}, {name: 'Summer', from: 59, to: 151, col: '#f3a34a'},
+                 {name: 'Monsoon', from: 151, to: 273, col: '#5fb878'}, {name: 'After the monsoon', from: 273, to: 365, col: '#d8b64a'}];
+const ringAng = doy => (90 - doy / 365.2422 * 360) * D2R;                // 1 Jan at the top, going clockwise
+const MS = {x0: 520, y0: 70, w: 460};                                     // the moon strip
+const DRG = {x0: 560, x1: 970, y0: 330, y1: 590, years: 30};
+function buildCal(){
+  let wedges = '';
+  const R1 = RING.r0 + RING.years * RING.dr + 10;
+  for (const s of SEASONS) {
+    const a0 = ringAng(s.from), a1 = ringAng(s.to);
+    wedges += `<path d="M${RING.x} ${RING.y} L${(RING.x + R1 * Math.cos(a0)).toFixed(1)} ${(RING.y - R1 * Math.sin(a0)).toFixed(1)} A${R1} ${R1} 0 0 1 ${(RING.x + R1 * Math.cos(a1)).toFixed(1)} ${(RING.y - R1 * Math.sin(a1)).toFixed(1)}Z" fill="${s.col}" opacity=".16"/>`;
+    const am = ringAng((s.from + s.to) / 2);
+  }
+  let months = '';
+  const md = [0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334];
+  md.forEach((d, m) => { const a = ringAng(d), am = ringAng(d + 15);
+    months += `<line x1="${(RING.x + RING.r0 * Math.cos(a)).toFixed(1)}" y1="${(RING.y - RING.r0 * Math.sin(a)).toFixed(1)}" x2="${(RING.x + R1 * Math.cos(a)).toFixed(1)}" y2="${(RING.y - R1 * Math.sin(a)).toFixed(1)}" stroke="#2c3e5c" stroke-width="1"/>` +
+      `<text x="${(RING.x + (R1 + 14) * Math.cos(am)).toFixed(1)}" y="${(RING.y - (R1 + 14) * Math.sin(am) + 4).toFixed(1)}" text-anchor="middle" fill="#9fb3c8" font-size="11" font-weight="700">${MONTHS[m]}</text>`; });
+  const legend = SEASONS.map((q, i) => `<rect x="${18 + i * 118}" y="604" width="12" height="12" rx="3" fill="${q.col}" opacity=".8"/><text x="${34 + i * 118}" y="614" fill="#9fb3c8" font-size="11.5">${q.name}</text>`).join('');
+  let cells = '';
+  for (let k = 0; k < 30; k++) { const x = MS.x0 + (k % 15) * (MS.w / 15) + MS.w / 30, y = MS.y0 + 40 + Math.floor(k / 15) * 70;
+    cells += `<g id="mc${k}"><circle cx="${x.toFixed(1)}" cy="${y}" r="12" fill="#1c2538" stroke="#2f3b55"/><path id="mcl${k}" fill="#f4efd8"/><text x="${x.toFixed(1)}" y="${y + 30}" text-anchor="middle" fill="#8ea3c2" font-size="11" font-weight="700">${k + 1}</text></g>`; }
+  calSvg.innerHTML = `
+  <rect width="1000" height="640" fill="#0d1726"/>
+  <text x="18" y="26" fill="#9fb3c8" font-size="13" font-weight="700" letter-spacing=".08em">THE YEAR OF THE SEASONS, YEAR AFTER YEAR</text>
+  <text x="18" y="44" fill="#6f8399" font-size="11.5">Each ring outwards is one more year. A dot marks the calendar’s New Year.</text>
+  ${wedges}${months}${legend}
+  <circle cx="${RING.x}" cy="${RING.y}" r="${RING.r0 - 4}" fill="#101d31" stroke="#2c3e5c"/>
+  <text id="ringYear" x="${RING.x}" y="${RING.y - 2}" text-anchor="middle" fill="#fff" font-size="20" font-weight="700" style="font-family:Fredoka,Inter,sans-serif">Year 1</text>
+  <text id="ringSub" x="${RING.x}" y="${RING.y + 16}" text-anchor="middle" fill="#8ea3c2" font-size="11"></text>
+  <path id="nyPath" fill="none" stroke="#ffd36b" stroke-width="1.6" opacity=".7"/>
+  <g id="nyDots"></g>
+  <g id="monthTicks"></g>
+  <!-- this lunar month -->
+  <rect x="${MS.x0 - 14}" y="${MS.y0 - 16}" width="${MS.w + 28}" height="186" rx="14" fill="#101d31" stroke="#243650"/>
+  <text id="msTitle" x="${MS.x0}" y="${MS.y0 + 6}" fill="#cfe0f5" font-size="13" font-weight="700">This month, day by day</text>
+  ${cells}
+  <text id="msLen" x="${MS.x0}" y="${MS.y0 + 160}" fill="#ffd36b" font-size="13" font-weight="700"></text>
+  <!-- where New Year falls -->
+  <rect x="${DRG.x0 - 50}" y="${DRG.y0 - 44}" width="${DRG.x1 - DRG.x0 + 70}" height="${DRG.y1 - DRG.y0 + 78}" rx="14" fill="#101d31" stroke="#243650"/>
+  <text x="${DRG.x0 - 36}" y="${DRG.y0 - 22}" fill="#cfe0f5" font-size="13" font-weight="700">Where New Year falls in the seasons</text>
+  <g id="drAxes"></g>
+  <path id="drPath" fill="none" stroke="#ffd36b" stroke-width="2.2"/>
+  <g id="drDots"></g>
+  `;
+  let ax = '';
+  for (let d = 0; d <= 365; d += 30.4 * 2) { const m = Math.round(d / 30.4); ax += `<line x1="${DRG.x0}" y1="${drY(d).toFixed(1)}" x2="${DRG.x1}" y2="${drY(d).toFixed(1)}" stroke="#1f3150"/><text x="${DRG.x0 - 6}" y="${(drY(d) + 4).toFixed(1)}" text-anchor="end" fill="#8ea3c2" font-size="10.5">${MONTHS[m % 12]}</text>`; }
+  SEASONS.forEach(s => ax += `<rect x="${DRG.x1 + 3}" y="${drY(s.from).toFixed(1)}" width="5" height="${(drY(s.to) - drY(s.from)).toFixed(1)}" fill="${s.col}"/>`);
+  for (let y = 0; y <= DRG.years; y += 5) ax += `<text x="${drX(y).toFixed(1)}" y="${DRG.y1 + 16}" text-anchor="middle" fill="#8ea3c2" font-size="10.5">${y ? 'year ' + (y + 1) : 'year 1'}</text>`;
+  $('drAxes').innerHTML = ax;
+}
+const drX = y => DRG.x0 + y / DRG.years * (DRG.x1 - DRG.x0);
+const drY = doy => DRG.y0 + (doy / 365.2422) * (DRG.y1 - DRG.y0);
+function monthIndexNow(){ return S.month; }
+function paintCal(){
+  const ny = newYears(S.years), cur = S.month, yIdx = S.years.length;
+  /* the spiral of New Years */
+  let dots = '', path = '';
+  ny.forEach((n, i) => {
+    if (i > RING.years) return;
+    const a = ringAng(dayOfYear(n.t) - 1), r = RING.r0 + i * RING.dr;
+    const x = RING.x + r * Math.cos(a), y = RING.y - r * Math.sin(a);
+    path += (i ? 'L' : 'M') + x.toFixed(1) + ' ' + y.toFixed(1);
+    dots += `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${i === ny.length - 1 ? 6 : 4}" fill="${i === ny.length - 1 ? '#ffd36b' : '#f4efd8'}" stroke="#0d1726" stroke-width="1.5"/>`;
+  });
+  $('nyPath').setAttribute('d', path); $('nyDots').innerHTML = dots;
+  /* this year's month starts, on the current ring */
+  let ticks = '';
+  const m0 = ny[ny.length - 1].month, r = RING.r0 + Math.min(ny.length - 1, RING.years) * RING.dr;
+  for (let m = m0; m <= cur; m++) {
+    const a = ringAng(dayOfYear(LUN[m]) - 1);
+    ticks += `<circle cx="${(RING.x + r * Math.cos(a)).toFixed(1)}" cy="${(RING.y - r * Math.sin(a)).toFixed(1)}" r="2.6" fill="#8ea3c2"/>`;
+  }
+  $('monthTicks').innerHTML = ticks;
+  $('ringYear').textContent = 'Year ' + (yIdx + 1);
+  $('ringSub').textContent = 'month ' + (cur - m0 + 1);
+  /* this month, day by day: the phase from the model's Sun and Moon */
+  const len = LUN[cur + 1] - LUN[cur];
+  for (let k = 0; k < 30; k++) {
+    const x = MS.x0 + (k % 15) * (MS.w / 15) + MS.w / 30, y = MS.y0 + 40 + Math.floor(k / 15) * 70;
+    const t = LUN[cur] + k + 0.5, show = k < Math.ceil(len);
+    $('mc' + k).setAttribute('opacity', show ? 1 : .15);
+    $('mcl' + k).setAttribute('d', show ? phasePath(x, y, 12, sunMoon(t).elong) : '');
+  }
+  $('msTitle').textContent = `This month, day by day: from the new Moon of ${dateStr(LUN[cur])}`;
+  $('msLen').textContent = S.locked ? `New Moon to new Moon: ${fmt(len, 2)} days` : '';
+  /* where New Year falls, year by year */
+  let dp = '', dd = '';
+  ny.forEach((n, i) => { if (i > DRG.years) return; const X = drX(i), Y = drY(dayOfYear(n.t) - 1);
+    dd += `<circle cx="${X.toFixed(1)}" cy="${Y.toFixed(1)}" r="3.5" fill="${S.years[i - 1] === 13 ? '#ff7ab0' : '#ffd36b'}"/>`;
+    const prev = i && ny[i - 1] ? dayOfYear(ny[i - 1].t) - 1 : null;
+    dp += (i === 0 || Math.abs((dayOfYear(n.t) - 1) - prev) > 180 ? 'M' : 'L') + X.toFixed(1) + ' ' + Y.toFixed(1); });
+  $('drPath').setAttribute('d', dp); $('drDots').innerHTML = dd;
+  $$('#calSeg button').forEach(b => b.setAttribute('aria-pressed', b.dataset.cal === S.cal));
+  $('btnAdhik').disabled = !S.locked || S.cal !== 'luni';
+}
+
+/* ============================================================================
+   Stage 3: the night sky.
+   ============================================================================ */
+const starSvg = $('starStage');
+const SKY = {x: 310, y: 330, R: 280};
+const AG = {x0: 680, x1: 975, y0: 360, y1: 590};
+function project(a){ const rho = (90 - a.alt) / 90 * SKY.R; return {x: SKY.x - rho * Math.sin(a.az * D2R), y: SKY.y - rho * Math.cos(a.az * D2R)}; }
+function buildStars(){
+  let bg = '';
+  const rnd = Play.mulberry32(21);
+  for (let i = 0; i < 160; i++) { const r = SKY.R * Math.sqrt(rnd()), a = rnd() * 2 * Math.PI; bg += `<circle cx="${(SKY.x + r * Math.cos(a)).toFixed(1)}" cy="${(SKY.y + r * Math.sin(a)).toFixed(1)}" r="${(rnd() * .8 + .3).toFixed(2)}" fill="#fff" opacity="${(rnd() * .35 + .1).toFixed(2)}"/>`; }
+  let lines = '';
+  for (const f in FIGURES) FIGURES[f].forEach(([a, b], i) => lines += `<line id="fl_${f}_${i}" stroke="${f === 'orion' ? '#ffb38a' : f === 'saptarishi' ? '#9fd4ff' : '#c3b3ff'}" stroke-width="1.6" opacity=".7"/>`);
+  let dots = '';
+  for (const k in STARS) { const s = STARS[k]; dots += `<circle id="st_${k}" r="${clamp(4.2 - s.mag * 0.9, 1.4, 5.5).toFixed(1)}" fill="${k === 'betelgeuse' || k === 'aldebaran' ? '#ffc2a0' : k === 'rigel' || k === 'sirius' ? '#d8e8ff' : '#fff'}"/>`; }
+  starSvg.innerHTML = `
+  <defs><radialGradient id="gDome"><stop offset="0" stop-color="#132440"/><stop offset="1" stop-color="#0a1426"/></radialGradient></defs>
+  <rect width="1000" height="640" fill="#0d1726"/>
+  <circle cx="${SKY.x}" cy="${SKY.y}" r="${SKY.R}" fill="url(#gDome)" stroke="#3d5573" stroke-width="2"/>
+  <g>${bg}</g>
+  <circle cx="${SKY.x}" cy="${SKY.y}" r="${SKY.R * 2 / 3}" fill="none" stroke="#1f3150" stroke-dasharray="3 6"/>
+  <circle cx="${SKY.x}" cy="${SKY.y}" r="${SKY.R / 3}" fill="none" stroke="#1f3150" stroke-dasharray="3 6"/>
+  <text x="${SKY.x}" y="${SKY.y - SKY.R - 10}" text-anchor="middle" fill="#cfe0f5" font-size="15" font-weight="700">N</text>
+  <text x="${SKY.x}" y="${SKY.y + SKY.R + 24}" text-anchor="middle" fill="#cfe0f5" font-size="15" font-weight="700">S</text>
+  <text x="${SKY.x - SKY.R - 16}" y="${SKY.y + 5}" text-anchor="middle" fill="#cfe0f5" font-size="15" font-weight="700">E</text>
+  <text x="${SKY.x + SKY.R + 16}" y="${SKY.y + 5}" text-anchor="middle" fill="#cfe0f5" font-size="15" font-weight="700">W</text>
+  <text x="640" y="40" fill="#9fb3c8" font-size="13" font-weight="700" letter-spacing=".08em">THE WHOLE SKY OVER DELHI</text>
+  <text x="640" y="60" fill="#6f8399" font-size="11.5">The edge of the circle is the horizon;</text><text x="640" y="76" fill="#6f8399" font-size="11.5">the middle is straight overhead.</text>
+  <path id="trailDip" fill="none" stroke="#9fd4ff" stroke-width="1" stroke-dasharray="2 4" opacity=".45"/>
+  <path id="trailOri" fill="none" stroke="#ffb38a" stroke-width="1" stroke-dasharray="2 4" opacity=".45"/>
+  <line id="pointer" stroke="#9fd4ff" stroke-width="1" stroke-dasharray="5 5" opacity=".6"/>
+  <line id="beltLine" stroke="#ffb38a" stroke-width="1" stroke-dasharray="5 5" opacity=".6"/>
+  <g>${lines}</g><g>${dots}</g>
+  <text id="lb_polaris" fill="#fff" font-size="12" font-weight="700">Pole Star</text>
+  <text id="lb_dip" fill="#9fd4ff" font-size="12" font-weight="700">Saptarishi</text>
+  <text id="lb_ori" fill="#ffb38a" font-size="12" font-weight="700">Orion</text>
+  <text id="lb_sir" fill="#d8e8ff" font-size="11.5" font-weight="600">Sirius</text>
+  <text id="lb_ald" fill="#ffc2a0" font-size="11" font-weight="600">Aldebaran</text>
+  <!-- altitude graph -->
+  <rect x="${AG.x0 - 46}" y="${AG.y0 - 50}" width="${AG.x1 - AG.x0 + 60}" height="${AG.y1 - AG.y0 + 84}" rx="14" fill="#101d31" stroke="#243650"/>
+  <text x="${AG.x0 - 32}" y="${AG.y0 - 28}" fill="#cfe0f5" font-size="13" font-weight="700">How high, through the night</text>
+  <g id="agAxes"></g>
+  <path id="agPol" fill="none" stroke="#ffffff" stroke-width="2"/>
+  <path id="agDip" fill="none" stroke="#9fd4ff" stroke-width="2"/>
+  <path id="agOri" fill="none" stroke="#ffb38a" stroke-width="2"/>
+  <line id="agNow" y1="${AG.y0}" y2="${AG.y1}" stroke="#ffd36b" stroke-width="1.5"/>
+  <g font-size="11" font-weight="700"><text x="${AG.x0}" y="${AG.y1 + 30}" fill="#fff">Pole Star</text><text x="${AG.x0 + 76}" y="${AG.y1 + 30}" fill="#9fd4ff">Saptarishi</text><text x="${AG.x0 + 160}" y="${AG.y1 + 30}" fill="#ffb38a">Orion’s belt</text></g>
+  `;
+  let ax = '';
+  for (let h = 18; h <= 30; h += 3) ax += `<text x="${agX(h).toFixed(1)}" y="${AG.y1 + 14}" text-anchor="middle" fill="#8ea3c2" font-size="10.5">${clock12(h).replace(':00', '')}</text>`;
+  for (const a of [0, 30, 60, 90]) ax += `<line x1="${AG.x0}" y1="${agY(a).toFixed(1)}" x2="${AG.x1}" y2="${agY(a).toFixed(1)}" stroke="${a ? '#1f3150' : '#5d7593'}"/><text x="${AG.x0 - 6}" y="${(agY(a) + 4).toFixed(1)}" text-anchor="end" fill="#8ea3c2" font-size="10.5">${a}°</text>`;
+  ax += `<text x="${AG.x1}" y="${agY(0) - 5}" text-anchor="end" fill="#5d7593" font-size="10">horizon</text>`;
+  $('agAxes').innerHTML = ax;
+}
+const agX = h => AG.x0 + (h - 18) / 12 * (AG.x1 - AG.x0), agY = a => AG.y1 - (clamp(a, -30, 90) + 30) / 120 * (AG.y1 - AG.y0);
+const midDoy = m => [15, 46, 74, 105, 135, 166, 196, 227, 258, 288, 319, 349][m];
+const beltOf = (doy, h) => { const a = altAz(STARS.alnilam, doy, h); return a; };
+function paintStars(){
+  const doy = midDoy(S.sMonth), h = S.sHour;
+  const P = {};
+  for (const k in STARS) { const a = altAz(STARS[k], doy, h); P[k] = Object.assign(project(a), a);
+    const el = $('st_' + k); el.setAttribute('cx', P[k].x.toFixed(1)); el.setAttribute('cy', P[k].y.toFixed(1)); el.setAttribute('opacity', a.alt > 0 ? 1 : 0); }
+  for (const f in FIGURES) FIGURES[f].forEach(([a, b], i) => { const el = $(`fl_${f}_${i}`); el.setAttribute('x1', P[a].x.toFixed(1)); el.setAttribute('y1', P[a].y.toFixed(1));
+    el.setAttribute('x2', P[b].x.toFixed(1)); el.setAttribute('y2', P[b].y.toFixed(1)); el.setAttribute('opacity', P[a].alt > 0 && P[b].alt > 0 ? .7 : 0); });
+  const lab = (id, k, dx, dy) => { $(id).setAttribute('x', (P[k].x + dx).toFixed(1)); $(id).setAttribute('y', (P[k].y + dy).toFixed(1)); $(id).setAttribute('opacity', P[k].alt > 0 ? 1 : 0); };
+  lab('lb_polaris', 'polaris', 9, 4); lab('lb_dip', 'megrez', 10, -10); lab('lb_ori', 'betelgeuse', 10, -8); lab('lb_sir', 'sirius', 9, 4); lab('lb_ald', 'aldebaran', 8, 4);
+  /* the pointer stars: Merak → Dubhe, on towards the Pole Star */
+  const up = P.dubhe.alt > 0 && P.merak.alt > 0;
+  $('pointer').setAttribute('x1', P.dubhe.x.toFixed(1)); $('pointer').setAttribute('y1', P.dubhe.y.toFixed(1));
+  $('pointer').setAttribute('x2', P.polaris.x.toFixed(1)); $('pointer').setAttribute('y2', P.polaris.y.toFixed(1)); $('pointer').setAttribute('opacity', up && S.locked ? .6 : 0);
+  $('beltLine').setAttribute('x1', P.mintaka.x.toFixed(1)); $('beltLine').setAttribute('y1', P.mintaka.y.toFixed(1));
+  $('beltLine').setAttribute('x2', P.sirius.x.toFixed(1)); $('beltLine').setAttribute('y2', P.sirius.y.toFixed(1)); $('beltLine').setAttribute('opacity', P.alnilam.alt > 0 && P.sirius.alt > 0 && S.locked ? .6 : 0);
+  /* trails through the whole night (the model, hour by hour) */
+  const trail = k => { let d = '', pen = false; for (let hh = 18; hh <= 30.001; hh += 0.25) { const a = altAz(STARS[k], doy, hh); if (a.alt < 0) { pen = false; continue; } const q = project(a); d += (pen ? 'L' : 'M') + q.x.toFixed(1) + ' ' + q.y.toFixed(1); pen = true; } return d; };
+  $('trailDip').setAttribute('d', S.locked ? trail('megrez') : ''); $('trailOri').setAttribute('d', S.locked ? trail('alnilam') : '');
+  /* the graph */
+  const line = k => { let d = ''; for (let hh = 18; hh <= 30.001; hh += 0.25) d += (hh === 18 ? 'M' : 'L') + agX(hh).toFixed(1) + ' ' + agY(altAz(STARS[k], doy, hh).alt).toFixed(1); return d; };
+  $('agPol').setAttribute('d', line('polaris')); $('agDip').setAttribute('d', line('megrez')); $('agOri').setAttribute('d', line('alnilam'));
+  $('agNow').setAttribute('x1', agX(h)); $('agNow').setAttribute('x2', agX(h));
+  $('starDate').textContent = `15 ${MONTHS[S.sMonth]}, ${clock12(h)}`;
+  $('month').value = S.sMonth; $('monthOut').textContent = MONTHS[S.sMonth];
+  $('hour').value = h; $('hourOut').textContent = clock12(h);
+  return P;
+}
+
+/* ============================================================================
+   Side panel: readings and the narrator.
+   ============================================================================ */
+function paintSidePanel(){
+  if (!S.locked) { $('meters').innerHTML = '<p class="hint" style="margin:0">The readings appear once you have made a prediction.</p>'; return; }
+  $('whyCard').hidden = false;
+  const row = (a, b) => `<span>${a}</span><b>${b}</b>`;
+  if (S.tab === 'ecl') {
+    const t = tNow(), e = sunMoon(t, S.tilt), ph = (1 - Math.cos(e.elong * D2R)) / 2;
+    const seen = S.visited.map(i => SYZ[i]).filter(Boolean);
+    const ecl = seen.filter(isEclipse);
+    $('meterKick').textContent = 'The Moon now';
+    $('meters').innerHTML = `<div class="readout">` +
+      row('Height above the Earth’s orbit', `${fmt(Math.abs(e.beta), 2)}° ${e.beta >= 0 ? 'above' : 'below'}`) +
+      row('Lit part we see', Math.round(ph * 100) + '%') +
+      row('Distance from the Earth', Math.round(e.r).toLocaleString('en-IN') + ' km') +
+      row('New and full Moons passed', seen.length) + row('Eclipses among them', ecl.length) + `</div>` +
+      (seen.length ? `<ul class="log">${seen.slice(-10).reverse().map(s => `<li class="${isEclipse(s) ? '' : 'miss'}"><i>${isEclipse(s) ? '★' : s.type === 'new' ? '●' : '○'}</i><span>${dateStr(s.t)}: ${s.type === 'new' ? 'new' : 'full'} Moon — ${isEclipse(s) ? `<b>${KIND[s.kind].toLowerCase()} ${s.type === 'new' ? 'solar' : 'lunar'} eclipse</b>` : s.kind === 'penumbral' ? 'only a faint shading' : `missed by ${fmt(Math.abs(s.beta), 1)}°`}</span></li>`).join('')}</ul>` : '');
+    const last = seen[seen.length - 1];
+    let txt = `<p>Seen from above, the Moon goes round the Earth once a month. But its path is <b>tilted by ${fmt(S.tilt, 1)}°</b> to the Earth’s path round the Sun, so for half of each month it is above and for half below.</p>`;
+    if (S.tilt < 0.05) txt = `<p>With <b>no tilt</b> the Moon never leaves the Earth’s path. Every new Moon it passes straight in front of the Sun, and every full Moon straight through the Earth’s shadow.</p>`;
+    if (last) txt += isEclipse(last)
+      ? `<p>At the ${last.type} Moon of ${dateStr(last.t)} the Moon was only <b>${fmt(Math.abs(last.beta), 2)}°</b> from the Earth’s path, close to a node. ${last.type === 'new' ? 'Its shadow fell on the Earth' : 'It passed into the Earth’s shadow'}: a <b>${KIND[last.kind].toLowerCase()} ${last.type === 'new' ? 'solar' : 'lunar'} eclipse</b>.</p>`
+      : `<p>At the ${last.type} Moon of ${dateStr(last.t)} the Moon was <b>${fmt(Math.abs(last.beta), 1)}° ${last.beta > 0 ? 'above' : 'below'}</b> the Earth’s path. The Sun and Moon each look only about ½° across, so ${last.type === 'new' ? 'its shadow missed the Earth' : 'it missed the Earth’s shadow'}.</p>`;
+    $('why').innerHTML = txt;
+  } else if (S.tab === 'cal') {
+    const ny = newYears(S.years), cur = ny[ny.length - 1], m0 = cur.month;
+    const y1 = LUN[12] - LUN[0], extra = S.years.filter(n => n === 13).length;
+    $('meterKick').textContent = `Your ${S.cal === 'lunar' ? 'lunar' : 'luni-solar'} calendar`;
+    $('meters').innerHTML = `<div class="readout">` + row('Years counted', S.years.length) + row('12 lunar months', fmt(y1, 1) + ' days') +
+      row('The year of the seasons', fmt(TROPICAL_YEAR, 2) + ' days') + row('This New Year', dateStr(cur.t)) +
+      row('Drift from the first New Year', `${fmt(Math.abs(cur.drift), 0)} days ${cur.drift < 0 ? 'early' : 'late'}`) + row('Adhika Maasa added', extra) + `</div>`;
+    let txt = `<p>Twelve months by the Moon add up to <b>${fmt(y1, 1)} days</b>, but the seasons take <b>${fmt(TROPICAL_YEAR, 1)} days</b> to come round. Each lunar year is about <b>${fmt(TROPICAL_YEAR - y1, 0)} days short</b>.</p>`;
+    txt += S.cal === 'lunar' ? `<p>So each New Year comes about 11 days earlier in the seasons than the one before. ${Math.abs(cur.drift) >= 90 ? `It has now slipped <b>${fmt(-cur.drift, 0)} days</b>: a festival fixed to this calendar has moved into a different season.` : 'Keep going and watch the dots spiral backwards.'}</p>`
+      : `<p>When the New Year has slipped nearly a month early, add an extra month (an <b>Adhika Maasa</b>) and it jumps back. ${S.years.length ? `So far you have added ${extra} in ${S.years.length} years.` : ''}</p>`;
+    $('why').innerHTML = txt;
+  } else {
+    const P = paintStars(), doy = midDoy(S.sMonth);
+    $('meterKick').textContent = `Over Delhi, ${$('starDate').textContent}`;
+    const hs = a => a.alt > 0 ? fmt(a.alt, 0) + '° up' : 'below the horizon';
+    $('meters').innerHTML = `<div class="readout">` + row('Pole Star', hs(P.polaris)) + row('Saptarishi (Megrez)', hs(P.megrez)) + row('Orion’s belt', hs(P.alnilam)) + row('Sirius', hs(P.sirius)) + `</div>`;
+    const dir = a => ['north', 'north-east', 'east', 'south-east', 'south', 'south-west', 'west', 'north-west'][Math.round(a.az / 45) % 8];
+    let txt = `<p>The Pole Star stays <b>${fmt(P.polaris.alt, 0)}° above the northern horizon</b> all night: the Earth’s axis points almost straight at it. As the Earth turns from west to east, every other star turns round it.</p>`;
+    txt += P.alnilam.alt > 0 ? `<p>Orion is up, in the ${dir(P.alnilam)}. It rises in the east and sets in the west, like the Sun.</p>` : `<p>Orion is below the horizon now. ${S.sMonth >= 4 && S.sMonth <= 8 ? 'In these months it is up in the daytime sky, hidden by sunlight.' : 'Try later in the night.'}</p>`;
+    $('why').innerHTML = txt;
+  }
+}
+
+/* ---- findings: reached by the model, never by a button -------------------- */
+function visitRange(t0, t1){
+  if (!S.locked) return;
+  const lo = Math.min(t0, t1), hi = Math.max(t0, t1);
+  SYZ.forEach((s, i) => { if (s.t > lo - 1e-6 && s.t <= hi + 1e-6 && !S.visited.includes(i)) S.visited.push(i); });
+  S.visited.sort((a, b) => a - b);
+  checkEcl();
+}
+function checkEcl(){
+  const seen = S.visited.map(i => SYZ[i]).filter(Boolean);
+  if (seen.some(s => s.type === 'new' && s.kind === 'none')) discover('miss');
+  if (seen.some(s => s.type === 'new' && isEclipse(s))) discover('solar');
+  if (seen.some(s => s.type === 'full' && isEclipse(s))) discover('lunar');
+  if (S.tilt < 0.05) { const nn = seen.filter(s => s.type === 'new'); if (nn.length >= 2 && nn.slice(-2).every(isEclipse)) discover('flat'); }
+  maybeExplain();
+}
+function checkCal(){
+  if (!S.locked) return;
+  const ny = newYears(S.years), cur = ny[ny.length - 1];
+  if (S.years.length >= 1) discover('short');
+  if (S.cal === 'lunar' && Math.abs(cur.drift) >= 90) discover('drift');
+  if (S.cal === 'luni' && S.years.length >= 19 && ny.every(n => Math.abs(n.drift) <= 20)) discover('adhik');
+}
+function checkStars(){
+  if (!S.locked) return;
+  const doy = midDoy(S.sMonth);
+  if (!S.pole0 || S.pole0.m !== S.sMonth) S.pole0 = {m: S.sMonth, h: S.sHour};
+  /* how far the Saptarishi has turned about the pole: the change in its hour angle, from the model's sidereal time */
+  const turn = Math.abs(sgn180(lst(doy, S.sHour) - lst(doy, S.pole0.h)));
+  const dPol = Math.abs(altAz(STARS.polaris, doy, S.sHour).alt - altAz(STARS.polaris, doy, S.pole0.h).alt);
+  if (turn >= 25 && dPol < 1.5 && altAz(STARS.megrez, doy, S.sHour).alt > 0) discover('pole');
+  if (Math.abs(S.sHour - 21) <= 1) { const a = altAz(STARS.alnilam, doy, S.sHour).alt; if (a > 10) S.orionUp = true; if (a < 0) S.orionDown = true; }
+  if (S.orionUp && S.orionDown) discover('orion');
+}
+let EXPLAINED = false;
+function maybeExplain(){
+  if (EXPLAINED || !POE || !(found('miss') && (found('solar') || found('flat')))) return;
+  EXPLAINED = true;
+  const seen = S.visited.map(i => SYZ[i]).filter(Boolean);
+  const miss = seen.filter(s => s.type === 'new' && s.kind === 'none').sort((a, b) => Math.abs(b.beta) - Math.abs(a.beta))[0];
+  const hit = seen.filter(s => s.type === 'new' && isEclipse(s))[0];
+  POE.explain(`At the new Moon of ${dateStr(miss.t)} the Moon passed <b>${fmt(Math.abs(miss.beta), 1)}° ${miss.beta > 0 ? 'above' : 'below'}</b> the Sun, and its shadow missed the Earth by ${fmt(Math.abs(miss.h) - 1 - miss.moonPen, 1)} Earth radii. ` +
+    (hit ? `On ${dateStr(hit.t)} the new Moon came near a node, only <b>${fmt(Math.abs(hit.beta), 2)}°</b> off, and the model made a ${KIND[hit.kind].toLowerCase()} solar eclipse. ` : '') +
+    `Because the Moon’s path is tilted, the Sun, Earth and Moon line up exactly only when a new or full Moon happens near a node — about twice a year.`);
+}
+
+/* ============================================================================
+   Controls.
+   ============================================================================ */
+buildEcl(); buildCal(); buildStars();
+function setDay(d){ const t0 = tNow(); S.day = clamp(d, 0, 1095); visitRange(t0, tNow()); paintAll(); }
+function setRun(on){ S.running = on; $('btnRun').textContent = on ? '⏸ Pause' : '▶ Run'; }
+$('btnRun').addEventListener('click', () => { setRun(!S.running); sound('tick'); track('run', {on: S.running}); });
+$('days').addEventListener('input', e => { setRun(false); setDay(+e.target.value); });
+$('tilt').addEventListener('input', e => { S.tilt = +e.target.value; SYZ = syzygies(T0, T0 + 1096, S.tilt); S.visited = []; paintAll(); });
+$('tilt').addEventListener('change', () => track('tilt', {tilt: S.tilt}));
+const jump = type => { setRun(false); const t = tNow(); const nx = SYZ.find(s => s.type === type && s.t > t + 0.01); if (nx) { setDay(nx.t - T0 + 0.001); sound('pop'); track('jump', {type}); } };
+$('btnNew').addEventListener('click', () => jump('new'));
+$('btnFull').addEventListener('click', () => jump('full'));
+/* Drag the Earth round the Sun: the change in its angle moves the date by that part of a year. */
+let dragA = null;
+const angAbout = (p, c) => Math.atan2(-(p.y - c.y), p.x - c.x) * R2D;
+drag($('earthHit'), eclSvg, {
+  start(p){ if (!S.locked) return false; setRun(false); dragA = angAbout(p, TV); },
+  move(p){ const a = angAbout(p, TV), da = sgn180(a - dragA); dragA = a; setDay(S.day + da / 360 * 365.2564); },
+  end(){ track('dragEarth', {day: +S.day.toFixed(1)}); },
+});
+drag($('moonHit'), eclSvg, {
+  start(p){ if (!S.locked) return false; setRun(false); const e = earthXY(tNow()); dragA = angAbout(p, e); },
+  move(p){ const e = earthXY(tNow()), a = angAbout(p, e), da = sgn180(a - dragA); dragA = a; setDay(S.day + da / 360 * 27.3217); },
+  end(){ track('dragMoon', {day: +S.day.toFixed(1)}); },
+});
+for (const id of ['earthHit', 'moonHit']) $(id).addEventListener('keydown', e => {
+  const k = {ArrowRight: 1, ArrowUp: 1, ArrowLeft: -1, ArrowDown: -1}[e.key]; if (!k || !S.locked) return;
+  e.preventDefault(); setRun(false); setDay(S.day + k * (id === 'earthHit' ? 5 : 1));
+});
+
+$('calSeg').addEventListener('click', e => { const b = e.target.closest('[data-cal]'); if (!b || b.disabled) return; S.cal = b.dataset.cal; S.years = []; S.month = 0; sound('pop'); track('calendar', {kind: S.cal}); paintAll(); });
+const addYear = n => { if (S.years.length >= 36) return; S.years.push(n); S.month = newYears(S.years).slice(-1)[0].month; sound(n === 13 ? 'chime' : 'tick'); track('year', {months: n, cal: S.cal}); paintAll(); checkCal(); };
+$('btnYear').addEventListener('click', () => addYear(12));
+$('btnAdhik').addEventListener('click', () => { if (S.cal === 'luni') addYear(13); });
+$('btnMonth').addEventListener('click', () => {
+  if (S.years.length >= 36) return;
+  S.month++;
+  const ny = newYears(S.years), start = ny[ny.length - 1].month;
+  if (S.month - start >= 12) { S.years.push(12); }                   // twelve months finish a lunar year
+  sound('tick'); paintAll(); checkCal();
+});
+$('btnCalReset').addEventListener('click', () => { S.years = []; S.month = 0; sound('pop'); paintAll(); });
+
+$('month').addEventListener('input', e => { S.sMonth = +e.target.value; paintAll(); checkStars(); });
+$('hour').addEventListener('input', e => { setNight(false); S.sHour = +e.target.value; paintAll(); checkStars(); });
+function setNight(on){ S.night = on; $('btnNight').textContent = on ? '⏸ Pause' : '▶ Run the night'; }
+$('btnNight').addEventListener('click', () => { if (!S.night && S.sHour >= 30) S.sHour = 18; setNight(!S.night); sound('tick'); });
+
+function showTab(tab){
+  S.tab = tab;
+  for (const [t, id] of [['ecl', 'eclStage'], ['cal', 'calStage'], ['stars', 'starStage']]) $(id).toggleAttribute('hidden', t !== tab);   // SVG has no .hidden property
+  $$('.tabs button').forEach(b => b.setAttribute('aria-selected', b.dataset.tab === tab));
+  $('ctlEcl').hidden = tab !== 'ecl'; $('ctlCal').hidden = tab !== 'cal'; $('ctlStars').hidden = tab !== 'stars';
+  if (tab !== 'ecl') setRun(false);
+  if (tab !== 'stars') setNight(false);
+  paintAll();
+  if (tab === 'stars') checkStars();
+}
+$$('.tabs button').forEach(b => b.addEventListener('click', () => { sound('tick'); showTab(b.dataset.tab); track('tab', {tab: b.dataset.tab}); }));
+function lockControls(lock){
+  for (const id of ['btnRun', 'days', 'btnNew', 'btnFull', 'tilt', 'btnMonth', 'btnYear', 'btnAdhik', 'btnCalReset', 'month', 'hour', 'btnNight']) $(id).disabled = lock;
+  $$('#calSeg button').forEach(b => b.disabled = lock);
+  for (const id of ['earthHit', 'moonHit']) $(id).style.pointerEvents = lock ? 'none' : '';
+  $('gate').hidden = !lock;
+}
+function paintAll(){
+  if (S.tab === 'ecl') paintEcl(); else if (S.tab === 'cal') paintCal(); else paintStars();
+  paintSidePanel();
+}
+
+let sideT = 0;
+loop(dt => {
+  if (!S.locked) return;
+  if (S.tab === 'ecl' && S.running) {
+    const t0 = tNow();
+    S.day += dt * 6;
+    if (S.day >= 1095) { S.day = 1095; setRun(false); }
+    visitRange(t0, tNow());
+    paintEcl();
+    sideT += dt; if (sideT > 0.3) { sideT = 0; paintSidePanel(); }
+  }
+  if (S.tab === 'stars' && S.night) {
+    S.sHour += dt * 1.0;
+    if (S.sHour >= 30) { S.sHour = 30; setNight(false); }
+    paintStars(); checkStars();
+    sideT += dt; if (sideT > 0.3) { sideT = 0; paintSidePanel(); }
+  }
+});
+
+/* ============================================================================
+   Start
+   ============================================================================ */
+findings($('finds'), [
+  {id: 'miss',  icon: '●', label: 'A new Moon that misses the Sun',        hint: 'Watch a new Moon go by'},
+  {id: 'solar', icon: '🌑', label: 'A solar eclipse',                        hint: 'Keep running time'},
+  {id: 'lunar', icon: '🌕', label: 'A lunar eclipse',                        hint: 'And watch the full Moons'},
+  {id: 'flat',  icon: '⟂', label: 'No tilt: an eclipse every month',        hint: 'What if the Moon’s path were not tilted?'},
+  {id: 'short', icon: '📅', label: 'Twelve Moons fall 11 days short',        hint: 'Count a year by the Moon'},
+  {id: 'drift', icon: '↺', label: 'A lunar calendar walks through the seasons', hint: 'Keep counting years'},
+  {id: 'adhik', icon: '＋', label: 'An Adhika Maasa keeps step',              hint: 'Try a luni-solar calendar for 19 years'},
+  {id: 'pole',  icon: '✦', label: 'The Saptarishi turns round the Pole Star', hint: 'Watch the northern sky for two hours'},
+  {id: 'orion', icon: '🏹', label: 'Orion is a winter evening sight',          hint: 'Look at 9 pm in different months'},
+], () => toast('All nine found. The Moon, the Sun and the stars really are a clock.', 4200));
+
+const POE = predict($('poe'), {
+  id: 'why-no-monthly-eclipse',
+  q: 'Every month, at new Moon, the Moon passes between the Sun and the Earth. So why is there not a solar eclipse every month?',
+  options: [
+    {id: 'small',  text: 'The Moon is too small to cover the Sun most months.'},
+    {id: 'tilt',   text: 'The Moon’s path is tilted, so most months it passes above or below the Sun.', right: true},
+    {id: 'clouds', text: 'There is an eclipse every month, but clouds hide most of them.'},
+    {id: 'fast',   text: 'The Moon moves too fast to block the Sun most months.'},
+  ],
+  onLock(){
+    S.locked = true;
+    lockControls(false);
+    $('bgVeil').remove(); $('bgVeilT').remove();
+    S.lastT = tNow();
+    say('Now run time forward and watch each new Moon.');
+    paintAll();
+  },
+});
+lockControls(!POE.locked);
+if (!Play.FF('predict')) S.locked = true;
+showTab(S.tab);
+window.PG_STATE = () => ({tab: S.tab, locked: S.locked, day: S.day, t: tNow(), date: dateStr(tNow(), true), tilt: S.tilt, running: S.running,
+  visited: S.visited.map(i => ({date: dateStr(SYZ[i].t), type: SYZ[i].type, kind: SYZ[i].kind})),
+  cal: S.cal, years: S.years.slice(), month: S.month, newYears: newYears(S.years).map(n => ({date: dateStr(n.t), drift: n.drift})),
+  sMonth: S.sMonth, sHour: S.sHour});
+window.PG_MODEL = {sunMoon, syzygy, eclipseAt, syzygies, isEclipse, lunations, newYears, LUN, TROPICAL_YEAR, T0, J2000, altAz, lst, STARS, dateStr, midDoy};
+</script>
+</body>
+</html>

@@ -1,0 +1,857 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bayes, Counted</title>
+<meta name="description" content="Class 12: ten thousand people, each drawn by the model, take a test for a rare disease. Keep only the positives and count how many are ill. Tree, area diagram and Bayes' theorem all read off the same crowd, then independence tested on two dice.">
+<link rel="icon" href="../../favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600&family=Inter:wght@400;500;600;700&family=Nunito:wght@500;700;800&family=Newsreader:opsz,wght@6..72,400;6..72,500&family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="../../play.css">
+<style>
+/* Only what this page needs beyond play.css. */
+.pg-stage{min-height:0}
+@media (max-width:1180px) and (min-width:981px){ .pg-main{grid-template-columns:minmax(0,1fr) 330px} }
+.gate{position:absolute; left:55%; right:0; top:0; height:70%; display:grid; place-items:center; pointer-events:none}
+.gate span{background:rgba(29,35,39,.86); color:#fff; padding:10px 16px; border-radius:99px; font-weight:600; font-size:14px}
+.seg{display:grid; grid-auto-flow:column; grid-auto-columns:1fr; gap:4px; background:var(--sunk); padding:4px; border-radius:var(--radius-sm)}
+.seg button{border:0; background:transparent; border-radius:7px; min-height:30px; font-weight:600; font-size:12.5px; cursor:pointer; color:var(--ink-2); padding:0 6px; line-height:1.2}
+.seg button[aria-pressed="true"]{background:var(--card); color:var(--ink); box-shadow:var(--shadow)}
+.seg button:disabled{opacity:.5; cursor:default}
+.ctl{grid-template-columns:112px 1fr 70px; margin:2px 0}
+.ctl label{font-size:12.5px; line-height:1.2}
+.ctl output{font-family:var(--font-mono); font-size:12.5px; font-weight:600; min-width:0}
+.sub{font-size:11px; letter-spacing:.07em; text-transform:uppercase; font-weight:700; color:var(--ink-3); margin:12px 0 4px}
+.note{font-size:12.5px; color:var(--ink-3); margin:6px 0 0}
+.tog[aria-pressed="true"]{background:var(--accent-soft); border-color:var(--accent)}
+.why p{font-size:13.5px; margin-bottom:.55em}
+.why .mono{font-size:12.5px}
+.evrow{display:grid; grid-template-columns:22px 1fr; gap:8px; align-items:center; margin:6px 0}
+.evrow i{width:18px; height:18px; border-radius:5px; display:block}
+.evrow select{width:100%; font-size:13px}
+#hits .hit{cursor:pointer}
+#graphHit{cursor:ew-resize}
+svg text.m{font-family:var(--font-mono)}
+</style>
+</head>
+<body>
+<header class="pg-top"></header>
+
+<div class="pg-intro">
+  <h1>Conditional probability and Bayes</h1>
+  <p>Ten thousand people, each one drawn by the model: who has a rare disease, and what their test says. Keep only the people who tested positive and
+     count how many of them are ill. That count is P(ill | positive); Bayes’ theorem is what the count comes to. Set the disease, the test and the
+     factory yourself, test twice, then find out on two dice what “independent” really means.</p>
+</div>
+
+<main class="pg-main">
+  <section class="pg-stage" id="stageWrap">
+    <svg id="stage" viewBox="0 0 1000 800" role="img" aria-label="An icon array of ten thousand people or bolts, a tree diagram, an area diagram and a graph of the posterior against the prior; or the 36 outcomes of two dice"></svg>
+    <div class="gate" id="gate"><span>Make your prediction first →</span></div>
+  </section>
+
+  <aside class="pg-side">
+    <div id="poe"></div>
+
+    <div class="card" id="ctlCard">
+      <div class="seg" role="group" aria-label="Which tool">
+        <button id="toolTest" aria-pressed="true">A positive test</button>
+        <button id="toolMach" aria-pressed="false">Three machines</button>
+        <button id="toolDice" aria-pressed="false">Two dice</button>
+      </div>
+
+      <div id="grpTest">
+        <div class="sub">The disease and the test</div>
+        <div class="ctl"><label for="prev">Has the disease</label><input type="range" id="prev" min="-4" max="-0.3" step="0.05" value="-3"><output id="prevOut">0.1%</output></div>
+        <div class="ctl"><label for="sens">Test catches the ill</label><input type="range" id="sens" min="50" max="100" step="1" value="90"><output id="sensOut">90%</output></div>
+        <div class="ctl"><label for="spec">Test clears the healthy</label><input type="range" id="spec" min="50" max="99.9" step="0.1" value="99"><output id="specOut">99.0%</output></div>
+        <div class="ctl"><label for="corr">A retest repeats the first result</label><input type="range" id="corr" min="0" max="100" step="5" value="0"><output id="corrOut">0%</output></div>
+        <div class="sub">Look at</div>
+        <div class="seg" role="group" aria-label="Condition on">
+          <button id="condT0" aria-pressed="true">Everyone</button>
+          <button id="condT1" aria-pressed="false">Given a +</button>
+          <button id="condT2" aria-pressed="false">Given + twice</button>
+        </div>
+      </div>
+
+      <div id="grpMach" hidden>
+        <div class="sub">NCERT Example 19: who makes the bolts</div>
+        <div class="ctl"><label for="shA">Machine A makes</label><input type="range" id="shA" min="5" max="85" step="1" value="25"><output id="shAOut">25%</output></div>
+        <div class="ctl"><label for="shB">Machine B makes</label><input type="range" id="shB" min="5" max="85" step="1" value="35"><output id="shBOut">35%</output></div>
+        <div class="ctl"><label>Machine C makes</label><span class="note" style="margin:0">the rest</span><output id="shCOut">40%</output></div>
+        <div class="ctl"><label for="dA">A: defective</label><input type="range" id="dA" min="0" max="10" step="0.5" value="5"><output id="dAOut">5%</output></div>
+        <div class="ctl"><label for="dB">B: defective</label><input type="range" id="dB" min="0" max="10" step="0.5" value="4"><output id="dBOut">4%</output></div>
+        <div class="ctl"><label for="dC">C: defective</label><input type="range" id="dC" min="0" max="10" step="0.5" value="2"><output id="dCOut">2%</output></div>
+        <div class="sub">Look at</div>
+        <div class="seg" role="group" aria-label="Condition on">
+          <button id="condM0" aria-pressed="true">All bolts</button>
+          <button id="condM1" aria-pressed="false">Given defective</button>
+        </div>
+      </div>
+
+      <div id="grpPop">
+        <div class="row" style="margin-top:10px">
+          <button class="btn sm" id="btnDraw" title="The same rules, a fresh crowd">Draw a new 10 000</button>
+          <button class="btn sm tog" id="btnSort" aria-pressed="false">Sort by cause</button>
+          <button class="btn sm" id="btnBook">↺ Book’s numbers</button>
+        </div>
+      </div>
+
+      <div id="grpDice" hidden>
+        <div class="sub">Two events on two dice</div>
+        <div class="evrow"><i style="background:#3f7fd8"></i><select id="selE" aria-label="Event E"></select></div>
+        <div class="evrow"><i style="background:#e8a23a"></i><select id="selF" aria-label="Event F"></select></div>
+        <div class="sub">Click squares to add or remove them from</div>
+        <div class="seg" role="group" aria-label="Paint which event">
+          <button id="paintE" aria-pressed="true">E</button>
+          <button id="paintF" aria-pressed="false">F</button>
+        </div>
+        <div class="row" style="margin-top:10px"><button class="btn sm tog" id="btnGiven" aria-pressed="false">Given F: shrink to F</button></div>
+      </div>
+    </div>
+
+    <div class="card why" id="whyCard">
+      <div class="kicker">What the count says</div>
+      <div id="why"><p class="note" style="margin:0">The counts appear once you have made a prediction.</p></div>
+    </div>
+
+    <div class="card"><div class="kicker">To find</div><div id="finds"></div></div>
+  </aside>
+</main>
+
+<script src="../../play.js"></script>
+<script>
+'use strict';
+const {$, esc, clamp, fmt, drag, sound, say, track, toast, predict, findings, discover, found,
+       shareState, sharedState, mount, reduced, mulberry32} = Play;
+mount({thread: 'chance', band: 'theorist'});
+
+/* MODEL:start ==================================================================
+   A crowd of N = 10 000, drawn one by one (NCERT Class 12, Ch 13).
+
+   Every member gets four random numbers u1…u4 from a seeded generator, once. The rules
+   then decide, person by person:
+     cause  h   : u1 falls in the slice of [0, 1) that belongs to hypothesis h
+                  (ill / healthy, or machine A / B / C), so P(h) is the prior;
+     test 1 a1  : u2 < P(A | h)   (the test says +, or the bolt is defective);
+     test 2 a2  : with probability c (u3 < c) the retest repeats test 1; otherwise it is
+                  a fresh, independent test, u4 < P(A | h).
+   Because the random numbers are kept, moving a slider changes only the people it must.
+
+   Everything the page reports is COUNTED from the crowd: P(ill | +) is the number who are
+   ill among those who tested +, divided by the number who tested +. Bayes’ theorem,
+       P(Hi | A) = P(Hi) P(A | Hi) / Σj P(Hj) P(A | Hj),
+   is computed beside it, from the rules alone, so the two can be compared.
+
+   Two dice: the sample space is the 36 ordered pairs; an event is any set of them.
+   E and F are independent when P(E ∩ F) = P(E) P(F), checked in whole numbers:
+   36 · n(E ∩ F) = n(E) · n(F).
+   ============================================================================ */
+const N = 10000, SIDE = 100;
+function population(seed){
+  const r = mulberry32(seed >>> 0);
+  const P = {seed, u1: new Float64Array(N), u2: new Float64Array(N), u3: new Float64Array(N), u4: new Float64Array(N), perm: new Uint16Array(N)};
+  for (let i = 0; i < N; i++) { P.u1[i] = r(); P.u2[i] = r(); P.u3[i] = r(); P.u4[i] = r(); P.perm[i] = i; }
+  for (let i = N - 1; i > 0; i--) { const j = Math.floor(r() * (i + 1)); const t = P.perm[i]; P.perm[i] = P.perm[j]; P.perm[j] = t; }
+  return P;
+}
+/* The hypotheses for each tool: priors P(Hi), likelihoods P(A | Hi), retest repeat c. */
+function hypotheses(tool, par){
+  if (tool === 'mach') {
+    const a = par.shA / 100, b = par.shB / 100;
+    return {priors: [a, b, Math.max(0, 1 - a - b)], like: [par.dA / 100, par.dB / 100, par.dC / 100], corr: 0};
+  }
+  const p = Math.pow(10, par.prev);
+  return {priors: [p, 1 - p], like: [par.sens / 100, 1 - par.spec / 100], corr: par.corr / 100};
+}
+/* Bayes from the rules: joint P(Hi ∩ A), total P(A), posterior P(Hi | A). */
+function bayes(priors, like){
+  const joint = priors.map((p, i) => p * like[i]);
+  const total = joint.reduce((s, x) => s + x, 0);
+  return {joint, total, post: joint.map(x => total > 0 ? x / total : NaN)};
+}
+/* Two positives: P(++ | H) = c·L + (1 − c)·L². With c = 0 the tests are independent and the
+   first posterior simply becomes the prior for the second test. */
+const like2 = (L, c) => c * L + (1 - c) * L * L;
+function bayes2(priors, like, c){ return bayes(priors, like.map(L => like2(L, c))); }
+/* Decide every member of the crowd, and count. */
+function assign(P, H){
+  const n = H.priors.length, h = new Uint8Array(N), a1 = new Uint8Array(N), a2 = new Uint8Array(N);
+  const cum = []; let s = 0; for (const p of H.priors) { s += p; cum.push(s); }
+  const cnt = {n: new Array(n).fill(0), A: new Array(n).fill(0), AA: new Array(n).fill(0)};
+  for (let i = 0; i < N; i++) {
+    let k = 0; while (k < n - 1 && P.u1[i] >= cum[k]) k++;
+    h[i] = k;
+    const L = H.like[k];
+    a1[i] = P.u2[i] < L ? 1 : 0;
+    a2[i] = P.u3[i] < H.corr ? a1[i] : (P.u4[i] < L ? 1 : 0);
+    cnt.n[k]++; if (a1[i]) cnt.A[k]++; if (a1[i] && a2[i]) cnt.AA[k]++;
+  }
+  return {h, a1, a2, cnt};
+}
+/* The counted posterior: among those who show A (level 1) or A twice (level 2), the share with cause i. */
+function counted(cnt, level){
+  const m = level === 2 ? cnt.AA : cnt.A, tot = m.reduce((s, x) => s + x, 0);
+  return {m, tot, post: m.map(x => tot ? x / tot : NaN)};
+}
+/* Two dice. Outcome index k = 6(i − 1) + (j − 1) for first die i, second die j. */
+const DICE = [];
+for (let i = 1; i <= 6; i++) for (let j = 1; j <= 6; j++) DICE.push([i, j]);
+const EVENTS = [
+  {id: 'six1',  text: 'The first die shows 6',           f: (i, j) => i === 6},
+  {id: 'sum7',  text: 'The sum is 7',                     f: (i, j) => i + j === 7},
+  {id: 'sum8',  text: 'The sum is 8',                     f: (i, j) => i + j === 8},
+  {id: 'odd1',  text: 'The first die is odd',             f: (i, j) => i % 2 === 1},
+  {id: 'odd2',  text: 'The second die is odd',            f: (i, j) => j % 2 === 1},
+  {id: 'even1', text: 'The first die is even',            f: (i, j) => i % 2 === 0},
+  {id: 'm31',   text: 'The first die is a multiple of 3', f: (i, j) => i % 3 === 0},
+  {id: 'dbl',   text: 'A double',                         f: (i, j) => i === j},
+  {id: 'ge10',  text: 'The sum is at least 10',           f: (i, j) => i + j >= 10},
+  {id: 'sumEv', text: 'The sum is even',                  f: (i, j) => (i + j) % 2 === 0},
+  {id: 'big1',  text: 'The first die is bigger',          f: (i, j) => i > j},
+  {id: 'small1',text: 'The first die is smaller',         f: (i, j) => i < j},
+];
+const eventSet = id => { const e = EVENTS.find(x => x.id === id); return DICE.map(([i, j]) => e && e.f(i, j) ? 1 : 0); };
+/* The independence test, in whole numbers over a sample space of size nS. */
+function indep(nS, nE, nF, nEF){
+  return {pE: nE / nS, pF: nF / nS, pEF: nEF / nS, prod: nE * nF / (nS * nS),
+    pEgF: nF ? nEF / nF : NaN, pEgnF: nS - nF ? (nE - nEF) / (nS - nF) : NaN,
+    independent: nS * nEF === nE * nF, exclusive: nEF === 0};
+}
+function diceCounts(E, F){
+  let nE = 0, nF = 0, nEF = 0;
+  for (let k = 0; k < 36; k++) { nE += E[k]; nF += F[k]; nEF += E[k] & F[k]; }
+  return Object.assign({nE, nF, nEF}, indep(36, nE, nF, nEF));
+}
+/* MODEL:end */
+
+/* ---- state: plain data --------------------------------------------------- */
+const BOOK = {prev: -3, sens: 90, spec: 99, corr: 0, shA: 25, shB: 35, dA: 5, dB: 4, dC: 2};
+const LIM = {prev: [-4, -0.3], sens: [50, 100], spec: [50, 99.9], corr: [0, 100], shA: [5, 85], shB: [5, 85], dA: [0, 10], dB: [0, 10], dC: [0, 10]};
+const S = {tool: 'test', par: Object.assign({}, BOOK), seed: 139, cond: {test: 0, mach: 0}, sorted: false, locked: false,
+  E: eventSet('six1'), F: eventSet('sum8'), selE: 'six1', selF: 'sum8', paint: 'E', given: false,
+  draws: [], drawKey: '', seen: {}, log: [], crowd: 1};
+const shared = sharedState();
+if (shared) {
+  if (['test', 'mach', 'dice'].includes(shared.tool)) S.tool = shared.tool;
+  if (shared.par) for (const k in BOOK) { const v = +shared.par[k]; if (isFinite(v)) S.par[k] = clamp(v, LIM[k][0], LIM[k][1]); }
+  if (isFinite(+shared.seed)) S.seed = +shared.seed;
+  if (Array.isArray(shared.E) && shared.E.length === 36) { S.E = shared.E.map(v => v ? 1 : 0); S.selE = shared.selE || 'own'; }
+  if (Array.isArray(shared.F) && shared.F.length === 36) { S.F = shared.F.map(v => v ? 1 : 0); S.selF = shared.selF || 'own'; }
+}
+if (S.par.shA + S.par.shB > 95) S.par.shB = 95 - S.par.shA;
+shareState(() => ({tool: S.tool, par: Object.assign({}, S.par), seed: S.seed, E: S.E.slice(), F: S.F.slice(), selE: S.selE, selF: S.selF}));
+let POP = population(S.seed), AS = null, HYP = null;
+
+/* ============================================================================
+   The stage: built once, then patched.
+   ============================================================================ */
+const svg = $('stage');
+const AR = {x: 30, y: 58, pitch: 5, dot: 4};           // the icon array, 100 × 100
+const TR = {x0: 578, y0: 40, h: 230};                   // the tree
+const SQ = {x: 580, y: 318, w: 200, h: 184};            // the area diagram
+const PB = {x: 838, y: 318, w: 34, h: 184};             // the posterior bar
+const GR = {x: 620, y: 612, w: 350, h: 138};            // posterior against prior
+const DG = {x: 88, y: 118, c: 66};                      // dice grid
+const DQ = {x: 600, y: 118, w: 300, h: 300};            // dice area diagram
+const INK = '#1d2327', FAINT = '#7c878c', HAIR = '#e8e4d8';
+const HUES = {
+  test: [{on: '#c62f2a', off: '#f2bdb7', name: 'has the disease', short: 'ill'}, {on: '#3d5f95', off: '#dde2ea', name: 'healthy', short: 'healthy'}],
+  mach: [{on: '#a8740f', off: '#f4dfa8', name: 'machine A', short: 'A'}, {on: '#2c62b8', off: '#cfdef6', name: 'machine B', short: 'B'}, {on: '#20774a', off: '#cdebd8', name: 'machine C', short: 'C'}],
+};
+const LEAF = {test: ['+', '−'], mach: ['defective', 'fine']};
+const COLE = '#3f7fd8', COLF = '#e8a23a', COLB = '#2f9e5b';
+
+function build(){
+  svg.innerHTML = `
+  <rect x="0" y="0" width="1000" height="800" fill="#fbfaf6"/>
+  <g id="bayesL">
+    <text id="arT" x="${AR.x}" y="36" font-size="13" font-weight="700" fill="#4a555b" letter-spacing=".08em"></text>
+    <text id="arSub" x="${AR.x + 500}" y="36" font-size="12" fill="${FAINT}" text-anchor="end" class="m"></text>
+    <rect x="${AR.x - 6}" y="${AR.y - 6}" width="${SIDE * AR.pitch + 11}" height="${SIDE * AR.pitch + 11}" rx="6" fill="#fff" stroke="${HAIR}"/>
+    <g id="dots"></g>
+    <g id="legend"></g>
+    <text id="cnt1" x="${AR.x}" y="660" font-size="13.5" fill="${INK}"></text>
+    <text id="cnt2" x="${AR.x}" y="684" font-size="13.5" fill="${INK}" class="m"></text>
+    <text id="cnt3" x="${AR.x}" y="716" font-size="13" fill="#4a555b" class="m"></text>
+    <text id="cnt4" x="${AR.x}" y="740" font-size="13" fill="#4a555b" class="m"></text>
+    <text id="cnt5" x="${AR.x}" y="770" font-size="12.5" fill="${FAINT}"></text>
+    <line x1="560" y1="14" x2="560" y2="786" stroke="${HAIR}"/>
+    <text x="${TR.x0 - 8}" y="30" font-size="13" font-weight="700" fill="#4a555b" letter-spacing=".08em">THE TREE</text>
+    <g font-size="11" fill="${FAINT}" text-anchor="end"><text x="872" y="30">P(both)</text><text x="928" y="30">expected</text><text x="982" y="30">counted</text></g>
+    <g id="tree"></g>
+    <text x="${SQ.x - 8}" y="${SQ.y - 20}" font-size="13" font-weight="700" fill="#4a555b" letter-spacing=".08em">THE AREA DIAGRAM</text>
+    <g id="square"></g>
+    <text x="${GR.x - 50}" y="${GR.y - 26}" font-size="13" font-weight="700" fill="#4a555b" letter-spacing=".08em" id="grTitle"></text>
+    <g id="graph"></g>
+    <rect id="veil" x="561" y="0" width="439" height="800" fill="#fbfaf6" opacity=".96"/>
+    <text id="veilT" x="780" y="400" text-anchor="middle" fill="${FAINT}" font-size="15" font-weight="600">The tree and Bayes appear</text>
+    <text id="veilT2" x="780" y="422" text-anchor="middle" fill="${FAINT}" font-size="15" font-weight="600">once you have made a prediction.</text>
+  </g>
+  <g id="diceL" style="display:none">
+    <text x="${DG.x - 58}" y="36" font-size="13" font-weight="700" fill="#4a555b" letter-spacing=".08em">THE SAMPLE SPACE: 36 EQUALLY LIKELY OUTCOMES</text>
+    <text x="${DG.x + 3 * DG.c}" y="${DG.y - 34}" font-size="12.5" fill="${FAINT}" text-anchor="middle">second die →</text>
+    <text x="${DG.x - 40}" y="${DG.y + 3 * DG.c}" font-size="12.5" fill="${FAINT}" text-anchor="middle" transform="rotate(-90 ${DG.x - 40} ${DG.y + 3 * DG.c})">first die →</text>
+    <g id="dgrid"></g>
+    <g id="dlegend"></g>
+    <line x1="560" y1="14" x2="560" y2="786" stroke="${HAIR}"/>
+    <text x="${DQ.x - 20}" y="36" font-size="13" font-weight="700" fill="#4a555b" letter-spacing=".08em">IS E LEVEL ACROSS F?</text>
+    <text x="${DQ.x - 20}" y="56" font-size="12" fill="${FAINT}">column widths: F and not-F · shaded: the share of each that is E</text>
+    <g id="dsquare"></g>
+    <g id="dnums"></g>
+  </g>
+  <g id="hits">
+    <rect id="graphHit" x="${GR.x}" y="${GR.y}" width="${GR.w}" height="${GR.h}" fill="transparent" tabindex="0" role="slider" aria-label="Drag across the graph to set how common the disease is"/>
+    <g id="diceHits" style="display:none"></g>
+  </g>`;
+  let dh = '';
+  DICE.forEach(([i, j], k) => {
+    dh += `<rect class="hit" id="cell-${i}${j}" data-k="${k}" x="${DG.x + (j - 1) * DG.c}" y="${DG.y + (i - 1) * DG.c}" width="${DG.c}" height="${DG.c}" fill="transparent" tabindex="0" role="button" aria-label="Outcome (${i}, ${j})"/>`;
+  });
+  $('diceHits').innerHTML = dh;
+  buildDice();
+}
+
+/* ---- the icon array ---------------------------------------------------------- */
+function slotOf(i){ return POP.perm[i]; }
+function paintDots(){
+  const H = HYP, A = AS, lv = S.cond[S.tool], n = H.priors.length, hue = HUES[S.tool];
+  const on = hue.map(() => []), off = hue.map(() => []);
+  let slots;
+  if (S.sorted) {
+    /* Like the area diagram: each cause takes a run of columns in proportion to its size, and
+       inside its run those showing A settle along the bottom rows, spread across the whole run. */
+    slots = new Uint16Array(N);
+    const byH = hue.map(() => ({m: [], u: []}));
+    for (let i = 0; i < N; i++) (mark(i, lv) ? byH[A.h[i]].m : byH[A.h[i]].u).push(i);
+    let start = 0;
+    for (let k = 0; k < n; k++) {
+      const people = byH[k].m.concat(byH[k].u), cnt = people.length;
+      const range = Array.from({length: cnt}, (_, q) => start + q);   // slot s: column floor(s/100), row from the bottom s%100
+      range.sort((x, y) => (x % SIDE) - (y % SIDE) || x - y);
+      people.forEach((i, q) => slots[i] = range[q]);
+      start += cnt;
+    }
+  }
+  for (let i = 0; i < N; i++) {
+    const s = S.sorted ? slots[i] : slotOf(i);
+    const col = S.sorted ? Math.floor(s / SIDE) : s % SIDE, row = S.sorted ? SIDE - 1 - s % SIDE : Math.floor(s / SIDE);
+    const x = AR.x + col * AR.pitch, y = AR.y + row * AR.pitch;
+    (mark(i, lv) ? on : off)[A.h[i]].push(`M${x} ${y}h4v4h-4z`);
+  }
+  let g = '';
+  for (let k = 0; k < n; k++) g += `<path d="${off[k].join('')}" fill="${hue[k].off}" opacity="${lv ? 0.28 : 1}"/>`;
+  for (let k = 0; k < n; k++) g += `<path d="${on[k].join('')}" fill="${hue[k].on}"/>`;
+  $('dots').innerHTML = g;
+}
+/* Which dots are "marked": at level 0 and 1 those showing A; at level 2 those showing A twice. */
+const mark = (i, lv) => lv === 2 ? AS.a1[i] && AS.a2[i] : AS.a1[i];
+
+function paintLegend(){
+  const hue = HUES[S.tool], leaf = LEAF[S.tool], c = AS.cnt, lv = S.cond[S.tool];
+  let g = '', x = AR.x, y = 590;
+  const items = [];
+  hue.forEach((h, k) => {
+    const A = lv === 2 ? c.AA[k] : c.A[k];
+    items.push({col: h.on, t: `${h.short}, ${lv === 2 ? '+ twice' : leaf[0]}`, v: A});
+    items.push({col: h.off, t: `${h.short}, ${lv === 2 ? 'not + twice' : leaf[1]}`, v: c.n[k] - A});
+  });
+  const per = S.tool === 'mach' ? 3 : 2;
+  items.forEach((it, n) => {
+    const col = S.tool === 'mach' ? Math.floor(n / 2) : n % 2, row = S.tool === 'mach' ? n % 2 : Math.floor(n / 2);
+    const X = x + col * (S.tool === 'mach' ? 172 : 250), Y = y + row * 22;
+    g += `<rect x="${X}" y="${Y - 10}" width="12" height="12" rx="2" fill="${it.col}"/><text x="${X + 18}" y="${Y}" font-size="12.5" fill="#4a555b">${esc(it.t)} <tspan class="m" font-weight="600" fill="${INK}">${it.v.toLocaleString('en-IN')}</tspan></text>`;
+  });
+  $('legend').innerHTML = g;
+}
+
+/* ---- the tree ---------------------------------------------------------------- */
+function paintTree(){
+  const H = HYP, n = H.priors.length, c = AS.cnt, lv = S.cond[S.tool], hue = HUES[S.tool], leaf = LEAF[S.tool];
+  const L = lv === 2 ? H.like.map(x => like2(x, H.corr)) : H.like;
+  const rootY = TR.y0 + TR.h / 2, xh = 668, xl = 752;
+  const hy = k => TR.y0 + (k + 0.5) * TR.h / n;
+  const leafDy = n === 2 ? 30 : 20;
+  const lvLab = lv === 2 ? ['+ +', 'not'] : leaf;
+  let g = `<circle cx="${TR.x0}" cy="${rootY}" r="4" fill="${INK}"/>`;
+  for (let k = 0; k < n; k++) {
+    const y = hy(k);
+    g += `<line x1="${TR.x0}" y1="${rootY}" x2="${xh}" y2="${y}" stroke="${hue[k].on}" stroke-width="2"/>`;
+    g += `<text x="${(TR.x0 + xh) / 2 - 2}" y="${(rootY + y) / 2 + (y < rootY ? -6 : y > rootY ? 14 : -6)}" font-size="11.5" fill="${hue[k].on}" text-anchor="middle" class="m">${pfmt(H.priors[k])}</text>`;
+    g += `<circle cx="${xh}" cy="${y}" r="4" fill="${hue[k].on}"/><text x="${xh - 8}" y="${y + 4}" font-size="12" font-weight="700" fill="${hue[k].on}" text-anchor="end" stroke="#fbfaf6" stroke-width="4" paint-order="stroke">${esc(hue[k].short)}</text>`;
+    [0, 1].forEach(a => {
+      const ly = y + (a ? leafDy : -leafDy), p = a ? 1 - L[k] : L[k], joint = H.priors[k] * p;
+      const cntv = a ? c.n[k] - (lv === 2 ? c.AA[k] : c.A[k]) : (lv === 2 ? c.AA[k] : c.A[k]);
+      const hot = lv > 0 && !a;
+      g += `<line x1="${xh}" y1="${y}" x2="${xl}" y2="${ly}" stroke="${a ? '#b9b4a8' : hue[k].on}" stroke-width="${hot ? 3 : 1.5}"/>`;
+      g += `<text x="${(xh + xl) / 2}" y="${(y + ly) / 2 + (a ? 14 : -5)}" font-size="11" fill="${FAINT}" text-anchor="middle" class="m">${pfmt(p)}</text>`;
+      if (hot) g += `<rect x="${xl + 2}" y="${ly - 11}" width="${986 - xl - 2}" height="18" rx="4" fill="${hue[k].off}" opacity=".7"/>`;
+      g += `<text x="${xl + 6}" y="${ly + 4}" font-size="12" font-weight="600" fill="${a ? '#7c878c' : hue[k].on}">${esc(lvLab[a])}</text>`;
+      g += `<text x="872" y="${ly + 4}" font-size="11.5" fill="${INK}" text-anchor="end" class="m">${pfmt(joint, 4)}</text>`;
+      g += `<text x="928" y="${ly + 4}" font-size="11.5" fill="#4a555b" text-anchor="end" class="m">${fmt(joint * N, joint * N < 100 ? 1 : 0)}</text>`;
+      g += `<text x="982" y="${ly + 4}" font-size="11.5" font-weight="600" fill="${INK}" text-anchor="end" class="m">${cntv}</text>`;
+    });
+  }
+  $('tree').innerHTML = g;
+}
+function pfmt(p, dp){
+  if (!isFinite(p)) return '—';
+  if (dp != null) return p === 0 ? '0' : p < 0.0001 ? p.toExponential(1) : p.toFixed(dp);
+  return p === 0 ? '0' : p < 0.001 ? p.toFixed(4) : p < 0.01 || (p > 0.99 && p < 1) ? p.toFixed(3) : p.toFixed(2);
+}
+
+/* ---- the area diagram and posterior bar ----------------------------------------- */
+function paintSquare(){
+  const H = HYP, n = H.priors.length, lv = S.cond[S.tool], hue = HUES[S.tool];
+  const L = lv === 2 ? H.like.map(x => like2(x, H.corr)) : H.like;
+  const B = bayes(H.priors, L);
+  let g = `<rect x="${SQ.x}" y="${SQ.y}" width="${SQ.w}" height="${SQ.h}" fill="#fff" stroke="#b9b4a8"/>`;
+  let x = SQ.x;
+  const tiny = [];
+  for (let k = 0; k < n; k++) {
+    const w = H.priors[k] * SQ.w, hA = L[k] * SQ.h;
+    g += `<rect x="${x.toFixed(2)}" y="${SQ.y}" width="${Math.max(0, w).toFixed(2)}" height="${SQ.h}" fill="${hue[k].off}" opacity="${lv ? .45 : 1}"/>`;
+    g += `<rect x="${x.toFixed(2)}" y="${(SQ.y + SQ.h - hA).toFixed(2)}" width="${Math.max(0, w).toFixed(2)}" height="${hA.toFixed(2)}" fill="${hue[k].on}"/>`;
+    if (k < n - 1) g += `<line x1="${(x + w).toFixed(2)}" y1="${SQ.y}" x2="${(x + w).toFixed(2)}" y2="${SQ.y + SQ.h}" stroke="#fff" stroke-width="1"/>`;
+    if (w < 6) tiny.push(hue[k].short);
+    else g += `<text x="${(x + w / 2).toFixed(1)}" y="${SQ.y + SQ.h + 16}" font-size="11.5" fill="${hue[k].on}" font-weight="600" text-anchor="middle">${esc(hue[k].short)}</text>`;
+    x += w;
+  }
+  g += `<text x="${SQ.x}" y="${SQ.y - 5}" font-size="11" fill="${FAINT}">width P(cause) · shaded P(${lv === 2 ? '++' : S.tool === 'mach' ? 'def.' : '+'} | cause)</text>`;
+  if (tiny.length) g += `<text x="${SQ.x}" y="${SQ.y + SQ.h + 32}" font-size="11" fill="${hue[0].on}">the “${esc(tiny.join(', '))}” strip is only ${fmt(H.priors[0] * SQ.w, 2)} units wide</text>`;
+  /* the posterior bar: keep only the shaded pieces and stack them to fill the bar */
+  g += `<text x="${PB.x + PB.w + 30}" y="${PB.y - 5}" font-size="11" fill="${FAINT}" text-anchor="end">shaded only</text>`;
+  let y = PB.y;
+  for (let k = 0; k < n; k++) {
+    const hh = (B.post[k] || 0) * PB.h;
+    g += `<rect x="${PB.x}" y="${y.toFixed(2)}" width="${PB.w}" height="${hh.toFixed(2)}" fill="${hue[k].on}"/>`;
+    if (hh > 14) g += `<text x="${PB.x + PB.w + 6}" y="${(y + hh / 2 + 4).toFixed(1)}" font-size="11.5" fill="${hue[k].on}" font-weight="600" class="m">${fmt(B.post[k], 3)}</text>`;
+    else g += `<text x="${PB.x + PB.w + 6}" y="${(y + Math.max(hh, 0) / 2 + 4 + (k === 0 ? 0 : 10)).toFixed(1)}" font-size="11.5" fill="${hue[k].on}" font-weight="600" class="m">${fmt(B.post[k], 3)}</text>`;
+    y += hh;
+  }
+  g += `<rect x="${PB.x}" y="${PB.y}" width="${PB.w}" height="${PB.h}" fill="none" stroke="#b9b4a8"/>`;
+  g += `<text x="${(SQ.x + SQ.w + PB.x) / 2}" y="${SQ.y + SQ.h / 2 + 5}" font-size="16" fill="#b9b4a8" text-anchor="middle">→</text>`;
+  g += `<text x="${PB.x + PB.w / 2}" y="${PB.y + PB.h + 16}" font-size="11" fill="${FAINT}" text-anchor="middle">P(cause | ${lv === 2 ? '++' : S.tool === 'mach' ? 'def.' : '+'})</text>`;
+  $('square').innerHTML = g;
+}
+
+/* ---- the graph: posterior against prior (test), or prior vs posterior bars (machines) ---- */
+const gxP = lp => GR.x + (lp + 4) / 4 * GR.w;            // log10 prevalence −4 … 0
+const gyP = p => GR.y + GR.h - clamp(p, 0, 1) * GR.h;
+function paintGraph(){
+  const H = HYP, lv = S.cond[S.tool];
+  let g = `<rect x="${GR.x}" y="${GR.y}" width="${GR.w}" height="${GR.h}" fill="#fff" stroke="${HAIR}"/>`;
+  for (const p of [0, 0.25, 0.5, 0.75, 1]) g += `<line x1="${GR.x}" y1="${gyP(p)}" x2="${GR.x + GR.w}" y2="${gyP(p)}" stroke="#f0ede4"/><text x="${GR.x - 6}" y="${gyP(p) + 4}" font-size="11" fill="${FAINT}" text-anchor="end" class="m">${p}</text>`;
+  if (S.tool === 'test') {
+    $('grTitle').textContent = 'P(ILL | +) AGAINST HOW COMMON IT IS';
+    for (let e = -4; e <= 0; e++) g += `<line x1="${gxP(e)}" y1="${GR.y + GR.h}" x2="${gxP(e)}" y2="${GR.y + GR.h + 4}" stroke="#9aa3a6"/><text x="${gxP(e)}" y="${GR.y + GR.h + 17}" font-size="11" fill="${FAINT}" text-anchor="middle" class="m">${['0.01%', '0.1%', '1%', '10%', '100%'][e + 4]}</text>`;
+    g += `<text x="${GR.x + GR.w}" y="${GR.y + GR.h + 33}" font-size="11" fill="${FAINT}" text-anchor="end">has the disease (prior), log scale →</text>`;
+    let d1 = '', d2 = '';
+    for (let e = -4; e <= 0.0001; e += 0.04) {
+      const p = Math.pow(10, e), pr = [p, 1 - p];
+      const q1 = bayes(pr, H.like).post[0], q2 = bayes2(pr, H.like, H.corr).post[0];
+      d1 += (d1 ? 'L' : 'M') + gxP(e).toFixed(1) + ' ' + gyP(q1).toFixed(1);
+      d2 += (d2 ? 'L' : 'M') + gxP(e).toFixed(1) + ' ' + gyP(q2).toFixed(1);
+    }
+    g += `<path d="${d2}" fill="none" stroke="#c62f2a" stroke-width="1.6" stroke-dasharray="5 4" opacity=".7"/>`;
+    g += `<path d="${d1}" fill="none" stroke="#c62f2a" stroke-width="2.2"/>`;
+    g += `<line x1="${GR.x}" y1="${gyP(0.5)}" x2="${GR.x + GR.w}" y2="${gyP(0.5)}" stroke="#b9b4a8" stroke-dasharray="2 3"/>`;
+    const X = gxP(S.par.prev);
+    g += `<line x1="${X}" y1="${GR.y}" x2="${X}" y2="${GR.y + GR.h}" stroke="${INK}" stroke-width="1.2" stroke-dasharray="4 3"/>`;
+    g += `<g font-size="11"><line x1="${GR.x + 8}" y1="${GR.y - 9}" x2="${GR.x + 26}" y2="${GR.y - 9}" stroke="#c62f2a" stroke-width="2.2"/><text x="${GR.x + 30}" y="${GR.y - 5}" fill="#7a2f2a">one +</text>` +
+         `<line x1="${GR.x + 76}" y1="${GR.y - 9}" x2="${GR.x + 94}" y2="${GR.y - 9}" stroke="#c62f2a" stroke-width="1.6" stroke-dasharray="5 4"/><text x="${GR.x + 98}" y="${GR.y - 5}" fill="#7a2f2a">+ twice</text>` +
+         `<circle cx="${GR.x + 158}" cy="${GR.y - 9}" r="4.5" fill="#fff" stroke="${INK}" stroke-width="2"/><text x="${GR.x + 167}" y="${GR.y - 5}" fill="#4a555b">counted</text></g>`;
+    for (const d of S.draws) g += `<line x1="${X - 6}" y1="${gyP(d).toFixed(1)}" x2="${X + 6}" y2="${gyP(d).toFixed(1)}" stroke="${INK}" stroke-width="1" opacity=".45"/>`;
+    if (lv) {
+      const cp = counted(AS.cnt, lv).post[0];
+      if (isFinite(cp)) g += `<circle cx="${X}" cy="${gyP(cp).toFixed(1)}" r="5" fill="#fff" stroke="${INK}" stroke-width="2"/>`;
+    }
+  } else {
+    $('grTitle').textContent = 'BEFORE AND AFTER: WHICH MACHINE?';
+    const B = bayes(H.priors, H.like), cp = counted(AS.cnt, 1).post, hue = HUES.mach;
+    const bw = 28;
+    for (let k = 0; k < 3; k++) {
+      const cx = GR.x + (k + 0.5) * GR.w / 3;
+      g += `<rect x="${cx - bw - 3}" y="${gyP(H.priors[k])}" width="${bw}" height="${GR.y + GR.h - gyP(H.priors[k])}" fill="${hue[k].off}" stroke="${hue[k].on}"/>`;
+      g += `<rect x="${cx + 3}" y="${gyP(B.post[k] || 0)}" width="${bw}" height="${GR.y + GR.h - gyP(B.post[k] || 0)}" fill="${hue[k].on}"/>`;
+      if (lv && isFinite(cp[k])) g += `<circle cx="${cx + 3 + bw / 2}" cy="${gyP(cp[k])}" r="4.5" fill="#fff" stroke="${INK}" stroke-width="2"/>`;
+      g += `<text x="${cx}" y="${GR.y + GR.h + 17}" font-size="12" font-weight="700" fill="${hue[k].on}" text-anchor="middle">${hue[k].short}</text>`;
+    }
+    g += `<g font-size="11"><rect x="${GR.x + 8}" y="${GR.y - 15}" width="11" height="11" fill="#eee" stroke="#888"/><text x="${GR.x + 23}" y="${GR.y - 5}" fill="#4a555b">P(machine)</text>` +
+         `<rect x="${GR.x + 100}" y="${GR.y - 15}" width="11" height="11" fill="#666"/><text x="${GR.x + 115}" y="${GR.y - 5}" fill="#4a555b">P(machine | defective)</text>` +
+         `<circle cx="${GR.x + 263}" cy="${GR.y - 9}" r="4.5" fill="#fff" stroke="${INK}" stroke-width="2"/><text x="${GR.x + 272}" y="${GR.y - 5}" fill="#4a555b">counted</text></g>`;
+  }
+  $('graph').innerHTML = g;
+  $('graphHit').style.display = S.tool === 'test' ? '' : 'none';
+}
+
+/* ---- the counting lines under the array --------------------------------------------- */
+function paintCounts(){
+  const H = HYP, lv = S.cond[S.tool], c = AS.cnt, hue = HUES[S.tool];
+  const thing = S.tool === 'mach' ? 'bolts' : 'people';
+  $('arT').textContent = S.tool === 'mach' ? '10 000 BOLTS, EACH A DRAW' : '10 000 PEOPLE, EACH A DRAW';
+  $('arSub').textContent = `crowd no. ${S.crowd}` + (S.sorted ? ' · sorted' : '');
+  if (!S.locked) { ['cnt1', 'cnt2', 'cnt3', 'cnt4', 'cnt5'].forEach(id => $(id).textContent = ''); $('cnt1').textContent = 'Every square is one of the ' + thing + '.'; return; }
+  const C = counted(c, lv || 1), B = lv === 2 ? bayes2(H.priors, H.like, H.corr) : bayes(H.priors, H.like);
+  if (S.tool === 'test') {
+    const p = H.priors[0], se = H.like[0], fp = H.like[1];
+    if (!lv) {
+      $('cnt1').innerHTML = `Of 10 000 people, <tspan font-weight="700">${c.n[0]}</tspan> have the disease and <tspan font-weight="700">${c.A[0] + c.A[1]}</tspan> test positive.`;
+      $('cnt2').textContent = `Nobody knows who is ill. Choose “Given a +” to keep only the positives.`;
+      $('cnt3').textContent = ''; $('cnt4').textContent = '';
+    } else {
+      $('cnt1').innerHTML = `Of the <tspan font-weight="700">${C.tot}</tspan> who tested positive${lv === 2 ? ' twice' : ''}, <tspan font-weight="700" fill="#c62f2a">${C.m[0]}</tspan> are ill.`;
+      $('cnt2').textContent = `counted  P(ill | ${lv === 2 ? '++' : '+'}) = ${C.m[0]}/${C.tot} = ${fmt(C.post[0], 4)}`;
+      const L = lv === 2 ? [like2(se, H.corr), like2(fp, H.corr)] : [se, fp];
+      $('cnt3').textContent = `Bayes    ${pfmt(p, 4)}×${pfmt(L[0], 4)} / (${pfmt(p, 4)}×${pfmt(L[0], 4)} + ${pfmt(1 - p, 4)}×${pfmt(L[1], 4)})`;
+      $('cnt4').textContent = `         = ${fmt(B.post[0], 4)}` + (lv === 2 && H.corr > 0 ? `   (independent tests would give ${fmt(bayes2(H.priors, H.like, 0).post[0], 4)})` : '');
+    }
+  } else {
+    if (!lv) {
+      $('cnt1').innerHTML = `A makes <tspan font-weight="700">${c.n[0]}</tspan>, B <tspan font-weight="700">${c.n[1]}</tspan>, C <tspan font-weight="700">${c.n[2]}</tspan>. Defective: <tspan font-weight="700">${C.tot}</tspan> in all.`;
+      $('cnt2').textContent = `total probability  P(def.) = Σ P(machine)·P(def. | machine) = ${fmt(bayes(H.priors, H.like).total, 4)}`;
+      $('cnt3').textContent = `counted            ${C.tot}/10 000 = ${fmt(C.tot / N, 4)}`;
+      $('cnt4').textContent = '';
+    } else {
+      $('cnt1').innerHTML = `Of the <tspan font-weight="700">${C.tot}</tspan> defective bolts, A made <tspan font-weight="700">${C.m[0]}</tspan>, B <tspan font-weight="700">${C.m[1]}</tspan>, C <tspan font-weight="700">${C.m[2]}</tspan>.`;
+      $('cnt2').textContent = `counted  P(A|def.) ${fmt(C.post[0], 3)}  P(B|def.) ${fmt(C.post[1], 3)}  P(C|def.) ${fmt(C.post[2], 3)}`;
+      $('cnt3').textContent = `Bayes    P(A|def.) ${fmt(B.post[0], 3)}  P(B|def.) ${fmt(B.post[1], 3)}  P(C|def.) ${fmt(B.post[2], 3)}`;
+      $('cnt4').textContent = `P(def.) = ${H.priors.map((p, k) => pfmt(p, 2) + '×' + pfmt(H.like[k], 3)).join(' + ')} = ${fmt(B.total, 4)}`;
+    }
+  }
+  const key = drawKey();
+  if (S.drawKey === key && S.draws.length > 1) {
+    const m = S.draws.reduce((s, x) => s + x, 0) / S.draws.length;
+    $('cnt5').textContent = `${S.draws.length} crowds drawn with these numbers: the counted value averages ${fmt(m, 4)}; Bayes says ${fmt(B.post[S.tool === 'mach' ? 1 : 0], 4)}.`;
+  } else $('cnt5').textContent = lv ? `Draw a new 10 000 to see the count wobble around Bayes.` : '';
+}
+
+/* ---- the dice ------------------------------------------------------------------ */
+const PIPS = {1: [[0, 0]], 2: [[-1, -1], [1, 1]], 3: [[-1, -1], [0, 0], [1, 1]], 4: [[-1, -1], [1, -1], [-1, 1], [1, 1]], 5: [[-1, -1], [1, -1], [0, 0], [-1, 1], [1, 1]], 6: [[-1, -1], [1, -1], [-1, 0], [1, 0], [-1, 1], [1, 1]]};
+function die(cx, cy, v, s = 20){
+  return `<rect x="${cx - s / 2}" y="${cy - s / 2}" width="${s}" height="${s}" rx="4" fill="#fff" stroke="#8a94a6" stroke-width="1"/>` +
+    PIPS[v].map(([a, b]) => `<circle cx="${cx + a * s * 0.27}" cy="${cy + b * s * 0.27}" r="${s * 0.085}" fill="${INK}"/>`).join('');
+}
+function buildDice(){
+  let g = '';
+  for (let i = 1; i <= 6; i++) g += `<g transform="translate(${DG.x - 16} ${DG.y + (i - 0.5) * DG.c})">${die(0, 0, i, 18)}</g>`;
+  for (let j = 1; j <= 6; j++) g += `<g transform="translate(${DG.x + (j - 0.5) * DG.c} ${DG.y - 16})">${die(0, 0, j, 18)}</g>`;
+  DICE.forEach(([i, j], k) => {
+    const x = DG.x + (j - 1) * DG.c, y = DG.y + (i - 1) * DG.c;
+    g += `<g id="dc-${k}"><rect id="dcr-${k}" x="${x + 2}" y="${y + 2}" width="${DG.c - 4}" height="${DG.c - 4}" rx="7" fill="#fff" stroke="${HAIR}"/>` +
+      `<text x="${x + DG.c / 2}" y="${y + DG.c / 2 - 4}" font-size="13" text-anchor="middle" fill="${INK}" class="m" id="dct-${k}">${i},${j}</text>` +
+      `<text x="${x + DG.c / 2}" y="${y + DG.c / 2 + 14}" font-size="10.5" text-anchor="middle" fill="${FAINT}" class="m" id="dcs-${k}">sum ${i + j}</text></g>`;
+  });
+  $('dgrid').innerHTML = g;
+  $('dlegend').innerHTML = `<g font-size="12.5" fill="#4a555b">
+    <rect x="${DG.x}" y="530" width="14" height="14" rx="3" fill="${COLE}"/><text x="${DG.x + 20}" y="541">in E only</text>
+    <rect x="${DG.x + 110}" y="530" width="14" height="14" rx="3" fill="${COLF}"/><text x="${DG.x + 130}" y="541">in F only</text>
+    <rect x="${DG.x + 220}" y="530" width="14" height="14" rx="3" fill="${COLB}"/><text x="${DG.x + 240}" y="541">in both, E ∩ F</text></g>
+    <text id="dEtext" x="${DG.x - 58}" y="582" font-size="13" fill="${COLE}" font-weight="600"></text>
+    <text id="dFtext" x="${DG.x - 58}" y="604" font-size="13" fill="#b5741a" font-weight="600"></text>
+    <text id="dHint" x="${DG.x - 58}" y="630" font-size="12.5" fill="${FAINT}">Click squares to build your own event. Every outcome has probability 1/36.</text>
+    <text x="${DG.x - 58}" y="676" font-size="13" font-weight="700" fill="#4a555b" letter-spacing=".08em">PAIRS YOU HAVE TESTED</text>
+    <g id="dlog"></g>`;
+}
+function paintDice(){
+  const E = S.E, F = S.F;
+  DICE.forEach((_, k) => {
+    const e = E[k], f = F[k];
+    const fill = e && f ? COLB : e ? COLE : f ? COLF : '#fff';
+    const r = $('dcr-' + k);
+    r.setAttribute('fill', fill); r.setAttribute('stroke', e || f ? fill : HAIR);
+    $('dct-' + k).setAttribute('fill', e || f ? '#fff' : INK);
+    $('dcs-' + k).setAttribute('fill', e || f ? '#fff' : FAINT); $('dcs-' + k).setAttribute('opacity', e || f ? .85 : 1);
+    $('dc-' + k).setAttribute('opacity', S.given && !f ? 0.22 : 1);
+  });
+  const d = diceCounts(E, F);
+  $('dEtext').textContent = 'E: ' + evName(S.selE) + `  (${d.nE} outcomes)`;
+  $('dFtext').textContent = 'F: ' + evName(S.selF) + `  (${d.nF} outcomes)`;
+  /* area diagram */
+  let g = `<rect x="${DQ.x}" y="${DQ.y}" width="${DQ.w}" height="${DQ.h}" fill="#fff" stroke="#b9b4a8"/>`;
+  const wF = d.nF / 36 * DQ.w;
+  const hF = isFinite(d.pEgF) ? d.pEgF * DQ.h : 0, hN = isFinite(d.pEgnF) ? d.pEgnF * DQ.h : 0;
+  g += `<rect x="${DQ.x}" y="${DQ.y}" width="${wF}" height="${DQ.h}" fill="#fbe9cc"/>`;
+  g += `<rect x="${DQ.x}" y="${DQ.y + DQ.h - hF}" width="${wF}" height="${hF}" fill="${COLB}"/>`;
+  g += `<rect x="${DQ.x + wF}" y="${DQ.y + DQ.h - hN}" width="${DQ.w - wF}" height="${hN}" fill="${COLE}" opacity="${S.given ? .25 : 1}"/>`;
+  if (S.given) g += `<rect x="${DQ.x + wF}" y="${DQ.y}" width="${DQ.w - wF}" height="${DQ.h}" fill="#fbfaf6" opacity=".6"/>`;
+  g += `<line x1="${DQ.x + wF}" y1="${DQ.y}" x2="${DQ.x + wF}" y2="${DQ.y + DQ.h}" stroke="#fff" stroke-width="2"/>`;
+  const yE = DQ.y + DQ.h - d.pE * DQ.h;
+  g += `<line x1="${DQ.x - 8}" y1="${yE}" x2="${DQ.x + DQ.w + 8}" y2="${yE}" stroke="${INK}" stroke-width="1.4" stroke-dasharray="5 4"/>`;
+  g += `<text x="${DQ.x + DQ.w + 12}" y="${yE + 4}" font-size="12" fill="${INK}" class="m">P(E) = ${d.nE}/36</text>`;
+  if (wF > 24) g += `<text x="${DQ.x + wF / 2}" y="${DQ.y + DQ.h + 17}" font-size="12" font-weight="700" fill="#b5741a" text-anchor="middle">F</text>`;
+  if (DQ.w - wF > 30) g += `<text x="${DQ.x + wF + (DQ.w - wF) / 2}" y="${DQ.y + DQ.h + 17}" font-size="12" font-weight="700" fill="${FAINT}" text-anchor="middle">not F</text>`;
+  if (hF > 0 && wF > 40) g += `<text x="${DQ.x + wF / 2}" y="${DQ.y + DQ.h - hF + 16}" font-size="11.5" fill="#fff" font-weight="600" text-anchor="middle" class="m">${fmt(d.pEgF, 3)}</text>`;
+  if (hN > 0 && DQ.w - wF > 40 && !S.given) g += `<text x="${DQ.x + wF + (DQ.w - wF) / 2}" y="${DQ.y + DQ.h - hN + 16}" font-size="11.5" fill="#fff" font-weight="600" text-anchor="middle" class="m">${fmt(d.pEgnF, 3)}</text>`;
+  $('dsquare').innerHTML = g;
+  /* the numbers */
+  const L = (y, t, o = '') => `<text x="${DQ.x - 20}" y="${y}" font-size="13.5" fill="${INK}" class="m" ${o}>${t}</text>`;
+  const verdict = d.nE === 0 || d.nF === 0 ? ['An empty event: choose or paint something.', FAINT]
+    : d.independent ? [`INDEPENDENT: P(E ∩ F) = P(E)·P(F)`, COLB]
+    : d.exclusive ? [`DEPENDENT, AND MUTUALLY EXCLUSIVE`, '#c62f2a'] : [`DEPENDENT: P(E ∩ F) ≠ P(E)·P(F)`, '#c62f2a'];
+  let n = '';
+  n += L(476, `P(E) = ${d.nE}/36 = ${fmt(d.pE, 4)}      P(F) = ${d.nF}/36 = ${fmt(d.pF, 4)}`);
+  n += L(502, `P(E)·P(F) = ${d.nE}·${d.nF}/1296 = ${fmt(d.prod, 4)}`);
+  n += L(528, `P(E ∩ F)  = ${d.nEF}/36 = ${d.nEF * 36}/1296 = ${fmt(d.pEF, 4)}`);
+  n += L(560, `P(E | F)  = n(E ∩ F)/n(F) = ${d.nEF}/${d.nF} = ${fmt(d.pEgF, 4)}`, S.given ? 'font-weight="700"' : '');
+  n += L(586, `P(E)      = ${fmt(d.pE, 4)}`);
+  n += `<text x="${DQ.x - 20}" y="626" font-size="15" font-weight="700" fill="${verdict[1]}">${esc(verdict[0])}</text>`;
+  const why = d.nE && d.nF ? (d.independent ? `Knowing F happened leaves the chance of E exactly where it was: the shading is level.`
+    : d.exclusive ? `They cannot happen together, so knowing F happened makes E impossible.`
+    : `Knowing F happened ${d.pEgF > d.pE ? 'raises' : 'lowers'} the chance of E from ${fmt(d.pE, 3)} to ${fmt(d.pEgF, 3)}.`) : '';
+  n += `<text x="${DQ.x - 20}" y="652" font-size="12.5" fill="#4a555b">${esc(why)}</text>`;
+  if (S.given) n += `<text x="${DQ.x - 20}" y="678" font-size="12.5" fill="#b5741a">Given F: only the ${d.nF} outcomes of F are left. They are the new sample space.</text>`;
+  $('dnums').innerHTML = n;
+  /* the log of pairs tested: a measurement record */
+  if (d.nE && d.nF) {
+    const key = S.E.join('') + '|' + S.F.join('');
+    if (!S.log.length || S.log[0].key !== key) {
+      S.log = S.log.filter(r => r.key !== key);
+      S.log.unshift({key, e: evName(S.selE), f: evName(S.selF), nE: d.nE, nF: d.nF, nEF: d.nEF, ind: d.independent});
+      S.log.length = Math.min(S.log.length, 4);
+    }
+  }
+  $('dlog').innerHTML = S.log.map((r, i) => {
+    const y = 702 + i * 22;
+    return `<text x="${DG.x - 58}" y="${y}" font-size="12" fill="${i ? FAINT : INK}"><tspan fill="${r.ind ? COLB : '#c62f2a'}" font-weight="700">${r.ind ? 'independent' : 'dependent'}</tspan>  ` +
+      `<tspan class="m">36·${r.nEF} ${r.ind ? '=' : '≠'} ${r.nE}·${r.nF}</tspan>  ${esc(trim(r.e, 28))} · ${esc(trim(r.f, 28))}</text>`;
+  }).join('');
+}
+const trim = (t, n) => t.length > n ? t.slice(0, n - 1) + '…' : t;
+const evName = id => { const e = EVENTS.find(x => x.id === id); return e ? e.text.toLowerCase().replace(/^the /, 'the ') : 'your own set of outcomes'; };
+
+/* ============================================================================
+   Painting, the side card, findings
+   ============================================================================ */
+function recompute(){
+  HYP = hypotheses(S.tool === 'dice' ? 'test' : S.tool, S.par);
+  AS = assign(POP, HYP);
+}
+function drawKey(){ return S.tool + '|' + JSON.stringify(HYP.priors) + JSON.stringify(HYP.like) + HYP.corr + '|' + S.cond[S.tool]; }
+function paintAll(){
+  const dice = S.tool === 'dice';
+  $('bayesL').style.display = dice ? 'none' : '';
+  $('diceL').style.display = dice ? '' : 'none';
+  $('diceHits').style.display = dice ? '' : 'none';
+  $('grpTest').hidden = S.tool !== 'test'; $('grpMach').hidden = S.tool !== 'mach';
+  $('grpDice').hidden = !dice; $('grpPop').hidden = dice;
+  $('gate').style.left = dice ? '0' : '55%';
+  if (dice) { paintDice(); } else {
+    paintDots(); paintLegend(); paintCounts();
+    if (S.locked) { paintTree(); paintSquare(); paintGraph(); }
+    else $('graphHit').style.display = 'none';
+  }
+  paintWhy();
+  check();
+}
+function paintWhy(){
+  if (!S.locked) return;
+  let t = '';
+  if (S.tool === 'test') {
+    const H = HYP, lv = S.cond.test, c = AS.cnt, B1 = bayes(H.priors, H.like);
+    const nPos = c.A[0] + c.A[1];
+    t += `<p>In this crowd <span class="mono">${c.n[0]}</span> people are ill; the test catches <span class="mono">${c.A[0]}</span> of them. Of the <span class="mono">${c.n[1].toLocaleString('en-IN')}</span> healthy, a false alarm rate of <span class="mono">${fmt(100 * H.like[1], 1)}%</span> flags <span class="mono">${c.A[1]}</span>.</p>`;
+    if (lv === 1) t += `<p>So a positive result is <b>${c.A[0] >= c.A[1] ? 'more often' : 'far more often'}</b> ${c.A[0] >= c.A[1] ? 'a true catch' : 'a false alarm'}: <span class="mono">${c.A[1]}</span> false against <span class="mono">${c.A[0]}</span> true. The rare disease has so few people that even a small error rate on the many healthy outnumbers them.</p>`;
+    else if (lv === 2) t += `<p>Now test the <span class="mono">${nPos}</span> positives again. ${H.corr > 0 ? `But ${fmt(100 * H.corr, 0)}% of retests just repeat the first result (the same cause gives the same false alarm), so the healthy who were flagged are flagged again.` : `The retest is independent of the first, so a false alarm is unlikely to happen twice: the <span class="mono">${fmt(bayes(H.priors, H.like).post[0], 3)}</span> from the first test acts as the prior for the second.`}</p>`;
+    else t += `<p>Keep only the people who tested positive (“Given a +”): that is what a positive result tells you.</p>`;
+    t += `<p class="note">Bayes from the rules: P(ill | +) = <span class="mono">${fmt(B1.post[0], 4)}</span>.</p>`;
+  } else if (S.tool === 'mach') {
+    const H = HYP, B = bayes(H.priors, H.like);
+    const big = H.priors.indexOf(Math.max(...H.priors)), top = B.post.indexOf(Math.max(...B.post));
+    t += `<p>Each machine’s share of the defective bolts is its share of all bolts <b>times</b> how often it makes a bad one: ${H.priors.map((p, k) => `<span class="mono">${pfmt(p, 2)}×${pfmt(H.like[k], 3)}</span>`).join(', ')}.</p>`;
+    t += `<p>Machine ${'ABC'[big]} makes the most bolts, and machine ${'ABC'[top]} is the likeliest maker of a defective one${big !== top ? ': not the same machine' : ''}.</p>`;
+  } else {
+    const d = diceCounts(S.E, S.F);
+    t += `<p>Independent means “knowing F tells you nothing about E”: P(E | F) = P(E). Multiply both sides by P(F) and it is the book’s test, P(E ∩ F) = P(E)·P(F).</p>`;
+    t += `<p>Here <span class="mono">36 × ${d.nEF} = ${36 * d.nEF}</span> and <span class="mono">${d.nE} × ${d.nF} = ${d.nE * d.nF}</span>: ${d.independent ? '<b>equal</b>' : '<b>not equal</b>'}.</p>`;
+  }
+  $('why').innerHTML = t;
+}
+
+let EXPLAINED = false;
+function check(){
+  if (!S.locked) return;
+  if (S.tool === 'test') {
+    const H = HYP, lv = S.cond.test, B1 = bayes(H.priors, H.like), c = AS.cnt;
+    if (lv >= 1) {
+      const k = H.like.join(',');
+      const seen = S.seen[k] || (S.seen[k] = {min: 1, max: 0});
+      seen.min = Math.min(seen.min, B1.post[0]); seen.max = Math.max(seen.max, B1.post[0]);
+      if (seen.min < 0.2 && seen.max > 0.8) discover('base');
+    }
+    if (lv === 1) {
+      const C = counted(c, 1);
+      if (H.priors[0] <= 0.011 && H.like[0] >= 0.8 && C.post[0] < 0.5 && B1.post[0] < 0.5) { discover('alarm'); explainOnce(); }
+    }
+    if (lv === 2) {
+      const C2 = counted(c, 2), B2 = bayes2(H.priors, H.like, H.corr), B2i = bayes2(H.priors, H.like, 0);
+      if (H.corr < 0.001 && B1.post[0] < 0.2 && B2.post[0] > 0.5 && C2.post[0] > 0.5) discover('again');
+      if (H.corr >= 0.5 && B2i.post[0] - B2.post[0] > 0.3) discover('corr');
+    }
+  } else if (S.tool === 'mach') {
+    if (S.cond.mach === 1) {
+      const H = HYP, B = bayes(H.priors, H.like), C = counted(AS.cnt, 1);
+      const big = H.priors.indexOf(Math.max(...H.priors));
+      const topB = B.post.indexOf(Math.max(...B.post)), topC = C.post.indexOf(Math.max(...C.post));
+      if (big !== topB && big !== topC) discover('culprit');
+    }
+  } else {
+    const d = diceCounts(S.E, S.F);
+    const same = S.E.every((v, k) => v === S.F[k]);
+    if (d.nE > 0 && d.nE < 36 && d.nF > 0 && d.nF < 36 && !same) {
+      if (d.independent && d.nEF > 0) discover('indep');
+      if (d.exclusive) discover('excl');
+      if (S.given && Math.abs(d.pEgF - d.pE) > 1e-9) discover('given');
+    }
+  }
+}
+function explainOnce(){
+  if (EXPLAINED || !POE || !POE.locked) return;
+  EXPLAINED = true;
+  const H = HYP, c = AS.cnt, C = counted(c, 1), B = bayes(H.priors, H.like);
+  POE.explain(`The model drew 10 000 people. <b>${c.n[0]}</b> had the disease and the test caught <b>${c.A[0]}</b>. But ${fmt(100 * H.like[1], 1)}% of the <b>${c.n[1].toLocaleString('en-IN')}</b> healthy people is <b>${c.A[1]}</b> false alarms. ` +
+    `Among the <b>${C.tot}</b> positives, only ${c.A[0]} are ill: <span class="mono">${c.A[0]}/${C.tot} = ${fmt(C.post[0], 3)}</span>. Bayes’ theorem (NCERT Example 18) gives <span class="mono">${fmt(B.post[0], 4)}</span>: about 8%, not 90%. ` +
+    `The 90% is P(+ | ill); the question asked for P(ill | +).`, POE.choice === 'eight');
+}
+
+/* ============================================================================
+   Controls
+   ============================================================================ */
+build();
+const OUT = {prev: v => { const p = 100 * Math.pow(10, v); return (p < 1 ? p.toFixed(p < 0.1 ? 3 : 2) : p < 10 ? p.toFixed(1) : p.toFixed(0)) + '%'; },
+  sens: v => v.toFixed(0) + '%', spec: v => v.toFixed(1) + '%', corr: v => v.toFixed(0) + '%',
+  shA: v => v.toFixed(0) + '%', shB: v => v.toFixed(0) + '%', dA: v => v.toFixed(1).replace(/\.0$/, '') + '%', dB: v => v.toFixed(1).replace(/\.0$/, '') + '%', dC: v => v.toFixed(1).replace(/\.0$/, '') + '%'};
+function syncControls(){
+  for (const k in OUT) { $(k).value = S.par[k]; $(k + 'Out').textContent = OUT[k](S.par[k]); }
+  $('shCOut').textContent = (100 - S.par.shA - S.par.shB).toFixed(0) + '%';
+  for (const t of ['test', 'mach', 'dice']) $('tool' + t[0].toUpperCase() + t.slice(1)).setAttribute('aria-pressed', S.tool === t);
+  [0, 1, 2].forEach(l => $('condT' + l).setAttribute('aria-pressed', S.cond.test === l));
+  [0, 1].forEach(l => $('condM' + l).setAttribute('aria-pressed', S.cond.mach === l));
+  $('btnSort').setAttribute('aria-pressed', S.sorted);
+  $('paintE').setAttribute('aria-pressed', S.paint === 'E'); $('paintF').setAttribute('aria-pressed', S.paint === 'F');
+  $('btnGiven').setAttribute('aria-pressed', S.given);
+  $('selE').value = S.selE; $('selF').value = S.selF;
+}
+function setPar(k, v){
+  S.par[k] = clamp(v, LIM[k][0], LIM[k][1]);
+  if (k === 'shA' || k === 'shB') {           // the three shares must add to 100%
+    const o = k === 'shA' ? 'shB' : 'shA';
+    if (S.par.shA + S.par.shB > 95) S.par[o] = 95 - S.par[k];
+  }
+  syncControls();
+  recompute();
+  if (drawKey() !== S.drawKey) { S.draws = []; S.drawKey = ''; }
+  paintAll();
+}
+for (const k in OUT) {
+  $(k).addEventListener('input', e => setPar(k, +e.target.value));
+  $(k).addEventListener('change', () => track('set', {k, v: S.par[k]}));
+}
+function setTool(t){
+  S.tool = t; sound('tick'); syncControls(); recompute(); S.draws = []; S.drawKey = ''; paintAll(); track('tool', {t});
+}
+$('toolTest').addEventListener('click', () => setTool('test'));
+$('toolMach').addEventListener('click', () => setTool('mach'));
+$('toolDice').addEventListener('click', () => setTool('dice'));
+function setCond(tool, l){ S.cond[tool] = l; sound('tick'); syncControls(); S.draws = []; S.drawKey = ''; paintAll(); track('condition', {tool, level: l}); }
+[0, 1, 2].forEach(l => $('condT' + l).addEventListener('click', () => setCond('test', l)));
+[0, 1].forEach(l => $('condM' + l).addEventListener('click', () => setCond('mach', l)));
+$('btnDraw').addEventListener('click', () => {
+  const key = drawKey();
+  if (S.drawKey !== key) { S.draws = []; S.drawKey = key; }
+  if (!S.draws.length && S.cond[S.tool]) S.draws.push(counted(AS.cnt, S.cond[S.tool]).post[S.tool === 'mach' ? 1 : 0]);
+  S.seed = (S.seed * 1103515245 + 12345) >>> 0; S.crowd++;
+  POP = population(S.seed); recompute();
+  if (S.cond[S.tool]) { const v = counted(AS.cnt, S.cond[S.tool]).post[S.tool === 'mach' ? 1 : 0]; if (isFinite(v)) S.draws.push(v); }
+  sound('whoosh'); paintAll(); track('draw', {seed: S.seed});
+});
+$('btnSort').addEventListener('click', () => { S.sorted = !S.sorted; sound('tick'); syncControls(); paintAll(); });
+$('btnBook').addEventListener('click', () => {
+  for (const k in BOOK) S.par[k] = BOOK[k];
+  syncControls(); recompute(); S.draws = []; S.drawKey = ''; sound('whoosh'); paintAll();
+});
+/* Drag across the graph to set the prior: the posterior curve is the model's, the dot is counted. */
+drag($('graphHit'), svg, {
+  start(p){ if (!S.locked || S.tool !== 'test') return false; setPrevX(p.x); },
+  move(p){ setPrevX(p.x); },
+  end(){ track('set', {k: 'prev', v: S.par.prev, by: 'graph'}); },
+});
+function setPrevX(x){ const v = Math.round(((x - GR.x) / GR.w * 4 - 4) / 0.05) * 0.05; setPar('prev', clamp(v, LIM.prev[0], LIM.prev[1])); }
+
+/* dice */
+$('selE').innerHTML = $('selF').innerHTML = EVENTS.map(e => `<option value="${e.id}">${esc(e.text)}</option>`).join('') + `<option value="own">Your own set</option>`;
+function pickEvent(which, id){
+  if (id === 'own') { S['sel' + which] = 'own'; paintAll(); return; }
+  S[which] = eventSet(id); S['sel' + which] = id; sound('tick'); paintAll(); track('event', {which, id});
+}
+$('selE').addEventListener('change', e => pickEvent('E', e.target.value));
+$('selF').addEventListener('change', e => pickEvent('F', e.target.value));
+$('paintE').addEventListener('click', () => { S.paint = 'E'; sound('tick'); syncControls(); });
+$('paintF').addEventListener('click', () => { S.paint = 'F'; sound('tick'); syncControls(); });
+$('btnGiven').addEventListener('click', () => { S.given = !S.given; sound('tick'); syncControls(); paintAll(); track('given', {on: S.given}); });
+$('diceHits').addEventListener('click', e => {
+  const h = e.target.closest('[data-k]'); if (!h || !S.locked) return;
+  const k = +h.dataset.k, w = S.paint;
+  S[w] = S[w].slice(); S[w][k] = S[w][k] ? 0 : 1; S['sel' + w] = 'own';
+  sound('pop'); syncControls(); paintAll(); track('paint', {which: w, k});
+});
+
+function lockControls(lock){
+  for (const el of document.querySelectorAll('#ctlCard button, #ctlCard input, #ctlCard select')) el.disabled = lock;
+  $('hits').style.pointerEvents = lock ? 'none' : '';
+  $('gate').hidden = !lock;
+}
+
+/* ============================================================================
+   Start
+   ============================================================================ */
+findings($('finds'), [
+  {id: 'alarm',   icon: '⚠', label: 'Most positives are false alarms', hint: 'Keep only the positives, with a rare disease'},
+  {id: 'base',    icon: '⚖', label: 'The base rate decides',           hint: 'Same test, a common disease?'},
+  {id: 'again',   icon: '↻', label: 'Yesterday’s posterior, today’s prior', hint: 'Test the positives again'},
+  {id: 'corr',    icon: '⛓', label: 'Tests that share a cause break Bayes', hint: 'What if the retest just repeats?'},
+  {id: 'culprit', icon: '⚙', label: 'The busiest machine is not the likeliest culprit', hint: 'Three machines: pick a defective bolt'},
+  {id: 'indep',   icon: '⊥', label: 'Independent, yet they overlap',   hint: 'Two dice: find a pair with P(E ∩ F) = P(E)P(F)'},
+  {id: 'excl',    icon: '∅', label: 'Mutually exclusive is not independent', hint: 'Two events that cannot happen together?'},
+  {id: 'given',   icon: '▣', label: 'Given F, F is the whole world',   hint: 'Shrink the sample space to F'},
+], () => toast('All eight. Conditional probability is counting inside a smaller world.', 4800));
+
+const POE = predict($('poe'), {
+  id: 'hiv',
+  q: 'A disease affects 0.1% of people. A test catches 90% of those who have it, and wrongly flags 1% of those who don’t. Your test is positive. The chance you have the disease is about…',
+  options: [
+    {id: 'ninety', text: '90%: the test catches 90% of cases'},
+    {id: 'ninety9', text: '99%: the test is wrong only 1% of the time'},
+    {id: 'half', text: '50%: either you have it or you don’t'},
+    {id: 'eight', text: 'Less than 10%', right: true},
+  ],
+  onLock(){
+    S.locked = true;
+    lockControls(false);
+    for (const id of ['veil', 'veilT', 'veilT2']) $(id).remove();
+    say('Now count. Keep only the people who tested positive.');
+    paintAll();
+  },
+});
+lockControls(!POE.locked);
+if (!Play.FF('predict')) { S.locked = true; lockControls(false); }
+syncControls();
+recompute();
+paintAll();
+
+window.applyFeatures = () => paintAll();
+window.PG_STATE = () => {
+  const H = HYP, lv = S.tool === 'dice' ? 0 : S.cond[S.tool];
+  const out = {tool: S.tool, par: Object.assign({}, S.par), seed: S.seed, cond: Object.assign({}, S.cond), sorted: S.sorted, locked: S.locked,
+    priors: H.priors.slice(), like: H.like.slice(), corr: H.corr,
+    cnt: {n: AS.cnt.n.slice(), A: AS.cnt.A.slice(), AA: AS.cnt.AA.slice()},
+    bayes: bayes(H.priors, H.like).post, bayes2: bayes2(H.priors, H.like, H.corr).post,
+    counted: lv ? counted(AS.cnt, lv).post : null, draws: S.draws.slice(),
+    dice: Object.assign({selE: S.selE, selF: S.selF, given: S.given, paint: S.paint}, diceCounts(S.E, S.F))};
+  return out;
+};
+window.PG_MODEL = {N, population, hypotheses, bayes, bayes2, like2, assign, counted, EVENTS, eventSet, indep, diceCounts, DICE};
+</script>
+</body>
+</html>

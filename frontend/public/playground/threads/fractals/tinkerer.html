@@ -1,0 +1,348 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Koch Snowflake</title>
+<meta name="description" content="Class 6–8: predict what happens to a snowflake's edge and area as you add bumps forever, then build the Koch snowflake and the Sierpinski gasket step by step and measure both.">
+<link rel="icon" href="../../favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="../../play.css">
+<style>
+/* Only what this page needs beyond play.css. */
+.pg-stage{background:#0d1726}
+@media (max-width:1180px) and (min-width:981px){ .pg-main.wide-side{grid-template-columns:minmax(0,1fr) 340px} }
+.gate{position:absolute; inset:0; display:grid; place-items:center; pointer-events:none}
+.gate span{background:rgba(15,26,43,.82); color:#fff; padding:10px 16px; border-radius:99px; font-weight:600; font-size:14px}
+.seg{display:flex; background:var(--sunk); border-radius:99px; padding:3px; gap:3px}
+.seg button{flex:1; border:0; background:transparent; border-radius:99px; padding:7px 8px; font-weight:600; font-size:13px; cursor:pointer; color:var(--ink-2)}
+.seg button[aria-pressed="true"]{background:var(--card); color:var(--ink); box-shadow:var(--shadow)}
+.seg button:disabled{cursor:default; opacity:.5}
+.stepper{display:flex; align-items:center; gap:8px; justify-content:space-between}
+.stepper button{width:34px; height:34px; border-radius:50%; border:1px solid var(--hair-2); background:var(--card); cursor:pointer; font-weight:700; font-size:18px; line-height:1; color:var(--ink-2)}
+.stepper button:hover:not(:disabled){border-color:var(--accent); color:var(--accent)}
+.stepper button:disabled{opacity:.4; cursor:default}
+.stepper b{font-family:"Fredoka",var(--font-head); font-size:22px; font-weight:600; min-width:40px; text-align:center; font-variant-numeric:tabular-nums}
+.meters{display:grid; gap:8px}
+.meter{display:grid; grid-template-columns:1fr auto; gap:2px 10px; font-size:13px}
+.meter .bar{grid-column:1/-1; height:8px; border-radius:99px; background:var(--sunk); overflow:hidden}
+.meter .bar i{display:block; height:100%; border-radius:99px; transition:width .25s}
+.meter b{font-variant-numeric:tabular-nums; font-family:"JetBrains Mono",var(--font-mono)}
+.why p{font-size:14px}
+.why b{color:var(--ink)}
+.hint{font-size:12.5px; color:var(--ink-3); margin:6px 0 0}
+</style>
+</head>
+<body>
+<header class="pg-top"></header>
+
+<div class="pg-intro">
+  <h1>The Koch snowflake</h1>
+  <p>A fractal is built by repeating one simple rule. Before you touch anything, decide what happens to a
+     snowflake's edge and its area if you keep adding bumps forever. Then build it step by step yourself — the
+     perimeter is measured from the segments actually drawn, and the area from the actual shape — and watch one
+     race away while the other settles down.</p>
+</div>
+
+<main class="pg-main wide-side">
+  <section class="pg-stage" id="stageWrap">
+    <svg id="stage" viewBox="0 0 1000 760" role="img" aria-label="A fractal shape built step by step, and a graph of its perimeter and area as more steps are added"></svg>
+    <div class="gate" id="gate"><span>Make your prediction first →</span></div>
+  </section>
+
+  <aside class="pg-side">
+    <div id="poe"></div>
+
+    <div class="card" id="ctlCard">
+      <div class="seg" role="group" aria-label="Which fractal">
+        <button data-shape="koch" aria-pressed="true">Koch snowflake</button>
+        <button data-shape="sierpinski" aria-pressed="false">Sierpinski gasket</button>
+      </div>
+      <div class="kicker" style="margin-top:10px">Steps applied</div>
+      <div class="stepper"><button data-n="-1" aria-label="Fewer steps">−</button><b id="nOut">0</b><button data-n="1" aria-label="One more step">+</button></div>
+      <p class="hint" id="ruleHint"></p>
+    </div>
+
+    <div class="card" id="meterCard">
+      <div class="kicker">Measured from the shape drawn</div>
+      <div class="meters" id="meters"></div>
+    </div>
+
+    <div class="card why" id="whyCard" hidden>
+      <div class="kicker">What is happening</div>
+      <div id="why"></div>
+    </div>
+
+    <div class="card"><div class="kicker">To find</div><div id="finds"></div></div>
+  </aside>
+</main>
+
+<script src="../../play.js"></script>
+<script>
+'use strict';
+const {$, $$, esc, clamp, fmt, sound, say, track, toast, predict, findings, discover, found,
+       shareState, sharedState, mount, reduced} = Play;
+mount({thread: 'fractals', band: 'tinkerer'});
+
+/* MODEL:start ================================================================
+   NCERT Class 8 Ganita Prakash, "Exploring Some Geometric Themes". The Koch
+   snowflake: start with an equilateral triangle; on every step, EVERY side is
+   divided into 3 equal parts and an equilateral bump is raised on the middle
+   part. The Sierpinski gasket: start with a filled equilateral triangle; on
+   every step, EVERY filled triangle has its middle (the triangle joining its
+   three edge-midpoints) removed, leaving 3 smaller filled corner triangles.
+   Nothing here is a formula standing in for the answer: the actual polygon
+   (Koch) or the actual set of triangles (Sierpinski) is built at each step,
+   and the perimeter and area are measured from THAT geometry (perimeter by
+   summing the length of every segment actually drawn; area by the shoelace
+   formula / by summing each triangle's own area).
+   ============================================================================ */
+function polygonPerimeter(pts){
+  let p = 0;
+  for (let i = 0; i < pts.length; i++) { const a = pts[i], b = pts[(i + 1) % pts.length]; p += Math.hypot(b.x - a.x, b.y - a.y); }
+  return p;
+}
+function polygonArea(pts){
+  let s = 0;
+  for (let i = 0; i < pts.length; i++) { const a = pts[i], b = pts[(i + 1) % pts.length]; s += a.x * b.y - b.x * a.y; }
+  return Math.abs(s) / 2;
+}
+/* One Koch step: every edge A→D becomes A, B, peak, C, D where B, C are its
+   thirds and `peak` is the apex of an outward equilateral triangle on B→C. */
+function kochStep(pts){
+  const out = [];
+  const n = pts.length;
+  for (let i = 0; i < n; i++) {
+    const a = pts[i], d = pts[(i + 1) % n];
+    const b = {x: a.x + (d.x - a.x) / 3, y: a.y + (d.y - a.y) / 3};
+    const c = {x: a.x + (d.x - a.x) * 2 / 3, y: a.y + (d.y - a.y) * 2 / 3};
+    const dx = c.x - b.x, dy = c.y - b.y;
+    /* Rotate B→C by -60° about B to raise the bump outward (the starting
+       triangle is wound clockwise in screen coordinates, y-down). */
+    const ang = -Math.PI / 3;
+    const peak = {
+      x: b.x + dx * Math.cos(ang) - dy * Math.sin(ang),
+      y: b.y + dx * Math.sin(ang) + dy * Math.cos(ang),
+    };
+    out.push(a, b, peak, c);
+  }
+  return out;
+}
+function kochShape(n, cx, cy, r){
+  let pts = [0, 1, 2].map(k => { const a = -Math.PI / 2 + k * 2 * Math.PI / 3; return {x: cx + r * Math.cos(a), y: cy + r * Math.sin(a)}; });
+  for (let i = 0; i < n; i++) pts = kochStep(pts);
+  return {points: pts, perimeter: polygonPerimeter(pts), area: polygonArea(pts), sides: pts.length};
+}
+/* One Sierpinski step on a single filled triangle: keep the 3 corner
+   triangles formed with the edge-midpoints, drop the (inverted) middle one. */
+function sierpinskiStep(tris){
+  const out = [];
+  for (const [p1, p2, p3] of tris) {
+    const m12 = {x: (p1.x + p2.x) / 2, y: (p1.y + p2.y) / 2};
+    const m23 = {x: (p2.x + p3.x) / 2, y: (p2.y + p3.y) / 2};
+    const m31 = {x: (p3.x + p1.x) / 2, y: (p3.y + p1.y) / 2};
+    out.push([p1, m12, m31], [m12, p2, m23], [m31, m23, p3]);
+  }
+  return out;
+}
+function triArea(t){ return polygonArea(t); }
+function triPerim(t){ return polygonPerimeter(t); }
+function sierpinskiShape(n, cx, cy, r){
+  let tris = [[0, 1, 2].map(k => { const a = -Math.PI / 2 + k * 2 * Math.PI / 3; return {x: cx + r * Math.cos(a), y: cy + r * Math.sin(a)}; })];
+  for (let i = 0; i < n; i++) tris = sierpinskiStep(tris);
+  const area = tris.reduce((s, t) => s + triArea(t), 0);
+  const perimeter = tris.reduce((s, t) => s + triPerim(t), 0);
+  return {triangles: tris, perimeter, area, count: tris.length};
+}
+/* MODEL:end */
+
+/* ---- state: plain data ----------------------------------------------------- */
+const S = {shape: 'koch', n: 0, locked: false, visited: {koch: 0, sierpinski: 0}};
+const shared = sharedState();
+if (shared) {
+  if (['koch', 'sierpinski'].includes(shared.shape)) S.shape = shared.shape;
+  S.n = clamp(+shared.n || 0, 0, 6);
+}
+shareState(() => ({shape: S.shape, n: S.n}));
+
+/* ============================================================================
+   The stage: the fractal, drawn fresh at every step count, and a graph.
+   ============================================================================ */
+const svg = $('stage');
+const CX = 300, CY = 260, R = 200;
+const GX = {x: 560, y: 60, w: 380, h: 400};
+const GR = {x: 60, y: 520, w: 880, h: 190};
+
+function build(){
+  svg.innerHTML = `
+  <rect x="0" y="0" width="1000" height="760" fill="#0d1726"/>
+  <g id="stars"></g>
+  <text id="shapeCaption" x="300" y="34" text-anchor="middle" font-size="13" font-weight="700" letter-spacing=".05em" fill="#9fb3c8"></text>
+  <g id="shapeG"></g>
+  <g id="sideGraph"></g>
+  <g id="graph"></g>
+  `;
+  const rnd = Play.mulberry32(3);
+  let stars = '';
+  for (let i = 0; i < 50; i++) stars += `<circle cx="${(rnd() * 1000).toFixed(1)}" cy="${(rnd() * 60).toFixed(1)}" r="${(rnd() * 1.1 + .3).toFixed(2)}" fill="#fff" opacity="${(rnd() * .5 + .2).toFixed(2)}"/>`;
+  $('stars').innerHTML = stars;
+}
+
+function paintShape(){
+  const n = S.n;
+  let path = '', caption = '';
+  if (S.shape === 'koch') {
+    const k = kochShape(n, CX, CY, R);
+    path = 'M' + k.points.map(p => p.x.toFixed(1) + ' ' + p.y.toFixed(1)).join('L') + 'Z';
+    caption = `KOCH SNOWFLAKE — STEP ${n} — ${k.sides} SIDES`;
+    $('shapeG').innerHTML = `<path d="${path}" fill="#bfe3ff" fill-opacity=".92" stroke="#eaf6ff" stroke-width="2" stroke-linejoin="round"/>`;
+  } else {
+    const sk = sierpinskiShape(n, CX, CY, R);
+    path = sk.triangles.map(t => 'M' + t.map(p => p.x.toFixed(1) + ' ' + p.y.toFixed(1)).join('L') + 'Z').join(' ');
+    caption = `SIERPINSKI GASKET — STEP ${n} — ${sk.count} TRIANGLES`;
+    $('shapeG').innerHTML = `<path d="${path}" fill="#ffd166" fill-opacity=".92" stroke="#0d1726" stroke-width="0.6"/>`;
+  }
+  $('shapeCaption').textContent = caption;
+}
+
+function stats(shape, n){
+  return shape === 'koch' ? kochShape(n, CX, CY, R) : sierpinskiShape(n, CX, CY, R);
+}
+
+/* ---- graph: perimeter and area (as a multiple of step 0) across steps visited so far -- */
+function drawGraph(){
+  const shape = S.shape, base = stats(shape, 0);
+  const xs = []; for (let i = 0; i <= S.n; i++) xs.push(i);
+  const per = xs.map(i => stats(shape, i).perimeter / base.perimeter);
+  const are = xs.map(i => stats(shape, i).area / base.area);
+  const maxN = Math.max(6, S.n);
+  const gx = i => GR.x + i / maxN * GR.w;
+  const maxY = Math.max(3, ...per) * 1.08;
+  const gy = v => GR.y + GR.h - clamp(v, 0, maxY) / maxY * GR.h;
+  let axes = `<line x1="${GR.x}" y1="${GR.y + GR.h}" x2="${GR.x + GR.w}" y2="${GR.y + GR.h}" stroke="#3d5573"/>` +
+             `<line x1="${GR.x}" y1="${GR.y}" x2="${GR.x}" y2="${GR.y + GR.h}" stroke="#3d5573"/>`;
+  for (let v = 0; v <= Math.floor(maxY); v++) axes += `<line x1="${GR.x}" y1="${gy(v).toFixed(1)}" x2="${GR.x + GR.w}" y2="${gy(v).toFixed(1)}" stroke="#213249"/>` +
+    `<text x="${GR.x - 8}" y="${(gy(v) + 4).toFixed(1)}" text-anchor="end" font-size="10.5" fill="#7d93ad">${v}×</text>`;
+  for (let i = 0; i <= maxN; i++) axes += `<text x="${gx(i).toFixed(1)}" y="${GR.y + GR.h + 18}" text-anchor="middle" font-size="11" fill="#7d93ad">${i}</text>`;
+  axes += `<text x="${GR.x + GR.w / 2}" y="${GR.y + GR.h + 34}" text-anchor="middle" font-size="11.5" fill="#9fb3c8" font-weight="600">STEPS ADDED</text>`;
+  const perPath = xs.map((i, k) => (k ? 'L' : 'M') + gx(i).toFixed(1) + ' ' + gy(per[k]).toFixed(1)).join('');
+  const arePath = xs.map((i, k) => (k ? 'L' : 'M') + gx(i).toFixed(1) + ' ' + gy(are[k]).toFixed(1)).join('');
+  const perDots = xs.map((i, k) => `<circle cx="${gx(i).toFixed(1)}" cy="${gy(per[k]).toFixed(1)}" r="4" fill="#ff6b6b"/>`).join('');
+  const areDots = xs.map((i, k) => `<circle cx="${gx(i).toFixed(1)}" cy="${gy(are[k]).toFixed(1)}" r="4" fill="#5ec8b8"/>`).join('');
+  $('graph').innerHTML = axes +
+    `<path d="${perPath}" fill="none" stroke="#ff6b6b" stroke-width="2.4"/>` + perDots +
+    `<path d="${arePath}" fill="none" stroke="#5ec8b8" stroke-width="2.4"/>` + areDots +
+    `<text x="${GR.x}" y="${GR.y - 14}" font-size="12.5" font-weight="700" fill="#ff6b6b">— PERIMETER, as a multiple of step 0</text>` +
+    `<text x="${GR.x + 300}" y="${GR.y - 14}" font-size="12.5" font-weight="700" fill="#5ec8b8">— AREA, as a multiple of step 0</text>`;
+}
+
+/* ---- paint: everything that depends on the state --------------------------- */
+function paint(){
+  $$('#ctlCard [data-shape]').forEach(b => b.setAttribute('aria-pressed', b.dataset.shape === S.shape));
+  $('nOut').textContent = S.n;
+  $('ruleHint').textContent = S.shape === 'koch'
+    ? 'Every step: each side is split into 3, and a bump is raised on the middle third.'
+    : 'Every step: each filled triangle loses its middle triangle, leaving 3 smaller ones.';
+  paintShape();
+  if (S.locked) { drawGraph(); paintMeters(); paintWhy(); check(); }
+  else { $('graph').innerHTML = ''; $('meters').innerHTML = '<p style="font-size:13px;color:var(--ink-3);margin:0">The measurements appear once you have made a prediction.</p>'; }
+}
+function paintMeters(){
+  const base = stats(S.shape, 0), cur = stats(S.shape, S.n);
+  const perRatio = cur.perimeter / base.perimeter, areaRatio = cur.area / base.area;
+  const row = (lab, val, frac, col) => `<div class="meter"><span>${lab}</span><b>${val}</b><span class="bar"><i style="width:${(clamp(frac, 0, 1) * 100).toFixed(1)}%;background:${col}"></i></span></div>`;
+  $('meters').innerHTML =
+    row('Perimeter', fmt(perRatio, 2) + '× the start', perRatio / 8, '#ff6b6b') +
+    row('Area', fmt(areaRatio, 3) + '× the start', S.shape === 'koch' ? areaRatio / 1.8 : areaRatio, '#5ec8b8') +
+    row(S.shape === 'koch' ? 'Sides' : 'Triangles', fmt(S.shape === 'koch' ? cur.sides : cur.count, 0), 1, '#8a94a6');
+}
+function paintWhy(){
+  $('whyCard').hidden = false;
+  const base = stats(S.shape, 0), cur = stats(S.shape, S.n);
+  const perRatio = cur.perimeter / base.perimeter, areaRatio = cur.area / base.area;
+  let txt;
+  if (S.shape === 'koch') {
+    txt = `<p>After <b>${S.n}</b> step${S.n === 1 ? '' : 's'}, the snowflake has <b>${cur.sides}</b> sides. Its perimeter is <b>${fmt(perRatio, 2)}×</b> the starting triangle's — each step multiplies it by 4⁄3. Its area is only <b>${fmt(areaRatio, 3)}×</b> the start, and area growth is slowing fast: the limit is exactly <b>1.6×</b> (8⁄5) the first triangle, however many bumps you add.</p>`;
+  } else {
+    txt = `<p>After <b>${S.n}</b> step${S.n === 1 ? '' : 's'}, the gasket is made of <b>${cur.count}</b> small triangles. Its perimeter is <b>${fmt(perRatio, 2)}×</b> the start (×1.5 every step) — racing away, just like the snowflake's. But its area is only <b>${fmt(areaRatio, 3)}×</b> the start (×0.75 every step) and is heading to <b>zero</b>, not to a limit.</p>`;
+  }
+  $('why').innerHTML = txt;
+}
+
+/* ---- findings: reached by the model, never by a button --------------------- */
+function check(){
+  const base = stats(S.shape, 0), cur = stats(S.shape, S.n);
+  const perRatio = cur.perimeter / base.perimeter, areaRatio = cur.area / base.area;
+  if (S.shape === 'koch') {
+    S.visited.koch = Math.max(S.visited.koch, S.n);
+    if (S.n >= 3 && perRatio >= 2.3) discover('perimeterRaces');
+    if (S.n >= 5 && areaRatio >= 1.59) discover('areaCeiling');
+  } else {
+    S.visited.sierpinski = Math.max(S.visited.sierpinski, S.n);
+    if (S.n >= 6 && areaRatio <= 0.2) discover('vanishingArea');
+    if (S.n >= 6 && perRatio >= 8) discover('racingPerimeterToo');
+  }
+  if (S.visited.koch >= 4 && S.visited.sierpinski >= 4) discover('compareBoth');
+  maybeExplain();
+}
+let EXPLAINED = false;
+function maybeExplain(){
+  if (EXPLAINED || !POE || S.shape !== 'koch' || S.n < 4) return;
+  EXPLAINED = true;
+  const base = stats('koch', 0), cur = stats('koch', S.n);
+  POE.explain(`At step ${S.n} the perimeter is already <b>${fmt(cur.perimeter / base.perimeter, 2)}×</b> the start and climbing every step — it has no limit. The area, though, is <b>${fmt(cur.area / base.area, 3)}×</b> the start and barely moving now: it is closing in on exactly <b>1.6×</b> (8⁄5) the first triangle's area, forever.`);
+}
+
+/* ============================================================================
+   Controls.
+   ============================================================================ */
+build();
+function lockControls(lock){
+  $$('#ctlCard button').forEach(b => b.disabled = lock);
+  $('gate').hidden = !lock;
+}
+$('ctlCard').addEventListener('click', e => {
+  const s = e.target.closest('[data-shape]');
+  if (s && !s.disabled) { S.shape = s.dataset.shape; sound('pop'); track('shape', {shape: S.shape}); paint(); return; }
+  const nn = e.target.closest('[data-n]');
+  if (nn && !nn.disabled) { S.n = clamp(S.n + (+nn.dataset.n), 0, 6); sound(S.n === 6 || S.n === 0 ? 'boing' : 'tick'); track('step', {shape: S.shape, n: S.n}); paint(); return; }
+});
+
+/* ============================================================================
+   Start
+   ============================================================================ */
+findings($('finds'), [
+  {id: 'perimeterRaces', icon: '📏', label: "The snowflake's edge already races past 2.3× the start", hint: 'Add at least 3 steps to the Koch snowflake'},
+  {id: 'areaCeiling', icon: '🧊', label: 'Its area is closing in on a ceiling near 1.6×', hint: 'Add at least 5 steps to the Koch snowflake'},
+  {id: 'vanishingArea', icon: '🕳', label: "The Sierpinski gasket's area is vanishing", hint: 'Add 6 steps to the Sierpinski gasket'},
+  {id: 'racingPerimeterToo', icon: '📐', label: 'Yet its perimeter races away too', hint: 'Look at the perimeter at 6 steps'},
+  {id: 'compareBoth', icon: '⚖', label: 'Two runaway edges, two different area stories', hint: 'Take both shapes to at least 4 steps'},
+], () => toast('All five found. A perimeter with no limit, and two very different areas.', 4200));
+
+const POE = predict($('poe'), {
+  id: 'why-fractals',
+  q: 'You keep adding bumps to the snowflake, forever. What happens to its perimeter and its area?',
+  options: [
+    {id: 'bothGrow', text: 'Both the perimeter and the area grow without any limit.'},
+    {id: 'bothSame', text: "Neither one changes much — it's still basically the same triangle."},
+    {id: 'right', text: 'The perimeter grows without limit, but the area approaches a fixed limit.', right: true},
+    {id: 'areaGrows', text: 'The area grows without limit, but the perimeter approaches a fixed limit.'},
+  ],
+  onLock(){
+    S.locked = true;
+    lockControls(false);
+    say('Now find out. Add steps to the snowflake, and watch the perimeter and the area.');
+    paint();
+  },
+});
+lockControls(!POE.locked);
+if (!Play.FF('predict')) S.locked = true;
+paint();
+window.applyFeatures = () => paint();
+window.PG_STATE = () => JSON.parse(JSON.stringify(S));
+window.PG_MODEL = {kochShape, sierpinskiShape, polygonPerimeter, polygonArea};
+</script>
+</body>
+</html>

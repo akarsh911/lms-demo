@@ -1,0 +1,649 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Infinitely Many Pieces</title>
+<meta name="description" content="Class 11–12: an infinite geometric series with a finite sum, then the area under a curve — drag x and watch the area function grow with a slope equal to the curve.">
+<link rel="icon" href="../../favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600&family=Inter:wght@400;500;600;700&family=Nunito:wght@500;700;800&family=Newsreader:opsz,wght@6..72,400;6..72,500&family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="../../play.css">
+<style>
+/* Only what this page needs beyond play.css. */
+.pg-stage{align-self:start; min-height:0}
+svg text.m{font-family:var(--font-mono); white-space:pre}
+svg text.serif{font-family:"Newsreader",Georgia,serif}
+.tabs{display:flex; gap:4px; padding:10px 12px 0; border-bottom:1px solid var(--hair); background:var(--card)}
+.tab{border:1px solid transparent; border-bottom:none; background:none; padding:8px 14px; border-radius:8px 8px 0 0; cursor:pointer;
+  font-family:"Newsreader",Georgia,serif; font-size:17px; color:var(--ink-3); margin-bottom:-1px}
+.tab[aria-selected="true"]{background:var(--card); border-color:var(--hair); color:var(--ink); border-bottom:1px solid var(--card)}
+.tab:disabled{cursor:default}
+.chips{display:flex; flex-wrap:wrap; gap:6px; margin:6px 0 4px}
+.chip{border:1px solid var(--hair-2); background:var(--card); border-radius:99px; padding:5px 11px; font-size:13px; cursor:pointer; font-weight:600; color:var(--ink-2)}
+.chip[aria-pressed="true"]{background:var(--accent-soft); border-color:var(--accent); color:var(--ink)}
+.chip:disabled{opacity:.45; cursor:default}
+.readout{display:grid; grid-template-columns:auto 1fr; gap:4px 12px; font-size:13px; align-items:baseline}
+.readout span{color:var(--ink-2)}
+.readout b{font-family:var(--font-mono); font-weight:600; font-size:12.5px; font-variant-numeric:tabular-nums; text-align:right; overflow-wrap:anywhere}
+.readout .sep{grid-column:1/-1; height:1px; background:var(--hair); margin:3px 0}
+.note{font-size:12.5px; color:var(--ink-3); margin:6px 0 0}
+.why p{font-size:13.5px; margin-bottom:.55em}
+.why .mono{font-size:12.5px}
+.gate{position:absolute; left:0; right:0; top:48px; bottom:0; display:grid; place-items:center; pointer-events:none}
+.gate span{background:rgba(29,35,39,.85); color:#fff; padding:10px 16px; border-radius:99px; font-weight:600; font-size:14px}
+.ctl output{min-width:72px}
+</style>
+</head>
+<body>
+<header class="pg-top"></header>
+
+<div class="pg-intro">
+  <h1>Infinitely many pieces</h1>
+  <p>Cut a square in half, then half the rest, then half again — for ever. Do the pieces add up to something, or to infinity?
+     Change the ratio and find out when an infinite series has a finite sum. Then add up something smoother: the area under a curve.
+     Drag x, watch the area A(x) pile up, and see why its slope is the curve itself.</p>
+</div>
+
+<main class="pg-main wide-side">
+  <section class="pg-stage" id="stageWrap">
+    <div class="tabs" role="tablist">
+      <button class="tab" role="tab" id="tabSeries" aria-selected="true">Series</button>
+      <button class="tab" role="tab" id="tabRiemann" aria-selected="false">Area under a curve</button>
+    </div>
+    <svg id="stageS" viewBox="0 0 1000 350" role="img" aria-label="Pieces of a series packed into unit squares, a number line of partial sums, and a graph of the partial sums"></svg>
+    <svg id="stageR" viewBox="0 0 1000 540" role="img" aria-label="The area under a curve from a to x, and the graph of that area as x moves" hidden></svg>
+    <div class="gate" id="gate"><span>Make your prediction first →</span></div>
+  </section>
+
+  <aside class="pg-side">
+    <div id="poe"></div>
+
+    <div class="card" id="cardS">
+      <div class="kicker">The series</div>
+      <div class="chips" role="radiogroup" aria-label="Which series">
+        <button class="chip" id="modeGeo" aria-pressed="true">Geometric a + ar + ar² + …</button>
+        <button class="chip" id="modeHarm" aria-pressed="false">Beyond the syllabus: 1 + ½ + ⅓ + …</button>
+      </div>
+      <div id="geoCtl">
+        <div class="ctl"><label for="ga">first piece a</label><input type="range" id="ga" min="0.05" max="1" step="0.05" value="0.5"><output id="gaOut" class="num mono">1/2</output></div>
+        <div class="ctl"><label for="gr">ratio r</label><input type="range" id="gr" min="0.05" max="1.2" step="0.05" value="0.5"><output id="grOut" class="num mono">1/2</output></div>
+        <div class="ctl"><label for="gn">pieces N</label><input type="range" id="gn" min="1" max="60" step="1" value="4"><output id="gnOut" class="num mono">4</output></div>
+      </div>
+      <div id="harmCtl" hidden>
+        <div class="ctl"><label for="hs">blocks n</label><input type="range" id="hs" min="0" max="5" step="0.02" value="1"><output id="hsOut" class="num mono">10</output></div>
+        <p class="note">The slider is logarithmic: each notch multiplies n by about 1.05.</p>
+      </div>
+      <div class="readout" id="readS" style="margin-top:8px"></div>
+    </div>
+
+    <div class="card" id="cardR" hidden>
+      <div class="kicker">The curve</div>
+      <div class="chips" id="fChips">
+        <button class="chip" data-f="line" aria-pressed="true">line y = x/2 + 1</button>
+        <button class="chip" data-f="par" aria-pressed="false">parabola y = x²</button>
+        <button class="chip" data-f="circ" aria-pressed="false">circle x² + y² = 4</button>
+        <button class="chip" data-f="ell" aria-pressed="false">ellipse x²/9 + y²/4 = 1</button>
+        <button class="chip" data-f="sin" aria-pressed="false">y = sin x</button>
+      </div>
+      <p class="note">Drag <b>a</b> and <b>x</b> along the rail under the graph.</p>
+      <div class="row" style="margin-top:8px">
+        <button class="btn sm" id="btnSplit" aria-pressed="false">Split at c</button>
+        <button class="btn sm" id="btnStrips" aria-pressed="false">Show thin strips</button>
+      </div>
+      <div class="readout" id="readR" style="margin-top:10px"></div>
+    </div>
+
+    <div class="card why" id="whyCard" hidden>
+      <div class="kicker">What the model says</div>
+      <div id="why"></div>
+    </div>
+
+    <div class="card"><div class="kicker">To find</div><div id="finds"></div></div>
+  </aside>
+</main>
+
+<script src="../../play.js"></script>
+<script>
+'use strict';
+const {$, esc, clamp, fmt, drag, sound, say, track, toast, predict, findings, discover, found,
+       shareState, sharedState, mount, reduced} = Play;
+mount({thread: 'fractions', band: 'theorist'});
+
+/* MODEL:start ==================================================================
+   1. Series, in exact arithmetic. a and r are sliders in steps of 1/20, so each is a
+      rational p/q; every term a·rᵏ and every partial sum is an exact fraction (BigInt),
+      and the limit a/(1 − r) is exact too. Pieces are packed into unit squares by a
+      guillotine cut: each piece is a strip off the long side of what is left, so ½, ¼, ⅛…
+      spirals into the square exactly as the drawing on the board does.
+   2. The harmonic series, summed term by term (to n = 100 000): H_n, and the first n at
+      which it passes 5 and 10.
+   3. Area under a curve. For each curve the model knows f and an exact antiderivative F
+      (for the circle and the ellipse, F uses arcsin — the standard integral
+      ∫√(a² − x²) dx = x/2·√(a² − x²) + a²/2·sin⁻¹(x/a)). The area function is
+      A(x) = ∫ₐˣ f(t) dt = F(x) − F(a): signed, so area below the x-axis counts negative,
+      and swapping the limits flips the sign. Its slope is measured from A itself, by a
+      central difference, and set beside f(x) — the Fundamental Theorem, checked.
+   ============================================================================ */
+const gcd = (a, b) => { a = a < 0n ? -a : a; b = b < 0n ? -b : b; while (b) [a, b] = [b, a % b]; return a; };
+function Q(n, d = 1n){ n = BigInt(n); d = BigInt(d); if (d < 0n) { n = -n; d = -d; } const g = gcd(n, d) || 1n; return {n: n / g, d: d / g}; }
+const qadd = (x, y) => Q(x.n * y.d + y.n * x.d, x.d * y.d);
+const qsub = (x, y) => Q(x.n * y.d - y.n * x.d, x.d * y.d);
+const qmul = (x, y) => Q(x.n * y.n, x.d * y.d);
+const qdiv = (x, y) => Q(x.n * y.d, x.d * y.n);
+const qnum = x => Number(x.n) / Number(x.d);
+const twentieths = v => Q(Math.round(v * 20), 20);
+
+/* The first N terms and partial sums of a + ar + ar² + …, exactly. */
+function geometric(a, r, N){
+  const A = twentieths(a), R = twentieths(r);
+  const terms = [], sums = [];
+  let t = A, s = Q(0);
+  for (let k = 0; k < N; k++) { terms.push(t); s = qadd(s, t); sums.push(s); t = qmul(t, R); }
+  const limit = qnum(R) < 1 ? qdiv(A, qsub(Q(1), R)) : null;
+  return {A, R, terms, sums, S: s, limit};
+}
+/* Guillotine packing of areas into unit squares (at most `squares` of them). */
+function pack(areas, squares = 3){
+  const out = []; let sq = 0, rc = {x: 0, y: 0, w: 1, h: 1}, used = 0;
+  areas.forEach((area, k) => {
+    let t = area;
+    while (t > 1e-13 && sq < squares) {
+      const avail = rc.w * rc.h, take = Math.min(t, avail);
+      if (rc.w >= rc.h) { const w = take / rc.h; out.push({k, sq, x: rc.x, y: rc.y, w, h: rc.h}); rc.x += w; rc.w -= w; }
+      else { const h = take / rc.w; out.push({k, sq, x: rc.x, y: rc.y, w: rc.w, h}); rc.y += h; rc.h -= h; }
+      t -= take; used += take;
+      if (avail - take < 1e-12) { sq++; rc = {x: 0, y: 0, w: 1, h: 1}; }
+    }
+  });
+  return {rects: out, used};
+}
+/* Harmonic numbers, once. */
+const HMAX = 100000, HN = new Float64Array(HMAX + 1);
+for (let n = 1; n <= HMAX; n++) HN[n] = HN[n - 1] + 1 / n;
+const harmonic = n => HN[clamp(Math.round(n), 0, HMAX)];
+const firstPast = v => { for (let n = 1; n <= HMAX; n++) if (HN[n] > v) return n; return null; };
+const GAMMA = 0.5772156649015329;
+
+const PI = Math.PI;
+const semi = (R, x) => { const c = clamp(x, -R, R); return c / 2 * Math.sqrt(R * R - c * c) + R * R / 2 * Math.asin(c / R); };
+const AREA = {
+  line: {label: 'y = x/2 + 1', lo: 0, hi: 4, y0: 0, y1: 3.2, f: x => x / 2 + 1, F: x => x * x / 4 + x, a0: 0, x0: 2.5, snaps: [0, 1, 2, 3, 4]},
+  par:  {label: 'y = x²', lo: -2, hi: 2, y0: 0, y1: 4.4, f: x => x * x, F: x => x * x * x / 3, a0: 0, x0: 1.5, snaps: [-2, -1, 0, 1, 2]},
+  circ: {label: 'y = √(4 − x²): the top half of the circle x² + y² = 4', lo: -2, hi: 2, y0: 0, y1: 2.5, f: x => Math.sqrt(Math.max(0, 4 - x * x)), F: x => semi(2, x), a0: -2, x0: 0, snaps: [-2, -1, 0, 1, 2]},
+  ell:  {label: 'y = ⅔√(9 − x²): the top half of the ellipse x²/9 + y²/4 = 1', lo: -3, hi: 3, y0: 0, y1: 2.5, f: x => 2 / 3 * Math.sqrt(Math.max(0, 9 - x * x)), F: x => 2 / 3 * semi(3, x), a0: -3, x0: 0, snaps: [-3, -2, -1, 0, 1, 2, 3]},
+  sin:  {label: 'y = sin x', lo: 0, hi: 2 * PI, y0: -1.25, y1: 1.25, f: Math.sin, F: x => -Math.cos(x), a0: 0, x0: PI / 2, snaps: [0, PI / 2, PI, 3 * PI / 2, 2 * PI]},
+};
+/* The signed area from a to x: F(x) − F(a). */
+const areaA = (fid, a, x) => AREA[fid].F(x) - AREA[fid].F(a);
+/* The slope of A at x, measured from A alone (central difference) — to set beside f(x). */
+const slopeOfA = (fid, a, x) => { const G = AREA[fid], h = 1e-8 * (G.hi - G.lo), l = Math.max(G.lo, x - h), r = Math.min(G.hi, x + h); return (areaA(fid, a, r) - areaA(fid, a, l)) / (r - l); };
+/* How much of the area between a and x lies below the axis (400 slices). */
+function belowAxis(fid, a, x){
+  const G = AREA[fid], lo = Math.min(a, x), hi = Math.max(a, x), n = 400, h = (hi - lo) / n;
+  let s = 0; for (let i = 0; i < n; i++) s += Math.min(0, G.f(lo + (i + 0.5) * h)) * h;
+  return s;
+}
+/* MODEL:end */
+
+/* ---- formatting ---------------------------------------------------------- */
+const qtxt = (q, maxDigits = 13) => q.d === 1n ? String(q.n) : (String(q.d).length <= maxDigits ? `${q.n}/${q.d}` : null);
+const nice = v => { const q = twentieths(v); return q.d === 1n ? String(q.n) : `${q.n}/${q.d}`; };
+const dec = (v, dp = 10) => isFinite(v) ? v.toFixed(dp) : '∞';
+const SUP = {'-': '⁻', 0: '⁰', 1: '¹', 2: '²', 3: '³', 4: '⁴', 5: '⁵', 6: '⁶', 7: '⁷', 8: '⁸', 9: '⁹'};
+function sci(v, dp = 2){
+  if (!isFinite(v)) return '—'; if (v === 0) return '0';
+  const e = Math.floor(Math.log10(Math.abs(v)));
+  if (e >= -3 && e < 4) return v.toPrecision(dp + 2);
+  return (v / Math.pow(10, e)).toFixed(dp) + ' × 10' + String(e).split('').map(c => SUP[c]).join('');
+}
+const sub = n => String(n).split('').map(c => '₀₁₂₃₄₅₆₇₈₉'[+c]).join('');
+const PINKS = ['#e0567a', '#f07f9c', '#c9416a', '#f5a3b8', '#e86a8e', '#f9c2d0', '#d24d74', '#f28fab'];
+
+/* ---- state: plain data --------------------------------------------------- */
+const S = {tab: 'series', mode: 'geo', a: 0.5, r: 0.5, N: 4, hs: 1, f: 'line', lo: 0, x: 2.5, c: 1.25, split: false, strips: false,
+           traceLo: 2.5, traceHi: 2.5, locked: false};
+const shared = sharedState();
+if (shared) {
+  if (['series', 'area'].includes(shared.tab)) S.tab = shared.tab;
+  if (['geo', 'harm'].includes(shared.mode)) S.mode = shared.mode;
+  S.a = clamp(+shared.a || 0.5, 0.05, 1); S.r = clamp(+shared.r || 0.5, 0.05, 1.2); S.N = clamp(+shared.N || 4, 1, 60);
+  S.hs = clamp(+shared.hs || 1, 0, 5);
+  if (AREA[shared.f]) { S.f = shared.f; const G = AREA[S.f]; S.lo = clamp(+shared.lo || 0, G.lo, G.hi); S.x = clamp(+shared.x || 0, G.lo, G.hi); S.traceLo = S.traceHi = S.x; }
+}
+shareState(() => ({tab: S.tab, mode: S.mode, a: S.a, r: S.r, N: S.N, hs: S.hs, f: S.f, lo: S.lo, x: S.x}));
+
+/* ============================================================================
+   Series stage
+   ============================================================================ */
+const sS = $('stageS');
+const SQ = [{x: 40, y: 52}, {x: 225, y: 52}, {x: 410, y: 52}], SQW = 165;
+const NL = {x0: 40, x1: 575, y: 282, max: 3};
+const nlx = v => NL.x0 + v / NL.max * (NL.x1 - NL.x0);
+const PG = {x: 660, y: 52, w: 305, h: 230, Nmax: 60, Smax: 4};
+const pgx = N => PG.x + N / PG.Nmax * PG.w, pgy = v => PG.y + PG.h - clamp(v, 0, PG.Smax) / PG.Smax * PG.h;
+const TW = {x: 120, w: 150, base: 318, U: 21};
+const HG = {x: 660, y: 52, w: 305, h: 230, lmax: 5, Hmax: 13};
+const hgx = l => HG.x + l / HG.lmax * HG.w, hgy = v => HG.y + HG.h - v / HG.Hmax * HG.h;
+
+function buildS(){
+  let sq = '';
+  SQ.forEach((p, i) => sq += `<rect x="${p.x}" y="${p.y}" width="${SQW}" height="${SQW}" fill="#fff" stroke="#1d2327" stroke-width="1.2"/>` +
+    `<text x="${p.x + SQW / 2}" y="${p.y + SQW + 16}" fill="#7c878c" font-size="11" text-anchor="middle">unit square ${i + 1}</text>`);
+  let nl = `<line x1="${NL.x0}" y1="${NL.y}" x2="${NL.x1 + 12}" y2="${NL.y}" stroke="#1d2327" stroke-width="1.4"/>`;
+  for (let v = 0; v <= 3; v++) nl += `<line x1="${nlx(v)}" y1="${NL.y - 7}" x2="${nlx(v)}" y2="${NL.y + 7}" stroke="#1d2327" stroke-width="1.4"/><text x="${nlx(v)}" y="${NL.y + 22}" font-size="12" text-anchor="middle" fill="#1d2327" class="m">${v}</text>`;
+  let pg = `<line x1="${PG.x}" y1="${PG.y + PG.h}" x2="${PG.x + PG.w}" y2="${PG.y + PG.h}" stroke="#9aa3a6"/><line x1="${PG.x}" y1="${PG.y}" x2="${PG.x}" y2="${PG.y + PG.h}" stroke="#9aa3a6"/>`;
+  for (let v = 0; v <= 4; v++) pg += `<line x1="${PG.x}" y1="${pgy(v)}" x2="${PG.x + PG.w}" y2="${pgy(v)}" stroke="#ece8dc"/><text x="${PG.x - 6}" y="${pgy(v) + 4}" font-size="10.5" text-anchor="end" fill="#7c878c" class="m">${v}</text>`;
+  for (let N = 0; N <= 60; N += 10) pg += `<text x="${pgx(N)}" y="${PG.y + PG.h + 15}" font-size="10.5" text-anchor="middle" fill="#7c878c" class="m">${N}</text>`;
+  pg += `<text x="${PG.x + PG.w}" y="${PG.y + PG.h + 32}" font-size="11" text-anchor="end" fill="#7c878c">pieces N →</text>`;
+  let hg = `<line x1="${HG.x}" y1="${HG.y + HG.h}" x2="${HG.x + HG.w}" y2="${HG.y + HG.h}" stroke="#9aa3a6"/><line x1="${HG.x}" y1="${HG.y}" x2="${HG.x}" y2="${HG.y + HG.h}" stroke="#9aa3a6"/>`;
+  for (let v = 0; v <= 12; v += 2) hg += `<line x1="${HG.x}" y1="${hgy(v)}" x2="${HG.x + HG.w}" y2="${hgy(v)}" stroke="#ece8dc"/><text x="${HG.x - 6}" y="${hgy(v) + 4}" font-size="10.5" text-anchor="end" fill="#7c878c" class="m">${v}</text>`;
+  for (let l = 0; l <= 5; l++) hg += `<text x="${hgx(l)}" y="${HG.y + HG.h + 15}" font-size="10.5" text-anchor="middle" fill="#7c878c" class="m">${l ? '10' + SUP[l] : '1'}</text>`;
+  hg += `<text x="${HG.x + HG.w}" y="${HG.y + HG.h + 32}" font-size="11" text-anchor="end" fill="#7c878c">blocks n (log scale) →</text>`;
+  let ln = ''; for (let i = 0; i <= 100; i++) { const l = i / 20, n = Math.pow(10, l); ln += (i ? 'L' : 'M') + hgx(l).toFixed(1) + ' ' + hgy(Math.log(n) + GAMMA).toFixed(1); }
+  sS.innerHTML = `
+  <rect x="0" y="0" width="1000" height="350" fill="#fbfaf6"/>
+  <g id="geoG">
+    <text x="40" y="30" fill="#4a555b" font-size="12" font-weight="700" letter-spacing=".08em">THE PIECES, PACKED INTO UNIT SQUARES</text>
+    ${sq}
+    <g id="pieces" stroke="#fff" stroke-width=".8"></g>
+    <text id="overflow" x="575" y="44" text-anchor="end" fill="#c9416a" font-size="12" font-weight="600"></text>
+    ${nl}
+    <g id="nlTicks"></g>
+    <g id="nlLimit"></g>
+    <g id="nlNow"></g>
+    <text x="${PG.x}" y="30" fill="#4a555b" font-size="12" font-weight="700" letter-spacing=".08em">PARTIAL SUMS S<tspan font-size="9" dy="3">N</tspan></text>
+    ${pg}
+    <line id="pgLimit" stroke="#1d2327" stroke-width="1.2" stroke-dasharray="5 4"/>
+    <text id="pgLimitT" font-size="11.5" fill="#1d2327" class="m" text-anchor="end"></text>
+    <g id="pgDots"></g>
+    <text id="pgOff" x="${PG.x + PG.w}" y="${PG.y - 6}" text-anchor="end" fill="#c9416a" font-size="11.5" font-weight="600"></text>
+  </g>
+  <g id="harmG" style="display:none">
+    <text x="40" y="30" fill="#4a555b" font-size="12" font-weight="700" letter-spacing=".08em">BEYOND THE SYLLABUS — THE HARMONIC TOWER: BLOCK k IS 1/k TALL</text>
+    <g id="lvl"></g>
+    <g id="tower" stroke="#fff" stroke-width=".6"></g>
+    <line x1="${TW.x - 20}" y1="${TW.base}" x2="${TW.x + TW.w + 20}" y2="${TW.base}" stroke="#1d2327" stroke-width="1.6"/>
+    <text id="towerH" x="40" y="54" font-size="15" fill="#1d2327" class="m"></text>
+    <text x="${HG.x}" y="30" fill="#4a555b" font-size="12" font-weight="700" letter-spacing=".08em">H<tspan font-size="9" dy="3">n</tspan><tspan dy="-3"> = 1 + ½ + … + 1/n, AGAINST n</tspan></text>
+    ${hg}
+    <path d="${ln}" fill="none" stroke="#9aa3a6" stroke-width="1.4" stroke-dasharray="5 4"/>
+    <text x="${hgx(4.9)}" y="${hgy(Math.log(Math.pow(10, 4.9)) + GAMMA) - 26}" font-size="11" fill="#7c878c" text-anchor="end">ln n + γ</text>
+    <path id="hCurve" fill="none" stroke="#e0567a" stroke-width="2.4"/>
+    <circle id="hNow" r="5" fill="#e0567a" stroke="#fff" stroke-width="2"/>
+  </g>`;
+}
+
+function paintSeries(){
+  const geo = S.mode === 'geo';
+  $('geoG').style.display = geo ? '' : 'none'; $('harmG').style.display = geo ? 'none' : '';
+  $('geoCtl').hidden = !geo; $('harmCtl').hidden = geo;
+  $('modeGeo').setAttribute('aria-pressed', geo); $('modeHarm').setAttribute('aria-pressed', !geo);
+  if (geo) paintGeo(); else paintHarm();
+}
+function paintGeo(){
+  const G = geometric(S.a, S.r, S.N);
+  const areas = G.terms.map(qnum), sums = G.sums.map(qnum), Sn = qnum(G.S), lim = G.limit ? qnum(G.limit) : null;
+  $('ga').value = S.a; $('gr').value = S.r; $('gn').value = S.N;
+  $('gaOut').textContent = nice(S.a); $('grOut').textContent = nice(S.r); $('gnOut').textContent = S.N;
+  /* pieces */
+  const P = pack(areas, 3);
+  let pc = '';
+  for (const q of P.rects) {
+    const o = SQ[q.sq], w = q.w * SQW, h = q.h * SQW;
+    if (w * h < 0.15) continue;
+    pc += `<rect x="${(o.x + q.x * SQW).toFixed(2)}" y="${(o.y + q.y * SQW).toFixed(2)}" width="${w.toFixed(2)}" height="${h.toFixed(2)}" fill="${PINKS[q.k % PINKS.length]}"/>`;
+    const lab = q.k < 6 ? (qtxt(G.terms[q.k], 4) || '') : '';
+    if (lab && w > lab.length * (w > 60 && h > 40 ? 8 : 6.6) + 6 && h > 18) pc += `<text x="${(o.x + (q.x + q.w / 2) * SQW).toFixed(1)}" y="${(o.y + (q.y + q.h / 2) * SQW + 4).toFixed(1)}" font-size="${w > 60 && h > 40 ? 13 : 10.5}" text-anchor="middle" fill="#fff" stroke="none" class="m">${lab}</text>`;
+  }
+  $('pieces').innerHTML = pc;
+  $('overflow').textContent = Sn > 3 + 1e-12 ? `+ ${fmt(Sn - 3, 2)} more than three squares hold` : '';
+  /* number line */
+  let tk = '';
+  sums.forEach((v, i) => { if (v <= 3.02) tk += `<line x1="${nlx(v).toFixed(2)}" y1="${NL.y - 5}" x2="${nlx(v).toFixed(2)}" y2="${NL.y + 5}" stroke="#e0567a" stroke-width="${i === sums.length - 1 ? 2.4 : 1.2}"/>`; });
+  $('nlTicks').innerHTML = tk;
+  $('nlLimit').innerHTML = S.locked && lim != null && lim <= 3 ?
+    `<line x1="${nlx(lim)}" y1="${NL.y - 22}" x2="${nlx(lim)}" y2="${NL.y + 8}" stroke="#1d2327" stroke-dasharray="3 3"/><text x="${nlx(lim) + 4}" y="${NL.y - 26}" font-size="11" fill="#1d2327" class="m">a/(1−r) = ${qtxt(G.limit, 8) || fmt(lim, 4)}</text>` : '';
+  const xs = nlx(Math.min(Sn, 3.08));
+  $('nlNow').innerHTML = `<path d="M${xs.toFixed(1)} ${NL.y + 9}l-6 10h12z" fill="#c9416a"/><text x="${xs.toFixed(1)}" y="${NL.y + 34}" font-size="11.5" text-anchor="middle" fill="#c9416a" class="m">S${sub(S.N)}${Sn > 3 ? ' →' : ''}</text>`;
+  /* partial sums graph */
+  if (S.locked && lim != null && lim <= PG.Smax) {
+    $('pgLimit').setAttribute('x1', PG.x); $('pgLimit').setAttribute('x2', PG.x + PG.w); $('pgLimit').setAttribute('y1', pgy(lim)); $('pgLimit').setAttribute('y2', pgy(lim));
+    $('pgLimitT').setAttribute('x', PG.x + PG.w); $('pgLimitT').setAttribute('y', pgy(lim) - 6); $('pgLimitT').textContent = `a/(1−r) = ${fmt(lim, 4)}`;
+  } else { $('pgLimit').setAttribute('x1', 0); $('pgLimit').setAttribute('x2', 0); $('pgLimitT').textContent = ''; }
+  $('pgDots').innerHTML = sums.map((v, i) => v <= PG.Smax ? `<circle cx="${pgx(i + 1).toFixed(1)}" cy="${pgy(v).toFixed(1)}" r="${i === sums.length - 1 ? 4.2 : 2.6}" fill="${i === sums.length - 1 ? '#c9416a' : '#e0567a'}"/>` : '').join('');
+  const off = sums.findIndex(v => v > PG.Smax);
+  $('pgOff').textContent = off >= 0 ? `↑ passes 4 at N = ${off + 1}` : '';
+  /* readouts */
+  if (!S.locked) { $('readS').innerHTML = '<span style="grid-column:1/-1;color:var(--ink-3)">The sums appear once you have made a prediction.</span>'; return; }
+  const gap = lim != null ? lim - Sn : null;
+  const fq = qtxt(G.S);
+  $('readS').innerHTML =
+    `<span>S${sub(S.N)}</span><b>${fq ? fq + '<br>' : ''}= ${dec(Sn, 10)}</b>` +
+    `<span>limit a/(1−r)</span><b>${lim != null ? (qtxt(G.limit) || '') + ' = ' + dec(lim, 10) : 'none: r ≥ 1'}</b>` +
+    `<span>gap still to fill</span><b>${gap != null ? (qtxt(qsub(G.limit, G.S)) || sci(gap)) : '—'}</b>` +
+    `<i class="sep"></i><span>next piece</span><b>${qtxt(qmul(G.terms[S.N - 1], G.R)) || sci(qnum(G.terms[S.N - 1]) * qnum(G.R))}</b>`;
+}
+function paintHarm(){
+  const n = Math.round(Math.pow(10, S.hs)), Hn = harmonic(n);
+  $('hs').value = S.hs; $('hsOut').textContent = n.toLocaleString('en-IN');
+  const U = TW.U;
+  let tw = '', y = TW.base;
+  const shown = Math.min(n, 60);
+  for (let k = 1; k <= shown; k++) {
+    const h = U / k; y -= h;
+    tw += `<rect x="${TW.x}" y="${y.toFixed(2)}" width="${TW.w}" height="${h.toFixed(2)}" fill="${PINKS[(k - 1) % PINKS.length]}"/>`;
+    if (h >= 11) tw += `<text x="${TW.x + TW.w / 2}" y="${(y + h / 2 + 4).toFixed(1)}" font-size="${h > 16 ? 12 : 10}" text-anchor="middle" fill="#fff" stroke="none" class="m">1/${k}</text>`;
+  }
+  if (n > 60) {
+    const h = U * (Hn - HN[60]); y -= h;
+    tw += `<rect x="${TW.x}" y="${y.toFixed(2)}" width="${TW.w}" height="${h.toFixed(2)}" fill="#f9c2d0" stroke="#e0567a" stroke-width=".8"/>` +
+      (h > 16 ? `<text x="${TW.x + TW.w / 2}" y="${(y + h / 2 + 4).toFixed(1)}" font-size="10.5" text-anchor="middle" fill="#9b2c4f" stroke="none">blocks 61 to ${n.toLocaleString('en-IN')}</text>` : '');
+  }
+  $('tower').innerHTML = tw;
+  $('towerH').textContent = S.locked ? `H${sub(n)} = ${Hn.toFixed(4)}` : '';
+  let lv = '';
+  for (const v of [5, 10]) {
+    const yy = TW.base - v * U, past = Hn > v, first = firstPast(v);
+    lv += `<line x1="${TW.x - 30}" y1="${yy}" x2="${TW.x + TW.w + 330}" y2="${yy}" stroke="${past ? '#c9416a' : '#9aa3a6'}" stroke-dasharray="4 4"/>` +
+      `<text x="${TW.x - 36}" y="${yy + 4}" font-size="12" text-anchor="end" fill="#1d2327" class="m">${v}</text>` +
+      `<text x="${TW.x + TW.w + 330}" y="${yy - 6}" font-size="11.5" text-anchor="end" fill="${past ? '#c9416a' : '#7c878c'}">${past && S.locked ? `passed ${v} at block ${first.toLocaleString('en-IN')}` : `height ${v}`}</text>`;
+  }
+  $('lvl').innerHTML = lv;
+  let c = ''; for (let i = 0; i <= 250; i++) { const l = i / 250 * S.hs, k = Math.round(Math.pow(10, l)); c += (i ? 'L' : 'M') + hgx(Math.log10(k)).toFixed(1) + ' ' + hgy(HN[k]).toFixed(1); }
+  $('hCurve').setAttribute('d', c);
+  $('hNow').setAttribute('cx', hgx(Math.log10(n)).toFixed(1)); $('hNow').setAttribute('cy', hgy(Hn).toFixed(1));
+  if (!S.locked) { $('readS').innerHTML = '<span style="grid-column:1/-1;color:var(--ink-3)">The sums appear once you have made a prediction.</span>'; return; }
+  $('readS').innerHTML = `<span>H${sub(n)}</span><b>${Hn.toFixed(10)}</b><span>ln n + γ</span><b>${(Math.log(n) + GAMMA).toFixed(10)}</b>` +
+    `<span>difference</span><b>${sci(Hn - Math.log(n) - GAMMA)}</b><i class="sep"></i>` +
+    `<span>passes 5 at</span><b>n = ${firstPast(5)}</b><span>passes 10 at</span><b>n = ${firstPast(10).toLocaleString('en-IN')}</b>`;
+}
+
+/* ============================================================================
+   Area stage: the curve with the area from a to x, a rail with the handles,
+   and below it the graph of A(x) with its tangent.
+   ============================================================================ */
+const sR = $('stageR');
+const PL = {x: 80, y: 44, w: 840, h: 236};              // the curve
+const RAIL = 316;                                       // the handles' rail
+const PA = {x: 80, y: 372, w: 840, h: 132};             // A(x)
+const AG = () => AREA[S.f];
+const ax = v => PL.x + (v - AG().lo) / (AG().hi - AG().lo) * PL.w;
+const ay = v => PL.y + PL.h - (v - AG().y0) / (AG().y1 - AG().y0) * PL.h;
+const invX = px => AG().lo + (px - PL.x) / PL.w * (AG().hi - AG().lo);
+let AR_LO = -1, AR_HI = 1;                              // A plot range, per curve and a
+const Ay = v => PA.y + PA.h - (v - AR_LO) / (AR_HI - AR_LO) * PA.h;
+/* Names a value as a multiple of π only when it really is one (to 0.005); anything else is a
+   decimal. It used to round to the nearest π/2, so c = 0.785 was printed as "π/2". */
+const PI_NAMES = {0: '0', 1: 'π/4', 2: 'π/2', 3: '3π/4', 4: 'π', 5: '5π/4', 6: '3π/2', 7: '7π/4', 8: '2π'};
+const tickTxt = v => {
+  if (S.f === 'sin') { const k = Math.round(v / (PI / 4)); if (Math.abs(v - k * PI / 4) < 0.005 && PI_NAMES[k]) return PI_NAMES[k]; }
+  return String(Math.round(v * 100) / 100);
+};
+
+function initArea(){
+  sR.innerHTML = `
+  <rect width="1000" height="540" fill="#fbfaf6"/>
+  <text x="${PL.x}" y="26" fill="#4a555b" font-size="12" font-weight="700" letter-spacing=".08em" id="arTitle"></text>
+  <g id="arAxes"></g>
+  <g id="arShade"></g>
+  <g id="arStrips"></g>
+  <path id="arCurve" fill="none" stroke="#1d2327" stroke-width="2.4"/>
+  <line id="arXline" stroke="#c9416a" stroke-width="1.6" stroke-dasharray="4 3"/>
+  <circle id="arXdot" r="5" fill="#c9416a" stroke="#fff" stroke-width="2"/>
+  <text id="arFx" font-size="12.5" class="m" fill="#9b2c4f"></text>
+  <g id="arRail"></g>
+  <text id="arAval" font-size="15" class="serif" fill="#1d2327"></text>
+  <line x1="0" y1="344" x2="1000" y2="344" stroke="#e2ded2"/>
+  <text x="${PA.x}" y="364" fill="#4a555b" font-size="12" font-weight="700" letter-spacing=".08em">THE AREA SO FAR, A(x) = ∫ₐˣ f(t) dt — DRAG x AND WATCH IT GROW</text>
+  <g id="aAxes"></g>
+  <path id="aFull" fill="none" stroke="#cfc9b8" stroke-width="1.4" stroke-dasharray="3 4"/>
+  <path id="aTrace" fill="none" stroke="#c9416a" stroke-width="2.6"/>
+  <line id="aTan" stroke="#1d2327" stroke-width="1.6"/>
+  <circle id="aDot" r="5" fill="#c9416a" stroke="#fff" stroke-width="2"/>
+  <text id="aTanT" font-size="12.5" class="m" fill="#1d2327"></text>
+  <g id="hitLayer">
+    <circle id="hA" r="15" cy="${RAIL}" fill="transparent" style="cursor:ew-resize" tabindex="0" role="slider" aria-label="Lower limit a"/>
+    <circle id="hX" r="15" cy="${RAIL}" fill="transparent" style="cursor:ew-resize" tabindex="0" role="slider" aria-label="Upper limit x"/>
+    <circle id="hC" r="15" cy="${RAIL}" fill="transparent" style="cursor:ew-resize" tabindex="0" role="slider" aria-label="Split point c"/>
+  </g>`;
+  const snap = v => {
+    const G = AG(), tol = 0.035 * (G.hi - G.lo);
+    v = clamp(v, G.lo, G.hi);
+    for (const q of G.snaps) if (Math.abs(v - q) < tol) return q;
+    return Math.round(v * 100) / 100;
+  };
+  const wire = (id, key) => drag($(id), sR, {
+    start(){ if (!S.locked || (key === 'c' && !S.split)) return false; },
+    move(p){
+      S[key] = snap(invX(p.x));
+      if (key === 'x') { S.traceLo = Math.min(S.traceLo, S.x); S.traceHi = Math.max(S.traceHi, S.x); }
+      if (key === 'lo') { S.traceLo = S.traceHi = S.x; }
+      paint();
+    },
+    end(){ sound('tick'); track('limit', {which: key, value: S[key], f: S.f}); },
+  });
+  wire('hA', 'lo'); wire('hX', 'x'); wire('hC', 'c');
+  for (const [id, key] of [['hA', 'lo'], ['hX', 'x'], ['hC', 'c']]) $(id).addEventListener('keydown', e => {
+    const d = {ArrowRight: 1, ArrowUp: 1, ArrowLeft: -1, ArrowDown: -1}[e.key]; if (!d || !S.locked) return;
+    e.preventDefault(); const G = AG(); S[key] = clamp(Math.round((S[key] + d * (G.hi - G.lo) / 100) * 100) / 100, G.lo, G.hi);
+    if (key === 'x') { S.traceLo = Math.min(S.traceLo, S.x); S.traceHi = Math.max(S.traceHi, S.x); }
+    paint();
+  });
+}
+/* Per curve: axes, the curve itself, and the full A(x) for reference. */
+function buildArea(){
+  const G = AG();
+  let a = '';
+  const yAxis = ay(Math.max(G.y0, Math.min(0, G.y1)));
+  a += `<line x1="${PL.x}" y1="${ay(0)}" x2="${PL.x + PL.w}" y2="${ay(0)}" stroke="#1d2327" stroke-width="1.2"/>`;
+  a += `<line x1="${ax(Math.max(G.lo, Math.min(0, G.hi)))}" y1="${PL.y}" x2="${ax(Math.max(G.lo, Math.min(0, G.hi)))}" y2="${PL.y + PL.h}" stroke="#9aa3a6"/>`;
+  for (let v = Math.ceil(G.y0); v <= G.y1; v++) if (v) a += `<text x="${ax(Math.max(G.lo, Math.min(0, G.hi))) - 7}" y="${ay(v) + 4}" font-size="11" text-anchor="end" fill="#7c878c" class="m">${v}</text><line x1="${ax(Math.max(G.lo, Math.min(0, G.hi))) - 4}" y1="${ay(v)}" x2="${ax(Math.max(G.lo, Math.min(0, G.hi)))}" y2="${ay(v)}" stroke="#9aa3a6"/>`;
+  /* the rail */
+  a += `<line x1="${PL.x}" y1="${RAIL}" x2="${PL.x + PL.w}" y2="${RAIL}" stroke="#cfc9b8" stroke-width="4" stroke-linecap="round"/>`;
+  for (const q of G.snaps) a += `<line x1="${ax(q)}" y1="${RAIL - 7}" x2="${ax(q)}" y2="${RAIL + 7}" stroke="#9aa3a6"/><text x="${ax(q)}" y="${RAIL + 22}" font-size="11.5" text-anchor="middle" fill="#4a555b" class="m">${tickTxt(q)}</text>`;
+  $('arAxes').innerHTML = a;
+  $('arTitle').textContent = G.label.toUpperCase().replace('X²', 'x²').replace('Y²', 'y²');
+  let d = ''; for (let i = 0; i <= 300; i++) { const x = G.lo + (G.hi - G.lo) * i / 300; d += (i ? 'L' : 'M') + ax(x).toFixed(1) + ' ' + ay(G.f(x)).toFixed(1); }
+  $('arCurve').setAttribute('d', d);
+}
+function paintArea(){
+  const G = AG(), a = S.lo, x = S.x, A = areaA(S.f, a, x);
+  document.querySelectorAll('#fChips .chip').forEach(c => c.setAttribute('aria-pressed', c.dataset.f === S.f));
+  $('btnSplit').setAttribute('aria-pressed', S.split); $('btnStrips').setAttribute('aria-pressed', S.strips);
+  /* the shaded area: above the axis pink, below the axis blue; split parts in two pinks */
+  const region = (l, r, col, neg) => {
+    if (Math.abs(r - l) < 1e-9) return '';
+    const lo = Math.min(l, r), hi = Math.max(l, r), n = 160;
+    let pos = `M${ax(lo)} ${ay(0)}`, ng = `M${ax(lo)} ${ay(0)}`;
+    for (let i = 0; i <= n; i++) { const t = lo + (hi - lo) * i / n, v = G.f(t); pos += `L${ax(t).toFixed(1)} ${ay(Math.max(0, v)).toFixed(1)}`; ng += `L${ax(t).toFixed(1)} ${ay(Math.min(0, v)).toFixed(1)}`; }
+    pos += `L${ax(hi)} ${ay(0)}Z`; ng += `L${ax(hi)} ${ay(0)}Z`;
+    return `<path d="${pos}" fill="${col}" opacity=".42"/><path d="${ng}" fill="${neg}" opacity=".42"/>`;
+  };
+  let sh = '';
+  if (S.split && S.locked) sh = region(a, S.c, '#e0567a', '#3f7fd8') + region(S.c, x, '#f5a3b8', '#8fb7ec');
+  else sh = region(a, x, '#e0567a', '#3f7fd8');
+  if (belowAxis(S.f, a, x) < -0.05) {
+    /* a minus sign in the middle of the part below the axis */
+    const lo = Math.min(a, x), hi = Math.max(a, x); let best = null;
+    for (let i = 0; i <= 60; i++) { const t = lo + (hi - lo) * i / 60; if (!best || G.f(t) < G.f(best)) best = t; }
+    sh += `<text x="${ax(best)}" y="${ay(G.f(best) / 2) + 7}" font-size="22" text-anchor="middle" fill="#1f4f94" font-weight="700">−</text>`;
+  }
+  const mid = (a + x) / 2;
+  if (Math.abs(x - a) > 0.08 * (G.hi - G.lo) && G.f(mid) > 0.3) sh += `<text x="${ax(mid)}" y="${ay(G.f(mid) / 2) + 7}" font-size="20" text-anchor="middle" fill="#9b2c4f" font-weight="700">${x >= a ? '+' : '−'}</text>`;
+  $('arShade').innerHTML = sh;
+  /* thin strips: the picture NCERT draws — area as many f(x)·dx */
+  let st = '';
+  if (S.strips && Math.abs(x - a) > 1e-6) {
+    const n = 14, lo = Math.min(a, x), hi = Math.max(a, x), h = (hi - lo) / n;
+    for (let i = 0; i < n; i++) { const t = lo + (i + 0.5) * h, v = G.f(t); st += `<rect x="${ax(lo + i * h).toFixed(1)}" y="${Math.min(ay(v), ay(0)).toFixed(1)}" width="${(ax(lo + h) - ax(lo)).toFixed(1)}" height="${Math.abs(ay(v) - ay(0)).toFixed(1)}" fill="none" stroke="#9b2c4f" stroke-width=".8"/>`; }
+    st += `<text x="${PL.x + 4}" y="${ay(0) + 15}" font-size="11.5" fill="#9b2c4f">the area is made of thin strips, each ≈ f(x)·dx</text>`;
+  }
+  $('arStrips').innerHTML = st;
+  const fx = G.f(x);
+  $('arXline').setAttribute('x1', ax(x)); $('arXline').setAttribute('x2', ax(x)); $('arXline').setAttribute('y1', ay(0)); $('arXline').setAttribute('y2', ay(fx));
+  $('arXdot').setAttribute('cx', ax(x)); $('arXdot').setAttribute('cy', ay(fx));
+  $('arFx').setAttribute('x', Math.min(ax(x) + 8, PL.x + PL.w - 110)); $('arFx').setAttribute('y', Math.max(PL.y + 12, ay(fx) - 10));
+  $('arFx').textContent = S.locked ? `f(x) = ${fmt(fx, 3)}` : '';
+  /* rail handles */
+  const handle = (v, lab, col, show = true) => show ? `<g><circle cx="${ax(v)}" cy="${RAIL}" r="11" fill="${col}" stroke="#fff" stroke-width="2"/><text x="${ax(v)}" y="${RAIL + 4.5}" font-size="12.5" text-anchor="middle" fill="#fff" font-weight="700" class="serif">${lab}</text></g>` : '';
+  let rl = '';
+  if (Math.abs(x - a) > 1e-9) rl += `<line x1="${ax(a)}" y1="${RAIL}" x2="${ax(x)}" y2="${RAIL}" stroke="${x >= a ? '#e0567a' : '#3f7fd8'}" stroke-width="4"/>`;
+  rl += handle(a, 'a', '#1d2327') + handle(x, 'x', '#c9416a') + handle(S.c, 'c', '#7c878c', S.split);
+  $('arRail').innerHTML = rl;
+  $('hA').setAttribute('cx', ax(a)); $('hX').setAttribute('cx', ax(x)); $('hC').setAttribute('cx', ax(S.c));
+  $('hC').style.display = S.split ? '' : 'none';
+  $('arAval').setAttribute('x', PL.x + PL.w); $('arAval').setAttribute('y', 26); $('arAval').setAttribute('text-anchor', 'end');
+  $('arAval').textContent = S.locked ? `∫ from ${tickTxt(a)} to ${tickTxt(x)} = ${fmt(A, 4)}${piTxt(A)}` : '';
+  /* A(x) graph */
+  let mn = Infinity, mx = -Infinity; const pts = [];
+  for (let i = 0; i <= 240; i++) { const t = G.lo + (G.hi - G.lo) * i / 240, v = areaA(S.f, a, t); pts.push([t, v]); mn = Math.min(mn, v); mx = Math.max(mx, v); }
+  const pad = Math.max(0.2, (mx - mn) * 0.12); AR_LO = mn - pad; AR_HI = mx + pad;
+  let aa = `<line x1="${PA.x}" y1="${Ay(0)}" x2="${PA.x + PA.w}" y2="${Ay(0)}" stroke="#9aa3a6"/>` +
+    `<text x="${PA.x - 8}" y="${Ay(0) + 4}" font-size="11" text-anchor="end" fill="#7c878c" class="m">0</text>` +
+    `<text x="${PA.x - 8}" y="${Ay(mx) + 4}" font-size="11" text-anchor="end" fill="#7c878c" class="m">${fmt(mx, 2)}</text>` +
+    (mn < -0.05 ? `<text x="${PA.x - 8}" y="${Ay(mn) + 4}" font-size="11" text-anchor="end" fill="#7c878c" class="m">${fmt(mn, 2)}</text>` : '');
+  aa += `<line x1="${ax(a)}" y1="${PA.y}" x2="${ax(a)}" y2="${PA.y + PA.h}" stroke="#1d2327" stroke-dasharray="2 4" opacity=".5"/><text x="${ax(a) + 4}" y="${PA.y + 12}" font-size="11" fill="#1d2327" class="serif">a</text>`;
+  $('aAxes').innerHTML = aa;
+  $('aFull').setAttribute('d', S.locked ? pts.map((p, i) => (i ? 'L' : 'M') + ax(p[0]).toFixed(1) + ' ' + Ay(p[1]).toFixed(1)).join('') : '');
+  const tr = pts.filter(p => p[0] >= S.traceLo - 1e-9 && p[0] <= S.traceHi + 1e-9);
+  $('aTrace').setAttribute('d', S.locked && tr.length > 1 ? tr.map((p, i) => (i ? 'L' : 'M') + ax(p[0]).toFixed(1) + ' ' + Ay(p[1]).toFixed(1)).join('') : '');
+  $('aDot').setAttribute('cx', ax(x)); $('aDot').setAttribute('cy', Ay(A)); $('aDot').setAttribute('opacity', S.locked ? 1 : 0);
+  /* the tangent: drawn with slope f(x) in the plot's own units */
+  const w = 0.09 * (G.hi - G.lo), x0 = Math.max(G.lo, x - w), x1 = Math.min(G.hi, x + w);
+  $('aTan').setAttribute('x1', ax(x0)); $('aTan').setAttribute('y1', Ay(A + fx * (x0 - x))); $('aTan').setAttribute('x2', ax(x1)); $('aTan').setAttribute('y2', Ay(A + fx * (x1 - x)));
+  $('aTan').setAttribute('opacity', S.locked ? 1 : 0);
+  $('aTanT').setAttribute('x', Math.min(ax(x1) + 6, PA.x + PA.w - 150)); $('aTanT').setAttribute('y', Math.max(PA.y + 12, Math.min(PA.y + PA.h, Ay(A + fx * (x1 - x)) - 4)));
+  $('aTanT').textContent = S.locked ? `slope = ${fmt(slopeOfA(S.f, a, x), 3)}` : '';
+  /* readouts */
+  if (!S.locked) { $('readR').innerHTML = '<span style="grid-column:1/-1;color:var(--ink-3)">The areas appear once you have made a prediction.</span>'; return; }
+  let r = `<span>f(x) at x = ${tickTxt(x)}</span><b>${fmt(fx, 4)}</b>` +
+    `<span>A(x) = F(x) − F(a)</span><b>${fmt(A, 5)}${piTxt(A)}</b>` +
+    `<span>slope of A at x (measured)</span><b>${fmt(slopeOfA(S.f, a, x), 4)}</b>`;
+  if (x < a - 1e-9) r += `<i class="sep"></i><span>swap the limits</span><b>∫ₐˣ = −∫ₓᵃ = −(${fmt(-A, 4)})</b>`;
+  if (S.split) { const p = areaA(S.f, a, S.c), q = areaA(S.f, S.c, x); r += `<i class="sep"></i><span>split at c = ${tickTxt(S.c)}</span><b>${fmt(p, 4)} + ${fmt(q, 4)} = ${fmt(p + q, 4)}</b>`; }
+  if (S.f === 'ell' || S.f === 'circ') { const L = AREA[S.f].lo, R = AREA[S.f].hi, half = areaA(S.f, L, R); r += `<i class="sep"></i><span>whole ${S.f === 'ell' ? 'ellipse' : 'circle'} = 2 × ∫ from ${L} to ${R}</span><b>${fmt(2 * half, 5)} = ${fmt(2 * half / PI, 3)}π</b>`; }
+  $('readR').innerHTML = r;
+}
+function piTxt(v){ const k = v / PI; return Math.abs(v) > 1e-9 && Math.abs(k * 4 - Math.round(k * 4)) < 1e-6 ? ` = ${Math.round(k * 4) % 4 === 0 ? Math.round(k) : (Math.round(k * 4) / 4)}π` : ''; }
+
+/* ---- narrator -------------------------------------------------------------- */
+function paintWhy(){
+  if (!S.locked) return;
+  $('whyCard').hidden = false;
+  let t = '';
+  if (S.tab === 'series' && S.mode === 'geo') {
+    const G = geometric(S.a, S.r, S.N), r = qnum(G.R);
+    if (r < 1) t = `<p>Every piece is r = <span class="mono">${nice(S.r)}</span> of the one before, so what is left after N pieces is <span class="mono">a·r<sup>N</sup>/(1−r)</span> — here <span class="mono">${sci(qnum(G.limit) - qnum(G.S))}</span>. That shrinks towards 0 but never reaches it: the sum is <b>as close to ${qtxt(G.limit, 8) || fmt(qnum(G.limit), 4)} as you like</b>, which is what “equals” means for an infinite sum.</p>` +
+      `<p>To get within 0.001 you need <b>${needed(G, 0.001)}</b> pieces; within 10⁻⁹, <b>${needed(G, 1e-9)}</b>.</p>`;
+    else t = `<p>With r = <span class="mono">${nice(S.r)}</span> ≥ 1 the pieces never shrink, so every N more pieces add at least <span class="mono">${fmt(qnum(G.A) * S.N, 2)}</span>. The partial sums climb past any number: <b>the series diverges.</b></p>`;
+  } else if (S.tab === 'series') {
+    const n = Math.round(Math.pow(10, S.hs));
+    t = `<p>The pieces 1/k do shrink to 0 — and the sum still escapes. Group them: ½, then ⅓ + ¼ ≥ ½, then ⅕ + … + ⅛ ≥ ½ … there are infinitely many halves.</p>` +
+      `<p>But slowly: H<sub>n</sub> ≈ ln n + γ, so each factor of 10 in n adds only about ln 10 = <span class="mono">2.303</span>. At n = <span class="mono">${n.toLocaleString('en-IN')}</span> the gap to ln n + γ is <span class="mono">${sci(harmonic(n) - Math.log(n) - GAMMA)}</span> ≈ 1/(2n).</p>`;
+  } else {
+    const G = AREA[S.f], A = areaA(S.f, S.lo, S.x);
+    t = `<p>A(x) = F(x) − F(a) = <span class="mono">${fmt(A, 4)}</span>. Push x on by a tiny dx and the area grows by a thin strip f(x)·dx — so the <b>slope of A is f(x)</b>: here <span class="mono">${fmt(slopeOfA(S.f, S.lo, S.x), 4)}</span> measured, <span class="mono">${fmt(G.f(S.x), 4)}</span> = f(x). That is the Fundamental Theorem of Calculus: to find an area, find a function whose slope is the curve.</p>`;
+    if (S.f === 'circ') t += `<p>From −2 to 2 the top half has area <span class="mono">${fmt(areaA('circ', -2, 2), 4)}</span> = 2π, so the whole circle is 4π = πr² with r = 2 — out of an antiderivative, not a formula learnt by heart.</p>`;
+    if (S.f === 'ell') t += `<p>From −3 to 3 the top half has area <span class="mono">${fmt(areaA('ell', -3, 3), 4)}</span> = 3π; the whole ellipse is twice that, 6π = π·3·2 = πab.</p>`;
+    if (S.f === 'sin') t += `<p>Where sin x dips below the axis each strip f(x)·dx is negative, so the integral subtracts that area. From 0 to 2π it all cancels: ∫ sin x dx = <span class="mono">${fmt(areaA('sin', 0, 2 * PI), 4)}</span>, though the shaded area is 4.</p>`;
+    if (S.x < S.lo) t += `<p>x is to the left of a, so every strip is taken with dx negative: ∫ₐˣ = −∫ₓᵃ.</p>`;
+    if (S.split) t += `<p>Split at c and the two areas add back to the whole: ∫ₐˣ = ∫ₐᶜ + ∫ᶜˣ — wherever c is, even outside [a, x].</p>`;
+  }
+  $('why').innerHTML = t;
+}
+function needed(G, eps){ const a = qnum(G.A), r = qnum(G.R); return Math.max(1, Math.ceil(Math.log(eps * (1 - r) / a) / Math.log(r))); }
+
+/* ---- findings: reached by the model, never by a button -------------------- */
+function check(){
+  if (!S.locked) return;
+  if (S.tab === 'series' && S.mode === 'geo') {
+    const G = geometric(S.a, S.r, S.N);
+    if (G.limit && S.N >= 20 && (qnum(G.limit) - qnum(G.S)) / qnum(G.limit) < 1e-4) { discover('finite'); maybeExplain(); }
+  }
+  if (S.tab === 'area') {
+    const G = AREA[S.f], span = G.hi - G.lo, A = areaA(S.f, S.lo, S.x);
+    if (S.traceHi - S.traceLo >= 0.6 * span) discover('ftc');
+    if (belowAxis(S.f, S.lo, S.x) < -0.3) discover('negative');
+    if (S.x < S.lo - 0.05 * span && Math.abs(A) > 0.05) discover('swap');
+    if (S.split && Math.min(Math.abs(S.c - S.lo), Math.abs(S.x - S.c)) >= 0.05 * span && (S.c - S.lo) * (S.x - S.c) > 0) discover('split');
+    if (S.f === 'ell' && Math.min(S.lo, S.x) <= G.lo + 1e-9 && Math.max(S.lo, S.x) >= G.hi - 1e-9) discover('pab');
+  }
+}
+let EXPLAINED = false;
+function maybeExplain(){
+  if (EXPLAINED || !POE) return;
+  EXPLAINED = true;
+  const G = geometric(S.a, S.r, S.N);
+  POE.explain(`Your ${S.N} pieces add up to <b>${qtxt(G.S) || dec(qnum(G.S), 10)}</b>, and the gap to <b>${qtxt(G.limit, 8) || fmt(qnum(G.limit), 4)}</b> is only <b>${sci(qnum(G.limit) - qnum(G.S))}</b> — and it keeps halving. ` +
+    `Infinitely many positive numbers <b>can</b> have a finite sum, if they shrink fast enough. Not all do: the harmonic series 1 + ½ + ⅓ + … passes 10 at n = ${firstPast(10).toLocaleString('en-IN')} and keeps going. ` +
+    `Shrinking to zero is necessary, but not enough.`);
+}
+
+/* ============================================================================
+   Controls
+   ============================================================================ */
+buildS(); initArea(); buildArea();
+function paint(){
+  $('tabSeries').setAttribute('aria-selected', S.tab === 'series'); $('tabRiemann').setAttribute('aria-selected', S.tab === 'area');
+  $('stageS').toggleAttribute('hidden', S.tab !== 'series'); $('stageR').toggleAttribute('hidden', S.tab !== 'area');
+  $('cardS').hidden = S.tab !== 'series'; $('cardR').hidden = S.tab !== 'area';
+  if (S.tab === 'series') paintSeries(); else paintArea();
+  paintWhy(); check();
+}
+$('tabSeries').addEventListener('click', () => { S.tab = 'series'; sound('tick'); paint(); track('tab', {tab: 'series'}); });
+$('tabRiemann').addEventListener('click', () => { S.tab = 'area'; sound('tick'); paint(); track('tab', {tab: 'area'}); });
+$('modeGeo').addEventListener('click', () => { S.mode = 'geo'; sound('tick'); paint(); });
+$('modeHarm').addEventListener('click', () => { S.mode = 'harm'; sound('tick'); paint(); });
+$('ga').addEventListener('input', e => { S.a = Math.round(+e.target.value * 20) / 20; paint(); });
+$('gr').addEventListener('input', e => { S.r = Math.round(+e.target.value * 20) / 20; paint(); });
+$('gn').addEventListener('input', e => { S.N = +e.target.value; sound('tick'); paint(); });
+$('hs').addEventListener('input', e => { S.hs = +e.target.value; paint(); });
+for (const id of ['ga', 'gr', 'gn', 'hs']) $(id).addEventListener('change', () => track('slider', {id, value: +$(id).value}));
+$('fChips').addEventListener('click', e => {
+  const c = e.target.closest('[data-f]'); if (!c || c.disabled) return;
+  S.f = c.dataset.f; const G = AREA[S.f]; S.lo = G.a0; S.x = G.x0; S.c = (G.a0 + G.x0) / 2; S.traceLo = S.traceHi = S.x;
+  sound('pop'); buildArea(); paint(); track('curve', {f: S.f});
+});
+$('btnSplit').addEventListener('click', () => { S.split = !S.split; if (S.split) S.c = Math.round((S.lo + S.x) / 2 * 100) / 100; sound('tick'); paint(); track('split', {on: S.split}); });
+$('btnStrips').addEventListener('click', () => { S.strips = !S.strips; sound('tick'); paint(); });
+
+function lockControls(lock){
+  for (const id of ['ga', 'gr', 'gn', 'hs', 'modeGeo', 'modeHarm', 'btnSplit', 'btnStrips']) $(id).disabled = lock;
+  document.querySelectorAll('#fChips .chip').forEach(c => c.disabled = lock);
+  for (const id of ['hA', 'hX', 'hC']) $(id).style.pointerEvents = lock ? 'none' : '';
+  $('gate').hidden = !lock;
+}
+
+/* ============================================================================
+   Start
+   ============================================================================ */
+findings($('finds'), [
+  {id: 'finite',   icon: '▣', label: 'An infinite sum with a finite total', hint: 'Keep adding pieces with r < 1'},
+  {id: 'ftc',      icon: '∫', label: 'The slope of the area is the curve', hint: 'Drag x across most of the curve'},
+  {id: 'negative', icon: '−', label: 'Area below the axis counts negative', hint: 'Try sin x past π'},
+  {id: 'swap',     icon: '⇄', label: 'Swap the limits, the sign flips', hint: 'Put x to the left of a'},
+  {id: 'split',    icon: '⫶', label: 'Split at c: the pieces add up', hint: 'Split the area at a point c'},
+  {id: 'pab',      icon: '⬭', label: 'πab from an antiderivative', hint: 'The whole width of the ellipse'},
+], () => toast('All six: an infinite series, and the Fundamental Theorem of Calculus, found by hand.', 4200));
+
+const POE = predict($('poe'), {
+  id: 'infinite-sum',
+  q: 'Adding infinitely many positive numbers always gives infinity. True?',
+  options: [
+    {id: 'true',   text: 'True — every piece adds something, so the total must grow for ever.'},
+    {id: 'some',   text: 'False — it can settle on a finite number, but not always.', right: true},
+    {id: 'always', text: 'False — if the pieces get smaller, it always settles on a finite number.'},
+    {id: 'cant',   text: 'Nobody can tell without adding them all.'},
+  ],
+  onLock(){ S.locked = true; lockControls(false); say('Now add the pieces.'); paint(); },
+});
+lockControls(!POE.locked);
+if (!Play.FF('predict')) S.locked = true;
+paint();
+window.applyFeatures = () => paint();
+window.PG_STATE = () => JSON.parse(JSON.stringify(S));
+window.PG_MODEL = {Q, qadd, qsub, qmul, qdiv, qnum, geometric, pack, harmonic, firstPast, AREA, areaA, slopeOfA, belowAxis};
+</script>
+</body>
+</html>

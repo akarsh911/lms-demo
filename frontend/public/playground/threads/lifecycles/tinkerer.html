@@ -1,0 +1,420 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Seeds That Wake Up</title>
+<meta name="description" content="Class 6–8: a bean seed in a glass-sided pot. Set the water, the warmth and the light, run the days, and find out that a seed only wakes up when water and air are both there.">
+<link rel="icon" href="../../favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600&family=Inter:wght@400;500;600;700&family=Nunito:wght@500;700;800&family=Newsreader:opsz,wght@6..72,400;6..72,500&family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="../../play.css">
+<style>
+/* Only what this page needs beyond play.css. */
+.pg-stage{background:#eef3ef}
+.gate{position:absolute; inset:0; display:grid; place-items:center; pointer-events:none}
+.gate span{background:rgba(20,32,24,.86); color:#fff; padding:10px 16px; border-radius:99px; font-weight:600; font-size:14px}
+.seg{display:grid; grid-auto-flow:column; grid-auto-columns:1fr; gap:4px; background:var(--sunk); padding:4px; border-radius:var(--radius-sm)}
+.seg button{border:0; background:transparent; border-radius:8px; min-height:36px; font-weight:600; font-size:13px; cursor:pointer; color:var(--ink-2); padding:0 6px; line-height:1.2}
+.seg button[aria-pressed="true"]{background:var(--card); color:var(--ink); box-shadow:var(--shadow)}
+.seg button:disabled{opacity:.5; cursor:default}
+.presets{display:grid; grid-template-columns:repeat(4,1fr); gap:5px; margin-top:6px}
+.presets button{min-height:38px; border-radius:var(--radius-sm); border:1.5px solid var(--hair-2); background:var(--card); cursor:pointer; font-weight:700; font-size:13px}
+.presets button:disabled{opacity:.5; cursor:default}
+.presets button[aria-pressed="true"]{border-color:var(--accent); background:var(--accent-soft)}
+.play{width:40px; min-width:40px; padding:0}
+.bigday{font-family:"Fredoka",var(--font-head); font-size:24px; font-weight:600; line-height:1}
+.why p{font-size:13.5px; margin-bottom:.5em}
+.why b{color:var(--ink)}
+.meters{display:grid; gap:7px}
+</style>
+</head>
+<body>
+<header class="pg-top"></header>
+
+<div class="pg-intro">
+  <h1>Seeds that wake up</h1>
+  <p>A bean seed, sown in a pot with a glass side so you can see underground. Set how much water it gets, how warm the room is and whether
+     it sits in sunlight or a dark cupboard, then run the days and watch — or watch nothing happen at all.</p>
+</div>
+
+<main class="pg-main wide-side">
+  <section class="pg-stage" id="stageWrap">
+    <svg id="stage" viewBox="0 0 1000 680" role="img" aria-label="A glass-sided pot with a bean seed underground, a thermometer, and a graph of the shoot's height over the days"></svg>
+    <div class="gate" id="gate"><span>Make your prediction first →</span></div>
+  </section>
+
+  <aside class="pg-side">
+    <div id="poe"></div>
+
+    <div class="card" id="ctlCard">
+      <div class="row" style="justify-content:space-between;align-items:flex-end">
+        <div><div class="kicker">Day</div><div class="bigday num" id="dayOut">0</div></div>
+        <button class="btn play" id="btnPlay" aria-label="Run the days" title="Run the days">▶</button>
+      </div>
+      <div class="ctl"><label for="day">Days</label><input type="range" id="day" min="0" max="40" step="1" value="0"><output id="dayNum" class="num">0</output></div>
+      <div class="ctl"><label for="water">Water</label><input type="range" id="water" min="0" max="100" step="1" value="50"><output id="waterOut" class="num">Moist</output></div>
+      <div class="ctl"><label for="warmth">Warmth</label><input type="range" id="warmth" min="0" max="40" step="1" value="22"><output id="warmthOut" class="num">22°C</output></div>
+      <div class="kicker" style="margin-top:8px">Where does the pot sit?</div>
+      <div class="seg" role="group" aria-label="Light">
+        <button id="lightSun" aria-pressed="true">☀️ In sunlight</button>
+        <button id="lightDark" aria-pressed="false">🌑 Dark cupboard</button>
+      </div>
+      <div class="kicker" style="margin-top:8px">Try the book's own pots (Activity 10.2)</div>
+      <div class="presets">
+        <button data-preset="A" title="No water, in sunlight">Pot A</button>
+        <button data-preset="B" title="Excess water, in sunlight">Pot B</button>
+        <button data-preset="C" title="Moist soil, in the dark">Pot C</button>
+        <button data-preset="D" title="Moist soil, in sunlight">Pot D</button>
+      </div>
+    </div>
+
+    <div class="card why" id="whyCard">
+      <div class="kicker">What is happening</div>
+      <div id="why"></div>
+    </div>
+
+    <div class="card"><div class="kicker">Readings</div><div class="meters" id="meters"></div></div>
+
+    <div class="card"><div class="kicker">To find</div><div id="finds"></div></div>
+  </aside>
+</main>
+
+<script src="../../play.js"></script>
+<script>
+'use strict';
+const {$, esc, clamp, fmt, loop, sound, say, track, toast, predict, findings, discover, found,
+       shareState, sharedState, mount, reduced} = Play;
+mount({thread: 'lifecycles', band: 'tinkerer'});
+
+/* MODEL:start ==================================================================
+   Seed germination (CBSE Class 6, Curiosity Ch 10 "Living Creatures", Activity 10.2
+   and section 10.2). The chapter's own four-pot experiment:
+     Pot A: no water, in sunlight            -> does not germinate
+     Pot B: excess water, in sunlight        -> does not germinate
+     Pot C: moist soil, in the dark          -> germinates
+     Pot D: moist soil, in sunlight          -> germinates
+   and its conclusion in words: "Water: seeds require water... Air and Soil: seeds
+   need air... they use the air available in the spaces between soil particles...
+   Light and/or dark: presence of light is not essential for germination... but
+   after germination, sunlight is required for further growth of the seedling."
+
+   So GERMINATION needs water AND air, and does not care about light:
+     - too little water -> Pot A fails.
+     - too much water fills the soil's air spaces, so there is no air even though
+       there is plenty of water -> Pot B fails (air is a FUNCTION of water here,
+       exactly as the book explains it, not an independent switch).
+     - moist soil has both water and air -> Pots C and D germinate, dark or not.
+   WARMTH is this page's own addition: the chapter only poses it as an open
+   question ("design an experiment to check if temperature has an effect"), so
+   the too-cold/too-hot cutoffs below are a reasonable choice, not a number from
+   the book. Once germinated, growth (root and shoot length, leaves, and later
+   a flower and a pod) is a smooth function of the days since germination, and
+   LIGHT decides whether the seedling can turn green and flower, following the
+   book's own sentence that light matters for growth, not germination.
+   ============================================================================ */
+const GERM_DELAY = 4;             // days of good conditions before germination is judged reached (this page's choice)
+function airLevel(water){ return water <= 75 ? 1 : clamp(1 - (water - 75) / 25, 0, 1); }
+function hasEnoughWater(water){ return water >= 15; }
+function warmthOK(warmth){ return warmth >= 8 && warmth <= 38; }
+function canGerminate(water, warmth){ return hasEnoughWater(water) && airLevel(water) > 0.5 && warmthOK(warmth); }
+function growthAt(day, water, warmth, light){
+  const ok = canGerminate(water, warmth);
+  const grown = ok ? Math.max(0, day - GERM_DELAY) : 0;
+  const sun = light === 'sun';
+  const shootMax = sun ? 16 : 24;                       // etiolated seedlings reach farther, but weaker
+  const shoot = ok ? shootMax * (1 - Math.exp(-grown / 11)) : 0;
+  const root = ok ? 13 * (1 - Math.exp(-grown / 9)) : 0;
+  const leaves = ok ? clamp((grown - 6) / 7, 0, 1) : 0;
+  const chlorophyll = ok && sun ? clamp((grown - 6) / 9, 0, 1) : 0;
+  const flower = ok && sun ? clamp((grown - 20) / 5, 0, 1) : 0;
+  const fruit = ok && sun ? clamp((grown - 30) / 7, 0, 1) : 0;
+  return {ok, grown, shoot, root, leaves, chlorophyll, flower, fruit};
+}
+const PRESETS = {
+  A: {water: 5,  warmth: 22, light: 'sun',  label: 'no water, in sunlight'},
+  B: {water: 96, warmth: 22, light: 'sun',  label: 'excess water, in sunlight'},
+  C: {water: 50, warmth: 22, light: 'dark', label: 'moist soil, in the dark'},
+  D: {water: 50, warmth: 22, light: 'sun',  label: 'moist soil, in sunlight'},
+};
+/* MODEL:end */
+
+function waterLabel(w){ return w < 15 ? 'Dry' : w > 75 ? 'Waterlogged' : 'Moist'; }
+
+/* ---- state: plain data --------------------------------------------------- */
+const S = {day: 0, water: 50, warmth: 22, light: 'sun', locked: false, playing: false, preset: null};
+const shared = sharedState();
+if (shared) {
+  S.day = clamp(+shared.day || 0, 0, 40); S.water = clamp(+shared.water, 0, 100) || 50; S.warmth = clamp(+shared.warmth, 0, 40) || 22;
+  if (shared.light === 'dark') S.light = 'dark';
+}
+shareState(() => ({day: Math.round(S.day), water: Math.round(S.water), warmth: Math.round(S.warmth), light: S.light}));
+
+/* ============================================================================
+   The pot: drawn once, then only patched.
+   ============================================================================ */
+const svg = $('stage');
+const POT = {x: 90, y: 150, w: 420, h: 430};          // outer glass pot rect
+const SOIL_TOP = POT.y + 180, SOIL_BOT = POT.y + POT.h - 16;
+const SEED = {x: POT.x + POT.w / 2, y: SOIL_TOP + 46};
+const GR = {x: 660, y: 60, w: 300, h: 300};           // shoot-height graph
+
+function build(){
+  svg.innerHTML = `
+  <defs>
+    <linearGradient id="gSky" x1="0" y1="0" x2="0" y2="1"><stop id="sky0" offset="0" stop-color="#bfe3fb"/><stop id="sky1" offset="1" stop-color="#eaf6ff"/></linearGradient>
+    <linearGradient id="gSoil" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#a9764a"/><stop offset="1" stop-color="#6b4a2b"/></linearGradient>
+    <clipPath id="clipPot"><rect x="${POT.x}" y="${POT.y}" width="${POT.w}" height="${POT.h}" rx="10"/></clipPath>
+    <clipPath id="clipSoil"><rect x="${POT.x}" y="${SOIL_TOP}" width="${POT.w}" height="${SOIL_BOT - SOIL_TOP}"/></clipPath>
+  </defs>
+  <rect width="1000" height="680" fill="#eef3ef"/>
+  <!-- window and sky, above the pot -->
+  <rect x="0" y="0" width="620" height="${POT.y - 4}" fill="url(#gSky)"/>
+  <circle id="sun" cx="500" cy="60" r="30" fill="#ffc53d"/>
+  <g id="shutter"><rect x="0" y="0" width="620" height="${POT.y - 4}" fill="#5a4128" opacity="0"/><text id="shutterT" x="310" y="${(POT.y - 4) / 2}" text-anchor="middle" fill="#f3e6d0" font-size="15" font-weight="700" opacity="0">DARK CUPBOARD</text></g>
+  <rect x="0" y="${POT.y - 6}" width="620" height="8" fill="#8a6238"/>
+  <!-- the glass pot -->
+  <g clip-path="url(#clipPot)">
+    <rect x="${POT.x}" y="${POT.y}" width="${POT.w}" height="${POT.h}" fill="#eaf6f5" opacity=".5"/>
+    <rect id="soilBlock" x="${POT.x}" y="${SOIL_TOP}" width="${POT.w}" height="${SOIL_BOT - SOIL_TOP}" fill="url(#gSoil)"/>
+    <rect id="waterFill" x="${POT.x}" width="${POT.w}" fill="#3f7f9e" opacity=".55"/>
+    <g id="waterBubbles"></g>
+    <g id="root" fill="none" stroke="#e8d9a8" stroke-linecap="round"></g>
+    <g id="dryCracks" stroke="#4a3319" stroke-width="1.4" fill="none" opacity="0"></g>
+    <ellipse id="seedCoat" rx="13" ry="9" fill="#7a5230"/>
+    <g id="shootGroup">
+      <path id="stem" fill="none" stroke-linecap="round"/>
+      <g id="leaves"></g>
+      <g id="flower" opacity="0">${[0, 72, 144, 216, 288].map(a => `<ellipse rx="7" ry="10" fill="#ffe6f0" transform="rotate(${a}) translate(0 -8)"/>`).join('')}<circle r="5" fill="#ffd36b"/></g>
+      <g id="pod"></g>
+    </g>
+    <g id="frostMarks" opacity="0"></g>
+  </g>
+  <rect x="${POT.x}" y="${POT.y}" width="${POT.w}" height="${POT.h}" rx="10" fill="none" stroke="#3a4a52" stroke-width="3" opacity=".55"/>
+  <text x="${POT.x + 8}" y="${POT.y - 14}" fill="#2c3a30" font-size="13" font-weight="700" letter-spacing=".04em">A BEAN SEED, UNDERGROUND VIEW</text>
+  <!-- thermometer -->
+  <g id="thermo" transform="translate(40 ${POT.y})">
+    <rect x="-6" y="0" width="12" height="${POT.h - 30}" rx="6" fill="#dfe3e0"/>
+    <circle cx="0" cy="${POT.h - 20}" r="14" fill="#dfe3e0"/>
+    <rect id="thermoFill" x="-3.5" width="7" rx="3.5" fill="#e0567a"/>
+    <circle cx="0" cy="${POT.h - 20}" r="10" fill="#e0567a"/>
+    <text x="0" y="${POT.h + 6}" text-anchor="middle" fill="#2c3a30" font-size="12" font-weight="700">°C</text>
+  </g>
+  <!-- the growth graph -->
+  <text x="${GR.x}" y="30" fill="#2c3a30" font-size="13" font-weight="700" letter-spacing=".04em">SHOOT HEIGHT, DAY BY DAY</text>
+  <g id="gAxes"></g>
+  <path id="hCurve" fill="none" stroke="#2f9e5b" stroke-width="3" stroke-linejoin="round"/>
+  <line id="nowLine" y1="${GR.y}" y2="${GR.y + GR.h}" stroke="#1d2327" stroke-width="1.3" stroke-dasharray="3 4"/>
+  <circle id="nowPt" r="5" fill="#2f9e5b" stroke="#fff" stroke-width="2"/>
+  <text id="graphVeilT" x="${GR.x + GR.w / 2}" y="${GR.y + GR.h / 2}" text-anchor="middle" fill="#8a938d" font-size="13" font-weight="600"></text>
+  <text x="${GR.x}" y="${GR.y + GR.h + 34}" fill="#5c655f" font-size="11.5">Day</text>
+  <text x="${GR.x - 28}" y="${GR.y - 6}" fill="#4a555b" font-size="12" font-weight="700">cm</text>
+  `;
+  let cracks = '';
+  for (let i = 0; i < 5; i++) { const x = POT.x + 40 + i * 80; cracks += `<path d="M${x} ${SOIL_TOP} L${x - 8} ${SOIL_TOP + 22} L${x + 6} ${SOIL_TOP + 40}"/>`; }
+  $('dryCracks').innerHTML = cracks;
+  let frost = '';
+  for (let i = 0; i < 8; i++) { const x = POT.x + 20 + i * 50, y = SOIL_TOP - 10; frost += `<path d="M${x - 6} ${y} L${x + 6} ${y} M${x} ${y - 6} L${x} ${y + 6} M${x - 4} ${y - 4} L${x + 4} ${y + 4} M${x - 4} ${y + 4} L${x + 4} ${y - 4}" stroke="#8fd6ff" stroke-width="1.4"/>`; }
+  $('frostMarks').innerHTML = frost;
+  $('seedCoat').setAttribute('cx', SEED.x); $('seedCoat').setAttribute('cy', SEED.y);
+  $('waterFill').setAttribute('y', SOIL_BOT); $('waterFill').setAttribute('height', 0);
+}
+
+/* ---- paint: everything that depends on the state -------------------------- */
+function paint(){
+  const g = growthAt(S.day, S.water, S.warmth, S.light);
+  const air = airLevel(S.water);
+  /* light: sun up top, or a shutter closes over the window */
+  const dark = S.light === 'dark';
+  $('shutter').querySelector('rect').setAttribute('opacity', dark ? 0.94 : 0);
+  $('shutterT').setAttribute('opacity', dark ? 1 : 0);
+  $('sun').setAttribute('opacity', dark ? 0 : 1);
+  /* the soil itself darkens as it gets wetter (ordinary moist soil colour); only once it is
+     truly waterlogged does standing water pool ON TOP of the soil — the book's own picture
+     of Pot B, "water is always present above the soil" — so an everyday moist pot never
+     looks like a flooded one. */
+  $('soilBlock').setAttribute('fill', mix('#d8bd8e', '#4a3319', clamp(S.water / 78, 0, 1)));
+  const puddle = clamp((S.water - 78) / 22, 0, 1) * 34;
+  $('waterFill').setAttribute('y', (SOIL_TOP - puddle).toFixed(1));
+  $('waterFill').setAttribute('height', (puddle + 4).toFixed(1));
+  $('waterFill').setAttribute('opacity', puddle > 1 ? 0.75 : 0);
+  let bub = '';
+  if (S.water > 78) { for (let i = 0; i < 6; i++) bub += `<circle cx="${POT.x + 30 + i * 65}" cy="${(SOIL_TOP - 6 - (i % 3) * 8).toFixed(1)}" r="${2 + i % 3}" fill="#eaf6f5" opacity=".8"/>`; }
+  $('waterBubbles').innerHTML = bub;
+  $('dryCracks').setAttribute('opacity', S.water < 15 ? 0.7 : 0);
+  $('frostMarks').setAttribute('opacity', S.warmth < 8 ? 1 : 0);
+  /* the seed, root and shoot */
+  $('seedCoat').setAttribute('opacity', g.ok && g.grown > 1 ? Math.max(0.15, 1 - g.grown / 8) : 1);
+  const rootD = g.root > 0.1 ? `M${SEED.x} ${SEED.y} Q${SEED.x - 6} ${SEED.y + g.root * 3} ${SEED.x - 10} ${SEED.y + g.root * 6}` +
+    ` M${SEED.x} ${SEED.y} Q${SEED.x + 8} ${SEED.y + g.root * 3.4} ${SEED.x + 14} ${SEED.y + g.root * 6.6}` +
+    ` M${SEED.x} ${SEED.y} L${SEED.x} ${SEED.y + g.root * 7.5}` : '';
+  $('root').innerHTML = `<path d="${rootD}" stroke-width="3"/>`;
+  const shootH = g.shoot * 7.2;
+  const stemTopY = SEED.y - shootH;
+  $('stem').setAttribute('d', shootH > 0.5 ? `M${SEED.x} ${SEED.y} Q${SEED.x - 6} ${SEED.y - shootH * 0.5} ${SEED.x} ${stemTopY.toFixed(1)}` : '');
+  const stemCol = mix('#e0d18f', '#2f9e5b', g.chlorophyll);
+  $('stem').setAttribute('stroke', stemCol); $('stem').setAttribute('stroke-width', 5);
+  let lv = '';
+  if (g.leaves > 0.02) {
+    const leafCol = mix('#e8e39a', '#3f9e5b', g.chlorophyll);
+    const n = 2, leafLen = 20 + g.leaves * 22;
+    for (let i = 0; i < n; i++) {
+      const t = 0.4 + i * 0.3, ly = SEED.y - shootH * t, side = i % 2 ? 1 : -1;
+      lv += `<path d="M${SEED.x} ${ly.toFixed(1)} Q${(SEED.x + side * leafLen * 0.6).toFixed(1)} ${(ly - 8).toFixed(1)} ${(SEED.x + side * leafLen).toFixed(1)} ${(ly - 2).toFixed(1)} Q${(SEED.x + side * leafLen * 0.6).toFixed(1)} ${(ly + 6).toFixed(1)} ${SEED.x} ${ly.toFixed(1)}Z" fill="${leafCol}" opacity="${(0.5 + g.leaves * 0.5).toFixed(2)}"/>`;
+    }
+  }
+  $('leaves').innerHTML = lv;
+  $('flower').setAttribute('transform', `translate(${SEED.x} ${stemTopY.toFixed(1)})`);
+  $('flower').setAttribute('opacity', g.flower > 0.05 ? Math.min(1, g.flower) : 0);
+  let pod = '';
+  if (g.fruit > 0.05) {
+    const podLen = 30 + g.fruit * 34, op = Math.min(1, g.fruit).toFixed(2);
+    pod = `<path d="M0 0 Q-13 ${(podLen * 0.4).toFixed(1)} -6.5 ${podLen.toFixed(1)} Q0 ${(podLen + 7).toFixed(1)} 6.5 ${podLen.toFixed(1)} Q13 ${(podLen * 0.4).toFixed(1)} 0 0Z" fill="#7a9e3f" stroke="#5c7d2c" stroke-width="1" opacity="${op}"/>
+      <circle cx="0" cy="${(podLen * 0.42).toFixed(1)}" r="2.6" fill="#5c7d2c" opacity="${op}"/>
+      <circle cx="0" cy="${(podLen * 0.68).toFixed(1)}" r="2.6" fill="#5c7d2c" opacity="${op}"/>`;
+  }
+  $('pod').innerHTML = pod;
+  $('pod').setAttribute('transform', `translate(${(SEED.x + 20).toFixed(1)} ${(stemTopY + 14).toFixed(1)}) rotate(28)`);
+  /* thermometer */
+  const thermoH = (POT.h - 30) * clamp(S.warmth / 40, 0.04, 1);
+  $('thermoFill').setAttribute('y', (POT.h - 20 - thermoH).toFixed(1)); $('thermoFill').setAttribute('height', thermoH.toFixed(1));
+  $('thermoFill').setAttribute('fill', S.warmth < 8 ? '#3f7fd8' : S.warmth > 38 ? '#d6453d' : '#e0567a');
+  /* controls readout */
+  $('dayOut').textContent = Math.round(S.day); $('dayNum').textContent = Math.round(S.day); $('day').value = Math.round(S.day);
+  $('water').value = Math.round(S.water); $('waterOut').textContent = waterLabel(S.water);
+  $('warmth').value = Math.round(S.warmth); $('warmthOut').textContent = Math.round(S.warmth) + '°C';
+  $('lightSun').setAttribute('aria-pressed', S.light === 'sun'); $('lightDark').setAttribute('aria-pressed', S.light === 'dark');
+  for (const b of document.querySelectorAll('[data-preset]')) {
+    const p = PRESETS[b.dataset.preset];
+    b.setAttribute('aria-pressed', S.preset === b.dataset.preset);
+  }
+  paintGraph(g);
+  paintMeters(g, air);
+  paintWhy(g, air);
+  check(g);
+}
+function mix(a, b, t){
+  t = clamp(t, 0, 1);
+  const pa = [1, 3, 5].map(i => parseInt(a.slice(i, i + 2), 16)), pb = [1, 3, 5].map(i => parseInt(b.slice(i, i + 2), 16));
+  return '#' + pa.map((v, i) => Math.round(v + (pb[i] - v) * t).toString(16).padStart(2, '0')).join('');
+}
+const HMAX = 16;
+const gx = d => GR.x + d / 40 * GR.w;
+const gy = h => GR.y + GR.h - clamp(h / HMAX, 0, 1) * GR.h;
+function paintGraph(){
+  if (!S.locked) { $('graphVeilT').textContent = 'The graph appears once you have made a prediction.'; $('hCurve').setAttribute('d', ''); $('nowPt').setAttribute('opacity', 0); $('nowLine').setAttribute('opacity', 0); $('gAxes').innerHTML = ''; return; }
+  $('graphVeilT').textContent = '';
+  let d = '';
+  for (let day = 0; day <= 40; day++) { const h = growthAt(day, S.water, S.warmth, S.light).shoot; d += (day ? 'L' : 'M') + gx(day).toFixed(1) + ' ' + gy(h).toFixed(1); }
+  $('hCurve').setAttribute('d', d);
+  const cur = growthAt(S.day, S.water, S.warmth, S.light).shoot;
+  $('nowLine').setAttribute('x1', gx(S.day).toFixed(1)); $('nowLine').setAttribute('x2', gx(S.day).toFixed(1)); $('nowLine').setAttribute('opacity', 1);
+  $('nowPt').setAttribute('cx', gx(S.day).toFixed(1)); $('nowPt').setAttribute('cy', gy(cur).toFixed(1)); $('nowPt').setAttribute('opacity', 1);
+  let ax = `<line x1="${GR.x}" y1="${GR.y + GR.h}" x2="${GR.x + GR.w}" y2="${GR.y + GR.h}" stroke="#9aa3a6"/><line x1="${GR.x}" y1="${GR.y}" x2="${GR.x}" y2="${GR.y + GR.h}" stroke="#9aa3a6"/>`;
+  for (let dd = 0; dd <= 40; dd += 10) ax += `<text x="${gx(dd).toFixed(1)}" y="${GR.y + GR.h + 16}" text-anchor="middle" fill="#7c878c" font-size="10.5">${dd}</text>`;
+  for (let hh = 0; hh <= HMAX; hh += 4) ax += `<text x="${GR.x - 6}" y="${(gy(hh) + 3).toFixed(1)}" text-anchor="end" fill="#7c878c" font-size="10.5">${hh}${hh === HMAX ? ' cm' : ''}</text>`;
+  $('gAxes').innerHTML = ax;
+}
+function paintMeters(g, air){
+  const row = (lab, val, frac, col) => `<div class="meter"><span>${lab}</span><b>${val}</b><span class="bar"><i style="width:${(clamp(frac, 0, 1) * 100).toFixed(0)}%;${col ? 'background:' + col : ''}"></i></span></div>`;
+  $('meters').innerHTML =
+    row('Water in the soil', waterLabel(S.water), S.water / 100, '#3f7fd8') +
+    row('Air between the soil grains', S.water > 75 ? 'squeezed out' : 'plenty', air, '#7a8b1f') +
+    row('Warmth', Math.round(S.warmth) + '°C', S.warmth / 40, '#e0567a') +
+    row('Shoot height', fmt(g.shoot, 1) + ' cm', g.shoot / HMAX, '#2f9e5b');
+}
+function paintWhy(g, air){
+  if (!S.locked) return;
+  let txt;
+  if (!hasEnoughWater(S.water)) txt = `<p><b>No water, no germination.</b> "Water enables the seeds to carry out the processes necessary for their growth," the book says — a dry seed coat never softens.</p>`;
+  else if (air <= 0.5) txt = `<p><b>Too much water pushes the air out.</b> The soil's pores are full of water instead of air, and seeds need that air, so the seed drowns even though it has plenty of water — exactly Pot B in the book.</p>`;
+  else if (!warmthOK(S.warmth)) txt = `<p><b>${S.warmth < 8 ? 'Too cold' : 'Too hot'} for the seed's chemistry to run.</b> (This part is this page's own extension — the book only asks you to design an experiment for it.)</p>`;
+  else txt = `<p><b>Water and air are both there</b>, so the seed is germinating — in ${S.light === 'dark' ? 'the dark, which the book says is fine: "presence of light is not essential for germination"' : 'sunlight'}.</p>` +
+    (g.grown > 0 ? `<p>${fmt(g.grown, 0)} days since germination: the shoot is <b>${fmt(g.shoot, 1)} cm</b> and the root <b>${fmt(g.root, 1)} cm</b>.
+       ${S.light === 'dark' ? 'Without light it stretches long and pale, hunting for light, but stays weak.' : 'In the light it turns green and sturdy: the book’s own point that "sunlight is required for further growth."'}</p>` : '');
+  $('why').innerHTML = txt;
+}
+
+/* ---- findings: reached by the model, never by a button -------------------- */
+function check(g){
+  if (!S.locked) return;
+  const air = airLevel(S.water);
+  if (!hasEnoughWater(S.water) && S.day >= 15) discover('dry');
+  if (hasEnoughWater(S.water) && air <= 0.5 && S.day >= 15) discover('waterlogged');
+  if (!warmthOK(S.warmth) && S.day >= 15) discover('temperature');
+  if (g.ok && S.light === 'dark' && g.shoot > 1) discover('darkgerm');
+  if (g.ok && S.light === 'sun' && g.chlorophyll > 0.7) discover('sunhealthy');
+  if (g.fruit > 0.4) discover('lifecycle');
+}
+
+/* ============================================================================
+   Controls
+   ============================================================================ */
+build();
+let ANIM = null;
+function setPlaying(on){
+  S.playing = on;
+  $('btnPlay').textContent = on ? '❚❚' : '▶';
+  $('btnPlay').setAttribute('aria-label', on ? 'Pause' : 'Run the days');
+  if (ANIM) { ANIM.stop(); ANIM = null; }
+  if (on) ANIM = loop(dt => { S.day = clamp(S.day + dt * 6, 0, 40); if (S.day >= 40) setPlaying(false); paint(); });
+}
+function clearPreset(){ S.preset = null; }
+$('btnPlay').addEventListener('click', () => { setPlaying(!S.playing); sound('tick'); track('play', {on: S.playing}); });
+$('day').addEventListener('input', e => { setPlaying(false); S.day = +e.target.value; paint(); });
+$('water').addEventListener('input', e => { setPlaying(false); clearPreset(); S.water = +e.target.value; paint(); });
+$('water').addEventListener('change', () => track('water', {water: S.water}));
+$('warmth').addEventListener('input', e => { setPlaying(false); clearPreset(); S.warmth = +e.target.value; paint(); });
+$('warmth').addEventListener('change', () => track('warmth', {warmth: S.warmth}));
+$('lightSun').addEventListener('click', () => { clearPreset(); S.light = 'sun'; sound('pop'); paint(); track('light', {light: S.light}); });
+$('lightDark').addEventListener('click', () => { clearPreset(); S.light = 'dark'; sound('pop'); paint(); track('light', {light: S.light}); });
+document.querySelector('.presets').addEventListener('click', e => {
+  const b = e.target.closest('[data-preset]'); if (!b || b.disabled) return;
+  const p = PRESETS[b.dataset.preset];
+  S.preset = b.dataset.preset; S.water = p.water; S.warmth = p.warmth; S.light = p.light;
+  sound('pop'); paint(); track('preset', {preset: S.preset});
+  say('Pot ' + S.preset + ': ' + p.label + '.');
+});
+function lockControls(lock){
+  for (const id of ['day', 'water', 'warmth', 'lightSun', 'lightDark', 'btnPlay']) $(id).disabled = lock;
+  for (const b of document.querySelectorAll('[data-preset]')) b.disabled = lock;
+  $('gate').hidden = !lock;
+}
+
+/* ============================================================================
+   Start
+   ============================================================================ */
+findings($('finds'), [
+  {id: 'dry',         icon: '🌵', label: 'No water, no germination',        hint: 'Try Pot A: no water', say: 'No water at all: nothing happens.'},
+  {id: 'waterlogged', icon: '💧', label: 'Too much water drowns the seed',  hint: 'Try Pot B: excess water', say: 'Waterlogged soil has no air, so the seed cannot germinate.'},
+  {id: 'temperature', icon: '🌡️', label: 'Too cold or too hot: nothing happens', hint: 'Push the warmth to an extreme', say: 'Far too cold or far too hot, and nothing happens.'},
+  {id: 'darkgerm',    icon: '🌑', label: 'Seeds don’t need light to germinate', hint: 'Try Pot C: moist, in the dark', say: 'It germinated in the dark. Light was never needed for that.'},
+  {id: 'sunhealthy',  icon: '🌿', label: 'Sunlight makes it strong and green', hint: 'Try Pot D and run the days on', say: 'In sunlight, the seedling turns green and sturdy.'},
+  {id: 'lifecycle',   icon: '🌰', label: 'The whole life cycle: seed to pod', hint: 'Run the days all the way, in sunlight', say: 'From a seed to a flower to a pod full of new seeds: the whole life cycle.'},
+], () => toast('You found every way a seed lives — and every way it fails to. All six findings.', 4200));
+
+const POE = predict($('poe'), {
+  id: 'underwater-seeds',
+  q: 'A gardener puts a tray of bean seeds completely underwater in a bucket for two weeks. Will they germinate?',
+  options: [
+    {id: 'better', text: 'Yes — extra water only helps a seed grow'},
+    {id: 'noair',  text: 'No — the waterlogged soil has no air left in it', right: true},
+    {id: 'warm',   text: 'Yes, but only if the water is warm'},
+    {id: 'light',  text: 'It depends only on whether there is enough light'},
+  ],
+  onLock(){
+    S.locked = true;
+    lockControls(false);
+    say('Now try it yourself. Set the water, the warmth and the light, and run the days.');
+    paint();
+  },
+});
+lockControls(!POE.locked);
+if (!Play.FF('predict')) S.locked = true;
+paint();
+window.applyFeatures = () => paint();
+window.PG_STATE = () => JSON.parse(JSON.stringify(S));
+window.PG_MODEL = {GERM_DELAY, airLevel, hasEnoughWater, warmthOK, canGerminate, growthAt, PRESETS};
+</script>
+</body>
+</html>

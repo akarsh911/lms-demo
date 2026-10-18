@@ -1,0 +1,494 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Zeroes of a Polynomial</title>
+<meta name="description" content="Class 10: linear, quadratic and cubic polynomials as graphs. Drag the zeroes and the coefficients rebuild; lift or stretch the curve; check the sum and product of the zeroes against −b/a and c/a.">
+<link rel="icon" href="../../favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600&family=Inter:wght@400;500;600;700&family=Nunito:wght@500;700;800&family=Newsreader:opsz,wght@6..72,400;6..72,500&family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="../../play.css">
+<style>
+/* Only what this page needs beyond play.css. */
+.pg-stage{align-self:start; min-height:0}
+svg text.m{font-family:var(--font-mono)}
+.gate{position:absolute; inset:0; display:grid; place-items:center; pointer-events:none}
+.gate span{background:rgba(29,35,39,.85); color:#fff; padding:10px 16px; border-radius:99px; font-weight:600; font-size:14px}
+.seg{display:grid; grid-template-columns:repeat(3,1fr); gap:6px; margin:4px 0 10px}
+.seg button{border:1px solid var(--hair-2); background:var(--sunk); border-radius:8px; padding:8px 4px; font-weight:600; font-size:14px; color:var(--ink-2); cursor:pointer}
+.seg button[aria-pressed="true"]{background:#a63d40; border-color:#a63d40; color:#fff}
+.seg button:disabled, .times button:disabled{opacity:.45; cursor:default}
+.times{display:flex; gap:6px; flex-wrap:wrap; margin-top:6px}
+.times button{flex:1; border:1px solid var(--hair-2); background:var(--sunk); border-radius:8px; padding:7px 4px; font-family:var(--font-mono); font-weight:600; color:var(--ink); cursor:pointer}
+.sp{display:grid; grid-template-columns:1fr 132px; gap:6px 10px; align-items:center; margin:6px 0}
+.sp label{font-size:14px; font-weight:600}
+.st{display:grid; grid-template-columns:30px 1fr 30px; align-items:center; border:1px solid var(--hair-2); border-radius:8px; overflow:hidden}
+.st button{border:0; background:var(--sunk); min-height:32px; cursor:pointer; font-weight:700; color:var(--ink-2)}
+.st button:disabled{opacity:.45; cursor:default}
+.st output{font-family:var(--font-mono); text-align:center; font-weight:600; font-size:14px}
+.note{font-size:12.5px; color:var(--ink-3); margin:6px 0 0}
+.why p{font-size:14px; margin-bottom:.55em}
+select{width:100%}
+.hit{cursor:grab}
+.hit.dragging{cursor:grabbing}
+@media (max-width:1180px) and (min-width:981px){ .pg-main.wide-side{grid-template-columns:minmax(0,1fr) 330px} }
+</style>
+</head>
+<body>
+<header class="pg-top"></header>
+
+<div class="pg-intro">
+  <h1>Zeroes of a polynomial</h1>
+  <p>NCERT Class 10, Chapter 2. A zero of p(x) is a number k with p(k) = 0, and on the graph it is where the curve meets the x-axis.
+     Drag the zeroes and watch the coefficients rebuild themselves. Lift the curve, stretch it, or build a quadratic from a sum and a product.
+     Then check the book’s rules: the zeroes add up to −b/a and multiply to c/a.</p>
+</div>
+
+<main class="pg-main wide-side">
+  <section class="pg-stage">
+    <svg id="stage" viewBox="0 0 1000 600" role="img" aria-label="The graph of a polynomial with its zeroes on the x-axis, and the zeroes checked against the coefficients"></svg>
+    <div class="gate" id="gate"><span>Make your prediction first →</span></div>
+  </section>
+
+  <aside class="pg-side">
+    <div id="poe"></div>
+
+    <div class="card" id="cardP">
+      <div class="kicker">The polynomial</div>
+      <div class="seg" id="degs">
+        <button id="deg1" data-deg="1" aria-pressed="false">Linear</button>
+        <button id="deg2" data-deg="2" aria-pressed="true">Quadratic</button>
+        <button id="deg3" data-deg="3" aria-pressed="false">Cubic</button>
+      </div>
+      <select id="preset" aria-label="A polynomial from the book"></select>
+      <div class="times" id="times" aria-label="Multiply the whole polynomial">
+        <button data-k="2">× 2</button><button data-k="0.5">× ½</button><button data-k="-1">× (−1)</button>
+      </div>
+      <p class="note">Drag a black zero along the x-axis. Drag the purple handle to lift the curve. Drag the teal probe to find p(k).</p>
+    </div>
+
+    <div class="card" id="cardB">
+      <div class="kicker">Build from sum and product</div>
+      <div class="sp">
+        <label>Sum of zeroes</label>
+        <span class="st"><button id="sDn" aria-label="sum down">−</button><output id="sOut">0</output><button id="sUp" aria-label="sum up">+</button></span>
+        <label>Product of zeroes</label>
+        <span class="st"><button id="pDn" aria-label="product down">−</button><output id="pOut">0</output><button id="pUp" aria-label="product up">+</button></span>
+      </div>
+      <p class="note">Builds x² − (sum)x + (product), as in Example 4.</p>
+    </div>
+
+    <div class="card why" id="whyCard" hidden>
+      <div class="kicker">What is happening</div>
+      <div id="why"></div>
+    </div>
+
+    <div class="card"><div class="kicker">To find</div><div id="finds"></div></div>
+  </aside>
+</main>
+
+<script src="../../play.js"></script>
+<script>
+'use strict';
+const {$, esc, clamp, drag, sound, say, track, toast, predict, findings, discover, found,
+       shareState, sharedState, mount} = Play;
+mount({thread: 'polynomials', band: 'modeller'});
+
+/* MODEL:start ==================================================================
+   A polynomial is its list of coefficients, highest power first: [a, b], [a, b, c]
+   or [a, b, c, d]. p(k) by Horner's rule.
+   Its real zeroes are found, not stored:
+   - linear: −b/a;
+   - quadratic: the discriminant decides two, two equal (one), or none;
+   - cubic: the sign changes between −M and M (M is Cauchy's bound, so every zero
+     is inside), so bisection traps one real zero r; dividing by (x − r) leaves a
+     quadratic, which gives the other two, or none.
+   Dragging a zero rebuilds the coefficients by multiplying out a(x − α)(x − β)…,
+   keeping a. Multiplying by k scales every coefficient and leaves every zero alone.
+   ============================================================================ */
+function evalP(co, x){ let y = 0; for (const c of co) y = y * x + c; return y; }
+function mul(p, q){ const r = new Array(p.length + q.length - 1).fill(0); p.forEach((u, i) => q.forEach((v, j) => r[i + j] += u * v)); return r; }
+/* Synthetic division by (x − r): the quotient (the remainder is p(r), 0 at a zero). */
+function deflate(co, r){ const q = [co[0]]; for (let i = 1; i < co.length - 1; i++) q.push(co[i] + q[i - 1] * r); return q; }
+function fromZeroes(a, zs){ let p = [a]; for (const z of zs) p = mul(p, [1, -z]); return p.map(c => Math.abs(c) < 1e-12 ? 0 : c); }
+function cubicRoot(co){
+  const a = co[0], M = 1 + Math.max(...co.slice(1).map(c => Math.abs(c / a)));
+  let lo = -M, hi = M, flo = evalP(co, lo);
+  for (let i = 0; i < 200; i++) {
+    const m = (lo + hi) / 2, fm = evalP(co, m);
+    if (fm === 0) return m;
+    if (flo * fm < 0) hi = m; else { lo = m; flo = fm; }
+  }
+  return (lo + hi) / 2;
+}
+/* Real zeroes, sorted, with a repeated zero listed twice. */
+function zeroes(co){
+  const n = co.length - 1;
+  if (n === 1) return [-co[1] / co[0]];
+  if (n === 2) {
+    const [a, b, c] = co, D = b * b - 4 * a * c, s = Math.max(1, b * b, Math.abs(4 * a * c));
+    if (Math.abs(D) <= 1e-9 * s) return [-b / (2 * a), -b / (2 * a)];
+    if (D < 0) return [];
+    const r = Math.sqrt(D);
+    return [(-b - r) / (2 * a), (-b + r) / (2 * a)].sort((p, q) => p - q);
+  }
+  const r = cubicRoot(co);
+  return [r, ...zeroes(deflate(co, r))].sort((p, q) => p - q);
+}
+const distinct = zs => zs.filter((z, i) => i === 0 || Math.abs(z - zs[i - 1]) > 1e-7);
+/* The book's relations, from the zeroes the model found and from the coefficients. */
+function relations(co){
+  const n = co.length - 1, a = co[0], z = zeroes(co), real = z.length === n;
+  const R = {n, real, z};
+  if (n === 1) { R.zero = z[0]; R.minusBA = -co[1] / a; }
+  if (n === 2) { R.minusBA = -co[1] / a; R.cA = co[2] / a; if (real) { R.sum = z[0] + z[1]; R.prod = z[0] * z[1]; } }
+  if (n === 3) { R.minusBA = -co[1] / a; R.cA = co[2] / a; R.minusDA = -co[3] / a;
+    if (real) { R.sum = z[0] + z[1] + z[2]; R.pair = z[0] * z[1] + z[1] * z[2] + z[0] * z[2]; R.prod = z[0] * z[1] * z[2]; } }
+  return R;
+}
+const fromSumProduct = (k, s, p) => [k, -k * s, k * p];
+const scaleP = (co, k) => co.map(c => c * k);
+/* MODEL:end */
+
+/* ---- formatting ---------------------------------------------------------- */
+const mn = v => (v < 0 ? '−' : '') + Math.abs(v);
+const num = (v, dp = 3) => { if (Math.abs(v) < 1e-9) return '0'; const r = Math.round(v); if (Math.abs(v - r) < 1e-9) return mn(r); return (+v.toFixed(dp)).toString().replace('-', '−'); };
+/* A fraction with a small denominator, or a surd like √3, if the number is one. */
+function nice(v){
+  if (Math.abs(v) < 1e-9) return '0';
+  for (let d = 1; d <= 12; d++) { const n = Math.round(v * d); if (Math.abs(n / d - v) < 1e-8) return d === 1 ? mn(n) : `${mn(n)}/${d}`; }
+  const sq = Math.round(v * v); if (sq > 1 && Math.abs(v * v - sq) < 1e-7 && Math.abs(Math.sqrt(sq) - Math.round(Math.sqrt(sq))) > 1e-9) return (v < 0 ? '−' : '') + '√' + sq;
+  return num(v);
+}
+const POW = ['', 'x', 'x²', 'x³'];
+function polyTxt(co){
+  const n = co.length - 1, parts = [];
+  co.forEach((c, i) => {
+    const p = n - i; if (Math.abs(c) < 1e-12) return;
+    const first = !parts.length, m = Math.abs(c);
+    parts.push((c < 0 ? (first ? '−' : ' − ') : (first ? '' : ' + ')) + (Math.abs(m - 1) < 1e-12 && p ? '' : nice(m)) + POW[p]);
+  });
+  return parts.join('') || '0';
+}
+const factorOf = z => Math.abs(z) < 1e-9 ? 'x' : `(x ${z < 0 ? '+' : '−'} ${nice(Math.abs(z))})`;
+function factorTxt(co, z){
+  const a = co[0], lead = Math.abs(a - 1) < 1e-12 ? '' : Math.abs(a + 1) < 1e-12 ? '−' : nice(a);
+  const groups = []; distinct(z).forEach(d => { const k = z.filter(w => Math.abs(w - d) < 1e-7).length; groups.push(factorOf(d) + (k === 2 ? '²' : k === 3 ? '³' : '')); });
+  return lead + groups.join('');
+}
+const eq = (p, q) => Math.abs(p - q) < 1e-6 * Math.max(1, Math.abs(p));
+
+/* ---- state: plain data --------------------------------------------------- */
+const PRE = [
+  {id: 'lin',   deg: 1, name: 'Fig. 2.1: 2x + 3',                       co: [2, 3]},
+  {id: 't21',   deg: 2, name: 'Table 2.1: x² − 3x − 4',                 co: [1, -3, -4]},
+  {id: 's23',   deg: 2, name: '§2.3: 2x² − 8x + 6',                     co: [2, -8, 6]},
+  {id: 's23b',  deg: 2, name: '§2.3: 3x² + 5x − 2',                     co: [3, 5, -2]},
+  {id: 'ex2',   deg: 2, name: 'Example 2: x² + 7x + 10',                co: [1, 7, 10]},
+  {id: 'ex3',   deg: 2, name: 'Example 3: x² − 3',                      co: [1, 0, -3]},
+  {id: 'e22',   deg: 2, name: 'Exercise 2.2 (ii): 4s² − 4s + 1',        co: [4, -4, 1]},
+  {id: 't22',   deg: 3, name: 'Table 2.2: x³ − 4x',                     co: [1, 0, -4, 0]},
+  {id: 'f27',   deg: 3, name: 'Fig. 2.7: x³',                           co: [1, 0, 0, 0]},
+  {id: 'f28',   deg: 3, name: 'Fig. 2.8: x³ − x²',                      co: [1, -1, 0, 0]},
+  {id: 'cub',   deg: 3, name: '§2.3: 2x³ − 5x² − 14x + 8',              co: [2, -5, -14, 8]},
+  {id: 'ex5',   deg: 3, name: 'Example 5: 3x³ − 5x² − 11x − 3',         co: [3, -5, -11, -3]},
+];
+const START = {1: [2, 3], 2: [2, -8, 6], 3: [1, 0, -4, 0]};
+const S = {deg: 2, co: [2, -8, 6], pre: 's23', probe: 2, W: {x0: -6, x1: 6, y0: -8, y1: 8},
+           locked: false, touched: false, probeOnZero: false, draggedZero: false, scaled: false, built: false, bs: 0, bp: 0};
+const shared = sharedState();
+if (shared && [1, 2, 3].includes(shared.deg) && Array.isArray(shared.co) && shared.co.length === shared.deg + 1 && shared.co.every(Number.isFinite) && shared.co[0]) {
+  S.deg = shared.deg; S.co = shared.co.slice(); S.pre = '';
+}
+shareState(() => ({deg: S.deg, co: S.co}));
+
+/* ============================================================================
+   The stage
+   ============================================================================ */
+const sv = $('stage'), G = {x: 40, y: 20, w: 560, h: 560}, HUE = '#a63d40';
+const gx = x => G.x + (x - S.W.x0) / (S.W.x1 - S.W.x0) * G.w, gy = y => G.y + G.h - (y - S.W.y0) / (S.W.y1 - S.W.y0) * G.h;
+const ux = px => S.W.x0 + (px - G.x) / G.w * (S.W.x1 - S.W.x0), uy = py => S.W.y0 + (G.y + G.h - py) / G.h * (S.W.y1 - S.W.y0);
+function niceStep(span){ const r = span / 8, p = Math.pow(10, Math.floor(Math.log10(r))); for (const m of [1, 2, 5, 10]) if (m * p >= r) return m * p; return 10 * p; }
+/* The x-window is fixed, −6 to 6. The y-window fits the curve near its zeroes and turns. */
+function fit(){
+  const co = S.co, z = zeroes(co);
+  let lo = -3, hi = 3;
+  if (z.length) { lo = Math.min(...z) - 1.5; hi = Math.max(...z) + 1.5; }
+  if (co.length === 3) { const h = -co[1] / (2 * co[0]); lo = Math.min(lo, h - 1.5); hi = Math.max(hi, h + 1.5); }
+  lo = Math.max(lo, -6); hi = Math.min(hi, 6);
+  let m = Math.abs(evalP(co, 0));
+  for (let i = 0; i <= 200; i++) m = Math.max(m, Math.abs(evalP(co, lo + (hi - lo) * i / 200)));
+  const Y = Math.max(3, m * 1.15);
+  S.W = {x0: -6, x1: 6, y0: -Y, y1: Y};
+}
+function build(){
+  sv.innerHTML = `
+  <defs><clipPath id="clipG"><rect x="${G.x}" y="${G.y}" width="${G.w}" height="${G.h}"/></clipPath></defs>
+  <rect x="0" y="0" width="1000" height="600" fill="#fbfaf6"/>
+  <rect x="${G.x}" y="${G.y}" width="${G.w}" height="${G.h}" fill="#fff"/>
+  <g id="grid"></g>
+  <g clip-path="url(#clipG)">
+    <line id="probeLine" stroke="#16a3a3" stroke-width="1.6" stroke-dasharray="6 5"/>
+    <path id="curve" fill="none" stroke="${HUE}" stroke-width="3.4" stroke-linejoin="round"/>
+    <circle id="probeDot" r="6" fill="#16a3a3" stroke="#fff" stroke-width="2"/>
+  </g>
+  <g id="zeroLabs"></g>
+  <rect x="${G.x}" y="${G.y}" width="${G.w}" height="30" fill="#e6f5f5" opacity=".9"/>
+  <text id="probeLab" font-size="13.5" font-weight="700" fill="#0f6f6f" class="m"></text>
+  <text id="probeWord" x="${G.x + 8}" y="${G.y + 20}" font-size="12" fill="#0f6f6f" font-weight="700">PROBE</text>
+  <circle class="hit" id="hP" r="11" fill="#16a3a3" stroke="#fff" stroke-width="3"/>
+  <text id="hPk" font-size="12" font-weight="700" fill="#fff" text-anchor="middle" pointer-events="none" class="m">k</text>
+  <circle class="hit" id="hZ0" r="10" fill="#1d2327" stroke="#fff" stroke-width="3"/>
+  <circle class="hit" id="hZ1" r="10" fill="#1d2327" stroke="#fff" stroke-width="3"/>
+  <circle class="hit" id="hZ2" r="10" fill="#1d2327" stroke="#fff" stroke-width="3"/>
+  <path class="hit" id="hL" d="M0 -13 L13 0 L0 13 L-13 0 Z" fill="#6a3fc2" stroke="#fff" stroke-width="3"/>
+  <g id="panel"></g>`;
+}
+function paintGrid(){
+  const sx = 1, sy = niceStep(S.W.y1 - S.W.y0);
+  let g = '';
+  for (let x = S.W.x0; x <= S.W.x1; x += sx) g += `<line x1="${gx(x)}" y1="${G.y}" x2="${gx(x)}" y2="${G.y + G.h}" stroke="${x === 0 ? '#1d2327' : '#e8e4da'}" stroke-width="${x === 0 ? 1.4 : 1}"/>` +
+    (x && x % 1 === 0 ? `<text x="${gx(x)}" y="${gy(0) + 16}" font-size="11" text-anchor="middle" fill="#7c878c" class="m">${mn(x)}</text>` : '');
+  for (let y = Math.ceil(S.W.y0 / sy) * sy; y <= S.W.y1; y += sy) g += `<line x1="${G.x}" y1="${gy(y)}" x2="${G.x + G.w}" y2="${gy(y)}" stroke="${Math.abs(y) < 1e-9 ? '#1d2327' : '#e8e4da'}" stroke-width="${Math.abs(y) < 1e-9 ? 1.6 : 1}"/>` +
+    (Math.abs(y) > 1e-9 && gy(y) > G.y + 40 ? `<text x="${gx(0) - 6}" y="${gy(y) + 4}" font-size="11" text-anchor="end" fill="#7c878c" class="m">${num(y)}</text>` : '');
+  g += `<text x="${G.x + G.w - 6}" y="${gy(0) - 8}" font-size="13" text-anchor="end" fill="#1d2327" font-style="italic">x</text>` +
+       `<text x="${gx(0) + 8}" y="${G.y + 46}" font-size="13" fill="#1d2327" font-style="italic">y = p(x)</text>`;
+  $('grid').innerHTML = g;
+}
+/* The purple handle: the vertex of a parabola, the centre of a cubic. */
+const liftX = () => S.deg === 2 ? -S.co[1] / (2 * S.co[0]) : S.deg === 3 ? -S.co[1] / (3 * S.co[0]) : 0;
+function paintGraph(){
+  const co = S.co, z = zeroes(co), f = x => evalP(co, x);
+  paintGrid();
+  let d = '';
+  for (let i = 0; i <= 480; i++) { const x = S.W.x0 + (S.W.x1 - S.W.x0) * i / 480; d += (i ? 'L' : 'M') + gx(x).toFixed(1) + ' ' + clamp(gy(f(x)), -3000, 4000).toFixed(1); }
+  $('curve').setAttribute('d', d);
+  /* zero handles: one per real zero, a repeated zero gets two stacked handles */
+  ['hZ0', 'hZ1', 'hZ2'].forEach((id, i) => {
+    const el = $(id), on = i < z.length && z[i] >= S.W.x0 && z[i] <= S.W.x1;
+    el.style.display = on ? '' : 'none';
+    if (on) { el.setAttribute('cx', gx(z[i]).toFixed(1)); el.setAttribute('cy', gy(0).toFixed(1)); }
+  });
+  $('zeroLabs').innerHTML = S.locked ? distinct(z).filter(v => v >= S.W.x0 && v <= S.W.x1).map((v, i) =>
+    `<text x="${gx(v)}" y="${gy(0) + (i % 2 ? 34 : -16)}" font-size="13.5" font-weight="700" text-anchor="middle" fill="#1d2327" class="m" paint-order="stroke" stroke="#fff" stroke-width="4">${nice(v)}</text>`).join('') : '';
+  /* lift handle */
+  const lx = liftX(), L = $('hL');
+  L.style.display = S.deg === 1 ? 'none' : '';
+  L.setAttribute('transform', `translate(${gx(lx).toFixed(1)} ${clamp(gy(f(lx)), G.y + 40, G.y + G.h).toFixed(1)})`);
+  /* probe */
+  const k = S.probe, pk = f(k), X = gx(k), Y = gy(pk);
+  $('probeLine').setAttribute('x1', X); $('probeLine').setAttribute('x2', X); $('probeLine').setAttribute('y1', G.y + 30); $('probeLine').setAttribute('y2', G.y + G.h);
+  $('probeDot').setAttribute('cx', X); $('probeDot').setAttribute('cy', clamp(Y, -50, 700));
+  $('hP').setAttribute('cx', X); $('hP').setAttribute('cy', G.y + 15);
+  $('hPk').setAttribute('x', X); $('hPk').setAttribute('y', G.y + 19.5);
+  const right = X < G.x + G.w - 150;
+  $('probeLab').setAttribute('x', X + (right ? 18 : -18)); $('probeLab').setAttribute('text-anchor', right ? 'start' : 'end');
+  $('probeLab').setAttribute('y', G.y + 20);
+  $('probeWord').setAttribute('opacity', X < G.x + 150 ? 0 : 1);
+  $('probeLab').textContent = S.locked ? `p(${nice(k)}) = ${nice(pk)}` : '';
+  paintPanel(z);
+}
+function paintPanel(z){
+  const co = S.co, X0 = 628, R = relations(co);
+  const h = (y, t) => `<text x="${X0}" y="${y}" font-size="12.5" font-weight="700" fill="#4a555b" letter-spacing=".08em">${t}</text>`;
+  const t = (y, s, o = {}) => `<text x="${X0 + (o.dx || 0)}" y="${y}" font-size="${o.fs || 16}" fill="${o.fill || '#1d2327'}" class="m"${o.w ? ` font-weight="${o.w}"` : ''}>${s}</text>`;
+  let s = h(44, `THE ${['', 'LINEAR', 'QUADRATIC', 'CUBIC'][S.deg]} POLYNOMIAL`) + t(76, `p(x) = ${esc(polyTxt(co))}`, {fs: polyTxt(co).length > 22 ? 17 : 20, fill: HUE, w: 600});
+  const L = ['a', 'b', 'c', 'd'];
+  s += t(102, co.map((c, i) => `${L[i]} = ${nice(c)}`).join('   '), {fs: 14, fill: '#4a555b'});
+  if (!S.locked) { $('panel').innerHTML = s + `<text x="${X0}" y="150" font-size="14" fill="#7c878c">The zeroes and the book’s checks appear</text><text x="${X0}" y="170" font-size="14" fill="#7c878c">once you have made a prediction.</text>`; return; }
+  const dz = distinct(z);
+  s += h(146, 'ZEROES: WHERE THE GRAPH MEETS THE x-AXIS');
+  if (!z.length) s += t(174, 'none: the curve never meets the axis', {fs: 15, fill: '#b3361f', w: 600});
+  else {
+    const names = ['α', 'β', 'γ'];
+    s += t(174, z.map((v, i) => `${names[i]} = ${nice(v)}`).join('   '), {fs: 17, w: 600});
+    s += t(200, `${dz.length} point${dz.length > 1 ? 's' : ''} on the axis${z.length > dz.length ? ' (a repeated zero)' : ''} · at most ${S.deg}`, {fs: 13.5, fill: '#4a555b'});
+    if (R.real) s += t(224, `p(x) = ${esc(factorTxt(co, z))}`, {fs: 15, fill: '#4a555b'});
+  }
+  let y = 268;
+  s += h(y - 6, 'ZEROES AND COEFFICIENTS'); y += 22;
+  const row = (lhs, lv, rhs, rv) => {
+    const ok = lv != null && eq(lv, rv);
+    s += `<rect x="${X0}" y="${y - 20}" width="352" height="30" rx="6" fill="${lv == null ? '#f1efe8' : ok ? '#e5f3ea' : '#fbe4df'}"/>` +
+      t(y, `${lhs} = ${lv == null ? '—' : nice(lv)}`, {fs: 15, dx: 10}) + t(y, `${rhs} = ${nice(rv)}`, {fs: 15, dx: 190}) +
+      (lv != null ? `<text x="${X0 + 342}" y="${y}" font-size="16" text-anchor="end" fill="${ok ? '#2f7d4f' : '#b3361f'}" font-weight="700">${ok ? '✓' : '✗'}</text>` : '');
+    y += 36;
+  };
+  if (S.deg === 1) row('zero', R.zero, '−b/a', R.minusBA);
+  if (S.deg === 2) { row('α + β', R.sum, '−b/a', R.minusBA); row('αβ', R.prod, 'c/a', R.cA); }
+  if (S.deg === 3) { row('α + β + γ', R.sum, '−b/a', R.minusBA); row('αβ + βγ + γα', R.pair, 'c/a', R.cA); row('αβγ', R.prod, '−d/a', R.minusDA); }
+  if (S.deg > 1 && !R.real) s += `<text x="${X0}" y="${y - 2}" font-size="13.5" fill="#b3361f">${S.deg === 2 ? 'No real zeroes to add: −b/a and c/a are still there,' : 'Only one real zero: the other two are not real,'}</text>` +
+    `<text x="${X0}" y="${y + 16}" font-size="13.5" fill="#b3361f">${S.deg === 2 ? 'but no point of the graph carries them.' : 'so these checks cannot be read off the graph.'}</text>`;
+  y += 44;
+  const k = S.probe, pk = evalP(co, k);
+  s += h(y, 'THE PROBE: THE VALUE OF p(x) AT x = k'); y += 30;
+  s += t(y, `p(${nice(k)}) = ${esc(co.map((c, i) => `${nice(c)}·(${nice(k)})${['', '', '²', '³'][co.length - 1 - i]}`).slice(0, -1).join(' + '))} + ${nice(co[co.length - 1])}`.replace(/\+ −/g, '− '), {fs: 12.5, fill: '#4a555b'});
+  s += t(y + 26, `= ${nice(pk)}${Math.abs(pk) < 1e-9 ? '   so k is a zero' : ''}`, {fs: 17, w: 600, fill: Math.abs(pk) < 1e-9 ? '#0f6f6f' : '#1d2327'});
+  $('panel').innerHTML = s;
+}
+
+/* ============================================================================
+   Narrator, findings, explanation
+   ============================================================================ */
+function paintWhy(){
+  $('whyCard').hidden = !S.locked;
+  if (!S.locked) return;
+  const co = S.co, z = zeroes(co), dz = distinct(z), a = co[0];
+  let t = '';
+  if (S.deg === 1) t = `<p>A straight line that is not flat crosses the x-axis exactly once, at x = −b/a = <b>${nice(-co[1] / a)}</b>. That is the one zero of ${esc(polyTxt(co))}.</p>`;
+  else if (S.deg === 2) {
+    const D = co[1] * co[1] - 4 * a * co[2];
+    t = `<p>The parabola opens ${a > 0 ? 'upward' : 'downward'} and its turning point is at height <b>${num(evalP(co, liftX()), 3)}</b>. ` +
+      (dz.length === 2 ? `It is on the other side of the axis from where the arms go, so the curve crosses the axis twice: two zeroes.`
+        : dz.length === 1 ? `The turning point sits exactly on the axis: the two zeroes have merged into one, x = ${nice(z[0])}.`
+        : `The whole curve stays on one side of the axis: no zero at all.`) + `</p>` +
+      `<p>b² − 4ac = ${num(D, 3)}. ` + (z.length ? `The zeroes add to ${nice(z[0] + z[1])} and multiply to ${nice(z[0] * z[1])}, exactly −b/a and c/a, because p(x) = a(x − α)(x − β) = ax² − a(α + β)x + aαβ.` : `−b/a = ${nice(-co[1] / a)} and c/a = ${nice(co[2] / a)} still exist; they just have no real zeroes to belong to.`) + `</p>`;
+  } else {
+    t = `<p>A cubic’s arms go opposite ways, so the curve must cross the axis at least once, and it can turn back at most twice: <b>${dz.length} zero${dz.length > 1 ? 'es' : ''}</b> here${z.length > dz.length ? ' (one of them repeated)' : ''}.</p>` +
+      (z.length === 3 ? `<p>Multiply out a(x − α)(x − β)(x − γ): the x² term is −a(α + β + γ), the x term a(αβ + βγ + γα), the constant −aαβγ. So the three checks hold.</p>`
+        : `<p>Lift or lower it with the purple handle and watch two of the zeroes meet and vanish, while one always stays.</p>`);
+  }
+  $('why').innerHTML = t;
+}
+let EXPL = false, BEFORE = null;
+function check(){
+  if (!S.locked || !S.touched) return;
+  const co = S.co, z = zeroes(co), dz = distinct(z);
+  if (S.probeOnZero && Math.abs(evalP(co, S.probe)) < 1e-9) discover('intercept');
+  if (S.deg === 2 && S.draggedZero && dz.length === 2) discover('rebuild');
+  if (S.deg === 2 && z.length === 2 && dz.length === 1) discover('merge');
+  if (S.deg === 2 && !z.length) discover('none');
+  if (S.deg === 3 && dz.length === 3) discover('cubic3');
+  if (S.deg === 3 && dz.length === 1) discover('cubic1');
+  if (S.built && S.deg === 2 && z.length === 2 && eq(z[0] + z[1], S.bs) && eq(z[0] * z[1], S.bp)) discover('build');
+  if (S.scaled && BEFORE && BEFORE.z.length === z.length && BEFORE.z.every((v, i) => Math.abs(v - z[i]) < 1e-7)) {
+    discover('stretch');
+    if (!EXPL && z.length) {
+      EXPL = true;
+      POE.explain(`The model multiplied every coefficient by ${nice(S.lastK)}: ${esc(polyTxt(BEFORE.co))} became <b>${esc(polyTxt(co))}</b>. ` +
+        `The curve ${S.lastK < 0 ? 'flipped over' : S.lastK > 1 ? 'stretched taller' : 'squashed flatter'}, yet it still meets the x-axis at <b>${z.map(nice).join(' and ')}</b>. ` +
+        `Where p(x) = 0, k·p(x) = 0 too. That is why the zeroes only fix −b/a and c/a, and every quadratic with these zeroes is k(…).`);
+    }
+  }
+}
+
+/* ============================================================================
+   Paint and controls
+   ============================================================================ */
+build();
+function paint(){
+  $('gate').hidden = S.locked;
+  ['deg1', 'deg2', 'deg3'].forEach((id, i) => $(id).setAttribute('aria-pressed', S.deg === i + 1));
+  $('preset').value = S.pre;
+  $('cardB').hidden = S.deg !== 2;
+  $('sOut').textContent = nice(S.bs); $('pOut').textContent = nice(S.bp);
+  paintGraph(); check(); paintWhy();
+}
+function outOfView(){
+  const co = S.co, z = zeroes(co), lx = liftX(), m = Math.max(...z.map(v => Math.abs(evalP(co, v))), S.deg > 1 ? Math.abs(evalP(co, lx)) : 0);
+  return m > S.W.y1 * 0.95 || (S.deg > 1 && Math.abs(evalP(co, lx)) < S.W.y1 * 0.12 && S.W.y1 > 12);
+}
+function setP(co, how){
+  BEFORE = {co: S.co.slice(), z: zeroes(S.co)};
+  S.co = co.map(c => Math.abs(c) < 1e-12 ? 0 : c); S.touched = true;
+  if (how !== 'drag') fit();
+  if (how !== 'scale') S.scaled = false;
+  paint();
+}
+$('degs').addEventListener('click', e => {
+  const b = e.target.closest('[data-deg]'); if (!b || b.disabled) return;
+  const n = +b.dataset.deg; if (n === S.deg) return;
+  S.deg = n; S.pre = PRE.find(p => p.deg === n && JSON.stringify(p.co) === JSON.stringify(START[n])).id; S.probe = 1;
+  S.draggedZero = false; S.built = false; setP(START[n].slice());
+  sound('tick'); track('degree', {n});
+});
+$('preset').addEventListener('change', e => {
+  const P = PRE.find(p => p.id === e.target.value); if (!P) return;
+  S.deg = P.deg; S.pre = P.id; S.draggedZero = false; S.built = false; setP(P.co.slice());
+  sound('pop'); track('preset', {id: P.id});
+});
+$('times').addEventListener('click', e => {
+  const b = e.target.closest('[data-k]'); if (!b || b.disabled) return;
+  const k = +b.dataset.k; S.lastK = k; S.scaled = true; S.pre = '';
+  setP(scaleP(S.co, k), 'scale'); sound('snap'); track('scale', {k});
+});
+const bStep = (key, d) => { S[key] = clamp(S[key] + d, -10, 10); S.built = true; S.pre = ''; S.draggedZero = false; setP(fromSumProduct(1, S.bs, S.bp)); sound('tick'); track('build', {sum: S.bs, product: S.bp}); };
+$('sDn').addEventListener('click', () => bStep('bs', -0.5)); $('sUp').addEventListener('click', () => bStep('bs', 0.5));
+$('pDn').addEventListener('click', () => bStep('bp', -0.5)); $('pUp').addEventListener('click', () => bStep('bp', 0.5));
+
+const snap = (v, s) => Math.round(v / s) * s;
+['hZ0', 'hZ1', 'hZ2'].forEach((id, i) => drag($(id), sv, {
+  start(){ if (!S.locked) return false; },
+  move(p){
+    const z = zeroes(S.co), x = clamp(snap(ux(p.x), 0.25), -5.75, 5.75);
+    if (i >= z.length || Math.abs(z[i] - x) < 1e-9) return;
+    let co;
+    if (z.length === S.deg) { const zs = z.slice(); zs[i] = x; co = fromZeroes(S.co[0], zs); }
+    else { const q = deflate(S.co, z[0]); co = mul(q, [1, -x]); }     // a cubic with one real zero keeps its other factor
+    S.draggedZero = true; S.built = false; S.pre = ''; setP(co, 'drag');
+  },
+  end(){ if (outOfView()) { fit(); paint(); } track('dragZero', {co: S.co}); },
+}));
+drag($('hL'), sv, {
+  start(){ if (!S.locked || S.deg === 1) return false; },
+  move(p){
+    const lx = liftX(), step = niceStep(S.W.y1 - S.W.y0) / 4, target = snap(clamp(uy(p.y), S.W.y0, S.W.y1), step);
+    const co = S.co.slice(); co[co.length - 1] += target - evalP(S.co, lx);
+    co[co.length - 1] = Math.round(co[co.length - 1] * 1e9) / 1e9;
+    S.built = false; S.pre = ''; setP(co, 'drag');
+  },
+  end(){ if (outOfView()) { fit(); paint(); } track('lift', {co: S.co}); },
+});
+drag($('hP'), sv, {
+  start(){ if (!S.locked) return false; },
+  move(p){
+    let k = clamp(snap(ux(p.x), 0.05), S.W.x0, S.W.x1);
+    const near = zeroes(S.co).find(z => Math.abs(z - k) < 0.15);
+    S.probeOnZero = near != null; if (near != null) k = near;
+    S.probe = k; S.touched = true; paint();
+  },
+  end(){ track('probe', {k: S.probe, value: evalP(S.co, S.probe)}); },
+});
+
+function lock(on){
+  document.querySelectorAll('#cardP button, #cardB button, #preset').forEach(b => b.disabled = on);
+  for (const id of ['hZ0', 'hZ1', 'hZ2', 'hL', 'hP']) $(id).style.pointerEvents = on ? 'none' : '';
+}
+
+/* ============================================================================
+   Start
+   ============================================================================ */
+$('preset').innerHTML = `<option value="">Your own polynomial</option>` + PRE.map(p => `<option value="${p.id}">${esc(p.name)}</option>`).join('');
+findings($('finds'), [
+  {id: 'intercept', icon: '⊙', label: 'p(k) = 0 exactly where the curve meets the axis', hint: 'Drag the probe onto a zero'},
+  {id: 'stretch',   icon: '×', label: 'Multiply by k: same zeroes', hint: 'Multiply the whole polynomial'},
+  {id: 'rebuild',   icon: '↔', label: 'Drag a zero, the coefficients follow', hint: 'Drag a black zero'},
+  {id: 'merge',     icon: '⊥', label: 'Two equal zeroes', hint: 'Bring the zeroes together'},
+  {id: 'none',      icon: '∅', label: 'A quadratic with no zeroes', hint: 'Lift it off the axis'},
+  {id: 'build',     icon: '∑', label: 'A quadratic from its sum and product', hint: 'Use the builder'},
+  {id: 'cubic3',    icon: '3', label: 'A cubic with three zeroes', hint: 'Try the cubic'},
+  {id: 'cubic1',    icon: '1', label: 'A cubic with just one zero', hint: 'Lift the cubic'},
+], () => toast('All eight: zeroes are where the graph meets the axis, and the coefficients know their sum and product.', 4200));
+
+const POE = predict($('poe'), {
+  id: 'scale-zeroes',
+  q: 'The zeroes of 2x² − 8x + 6 are 1 and 3. Multiply the whole polynomial by 2, to get 4x² − 16x + 12. What happens to the zeroes?',
+  options: [
+    {id: 'double', text: 'They double, to 2 and 6.'},
+    {id: 'same',   text: 'They stay 1 and 3.', right: true},
+    {id: 'half',   text: 'They halve, to ½ and 1½.'},
+    {id: 'gone',   text: 'The zeroes disappear.'},
+  ],
+  onLock(){ S.locked = true; lock(false); say('Now multiply it, and watch the zeroes.'); paint(); },
+});
+lock(!POE.locked);
+if (!Play.FF('predict')) S.locked = true;
+fit();
+paint();
+window.applyFeatures = () => paint();
+window.PG_STATE = () => JSON.parse(JSON.stringify(S));
+window.PG_MODEL = {evalP, zeroes, relations, fromZeroes, fromSumProduct, deflate, scaleP, cubicRoot};
+</script>
+</body>
+</html>

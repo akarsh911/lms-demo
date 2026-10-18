@@ -1,0 +1,638 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kepler, Measured</title>
+<meta name="description" content="Class 11–12: set the force law F ∝ 1/rⁿ yourself, launch a planet, and measure equal areas, closed orbits, T² ∝ a³ and the energy — then break them.">
+<link rel="icon" href="../../favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600&family=Inter:wght@400;500;600;700&family=Nunito:wght@500;700;800&family=Newsreader:opsz,wght@6..72,400;6..72,500&family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="../../play.css">
+<style>
+/* Only what this page needs beyond play.css. */
+#launchHit, #tipHit{cursor:grab}
+#launchHit.dragging, #tipHit.dragging{cursor:grabbing}
+.gate{position:absolute; left:0; right:0; top:0; height:67%; display:grid; place-items:center; pointer-events:none}
+.gate span{background:rgba(13,23,38,.85); color:#fff; padding:10px 16px; border-radius:99px; font-weight:600; font-size:14px}
+.law{font-family:"Newsreader",Georgia,serif; font-size:22px; line-height:1.1}
+.law sup{font-size:.62em}
+.readout{display:grid; grid-template-columns:1fr auto; gap:3px 12px; font-size:13px; align-items:baseline}
+.readout span{color:var(--ink-2)}
+.readout b{font-family:var(--font-mono); font-weight:600; font-size:12.5px; font-variant-numeric:tabular-nums; text-align:right}
+.readout .sep{grid-column:1/-1; height:1px; background:var(--hair); margin:4px 0}
+.why p{font-size:13.5px; margin-bottom:.55em}
+.why .mono{font-size:12.5px}
+.note{font-size:12.5px; color:var(--ink-3); margin:6px 0 0}
+.veil{font-size:13px; color:var(--ink-3)}
+.pg-stage{align-self:start; min-height:0}
+svg text.m{font-family:var(--font-mono); white-space:pre}
+svg text.serif{font-family:"Newsreader",Georgia,serif}
+</style>
+</head>
+<body>
+<header class="pg-top"></header>
+
+<div class="pg-intro">
+  <h1>Kepler, measured</h1>
+  <p>Newton’s gravity falls off as 1/r². Here you choose the law: F ∝ 1/rⁿ, any n from −1 to 4. Launch a planet,
+     then measure what Kepler measured — the area it sweeps, whether its orbit closes, how its period grows with its size —
+     and find out which of his laws belong to gravity, and which belong to every force that points at the Sun.</p>
+</div>
+
+<main class="pg-main wide-side">
+  <section class="pg-stage" id="stageWrap">
+    <svg id="stage" viewBox="0 0 1000 700" role="img" aria-label="A planet orbiting a star under a force law you choose, with the areas it sweeps, a log-log plot of period against size, and its energy over time"></svg>
+    <div class="gate" id="gate"><span>Make your prediction first →</span></div>
+  </section>
+
+  <aside class="pg-side">
+    <div id="poe"></div>
+
+    <div class="card" id="lawCard">
+      <div class="row" style="justify-content:space-between; align-items:flex-end">
+        <div><div class="kicker">The law you are testing</div><div class="law" id="lawSide">F = −k / r<sup>2</sup></div></div>
+        <div class="row">
+          <button class="btn sm" id="btnRun" aria-label="Pause">❚❚ Pause</button>
+          <button class="btn sm" id="btnRelaunch">↺ Relaunch</button>
+        </div>
+      </div>
+      <div class="ctl"><label for="nexp">n</label><input type="range" id="nexp" min="-1" max="4" step="0.1" value="2"><output id="nOut" class="num mono">2.0</output></div>
+      <p class="note">Drag the planet’s launch point (the dashed ring) or the tip of its velocity arrow. Every change relaunches it.
+        n = 2 is Newton; n = −1 is a spring.</p>
+    </div>
+
+    <div class="card" id="measureCard">
+      <div class="kicker">Measured, this launch</div>
+      <div id="measureVeil" class="veil">The measurements appear once you have made a prediction.</div>
+      <div id="measure" hidden>
+        <div class="readout">
+          <span>Angular momentum L</span><b id="mL">—</b>
+          <span>Change in L since launch</span><b id="mdL">—</b>
+          <span>Total energy E</span><b id="mE">—</b>
+          <span>Energy drift (integrator)</span><b id="mDrift">—</b>
+          <i class="sep"></i>
+          <span>Closest → closest angle Δφ</span><b id="mPhi">—</b>
+          <span>Radial period T</span><b id="mT">—</b>
+          <span>Semi-major axis a = (r<sub>min</sub>+r<sub>max</sub>)/2</span><b id="mA">—</b>
+          <span>Eccentricity e</span><b id="mEcc">—</b>
+        </div>
+        <div class="row" style="margin-top:10px; justify-content:space-between">
+          <button class="btn sm primary" id="btnRecord" disabled>Record (a, T)</button>
+          <button class="btn sm" id="btnClearRec">Clear points</button>
+        </div>
+        <p class="note" id="fitNote">Record three or more orbits of different sizes at the same n, and the slope of log T against log a is fitted.</p>
+      </div>
+    </div>
+
+    <div class="card why" id="whyCard" hidden>
+      <div class="kicker">What the model says</div>
+      <div id="why"></div>
+    </div>
+
+    <div class="card"><div class="kicker">To find</div><div id="finds"></div></div>
+  </aside>
+</main>
+
+<script src="../../play.js"></script>
+<script>
+'use strict';
+const {$, esc, clamp, fmt, drag, loop, sound, say, track, toast, predict, findings, discover, found,
+       shareState, sharedState, mount, reduced} = Play;
+mount({thread: 'sun-earth', band: 'theorist'});
+
+/* MODEL:start ==================================================================
+   A planet under an attractive central force of magnitude k / rⁿ (k = 1, per unit mass).
+
+   Integrator: velocity Verlet, fixed step h = 0.001. It is symplectic, so the energy
+   does not creep away over many orbits; and for ANY central force it conserves the
+   angular momentum L = x·vy − y·vx exactly (the cross terms cancel step by step), so
+   the areas swept in equal times come out equal to rounding error — for every n.
+   That is not a trick of the code: it is the same reason it is true in the sky.
+
+   Potential: U(r) = k r^(1−n) / (1−n), and k ln r when n = 1. So n = 2 gives −k/r,
+   n = −1 the spring's k r²/2.
+
+   Measured, never assumed: closest approaches are found as minima of r, refined with a
+   parabola through the last three steps; the radial period T, the angle Δφ between
+   successive closest approaches, and a = (r_min + r_max)/2 come from those.
+   ============================================================================ */
+const K = 1, H = 0.001;
+const WSTEPS = 500;                 // one area wedge = 500 steps = Δt 0.5
+const WDT = WSTEPS * H;
+const TRAIL_EVERY = 10, E_EVERY = 50;
+const RCRASH = 0.1, RESC = 6, RLOST = 30;
+const R2D = 180 / Math.PI;
+
+function potential(r, n){ return Math.abs(n - 1) < 1e-9 ? K * Math.log(r) : K * Math.pow(r, 1 - n) / (1 - n); }
+function accel(x, y, n){ const r = Math.hypot(x, y), f = -K * Math.pow(r, -n - 1); return [f * x, f * y]; }
+/* Near a circular orbit of radius r: the angle between closest approaches, and the radial period. */
+function apsidalTheory(n){ return n < 3 ? 360 / Math.sqrt(3 - n) : NaN; }
+function periodTheory(a, n){ return n < 3 ? 2 * Math.PI * Math.pow(a, (n + 1) / 2) / Math.sqrt(3 - n) : NaN; }
+/* Least-squares slope and intercept of log10 T against log10 a. */
+function fitLogLog(pts){
+  const X = pts.map(p => Math.log10(p.a)), Y = pts.map(p => Math.log10(p.T)), m = X.length;
+  const mx = X.reduce((s, v) => s + v, 0) / m, my = Y.reduce((s, v) => s + v, 0) / m;
+  let sxx = 0, sxy = 0; for (let i = 0; i < m; i++) { sxx += (X[i] - mx) ** 2; sxy += (X[i] - mx) * (Y[i] - my); }
+  const slope = sxy / sxx; return {slope, icpt: my - slope * mx};
+}
+
+/* A run: everything that happens after one launch under one law. */
+function makeRun(n, L){
+  const [ax, ay] = accel(L.x, L.y, n);
+  const r0 = Math.hypot(L.x, L.y);
+  const ke0 = (L.vx * L.vx + L.vy * L.vy) / 2, pe0 = potential(r0, n);
+  return {n, x: L.x, y: L.y, vx: L.vx, vy: L.vy, ax, ay, t: 0, k: 0,
+    L0: L.x * L.vy - L.y * L.vx, E0: ke0 + pe0, escale: Math.abs(ke0) + Math.abs(pe0) || 1,
+    status: 'bound', tEnd: null, phi: Math.atan2(L.y, L.x),
+    rh: [r0, r0], ph: [0, 0], rmin: r0, rmax: r0,
+    peris: [], apos: [], loop: null, loops: [],
+    wedges: [], cur: {A: 0, rmin: r0, rmax: r0, pts: [[L.x, L.y]]},
+    maxDrift: 0, maxdL: 0, esamp: [], trail: [[L.x, L.y]], trailCut: 0};
+}
+/* One Verlet step, and the measurements it feeds. */
+function step(R){
+  const n = R.n, h = H;
+  const nx = R.x + h * R.vx + 0.5 * h * h * R.ax, ny = R.y + h * R.vy + 0.5 * h * h * R.ay;
+  const [bx, by] = accel(nx, ny, n);
+  R.vx += 0.5 * h * (R.ax + bx); R.vy += 0.5 * h * (R.ay + by);
+  R.cur.A += 0.5 * (R.x * ny - R.y * nx);                 // the triangle swept this step: geometry, not L
+  let d = Math.atan2(ny, nx) - Math.atan2(R.y, R.x);
+  if (d > Math.PI) d -= 2 * Math.PI; if (d < -Math.PI) d += 2 * Math.PI;
+  R.phi += d;
+  R.x = nx; R.y = ny; R.ax = bx; R.ay = by; R.t += h; R.k++;
+  const r = Math.hypot(R.x, R.y);
+  R.rmin = Math.min(R.rmin, r); R.rmax = Math.max(R.rmax, r);
+  R.cur.rmin = Math.min(R.cur.rmin, r); R.cur.rmax = Math.max(R.cur.rmax, r);
+  if (R.k % TRAIL_EVERY === 0) { R.cur.pts.push([R.x, R.y]); R.trail.push([R.x, R.y]); }
+  if (R.k % WSTEPS === 0) {
+    R.cur.pts.push([R.x, R.y]);
+    R.wedges.push(R.cur); if (R.wedges.length > 40) R.wedges.shift();
+    R.cur = {A: 0, rmin: r, rmax: r, pts: [[R.x, R.y]]};
+  }
+  /* turning points of r, refined by a parabola through the last three steps */
+  const [r0, r1] = R.rh, [p0, p1] = R.ph;
+  const den = r0 - 2 * r1 + r;
+  if (R.k > 2 && den !== 0 && ((r1 < r0 && r1 <= r) || (r1 > r0 && r1 >= r))) {
+    const del = (r0 - r) / (2 * den);
+    const ext = {t: R.t - h + del * h, r: r1 - (r0 - r) * (r0 - r) / (8 * den), phi: (p1 + del * (R.phi - p0) / 2) * R2D};
+    if (r1 < r0) {
+      R.peris.push(ext);
+      if (R.peris.length >= 2) {
+        const a1 = R.peris[R.peris.length - 2], a2 = ext;
+        const apo = R.apos.filter(q => q.t > a1.t && q.t < a2.t).pop();
+        if (apo) {
+          const rmn = (a1.r + a2.r) / 2;
+          R.loop = {T: a2.t - a1.t, a: (rmn + apo.r) / 2, e: (apo.r - rmn) / (apo.r + rmn), dphi: a2.phi - a1.phi, rmin: rmn, rmax: apo.r};
+          R.loops.push(R.loop);
+        }
+      }
+    } else R.apos.push(ext);
+  }
+  R.rh = [r1, r]; R.ph = [p1, R.phi];
+  const ke = (R.vx * R.vx + R.vy * R.vy) / 2, pe = potential(r, n);
+  R.maxDrift = Math.max(R.maxDrift, Math.abs(ke + pe - R.E0) / R.escale);
+  R.maxdL = Math.max(R.maxdL, Math.abs(R.x * R.vy - R.y * R.vx - R.L0));
+  if (R.k % E_EVERY === 0) { R.esamp.push([R.t, ke, pe]); if (R.esamp.length > 520) R.esamp.shift(); }
+  if (r < RCRASH) { R.status = 'crashed'; R.tEnd = R.t; }
+  else if (r > RESC && ke + pe >= (n > 1 ? 0 : Infinity) && (R.x * R.vx + R.y * R.vy) > 0) { R.status = 'escaped'; R.tEnd = R.t; }
+  else if (r > RLOST) { R.status = 'lost'; R.tEnd = R.t; }
+}
+function advance(R, steps){ for (let i = 0; i < steps && R.status === 'bound'; i++) step(R); return R; }
+/* The spread of the last m wedge areas, as a fraction of their mean. */
+function areaSpread(ws){
+  if (!ws.length) return NaN;
+  const A = ws.map(w => w.A), mean = A.reduce((s, v) => s + v, 0) / A.length;
+  return (Math.max(...A) - Math.min(...A)) / Math.abs(mean);
+}
+/* Does the orbit close? Closest approaches 360° apart (an ellipse about a focus) or 180° apart
+   (an ellipse about its centre, the spring). */
+function closes(dphi){ const m = ((dphi % 180) + 180) % 180; return Math.min(m, 180 - m) < 0.5; }
+/* MODEL:end */
+
+/* ---- state: plain data --------------------------------------------------- */
+const DEF = {x: 1.5, y: 0, vx: 0, vy: 0.6};
+const S = {n: 2, launch: Object.assign({}, DEF), running: true, locked: false, records: [],
+           seen: {closedAt2: false, precessed: false}};
+const shared = sharedState();
+if (shared && shared.launch) {
+  S.n = clamp(Math.round((+shared.n || 2) * 10) / 10, -1, 4);
+  const l = shared.launch; if ([l.x, l.y, l.vx, l.vy].every(v => isFinite(+v))) S.launch = {x: +l.x, y: +l.y, vx: +l.vx, vy: +l.vy};
+}
+shareState(() => ({n: S.n, launch: S.launch}));
+let RUN = makeRun(S.n, S.launch);
+
+/* ============================================================================
+   The stage: built once, then patched.
+   ============================================================================ */
+const svg = $('stage');
+const C = {x: 320, y: 238}, PX = 110, VS = 80;          // star on screen; px per unit length; px per unit speed
+const sx = x => C.x + x * PX, sy = y => C.y - y * PX;
+const AR = {x: 664, y: 22, w: 316, h: 150};              // area bars
+const LL = {x: 700, y: 262, w: 272, h: 168, a0: Math.log10(0.3), a1: Math.log10(4), T0: Math.log10(0.5), T1: Math.log10(60)};
+const EG = {x: 70, y: 512, w: 880, h: 150, span: 24};
+
+function build(){
+  let stars = '';
+  const rnd = Play.mulberry32(11);
+  for (let i = 0; i < 90; i++) stars += `<circle cx="${(rnd() * 640).toFixed(1)}" cy="${(rnd() * 470).toFixed(1)}" r="${(rnd() * 1.1 + .25).toFixed(2)}" fill="#fff" opacity="${(rnd() * .5 + .15).toFixed(2)}"/>`;
+  let rings = '';
+  for (const r of [0.5, 1, 1.5, 2, 2.5, 3]) rings += `<circle cx="${C.x}" cy="${C.y}" r="${r * PX}" fill="none" stroke="#1d2c44" stroke-width="1"/>` +
+    `<text x="${C.x + r * PX * Math.cos(-0.55) + 3}" y="${C.y + r * PX * Math.sin(-0.55)}" fill="#3a5170" font-size="10" class="m">${r}</text>`;
+  svg.innerHTML = `
+  <defs>
+    <radialGradient id="gSun" cx="45%" cy="40%"><stop offset="0" stop-color="#fff4c2"/><stop offset=".55" stop-color="#ffc53d"/><stop offset="1" stop-color="#f28a12"/></radialGradient>
+    <radialGradient id="gGlow"><stop offset="0" stop-color="#ffcf5a" stop-opacity=".45"/><stop offset="1" stop-color="#ffcf5a" stop-opacity="0"/></radialGradient>
+    <radialGradient id="gEarth" cx="40%" cy="38%"><stop offset="0" stop-color="#6fc1ff"/><stop offset=".7" stop-color="#2471c9"/><stop offset="1" stop-color="#174d93"/></radialGradient>
+    <clipPath id="clipOrbit"><rect x="0" y="0" width="640" height="470"/></clipPath>
+    <clipPath id="clipLL"><rect x="700" y="262" width="272" height="168"/></clipPath>
+    <marker id="mArrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#ffd36b"/></marker>
+  </defs>
+  <rect x="0" y="0" width="640" height="470" fill="#0d1726"/>
+  <g>${stars}</g>
+  <g clip-path="url(#clipOrbit)">
+    <g>${rings}</g>
+    <g id="wedgeG"></g>
+    <g id="apsG"></g>
+    <g id="trailG" fill="none" stroke="#7fb4ff" stroke-width="1.3" stroke-linejoin="round" opacity=".85"></g>
+    <path id="trailNow" fill="none" stroke="#b7d6ff" stroke-width="1.6" stroke-linejoin="round"/>
+    <circle cx="${C.x}" cy="${C.y}" r="44" fill="url(#gGlow)"/>
+    <circle cx="${C.x}" cy="${C.y}" r="11" fill="url(#gSun)"/>
+    <g id="planet"><circle r="8" fill="url(#gEarth)"/><line x1="0" y1="-11" x2="0" y2="11" stroke="#fff" stroke-width="1.6" stroke-linecap="round" transform="rotate(23.5)"/></g>
+    <g id="launchG">
+      <circle id="launchRing" r="12" fill="none" stroke="#ffd36b" stroke-width="1.4" stroke-dasharray="3 3"/>
+      <line id="vArrow" stroke="#ffd36b" stroke-width="2" marker-end="url(#mArrow)"/>
+      <text id="vLab" fill="#ffd36b" font-size="11" class="m"></text>
+    </g>
+  </g>
+  <text x="18" y="28" fill="#9fb3c8" font-size="13" font-weight="700" letter-spacing=".08em">THE ORBIT</text>
+  <text id="lawTitle" x="18" y="48" fill="#dce6f0" font-size="17" class="serif">F = −k / r²</text>
+  <text id="status" x="18" y="455" fill="#9fb3c8" font-size="11.5" class="m"></text>
+  <text id="banner" x="${C.x}" y="80" fill="#ffd36b" font-size="17" text-anchor="middle" class="serif"></text>
+
+  <!-- right: equal areas, then T against a -->
+  <rect x="640" y="0" width="360" height="470" fill="#fbfaf6"/>
+  <line x1="640" y1="0" x2="640" y2="470" stroke="#e2ded2"/>
+  <text x="${AR.x}" y="22" fill="#4a555b" font-size="12" font-weight="700" letter-spacing=".08em">AREA SWEPT IN EACH Δt = ${WDT}</text>
+  <g id="areaAxes"></g>
+  <g id="areaBars"></g>
+  <text id="areaNote" x="${AR.x}" y="${AR.y + AR.h + 38}" fill="#4a555b" font-size="12" class="m"></text>
+  <line x1="652" y1="212" x2="990" y2="212" stroke="#e2ded2"/>
+  <text x="${AR.x}" y="234" fill="#4a555b" font-size="12" font-weight="700" letter-spacing=".08em">PERIOD T AGAINST SIZE a  (log–log)</text>
+  <g id="llAxes"></g>
+  <g clip-path="url(#clipLL)"><path id="llTheory" fill="none" stroke="#9aa3a6" stroke-width="1.2" stroke-dasharray="5 4"/>
+  <path id="llFit" fill="none" stroke="#6a3fc2" stroke-width="2"/></g>
+  <g id="llPts"></g>
+  <text id="llNote" x="${LL.x}" y="${LL.y + 12}" fill="#6a3fc2" font-size="12" class="m"></text>
+
+  <!-- bottom: energy -->
+  <rect x="0" y="470" width="1000" height="230" fill="#fbfaf6"/>
+  <line x1="0" y1="470" x2="1000" y2="470" stroke="#e2ded2"/>
+  <text x="18" y="496" fill="#4a555b" font-size="12" font-weight="700" letter-spacing=".08em">ENERGY PER UNIT MASS</text>
+  <g font-size="12" font-weight="600">
+    <line x1="230" y1="492" x2="256" y2="492" stroke="#e8890c" stroke-width="2.2"/><text x="262" y="496" fill="#8a4d00">kinetic</text>
+    <line x1="320" y1="492" x2="346" y2="492" stroke="#3f7fd8" stroke-width="2.2"/><text x="352" y="496" fill="#1f4f94">potential</text>
+    <line x1="422" y1="492" x2="448" y2="492" stroke="#1d2327" stroke-width="2.6"/><text x="454" y="496" fill="#1d2327">total</text>
+  </g>
+  <g id="eAxes"></g>
+  <path id="eKE" fill="none" stroke="#e8890c" stroke-width="2"/>
+  <path id="ePE" fill="none" stroke="#3f7fd8" stroke-width="2"/>
+  <path id="eTot" fill="none" stroke="#1d2327" stroke-width="2.6"/>
+  <text id="eDrift" x="975" y="496" text-anchor="end" fill="#4a555b" font-size="11.5" class="m"></text>
+
+  <rect id="veil" x="641" y="0" width="359" height="700" fill="#fbfaf6" opacity=".94"/>
+  <rect id="veil2" x="0" y="471" width="641" height="229" fill="#fbfaf6" opacity=".94"/>
+  <text id="veilT" x="500" y="600" text-anchor="middle" fill="#7c878c" font-size="15" font-weight="600">The measurements appear once you have made a prediction.</text>
+
+  <!-- hit targets: a layer that never moves between parents -->
+  <circle id="launchHit" r="17" fill="transparent" tabindex="0" role="slider" aria-label="Launch point: drag to move where the planet starts"/>
+  <circle id="tipHit" r="15" fill="transparent" tabindex="0" role="slider" aria-label="Velocity arrow tip: drag to set the launch velocity"/>
+  `;
+  /* static axes */
+  let a = `<line x1="${AR.x}" y1="${AR.y + AR.h}" x2="${AR.x + AR.w}" y2="${AR.y + AR.h}" stroke="#9aa3a6"/>`;
+  $('areaAxes').innerHTML = a;
+  let l = `<rect x="${LL.x}" y="${LL.y}" width="${LL.w}" height="${LL.h}" fill="none" stroke="#e2ded2"/>`;
+  for (const v of [0.5, 1, 2, 4]) { const x = llx(v); l += `<line x1="${x}" y1="${LL.y}" x2="${x}" y2="${LL.y + LL.h}" stroke="#ece8dc"/><text x="${x}" y="${LL.y + LL.h + 15}" fill="#7c878c" font-size="10.5" text-anchor="middle" class="m">${v}</text>`; }
+  for (const v of [1, 3, 10, 30]) { const y = lly(v); l += `<line x1="${LL.x}" y1="${y}" x2="${LL.x + LL.w}" y2="${y}" stroke="#ece8dc"/><text x="${LL.x - 6}" y="${y + 4}" fill="#7c878c" font-size="10.5" text-anchor="end" class="m">${v}</text>`; }
+  l += `<text x="${LL.x + LL.w}" y="${LL.y + LL.h + 30}" fill="#7c878c" font-size="11" text-anchor="end">a →</text><text x="${LL.x - 30}" y="${LL.y - 6}" fill="#7c878c" font-size="11">T ↑</text>`;
+  $('llAxes').innerHTML = l;
+}
+const llx = a => LL.x + (Math.log10(a) - LL.a0) / (LL.a1 - LL.a0) * LL.w;
+const lly = T => LL.y + LL.h - (Math.log10(T) - LL.T0) / (LL.T1 - LL.T0) * LL.h;
+
+/* ---- formatting ---------------------------------------------------------- */
+const SUP = {'-': '⁻', 0: '⁰', 1: '¹', 2: '²', 3: '³', 4: '⁴', 5: '⁵', 6: '⁶', 7: '⁷', 8: '⁸', 9: '⁹', '.': '·'};
+const sup = s => String(s).split('').map(c => SUP[c] || c).join('');
+function sci(v, dp = 1){
+  if (!isFinite(v)) return '—';
+  if (v === 0) return '0';
+  const e = Math.floor(Math.log10(Math.abs(v)));
+  if (e >= -2 && e < 4) return v.toFixed(Math.max(0, dp + 2 - e));
+  return (v / Math.pow(10, e)).toFixed(dp) + ' × 10' + sup(e);
+}
+const nTxt = n => (Math.abs(n) < 1e-9 ? 0 : n).toFixed(1);
+/* The law as written in a textbook: F = −k/r², F = −k r for the spring, F = −k for n = 0. */
+const expTxt = v => Math.abs(v - Math.round(v)) < 1e-9 ? String(Math.round(v)) : v.toFixed(1);
+const lawParts = n => Math.abs(n) < 1e-9 ? ['F = −k', ''] : n < 0 ? ['F = −k r', Math.abs(n + 1) < 1e-9 ? '' : expTxt(-n)] : ['F = −k / r', Math.abs(n - 1) < 1e-9 ? '' : expTxt(n)];
+const lawTxt = n => { const [a, e] = lawParts(n); return a + sup(e) + (Math.abs(n) < 1e-9 ? '  (a constant pull)' : ''); };
+const lawHTML = n => { const [a, e] = lawParts(n); return esc(a) + (e ? `<sup>${esc(e)}</sup>` : ''); };
+
+/* ---- trail: finished chunks become static paths; only the newest is redrawn --- */
+const CHUNK = 400, MAXCHUNKS = 12;
+function pathOf(pts){ let d = ''; for (let i = 0; i < pts.length; i++) d += (i ? 'L' : 'M') + sx(pts[i][0]).toFixed(1) + ' ' + sy(pts[i][1]).toFixed(1); return d; }
+function paintTrail(){
+  const T = RUN.trail;
+  while (T.length - RUN.trailCut > CHUNK) {
+    const seg = T.slice(RUN.trailCut, RUN.trailCut + CHUNK + 1);
+    const p = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    p.setAttribute('d', pathOf(seg)); $('trailG').appendChild(p);
+    while ($('trailG').childNodes.length > MAXCHUNKS) $('trailG').firstChild.remove();
+    RUN.trailCut += CHUNK;
+  }
+  $('trailNow').setAttribute('d', pathOf(T.slice(RUN.trailCut)).concat(`L${sx(RUN.x).toFixed(1)} ${sy(RUN.y).toFixed(1)}`));
+  if (RUN.trailCut > CHUNK * (MAXCHUNKS + 2)) { RUN.trail = T.slice(RUN.trailCut); RUN.trailCut = 0; }
+}
+
+/* ---- paint ----------------------------------------------------------------- */
+function paintLaunch(){
+  const L = S.launch, x = sx(L.x), y = sy(L.y), tx = x + L.vx * VS, ty = y - L.vy * VS;
+  $('launchRing').setAttribute('cx', x.toFixed(1)); $('launchRing').setAttribute('cy', y.toFixed(1));
+  const len = Math.hypot(tx - x, ty - y) || 1, ux = (tx - x) / len, uy = (ty - y) / len;
+  $('vArrow').setAttribute('x1', (x + ux * 12).toFixed(1)); $('vArrow').setAttribute('y1', (y + uy * 12).toFixed(1));
+  $('vArrow').setAttribute('x2', tx.toFixed(1)); $('vArrow').setAttribute('y2', ty.toFixed(1));
+  $('vLab').setAttribute('x', (tx + 10).toFixed(1)); $('vLab').setAttribute('y', (ty + (uy < 0 ? -4 : 12)).toFixed(1));
+  $('vLab').textContent = 'v = ' + fmt(Math.hypot(L.vx, L.vy), 2);
+  $('launchHit').setAttribute('cx', x.toFixed(1)); $('launchHit').setAttribute('cy', y.toFixed(1));
+  $('tipHit').setAttribute('cx', tx.toFixed(1)); $('tipHit').setAttribute('cy', ty.toFixed(1));
+}
+function paint(){
+  const R = RUN;
+  paintTrail();
+  $('planet').setAttribute('transform', `translate(${sx(R.x).toFixed(1)} ${sy(R.y).toFixed(1)})`);
+  $('planet').setAttribute('opacity', R.status === 'crashed' ? 0 : 1);
+  /* wedges: the last ten, alternately shaded, and the one being swept now */
+  let w = '';
+  const ws = R.wedges.slice(-10);
+  ws.forEach((q, i) => { w += `<path d="M${C.x} ${C.y}L${pathOf(q.pts).slice(1)}Z" fill="${(R.wedges.length - ws.length + i) % 2 ? '#ffd36b' : '#f29a1f'}" opacity="${(0.12 + 0.2 * (i + 1) / ws.length).toFixed(2)}"/>`; });
+  if (R.cur.pts.length > 1) w += `<path d="M${C.x} ${C.y}L${pathOf(R.cur.pts.concat([[R.x, R.y]])).slice(1)}Z" fill="#fff" opacity=".10"/>`;
+  $('wedgeG').innerHTML = w;
+  /* apsidal lines: star to each recent closest approach */
+  let ap = '';
+  for (const p of R.peris.slice(-8)) {
+    const ang = p.phi / R2D, x = sx(p.r * Math.cos(ang)), y = sy(p.r * Math.sin(ang));
+    ap += `<line x1="${C.x}" y1="${C.y}" x2="${x.toFixed(1)}" y2="${y.toFixed(1)}" stroke="#ff8fa3" stroke-width="1" stroke-dasharray="2 3" opacity=".8"/><circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="3" fill="#ff8fa3"/>`;
+  }
+  $('apsG').innerHTML = ap;
+  const r = Math.hypot(R.x, R.y);
+  $('status').textContent = `t = ${R.t.toFixed(2).padStart(6)}   r = ${r.toFixed(3)}   closest approaches: ${R.peris.length}`;
+  $('banner').textContent = R.status === 'crashed' ? `Fell into the star at t = ${R.tEnd.toFixed(2)}` :
+    R.status === 'escaped' ? `Escaped: E = ${fmt(R.E0, 3)} ≥ 0, never coming back` : R.status === 'lost' ? 'Gone beyond r = 30' : '';
+  $('lawTitle').textContent = lawTxt(S.n) + (Math.abs(S.n - 2) < 1e-9 ? '   (Newton)' : Math.abs(S.n + 1) < 1e-9 ? '   (a spring)' : '');
+  if (S.locked) paintMeasure();
+}
+function paintMeasure(){
+  const R = RUN;
+  /* area bars */
+  const ws = R.wedges.slice(-6);
+  let b = '';
+  if (ws.length) {
+    const mx = Math.max(...ws.map(q => Math.abs(q.A))) * 1.15, bw = AR.w / 6;
+    ws.forEach((q, i) => {
+      const hgt = Math.abs(q.A) / mx * AR.h, x = AR.x + i * bw + 6;
+      b += `<rect x="${x.toFixed(1)}" y="${(AR.y + AR.h - hgt).toFixed(1)}" width="${(bw - 12).toFixed(1)}" height="${hgt.toFixed(1)}" fill="${(R.wedges.length - ws.length + i) % 2 ? '#f5c24a' : '#f29a1f'}" rx="2"/>` +
+        `<text x="${(x + (bw - 12) / 2).toFixed(1)}" y="${(AR.y + AR.h - hgt - 5).toFixed(1)}" fill="#4a555b" font-size="10.5" text-anchor="middle" class="m">${q.A.toFixed(4)}</text>`;
+    });
+  }
+  $('areaBars').innerHTML = b;
+  const sp = areaSpread(ws);
+  $('areaNote').textContent = ws.length ? `spread ${sci(sp * 100, 1)} %    L·Δt/2 = ${(R.L0 * WDT / 2).toFixed(4)}` : 'Waiting for the first Δt…';
+  /* log-log */
+  const cur = S.records.filter(p => Math.abs(p.n - S.n) < 1e-9);
+  $('llPts').innerHTML = S.records.map(p => {
+    const on = Math.abs(p.n - S.n) < 1e-9, x = llx(clamp(p.a, 0.3, 4)), y = lly(clamp(p.T, 0.5, 60));
+    return `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${on ? 4.5 : 3}" fill="${on ? '#6a3fc2' : '#c9bfe0'}" stroke="#fff" stroke-width="1.2"><title>n = ${nTxt(p.n)}, a = ${p.a.toFixed(3)}, T = ${p.T.toFixed(3)}</title></circle>`;
+  }).join('');
+  if (S.n < 3) $('llTheory').setAttribute('d', `M${llx(0.3)} ${lly(periodTheory(0.3, S.n))}` + Array.from({length: 40}, (_, i) => { const a = 0.3 * Math.pow(4 / 0.3, (i + 1) / 40); return `L${llx(a).toFixed(1)} ${lly(clamp(periodTheory(a, S.n), 0.3, 80)).toFixed(1)}`; }).join(''));
+  else $('llTheory').setAttribute('d', '');
+  const F = fitOK(cur);
+  if (F) {
+    const f = F.fit, y = a => Math.pow(10, f.icpt + f.slope * Math.log10(a));
+    $('llFit').setAttribute('d', `M${llx(0.3)} ${lly(y(0.3)).toFixed(1)}L${llx(4)} ${lly(y(4)).toFixed(1)}`);
+    $('llNote').textContent = `fitted slope ${f.slope.toFixed(3)}   (n+1)/2 = ${((S.n + 1) / 2).toFixed(2)}`;
+  } else { $('llFit').setAttribute('d', ''); $('llNote').textContent = cur.length ? `${cur.length} point${cur.length > 1 ? 's' : ''} at n = ${nTxt(S.n)} — need 3, of different sizes` : ''; }
+  /* energy */
+  paintEnergy();
+  /* side readouts */
+  const Lnow = R.x * R.vy - R.y * R.vx, Enow = (R.vx * R.vx + R.vy * R.vy) / 2 + potential(Math.hypot(R.x, R.y), S.n);
+  $('mL').textContent = Lnow.toFixed(6);
+  $('mdL').textContent = sci(R.maxdL, 1);
+  $('mE').textContent = R.status === 'crashed' ? '—' : Enow.toFixed(5);
+  $('mDrift').textContent = sci(R.maxDrift, 1);
+  const lp = R.loop;
+  $('mPhi').textContent = lp ? lp.dphi.toFixed(2) + '°' : '—';
+  $('mT').textContent = lp ? lp.T.toFixed(4) : '—';
+  $('mA').textContent = lp ? lp.a.toFixed(4) : '—';
+  $('mEcc').textContent = lp ? lp.e.toFixed(3) : '—';
+  $('btnRecord').disabled = !lp || !S.locked;
+  $('fitNote').textContent = F ? `Fitted over ${cur.length} orbits at n = ${nTxt(S.n)}: log T = ${F.fit.slope.toFixed(3)} log a + ${F.fit.icpt.toFixed(3)}, so T ∝ a^${F.fit.slope.toFixed(3)}.` :
+    'Record three or more orbits of different sizes at the same n, and the slope of log T against log a is fitted.';
+}
+function fitOK(cur){
+  if (cur.length < 3) return null;
+  const as = cur.map(p => p.a);
+  if (Math.max(...as) / Math.min(...as) < 1.3) return null;
+  return {fit: fitLogLog(cur)};
+}
+function paintEnergy(){
+  const es = RUN.esamp;
+  if (es.length < 2) { $('eKE').setAttribute('d', ''); $('ePE').setAttribute('d', ''); $('eTot').setAttribute('d', ''); return; }
+  const t1 = Math.max(EG.span, es[es.length - 1][0]), t0 = t1 - EG.span;
+  let lo = Infinity, hi = -Infinity;
+  for (const [, k, p] of es) { lo = Math.min(lo, k, p, k + p); hi = Math.max(hi, k, p, k + p); }
+  lo = Math.max(lo, -6); hi = Math.min(hi, 6);
+  if (hi - lo < 0.2) { const m = (hi + lo) / 2; lo = m - 0.1; hi = m + 0.1; }
+  const pad = (hi - lo) * 0.08; lo -= pad; hi += pad;
+  const X = t => EG.x + (t - t0) / EG.span * EG.w, Y = v => EG.y + EG.h - (clamp(v, lo, hi) - lo) / (hi - lo) * EG.h;
+  const P = f => es.map((s, i) => (i ? 'L' : 'M') + X(s[0]).toFixed(1) + ' ' + Y(f(s)).toFixed(1)).join('');
+  $('eKE').setAttribute('d', P(s => s[1])); $('ePE').setAttribute('d', P(s => s[2])); $('eTot').setAttribute('d', P(s => s[1] + s[2]));
+  let ax = `<line x1="${EG.x}" y1="${Y(0).toFixed(1)}" x2="${EG.x + EG.w}" y2="${Y(0).toFixed(1)}" stroke="#cfc9b8" stroke-dasharray="3 3"/>` +
+    `<text x="${EG.x - 8}" y="${(Y(0) + 4).toFixed(1)}" fill="#7c878c" font-size="10.5" text-anchor="end" class="m">0</text>` +
+    `<text x="${EG.x - 8}" y="${(EG.y + 8).toFixed(1)}" fill="#7c878c" font-size="10.5" text-anchor="end" class="m">${hi.toFixed(2)}</text>` +
+    `<text x="${EG.x - 8}" y="${(EG.y + EG.h).toFixed(1)}" fill="#7c878c" font-size="10.5" text-anchor="end" class="m">${lo.toFixed(2)}</text>` +
+    `<line x1="${EG.x}" y1="${EG.y + EG.h}" x2="${EG.x + EG.w}" y2="${EG.y + EG.h}" stroke="#9aa3a6"/>`;
+  for (let t = Math.ceil(t0 / 4) * 4; t <= t1; t += 4) ax += `<text x="${X(t).toFixed(1)}" y="${EG.y + EG.h + 16}" fill="#7c878c" font-size="10.5" text-anchor="middle" class="m">${t}</text>`;
+  ax += `<text x="${EG.x}" y="${EG.y + EG.h + 34}" fill="#7c878c" font-size="11">time →</text>`;
+  $('eAxes').innerHTML = ax;
+  $('eDrift').textContent = `drift in the total: ${sci(RUN.maxDrift, 1)} of |KE₀|+|PE₀|  (Verlet, h = ${H})`;
+}
+
+/* A narrator: what THIS run is doing, in numbers from the model. */
+function paintWhy(){
+  if (!S.locked) return;
+  $('whyCard').hidden = false;
+  const R = RUN, n = S.n, lp = R.loop;
+  let t = '';
+  if (R.status === 'crashed') {
+    t += `<p><b>It fell into the star</b> at t = <span class="mono">${R.tEnd.toFixed(2)}</span>.</p>`;
+    if (n >= 3) t += `<p>With n ≥ 3 the pull grows at least as fast as the “centrifugal” barrier L²/r³. For n = 3 the effective potential is (L² − k)/2r²: with L² = <span class="mono">${(R.L0 * R.L0).toFixed(3)}</span> ${R.L0 * R.L0 < K ? '&lt; k, nothing holds the planet up' : '&gt; k, so it should have flown out'}. There is no stable orbit at all.</p>`;
+    if (R.maxDrift > 1e-3) t += `<p>Watch the energy drift: <span class="mono">${sci(R.maxDrift, 1)}</span>. Close to the star the planet moves so fast that a fixed step h = ${H} is too coarse — the integrator has its own limit, and this number is how you catch it.</p>`;
+  } else if (R.status === 'escaped') {
+    t += `<p><b>It escaped.</b> Its total energy E = <span class="mono">${R.E0.toFixed(3)}</span> is not negative, so it can reach infinity with speed to spare.</p>`;
+  } else t += `<p><b>Bound</b> so far: r has stayed between <span class="mono">${R.rmin.toFixed(3)}</span> and <span class="mono">${R.rmax.toFixed(3)}</span>.</p>`;
+  t += `<p>Each Δt = ${WDT} sweeps <span class="mono">${(R.L0 * WDT / 2).toFixed(4)}</span> = L·Δt/2. L has changed by at most <span class="mono">${sci(R.maxdL, 1)}</span>: a force along the line to the star has no lever arm, so it cannot change L — whatever n is.</p>`;
+  if (lp && R.status === 'bound') {
+    const th = apsidalTheory(n);
+    t += closes(lp.dphi) ? `<p>Closest approaches are <span class="mono">${lp.dphi.toFixed(2)}°</span> apart: the path retraces itself. <b>It closes.</b></p>`
+      : `<p>Closest approaches are <span class="mono">${lp.dphi.toFixed(2)}°</span> apart, not 360°, so the ellipse turns by <span class="mono">${(lp.dphi - 360).toFixed(1)}°</span> every loop: a rosette.` +
+        (isFinite(th) ? ` For a nearly circular orbit the theory gives 360°/√(3 − n) = <span class="mono">${th.toFixed(1)}°</span>.` : '') + `</p>`;
+  }
+  $('why').innerHTML = t;
+}
+
+/* ---- findings: reached by the model, never by a button -------------------- */
+function check(){
+  if (!S.locked) return;
+  const R = RUN, n = S.n;
+  const ws = R.wedges;
+  const ecc = (R.rmax - R.rmin) / (R.rmax + R.rmin);
+  if (Math.abs(n - 2) < 1e-9 && ws.length >= 6 && ecc > 0.15 && areaSpread(ws.slice(-6)) < 0.005) discover('areas');
+  if (Math.abs(n - 2) >= 0.25 && ws.length >= 4 && ecc > 0.08 && areaSpread(ws.slice(-4)) < 0.005) discover('areasAny');
+  if (R.loop && R.status === 'bound') {
+    if (Math.abs(n - 2) < 1e-9 && R.loop.e > 0.1 && closes(R.loop.dphi)) S.seen.closedAt2 = true;
+    if (Math.abs(n - 2) > 0.05 && Math.abs(n + 1) > 0.05 && !closes(R.loop.dphi) && Math.abs(R.loop.dphi - 360) > 5) S.seen.precessed = true;
+    if (S.seen.closedAt2 && S.seen.precessed) discover('closes');
+    if (R.peris.length >= 3 && Math.abs(n - 2) > 0.05 && Math.abs(n + 1) > 0.05 && !closes(R.loop.dphi) && Math.abs(R.loop.dphi - 360) > 10) discover('rosette');
+  }
+  const cur = S.records.filter(p => Math.abs(p.n - n) < 1e-9);
+  const F = fitOK(cur);
+  if (F && Math.abs(n - 2) < 1e-9 && Math.abs(F.fit.slope - 1.5) < 0.02) discover('kepler3');
+  if (n >= 2.95 && R.status === 'crashed') discover('doom');
+  if (n >= 2.95 && (R.status === 'crashed' || R.status === 'escaped')) maybeExplain();
+}
+let EXPLAINED = false;
+function maybeExplain(){
+  if (EXPLAINED || !POE) return;
+  EXPLAINED = true;
+  const R = RUN;
+  const ref = advance(makeRun(2, S.launch), 20000);      // the same launch under Newton, for comparison
+  const refTxt = ref.loop ? `Under 1/r² the same launch closes: closest approaches <b>${ref.loop.dphi.toFixed(2)}°</b> apart. ` : '';
+  POE.explain(`At n = ${nTxt(S.n)} your planet ${R.status === 'crashed' ? `<b>spiralled into the star</b> at t = ${R.tEnd.toFixed(2)}` : '<b>flew off and never came back</b>'}. ` +
+    refTxt + `With 1/r³ there is no closed ellipse and no stable orbit of any shape: the pull and the planet’s “centrifugal” barrier both go as 1/r³, so whichever is stronger wins for ever. ` +
+    `Only 1/r² (and the spring, n = −1) close every bound orbit — Bertrand’s theorem. But the areas were equal the whole way down: that is angular momentum, and it holds for every central force.`);
+}
+
+/* ============================================================================
+   Controls
+   ============================================================================ */
+build();
+function relaunch(){
+  RUN = makeRun(S.n, S.launch);
+  $('trailG').innerHTML = '';
+  paintLaunch(); paint();
+}
+function setRunning(on){
+  S.running = on;
+  $('btnRun').textContent = on ? '❚❚ Pause' : '▶ Run';
+  $('btnRun').setAttribute('aria-label', on ? 'Pause' : 'Run');
+}
+$('btnRun').addEventListener('click', () => { setRunning(!S.running); sound('tick'); });
+$('btnRelaunch').addEventListener('click', () => { relaunch(); setRunning(true); sound('whoosh'); track('relaunch', {n: S.n}); });
+$('nexp').addEventListener('input', e => {
+  S.n = Math.round(+e.target.value * 10) / 10;
+  $('nOut').textContent = nTxt(S.n); $('lawSide').innerHTML = lawHTML(S.n);
+  relaunch(); setRunning(true);
+});
+$('nexp').addEventListener('change', () => track('law', {n: S.n}));
+$('btnRecord').addEventListener('click', () => {
+  if (!RUN.loop) return;
+  S.records.push({n: S.n, a: RUN.loop.a, T: RUN.loop.T});
+  sound('pop'); track('record', {n: S.n, a: RUN.loop.a, T: RUN.loop.T});
+  paint(); check();
+});
+$('btnClearRec').addEventListener('click', () => { S.records = []; paint(); });
+
+/* Drag the launch point (keeps the velocity) or the arrow tip (sets the velocity). */
+const toModel = p => ({x: (p.x - C.x) / PX, y: (C.y - p.y) / PX});
+drag($('launchHit'), svg, {
+  start(){ if (!S.locked) return false; },
+  move(p){
+    const m = toModel(p), r = Math.hypot(m.x, m.y), k = clamp(r, 0.35, 2.6) / (r || 1);
+    S.launch.x = m.x * k; S.launch.y = m.y * k; relaunch();
+  },
+  end(){ setRunning(true); track('launch', Object.assign({}, S.launch)); },
+});
+drag($('tipHit'), svg, {
+  start(){ if (!S.locked) return false; },
+  move(p){
+    let vx = (p.x - sx(S.launch.x)) / VS, vy = (sy(S.launch.y) - p.y) / VS;
+    const v = Math.hypot(vx, vy); if (v > 2.2) { vx *= 2.2 / v; vy *= 2.2 / v; }
+    S.launch.vx = vx; S.launch.vy = vy; relaunch();
+  },
+  end(){ setRunning(true); track('launch', Object.assign({}, S.launch)); },
+});
+$('tipHit').addEventListener('keydown', e => {
+  const d = {ArrowUp: [0, .02], ArrowDown: [0, -.02], ArrowRight: [.02, 0], ArrowLeft: [-.02, 0]}[e.key];
+  if (!d || !S.locked) return;
+  e.preventDefault(); S.launch.vx += d[0]; S.launch.vy += d[1]; relaunch();
+});
+
+function lockControls(lock){
+  for (const id of ['nexp', 'btnRun', 'btnRelaunch']) $(id).disabled = lock;
+  $('launchHit').style.pointerEvents = lock ? 'none' : ''; $('tipHit').style.pointerEvents = lock ? 'none' : '';
+  $('gate').hidden = !lock;
+}
+
+/* ============================================================================
+   Start
+   ============================================================================ */
+findings($('finds'), [
+  {id: 'areas',    icon: '◔', label: 'Equal areas in equal times', hint: 'Watch the wedges on an eccentric orbit'},
+  {id: 'areasAny', icon: '◑', label: 'Equal areas even without an inverse square', hint: 'Does Kepler’s second law need 1/r²?'},
+  {id: 'closes',   icon: '⬭', label: 'The ellipse closes only for 1/r²', hint: 'Compare Δφ at n = 2 with another n'},
+  {id: 'rosette',  icon: '✿', label: 'A rosette', hint: 'Let an orbit run under a different law'},
+  {id: 'kepler3',  icon: '∝', label: 'T² ∝ a³ (fitted slope 1.5)', hint: 'Record orbits of different sizes'},
+  {id: 'doom',     icon: '🌀', label: 'Spiral of doom', hint: 'Try n = 3 or more'},
+], () => toast('All six. You have tested Kepler’s laws the way Newton did — by asking what else they could have been.', 4800));
+
+const POE = predict($('poe'), {
+  id: 'inverse-cube',
+  q: 'If gravity fell off as 1/r³ instead of 1/r², would the Earth’s orbit still be a closed ellipse?',
+  options: [
+    {id: 'same',    text: 'Yes — the same ellipse, just with a different period.'},
+    {id: 'other',   text: 'Yes — a closed orbit, but a different shape.'},
+    {id: 'rosette', text: 'No — it would stay bound, but the ellipse would slowly turn (a rosette).'},
+    {id: 'doom',    text: 'No — there would be no stable orbit: it would spiral into the Sun or fly away.', right: true},
+  ],
+  onLock(){
+    S.locked = true;
+    lockControls(false);
+    for (const id of ['veil', 'veil2', 'veilT']) $(id).remove();
+    $('measureVeil').hidden = true; $('measure').hidden = false;
+    paint(); paintWhy();
+  },
+});
+lockControls(!POE.locked);
+if (!Play.FF('predict')) S.locked = true;
+$('nexp').value = S.n; $('nOut').textContent = nTxt(S.n); $('lawSide').innerHTML = lawHTML(S.n);
+paintLaunch(); paint();
+
+/* Time runs at 3 units per second: about 50 Verlet steps a frame. Under reduced motion the
+   planet moves in jumps of a quarter-second of model time rather than gliding. */
+const RM = reduced();
+let acc = 0, whyT = 0;
+loop(dt => {
+  if (!S.running || RUN.status !== 'bound') { if (RUN.status !== 'bound') { check(); } return; }
+  acc += dt;
+  if (RM && acc < 0.25) return;
+  advance(RUN, Math.round(acc * 3 / H)); acc = 0;
+  paint(); check();
+  whyT += dt; if (whyT > 0.25 || RM) { whyT = 0; paintWhy(); }
+});
+setInterval(() => { if (RUN.status !== 'bound') paintWhy(); }, 500);
+window.applyFeatures = () => paint();
+window.PG_STATE = () => ({n: S.n, launch: Object.assign({}, S.launch), running: S.running, locked: S.locked, records: S.records.slice(),
+  t: RUN.t, status: RUN.status, wedges: RUN.wedges.map(w => w.A), loop: RUN.loop, peris: RUN.peris.length, maxDrift: RUN.maxDrift, maxdL: RUN.maxdL});
+window.PG_MODEL = {potential, accel, makeRun, step, advance, areaSpread, closes, fitLogLog, apsidalTheory, periodTheory, H, WDT};
+</script>
+</body>
+</html>

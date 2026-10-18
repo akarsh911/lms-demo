@@ -1,0 +1,403 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Behind the Mirror</title>
+<meta name="description" content="Class 7 Science, Ch 11 Light: walk up to a plane mirror and watch your image walk to meet you; find the wedge from your eye through the mirror's edges that decides what you can see; then add a second mirror and watch your reflections multiply.">
+<link rel="icon" href="../../favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="../../play.css">
+<style>
+/* Only what this page needs beyond play.css. */
+.gate{position:absolute; inset:0; display:grid; place-items:center; pointer-events:none}
+.gate span{background:rgba(58,40,20,.85); color:#fff; padding:10px 16px; border-radius:99px; font-weight:600; font-size:14px}
+.clockbar{display:flex; align-items:center; gap:12px; flex-wrap:wrap; padding:10px 16px; border-bottom:1px solid var(--hair)}
+.clocklab{font-size:12px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; color:var(--ink-3)}
+.clocknote{font-size:12.5px; color:var(--ink-3)}
+.seg{display:grid; grid-auto-flow:column; grid-auto-columns:1fr; gap:4px; background:var(--sunk); padding:4px; border-radius:var(--radius-sm); margin:0 16px 10px}
+.seg button{border:0; background:transparent; border-radius:8px; min-height:34px; font-weight:600; font-size:13px; cursor:pointer; color:var(--ink-2)}
+.seg button[aria-pressed="true"]{background:var(--card); color:var(--ink); box-shadow:var(--shadow)}
+.sub{font-size:11px; letter-spacing:.07em; text-transform:uppercase; font-weight:700; color:var(--ink-3); margin:10px 0 2px}
+.note{font-size:12.5px; color:var(--ink-3); margin:8px 0 0}
+.nums{display:grid; grid-template-columns:1fr auto; gap:3px 12px; font-size:13.5px}
+.nums b{font-variant-numeric:tabular-nums; text-align:right}
+.why p{font-size:14px}
+.why b{color:var(--ink)}
+</style>
+</head>
+<body>
+<header class="pg-top"></header>
+
+<div class="pg-intro">
+  <h1>Behind the mirror</h1>
+  <p>The card walks up to the mirror and back — play, pause, slow down or step through its walk with the clock above the bench, and
+     watch its image keep exactly as far behind the glass as the card is in front. A wedge from your eye through the mirror's two
+     edges decides what you can actually see. Add a second mirror, and every reflection reflects again.</p>
+</div>
+
+<main class="pg-main wide-side">
+  <section class="pg-stage" id="stageWrap">
+    <div class="clockbar">
+      <span class="clocklab">The walk</span>
+      <div id="clock"></div>
+      <span class="clocknote" id="clockNote"></span>
+    </div>
+    <div class="seg" role="group" aria-label="Which bench">
+      <button id="tabOne" aria-pressed="true">One mirror</button>
+      <button id="tabTwo" aria-pressed="false">Two mirrors</button>
+    </div>
+    <svg id="stage" viewBox="0 0 1000 640" role="img" aria-label="A card walking up to a plane mirror, with the eye's field of view and, on a second tab, two mirrors meeting at an angle"></svg>
+    <div class="gate" id="gate"><span>Make your prediction first →</span></div>
+  </section>
+
+  <aside class="pg-side">
+    <div id="poe"></div>
+
+    <div class="card" id="ctlCard">
+      <div id="ctlOne">
+        <div class="ctl"><label for="eyeY">Where you stand (sideways)</label><input type="range" id="eyeY" min="-20" max="20" step="1" value="-8"><output id="eyeYOut" class="num">-8 cm</output></div>
+        <div class="ctl"><label for="objY">The card's sideways position</label><input type="range" id="objY" min="-20" max="20" step="1" value="8"><output id="objYOut" class="num">8 cm</output></div>
+        <p class="note">The walk towards and away from the mirror is the clock's to run, above the bench.</p>
+      </div>
+      <div id="ctlTwo" hidden>
+        <div class="ctl"><label for="theta">Angle between the mirrors</label><input type="range" id="theta" min="20" max="120" step="5" value="60"><output id="thetaOut" class="num">60°</output></div>
+        <p class="note">The star sits exactly between the two mirrors. Narrow the angle and count what happens.</p>
+      </div>
+    </div>
+
+    <div class="card why" id="whyCard" hidden>
+      <div class="kicker">What is happening</div>
+      <div id="why"></div>
+    </div>
+
+    <div class="card" id="numCard">
+      <div class="kicker">Measured, right now</div>
+      <div id="nums"></div>
+    </div>
+
+    <div class="card"><div class="kicker">To find</div><div id="finds"></div></div>
+  </aside>
+</main>
+
+<script src="../../play.js"></script>
+<script>
+'use strict';
+const {$, esc, clamp, fmt, sound, say, track, toast, predict, findings, discover, found,
+       shareState, sharedState, mount, clock} = Play;
+mount({thread: 'light', band: 'tinkerer', part: 'plane'});
+
+/* MODEL:start ==================================================================
+   ONE MIRROR. The mirror is the plane x = 0; the card walks along y = objY at a
+   distance x(t) in front of it (a sine walk, so it approaches and recedes, never
+   stopping at the glass). Its image is exactly as far behind the mirror as the
+   card is in front, at the same height: image = (-x, objY). So the SEPARATION
+   between card and image is always 2x, closing (or opening) twice as fast as
+   the card itself moves.
+
+   Whether an eye at (-xEye, eyeY) — a fixed distance away, off to one side —
+   can actually see that image depends only on the mirror's SIZE. Reflect the
+   eye across the mirror to eye' = (xEye, eyeY) (its own image); the sight line
+   from eye' straight through the object is the same line the reflected ray
+   really takes. Where that line crosses the mirror (x = 0) must fall between
+   the mirror's two edges (±M) or the reflection is invisible from there — a
+   real field of view, not a fixed "can everyone see the mirror" answer.
+
+   TWO MIRRORS. Two mirrors meet at a vertex, one along angle 0, the other
+   along angle theta. Reflecting a point at angle phi in the mirror at 0 sends
+   it to -phi; reflecting it in the mirror at theta sends it to 2*theta - phi.
+   Starting from the object's own angle and applying both reflections over and
+   over generates every image there is — the model counts them by generating
+   them, rather than trusting the 360/theta - 1 formula blindly (it agrees with
+   it whenever 360/theta is a whole number).
+   ============================================================================ */
+const PX = 6;                          // px per cm
+const AY = 230;                        // the one-mirror bench axis
+const MX = 380;                        // the mirror, in pixels
+const M_CM = 15;                       // the mirror's own half-height
+const X_MID = 26, X_AMP = 18, PERIOD = 6;  // the walk: 8..44 cm from the mirror
+const BEAT = 0.4;
+const X_EYE = 34;                      // fixed distance of the eye from the mirror
+
+const xOf = t => X_MID + X_AMP * Math.sin(2 * Math.PI * t / PERIOD);
+function fieldOfView(eyeY, objX, objY){
+  const t = X_EYE / (objX + X_EYE);
+  const ycross = eyeY + t * (objY - eyeY);
+  return {ycross, visible: Math.abs(ycross) <= M_CM};
+}
+function kaleidoscopeImages(theta, phi0){
+  const norm = a => { a = a % 360; if (a < 0) a += 360; return a; };
+  const key = a => Math.round(norm(a) * 20);
+  const seen = new Set([key(phi0)]);
+  const images = []; let queue = [{a: phi0, flip: 0}], guard = 0;
+  while (queue.length && guard++ < 300) {
+    const {a, flip} = queue.shift();
+    for (const na of [-a, 2 * theta - a]) {
+      const k = key(na);
+      if (!seen.has(k)) { seen.add(k); const im = {a: na, flip: 1 - flip}; images.push(im); queue.push(im); }
+    }
+  }
+  return images;
+}
+/* MODEL:end */
+
+/* ---- state: plain data ------------------------------------------------------ */
+const S = {tab: 'one', eyeY: -8, objY: 8, theta: 60, t: 0, locked: false,
+  seen: {sepMin: null, sepMax: null, yLast: 8, yChanges: 0, sawVisible: false, sawHidden: false, thetaTried: false}};
+const shared = sharedState();
+if (shared) {
+  if (shared.tab === 'two') S.tab = 'two';
+  S.eyeY = clamp(+shared.eyeY || -8, -20, 20); S.objY = clamp(+shared.objY || 8, -20, 20); S.theta = clamp(+shared.theta || 60, 20, 120);
+}
+shareState(() => ({tab: S.tab, eyeY: S.eyeY, objY: S.objY, theta: S.theta}));
+let CLOCK = null;
+
+/* ============================================================================
+   The stage
+   ============================================================================ */
+const svg = $('stage');
+const GL = {x: 40, y: 495, w: 920, h: 120};
+const VX = 460, VY = 235, ML = 200, RHO_CM = 18;   // two-mirror bench
+
+function build(){
+  svg.innerHTML = `
+  <defs>
+    <linearGradient id="gMirror" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#eef6fb"/><stop offset="1" stop-color="#9fb6c6"/></linearGradient>
+    <pattern id="hatch" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2="6" stroke="#5b4326" stroke-width="2"/></pattern>
+  </defs>
+  <rect x="0" y="0" width="1000" height="460" fill="#8a6640"/>
+
+  <!-- ===================== ONE MIRROR ===================== -->
+  <g id="vOne">
+    <rect x="20" y="20" width="960" height="420" rx="10" fill="#fbf8ef"/>
+    <text x="44" y="48" fill="#6b5a44" font-size="13" font-weight="700" letter-spacing=".08em">A CARD, A MIRROR, AND YOUR EYE</text>
+    <text x="44" y="66" fill="#8a7a62" font-size="11.5">The wedge shows what a mirror this size can actually show you.</text>
+    <path id="fovWedge" fill="#ffe9a8" opacity=".4"/>
+    <line id="fovTop" stroke="#c9a227" stroke-dasharray="5 4"/>
+    <line id="fovBot" stroke="#c9a227" stroke-dasharray="5 4"/>
+    <line id="railOne" stroke="#c7b795" stroke-width="3" stroke-linecap="round"/>
+    <circle id="railOneCapL" r="4" fill="#a8916a"/><circle id="railOneCapR" r="4" fill="#a8916a"/>
+    <g id="mirrorG"><rect id="mBack" x="${MX - 6}" width="6" fill="url(#hatch)"/><rect id="mFace" x="${MX - 2}" width="4" fill="url(#gMirror)"/></g>
+    <line id="sightLine" stroke-width="2"/>
+    <g id="imgCard"></g>
+    <g id="objCard"></g>
+    <circle id="eyeDot" r="7" fill="#2f2a22"/><circle id="eyeDot2" r="3" fill="#fff"/>
+    <text id="visLab" x="960" y="48" fill="#6b5a44" font-size="12.5" font-weight="700" text-anchor="end"></text>
+  </g>
+
+  <!-- ===================== TWO MIRRORS ===================== -->
+  <g id="vTwo" display="none">
+    <text x="44" y="48" fill="#f4e9d6" font-size="13" font-weight="700" letter-spacing=".08em">TWO MIRRORS MEETING AT AN ANGLE</text>
+    <text x="44" y="66" fill="#d9c8a6" font-size="11.5">Every reflection is reflected again, until it runs off the far side.</text>
+    <path id="wedgeFill" fill="#fbf8ef"/>
+    <line id="mir1" stroke="url(#gMirror)" stroke-width="7" stroke-linecap="round"/>
+    <line id="mir2" stroke="url(#gMirror)" stroke-width="7" stroke-linecap="round"/>
+    <g id="images2"></g>
+    <g id="starObj"></g>
+    <text id="countLab" x="500" y="420" fill="#f4e9d6" font-size="16" font-weight="700" text-anchor="middle"></text>
+  </g>
+
+  <!-- ===================== below: one strip chart (tab one only) ===================== -->
+  <rect x="0" y="460" width="1000" height="180" fill="#fbfaf6"/>
+  <line x1="0" y1="460" x2="1000" y2="460" stroke="#e2ded2"/>
+  <text id="gTitle" x="40" y="484" fill="#4a555b" font-size="12.5" font-weight="700" letter-spacing=".06em">GAP BETWEEN YOU AND YOUR IMAGE, ONE WALK</text>
+  <g id="glAxes"></g>
+  <path id="glSep" fill="none" stroke="#1f8a70" stroke-width="2.2"/>
+  <circle id="glDot" r="4.5" fill="#1f8a70" stroke="#fff" stroke-width="1.3"/>
+  `;
+}
+
+/* ---- little letter card, built from a few strokes: F on a card, so a flip is obvious --- */
+function cardSVG(id, flip, virtual){
+  const op = virtual ? ' opacity=".55"' : '';
+  const dash = virtual ? ' stroke-dasharray="4 3"' : '';
+  return `<g id="${id}"${op}${flip ? ' data-flip="1"' : ''}>
+    <rect x="-16" y="-30" width="32" height="60" rx="4" fill="#f4ecd6" stroke="#a8916a"${dash}/>
+    <g id="${id}Letter" fill="#c0392b">
+      <rect x="-8" y="-18" width="6" height="36"/><rect x="-8" y="-18" width="16" height="6"/><rect x="-8" y="-3" width="12" height="6"/>
+    </g>
+  </g>`;
+}
+function stripChart(box, ymax, curve, dotT, ids){
+  const gx = t => box.x + t / PERIOD * box.w;
+  const gy = v => box.y + box.h - clamp(v, 0, ymax) / ymax * (box.h - 10);
+  $(ids.axes).innerHTML = `<line x1="${box.x}" y1="${box.y + box.h}" x2="${box.x + box.w}" y2="${box.y + box.h}" stroke="#cfc9b8"/>` +
+    `<line x1="${box.x}" y1="${box.y}" x2="${box.x}" y2="${box.y + box.h}" stroke="#cfc9b8"/>` +
+    `<text x="${box.x + box.w}" y="${box.y + box.h + 15}" fill="#9aa3a6" font-size="10.5" text-anchor="end">time, one walk (s)</text>`;
+  if (!S.locked) { $(ids.c).setAttribute('d', ''); return; }
+  const N = 80; let p = '';
+  for (let i = 0; i <= N; i++) { const t = i / N * PERIOD; p += (i ? 'L' : 'M') + gx(t).toFixed(1) + ' ' + gy(curve(t)).toFixed(1); }
+  $(ids.c).setAttribute('d', p);
+  $(ids.d).setAttribute('cx', gx(dotT).toFixed(1)); $(ids.d).setAttribute('cy', gy(curve(dotT)).toFixed(1));
+}
+
+/* ---- paint -------------------------------------------------------------------- */
+function paint(){
+  $('vOne').setAttribute('display', S.tab === 'one' ? '' : 'none');
+  $('vTwo').setAttribute('display', S.tab === 'two' ? '' : 'none');
+  $('tabOne').setAttribute('aria-pressed', S.tab === 'one'); $('tabTwo').setAttribute('aria-pressed', S.tab === 'two');
+  $('ctlOne').hidden = S.tab !== 'one'; $('ctlTwo').hidden = S.tab !== 'two';
+  $('gTitle').setAttribute('opacity', S.tab === 'one' ? 1 : 0);
+  $('eyeY').value = S.eyeY; $('eyeYOut').textContent = S.eyeY + ' cm';
+  $('objY').value = S.objY; $('objYOut').textContent = S.objY + ' cm';
+  $('theta').value = S.theta; $('thetaOut').textContent = S.theta + '°';
+  $('mBack').setAttribute('y', AY - M_CM * PX); $('mBack').setAttribute('height', 2 * M_CM * PX);
+  $('mFace').setAttribute('y', AY - M_CM * PX); $('mFace').setAttribute('height', 2 * M_CM * PX);
+
+  const xObj = xOf(S.t);
+  const objPx = {x: MX + xObj * PX, y: AY + S.objY * PX};
+  const imgPx = {x: MX - xObj * PX, y: AY + S.objY * PX};
+  const eyePx = {x: MX + X_EYE * PX, y: AY + S.eyeY * PX};
+  const eyePrimePx = {x: MX - X_EYE * PX, y: AY + S.eyeY * PX};
+  const fov = fieldOfView(S.eyeY, xObj, S.objY);
+
+  if (!$('objCard').firstChild) { $('objCard').innerHTML = cardSVG('objC', false, false); $('imgCard').innerHTML = cardSVG('imgC', true, true); }
+  $('objC').setAttribute('transform', `translate(${objPx.x.toFixed(1)} ${objPx.y.toFixed(1)})`);
+  $('imgC').setAttribute('transform', `translate(${imgPx.x.toFixed(1)} ${imgPx.y.toFixed(1)}) scale(-1,1)`);
+  $('eyeDot').setAttribute('cx', eyePx.x); $('eyeDot').setAttribute('cy', eyePx.y);
+  $('eyeDot2').setAttribute('cx', eyePx.x + 2); $('eyeDot2').setAttribute('cy', eyePx.y - 2);
+  $('railOne').setAttribute('x1', MX + 8 * PX); $('railOne').setAttribute('x2', MX + 44 * PX);
+  $('railOne').setAttribute('y1', objPx.y); $('railOne').setAttribute('y2', objPx.y);
+  $('railOneCapL').setAttribute('cx', MX + 8 * PX); $('railOneCapL').setAttribute('cy', objPx.y);
+  $('railOneCapR').setAttribute('cx', MX + 44 * PX); $('railOneCapR').setAttribute('cy', objPx.y);
+
+  if (S.locked) {
+    const far = 990;
+    const line = (p0, edgeY) => { const d = {x: MX - p0.x, y: (AY + edgeY * PX) - p0.y}; const t = (far - p0.x) / d.x; return {x: far, y: p0.y + d.y * t}; };
+    const top = line(eyePrimePx, -M_CM), bot = line(eyePrimePx, M_CM);
+    const mTop = {x: MX, y: AY - M_CM * PX}, mBot = {x: MX, y: AY + M_CM * PX};
+    /* the dashed construction lines are drawn only in real space (mirror to far edge): the
+       part of the line behind the glass is not a place a shadow of it should suggest anything is. */
+    $('fovTop').setAttribute('x1', mTop.x); $('fovTop').setAttribute('y1', mTop.y); $('fovTop').setAttribute('x2', top.x); $('fovTop').setAttribute('y2', top.y);
+    $('fovBot').setAttribute('x1', mBot.x); $('fovBot').setAttribute('y1', mBot.y); $('fovBot').setAttribute('x2', bot.x); $('fovBot').setAttribute('y2', bot.y);
+    $('fovWedge').setAttribute('d', `M${mTop.x} ${mTop.y.toFixed(1)} L${top.x} ${top.y.toFixed(1)} L${bot.x} ${bot.y.toFixed(1)} L${mBot.x} ${mBot.y.toFixed(1)}Z`);
+    $('sightLine').setAttribute('x1', eyePx.x); $('sightLine').setAttribute('y1', eyePx.y);
+    $('sightLine').setAttribute('x2', objPx.x); $('sightLine').setAttribute('y2', objPx.y);
+    $('sightLine').setAttribute('stroke', fov.visible ? '#1f8a70' : '#c0392b');
+    $('sightLine').setAttribute('stroke-dasharray', fov.visible ? '' : '5 4');
+    $('imgCard').setAttribute('opacity', 1);
+    $('visLab').textContent = fov.visible ? 'You can see the card’s reflection.' : 'The card is outside your view of the mirror.';
+  } else { $('fovWedge').setAttribute('d', ''); $('fovTop').setAttribute('x1', 0); $('fovTop').setAttribute('x2', 0); $('fovBot').setAttribute('x1', 0); $('fovBot').setAttribute('x2', 0); $('sightLine').setAttribute('x1', 0); $('sightLine').setAttribute('x2', 0); $('imgCard').setAttribute('opacity', 0); $('visLab').textContent = ''; }
+
+  /* two mirrors */
+  const m1 = {x: VX + ML, y: VY}, m2 = {x: VX + ML * Math.cos(S.theta * Math.PI / 180), y: VY - ML * Math.sin(S.theta * Math.PI / 180)};
+  $('mir1').setAttribute('x1', VX); $('mir1').setAttribute('y1', VY); $('mir1').setAttribute('x2', m1.x); $('mir1').setAttribute('y2', m1.y);
+  $('mir2').setAttribute('x1', VX); $('mir2').setAttribute('y1', VY); $('mir2').setAttribute('x2', m2.x); $('mir2').setAttribute('y2', m2.y);
+  $('wedgeFill').setAttribute('d', `M${VX} ${VY} L${m1.x.toFixed(1)} ${m1.y.toFixed(1)} A${ML} ${ML} 0 0 0 ${m2.x.toFixed(1)} ${m2.y.toFixed(1)}Z`);
+  const rho = RHO_CM * PX, phi0 = S.theta / 2;
+  const toXY = a => { const r = a * Math.PI / 180; return {x: VX + rho * Math.cos(r), y: VY - rho * Math.sin(r)}; };
+  const star = (cx, cy, flip) => {
+    const pts = []; for (let i = 0; i < 10; i++) { const r = i % 2 ? rho * 0.16 : rho * 0.32; const a = -Math.PI / 2 + i * Math.PI / 5; pts.push((cx + r * Math.cos(a)).toFixed(1) + ',' + (cy + r * Math.sin(a)).toFixed(1)); }
+    return `<polygon points="${pts.join(' ')}" fill="${flip ? '#7fa8d6' : '#e2552b'}" stroke="#fff" stroke-width="1.2"/>`;
+  };
+  const op0 = toXY(phi0);
+  $('starObj').innerHTML = star(op0.x, op0.y, false);
+  let imgs2 = '';
+  if (S.locked) { const list = kaleidoscopeImages(S.theta, phi0); for (const im of list) { const p = toXY(im.a); imgs2 += star(p.x, p.y, !!im.flip); } $('countLab').textContent = `${list.length} reflection${list.length === 1 ? '' : 's'}, for a ${S.theta}° angle`; }
+  else $('countLab').textContent = '';
+  $('images2').innerHTML = imgs2;
+
+  stripChart(GL, 90, t => 2 * xOf(t), ((S.t % PERIOD) + PERIOD) % PERIOD, {axes: 'glAxes', c: 'glSep', d: 'glDot'});
+
+  paintNums(xObj, fov); paintWhy(xObj, fov); check(xObj, fov);
+}
+function nums(rows){ $('nums').innerHTML = `<div class="nums">${rows.map(r => `<span>${r[0]}</span><b>${r[1]}</b>`).join('')}</div>`; }
+function paintNums(xObj, fov){
+  if (!S.locked) { $('nums').innerHTML = '<p style="font-size:13px;color:var(--ink-3);margin:0">The numbers appear once you have made a prediction.</p>'; return; }
+  if (S.tab === 'one') {
+    nums([
+      ['Card from mirror', fmt(xObj, 1) + ' cm'], ['Image from mirror', fmt(xObj, 1) + ' cm — always equal'],
+      ['Gap between card and image', fmt(2 * xObj, 1) + ' cm'], ['Card, sideways', S.objY + ' cm'], ['You, sideways', S.eyeY + ' cm'],
+      ['Where your sight line crosses the glass', fmt(fov.ycross, 1) + ' cm'], ['Mirror half-height', M_CM + ' cm'],
+      ['Can you see it?', fov.visible ? 'yes' : 'no'],
+    ]);
+  } else {
+    const list = kaleidoscopeImages(S.theta, S.theta / 2);
+    nums([['Angle between the mirrors', S.theta + '°'], ['360 ÷ angle − 1', fmt(360 / S.theta - 1, 2)], ['Images the model actually finds', String(list.length)]]);
+  }
+}
+function paintWhy(xObj, fov){
+  if (!S.locked) return;
+  $('whyCard').hidden = false;
+  let t = '';
+  if (S.tab === 'one') {
+    t = `<p>The card is <b>${fmt(xObj, 1)} cm</b> in front of the mirror, so its image is exactly <b>${fmt(xObj, 1)} cm</b> behind it — never more, never less. The gap between them is <b>${fmt(2 * xObj, 1)} cm</b>, closing (or opening) twice as fast as the card itself moves.</p>`;
+    t += fov.visible ? `<p>Your sight line to the mirror lands ${fmt(fov.ycross, 1)} cm from its centre — inside the ${M_CM} cm it reaches either way, so you can see the reflection.</p>`
+                     : `<p>Your sight line to the mirror would need to land ${fmt(fov.ycross, 1)} cm from its centre, but the glass only reaches ${M_CM} cm either way: the card's reflection is outside this mirror's view from where you stand.</p>`;
+    t += `<p>Whichever way the card faces, its mirror image is <b>flipped left-right</b> (turn it round and check the "F"): a mirror swaps front-to-back, not top-to-bottom.</p>`;
+  } else {
+    const list = kaleidoscopeImages(S.theta, S.theta / 2);
+    t = `<p>Every reflection in one mirror is itself reflected in the other, on and on, until an image would fall outside both mirrors' reach. At <b>${S.theta}°</b> that gives <b>${list.length}</b> reflections${Number.isInteger(360 / S.theta) ? `, matching 360 ÷ ${S.theta} − 1 = ${360 / S.theta - 1}` : ''}.</p>`;
+    t += `<p>Narrow the angle and there is more room for reflections to fit before they run off the mirrors' far edges.</p>`;
+  }
+  $('why').innerHTML = t;
+}
+function check(xObj, fov){
+  if (!S.locked) return;
+  const sep = 2 * xObj;
+  if (S.seen.sepMin == null || sep < S.seen.sepMin) S.seen.sepMin = sep;
+  if (S.seen.sepMax == null || sep > S.seen.sepMax) S.seen.sepMax = sep;
+  if (S.seen.sepMax - S.seen.sepMin > 20) discover('equalDistance');
+  if (S.seen.sepMax - S.seen.sepMin > 55) discover('closingSpeed');
+  if (Math.abs(S.objY - S.seen.yLast) >= 6) { S.seen.yChanges++; S.seen.yLast = S.objY; }
+  if (S.seen.yChanges >= 2) discover('inverted');
+  if (fov.visible) S.seen.sawVisible = true; else S.seen.sawHidden = true;
+  if (S.seen.sawVisible && S.seen.sawHidden) discover('fov');
+  if (S.tab === 'two' && S.theta <= 60) discover('multiples');
+}
+
+/* ============================================================================
+   Controls
+   ============================================================================ */
+build();
+const on = (id, ev, fn) => $(id).addEventListener(ev, fn);
+const tab = t => () => { S.tab = t; sound('pop'); track('tab', {tab: t}); paint(); };
+on('tabOne', 'click', tab('one')); on('tabTwo', 'click', tab('two'));
+on('eyeY', 'input', e => { S.eyeY = +e.target.value; paint(); });
+on('objY', 'input', e => { S.objY = +e.target.value; paint(); });
+on('theta', 'input', e => { S.theta = +e.target.value; paint(); });
+
+function lockControls(lock){
+  for (const id of ['eyeY', 'objY', 'theta', 'tabOne', 'tabTwo']) $(id).disabled = lock;
+  $('gate').hidden = !lock;
+}
+
+findings($('finds'), [
+  {id: 'equalDistance', icon: '=',  label: 'The image is always as far behind as the card is in front', hint: 'Watch the card walk near, then far'},
+  {id: 'closingSpeed',  icon: '⇉', label: 'The gap closes twice as fast as the card walks', hint: 'Let a full walk play out'},
+  {id: 'inverted',      icon: 'ꟻ', label: 'The reflection is always flipped left-right', hint: 'Try the card at two different sideways positions'},
+  {id: 'fov',           icon: '◺', label: 'Step outside the wedge and the reflection disappears', hint: 'Move yourself, or the card, out to one side'},
+  {id: 'multiples',     icon: '✳', label: 'Narrowing the angle multiplies your reflections', hint: 'Try the two-mirror bench at a narrow angle'},
+], () => toast('All five found. Every one comes from the same law of reflection.', 4200));
+
+const POE = predict($('poe'), {
+  id: 'mirror-closing',
+  q: 'Priya stands 2 m from a plane mirror and walks towards it at a steady pace. As she walks, the gap between Priya and her reflection…',
+  options: [
+    {id: 'same',   text: 'closes at the same speed she walks.'},
+    {id: 'twice',  text: 'closes twice as fast as she walks.', right: true},
+    {id: 'half',   text: 'closes at half her walking speed.'},
+    {id: 'stays',  text: 'stays the same.'},
+  ],
+  onLock(){
+    S.locked = true;
+    lockControls(false);
+    CLOCK = clock({mount: $('clock'), onTick: dt => { S.t += dt; paint(); }, step: BEAT});
+    $('clockNote').textContent = 'Play, slow down or step through one walk.';
+    say('Now watch the card walk up to the mirror, and its image.');
+    paint();
+  },
+});
+lockControls(!POE.locked);
+if (!Play.FF('predict')) S.locked = true;
+paint();
+window.applyFeatures = () => paint();
+window.PG_STATE = () => JSON.parse(JSON.stringify(Object.assign({}, S,
+  {xObj: xOf(S.t), fov: fieldOfView(S.eyeY, xOf(S.t), S.objY), images: kaleidoscopeImages(S.theta, S.theta / 2).length,
+   clock: CLOCK ? {playing: CLOCK.playing, speed: CLOCK.speed} : null})));
+window.PG_MODEL = {xOf, fieldOfView, kaleidoscopeImages, PX, AY, MX, M_CM, X_MID, X_AMP, PERIOD, BEAT, X_EYE};
+</script>
+</body>
+</html>

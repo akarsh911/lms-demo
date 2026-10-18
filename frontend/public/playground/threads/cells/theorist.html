@@ -1,0 +1,1033 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mitosis And Meiosis, Counted</title>
+<meta name="description" content="Class 11–12: a chromosome sandbox. Copy the DNA, pair the homologues, place the crossovers, line them up and pull them apart — and count every chromosome and every chromatid as you go.">
+<link rel="icon" href="../../favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600&family=Inter:wght@400;500;600;700&family=Nunito:wght@500;700;800&family=Newsreader:opsz,wght@6..72,400;6..72,500&family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="../../play.css">
+<style>
+/* Only what this page needs beyond play.css. */
+.pg-stage{align-self:start; min-height:0}
+.gate{position:absolute; left:0; right:0; top:0; height:62%; display:grid; place-items:center; pointer-events:none}
+.gate span{background:rgba(7,13,18,.86); color:#fff; padding:10px 16px; border-radius:99px; font-weight:600; font-size:14px}
+.seg{display:grid; grid-template-columns:1fr 1fr; gap:4px; background:var(--sunk); padding:4px; border-radius:var(--radius-sm); margin-bottom:8px}
+.seg button{border:0; background:transparent; border-radius:7px; min-height:30px; font-weight:600; font-size:13px; cursor:pointer; color:var(--ink-2)}
+.seg button[aria-pressed="true"]{background:var(--card); color:var(--ink); box-shadow:var(--shadow)}
+.seg button:disabled{opacity:.5; cursor:default}
+.stagename{font-family:"Newsreader",Georgia,serif; font-size:23px; line-height:1.1; margin:2px 0 4px}
+.hint{font-size:13.5px; color:var(--ink-2); margin:0 0 10px; min-height:3.9em}
+.stack{display:grid; gap:6px}
+.stack .btn{width:100%}
+.count{width:100%; border-collapse:collapse; font-size:13px}
+.count th{font-size:11px; letter-spacing:.05em; text-transform:uppercase; color:var(--ink-3); font-weight:700; text-align:right; padding:2px 4px}
+.count th:first-child, .count td:first-child{text-align:left}
+.count td{font-family:var(--font-mono); font-variant-numeric:tabular-nums; text-align:right; padding:3px 4px; border-top:1px solid var(--hair)}
+.count td.odd{color:#c0392b; font-weight:700}
+.note{font-size:12.5px; color:var(--ink-3); margin:6px 0 0}
+.why p{font-size:13.5px; margin-bottom:.55em}
+.why .mono{font-size:12.5px}
+.chk{display:flex; gap:8px; align-items:center; font-size:13px; color:var(--ink-2); margin:8px 0 2px}
+.ctl select{grid-column:2/4; width:100%}
+.hitU{cursor:grab}
+.hitU.dragging{cursor:grabbing}
+.hitU.pick{cursor:crosshair}
+svg text.m{font-family:var(--font-mono)}
+svg text.serif{font-family:"Newsreader",Georgia,serif}
+</style>
+</head>
+<body>
+<header class="pg-top"></header>
+
+<div class="pg-intro">
+  <h1>Mitosis and meiosis, counted</h1>
+  <p>A cell with 2n = 4: two pairs of homologous chromosomes, one of each pair from the mother (pink) and one from the father (blue).
+     Copy the DNA, move the chromosomes onto the plate yourself, place the crossovers, pull them apart — and count every chromosome
+     and every chromatid as you go. The step graph is drawn from the count. Then break the rules and see what a wrong count does.</p>
+  <div class="syl">CBSE Class 11 · Ch 10 Cell Cycle and Cell Division (Unit III, 15 marks) · ISC Biology: cell division</div>
+</div>
+
+<main class="pg-main wide-side">
+  <section class="pg-stage" id="stageWrap">
+    <svg id="stage" viewBox="0 0 1000 770" role="img" aria-label="Cells dividing, with chromosomes you can move; a step graph of DNA content and chromosome number per cell; and the gametes made, counted by kind"></svg>
+    <div class="gate" id="gate"><span>Make your prediction first →</span></div>
+  </section>
+
+  <aside class="pg-side">
+    <div id="poe"></div>
+
+    <div class="card" id="ctlCard">
+      <div class="seg" role="group" aria-label="Kind of division">
+        <button id="modeMit" aria-pressed="false">Mitosis</button>
+        <button id="modeMei" aria-pressed="true">Meiosis</button>
+      </div>
+      <div class="seg" role="group" aria-label="Chromosome number">
+        <button id="n4" aria-pressed="true">2n = 4</button>
+        <button id="n6" aria-pressed="false">2n = 6</button>
+      </div>
+      <div class="kicker" id="stageKick">Stage 1 of 11</div>
+      <div class="stagename" id="stageName">G1</div>
+      <p class="hint" id="stageHint"></p>
+      <div class="stack">
+        <button class="btn primary" id="btnNext">Next</button>
+        <button class="btn" id="btnAlign">Let the spindle line them up</button>
+        <button class="btn" id="btnShuffle">Shuffle which way the pairs face</button>
+        <button class="btn sm" id="btnRestart">↺ Start again</button>
+      </div>
+      <div class="ctl" style="margin-top:12px"><label for="nd">Break it</label>
+        <select id="nd">
+          <option value="none">Normal division</option>
+          <option value="MI">Non-disjunction in meiosis I</option>
+          <option value="MII">Non-disjunction in meiosis II</option>
+        </select></div>
+      <p class="note" id="ndNote">Non-disjunction acts on the smallest pair, as in chromosome 21.</p>
+    </div>
+
+    <div class="card" id="countCard">
+      <div class="kicker">Counted, now</div>
+      <div id="countBody"></div>
+    </div>
+
+    <div class="card" id="batchCard">
+      <div class="kicker">Many meioses</div>
+      <div class="row">
+        <button class="btn sm primary" id="btnBatch">Run 25 meioses</button>
+        <button class="btn sm" id="btnClear">Clear the gametes</button>
+      </div>
+      <label class="chk"><input type="checkbox" id="chkX"> a random crossover in every pair</label>
+      <p class="note">Each run uses the same model as the cell above: random orientation of every pair at metaphase I, and your break-it setting.</p>
+    </div>
+
+    <div class="card why" id="whyCard" hidden>
+      <div class="kicker">What the model says</div>
+      <div id="why"></div>
+    </div>
+
+    <div class="card"><div class="kicker">To find</div><div id="finds"></div></div>
+  </aside>
+</main>
+
+<script src="../../play.js"></script>
+<script>
+'use strict';
+const {$, esc, clamp, lerp, fmt, drag, loop, sound, say, track, toast, predict, findings, discover, found,
+       shareState, sharedState, mount, reduced, mulberry32} = Play;
+mount({thread: 'cells', band: 'theorist'});
+
+/* MODEL:start ==================================================================
+   Chromosomes as objects. Nothing on the page is drawn from a table of stages:
+   every count, every line on the step graph and every gamete comes from these
+   objects after the operations below have been applied to them.
+
+   A chromatid is one DNA molecule: a list of segments along its length s (0..1),
+   each marked with the parent it came from (M or P). A chromosome is one
+   centromere with one or two chromatids. A cell is a list of chromosomes.
+
+     replicate      S phase: every chromosome gets a sister chromatid (copy of its segments)
+     synapse        prophase I: homologues pair into bivalents
+     crossOver      at a chiasma, two non-sister chromatids swap the segments beyond it
+     orient         metaphase I: each bivalent faces the poles one way or the other, at random
+     anaphaseI      homologues part (sisters stay together)
+     splitSisters   mitosis and meiosis II: sister chromatids part, each becomes a chromosome
+     cytokinesis    one cell becomes two, by which pole each chromosome went to
+   Counts: chromosomes = centromeres; DNA content in C = chromatids ÷ n (1C = one haploid set).
+   ============================================================================ */
+const PAIRS = [
+  {L: 112, cen: 0.36, bands: [[.05, .04], [.16, .05], [.27, .04], [.46, .06], [.58, .05], [.7, .04], [.92, .04]], loci: [{g: 'A', s: 0.86}, {g: 'E', s: 0.10}]},
+  {L: 84, cen: 0.50, bands: [[.08, .05], [.27, .06], [.39, .03], [.63, .05], [.8, .06]], loci: [{g: 'B', s: 0.22}]},
+  {L: 60, cen: 0.25, bands: [[.1, .05], [.42, .07], [.62, .05], [.86, .06]], loci: [{g: 'D', s: 0.80}]},
+];
+let UID = 1;
+const uid = () => UID++;
+function germCell(n){
+  const ch = [];
+  for (let p = 0; p < n; p++) for (const o of ['M', 'P'])
+    ch.push({id: uid(), pair: p, origin: o, cts: [{id: uid(), segs: [[0, 1, o]]}], biv: false, face: null, side: null, plate: false});
+  return {id: uid(), chroms: ch};
+}
+function replicate(cell){
+  for (const c of cell.chroms) if (c.cts.length === 1) c.cts.push({id: uid(), segs: c.cts[0].segs.map(s => s.slice())});
+  return cell;
+}
+function synapse(cell){ for (const c of cell.chroms) c.biv = true; return cell; }
+const homologues = (cell, p) => [cell.chroms.find(c => c.pair === p && c.origin === 'M' && c.biv), cell.chroms.find(c => c.pair === p && c.origin === 'P' && c.biv)];
+/* the parts of a segment list inside [lo, hi], and outside it */
+function cutSegs(segs, lo, hi){
+  const inn = [], out = [];
+  for (const [a, b, s] of segs) {
+    const ia = Math.max(a, lo), ib = Math.min(b, hi);
+    if (ib > ia + 1e-9) inn.push([ia, ib, s]);
+    if (a < lo - 1e-9) out.push([a, Math.min(b, lo), s]);
+    if (b > hi + 1e-9) out.push([Math.max(a, hi), b, s]);
+  }
+  return [inn, out];
+}
+function mergeSegs(segs){
+  segs.sort((x, y) => x[0] - y[0]);
+  const r = [];
+  for (const s of segs) { const l = r[r.length - 1]; if (l && l[2] === s[2] && Math.abs(l[1] - s[0]) < 1e-9) l[1] = s[1]; else if (s[1] - s[0] > 1e-9) r.push(s.slice()); }
+  return r;
+}
+/* A chiasma at s on pair p: the two inner, non-sister chromatids swap everything beyond s
+   (on the side away from the centromere). Returns false if there is no bivalent or no room. */
+function crossOver(cell, p, s){
+  const [m, f] = homologues(cell, p);
+  if (!m || !f || m.cts.length < 2 || f.cts.length < 2) return false;
+  const cen = PAIRS[p].cen;
+  if (s <= 0.03 || s >= 0.97 || Math.abs(s - cen) < 0.05) return false;
+  const lo = s > cen ? s : 0, hi = s > cen ? 1 : s;
+  const a = m.cts[1], b = f.cts[0];
+  const [ai, ao] = cutSegs(a.segs, lo, hi), [bi, bo] = cutSegs(b.segs, lo, hi);
+  a.segs = mergeSegs(ao.concat(bi)); b.segs = mergeSegs(bo.concat(ai));
+  return true;
+}
+function orient(cell, rng){
+  const ps = [...new Set(cell.chroms.map(c => c.pair))];
+  for (const p of ps) { const [m, f] = homologues(cell, p); if (!m || !f) continue; m.face = rng() < 0.5 ? 'L' : 'R'; f.face = m.face === 'L' ? 'R' : 'L'; }
+  return cell;
+}
+function flip(cell, p){ const [m, f] = homologues(cell, p); if (m && f) { const t = m.face; m.face = f.face; f.face = t; } }
+/* Anaphase I: each homologue goes to the pole it faces. With non-disjunction, pair ndPair does not part. */
+function anaphaseI(cell, ndPair = -1){
+  for (const c of cell.chroms) c.side = c.pair === ndPair ? 'L' : c.face;
+  return cell;
+}
+/* Mitosis / anaphase II: sisters part. With non-disjunction, the two chromatids of pair ndPair both
+   go to the same pole.
+   Returns [parent id, left child id, right child id] for each split, so the view can follow. */
+function splitSisters(cell, ndPair = -1){
+  const out = [], trail = [];
+  for (const c of cell.chroms) {
+    if (c.cts.length === 2) {
+      const L = {id: uid(), pair: c.pair, origin: c.origin, cts: [c.cts[0]], biv: false, face: null, side: 'L', plate: false};
+      const R = {id: uid(), pair: c.pair, origin: c.origin, cts: [c.cts[1]], biv: false, face: null, side: c.pair === ndPair ? 'L' : 'R', plate: false};
+      out.push(L, R); trail.push([c.id, L.id, R.id]);
+    } else { c.side = 'L'; out.push(c); }
+  }
+  cell.chroms = out;
+  return trail;
+}
+function cytokinesis(cell){
+  const tidy = c => Object.assign(c, {side: null, biv: false, face: null, plate: false});
+  return [{id: uid(), chroms: cell.chroms.filter(c => c.side !== 'R').map(tidy)},
+          {id: uid(), chroms: cell.chroms.filter(c => c.side === 'R').map(tidy)}];
+}
+function counts(cell, n){
+  const chromatids = cell.chroms.reduce((s, c) => s + c.cts.length, 0);
+  return {chrom: cell.chroms.length, chromatids, C: chromatids / n};
+}
+const srcAt = (ct, s) => { const g = ct.segs.find(q => s >= q[0] - 1e-9 && s <= q[1] + 1e-9); return g ? g[2] : '?'; };
+/* The alleles a chromatid carries: pink (M) carries the capitals, blue (P) the small letters. */
+const letters = (ct, p) => PAIRS[p].loci.map(l => srcAt(ct, l.s) === 'M' ? l.g : l.g.toLowerCase()).join('');
+function allChromatids(cell){ const r = []; for (const c of cell.chroms) for (const ct of c.cts) r.push([c.pair, ct]); const cmp = (x, y) => x < y ? -1 : x > y ? 1 : 0;
+  return r.sort((a, b) => a[0] - b[0] || cmp(letters(a[1], a[0]), letters(b[1], b[0]))); }
+const genotype = cell => allChromatids(cell).map(([p, ct]) => letters(ct, p)).join(' ');
+/* A gamete's kind: which parent every stretch of every chromosome came from, to the nearest 5 %. */
+const makeup = cell => allChromatids(cell).map(([p, ct]) => p + ':' + ct.segs.map(s => s[2] + Math.round(s[0] * 20)).join('')).sort().join('|');
+/* a recombinant: a chromatid carrying one parent's allele of A with the other parent's allele of E */
+const recombinant = cell => allChromatids(cell).some(([p, ct]) => { if (p !== 0) return false; const l = letters(ct, 0); return /[A-Z]/.test(l) && /[a-z]/.test(l); });
+/* A whole meiosis, with no pictures: the same operations in the same order. */
+function meiosisFast(n, o = {}){
+  const rng = o.rng || Math.random, nd = o.nd || 'none', ndPair = n - 1;
+  const c = germCell(n); replicate(c); synapse(c); orient(c, rng);
+  let crossed = false;
+  if (o.cross) for (let p = 0; p < n; p++) {
+    const cen = PAIRS[p].cen; let s;
+    do { s = 0.04 + 0.92 * rng(); } while (Math.abs(s - cen) < 0.06);
+    crossed = crossOver(c, p, s) || crossed;
+  }
+  anaphaseI(c, nd === 'MI' ? ndPair : -1);
+  const out = [];
+  cytokinesis(c).forEach((d, i) => { splitSisters(d, nd === 'MII' && i === 0 ? ndPair : -1); out.push(...cytokinesis(d)); });
+  return out.map(g => gameteOf(g, n, crossed, nd));
+}
+function mitosisFast(n){
+  const c = germCell(n); replicate(c); splitSisters(c); return cytokinesis(c);
+}
+function gameteOf(g, n, crossed, nd){
+  const k = counts(g, n);
+  return {n, x: crossed, nd, chrom: k.chrom, C: k.C, geno: genotype(g), kind: makeup(g), rec: recombinant(g),
+          bars: allChromatids(g).map(([p, ct]) => ({p, segs: ct.segs.map(s => s.slice())}))};
+}
+/* MODEL:end */
+
+/* ---- sequences of stages ----------------------------------------------------- */
+const SEQ = {
+  mitosis: ['G1', 'S', 'G2', 'P', 'M', 'A', 'T'],
+  meiosis: ['G1', 'S', 'G2', 'PI', 'MI', 'AI', 'TI', 'PII', 'MII', 'AII', 'TII'],
+};
+const NAME = {G1: 'G1: interphase', S: 'S phase: DNA copied', G2: 'G2: interphase', P: 'Prophase', M: 'Metaphase', A: 'Anaphase', T: 'Telophase and cytokinesis',
+  PI: 'Prophase I', MI: 'Metaphase I', AI: 'Anaphase I', TI: 'Telophase I and cytokinesis', PII: 'Prophase II', MII: 'Metaphase II', AII: 'Anaphase II', TII: 'Telophase II and cytokinesis'};
+const SHORT = {G1: 'G1', S: 'S', G2: 'G2', P: 'Pro', M: 'Meta', A: 'Ana', T: 'Telo', PI: 'P I', MI: 'M I', AI: 'A I', TI: 'T I', PII: 'P II', MII: 'M II', AII: 'A II', TII: 'T II'};
+const NEXT = {S: 'Copy the DNA (S phase)', G2: 'Grow on (G2)', P: 'Prophase: condense', PI: 'Prophase I: pair the homologues', PII: 'Prophase II',
+  M: 'Attach the spindle', MI: 'Attach the spindle', MII: 'Attach the spindles', A: 'Anaphase: pull the sisters apart', AI: 'Anaphase I: part the homologues',
+  AII: 'Anaphase II: part the sisters', T: 'Telophase: divide the cell', TI: 'Telophase I: divide the cell', TII: 'Telophase II: divide the cells'};
+
+/* ---- state: plain data --------------------------------------------------- */
+const S = {mode: 'meiosis', n: 2, si: 0, cells: [], nd: 'none', chiasmata: [], samples: [], pool: [], randX: false,
+  locked: false, aligned: false, runX: false, runSeed: 1, flips: 0};
+const shared = sharedState();
+if (shared) { if (shared.mode === 'mitosis') S.mode = 'mitosis'; if (shared.n === 3) S.n = 3; if (['MI', 'MII'].includes(shared.nd)) S.nd = shared.nd; }
+shareState(() => ({mode: S.mode, n: S.n, nd: S.nd}));
+let RNG = mulberry32(2026);
+const stage = () => SEQ[S.mode][S.si];
+
+/* ============================================================================
+   The view: cells and chromosomes have screen positions that ease towards targets.
+   ============================================================================ */
+const svg = $('stage');
+const NS = 'http://www.w3.org/2000/svg';
+const el = (tag, attrs, parent) => { const e = document.createElementNS(NS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); if (parent) parent.appendChild(e); return e; };
+const set = (e, attrs) => { for (const k in attrs) e.setAttribute(k, attrs[k]); };
+const COL = {M: '#ff6f9f', P: '#5aa8ff'}, CORE = {M: '#ffd3e2', P: '#d6ebff'};
+const LAYOUT = {
+  1: [{x: 500, y: 266, rx: 330, ry: 194}],
+  2: [{x: 255, y: 266, rx: 226, ry: 178}, {x: 745, y: 266, rx: 226, ry: 178}],
+  4: [{x: 128, y: 266, rx: 114, ry: 150}, {x: 376, y: 266, rx: 114, ry: 150}, {x: 624, y: 266, rx: 114, ry: 150}, {x: 872, y: 266, rx: 114, ry: 150}],
+};
+const SCALE = {1: 1, 2: 0.86, 4: 0.6};
+const VC = new Map(), VX = new Map();                 // cell views, chromosome views
+/* one size for the whole run, chosen so that every chromosome fits on the plate at once */
+let SF = 1;
+function fitSize(){
+  const sum = PAIRS.slice(0, S.n).reduce((t, p) => t + p.L, 0);
+  const need = S.mode === 'mitosis' ? 2 * sum + (2 * S.n - 1) * 10 : sum + (S.n - 1) * 10;
+  SF = Math.min(1.3, 320 / need);
+}
+const scaleOf = () => (SCALE[S.cells.length] || 0.6) * SF;
+const GX = {x: 60, y: 530, w: 440, h: 178};
+const PL = {x: 598, y: 520, w: 384};
+
+function build(){
+  const rnd = mulberry32(3);
+  let dust = '';
+  for (let i = 0; i < 80; i++) dust += `<circle cx="${(rnd() * 1000).toFixed(1)}" cy="${(52 + rnd() * 420).toFixed(1)}" r="${(rnd() * 1.1 + .2).toFixed(2)}" fill="#9fc3ff" opacity="${(rnd() * .18 + .04).toFixed(2)}"/>`;
+  svg.innerHTML = `
+  <defs>
+    <radialGradient id="gBg" cx="50%" cy="45%" r="70%"><stop offset="0" stop-color="#132330"/><stop offset="1" stop-color="#060b10"/></radialGradient>
+    <radialGradient id="gCyto" cx="45%" cy="40%" r="60%"><stop offset="0" stop-color="#3c5f86" stop-opacity=".42"/><stop offset=".8" stop-color="#27456a" stop-opacity=".30"/><stop offset="1" stop-color="#6d8fc4" stop-opacity=".38"/></radialGradient>
+    <radialGradient id="gNuc" cx="45%" cy="40%" r="60%"><stop offset="0" stop-color="#5b6fb8" stop-opacity=".26"/><stop offset="1" stop-color="#7f93dc" stop-opacity=".16"/></radialGradient>
+    <radialGradient id="gCentro"><stop offset="0" stop-color="#f4ffe0"/><stop offset=".5" stop-color="#b8f59a" stop-opacity=".7"/><stop offset="1" stop-color="#7de3a0" stop-opacity="0"/></radialGradient>
+    <filter id="fGlow" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur in="SourceGraphic" stdDeviation="1.8" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+    <clipPath id="clipTop"><rect x="0" y="0" width="1000" height="486"/></clipPath>
+  </defs>
+  <rect x="0" y="0" width="1000" height="486" fill="url(#gBg)"/>
+  <g>${dust}</g>
+  <g id="ribbon"></g>
+  <g clip-path="url(#clipTop)">
+    <g id="cellsG"></g>
+    <g id="spindleG" fill="none" stroke="#7de3a0" stroke-linecap="round"></g>
+    <g id="plateG"></g>
+    <g id="chromG" filter="url(#fGlow)"></g>
+    <g id="chiG"></g>
+    <g id="labG"></g>
+  </g>
+  <text id="banner" x="500" y="474" text-anchor="middle" fill="#ffd36b" font-size="14" class="serif"></text>
+
+  <rect x="0" y="486" width="1000" height="284" fill="#fbfaf6"/>
+  <line x1="0" y1="486" x2="1000" y2="486" stroke="#e2ded2"/>
+  <line x1="560" y1="498" x2="560" y2="760" stroke="#ece8dc"/>
+  <text x="20" y="508" fill="#4a555b" font-size="12" font-weight="700" letter-spacing=".08em">PER CELL, COUNTED AT EVERY STAGE</text>
+  <g id="gAxes"></g>
+  <path id="gC" fill="none" stroke="#6a3fc2" stroke-width="2.6" stroke-linejoin="round"/>
+  <path id="gN" fill="none" stroke="#16a3a3" stroke-width="2.6" stroke-linejoin="round"/>
+  <g id="gDots"></g>
+  <text x="${PL.x - 16}" y="508" fill="#4a555b" font-size="12" font-weight="700" letter-spacing=".08em">GAMETES MADE, AND HOW MANY KINDS</text>
+  <g id="poolG"></g>
+  <g id="poolTxt"></g>
+  <g id="poolBars"></g>
+  <g id="hitG"></g>
+  `;
+  const hg = $('hitG');
+  for (let i = 0; i < 14; i++) el('rect', {id: 'hit' + i, class: 'hitU', x: 0, y: 0, width: 0, height: 0, fill: 'transparent', 'pointer-events': 'none'}, hg);
+}
+
+/* ---- cell views -------------------------------------------------------------- */
+function cellView(cell){
+  let v = VC.get(cell.id);
+  if (!v) {
+    const r = mulberry32(cell.id * 7 + 1);
+    v = {x: 500, y: 266, rx: 10, ry: 10, tx: 500, ty: 266, trx: 10, try_: 10, env: 1, tenv: 1, spin: 0, tspin: 0, poleOut: 0,
+         gr: Array.from({length: 16}, () => ({a: r() * 6.283, r: 0.25 + 0.65 * r(), w: (r() - .5) * 0.25}))};
+    VC.set(cell.id, v);
+  }
+  return v;
+}
+function layoutCells(){
+  const L = LAYOUT[S.cells.length] || LAYOUT[4];
+  S.cells.forEach((c, i) => { const v = cellView(c), t = L[i] || L[L.length - 1]; v.tx = t.x; v.ty = t.y; v.trx = t.rx; v.try_ = t.ry; });
+}
+const nucR = v => Math.min(v.trx, v.try_) * 0.6;
+/* ---- chromosome views ---------------------------------------------------------- */
+function chromView(c, init){
+  let v = VX.get(c.id);
+  if (!v) { v = Object.assign({x: 500, y: 266, tx: 500, ty: 266, k: 0, tk: 0, bend: 0, tbend: 0, sep: 1, tsep: 1, tilt: 0, ttilt: 0, pole: 0, ph: Math.random() * 6}, init || {}); VX.set(c.id, v); }
+  return v;
+}
+const widthOf = (k, sc) => lerp(2.4, 10.5, k) * (0.66 + 0.34 * Math.min(1, sc / SF));
+const lenOf = (p, k, sc) => PAIRS[p].L * sc * lerp(1.12, 1, k);
+/* Put the chromosomes of an interphase cell into its nucleus, loosely. */
+function toNucleus(cell, k){
+  const v = cellView(cell), R = nucR(v) * 0.42, N = cell.chroms.length, r = mulberry32(cell.id * 13 + 5);
+  cell.chroms.forEach((c, i) => {
+    const a = i / N * 2 * Math.PI + 0.4, x = chromView(c);
+    x.tx = v.tx + Math.cos(a) * R * (0.7 + 0.3 * r()); x.ty = v.ty + Math.sin(a) * R * (0.7 + 0.3 * r());
+    x.tk = k; x.tbend = 0; x.pole = 0; x.ttilt = (r() - .5) * 1.6;
+  });
+}
+/* Scatter the chromosomes (or bivalents) of a cell through it, as prophase leaves them. */
+function scatter(cell){
+  const v = cellView(cell), us = unitsOf(cell), r = mulberry32(cell.id * 31 + S.runSeed);
+  const sc = scaleOf(), cols = Math.ceil(Math.sqrt(us.length * 1.8)), rows = Math.ceil(us.length / cols);
+  const slots = [];
+  for (let j = 0; j < rows; j++) for (let i = 0; i < cols; i++) slots.push([(i + 0.5) / cols - 0.5, (j + 0.5) / rows - 0.5]);
+  slots.sort(() => r() - 0.5);
+  us.forEach((u, i) => {
+    const [fx, fy] = slots[i];
+    let x = v.tx + fx * v.trx * 1.25 + (r() - .5) * 20 * sc, y = v.ty + fy * v.try_ * 0.95 + (r() - .5) * 16 * sc;
+    if (Math.abs(x - v.tx) < 36 * sc) x += (x < v.tx ? -1 : 1) * 40 * sc;          // keep the plate clear
+    placeUnit(u, x, y, false);
+    u.chroms.forEach(c => { const cv = chromView(c); cv.ttilt = u.biv ? (r() - .5) * 0.3 : (r() - .5) * 0.7; });
+  });
+}
+/* units: what the learner moves — a chromosome, or a bivalent (two homologues together) */
+function unitsOf(cell){
+  const out = [], seen = new Set();
+  for (const c of cell.chroms) {
+    if (c.biv) {
+      if (seen.has(c.pair)) continue; seen.add(c.pair);
+      const [m, f] = homologues(cell, c.pair);
+      const L = [m, f].filter(Boolean).sort((a, b) => (a.face === 'R') - (b.face === 'R') || (a.origin === 'P') - (b.origin === 'P'));
+      out.push({key: 'b' + cell.id + '_' + c.pair, cell, chroms: L, biv: true, pair: c.pair});
+    } else out.push({key: 'c' + c.id, cell, chroms: [c], biv: false, pair: c.pair});
+  }
+  return out;
+}
+const allUnits = () => S.cells.flatMap(unitsOf).sort((a, b) => a.key < b.key ? -1 : 1);
+const unitLen = u => Math.max(...u.chroms.map(c => lenOf(c.pair, 1, scaleOf())));
+function unitPos(u){ const vs = u.chroms.map(c => chromView(c)); return {x: vs.reduce((s, v) => s + v.x, 0) / vs.length, y: vs[0].y, tx: vs.reduce((s, v) => s + v.tx, 0) / vs.length, ty: vs[0].ty}; }
+/* A unit's centromere(s) at (x, y). A bivalent's homologues sit side by side, the one facing the left pole on the left. */
+function placeUnit(u, x, y, now){
+  const sc = scaleOf(), w = widthOf(1, sc), off = u.biv ? w + 2.2 : 0;
+  u.chroms.forEach((c, i) => {
+    const v = chromView(c), dx = u.chroms.length === 2 ? (i ? off : -off) : 0;
+    v.tx = x + dx; v.ty = y; if (now) { v.x = v.tx; v.y = v.ty; }
+  });
+}
+function relayoutPlate(cell){
+  const v = cellView(cell), us = unitsOf(cell).filter(u => u.chroms[0].plate);
+  us.sort((a, b) => unitPos(a).y - unitPos(b).y);
+  const gap = 16 * scaleOf(), tot = us.reduce((s, u) => s + unitLen(u), 0) + gap * Math.max(0, us.length - 1);
+  let y = v.ty - tot / 2;
+  for (const u of us) {
+    const L = unitLen(u), cen = PAIRS[u.pair].cen;
+    placeUnit(u, v.tx, y + cen * L, false);                      // centromere where the arms fit
+    u.chroms.forEach(c => { chromView(c).ttilt = 0; });
+    y += L + gap;
+  }
+  S.aligned = S.cells.every(c => unitsOf(c).every(u => u.chroms[0].plate));
+}
+
+/* ============================================================================
+   Stages: every change goes through the model functions above.
+   ============================================================================ */
+function restart(){
+  S.si = 0; S.chiasmata = []; S.samples = []; S.aligned = false; S.runX = false; S.runSeed++;
+  fitSize();
+  VC.clear(); VX.clear();
+  const c = germCell(S.n);
+  S.cells = [c];
+  layoutCells();
+  const v = cellView(c); v.x = v.tx; v.y = v.ty; v.rx = v.trx; v.ry = v.try_;
+  toNucleus(c, 0);
+  c.chroms.forEach(ch => { const x = chromView(ch); x.x = x.tx; x.y = x.ty; x.k = 0; x.tilt = x.ttilt; });
+  sample();
+  paintControls();
+}
+function sample(){
+  S.samples.push({st: stage(), cells: S.cells.map(c => counts(c, S.n))});
+}
+function nextStage(){
+  const seq = SEQ[S.mode];
+  if (S.si >= seq.length - 1) { restart(); sound('whoosh'); return; }
+  const st = seq[S.si + 1];
+  if ((stage() === 'M' || stage() === 'MI' || stage() === 'MII') && !S.aligned) { toast('The spindle checkpoint holds anaphase until every chromosome is on the plate.'); sound('oops'); return; }
+  S.si++;
+  const ndPair = S.n - 1;
+  if (st === 'S') {
+    S.cells.forEach(c => { for (const ch of c.chroms) { const v = chromView(ch); v.sep = 0; v.tsep = 1; } replicate(c); });
+  } else if (st === 'P' || st === 'PI' || st === 'PII') {
+    if (st === 'PI') S.cells.forEach(synapse);
+    S.cells.forEach(c => { const v = cellView(c); v.tenv = 0; v.tspin = 1; c.chroms.forEach(ch => { chromView(ch).tk = 1; }); scatter(c); });
+  } else if (st === 'M' || st === 'MI' || st === 'MII') {
+    if (st === 'MI') S.cells.forEach(c => { orient(c, RNG); unitsOf(c).forEach(u => { const p = unitPos(u); placeUnit(u, p.tx, p.ty, false); }); });
+    S.aligned = false;
+  } else if (st === 'AI') {
+    S.cells.forEach(c => {
+      anaphaseI(c, S.nd === 'MI' ? ndPair : -1);
+      const v = cellView(c);
+      c.chroms.forEach(ch => { const x = chromView(ch), sgn = ch.side === 'L' ? -1 : 1; x.tx = v.tx + sgn * v.trx * 0.5 + (x.tx - v.tx) * 0.2; x.ty = v.ty + (x.ty - v.ty) * 0.8; x.tbend = 0.5; x.pole = sgn; });
+    });
+  } else if (st === 'A' || st === 'AII') {
+    S.cells.forEach((c, i) => {
+      const trail = splitSisters(c, S.nd === 'MII' && st === 'AII' && i === 0 ? ndPair : -1);
+      const v = cellView(c);
+      for (const [pid, lid, rid] of trail) {
+        const pv = VX.get(pid) || chromView({id: pid});
+        const w = widthOf(pv.k, scaleOf());
+        chromView({id: lid}, {x: pv.x - w / 2, y: pv.y, tx: pv.tx - w / 2, ty: pv.ty, k: pv.k, tk: 1, sep: 1, tsep: 1, tilt: pv.tilt, ttilt: 0});
+        chromView({id: rid}, {x: pv.x + w / 2, y: pv.y, tx: pv.tx + w / 2, ty: pv.ty, k: pv.k, tk: 1, sep: 1, tsep: 1, tilt: pv.tilt, ttilt: 0});
+        VX.delete(pid);
+      }
+      c.chroms.forEach(ch => { const x = chromView(ch), sgn = ch.side === 'L' ? -1 : 1; x.tx = v.tx + sgn * v.trx * 0.6; x.ty = v.ty + (x.ty - v.ty) * 0.78; x.tbend = 1; x.pole = sgn; });
+    });
+  } else if (st === 'T' || st === 'TI' || st === 'TII') {
+    const next = [];
+    S.cells.forEach(c => {
+      const pv = cellView(c), kids = cytokinesis(c);
+      kids.forEach((d, j) => { const v = cellView(d); v.x = pv.x + (j ? 1 : -1) * pv.rx * 0.45; v.y = pv.y; v.rx = pv.rx * 0.58; v.ry = pv.ry * 0.94; v.env = 0; v.tenv = st === 'TI' ? 0.55 : 1; v.spin = pv.spin; v.tspin = 0; });
+      next.push(...kids);
+    });
+    S.cells = next; layoutCells();
+    S.cells.forEach(c => { toNucleus(c, st === 'TI' ? 0.75 : 0); c.chroms.forEach(ch => { chromView(ch).pole = 0; }); });
+    if (st === 'TII') collectGametes();
+  }
+  sample();
+  sound(st === 'S' ? 'pop' : st[0] === 'A' ? 'whoosh' : st[0] === 'T' ? 'boing' : 'tick');
+  track('stage', {mode: S.mode, stage: st, cells: S.cells.map(c => counts(c, S.n))});
+  if (reduced()) snapAll();
+  check();
+  paintControls();
+}
+function collectGametes(){
+  const nd = S.nd, crossed = S.runX;
+  for (const g of S.cells) S.pool.push(gameteOf(g, S.n, crossed, nd));
+  track('gametes', {n: S.n, made: S.cells.map(g => genotype(g))});
+}
+function alignAll(){
+  S.cells.forEach(c => { unitsOf(c).forEach(u => u.chroms.forEach(ch => { ch.plate = true; })); relayoutPlate(c); });
+  sound('snap'); track('align', {by: 'spindle'});
+  if (reduced()) snapAll();
+  check(); paintControls();
+}
+function shuffleFaces(){
+  S.cells.forEach(c => { orient(c, RNG); unitsOf(c).forEach(u => { const p = unitPos(u); placeUnit(u, p.tx, p.ty, false); }); relayoutPlate(c); });
+  S.flips++; sound('tick'); track('orient', {by: 'shuffle'});
+  if (reduced()) snapAll();
+}
+function batch(){
+  const rng = mulberry32(1000 + S.pool.length * 7 + S.n);
+  for (let i = 0; i < 25; i++) S.pool.push(...meiosisFast(S.n, {rng, cross: S.randX, nd: S.nd}));
+  sound('pop'); track('batch', {n: S.n, cross: S.randX, nd: S.nd, pool: S.pool.length});
+  check(); paintPool();
+}
+function snapAll(){
+  for (const v of VC.values()) { v.x = v.tx; v.y = v.ty; v.rx = v.trx; v.ry = v.try_; v.env = v.tenv; v.spin = v.tspin; }
+  for (const v of VX.values()) { v.x = v.tx; v.y = v.ty; v.k = v.tk; v.bend = v.tbend; v.sep = v.tsep; v.tilt = v.ttilt; }
+}
+
+/* ============================================================================
+   Drawing chromosomes. Each chromatid is a banded rod with its segments coloured
+   by the parent they came from; sisters are held at the centromere.
+   ============================================================================ */
+const CEL = new Map();                   // chromatid id -> its SVG elements
+function ctEls(id){
+  let e = CEL.get(id);
+  if (!e) {
+    const g = el('g', {}, $('chromG'));
+    e = {g, out: el('path', {fill: 'none', stroke: '#05070d', 'stroke-opacity': .55, 'stroke-linecap': 'round', 'stroke-linejoin': 'round'}, g),
+         segs: [0, 1, 2, 3, 4].map(() => el('path', {fill: 'none', 'stroke-linecap': 'round', 'stroke-linejoin': 'round'}, g)),
+         band: el('path', {fill: 'none', stroke: '#2a0f3a', 'stroke-linejoin': 'round'}, g),
+         core: [0, 1, 2, 3, 4].map(() => el('path', {fill: 'none', 'stroke-linecap': 'round', 'stroke-linejoin': 'round'}, g)),
+         labs: [0, 1].map(() => el('text', {'font-size': 9, 'font-weight': 700, 'text-anchor': 'middle', fill: '#fff', stroke: '#0a0714', 'stroke-width': 2.4, 'paint-order': 'stroke', class: 'm'}, g)),
+         seen: true};
+    CEL.set(id, e);
+  }
+  e.seen = true;
+  return e;
+}
+const NPT = 40;
+/* The centre line of one chromatid: arms leave the centromere along the axis and, while being
+   pulled, bend back behind it. Interphase threads wander. Returns points with their s. */
+function centreLine(c, v, lane, sc){
+  const P = PAIRS[c.pair], k = v.k, L = lenOf(c.pair, k, sc), w = widthOf(k, sc);
+  const ax = {x: Math.sin(v.tilt), y: Math.cos(v.tilt)};           // s grows along ax
+  const trail = {x: -v.pole, y: 0};
+  const pts = new Array(NPT + 1);
+  for (const dirSign of [1, -1]) {
+    const armLen = (dirSign > 0 ? 1 - P.cen : P.cen) * L;
+    let x = v.x, y = v.y;
+    const st = {x: ax.x * dirSign, y: ax.y * dirSign};
+    const cr = st.x * trail.y - st.y * trail.x;
+    const rot = (cr >= 0 ? 1 : -1) * (v.pole ? 1 : 0);
+    const iC = Math.round(P.cen * NPT);
+    const idx = dirSign > 0 ? [...Array(NPT - iC + 1).keys()].map(j => iC + j) : [...Array(iC + 1).keys()].map(j => iC - j);
+    let prev = 0;
+    idx.forEach((i, j) => {
+      const s = i / NPT, d = Math.abs(s - P.cen) * L;
+      if (j > 0) {
+        const th = v.bend * 1.2 * Math.min(1, d / Math.max(12, armLen * 0.3)) * rot;
+        const dx = st.x * Math.cos(th) - st.y * Math.sin(th), dy = st.x * Math.sin(th) + st.y * Math.cos(th);
+        x += dx * (d - prev); y += dy * (d - prev);
+      }
+      prev = d;
+      pts[i] = {s, x, y};
+    });
+  }
+  /* normals, lane offset (sisters pinched at the centromere), and the interphase wander */
+  const pinch = s => lerp(1, 0.38 + 0.62 * Math.min(1, Math.abs(s - P.cen) * L / 7), v.k);
+  const amp = lerp(4.2, 0, Math.min(1, k * 1.6)) * (0.6 + 0.4 * Math.min(1, sc / SF));
+  const base = pts.slice();
+  for (let i = 0; i <= NPT; i++) {
+    const a = base[Math.max(0, i - 1)], b = base[Math.min(NPT, i + 1)];
+    let nx = -(b.y - a.y), ny = b.x - a.x; const m = Math.hypot(nx, ny) || 1; nx /= m; ny /= m;
+    const off = lane * (w / 2 + 0.6) * v.sep * pinch(pts[i].s) + amp * Math.sin(i * 0.62 + v.ph + lane * 1.7);
+    pts[i] = {s: base[i].s, x: base[i].x + nx * off, y: base[i].y + ny * off};
+  }
+  return pts;
+}
+const polyD = pts => pts.map((p, i) => (i ? 'L' : 'M') + p.x.toFixed(1) + ' ' + p.y.toFixed(1)).join('');
+function between(pts, a, b){
+  const at = s => { const f = s * NPT, i = Math.min(NPT - 1, Math.floor(f)), t = f - i; return {x: lerp(pts[i].x, pts[i + 1].x, t), y: lerp(pts[i].y, pts[i + 1].y, t)}; };
+  const r = [at(a)];
+  for (const p of pts) if (p.s > a + 1e-9 && p.s < b - 1e-9) r.push(p);
+  r.push(at(b));
+  return r;
+}
+const BOX = new Map();                   // chromosome id -> bounding box, for hit targets
+function paintChromosomes(){
+  for (const e of CEL.values()) e.seen = false;
+  BOX.clear();
+  const sc = scaleOf();
+  let kin = '';
+  for (const cell of S.cells) for (const c of cell.chroms) {
+    const v = chromView(c), w = widthOf(v.k, sc), L = lenOf(c.pair, v.k, sc);
+    const lanes = c.cts.length === 2 ? [-1, 1] : [0];
+    let bx0 = 1e9, by0 = 1e9, bx1 = -1e9, by1 = -1e9;
+    c.cts.forEach((ct, i) => {
+      const e = ctEls(ct.id), pts = centreLine(c, v, lanes[i], sc);
+      for (const p of pts) { bx0 = Math.min(bx0, p.x); by0 = Math.min(by0, p.y); bx1 = Math.max(bx1, p.x); by1 = Math.max(by1, p.y); }
+      const d = polyD(pts);
+      set(e.out, {d, 'stroke-width': (w + 2.2).toFixed(2)});
+      e.segs.forEach((sp, j) => {
+        const q = ct.segs[j], cp = e.core[j];
+        if (!q) { if (sp.getAttribute('d')) { sp.setAttribute('d', ''); cp.setAttribute('d', ''); } return; }
+        const dq = polyD(between(pts, q[0], q[1]));
+        set(sp, {d: dq, stroke: COL[q[2]], 'stroke-width': w.toFixed(2)});
+        set(cp, {d: dq, stroke: CORE[q[2]], 'stroke-width': (w * 0.36).toFixed(2), 'stroke-opacity': (0.25 + 0.4 * v.k).toFixed(2)});
+      });
+      /* G-bands: a dash pattern along the chromatid, faint while it is a loose thread */
+      const bands = PAIRS[c.pair].bands; let da = [0], last = 0;
+      for (const [s0, bw] of bands) { da.push(((s0 - last) * L).toFixed(1), (bw * L).toFixed(1)); last = s0 + bw; }
+      da.push(((1 - last) * L + 50).toFixed(1));
+      set(e.band, {d, 'stroke-width': (w * 0.98).toFixed(2), 'stroke-dasharray': da.join(' '), 'stroke-opacity': (0.42 * v.k).toFixed(2)});
+      /* alleles, written on the chromatid at their locus */
+      const loci = PAIRS[c.pair].loci, lsc = sc / SF, show = v.k > 0.7 && lsc > 0.55;
+      e.labs.forEach((t, j) => {
+        const l = loci[j];
+        if (!l || !show) { if (t.textContent) t.textContent = ''; return; }
+        const f = l.s * NPT, i0 = Math.min(NPT - 1, Math.floor(f)), tt = f - i0;
+        const x = lerp(pts[i0].x, pts[i0 + 1].x, tt), y = lerp(pts[i0].y, pts[i0 + 1].y, tt);
+        set(t, {x: x.toFixed(1), y: (y + 3.4).toFixed(1), 'font-size': (9.5 * (0.75 + 0.25 * lsc)).toFixed(1)});
+        t.textContent = srcAt(ct, l.s) === 'M' ? l.g : l.g.toLowerCase();
+      });
+      if (i === 0 && v.k > 0.4) {
+        const cp = pts[Math.round(PAIRS[c.pair].cen * NPT)];
+        const q = c.cts.length === 2 ? centreLine(c, v, 1, sc)[Math.round(PAIRS[c.pair].cen * NPT)] : cp;
+        kin += `<circle cx="${((cp.x + q.x) / 2).toFixed(1)}" cy="${((cp.y + q.y) / 2).toFixed(1)}" r="${(w * 0.3).toFixed(1)}" fill="#fff4c4" opacity="${(0.9 * v.k).toFixed(2)}"/>`;
+      }
+    });
+    BOX.set(c.id, {x0: bx0, y0: by0, x1: bx1, y1: by1});
+  }
+  for (const [id, e] of CEL) if (!e.seen) { e.g.remove(); CEL.delete(id); }
+  $('labG').innerHTML = kin;
+  /* chiasmata: where the inner chromatids of a bivalent were cut and rejoined */
+  let chi = '';
+  for (const q of (stage() === 'PI' || stage() === 'MI' ? S.chiasmata : [])) {
+    const cell = S.cells.find(c => c.id === q.cell); if (!cell) continue;
+    const [m, f] = homologues(cell, q.pair); if (!m || !f) continue;
+    const pm = centreLine(m, chromView(m), 1, sc), pf = centreLine(f, chromView(f), -1, sc);
+    const i = Math.round(q.s * NPT), x = (pm[i].x + pf[i].x) / 2, y = (pm[i].y + pf[i].y) / 2;
+    chi += `<path d="M${x - 5} ${y - 5}L${x + 5} ${y + 5}M${x + 5} ${y - 5}L${x - 5} ${y + 5}" stroke="#ffd36b" stroke-width="2.4" stroke-linecap="round"/>` +
+           `<circle cx="${x}" cy="${y}" r="9" fill="none" stroke="#ffd36b" stroke-opacity=".5"/>`;
+  }
+  $('chiG').innerHTML = chi;
+}
+
+/* ---- cells, spindle, plate ----------------------------------------------------------- */
+const CELLEL = new Map();
+function paintCells(t){
+  for (const e of CELLEL.values()) e.seen = false;
+  for (const c of S.cells) {
+    const v = cellView(c);
+    let e = CELLEL.get(c.id);
+    if (!e) {
+      const g = el('g', {}, $('cellsG'));
+      e = {g, halo: el('ellipse', {fill: 'none', stroke: '#b9d0ff', 'stroke-opacity': .13, 'stroke-width': 9}, g),
+           body: el('ellipse', {fill: 'url(#gCyto)', stroke: '#a9c4f2', 'stroke-opacity': .7, 'stroke-width': 1.8}, g),
+           gran: el('g', {}, g),
+           nuc: el('circle', {fill: 'url(#gNuc)', stroke: '#b7c6ff', 'stroke-width': 1.6, 'stroke-dasharray': '6 3'}, g),
+           nuo: el('ellipse', {fill: '#8f7fd6', 'fill-opacity': .35}, g),
+           lab: el('text', {'font-size': 12, 'text-anchor': 'middle', fill: '#cfe0ff', class: 'm'}, $('labG').parentNode)};
+      CELLEL.set(c.id, e);
+    }
+    e.seen = true;
+    set(e.halo, {cx: v.x.toFixed(1), cy: v.y.toFixed(1), rx: (v.rx + 3).toFixed(1), ry: (v.ry + 3).toFixed(1)});
+    set(e.body, {cx: v.x.toFixed(1), cy: v.y.toFixed(1), rx: v.rx.toFixed(1), ry: v.ry.toFixed(1)});
+    const R = Math.min(v.rx, v.ry) * 0.6;
+    set(e.nuc, {cx: v.x.toFixed(1), cy: v.y.toFixed(1), r: R.toFixed(1), opacity: v.env.toFixed(2)});
+    set(e.nuo, {cx: (v.x + R * 0.35).toFixed(1), cy: (v.y - R * 0.3).toFixed(1), rx: (R * 0.16).toFixed(1), ry: (R * 0.12).toFixed(1), opacity: v.env.toFixed(2)});
+    /* the cytoplasm streams slowly: granules on their own orbits */
+    let gr = '';
+    for (const q of v.gr) {
+      const a = q.a + t * q.w, x = v.x + Math.cos(a) * v.rx * q.r * 0.92, y = v.y + Math.sin(a) * v.ry * q.r * 0.92;
+      gr += `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="1.5" fill="#cfe3ff" opacity=".35"/>`;
+    }
+    e.gran.innerHTML = gr;
+    const k = counts(c, S.n);
+    set(e.lab, {x: v.x.toFixed(1), y: (v.y + v.ry - 12).toFixed(1)});
+    e.lab.textContent = S.cells.length === 4 ? `${k.chrom} chr · ${fmt(k.C, 0)}C` : `${k.chrom} chromosomes · ${fmt(k.C, 0)}C`;
+  }
+  for (const [id, e] of CELLEL) if (!e.seen) { e.g.remove(); e.lab.remove(); CELLEL.delete(id); }
+  /* spindle: from each pole to every kinetochore facing it, plus a few polar fibres */
+  let sp = '', pl = '';
+  const st = stage();
+  for (const c of S.cells) {
+    const v = cellView(c); if (v.spin < 0.03) continue;
+    const pL = {x: v.x - v.rx * 0.84, y: v.y}, pR = {x: v.x + v.rx * 0.84, y: v.y};
+    let f = '';
+    for (const ch of c.chroms) {
+      const x = chromView(ch);
+      const attach = st === 'P' || st === 'PI' || st === 'PII' ? [] : ch.side ? [ch.side] : ch.face ? [ch.face] : ['L', 'R'];
+      for (const s of attach) { const p = s === 'L' ? pL : pR; f += `M${p.x.toFixed(1)} ${p.y.toFixed(1)}Q${((p.x + x.x) / 2).toFixed(1)} ${((p.y + x.y) / 2 + (x.y - v.y) * 0.15).toFixed(1)} ${x.x.toFixed(1)} ${x.y.toFixed(1)}`; }
+    }
+    for (const dy of [-0.55, -0.3, 0.3, 0.55]) f += `M${pL.x.toFixed(1)} ${pL.y}Q${v.x.toFixed(1)} ${(v.y + dy * v.ry * 1.1).toFixed(1)} ${pR.x.toFixed(1)} ${pR.y}`;
+    sp += `<path d="${f}" stroke-width="1" opacity="${(0.4 * v.spin).toFixed(2)}"/>`;
+    for (const p of [pL, pR]) {
+      let rays = '';
+      for (let i = 0; i < 12; i++) { const a = i / 12 * 6.283; rays += `M${p.x.toFixed(1)} ${p.y.toFixed(1)}l${(Math.cos(a) * 16).toFixed(1)} ${(Math.sin(a) * 16).toFixed(1)}`; }
+      sp += `<path d="${rays}" stroke-width=".9" opacity="${(0.45 * v.spin).toFixed(2)}"/><circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="9" fill="url(#gCentro)" stroke="none" opacity="${v.spin.toFixed(2)}"/>`;
+    }
+    if (st === 'M' || st === 'MI' || st === 'MII') pl += `<line x1="${v.x.toFixed(1)}" y1="${(v.y - v.ry * 0.86).toFixed(1)}" x2="${v.x.toFixed(1)}" y2="${(v.y + v.ry * 0.86).toFixed(1)}" stroke="#ffd36b" stroke-width="1.4" stroke-dasharray="3 6" opacity=".55"/>` +
+      `<text x="${v.x.toFixed(1)}" y="${(v.y - v.ry * 0.86 - 6).toFixed(1)}" fill="#ffd36b" font-size="10.5" text-anchor="middle" opacity=".8">metaphase plate</text>`;
+  }
+  $('spindleG').innerHTML = sp; $('plateG').innerHTML = pl;
+}
+/* ---- the ribbon of stages ---------------------------------------------------------- */
+function paintRibbon(){
+  const seq = SEQ[S.mode], W = 900 / seq.length;
+  $('ribbon').innerHTML = seq.map((st, i) => {
+    const x = 50 + i * W, on = i === S.si, done = i < S.si;
+    let lab = SHORT[st];
+    if (on && (st === 'M' || st === 'MI' || st === 'MII') && !S.aligned) lab = 'Prometa' + (st === 'M' ? '' : st.slice(1).replace('I', ' I').replace(' II', ' II'));
+    return `<rect x="${(x + 2).toFixed(1)}" y="14" width="${(W - 4).toFixed(1)}" height="24" rx="12" fill="${on ? '#ffd36b' : done ? '#27405c' : '#16283a'}" stroke="${on ? '#ffd36b' : '#2f4a66'}"/>` +
+           `<text x="${(x + W / 2).toFixed(1)}" y="30" text-anchor="middle" font-size="11.5" font-weight="700" fill="${on ? '#1b1405' : done ? '#b7cbe3' : '#6f8aa6'}">${esc(lab)}</text>`;
+  }).join('');
+}
+/* ---- the step graph, from the counts: two panels sharing one row of stages ---------- */
+const GC = {y: 528, h: 84}, GN = {y: 646, h: 66};
+function paintGraph(){
+  const seq = SEQ[S.mode], m = seq.length, dx = GX.w / m;
+  const nMax = 4 * S.n, X = i => GX.x + i * dx;
+  const yC = c => GC.y + GC.h - c / 4 * GC.h, yN = k => GN.y + GN.h - k / nMax * GN.h;
+  let a = '';
+  for (const c of [1, 2, 4]) a += `<line x1="${GX.x}" y1="${yC(c).toFixed(1)}" x2="${GX.x + GX.w}" y2="${yC(c).toFixed(1)}" stroke="#ece8dc"/><text x="${GX.x - 8}" y="${(yC(c) + 4).toFixed(1)}" fill="#6a3fc2" font-size="11" text-anchor="end" class="m">${c}C</text>`;
+  for (const k of [S.n, 2 * S.n, 4 * S.n]) a += `<line x1="${GX.x}" y1="${yN(k).toFixed(1)}" x2="${GX.x + GX.w}" y2="${yN(k).toFixed(1)}" stroke="#ece8dc"/><text x="${GX.x - 8}" y="${(yN(k) + 4).toFixed(1)}" fill="#16a3a3" font-size="11" text-anchor="end" class="m">${k === S.n ? 'n' : k === 2 * S.n ? '2n' : '4n'}</text>`;
+  a += `<line x1="${GX.x}" y1="${GC.y + GC.h}" x2="${GX.x + GX.w}" y2="${GC.y + GC.h}" stroke="#9aa3a6"/><line x1="${GX.x}" y1="${GN.y + GN.h}" x2="${GX.x + GX.w}" y2="${GN.y + GN.h}" stroke="#9aa3a6"/>` +
+       `<text x="${GX.x + GX.w}" y="${GC.y - 6}" fill="#4b2a92" font-size="11.5" font-weight="700" text-anchor="end">DNA per cell</text>` +
+       `<text x="${GX.x + GX.w}" y="${GN.y - 6}" fill="#0f6f6f" font-size="11.5" font-weight="700" text-anchor="end">chromosomes per cell</text>`;
+  seq.forEach((st, i) => { a += `<text x="${(X(i) + dx / 2).toFixed(1)}" y="${GN.y + GN.h + 16}" fill="${i === S.si ? '#1d2327' : '#7c878c'}" font-size="10.5" font-weight="${i === S.si ? 700 : 500}" text-anchor="middle">${esc(SHORT[st])}</text>`; });
+  if (S.mode === 'meiosis') a += `<line x1="${X(7).toFixed(1)}" y1="${GC.y - 2}" x2="${X(7).toFixed(1)}" y2="${GN.y + GN.h}" stroke="#cfc9b8" stroke-dasharray="3 3"/><text x="${(X(7) + 4).toFixed(1)}" y="${GN.y + GN.h + 32}" fill="#9aa3a6" font-size="10.5">meiosis II: no S phase before it</text>`;
+  a += `<rect x="${(X(S.si)).toFixed(1)}" y="${GC.y - 2}" width="${dx.toFixed(1)}" height="${GN.y + GN.h - GC.y + 2}" fill="#6a3fc2" opacity=".05"/>`;
+  $('gAxes').innerHTML = a;
+  const step = (f, y) => { let d = ''; S.samples.forEach((smp, i) => { const v = y(f(smp.cells[0])); d += (i ? `L${X(i).toFixed(1)} ${v.toFixed(1)}` : `M${X(0).toFixed(1)} ${v.toFixed(1)}`) + `L${(X(i) + dx).toFixed(1)} ${v.toFixed(1)}`; }); return d; };
+  $('gC').setAttribute('d', step(c => c.C, yC));
+  $('gN').setAttribute('d', step(c => c.chrom, yN));
+  /* other cells, where they differ from the first (non-disjunction) */
+  let dots = '';
+  S.samples.forEach((smp, i) => smp.cells.slice(1).forEach(c => {
+    if (c.C !== smp.cells[0].C) dots += `<circle cx="${(X(i) + dx / 2).toFixed(1)}" cy="${yC(c.C).toFixed(1)}" r="3.6" fill="#fbfaf6" stroke="#6a3fc2" stroke-width="1.6"/>`;
+    if (c.chrom !== smp.cells[0].chrom) dots += `<circle cx="${(X(i) + dx / 2).toFixed(1)}" cy="${yN(c.chrom).toFixed(1)}" r="3.6" fill="#fbfaf6" stroke="#16a3a3" stroke-width="1.6"/>`;
+  }));
+  if (dots) dots += `<text x="${GX.x}" y="${GN.y + GN.h + 32}" fill="#7c878c" font-size="10.5">○ another cell, where it differs</text>`;
+  $('gDots').innerHTML = dots;
+}
+/* ---- the gamete pool ----------------------------------------------------------------- */
+function kindsOf(list){ return new Set(list.map(g => g.kind)).size; }
+function paintPool(){
+  const mine = S.pool.filter(g => g.n === S.n), last = mine.slice(-24);
+  let g = '';
+  last.forEach((q, i) => {
+    const cx = PL.x + (i % 12) * 32 + 14, cy = PL.y + 14 + Math.floor(i / 12) * 32;
+    const odd = q.chrom !== S.n;
+    g += `<circle cx="${cx}" cy="${cy}" r="14" fill="${odd ? '#fde6e3' : '#f1eefb'}" stroke="${odd ? '#d6453d' : '#b9aee0'}" stroke-width="${odd ? 1.8 : 1}"><title>${esc(q.geno)} · ${q.chrom} chromosomes</title></circle>`;
+    const bw = 3.2, tot = q.bars.length * (bw + 1.6) - 1.6;
+    q.bars.forEach((b, j) => {
+      const h = PAIRS[b.p].L / PAIRS[0].L * 18, x = cx - tot / 2 + j * (bw + 1.6), y0 = cy - h / 2;
+      for (const s of b.segs) g += `<rect x="${x.toFixed(1)}" y="${(y0 + s[0] * h).toFixed(1)}" width="${bw}" height="${((s[1] - s[0]) * h).toFixed(1)}" fill="${s[2] === 'M' ? '#e0457d' : '#3b82e0'}"/>`;
+    });
+  });
+  $('poolG').innerHTML = g;
+  const plain = mine.filter(q => !q.x && q.nd === 'none'), withX = mine.filter(q => q.x), odd = mine.filter(q => q.chrom !== S.n);
+  const y0 = PL.y + 86;
+  const two = Math.pow(2, S.n);
+  $('poolTxt').innerHTML =
+    `<text x="${PL.x}" y="${y0}" fill="#1d2327" font-size="12" class="m">made: ${mine.length} gametes   (n = ${S.n}, so 2ⁿ = ${two})</text>` +
+    `<text x="${PL.x}" y="${y0 + 16}" fill="#4b2a92" font-size="12" class="m">kinds, no crossing over:   ${plain.length ? kindsOf(plain) : '—'}</text>` +
+    `<text x="${PL.x}" y="${y0 + 32}" fill="#8a4d00" font-size="12" class="m">kinds, with crossing over: ${withX.length ? kindsOf(withX) : '—'}</text>` +
+    `<text x="${PL.x}" y="${y0 + 48}" fill="${odd.length ? '#c0392b' : '#9aa3a6'}" font-size="12" class="m">wrong number (n±1):        ${odd.length}</text>`;
+  /* allele combinations: bars of how often each appeared */
+  const tally = new Map();
+  for (const q of mine) tally.set(q.geno, (tally.get(q.geno) || 0) + 1);
+  const rows = [...tally.entries()].sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : 1)).slice(0, 6), mx = rows.length ? rows[0][1] : 1;
+  let bars = '';
+  rows.forEach(([k, v], i) => {
+    const y = y0 + 60 + i * 12, rec = /Ae|aE/.test(k);
+    bars += `<text x="${PL.x + 92}" y="${y + 8}" fill="${rec ? '#8a4d00' : '#4a555b'}" font-size="10" text-anchor="end" class="m">${esc(k)}</text>` +
+            `<rect x="${PL.x + 98}" y="${y}" width="${(v / mx * 236).toFixed(1)}" height="9" rx="2" fill="${rec ? '#f29a1f' : '#9b8ad6'}"/>` +
+            `<text x="${PL.x + 104 + v / mx * 236}" y="${y + 8}" fill="#7c878c" font-size="10" class="m">${v}</text>`;
+  });
+  if (tally.size > rows.length) bars += `<text x="${PL.x + 98}" y="${y0 + 60 + rows.length * 12 + 8}" fill="#9aa3a6" font-size="10">and ${tally.size - rows.length} more allele combinations</text>`;
+  if (!rows.length) bars = `<text x="${PL.x}" y="${y0 + 74}" fill="#9aa3a6" font-size="11.5">Finish a meiosis, or run 25 at once.</text>`;
+  $('poolBars').innerHTML = bars;
+}
+
+/* ---- hit targets: one per unit, in a layer that never moves ------------------------ */
+let HITMAP = [];
+function paintHits(){
+  const st = stage(), active = S.locked && ['PI', 'M', 'MI', 'MII'].includes(st);
+  HITMAP = active ? allUnits() : [];
+  for (let i = 0; i < 14; i++) {
+    const h = $('hit' + i), u = HITMAP[i];
+    if (!u) { if (h.getAttribute('width') !== '0') set(h, {width: 0, height: 0, 'pointer-events': 'none'}); h.removeAttribute('data-unit'); continue; }
+    let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
+    for (const c of u.chroms) { const b = BOX.get(c.id); if (!b) continue; x0 = Math.min(x0, b.x0); y0 = Math.min(y0, b.y0); x1 = Math.max(x1, b.x1); y1 = Math.max(y1, b.y1); }
+    set(h, {x: (x0 - 7).toFixed(1), y: (y0 - 6).toFixed(1), width: (x1 - x0 + 14).toFixed(1), height: (y1 - y0 + 12).toFixed(1), 'pointer-events': 'all', 'data-unit': u.key, 'data-pair': u.pair});
+    h.classList.toggle('pick', st === 'PI');
+  }
+}
+function wireHits(){
+  for (let i = 0; i < 14; i++) {
+    const h = $('hit' + i);
+    let u = null, p0 = null, moved = false, c0 = null;
+    drag(h, svg, {
+      start(p){
+        u = HITMAP[i]; if (!u || !S.locked) return false;
+        const st = stage(); if (!['PI', 'M', 'MI', 'MII'].includes(st)) return false;
+        p0 = p; moved = false; c0 = unitPos(u);
+      },
+      move(p){
+        if (!u || stage() === 'PI') return;
+        if (!moved && Math.hypot(p.x - p0.x, p.y - p0.y) < 4) return;
+        moved = true;
+        const v = cellView(u.cell);
+        let x = c0.x + p.x - p0.x, y = c0.y + p.y - p0.y;
+        const ex = (x - v.x) / (v.rx * 0.8), ey = (y - v.y) / (v.ry * 0.78), r = Math.hypot(ex, ey);
+        if (r > 1) { x = v.x + (x - v.x) / r; y = v.y + (y - v.y) / r; }
+        u.chroms.forEach(c => { c.plate = false; });
+        placeUnit(u, x, y, true);
+      },
+      end(p){
+        if (!u) return;
+        const st = stage();
+        if (!moved) {
+          if (st === 'PI' && u.biv) placeChiasma(u, p);
+          else if (st === 'MI' && u.biv) { flip(u.cell, u.pair); S.flips++; const q = unitPos(u); placeUnit(unitsOf(u.cell).find(w => w.key === u.key), q.tx, q.ty, false); sound('tick'); track('orient', {by: 'click', pair: u.pair}); }
+        } else {
+          const v = cellView(u.cell), q = unitPos(u);
+          if (Math.abs(q.x - v.x) < 46 * scaleOf()) { u.chroms.forEach(c => { c.plate = true; }); sound('snap'); }
+          relayoutPlate(u.cell);
+          track('drag', {unit: u.key, plate: u.chroms[0].plate});
+        }
+        u = null;
+        check(); paintControls();
+      },
+    });
+  }
+}
+/* Click on a bivalent in prophase I: the point along its length is where the chiasma forms. */
+function placeChiasma(u, p){
+  const m = u.chroms.find(c => c.origin === 'M') || u.chroms[0], v = chromView(m), L = lenOf(m.pair, v.k, scaleOf());
+  const ax = {x: Math.sin(v.tilt), y: Math.cos(v.tilt)};
+  const s = PAIRS[m.pair].cen + ((p.x - v.x) * ax.x + (p.y - v.y) * ax.y) / L;
+  const n = S.chiasmata.filter(q => q.cell === u.cell.id && q.pair === u.pair).length;
+  if (n >= 2) { toast('Two chiasmata on this pair is plenty for now.'); return; }
+  if (crossOver(u.cell, u.pair, s)) {
+    S.chiasmata.push({cell: u.cell.id, pair: u.pair, s}); S.runX = true;
+    sound('snap'); track('crossover', {pair: u.pair, s: +s.toFixed(3)});
+  } else { toast('A chiasma needs a spot on an arm, not at the centromere or the very tip.'); sound('oops'); }
+}
+
+/* ============================================================================
+   Words, from the counts
+   ============================================================================ */
+const HINT = {
+  G1: s => `One cell, 2n = ${2 * s.n}. Each chromosome is one DNA molecule: one chromatid. The pink ones came from the mother, the blue from the father.`,
+  S: () => 'Every chromosome has been copied. Now each is two sister chromatids held at one centromere: the same number of chromosomes, twice the DNA.',
+  G2: () => 'The cell grows and checks its copied DNA before it divides.',
+  P: () => 'The chromosomes coil up and become visible. The nuclear envelope breaks down and the spindle forms between the poles.',
+  PI: () => 'Homologues have paired up side by side (synapsis), making bivalents. Click a bivalent where you want a chiasma: two non-sister chromatids will swap segments there.',
+  PII: () => 'No S phase came first. Each chromosome still has the two chromatids it had before meiosis I.',
+  M: s => s.aligned ? 'Every chromosome sits on the plate with its two kinetochores facing opposite poles.' : 'Drag each chromosome onto the dashed plate, or let the spindle do it. Anaphase cannot start until all are there.',
+  MI: s => s.aligned ? 'Every bivalent is on the plate. Which homologue faces which pole was chance. Click a pair to flip it.' : 'Drag each bivalent onto the plate, or let the spindle do it. Click a pair to flip which homologue faces which pole.',
+  MII: s => s.aligned ? 'All on the plates. Sister kinetochores face opposite poles, as in mitosis.' : 'Drag the chromosomes onto the plates, or let the spindles do it.',
+  A: () => 'Sister chromatids part. Each is now a chromosome of its own, so for a moment the cell holds twice as many chromosomes.',
+  AI: () => 'Homologues part: one of each pair to each pole. The sisters stay together.',
+  AII: () => 'Now the sisters part, as in mitosis.',
+  T: () => 'Two nuclei form and the cell divides. Two daughter cells, each like the parent.',
+  TI: () => 'Two cells. Each has one of each pair: half the chromosomes, but every chromosome still has two chromatids.',
+  TII: () => 'Four cells: the gametes. Each has one chromatid of one of each pair.',
+};
+function paintControls(){
+  const seq = SEQ[S.mode], st = stage();
+  $('stageKick').textContent = `Stage ${S.si + 1} of ${seq.length} · ${S.mode === 'mitosis' ? 'mitosis' : 'meiosis'}`;
+  $('stageName').textContent = (st === 'M' || st === 'MI' || st === 'MII') && !S.aligned ? 'Prometaphase' + (st === 'M' ? '' : st === 'MI' ? ' I' : ' II') : NAME[st];
+  $('stageHint').textContent = HINT[st](S);
+  const last = S.si >= seq.length - 1, isM = st === 'M' || st === 'MI' || st === 'MII';
+  $('btnNext').textContent = last ? '↺ Start another cell' : NEXT[seq[S.si + 1]] + ' ▶';
+  $('btnNext').disabled = !S.locked || (isM && !S.aligned);
+  $('btnAlign').hidden = !isM; $('btnAlign').disabled = !S.locked || S.aligned;
+  $('btnShuffle').hidden = st !== 'MI'; $('btnShuffle').disabled = !S.locked;
+  $('modeMit').setAttribute('aria-pressed', S.mode === 'mitosis'); $('modeMei').setAttribute('aria-pressed', S.mode === 'meiosis');
+  $('n4').setAttribute('aria-pressed', S.n === 2); $('n6').setAttribute('aria-pressed', S.n === 3);
+  $('nd').value = S.nd; $('nd').disabled = !S.locked || S.mode === 'mitosis';
+  $('ndNote').textContent = S.mode === 'mitosis' ? 'Non-disjunction is set for meiosis.' : 'Non-disjunction acts on the smallest pair, as in chromosome 21.';
+  for (const id of ['modeMit', 'modeMei', 'n4', 'n6', 'btnRestart', 'btnBatch', 'btnClear', 'chkX']) $(id).disabled = !S.locked;
+  paintCounts(); paintWhy(); paintRibbon(); paintGraph(); paintPool();
+}
+function paintCounts(){
+  const rows = S.cells.map((c, i) => {
+    const k = counts(c, S.n), odd = S.si > 0 && (S.cells.length > 1) && k.chrom !== S.cells[0].chroms.length;
+    const ploid = k.chrom === 2 * S.n ? '2n' : k.chrom === S.n ? 'n' : k.chrom === 4 * S.n ? '4n' : k.chrom > S.n && k.chrom < 2 * S.n ? 'n + ' + (k.chrom - S.n) : k.chrom < S.n ? 'n − ' + (S.n - k.chrom) : k.chrom === 2 * S.n + 1 ? '2n + 1' : String(k.chrom);
+    return `<tr><td>Cell ${i + 1}</td><td class="${odd ? 'odd' : ''}">${k.chrom} <span style="color:var(--ink-3)">(${ploid})</span></td><td>${k.chromatids}</td><td>${fmt(k.C, 0)}C</td></tr>`;
+  }).join('');
+  $('countBody').innerHTML = `<table class="count"><tr><th>Cell</th><th>Chromosomes</th><th>Chromatids</th><th>DNA</th></tr>${rows}</table>` +
+    `<p class="note">Counted from the objects: chromosomes = centromeres; DNA = chromatids ÷ n, with n = ${S.n}.</p>`;
+}
+function paintWhy(){
+  if (!S.locked) return;
+  $('whyCard').hidden = false;
+  const st = stage(), k0 = counts(S.cells[0], S.n);
+  let t = '';
+  if (st === 'S' || st === 'G2') t += `<p>The DNA doubled from <span class="mono">2C</span> to <span class="mono">${fmt(k0.C, 0)}C</span>, but the count of chromosomes stayed at <span class="mono">${k0.chrom}</span>: a copied chromosome is still one chromosome, because it still has one centromere.</p>`;
+  if (st === 'A' || st === 'AII') t += `<p>Each cell now holds <span class="mono">${S.cells.map(c => counts(c, S.n).chrom).join(' and ')}</span> chromosomes for a moment: every chromatid has its own centromere now. The DNA has not changed: <span class="mono">${fmt(k0.C, 0)}C</span>.</p>`;
+  if (st === 'TI') {
+    const ks = S.cells.map(c => counts(c, S.n));
+    t += `<p>Meiosis I is the reduction division: <span class="mono">${2 * S.n} → ${ks.map(k => k.chrom).join(' and ')}</span> chromosomes. The DNA fell from 4C to <span class="mono">${ks.map(k => fmt(k.C, 0) + 'C').join(' and ')}</span>, not yet to 1C.</p>`;
+  }
+  if (st === 'T') t += `<p>Mitosis is an equational division: each daughter has <span class="mono">${S.cells.map(c => counts(c, S.n).chrom).join(' and ')}</span> chromosomes, as the parent did, and <span class="mono">2C</span> of DNA.</p>`;
+  if (st === 'TII') {
+    const odd = S.cells.filter(c => counts(c, S.n).chrom !== S.n);
+    t += `<p>Four gametes: <span class="mono">${S.cells.map(c => genotype(c)).join(' · ')}</span>.</p>`;
+    if (S.runX) t += `<p>You placed ${S.chiasmata.length === 1 ? 'a crossover' : S.chiasmata.length + ' crossovers'}, so some chromosomes carry pink and blue stretches: combinations neither parent had.</p>`;
+    if (odd.length) t += `<p><b>Non-disjunction:</b> gametes with <span class="mono">${odd.map(c => counts(c, S.n).chrom).join(', ')}</span> chromosomes instead of ${S.n}. An n + 1 gamete joining a normal one makes a 2n + 1 zygote: a trisomy. Trisomy 21 is Down syndrome.</p>`;
+  }
+  if (st === 'PI' && S.chiasmata.length) t += `<p>${S.chiasmata.length} chiasma${S.chiasmata.length > 1 ? 'ta' : ''} placed. The two inner chromatids swapped the segments beyond ${S.chiasmata.length > 1 ? 'each point' : 'the point'}: look for the colour change.</p>`;
+  if (st === 'MI' && S.aligned) {
+    const faces = S.cells[0].chroms.filter(c => c.face === 'L').map(c => c.origin === 'M' ? 'pink' : 'blue');
+    t += `<p>Facing the left pole: <span class="mono">${faces.join(', ')}</span>. Each of the ${S.n} pairs faces one of 2 ways, independently, so there are 2<sup>${S.n}</sup> = ${Math.pow(2, S.n)} ways to sort whole chromosomes into gametes.</p>`;
+  }
+  if (!t) t = `<p>Each cell here: <span class="mono">${k0.chrom}</span> chromosomes, <span class="mono">${k0.chromatids}</span> chromatids, <span class="mono">${fmt(k0.C, 0)}C</span> of DNA.</p>`;
+  $('why').innerHTML = t;
+}
+
+/* ---- findings: reached by the model, never by a button ---------------------------- */
+function check(){
+  if (!S.locked) return;
+  const st = stage(), ks = S.cells.map(c => counts(c, S.n));
+  if (st === 'S' && ks[0].C === 4 && ks[0].chrom === 2 * S.n) discover('dna');
+  if (S.mode === 'mitosis' && st === 'T' && ks.length === 2 && ks.every(k => k.chrom === 2 * S.n && k.C === 2)) discover('keeps');
+  if (S.mode === 'meiosis' && st === 'TI') { if (ks.length === 2 && ks.every(k => k.chrom === S.n)) discover('halves'); maybeExplain(); }
+  const mine = S.pool.filter(g => g.n === S.n);
+  if (mine.some(g => g.rec)) discover('cross');
+  const plain = mine.filter(g => !g.x && g.nd === 'none');
+  if (plain.length && kindsOf(plain) === Math.pow(2, S.n)) discover('twoN');
+  if (S.pool.some(g => g.chrom !== g.n)) discover('nondisj');
+}
+let EXPLAINED = false;
+function maybeExplain(){
+  if (EXPLAINED || !POE) return;
+  EXPLAINED = true;
+  const ks = S.cells.map(c => counts(c, S.n)), before = S.samples[S.samples.length - 2].cells[0];
+  const halved = ks.every(k => k.chrom * 2 === before.chrom);
+  POE.explain(`The parent cell had <b>${before.chrom}</b> chromosomes (2n = ${before.chrom}). After meiosis I the two daughters have <b>${ks.map(k => k.chrom).join(' and ')}</b>` +
+    `${halved ? ': half' : ''}. Homologues went to opposite poles, one of each pair to each cell. But every chromosome still has two chromatids, so each cell holds <b>${fmt(ks[0].C, 0)}C</b> of DNA — the DNA only falls to 1C after meiosis II.`,
+    POE.choice === 'half');
+}
+
+/* ============================================================================
+   Controls
+   ============================================================================ */
+build();
+wireHits();
+$('btnNext').addEventListener('click', nextStage);
+$('btnAlign').addEventListener('click', alignAll);
+$('btnShuffle').addEventListener('click', () => { shuffleFaces(); paintControls(); });
+$('btnRestart').addEventListener('click', () => { restart(); sound('whoosh'); track('restart'); });
+$('btnBatch').addEventListener('click', batch);
+$('btnClear').addEventListener('click', () => { S.pool = []; paintPool(); });
+$('chkX').addEventListener('change', e => { S.randX = e.target.checked; track('randomCrossover', {on: S.randX}); });
+$('nd').addEventListener('change', e => { S.nd = e.target.value; track('break', {nd: S.nd}); paintControls(); });
+const setMode = m => { if (S.mode === m) return; S.mode = m; restart(); sound('pop'); track('mode', {mode: m}); };
+const setN = n => { if (S.n === n) return; S.n = n; restart(); sound('pop'); track('n', {n}); };
+$('modeMit').addEventListener('click', () => setMode('mitosis'));
+$('modeMei').addEventListener('click', () => setMode('meiosis'));
+$('n4').addEventListener('click', () => setN(2));
+$('n6').addEventListener('click', () => setN(3));
+function lockControls(lock){ $('gate').hidden = !lock; paintControls(); }
+
+/* ============================================================================
+   Start
+   ============================================================================ */
+findings($('finds'), [
+  {id: 'dna',     icon: '×2', label: 'DNA doubles before division', hint: 'Watch the count through S phase'},
+  {id: 'keeps',   icon: '=',  label: 'Mitosis keeps the number', hint: 'Finish a mitosis'},
+  {id: 'halves',  icon: '½',  label: 'Meiosis halves it', hint: 'Count after meiosis I'},
+  {id: 'cross',   icon: '✕',  label: 'Crossing over makes new combinations', hint: 'Place a chiasma, then finish the meiosis'},
+  {id: 'twoN',    icon: '2ⁿ', label: '2ⁿ kinds of gamete', hint: 'Make many gametes without crossing over'},
+  {id: 'nondisj', icon: '±1', label: 'Non-disjunction', hint: 'Break it'},
+], () => toast('All six. You have counted your way through the cell cycle.', 4600));
+
+const POE = predict($('poe'), {
+  id: 'meiosis-I-count',
+  q: 'After meiosis I, how many chromosomes does each daughter cell have compared with the parent cell?',
+  options: [
+    {id: 'same',    text: 'The same.'},
+    {id: 'half',    text: 'Half.', right: true},
+    {id: 'double',  text: 'Double.'},
+    {id: 'quarter', text: 'A quarter.'},
+  ],
+  onLock(){
+    S.locked = true;
+    lockControls(false);
+    say('Now divide the cell and count.');
+    paintWhy();
+  },
+});
+restart();
+lockControls(!POE.locked);
+if (!Play.FF('predict')) { S.locked = true; lockControls(false); }
+
+/* Everything eases towards its target; under reduced motion it is already there. */
+loop((dt, t) => {
+  const RM = reduced(), a = RM ? 1 : 1 - Math.exp(-dt * 5.5), b = RM ? 1 : 1 - Math.exp(-dt * 3);
+  for (const v of VC.values()) { v.x += (v.tx - v.x) * a; v.y += (v.ty - v.y) * a; v.rx += (v.trx - v.rx) * a; v.ry += (v.try_ - v.ry) * a; v.env += (v.tenv - v.env) * b; v.spin += (v.tspin - v.spin) * b; }
+  for (const v of VX.values()) { v.x += (v.tx - v.x) * a; v.y += (v.ty - v.y) * a; v.k += (v.tk - v.k) * b; v.bend += (v.tbend - v.bend) * a; v.sep += (v.tsep - v.sep) * b; v.tilt += (v.ttilt - v.tilt) * a; if (!RM) v.ph += dt * 0.6; }
+  paintCells(RM ? 0 : t); paintChromosomes(); paintHits();
+});
+window.applyFeatures = () => paintControls();
+window.PG_STATE = () => ({mode: S.mode, n: S.n, stage: stage(), si: S.si, nd: S.nd, aligned: S.aligned, locked: S.locked, randX: S.randX, flips: S.flips,
+  chiasmata: S.chiasmata.map(q => ({pair: q.pair, s: q.s})), samples: JSON.parse(JSON.stringify(S.samples)),
+  cells: S.cells.map(c => Object.assign(counts(c, S.n), {geno: genotype(c), faces: c.chroms.filter(x => x.face).map(x => x.origin + x.pair + x.face), view: (v => ({x: v.tx, y: v.ty, rx: v.trx, ry: v.try_}))(cellView(c)),
+    chroms: c.chroms.map(x => ({pair: x.pair, origin: x.origin, plate: x.plate, cts: x.cts.map(t => t.segs.map(s => s.slice()))}))})),
+  units: HITMAP.map((u, i) => { const m = u.chroms.find(c => c.origin === 'M') || u.chroms[0], v = chromView(m), p = unitPos(u);
+    return {hit: 'hit' + i, key: u.key, pair: u.pair, biv: u.biv, cell: S.cells.indexOf(u.cell), plate: u.chroms[0].plate,
+      x: p.x, y: p.y, mx: v.x, my: v.y, tilt: v.tilt, L: lenOf(u.pair, v.k, scaleOf()), cen: PAIRS[u.pair].cen}; }),
+  pool: S.pool.map(g => ({n: g.n, x: g.x, nd: g.nd, chrom: g.chrom, C: g.C, geno: g.geno, rec: g.rec}))});
+window.PG_MODEL = {PAIRS, germCell, replicate, synapse, crossOver, orient, anaphaseI, splitSisters, cytokinesis, counts, genotype, makeup, recombinant, meiosisFast, mitosisFast, homologues, mulberry32};
+</script>
+</body>
+</html>

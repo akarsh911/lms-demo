@@ -1,0 +1,819 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Beyond the Point</title>
+<meta name="description" content="Class 7: zoom into a number line past tenths and hundredths, compare 0.5 with 0.45 digit by digit, add with place-value blocks that regroup, and multiply tenths on a hundredths grid.">
+<link rel="icon" href="../../favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="../../play.css">
+<style>
+/* Only what this page needs beyond play.css. The stage paints its own paper in light and dark chrome. */
+.pg-stage{background:#fbfaf6}
+html, body{overflow-anchor:none}   /* the side panel grows as you play: never let the page jump under a drag */
+@media (max-width:1180px) and (min-width:981px){ .pg-main.wide-side{grid-template-columns:minmax(0,1fr) 340px} }
+.gate{position:absolute; inset:0; display:grid; place-items:center; pointer-events:none}
+.gate span{background:rgba(15,26,43,.82); color:#fff; padding:10px 16px; border-radius:99px; font-weight:600; font-size:14px}
+.seg{display:grid; grid-template-columns:repeat(4,1fr); background:var(--sunk); border-radius:99px; padding:3px; gap:3px}
+.seg button{border:0; background:transparent; border-radius:99px; padding:7px 4px; font-weight:600; font-size:13.5px; cursor:pointer; color:var(--ink-2)}
+.seg button[aria-pressed="true"]{background:var(--card); color:var(--ink); box-shadow:var(--shadow)}
+.seg button:disabled{cursor:default; opacity:.5}
+.chips{display:flex; flex-wrap:wrap; gap:6px; margin:10px 0 4px}
+.chip{border:1px solid var(--hair-2); background:var(--card); color:var(--ink); border-radius:99px; padding:6px 11px; font-weight:600; font-size:13px; cursor:pointer; font-variant-numeric:tabular-nums}
+.chip:hover:not(:disabled){border-color:#e08a1e}
+.chip[aria-pressed="true"]{border-color:#e08a1e; background:var(--warm-soft)}
+.chip:disabled{opacity:.45; cursor:default}
+.nums{display:grid; grid-template-columns:auto 1fr; gap:8px 10px; align-items:center; margin:12px 0 4px}
+.nums label{font-size:13px; font-weight:700}
+.nums input{font:600 18px/1 "JetBrains Mono",ui-monospace,monospace; width:100%; min-height:38px; padding:0 10px; border-radius:10px; border:1.5px solid var(--hair-2); background:var(--card); color:var(--ink)}
+.nums input:focus{outline:none; border-color:#e08a1e}
+.nums input.bad{border-color:var(--bad)}
+.la{color:#a85f0a} .lb{color:#136b6b}
+.opseg{display:inline-grid; grid-template-columns:1fr 1fr; background:var(--sunk); border-radius:10px; padding:3px; gap:3px}
+.opseg button{border:0; background:transparent; border-radius:8px; width:40px; height:32px; font-size:20px; font-weight:700; cursor:pointer; color:var(--ink-2)}
+.opseg button[aria-pressed="true"]{background:var(--card); color:var(--ink); box-shadow:var(--shadow)}
+.stepper{display:flex; align-items:center; gap:8px; margin:8px 0}
+.stepper label{font-size:13px; font-weight:700; min-width:64px}
+.stepper output{font:600 20px/1 "JetBrains Mono",monospace; min-width:48px; text-align:center}
+.stepper .btn{min-height:34px; width:34px; padding:0; font-size:18px}
+.msg{font-size:13px; color:var(--bad); min-height:1.2em; margin:4px 0 0}
+.hint{font-size:12.5px; color:var(--ink-3); margin:6px 0 0}
+.why p{font-size:14px; margin:0 0 .55em}
+.why b{color:var(--ink)}
+.hit{cursor:pointer}
+.hit.dragging{cursor:grabbing}
+.seghit{cursor:zoom-in}
+.seghit:hover{fill:rgba(224,138,30,.10)}
+</style>
+</head>
+<body>
+<header class="pg-top"></header>
+
+<div class="pg-intro">
+  <h1>A peek beyond the point</h1>
+  <p>Split a unit into ten parts, then split a part into ten again: that is all a decimal is. Before you touch anything, decide which is bigger, 0.5 or 0.45.
+     Then zoom into a number line past tenths and hundredths, compare decimals digit by digit, add with blocks that regroup, and multiply tenths on a grid.</p>
+</div>
+
+<main class="pg-main wide-side">
+  <section class="pg-stage" id="stageWrap">
+    <svg id="stage" viewBox="0 0 1000 640" role="img" aria-label="A number line you can zoom into by tens, two hundredths grids and number lines comparing two decimals, place-value blocks for adding, and a grid for multiplying tenths"></svg>
+    <div class="gate" id="gate"><span>Make your prediction first →</span></div>
+  </section>
+
+  <aside class="pg-side">
+    <div id="poe"></div>
+
+    <div class="card" id="ctlCard">
+      <div class="seg" role="group" aria-label="What to explore">
+        <button id="tabZoom" data-tab="zoom" aria-pressed="true">Zoom</button>
+        <button id="tabCompare" data-tab="compare" aria-pressed="false">Compare</button>
+        <button id="tabAdd" data-tab="add" aria-pressed="false">Add</button>
+        <button id="tabMul" data-tab="mul" aria-pressed="false">Multiply</button>
+      </div>
+
+      <div id="ctlZoom">
+        <div class="chips" id="goalChips">
+          <button class="chip" data-goal="4185">Find 4.185</button>
+          <button class="chip" data-goal="9876">Find 9.876</button>
+          <button class="chip" data-goal="407">Find 0.407</button>
+        </div>
+        <p class="hint">Click a piece of a number line to zoom into it: each zoom cuts that piece into 10 equal parts. The book locates 4.185 this way.</p>
+        <div class="row" style="margin-top:8px"><button class="btn sm" id="btnZoomReset">Start again</button></div>
+      </div>
+
+      <div id="ctlCompare" hidden>
+        <div class="nums">
+          <label for="inA" class="la">A</label><input id="inA" value="0.5" inputmode="decimal" autocomplete="off" aria-label="First decimal">
+          <label for="inB" class="lb">B</label><input id="inB" value="0.45" inputmode="decimal" autocomplete="off" aria-label="Second decimal">
+        </div>
+        <div class="msg" id="cmpMsg"></div>
+        <div class="chips" id="cmpChips">
+          <button class="chip" data-a="0.5" data-b="0.45">0.5 and 0.45</button>
+          <button class="chip" data-a="6.456" data-b="6.465">6.456 and 6.465</button>
+          <button class="chip" data-a="0.2" data-b="0.20">0.2 and 0.20</button>
+          <button class="chip" data-a="1.01" data-b="0.9">1.01 and 0.9</button>
+        </div>
+        <p class="hint">Type any decimals below 100, up to three digits after the point.</p>
+      </div>
+
+      <div id="ctlAdd" hidden>
+        <div class="nums">
+          <label for="addA" class="la">A</label><input id="addA" value="2.7" inputmode="decimal" autocomplete="off" aria-label="First number">
+          <label for="addB" class="lb">B</label><input id="addB" value="3.5" inputmode="decimal" autocomplete="off" aria-label="Second number">
+        </div>
+        <div class="row">
+          <div class="opseg" role="group" aria-label="Add or take away"><button id="opAdd" aria-pressed="true" aria-label="Add">+</button><button id="opSub" aria-pressed="false" aria-label="Take away">−</button></div>
+          <button class="btn primary" id="btnRun">Add them</button>
+        </div>
+        <div class="msg" id="addMsg"></div>
+        <div class="chips" id="addChips">
+          <button class="chip" data-x="2.7" data-y="3.5" data-op="+">2.7 + 3.5</button>
+          <button class="chip" data-x="0.25" data-y="0.3" data-op="+">0.25 + 0.3</button>
+          <button class="chip" data-x="3.5" data-y="2.7" data-op="-">3.5 − 2.7</button>
+          <button class="chip" data-x="2.4" data-y="0.9" data-op="-">2.4 − 0.9</button>
+        </div>
+        <p class="hint">Numbers from 0 to 9.99. A big square is 1 unit, a strip is a tenth, a tiny square is a hundredth.</p>
+      </div>
+
+      <div id="ctlMul" hidden>
+        <div class="stepper"><label class="la">Across</label><button class="btn" data-mk="p" data-d="-1" aria-label="Across: one tenth less">−</button><output id="pOut">0.3</output><button class="btn" data-mk="p" data-d="1" aria-label="Across: one tenth more">+</button></div>
+        <div class="stepper"><label class="lb">Down</label><button class="btn" data-mk="q" data-d="-1" aria-label="Down: one tenth less">−</button><output id="qOut">0.4</output><button class="btn" data-mk="q" data-d="1" aria-label="Down: one tenth more">+</button></div>
+        <p class="hint">Or drag the knobs on the top and left edges of the grid. The bold square is 1 whole, cut into 100 hundredths.</p>
+      </div>
+    </div>
+
+    <div class="card why" id="whyCard" hidden>
+      <div class="kicker">What is happening</div>
+      <div id="why"></div>
+    </div>
+
+    <div class="card"><div class="kicker">To find</div><div id="finds"></div></div>
+  </aside>
+</main>
+
+<script src="../../play.js"></script>
+<script>
+'use strict';
+const {$, esc, clamp, fmt, drag, sound, say, track, toast, predict, findings, discover, found,
+       shareState, sharedState, mount, reduced, sleep} = Play;
+mount({thread: 'decimals', band: 'tinkerer'});
+
+/* MODEL:start ==================================================================
+   Every decimal is held as a whole number of thousandths (or hundredths), so no
+   floating-point sum is ever shown. Place value does all the work:
+     tens, units, tenths, hundredths, thousandths — each ten times the next.
+
+   Zoom:     each level cuts the chosen piece of the level above into 10 equal parts.
+   Compare:  the book's method — compare the digit in the biggest place first; the
+             first place where the digits differ decides, and nothing after it can.
+   Add/take: blocks are put together column by column; 10 of a place regroup into 1
+             of the place to its left (and 1 splits into 10 when taking away).
+   Multiply: tenths × tenths on a 10 × 10 grid: p columns and q rows overlap in p·q
+             cells, each a hundredth, so the product has 1 + 1 = 2 decimal places.
+   ============================================================================ */
+const PLACES = ['tens', 'units', 'tenths', 'hundredths', 'thousandths'];
+function gcd(a, b){ a = Math.abs(a); b = Math.abs(b); while (b) [a, b] = [b, a % b]; return a || 1; }
+function parseDec(str, maxDp = 3, maxInt = 99){
+  const s = String(str).trim();
+  if (s === '' || s === '.' || !/^\d*\.?\d*$/.test(s)) return {ok: false, why: 'Type a number such as 0.45'};
+  const [ip, fp = ''] = s.split('.');
+  if (fp.length > maxDp) return {ok: false, why: `Use at most ${maxDp} digits after the point`};
+  const int = ip === '' ? 0 : parseInt(ip, 10);
+  if (int > maxInt) return {ok: false, why: `Keep it below ${maxInt + 1}`};
+  return {ok: true, text: s, int, fp, dp: fp.length, thou: int * 1000 + parseInt((fp + '000').slice(0, 3), 10)};
+}
+/* thousandths → a string with dp digits after the point */
+function toText(thou, dp = 3){
+  const int = Math.floor(thou / 1000), f = String(thou % 1000).padStart(3, '0').slice(0, dp);
+  return dp ? int + '.' + f : String(int);
+}
+const trim = thou => { let dp = 3; while (dp > 0 && Math.floor(thou / Math.pow(10, 3 - dp)) % 10 === 0) dp--; return toText(thou, dp); };
+const digitsOf = thou => [Math.floor(thou / 10000) % 10, Math.floor(thou / 1000) % 10, Math.floor(thou / 100) % 10, Math.floor(thou / 10) % 10, thou % 10];
+function compareDec(a, b){
+  const da = digitsOf(a), db = digitsOf(b);
+  for (let i = 0; i < 5; i++) if (da[i] !== db[i]) return {cmp: da[i] > db[i] ? 1 : -1, place: i, da, db};
+  return {cmp: 0, place: -1, da, db};
+}
+function asFraction(thou){ const g = gcd(thou, 1000); return {n: thou / g, d: 1000 / g}; }
+/* zoom: digits = [units, tenths, hundredths, thousandths] chosen so far */
+const zoomValue = ds => ds.reduce((s, d, j) => s + d * Math.pow(10, 3 - j), 0);
+const segWidth = j => Math.pow(10, 3 - j);                               // in thousandths, at level j
+const levelStart = (ds, j) => j === 0 ? 0 : zoomValue(ds.slice(0, j));
+/* adding and taking away in hundredths, as place-value columns [units, tenths, hundredths] */
+const cols = h => [Math.floor(h / 100), Math.floor(h / 10) % 10, h % 10];
+const colValue = c => c[0] * 100 + c[1] * 10 + c[2];
+function addSteps(a, b){
+  const A = cols(a), Bc = cols(b), st = [];
+  let c = [A[0] + Bc[0], A[1] + Bc[1], A[2] + Bc[2]];
+  st.push({c: c.slice(), kind: 'together'});
+  if (c[2] >= 10) { c = [c[0], c[1] + 1, c[2] - 10]; st.push({c: c.slice(), kind: 'carryH'}); }
+  if (c[1] >= 10) { c = [c[0] + 1, c[1] - 10, c[2]]; st.push({c: c.slice(), kind: 'carryT'}); }
+  return st;
+}
+function subSteps(a, b){
+  const Bc = cols(b), st = [];
+  let c = cols(a);
+  st.push({c: c.slice(), kind: 'start'});
+  if (c[2] < Bc[2]) {
+    if (c[1] === 0) { c = [c[0] - 1, c[1] + 10, c[2]]; st.push({c: c.slice(), kind: 'splitU'}); }
+    c = [c[0], c[1] - 1, c[2] + 10]; st.push({c: c.slice(), kind: 'splitT'});
+  }
+  c = [c[0], c[1], c[2] - Bc[2]]; st.push({c: c.slice(), kind: 'takeH'});
+  if (c[1] < Bc[1]) { c = [c[0] - 1, c[1] + 10, c[2]]; st.push({c: c.slice(), kind: 'splitU'}); }
+  c = [c[0], c[1] - Bc[1], c[2]]; st.push({c: c.slice(), kind: 'takeT'});
+  c = [c[0] - Bc[0], c[1], c[2]]; st.push({c: c.slice(), kind: 'takeU'});
+  return st;
+}
+/* tenths × tenths on the grid */
+const gridProduct = (p, q) => ({cells: p * q, hundredths: p * q, text: toText(p * q * 10, 2)});
+/* the book's rule for any two decimals: multiply without the points, then count places */
+function mulDec(x, y){
+  const X = parseDec(x, 3, 999), Y = parseDec(y, 3, 999);
+  const n = BigInt(X.int + X.fp) * BigInt(Y.int + Y.fp), dp = X.dp + Y.dp;
+  let s = n.toString().padStart(dp + 1, '0');
+  if (dp) s = s.slice(0, s.length - dp) + '.' + s.slice(s.length - dp);
+  if (dp) s = s.replace(/0+$/, '').replace(/\.$/, '');
+  return {text: s, places: dp};
+}
+/* MODEL:end */
+
+/* ---- state: plain data --------------------------------------------------- */
+const S = {tab: 'zoom', locked: false, ds: [], goal: null, a: '0.5', b: '0.45', x: '2.7', y: '3.5', op: '+', step: -1, steps: null, running: false,
+           p: 3, q: 4, changes: 0};
+const shared = sharedState();
+if (shared) {
+  if (['zoom', 'compare', 'add', 'mul'].includes(shared.tab)) S.tab = shared.tab;
+  if (Array.isArray(shared.ds)) S.ds = shared.ds.slice(0, 4).map(d => clamp(Math.round(+d) || 0, 0, 9));
+  for (const k of ['a', 'b', 'x', 'y']) if (typeof shared[k] === 'string') S[k] = shared[k].slice(0, 7);
+  if (shared.op === '-') S.op = '-';
+  if (shared.p) S.p = clamp(Math.round(+shared.p) || 3, 0, 20);
+  if (shared.q) S.q = clamp(Math.round(+shared.q) || 4, 0, 20);
+}
+shareState(() => ({tab: S.tab, ds: S.ds, a: S.a, b: S.b, x: S.x, y: S.y, op: S.op, p: S.p, q: S.q}));
+
+/* ============================================================================
+   The stage: drawn once, then only patched.
+   ============================================================================ */
+const svg = $('stage');
+const AM = '#e08a1e', AM_D = '#a85f0a', AM_L = '#f8d9a8', TE = '#1f8a8a', TE_D = '#136b6b', TE_L = '#bfe3e3', PU = '#7b5cd6';
+const INK = '#1d2327', INK2 = '#4a555b', INK3 = '#6f7a80', PAPER = '#fbfaf6', HAIR = '#e2ded2';
+const LV = {x: 170, w: 770, y: [118, 246, 374, 502]};
+const GA = {x: 60, y: 86, s: 200}, GB = {x: 320, y: 86, s: 200};
+const NL1 = {x: 80, w: 840, y: 410}, NL2 = {x: 80, w: 840, y: 548};
+const COL = {u: 110, t: 590, h: 790};                      // add view: column left edges
+const ROWY = {a: 78, b: 204, r: 352};                       // add view: row tops
+const MG = {x: 96, y: 112, U: 220};                         // multiply grid
+const set = (id, attrs) => { const el = typeof id === 'string' ? $(id) : id; for (const k in attrs) el.setAttribute(k, attrs[k]); return el; };
+const T = (x, y, txt, o = '') => `<text x="${x}" y="${y}" ${o}>${txt}</text>`;
+const H = (x, y, txt) => T(x, y, txt, `fill="${INK2}" font-size="13" font-weight="700" letter-spacing=".08em"`);
+const MONO = 'font-family="JetBrains Mono, monospace"';
+
+function build(){
+  /* zoom: 4 levels, each with 10 clickable pieces that never move */
+  let lv = '', hits = '';
+  for (let j = 0; j < 4; j++) {
+    const y = LV.y[j];
+    lv += `<g id="lv${j}"><rect id="lvSel${j}" y="${y - 16}" height="32" rx="5" fill="${AM}" opacity=".22"/>` +
+          `<line x1="${LV.x}" y1="${y}" x2="${LV.x + LV.w}" y2="${y}" stroke="${INK}" stroke-width="2.2"/><g id="lvTicks${j}"></g>` +
+          `<text id="lvName${j}" x="22" y="${y - 2}" fill="${INK}" font-size="13" font-weight="700"></text><text id="lvName2${j}" x="22" y="${y + 16}" fill="${INK3}" font-size="11.5" font-weight="600"></text>` +
+          `<circle id="lvDot${j}" cy="${y}" r="5" fill="${AM_D}" stroke="#fff" stroke-width="1.5"/>` +
+          `<g id="lvGoal${j}"><path d="M0 0 V-26" stroke="${PU}" stroke-width="2"/><path d="M0 -26 L14 -21 L0 -16Z" fill="${PU}"/></g></g>`;
+    hits += `<g id="lvHit${j}">` + Array.from({length: 10}, (_, k) =>
+      `<rect class="seghit" data-lv="${j}" data-k="${k}" x="${LV.x + k * LV.w / 10}" y="${y - 22}" width="${LV.w / 10}" height="44" fill="transparent" role="button" aria-label="Zoom into piece ${k + 1} of level ${j + 1}"/>`).join('') + `</g>`;
+  }
+  /* compare: the two hundredths grids */
+  const grid = (G, id, col) => {
+    let s = `<rect x="${G.x}" y="${G.y}" width="${G.s}" height="${G.s}" fill="#fff"/><g id="${id}Fill"></g>`;
+    for (let i = 1; i < 10; i++) {
+      const o = i * G.s / 10;
+      s += `<line x1="${G.x + o}" y1="${G.y}" x2="${G.x + o}" y2="${G.y + G.s}" stroke="#d6d0c2" stroke-width="${i === 5 ? 1.2 : .8}"/><line x1="${G.x}" y1="${G.y + o}" x2="${G.x + G.s}" y2="${G.y + o}" stroke="#d6d0c2" stroke-width=".8"/>`;
+    }
+    return s + `<rect x="${G.x}" y="${G.y}" width="${G.s}" height="${G.s}" fill="none" stroke="${col}" stroke-width="2.5"/>`;
+  };
+  /* multiply grid lines: every tenth over 2 × 2 units */
+  let mg = '';
+  for (let i = 0; i <= 20; i++) {
+    const o = i * MG.U / 10;
+    mg += `<line x1="${MG.x + o}" y1="${MG.y}" x2="${MG.x + o}" y2="${MG.y + 2 * MG.U}" stroke="${i % 10 ? '#e4dfd3' : '#cfc8b8'}" stroke-width="${i % 10 ? .8 : 1.2}"/>` +
+          `<line x1="${MG.x}" y1="${MG.y + o}" x2="${MG.x + 2 * MG.U}" y2="${MG.y + o}" stroke="${i % 10 ? '#e4dfd3' : '#cfc8b8'}" stroke-width="${i % 10 ? .8 : 1.2}"/>`;
+  }
+
+  svg.innerHTML = `
+  <defs>
+    <pattern id="hatchT" width="8" height="8" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2="8" stroke="${TE}" stroke-width="2.6" opacity=".55"/></pattern>
+    <marker id="arrA" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="${AM_D}"/></marker>
+  </defs>
+  <rect x="0" y="0" width="1000" height="640" fill="${PAPER}"/>
+
+  <!-- ===================== ZOOM ===================== -->
+  <g id="vZoom">
+    ${H(22, 30, 'ZOOM INTO THE NUMBER LINE')}
+    <text id="zSub" x="22" y="48" fill="${INK3}" font-size="12"></text>
+    <g id="zMag"></g>
+    ${lv}
+    <g id="zPin"><path d="M0 -4 C-9 -16 -12 -22 -12 -28 A12 12 0 1 1 12 -28 C12 -22 9 -16 0 -4Z" fill="${AM}" stroke="#fff" stroke-width="2"/><circle cy="-28" r="4.5" fill="#fff"/>
+      <text id="zPinLab" y="-46" fill="${AM_D}" font-size="16" font-weight="700" text-anchor="middle"></text></g>
+    <g id="zBoxes"></g>
+    ${hits}
+  </g>
+
+  <!-- ===================== COMPARE ===================== -->
+  <g id="vCompare" style="display:none">
+    ${H(22, 30, 'HUNDREDTHS OF A WHOLE')}
+    ${T(22, 48, 'Each big square is 1 whole cut into 100 hundredths. A thousandth is a tenth of one small square.', `fill="${INK3}" font-size="12"`)}
+    ${grid(GA, 'gA', AM_D)}${grid(GB, 'gB', TE_D)}
+    <text id="gALab" x="${GA.x + GA.s / 2}" y="${GA.y + GA.s + 24}" fill="${AM_D}" font-size="15" font-weight="700" text-anchor="middle"></text>
+    <text id="gBLab" x="${GB.x + GB.s / 2}" y="${GB.y + GB.s + 24}" fill="${TE_D}" font-size="15" font-weight="700" text-anchor="middle"></text>
+    <text id="gAWhole" x="${GA.x + GA.s / 2}" y="${GA.y + GA.s + 42}" fill="${INK3}" font-size="12" text-anchor="middle"></text>
+    <text id="gBWhole" x="${GB.x + GB.s / 2}" y="${GB.y + GB.s + 42}" fill="${INK3}" font-size="12" text-anchor="middle"></text>
+    <rect x="570" y="70" width="410" height="262" rx="14" fill="#fff" stroke="${HAIR}"/>
+    ${T(590, 98, 'DIGIT BY DIGIT, BIGGEST PLACE FIRST', `fill="${INK3}" font-size="12" font-weight="700" letter-spacing=".06em"`)}
+    <g id="cTable"></g>
+    <text id="cVerdict" x="775" y="312" font-size="17" font-weight="700" text-anchor="middle"></text>
+    <line x1="0" y1="350" x2="1000" y2="350" stroke="${HAIR}"/>
+    ${H(22, 378, 'ON THE NUMBER LINE')}
+    <g id="cLines"></g>
+  </g>
+
+  <!-- ===================== ADD ===================== -->
+  <g id="vAdd" style="display:none">
+    ${H(22, 30, 'PLACE-VALUE BLOCKS')}
+    <text id="aSub" x="22" y="48" fill="${INK3}" font-size="12"></text>
+    <rect x="${COL.u - 10}" y="58" width="${COL.t - COL.u - 10}" height="570" rx="12" fill="#fdf3e4"/>
+    <rect x="${COL.t - 10}" y="58" width="${COL.h - COL.t - 10}" height="570" rx="12" fill="#e9f5f5"/>
+    <rect x="${COL.h - 10}" y="58" width="${990 - COL.h}" height="570" rx="12" fill="#f1ecfb"/>
+    ${T(COL.u, 76, 'UNITS', `fill="${AM_D}" font-size="12" font-weight="700" letter-spacing=".08em"`)}
+    ${T(COL.t, 76, 'TENTHS', `fill="${TE_D}" font-size="12" font-weight="700" letter-spacing=".08em"`)}
+    ${T(COL.h, 76, 'HUNDREDTHS', `fill="#5a3fb0" font-size="12" font-weight="700" letter-spacing=".08em"`)}
+    <text id="aRowA" x="16" y="${ROWY.a + 40}" fill="${AM_D}" font-size="18" font-weight="700" ${MONO}></text>
+    <text id="aRowB" x="16" y="${ROWY.b + 40}" fill="${TE_D}" font-size="18" font-weight="700" ${MONO}></text>
+    <text id="aRowR" x="16" y="${ROWY.r + 40}" fill="${INK}" font-size="18" font-weight="700" ${MONO}></text>
+    <line x1="10" y1="${ROWY.r - 14}" x2="990" y2="${ROWY.r - 14}" stroke="${INK3}" stroke-width="1.5"/>
+    <g id="aBlocks"></g>
+    <g id="aNote"><rect id="aNoteBg" rx="10" fill="${INK}" opacity=".9"/><text id="aNoteT" fill="#fff" font-size="14" font-weight="700" text-anchor="middle"></text></g>
+  </g>
+
+  <!-- ===================== MULTIPLY ===================== -->
+  <g id="vMul" style="display:none">
+    ${H(22, 30, 'TENTHS × TENTHS')}
+    ${T(22, 48, 'The bold square is 1 whole. Each small cell is one hundredth of it.', `fill="${INK3}" font-size="12"`)}
+    <rect x="${MG.x}" y="${MG.y}" width="${2 * MG.U}" height="${2 * MG.U}" fill="#fff"/>
+    <rect id="mA" x="${MG.x}" y="${MG.y}" fill="${AM_L}" opacity=".85"/>
+    <rect id="mB" x="${MG.x}" y="${MG.y}" fill="url(#hatchT)"/>
+    <rect id="mO" x="${MG.x}" y="${MG.y}" fill="${AM}"/>
+    ${mg}
+    <g id="mNums" font-size="10.5" font-weight="700" fill="#fff" text-anchor="middle"></g>
+    <rect x="${MG.x}" y="${MG.y}" width="${MG.U}" height="${MG.U}" fill="none" stroke="${INK}" stroke-width="3"/>
+    <line id="mAGuide" y1="${MG.y - 16}" y2="${MG.y}" stroke="${AM_D}" stroke-width="2"/>
+    <circle id="mAKnob" cy="${MG.y - 18}" r="9" fill="${AM_D}" stroke="#fff" stroke-width="2"/>
+    <text id="mALab" y="${MG.y - 34}" fill="${AM_D}" font-size="15" font-weight="700" text-anchor="middle"></text>
+    <line id="mBGuide" x1="${MG.x - 16}" x2="${MG.x}" stroke="${TE_D}" stroke-width="2"/>
+    <circle id="mBKnob" cx="${MG.x - 18}" r="9" fill="${TE_D}" stroke="#fff" stroke-width="2"/>
+    <text id="mBLab" x="${MG.x - 32}" fill="${TE_D}" font-size="15" font-weight="700" text-anchor="end"></text>
+    <rect x="590" y="70" width="390" height="520" rx="14" fill="#fff" stroke="${HAIR}"/>
+    ${T(612, 100, 'COUNT THE OVERLAP', `fill="${INK3}" font-size="12" font-weight="700" letter-spacing=".08em"`)}
+    <text id="mEq" x="612" y="150" fill="${INK}" font-size="36" font-weight="700" font-family="Fredoka, Inter, sans-serif"></text>
+    <text id="mL1" x="612" y="192" fill="${INK2}" font-size="15"></text>
+    <text id="mL2" x="612" y="220" fill="${INK2}" font-size="15"></text>
+    <text id="mL3" x="612" y="248" fill="${INK2}" font-size="15"></text>
+    <line x1="612" y1="274" x2="958" y2="274" stroke="${HAIR}"/>
+    ${T(612, 302, 'IS THE PRODUCT BIGGER?', `fill="${INK3}" font-size="12" font-weight="700" letter-spacing=".08em"`)}
+    <g id="mCases"></g>
+    <rect id="hitMA" class="hit" x="${MG.x - 8}" y="${MG.y - 44}" width="${2 * MG.U + 16}" height="42" fill="transparent" role="slider" aria-label="Across: drag along the top edge"/>
+    <rect id="hitMB" class="hit" x="${MG.x - 50}" y="${MG.y - 8}" width="48" height="${2 * MG.U + 16}" fill="transparent" role="slider" aria-label="Down: drag along the left edge"/>
+  </g>
+  `;
+}
+
+/* ============================================================================
+   ZOOM
+   ============================================================================ */
+function label(v, j){
+  /* a tick at level j: show as many decimals as the level needs, fewer at the level-above ticks */
+  if (j === 0) return String(v / 1000);
+  return v % segWidth(j - 1) === 0 ? trim(v) : toText(v, j);
+}
+function paintZoom(){
+  const ds = S.ds, depth = ds.length, v = depth ? zoomValue(ds) : null;
+  const names = ['in units', 'tenths, ×10', 'hundredths, ×100', 'thousandths, ×1000'];
+  let mag = '';
+  for (let j = 0; j < 4; j++) {
+    const show = j === 0 || depth >= j;
+    $('lv' + j).style.display = show ? '' : 'none';
+    $('lvHit' + j).style.display = show ? '' : 'none';
+    if (!show) continue;
+    const lo = levelStart(ds, j), w = segWidth(j), y = LV.y[j];
+    const xOf = t => LV.x + (t - lo) / (10 * w) * LV.w;
+    let tk = '';
+    for (let k = 0; k <= 10; k++) {
+      const x = (LV.x + k * LV.w / 10).toFixed(1), big = k === 0 || k === 10 || k === 5;
+      tk += `<line x1="${x}" y1="${y - (big ? 10 : 7)}" x2="${x}" y2="${y + (big ? 10 : 7)}" stroke="${INK}" stroke-width="${big ? 2 : 1.4}"/>` +
+            T(x, y + 30, label(lo + k * w, j), `fill="${INK2}" font-size="12.5" font-weight="${k === 0 || k === 10 ? 700 : 500}" text-anchor="middle"`);
+    }
+    $('lvTicks' + j).innerHTML = tk;
+    $('lvName' + j).textContent = j === 0 ? '0 to 10' : `${label(lo, j)} to ${label(lo + 10 * w, j)}`;
+    $('lvName2' + j).textContent = names[j];
+    const sel = ds[j];
+    if (sel != null) {
+      set('lvSel' + j, {x: (LV.x + sel * LV.w / 10).toFixed(1), width: (LV.w / 10).toFixed(1), opacity: .22});
+      if (j < 3) {
+        const x1 = LV.x + sel * LV.w / 10, x2 = x1 + LV.w / 10, yn = LV.y[j + 1];
+        mag += `<path d="M${x1} ${y + 36} L${x2} ${y + 36} L${LV.x + LV.w} ${yn - 42} L${LV.x} ${yn - 42}Z" fill="${AM}" opacity=".10"/>` +
+               `<line x1="${x1}" y1="${y + 36}" x2="${LV.x}" y2="${yn - 42}" stroke="${AM}" stroke-width="1" opacity=".6"/><line x1="${x2}" y1="${y + 36}" x2="${LV.x + LV.w}" y2="${yn - 42}" stroke="${AM}" stroke-width="1" opacity=".6"/>`;
+      }
+    } else set('lvSel' + j, {opacity: 0});
+    set('lvDot' + j, {cx: v == null ? -20 : xOf(v).toFixed(1), opacity: v != null && j < depth - 1 ? 1 : 0});
+    const g = S.goal, gin = g != null && g >= lo && g <= lo + 10 * w;
+    set('lvGoal' + j, {transform: `translate(${gin ? xOf(g).toFixed(1) : -50} ${y - 10})`, opacity: gin ? 1 : 0});
+  }
+  $('zMag').innerHTML = mag;
+  if (depth) {
+    const j = depth - 1, lo = levelStart(ds, j), x = LV.x + (v - lo) / (10 * segWidth(j)) * LV.w;
+    set('zPin', {transform: `translate(${x.toFixed(1)} ${LV.y[j] - 8})`, opacity: 1});
+    $('zPinLab').textContent = toText(v, j);
+  } else set('zPin', {opacity: 0});
+  $('zSub').textContent = S.goal != null ? `Find ${toText(S.goal, 3)} (the purple flag). Click the piece of the line it sits in.` : 'Click any piece of the top line to zoom into it.';
+  /* place-value boxes */
+  let bx = '';
+  const heads = ['units', 'tenths', 'hundredths', 'thousandths'], X0 = 170, Y0 = 578;
+  heads.forEach((h, j) => {
+    const x = X0 + j * 112 + (j ? 30 : 0);
+    bx += `<rect x="${x}" y="${Y0}" width="96" height="46" rx="8" fill="${ds[j] != null ? '#fff' : '#f1eee6'}" stroke="${ds[j] != null ? AM : HAIR}" stroke-width="1.6"/>` +
+          T(x + 48, Y0 + 32, ds[j] != null ? ds[j] : '', `fill="${INK}" font-size="24" font-weight="700" text-anchor="middle" ${MONO}`) +
+          T(x + 48, Y0 - 6, h, `fill="${INK3}" font-size="11.5" font-weight="600" text-anchor="middle"`);
+    if (j === 0) bx += `<circle cx="${X0 + 112 + 12}" cy="${Y0 + 38}" r="4.5" fill="${INK}"/>`;
+  });
+  if (depth) {
+    const f = asFraction(v);
+    bx += T(640, Y0 + 20, ds.map((d, j) => j === 0 ? `${d}` : `${d}/${Math.pow(10, j)}`).join(' + '), `fill="${INK2}" font-size="14" ${MONO}`);
+    bx += T(640, Y0 + 42, `= ${toText(v, depth - 1)}` + (f.d > 1 ? `  = ${v}/1000` + (f.d !== 1000 ? ` = ${f.n}/${f.d}` : '') : ''), `fill="${INK}" font-size="15" font-weight="700" ${MONO}`);
+  }
+  $('zBoxes').innerHTML = bx;
+  for (const c of document.querySelectorAll('[data-goal]')) c.setAttribute('aria-pressed', S.goal === +c.dataset.goal);
+  return {depth, v};
+}
+
+/* ============================================================================
+   COMPARE
+   ============================================================================ */
+function paintGrid(G, id, pv, col, colL){
+  if (!pv.ok) { $(id + 'Fill').innerHTML = ''; return; }
+  const f = pv.thou % 1000, full = Math.floor(f / 10), part = f % 10, c = G.s / 10;
+  let s = '';
+  for (let i = 0; i < full; i++) {
+    const cx = Math.floor(i / 10), cy = i % 10;                 // fill column by column: a column is a tenth
+    s += `<rect x="${(G.x + cx * c).toFixed(1)}" y="${(G.y + cy * c).toFixed(1)}" width="${c}" height="${c}" fill="${col}"/>`;
+  }
+  if (part) { const i = full, cx = Math.floor(i / 10), cy = i % 10;
+    s += `<rect x="${(G.x + cx * c).toFixed(1)}" y="${(G.y + cy * c).toFixed(1)}" width="${(c * part / 10).toFixed(1)}" height="${c}" fill="${colL}"/>`; }
+  $(id + 'Fill').innerHTML = s;
+}
+function paintCompare(){
+  const A = parseDec(S.a), B = parseDec(S.b);
+  $('inA').classList.toggle('bad', !A.ok); $('inB').classList.toggle('bad', !B.ok);
+  $('cmpMsg').textContent = !A.ok ? 'A: ' + A.why : !B.ok ? 'B: ' + B.why : '';
+  paintGrid(GA, 'gA', A, AM, AM_L); paintGrid(GB, 'gB', B, TE, TE_L);
+  const hund = pv => { const f = pv.thou % 1000; return f % 10 ? `${f / 10} hundredths` : `${f / 10} hundredth${f / 10 === 1 ? '' : 's'}`; };
+  $('gALab').textContent = A.ok ? `A = ${A.text}` : 'A = ?';
+  $('gBLab').textContent = B.ok ? `B = ${B.text}` : 'B = ?';
+  $('gAWhole').textContent = A.ok ? (A.int ? `${A.int} whole${A.int > 1 ? 's' : ''} and ` : '') + hund(A) + ' shaded' : '';
+  $('gBWhole').textContent = B.ok ? (B.int ? `${B.int} whole${B.int > 1 ? 's' : ''} and ` : '') + hund(B) + ' shaded' : '';
+  if (!A.ok || !B.ok) { $('cTable').innerHTML = ''; $('cLines').innerHTML = ''; $('cVerdict').textContent = ''; return null; }
+  const R = compareDec(A.thou, B.thou);
+  /* the table: A and B digit by digit */
+  const X = [612, 668, 742, 822, 910];
+  let t = '';
+  ['tens', 'units', 'tenths', 'hundredths', 'thousandths'].forEach((h, i) => {
+    const decided = R.place === i, after = R.place >= 0 && i > R.place;
+    if (decided) t += `<rect x="${X[i] - 30}" y="118" width="60" height="150" rx="8" fill="#fde9cc"/>`;
+    t += T(X[i], 136, h, `fill="${decided ? AM_D : INK3}" font-size="11" font-weight="700" text-anchor="middle"`);
+    const shown = (pv, d) => { const writ = i < 2 ? (i === 0 ? pv.int >= 10 : true) : i - 2 < pv.dp; return {d, writ}; };
+    [[A, R.da, 178, AM_D], [B, R.db, 226, TE_D]].forEach(([pv, dg, y, col]) => {
+      const sh = shown(pv, dg[i]);
+      t += T(X[i], y, sh.writ ? dg[i] : (i === 0 ? '' : '0'), `fill="${after ? '#b9b3a6' : sh.writ ? col : '#b9b3a6'}" font-size="26" font-weight="700" text-anchor="middle" ${MONO}`);
+    });
+    if (!after && R.place !== i && (R.place < 0 || i < R.place)) t += T(X[i], 256, '=', `fill="${INK3}" font-size="16" font-weight="700" text-anchor="middle"`);
+    if (decided) t += T(X[i], 258, R.cmp > 0 ? 'A bigger' : 'B bigger', `fill="${AM_D}" font-size="11.5" font-weight="700" text-anchor="middle"`);
+  });
+  t += `<circle cx="705" cy="172" r="3.5" fill="${AM_D}"/><circle cx="705" cy="220" r="3.5" fill="${TE_D}"/>`;
+  t += T(582, 178, 'A', `fill="${AM_D}" font-size="14" font-weight="700"`) + T(582, 226, 'B', `fill="${TE_D}" font-size="14" font-weight="700"`);
+  $('cTable').innerHTML = t;
+  set('cVerdict', {fill: R.cmp === 0 ? '#1f7a45' : AM_D}).textContent = R.cmp === 0 ? `${A.text} and ${B.text} are the same number` :
+    `${R.cmp > 0 ? A.text : B.text} > ${R.cmp > 0 ? B.text : A.text}: decided in the ${PLACES[R.place]}`;
+
+  /* number lines: the whole picture, then the piece where they part company */
+  const top = Math.max(A.thou, B.thou) >= 10000 ? 100000 : 10000;
+  const x1 = t2 => NL1.x + t2 / top * NL1.w;
+  let s = `<line x1="${NL1.x}" y1="${NL1.y}" x2="${NL1.x + NL1.w}" y2="${NL1.y}" stroke="${INK}" stroke-width="2"/>`;
+  for (let k = 0; k <= 10; k++) { const x = NL1.x + k * NL1.w / 10;
+    s += `<line x1="${x}" y1="${NL1.y - 8}" x2="${x}" y2="${NL1.y + 8}" stroke="${INK}" stroke-width="1.6"/>` + T(x, NL1.y + 26, k * top / 10000, `fill="${INK2}" font-size="12.5" text-anchor="middle"`); }
+  /* the zoomed piece: at the place where they first differ (or the last written place when equal) */
+  const e = R.place >= 0 ? R.place : 2 + Math.max(A.dp, B.dp, 1) - 1;       // index into PLACES
+  const unit = Math.pow(10, 4 - e);                                          // one step at that place, in thousandths
+  const lo = Math.floor(Math.min(A.thou, B.thou) / (unit * 10)) * unit * 10, hi = lo + unit * 10;
+  const x2 = t2 => NL2.x + (t2 - lo) / (hi - lo) * NL2.w;
+  s += `<path d="M${x1(lo).toFixed(1)} ${NL1.y + 34} L${x1(hi).toFixed(1)} ${NL1.y + 34} L${NL2.x + NL2.w} ${NL2.y - 44} L${NL2.x} ${NL2.y - 44}Z" fill="${AM}" opacity=".10"/>`;
+  s += `<rect x="${x1(lo).toFixed(1)}" y="${NL1.y - 12}" width="${Math.max(2, x1(hi) - x1(lo)).toFixed(1)}" height="24" fill="${AM}" opacity=".25"/>`;
+  s += `<line x1="${NL2.x}" y1="${NL2.y}" x2="${NL2.x + NL2.w}" y2="${NL2.y}" stroke="${INK}" stroke-width="2"/>`;
+  const dpl = Math.max(0, e - 1);
+  for (let k = 0; k <= 10; k++) { const v = lo + k * unit, x = NL2.x + k * NL2.w / 10;
+    s += `<line x1="${x}" y1="${NL2.y - 8}" x2="${x}" y2="${NL2.y + 8}" stroke="${INK}" stroke-width="1.6"/>` + T(x, NL2.y + 26, e <= 1 ? String(v / 1000) : toText(v, dpl), `fill="${INK2}" font-size="12.5" text-anchor="middle"`); }
+  s += T(NL2.x + NL2.w, NL2.y - 50, `zoomed into ${e <= 1 ? String(lo / 1000) : toText(lo, dpl)} to ${e <= 1 ? String(hi / 1000) : toText(hi, dpl)}, cut into ${PLACES[e]}`, `fill="${INK3}" font-size="12" font-weight="700" text-anchor="end"`);
+  const pin = (x, y, lab, col, dy) => `<circle cx="${x.toFixed(1)}" cy="${y}" r="7" fill="${col}" stroke="#fff" stroke-width="2"/>` +
+    T(x.toFixed(1), y + dy, lab, `fill="${col}" font-size="14" font-weight="700" text-anchor="middle"`);
+  const same = R.cmp === 0, aUp = A.thou >= B.thou;
+  s += pin(x1(A.thou), NL1.y, same ? '' : 'A', AM_D, aUp ? -14 : 46) + pin(x1(B.thou), NL1.y, same ? '' : 'B', TE_D, aUp ? 46 : -14);
+  s += pin(x2(A.thou), NL2.y, same ? `${A.text} = ${B.text}` : `A ${A.text}`, AM_D, aUp || same ? -14 : 46) + (same ? '' : pin(x2(B.thou), NL2.y, `B ${B.text}`, TE_D, aUp ? 46 : -14));
+  $('cLines').innerHTML = s;
+  $('inA').value === S.a || ($('inA').value = S.a); $('inB').value === S.b || ($('inB').value = S.b);
+  for (const c of document.querySelectorAll('[data-a]')) c.setAttribute('aria-pressed', c.dataset.a === S.a && c.dataset.b === S.b);
+  return {A, B, R};
+}
+
+/* ============================================================================
+   ADD and TAKE AWAY with blocks
+   ============================================================================ */
+const UB = 50;                                            // a unit block is UB × UB; a tenth is UB × UB/10; a hundredth UB/10 square
+function blocks(c, y, tone, faded){
+  const [u, t, h] = c;
+  let s = '';
+  const uc = tone === 'a' ? AM : tone === 'b' ? TE : '#5b6770', tc = tone === 'a' ? '#d98a2b' : tone === 'b' ? '#2b9a9a' : '#6f7c85', hc = tone === 'a' ? '#c47a1b' : tone === 'b' ? '#238080' : '#7b5cd6';
+  for (let i = 0; i < u; i++) {
+    const x = COL.u + (i % 8) * (UB + 6), yy = y + Math.floor(i / 8) * (UB + 6);
+    s += `<rect x="${x}" y="${yy}" width="${UB}" height="${UB}" rx="3" fill="${uc}" opacity="${faded ? .35 : 1}"/>`;
+    for (let k = 1; k < 10; k++) s += `<line x1="${x}" y1="${yy + k * UB / 10}" x2="${x + UB}" y2="${yy + k * UB / 10}" stroke="#fff" stroke-width=".6" opacity=".55"/>`;
+  }
+  for (let i = 0; i < t; i++) {
+    const x = COL.t + Math.floor(i / 10) * (UB + 12), yy = y + (i % 10) * (UB / 10 + 1.6);
+    s += `<rect x="${x}" y="${yy.toFixed(1)}" width="${UB}" height="${UB / 10}" rx="1" fill="${tc}" opacity="${faded ? .35 : 1}"/>`;
+  }
+  for (let i = 0; i < h; i++) {
+    const col = i % 10, row = Math.floor(i / 10) % 10, stack = Math.floor(i / 100);
+    const x = COL.h + stack * (UB + 12) + col * (UB / 10 + .6), yy = y + row * (UB / 10 + 1.6);
+    s += `<rect x="${x.toFixed(1)}" y="${yy.toFixed(1)}" width="${UB / 10}" height="${UB / 10}" fill="${hc}" opacity="${faded ? .35 : 1}"/>`;
+  }
+  return s;
+}
+const hText = h => toText(h * 10, 2);
+const NOTE = {together: 'Put the blocks together, column by column', carryH: '10 hundredths make 1 tenth', carryT: '10 tenths make 1 unit',
+              start: 'Start with A', splitT: 'Split 1 tenth into 10 hundredths', splitU: 'Split 1 unit into 10 tenths',
+              takeH: 'Take away the hundredths', takeT: 'Take away the tenths', takeU: 'Take away the units'};
+function paintAdd(){
+  const X = parseDec(S.x, 2, 9), Y = parseDec(S.y, 2, 9);
+  $('addA').classList.toggle('bad', !X.ok); $('addB').classList.toggle('bad', !Y.ok);
+  let msg = !X.ok ? 'A: ' + X.why : !Y.ok ? 'B: ' + Y.why : '';
+  const a = X.ok ? X.thou / 10 : 0, b = Y.ok ? Y.thou / 10 : 0;
+  if (!msg && S.op === '-' && b > a) msg = 'B is bigger than A: take the smaller from the bigger.';
+  $('addMsg').textContent = msg;
+  $('btnRun').textContent = S.op === '+' ? 'Add them' : 'Take away';
+  $('btnRun').disabled = !S.locked || !!msg || S.running;
+  $('opAdd').setAttribute('aria-pressed', S.op === '+'); $('opSub').setAttribute('aria-pressed', S.op === '-');
+  $('aSub').textContent = S.op === '+' ? 'A and B are laid out in place value. Adding puts them together, and ten of anything regroups to the left.'
+    : 'Start with A and take B away. When a column runs short, one block from the left splits into ten.';
+  $('aRowA').textContent = X.ok ? hText(a) : '?';
+  $('aRowB').textContent = Y.ok ? (S.op === '+' ? '+ ' : '− ') + hText(b) : '?';
+  const st = S.steps && S.step >= 0 ? S.steps[S.step] : null;
+  $('aRowR').textContent = st && S.step === S.steps.length - 1 ? '= ' + hText(colValue(st.c)) : '=';
+  let s = '';
+  if (X.ok) s += blocks(cols(a), ROWY.a, 'a');
+  if (Y.ok) s += blocks(cols(b), ROWY.b, 'b', S.op === '-' && st && /take/.test(st.kind));
+  if (st) s += blocks(st.c, ROWY.r, 'r');
+  else s += T(500, ROWY.r + 110, `Press “${S.op === '+' ? 'Add them' : 'Take away'}”.`, `fill="${INK3}" font-size="16" text-anchor="middle"`);
+  /* the column sum written the usual way, points lined up */
+  if (st && S.step === S.steps.length - 1) {
+    const w = (t) => hText(t).padStart(5, ' ');
+    s += `<g ${MONO} font-size="17" font-weight="700" text-anchor="end">` + T(972, 560, w(a).replace(/ /g, ' '), `fill="${AM_D}"`) +
+         T(972, 584, ((S.op === '+' ? '+' : '−') + w(b).slice(1)).replace(/ /g, ' '), `fill="${TE_D}"`) +
+         `<line x1="890" y1="592" x2="975" y2="592" stroke="${INK}" stroke-width="1.5"/>` + T(972, 614, w(colValue(st.c)).replace(/ /g, ' '), `fill="${INK}"`) + `</g>`;
+  }
+  $('aBlocks').innerHTML = s;
+  if (st) {
+    const txt = NOTE[st.kind], wN = txt.length * 7.6 + 30;
+    set('aNoteBg', {x: 500 - wN / 2, y: 598, width: wN, height: 30, opacity: .9});
+    set('aNoteT', {x: 500, y: 618}).textContent = txt;
+  } else { set('aNoteBg', {opacity: 0}); $('aNoteT').textContent = ''; }
+  if ($('addA').value !== S.x && document.activeElement !== $('addA')) $('addA').value = S.x;
+  if ($('addB').value !== S.y && document.activeElement !== $('addB')) $('addB').value = S.y;
+  for (const c of document.querySelectorAll('[data-x]')) c.setAttribute('aria-pressed', c.dataset.x === S.x && c.dataset.y === S.y && c.dataset.op === S.op);
+  return {X, Y, a, b, st, done: !!st && S.step === S.steps.length - 1};
+}
+
+/* ============================================================================
+   MULTIPLY on the grid
+   ============================================================================ */
+function paintMul(){
+  const P = gridProduct(S.p, S.q), c = MG.U / 10;
+  const wA = S.p * c, hB = S.q * c;
+  set('mA', {width: wA, height: Math.max(MG.U, hB)});
+  set('mB', {width: Math.max(MG.U, wA), height: hB});
+  set('mO', {width: wA, height: hB});
+  let n = '';
+  if (P.cells <= 60) { let k = 0; for (let j = 0; j < S.q; j++) for (let i = 0; i < S.p; i++) { k++; n += T((MG.x + (i + .5) * c).toFixed(1), (MG.y + (j + .5) * c + 4).toFixed(1), k); } }
+  $('mNums').innerHTML = n;
+  const ax = MG.x + wA, by = MG.y + hB;
+  set('mAKnob', {cx: ax}); set('mAGuide', {x1: ax, x2: ax});
+  set('mALab', {x: clamp(ax, MG.x + 16, MG.x + 2 * MG.U)}).textContent = toText(S.p * 100, 1);
+  set('mBKnob', {cy: by}); set('mBGuide', {y1: by, y2: by});
+  set('mBLab', {y: clamp(by, MG.y + 10, MG.y + 2 * MG.U) + 5}).textContent = toText(S.q * 100, 1);
+  const pa = toText(S.p * 100, 1), qa = toText(S.q * 100, 1), pr = trim(P.hundredths * 10);
+  $('mEq').textContent = `${pa} × ${qa} = ${pr}`;
+  $('mL1').textContent = `${S.p} tenths across, ${S.q} tenths down`;
+  $('mL2').textContent = `overlap: ${S.p} × ${S.q} = ${P.cells} small cells`;
+  $('mL3').textContent = `each a hundredth, so ${P.cells}/100 = ${P.text}`;
+  const lt = v => v < 10, gt = v => v > 10;
+  const cases = [
+    ['Both bigger than 1', gt(S.p) && gt(S.q), 'bigger than both'],
+    ['Both between 0 and 1', S.p > 0 && S.q > 0 && lt(S.p) && lt(S.q), 'smaller than both'],
+    ['One below 1, one above', (lt(S.p) && gt(S.q) || gt(S.p) && lt(S.q)) && S.p > 0 && S.q > 0, 'in between the two'],
+    ['One of them is exactly 1', (S.p === 10 || S.q === 10) && S.p > 0 && S.q > 0, 'equal to the other'],
+  ];
+  $('mCases').innerHTML = cases.map(([a, on, r], i) => `<rect x="606" y="${318 + i * 62}" width="358" height="54" rx="9" fill="${on ? '#fde9cc' : '#f6f4ee'}" stroke="${on ? AM : 'none'}"/>` +
+    T(622, 340 + i * 62, a, `fill="${on ? INK : INK3}" font-size="14" font-weight="700"`) + T(622, 361 + i * 62, 'The product is ' + r + '.', `fill="${on ? INK2 : '#9aa3a6'}" font-size="13"`)).join('');
+  $('pOut').textContent = pa; $('qOut').textContent = qa;
+  return P;
+}
+
+/* ---- paint: everything that depends on the state -------------------------- */
+const VIEWS = {zoom: 'vZoom', compare: 'vCompare', add: 'vAdd', mul: 'vMul'};
+const CTLS = {zoom: 'ctlZoom', compare: 'ctlCompare', add: 'ctlAdd', mul: 'ctlMul'};
+function paint(){
+  for (const t in VIEWS) { $(VIEWS[t]).style.display = t === S.tab ? '' : 'none'; $(CTLS[t]).hidden = t !== S.tab; }
+  for (const b of document.querySelectorAll('[data-tab]')) b.setAttribute('aria-pressed', b.dataset.tab === S.tab);
+  const res = S.tab === 'zoom' ? paintZoom() : S.tab === 'compare' ? paintCompare() : S.tab === 'add' ? paintAdd() : paintMul();
+  paintWhy(res);
+  check(res);
+}
+
+/* A live narrator: it describes what THIS state is doing, in words, from the model. */
+function paintWhy(r){
+  if (!S.locked) return;
+  $('whyCard').hidden = false;
+  let t = '';
+  if (S.tab === 'zoom') {
+    if (!r.depth) t = `<p>The top line runs from 0 to 10 in whole units. Click the piece between two whole numbers to cut it into <b>10 tenths</b>.</p>`;
+    else {
+      const d = S.ds, v = r.v, j = r.depth - 1;
+      t += `<p>You are at <b>${toText(v, j)}</b>: ` + d.map((x, i) => `<b>${x}</b> ${['unit', 'tenth', 'hundredth', 'thousandth'][i]}${x === 1 ? '' : 's'}`).join(', ') + `.</p>`;
+      if (j < 3) t += `<p>Each piece on the lowest line is <b>1/${Math.pow(10, j + 1)}</b> of a unit. Cut it again and every piece becomes ten times smaller: 1/${Math.pow(10, j + 2)}.</p>`;
+      else t += `<p>A thousandth is a tenth of a hundredth: <b>1000</b> of them make one unit. ${toText(v, 3)} = ${v}/1000.</p>`;
+      if (S.goal != null) t += v === S.goal && j === 3 ? `<p>That is ${toText(S.goal, 3)}: found by zooming three times.</p>` : `<p>Aim: ${toText(S.goal, 3)}. Its units digit is ${digitsOf(S.goal)[1]}, its tenths digit ${digitsOf(S.goal)[2]}.</p>`;
+    }
+  } else if (S.tab === 'compare') {
+    if (!r) t = '<p>Type two decimals to compare.</p>';
+    else {
+      const {A, B, R} = r;
+      t += `<p>A is <b>${A.thou} thousandths</b>; B is <b>${B.thou} thousandths</b>. Written with the same number of places, A = ${toText(A.thou, 3)} and B = ${toText(B.thou, 3)}.</p>`;
+      if (R.cmp === 0) t += `<p>They are the <b>same number</b>. ${A.text !== B.text ? `Zeros on the right after the point change nothing: ${A.text} and ${B.text} shade exactly the same cells.` : ''}</p>`;
+      else {
+        const big = R.cmp > 0 ? A : B, small = R.cmp > 0 ? B : A;
+        t += `<p>Going from the biggest place, the digits first differ in the <b>${PLACES[R.place]}</b>: ${R.da[R.place]} and ${R.db[R.place]}. So <b>${big.text} &gt; ${small.text}</b>. Whatever comes after can never make up one whole ${PLACES[R.place].replace(/s$/, '')}.</p>`;
+        if (big.dp < small.dp) t += `<p>${small.text} has more digits, but digits after the point are not a count: ${big.text} fills more of the grid.</p>`;
+      }
+    }
+  } else if (S.tab === 'add') {
+    const {X, Y, a, b, st, done} = r;
+    if (!X.ok || !Y.ok) t = '<p>Type two numbers from 0 to 9.99.</p>';
+    else {
+      const ca = cols(a), cb = cols(b);
+      t += `<p>A is ${ca[0]} units, ${ca[1]} tenths and ${ca[2]} hundredths. B is ${cb[0]} units, ${cb[1]} tenths and ${cb[2]} hundredths.</p>`;
+      if (st) {
+        const k = st.kind;
+        if (k === 'together') t += `<p>Together: <b>${st.c[0]} units, ${st.c[1]} tenths, ${st.c[2]} hundredths</b>.${st.c[2] >= 10 || st.c[1] >= 10 ? ' A column has ten or more: it must regroup.' : ''}</p>`;
+        else if (k === 'carryH' || k === 'carryT') t += `<p><b>${NOTE[k]}</b>, just as 10 ones make a ten. Now ${st.c[0]} units, ${st.c[1]} tenths, ${st.c[2]} hundredths.</p>`;
+        else if (/split/.test(k)) t += `<p>Not enough to take away, so <b>${NOTE[k].toLowerCase()}</b>. Now ${st.c[0]} units, ${st.c[1]} tenths, ${st.c[2]} hundredths.</p>`;
+        else t += `<p>${NOTE[k]}: now ${st.c[0]} units, ${st.c[1]} tenths, ${st.c[2]} hundredths.</p>`;
+        if (done) t += `<p>So ${hText(a)} ${S.op === '+' ? '+' : '−'} ${hText(b)} = <b>${trim(colValue(st.c) * 10)}</b>. Tenths went with tenths and hundredths with hundredths: that is why the points are lined up.</p>`;
+      }
+    }
+  } else {
+    const P = r;
+    t += `<p>${S.p} tenths across and ${S.q} tenths down overlap in <b>${S.p} × ${S.q} = ${P.cells}</b> cells, and each cell is a hundredth. So ${toText(S.p * 100, 1)} × ${toText(S.q * 100, 1)} = <b>${P.text}</b>.</p>`;
+    t += `<p>The book’s rule: multiply ${S.p} × ${S.q} = ${S.p * S.q} without the points, then give the answer 1 + 1 = 2 decimal places.</p>`;
+  }
+  $('why').innerHTML = t;
+}
+
+/* ---- findings: reached by the model, never by a button -------------------- */
+function check(r){
+  if (!S.locked || S.changes < 1) return;
+  if (S.tab === 'zoom') { if (r.depth === 4) discover('zoom'); }
+  else if (S.tab === 'compare' && r) {
+    const {A, B, R} = r;
+    if (R.cmp !== 0) { const big = R.cmp > 0 ? A : B, small = R.cmp > 0 ? B : A; if (big.dp < small.dp) discover('bigger'); }
+    if (R.cmp === 0 && A.text !== B.text) discover('zero');
+  } else if (S.tab === 'add' && r.done) {
+    if (S.steps.some(s => /carry/.test(s.kind))) discover('carry');
+    if (S.steps.some(s => /split/.test(s.kind))) discover('borrow');
+  } else if (S.tab === 'mul') {
+    if (S.p > 0 && S.q > 0 && S.p < 10 && S.q < 10) discover('product');
+  }
+  maybeExplain();
+}
+let EXPLAINED = false;
+function maybeExplain(){
+  if (EXPLAINED || !POE || !found('bigger')) return;
+  EXPLAINED = true;
+  const a = parseDec('0.5'), b = parseDec('0.45'), R = compareDec(a.thou, b.thou);
+  POE.explain(`0.5 is 5 tenths, which is <b>${a.thou / 10} hundredths</b>; 0.45 is <b>${b.thou / 10} hundredths</b>. Compared digit by digit, the units match and the <b>${PLACES[R.place]}</b> decide: ` +
+    `${R.da[R.place]} &gt; ${R.db[R.place]}. So 0.5 is bigger by ${(a.thou - b.thou) / 10} hundredths. The extra digit in 0.45 is only 5 hundredths: it can never make up a whole tenth.`);
+}
+
+/* ============================================================================
+   Controls. The stage is built first, so there is something to wire.
+   ============================================================================ */
+build();
+function note(what){ S.changes++; paint(); track('change', {what, tab: S.tab}); }
+document.querySelectorAll('[data-tab]').forEach(b => b.addEventListener('click', () => {
+  if (!S.locked || S.tab === b.dataset.tab) return;
+  S.tab = b.dataset.tab; sound('pop'); note('tab');
+}));
+/* zoom */
+document.querySelectorAll('.seghit').forEach(h => h.addEventListener('click', () => {
+  if (!S.locked) return;
+  const j = +h.dataset.lv, k = +h.dataset.k;
+  if (j > S.ds.length) return;
+  S.ds = S.ds.slice(0, j).concat(k);
+  Play.tone(420 + j * 160, .12, 'triangle', .1);
+  note('zoom' + j);
+}));
+document.querySelectorAll('[data-goal]').forEach(b => b.addEventListener('click', () => {
+  if (!S.locked) return;
+  S.goal = S.goal === +b.dataset.goal ? null : +b.dataset.goal; S.ds = []; sound('pop'); note('goal');
+}));
+$('btnZoomReset').addEventListener('click', () => { if (!S.locked) return; S.ds = []; sound('whoosh'); note('reset'); });
+/* compare */
+$('inA').addEventListener('input', e => { if (!S.locked) return; S.a = e.target.value; note('typeA'); });
+$('inB').addEventListener('input', e => { if (!S.locked) return; S.b = e.target.value; note('typeB'); });
+document.querySelectorAll('[data-a]').forEach(c => c.addEventListener('click', () => {
+  if (!S.locked) return;
+  S.a = c.dataset.a; S.b = c.dataset.b; $('inA').value = S.a; $('inB').value = S.b; sound('snap'); note('pair');
+}));
+/* add */
+function stopRun(){ RUN++; S.running = false; S.steps = null; S.step = -1; }
+let RUN = 0;
+$('addA').addEventListener('input', e => { if (!S.locked) return; S.x = e.target.value; stopRun(); note('addA'); });
+$('addB').addEventListener('input', e => { if (!S.locked) return; S.y = e.target.value; stopRun(); note('addB'); });
+$('opAdd').addEventListener('click', () => { if (!S.locked || S.op === '+') return; S.op = '+'; stopRun(); sound('tick'); note('op'); });
+$('opSub').addEventListener('click', () => { if (!S.locked || S.op === '-') return; S.op = '-'; stopRun(); sound('tick'); note('op'); });
+document.querySelectorAll('[data-x]').forEach(c => c.addEventListener('click', () => {
+  if (!S.locked) return;
+  S.x = c.dataset.x; S.y = c.dataset.y; S.op = c.dataset.op; $('addA').value = S.x; $('addB').value = S.y; stopRun(); sound('snap'); note('example');
+}));
+$('btnRun').addEventListener('click', async () => {
+  if (!S.locked || S.running) return;
+  const X = parseDec(S.x, 2, 9), Y = parseDec(S.y, 2, 9);
+  if (!X.ok || !Y.ok) return;
+  const a = X.thou / 10, b = Y.thou / 10;
+  if (S.op === '-' && b > a) return;
+  stopRun();
+  const run = RUN;
+  S.steps = S.op === '+' ? addSteps(a, b) : subSteps(a, b); S.running = true;
+  for (let i = 0; i < S.steps.length; i++) {
+    if (run !== RUN) return;
+    S.step = i; sound(/carry|split/.test(S.steps[i].kind) ? 'snap' : 'tick'); paint();
+    if (!reduced() && i < S.steps.length - 1) await sleep(900);
+  }
+  if (run !== RUN) return;
+  S.running = false; note('run');
+  track('addsub', {op: S.op, a: S.x, b: S.y, result: hText(colValue(S.steps[S.steps.length - 1].c))});
+});
+/* multiply */
+document.querySelectorAll('[data-mk]').forEach(b => b.addEventListener('click', () => {
+  if (!S.locked) return;
+  const k = b.dataset.mk, v = clamp(S[k] + +b.dataset.d, 0, 20);
+  if (v === S[k]) return;
+  S[k] = v; sound('tick'); note(k);
+}));
+const snapT = t => clamp(Math.round(t * 10), 0, 20);
+drag($('hitMA'), svg, {start(p){ if (!S.locked) return false; this.move(p); },
+  move(p){ const v = snapT((p.x - MG.x) / MG.U); if (v !== S.p) { S.p = v; sound('tick'); note('dragP'); } }});
+drag($('hitMB'), svg, {start(p){ if (!S.locked) return false; this.move(p); },
+  move(p){ const v = snapT((p.y - MG.y) / MG.U); if (v !== S.q) { S.q = v; sound('tick'); note('dragQ'); } }});
+
+function lockControls(lock){
+  for (const el of document.querySelectorAll('#ctlCard button, #ctlCard input')) el.disabled = lock;
+  for (const el of document.querySelectorAll('.seghit, #hitMA, #hitMB')) el.style.pointerEvents = lock ? 'none' : '';
+  $('gate').hidden = !lock;
+}
+
+/* ============================================================================
+   Start
+   ============================================================================ */
+findings($('finds'), [
+  {id: 'zoom',    icon: '🔍', label: 'Zoomed down to thousandths',            hint: 'Zoom in three times'},
+  {id: 'bigger',  icon: '>', label: 'Fewer digits, bigger number',            hint: 'Compare 0.5 and 0.45'},
+  {id: 'zero',    icon: '0', label: 'A zero on the end changes nothing',      hint: 'Compare 0.2 and 0.20'},
+  {id: 'carry',   icon: '↰', label: 'Ten tenths make a unit',                 hint: 'Add so a column overflows'},
+  {id: 'borrow',  icon: '↳', label: 'A unit splits into ten tenths',          hint: 'Take away when a column runs short'},
+  {id: 'product', icon: '▦', label: 'Tenths × tenths = hundredths',           hint: 'Multiply two numbers less than 1'},
+], () => toast('All six found. Every place is ten times the place to its right, on both sides of the point.', 4200));
+
+const POE = predict($('poe'), {
+  id: 'half-vs-forty-five',
+  q: 'Which is bigger: 0.5 or 0.45?',
+  options: [
+    {id: 'more',  text: '0.45, because 45 is bigger than 5.'},
+    {id: 'half',  text: '0.5', right: true},
+    {id: 'same',  text: 'They are equal.'},
+    {id: 'cant',  text: 'Can’t tell without a calculator.'},
+  ],
+  onLock(){
+    S.locked = true;
+    lockControls(false);
+    say('Now find out. Zoom into the number line, or compare the two decimals.');
+    paint();
+  },
+});
+lockControls(!POE.locked);
+if (!Play.FF('predict')) S.locked = true;
+paint();
+window.applyFeatures = () => paint();
+window.PG_STATE = () => JSON.parse(JSON.stringify(S));
+window.PG_MODEL = {parseDec, toText, trim, digitsOf, compareDec, asFraction, zoomValue, segWidth, levelStart, cols, colValue, addSteps, subSteps, gridProduct, mulDec};
+</script>
+</body>
+</html>

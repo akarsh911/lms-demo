@@ -1,0 +1,591 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Conic Sections</title>
+<meta name="description" content="Class 11–12: cut a double cone with a plane and get a circle, ellipse, parabola or hyperbola; find the foci with Dandelin's spheres, measure the eccentricity and the latus rectum, and fire rays off the curve.">
+<link rel="icon" href="../../favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600&family=Inter:wght@400;500;600;700&family=Nunito:wght@500;700;800&family=Newsreader:opsz,wght@6..72,400;6..72,500&family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="../../play.css">
+<style>
+/* Only what this page needs beyond play.css. */
+.pg-stage{min-height:0}
+svg text.m{font-family:var(--font-mono)}
+svg text.serif{font-family:"Newsreader",Georgia,serif}
+svg text{pointer-events:none}
+.gate{position:absolute; inset:0; display:grid; place-items:center; pointer-events:none}
+.gate span{background:rgba(29,35,39,.85); color:#fff; padding:10px 16px; border-radius:99px; font-weight:600; font-size:14px}
+.chips{display:flex; flex-wrap:wrap; gap:6px; margin:6px 0 2px}
+.chip{border:1px solid var(--hair-2); background:var(--card); border-radius:99px; padding:5px 11px; font-size:13px; cursor:pointer; font-weight:600; color:var(--ink-2)}
+.chip[aria-pressed="true"]{background:var(--accent-soft); border-color:var(--accent); color:var(--ink)}
+.chip:disabled{opacity:.45; cursor:default}
+.readout{display:grid; grid-template-columns:auto 1fr; gap:3px 12px; font-size:13px; align-items:baseline}
+.readout span{color:var(--ink-2)}
+.readout b{font-family:var(--font-mono); font-weight:600; font-size:12.5px; font-variant-numeric:tabular-nums; text-align:right; overflow-wrap:anywhere}
+.readout .sep{grid-column:1/-1; height:1px; background:var(--hair); margin:3px 0}
+.kind{font-family:"Newsreader",Georgia,serif; font-size:26px; line-height:1.1}
+.eqn{font-family:var(--font-mono); font-size:13px; margin:4px 0 8px; color:var(--ink-2)}
+.note{font-size:12.5px; color:var(--ink-3); margin:6px 0 0}
+.why p{font-size:13.5px; margin-bottom:.55em}
+.ctl output{min-width:72px}
+#rot{cursor:grab} #rot.dragging{cursor:grabbing}
+#hP{cursor:grab} #hP.dragging{cursor:grabbing}
+#coneBack,#plane,#sph3,#cut3,#coneFront,#foc3,#vert3,#tsAxes,#tsDirs,#tsRays,#cutT,#tsSeg,#tsFoci,#lat{pointer-events:none}
+</style>
+</head>
+<body>
+<header class="pg-top"></header>
+
+<div class="pg-intro">
+  <h1>Conic sections</h1>
+  <p>Spin a line about an axis and you get a double cone. Cut it with a plane: tilt the plane and the cut is a circle, an ellipse,
+     a parabola or a hyperbola. Every curve on this page is the true intersection of the plane with the cone. Find its foci with
+     Dandelin’s spheres, measure the ratio that makes all four curves one family, and break the cut by passing it through the vertex.</p>
+</div>
+
+<main class="pg-main wide-side">
+  <section class="pg-stage" id="stageWrap">
+    <svg id="stage" viewBox="0 0 1000 640" role="img" aria-label="Left: a double cone cut by a plane. Right: the true shape of the cut, with its foci and directrices. Below: measurements"></svg>
+    <div class="gate" id="gate"><span>Make your prediction first →</span></div>
+  </section>
+
+  <aside class="pg-side">
+    <div id="poe"></div>
+
+    <div class="card" id="ctlCard">
+      <div class="kicker">The cone and the plane</div>
+      <div class="ctl"><label for="al">cone α</label><input type="range" id="al" min="15" max="50" step="0.5" value="30"><output id="alOut" class="num mono">30.0°</output></div>
+      <div class="ctl"><label for="be">plane β</label><input type="range" id="be" min="0" max="90" step="0.5" value="60"><output id="beOut" class="num mono">60.0°</output></div>
+      <div class="ctl"><label for="dd">depth d</label><input type="range" id="dd" min="0" max="2.5" step="0.05" value="1.5"><output id="ddOut" class="num mono">1.50</output></div>
+      <p class="note">α: the angle between the cone’s side and its axis. β: the angle between the plane and the axis. d: where the plane crosses the axis, below the vertex.</p>
+      <div class="chips">
+        <button class="chip" id="cSph" aria-pressed="false">Dandelin’s spheres</button>
+        <button class="chip" id="cRay" aria-pressed="false">Rays from a focus</button>
+        <button class="chip" id="cRec">Record e</button>
+        <button class="chip" id="cClr">Clear</button>
+      </div>
+    </div>
+
+    <div class="card" id="numCard">
+      <div class="kind" id="kind">Ellipse</div>
+      <div class="eqn" id="eqn"></div>
+      <div class="readout" id="read"></div>
+      <p class="note">Drag P along the curve on the right. Drag the cone to turn it.</p>
+    </div>
+
+    <div class="card why"><div class="kicker">What is happening</div><div id="why"></div></div>
+    <div class="card"><div class="kicker">To find</div><div id="finds"></div></div>
+  </aside>
+</main>
+
+<script src="../../play.js"></script>
+<script>
+'use strict';
+const {$, esc, clamp, fmt, drag, sound, say, track, toast, predict, findings, discover, found,
+       shareState, sharedState, mount, reduced, svgPoint} = Play;
+mount({thread: 'area', band: 'theorist'});
+
+/* MODEL:start ==================================================================
+   The double cone x² + y² = tan²α · z², vertex at the origin, axis z.
+   The plane makes angle β with the axis and crosses it at z0 = −d:
+       X(s, t) = (s sin β, t, z0 + s cos β),
+   so (s, t) are true lengths measured in the plane. Putting X into the cone:
+       t² = tan²α (z0 + s cos β)² − s² sin²β.                         (★)
+   Everything follows from (★).
+   - The curve is SAMPLED from (★): nothing is drawn from a standard form.
+   - Its type is the sign of A = sin²β − tan²α cos²β (the s² coefficient):
+     A > 0 ellipse (β > α), A = 0 parabola (β = α), A < 0 hyperbola (β < α).
+   - Completing the square in (★) gives the centre, a, b, c, the foci and the
+     directrices — in the plane's own lengths, so they can be MEASURED against
+     the sampled points: PF, PF′, the distance PD to a directrix, the latus rectum.
+   - Dandelin's spheres are found separately, as the spheres on the axis that touch
+     both the cone and the plane; the points where they touch the plane are the foci.
+   - Rays from a focus are reflected at the sampled curve by the normal ∇G of
+     G(s, t) = t² − tan²α(z0 + s cos β)² + s² sin²β.
+   ============================================================================ */
+const D2R = Math.PI / 180;
+function setup(alpha, beta, d){
+  const T = Math.tan(alpha * D2R) ** 2, cb = beta >= 90 ? 0 : Math.cos(beta * D2R), sb = Math.sin(beta * D2R), z0 = -d;
+  return {alpha, beta, d, T, cb, sb, z0, A: sb * sb - T * cb * cb};
+}
+const tt2 = (P, s) => P.T * (P.z0 + s * P.cb) ** 2 - s * s * P.sb * P.sb;        /* t² from (★) */
+/* Sample (★) for |z| ≤ zmax. Returns branches: each a list of [s, t] points, as a path. */
+function sample(P, zmax, N = 700){
+  let lo, hi;
+  if (P.cb > 1e-12) { lo = (-zmax - P.z0) / P.cb; hi = (zmax - P.z0) / P.cb; }
+  else { hi = zmax * Math.sqrt(P.T) * 1.05; lo = -hi; }
+  const ss = [];
+  for (let i = 0; i <= N; i++) ss.push(lo + (hi - lo) * i / N);
+  /* the exact ends of each piece: roots of t² = 0 */
+  const a2 = -P.A, a1 = 2 * P.T * P.z0 * P.cb, a0 = P.T * P.z0 * P.z0;
+  const roots = [];
+  if (Math.abs(a2) > 1e-12) { const D = a1 * a1 - 4 * a2 * a0; if (D >= 0) { const q = Math.sqrt(D); roots.push((-a1 - q) / (2 * a2), (-a1 + q) / (2 * a2)); } }
+  else if (Math.abs(a1) > 1e-12) roots.push(-a0 / a1);
+  for (const r of roots) if (r >= lo && r <= hi) ss.push(r);
+  ss.sort((x, y) => x - y);
+  const runs = []; let run = [];
+  for (const s of ss) {
+    const v = tt2(P, s), isRoot = roots.some(r => Math.abs(r - s) < 1e-12);
+    if (v >= 0 || isRoot) run.push([s, Math.sqrt(Math.max(0, v))]);
+    else if (run.length) { runs.push(run); run = []; }
+  }
+  if (run.length) runs.push(run);
+  /* Each run becomes a path that turns round at an end where t = 0. An end cut off by |z| ≤ zmax
+     is left open; a run with no such end (two lines through the vertex) is two separate paths. */
+  const out = [];
+  for (const r of runs) {
+    if (r.length === 1) { out.push([[r[0][0], 0]]); continue; }
+    const up = r.map(([s, t]) => [s, t]), dn = r.map(([s, t]) => [s, -t]);
+    const endRoot = r[r.length - 1][1] < 1e-9, startRoot = r[0][1] < 1e-9;
+    if (endRoot) out.push([...up, ...dn.reverse()]);
+    else if (startRoot) out.push([...dn.reverse(), ...up]);
+    else out.push(up, dn);
+  }
+  return out;
+}
+/* The conic's own numbers, by completing the square in (★). */
+function conic(alpha, beta, d){
+  const P = setup(alpha, beta, d), eTheory = P.cb / Math.cos(alpha * D2R);
+  const out = {P, eTheory, foci: [], dirs: [], kind: '', a: null, b: null, c: null, e: null, latus: null, centre: null};
+  const para = Math.abs(P.A) < 1e-9;
+  if (d < 1e-12) { out.kind = para ? 'line' : P.A > 0 ? 'point' : 'lines'; return out; }
+  if (para) {
+    const q = P.T * P.z0 * P.cb, sv = -P.z0 / (2 * P.cb), p = q / 2;              /* t² = 4p (s − sv) */
+    Object.assign(out, {kind: 'parabola', vertex: sv, p, foci: [sv + p], dirs: [sv - p], e: 1, latus: 4 * Math.abs(p), a: Math.abs(p)});
+    return out;
+  }
+  const sc = P.T * P.z0 * P.cb / P.A, K = P.T * P.z0 * P.z0 * P.sb * P.sb / P.A;  /* A(s − sc)² + t² = K */
+  const a = Math.sqrt(K / P.A), b = Math.sqrt(Math.abs(K));
+  if (P.A > 0) {
+    const c = Math.sqrt(Math.max(0, a * a - b * b)), e = c / a;
+    Object.assign(out, {kind: beta >= 90 ? 'circle' : 'ellipse', a, b, c, e, centre: sc, foci: c > 1e-12 ? [sc - c, sc + c] : [sc],
+      dirs: c > 1e-12 ? [sc - a / e, sc + a / e] : [], latus: 2 * b * b / a});
+  } else {
+    const c = Math.sqrt(a * a + b * b), e = c / a;
+    Object.assign(out, {kind: 'hyperbola', a, b, c, e, centre: sc, foci: [sc - c, sc + c], dirs: [sc - a / e, sc + a / e], latus: 2 * b * b / a});
+  }
+  return out;
+}
+/* Dandelin's spheres: centre (0, 0, zc) on the axis, radius |zc| sin α (touching the cone),
+   and at distance |zc| sin α from the plane (touching the plane). */
+function dandelin(alpha, beta, d){
+  const P = setup(alpha, beta, d), sa = Math.sin(alpha * D2R), n = [-P.cb, 0, P.sb], u = [P.sb, 0, P.cb], out = [];
+  if (d < 1e-12) return out;
+  for (const sg of [1, -1]) {
+    const den = P.sb + sg * sa; if (Math.abs(den) < 1e-9) continue;
+    const zc = P.sb * P.z0 / den, r = Math.abs(zc) * sa;
+    const k = n[2] * (zc - P.z0);                                  /* signed distance to the plane */
+    const F = [-k * n[0], -k * n[1], zc - k * n[2]];
+    out.push({zc, r, dist: Math.abs(k), s: F[0] * u[0] + F[1] * u[1] + (F[2] - P.z0) * u[2], t: F[1]});
+  }
+  return out;
+}
+/* Distances from a point on the curve to the foci and to the directrix nearest the first focus. */
+function measure(C, s, t){
+  const F = C.foci, PF = F.length ? Math.hypot(s - F[0], t) : null, PF2 = F.length > 1 ? Math.hypot(s - F[1], t) : null;
+  const PD = C.dirs.length ? Math.abs(s - C.dirs[0]) : null;
+  return {PF, PF2, PD, ratio: PD ? PF / PD : null, sum: PF2 != null ? PF + PF2 : null, diff: PF2 != null ? Math.abs(PF - PF2) : null};
+}
+/* The latus rectum MEASURED on (★): the chord through the focus, square to the axis. */
+const latusMeasured = C => C.foci.length && C.kind !== 'circle' ? 2 * Math.sqrt(Math.max(0, tt2(C.P, C.foci[0]))) : null;
+/* Rays from the first focus, reflected off the sampled curve. */
+function rays(C, branches, n = 14){
+  const F = [C.foci[0], 0], out = [];
+  for (let i = 0; i < n; i++) {
+    const th = (i + 0.5) / n * 2 * Math.PI, dir = [Math.cos(th), Math.sin(th)];
+    let best = null;
+    for (const br of branches) for (let j = 0; j + 1 < br.length; j++) {
+      const p = br[j], q = br[j + 1], e = [q[0] - p[0], q[1] - p[1]], den = dir[0] * e[1] - dir[1] * e[0];
+      if (Math.abs(den) < 1e-14) continue;
+      const w = [p[0] - F[0], p[1] - F[1]], tr = (w[0] * e[1] - w[1] * e[0]) / den, u = (w[0] * dir[1] - w[1] * dir[0]) / den;
+      if (tr > 1e-9 && u >= 0 && u <= 1 && (!best || tr < best.tr)) best = {tr, hit: [F[0] + dir[0] * tr, F[1] + dir[1] * tr]};
+    }
+    if (!best) continue;
+    /* refine onto the true curve: along the ray, G(F + r·dir) = 0 is a quadratic in r */
+    const P = C.P, s0 = F[0], dx = dir[0], dy = dir[1];
+    const qa = dy * dy - P.T * (dx * P.cb) ** 2 + dx * dx * P.sb * P.sb;
+    const qb = -2 * P.T * (P.z0 + s0 * P.cb) * dx * P.cb + 2 * s0 * dx * P.sb * P.sb;
+    const qc = -P.T * (P.z0 + s0 * P.cb) ** 2 + s0 * s0 * P.sb * P.sb;
+    let rs = [];
+    if (Math.abs(qa) > 1e-14) { const D = qb * qb - 4 * qa * qc; if (D >= 0) rs = [(-qb - Math.sqrt(D)) / (2 * qa), (-qb + Math.sqrt(D)) / (2 * qa)]; }
+    else if (Math.abs(qb) > 1e-14) rs = [-qc / qb];
+    const tr = rs.filter(r => r > 1e-9).sort((x, y) => Math.abs(x - best.tr) - Math.abs(y - best.tr))[0];
+    if (tr != null && Math.abs(tr - best.tr) < 0.05 * Math.max(1, best.tr)) best.hit = [F[0] + dx * tr, F[1] + dy * tr];
+    const [s, t] = best.hit;
+    let nv = [2 * s * P.sb * P.sb - 2 * P.T * (P.z0 + s * P.cb) * P.cb, 2 * t]; const L = Math.hypot(...nv); nv = [nv[0] / L, nv[1] / L];
+    const dn = dir[0] * nv[0] + dir[1] * nv[1], out2 = [dir[0] - 2 * dn * nv[0], dir[1] - 2 * dn * nv[1]];
+    let miss = null;
+    if (C.foci.length > 1) { const w = [C.foci[1] - s, -t]; miss = Math.abs(w[0] * out2[1] - w[1] * out2[0]); }   /* distance of F′ from the reflected line */
+    else if (C.kind === 'parabola') miss = Math.abs(out2[1]);                                                    /* how far from parallel to the axis */
+    out.push({hit: best.hit, out: out2, miss});
+  }
+  return out;
+}
+/* A straight line through the origin, fitted to (x, y) points: slope Σxy / Σx². */
+const fitThroughOrigin = pts => { let sxy = 0, sxx = 0; for (const [x, y] of pts) { sxy += x * y; sxx += x * x; } return sxx ? sxy / sxx : null; };
+/* MODEL:end */
+
+/* ---- state -------------------------------------------------------------------- */
+const S = {alpha: 30, beta: 60, d: 1.5, yaw: 28, pitch: 16, spheres: false, rays: false, locked: false,
+  Ps: -1.2, Psg: 1, sectors: [], recs: []};
+const shared = sharedState();
+if (shared) {
+  S.alpha = clamp(+shared.alpha || 30, 15, 50); S.beta = clamp(+shared.beta, 0, 90); S.d = clamp(+shared.d, 0, 2.5);
+  if (shared.yaw != null) { S.yaw = +shared.yaw; S.pitch = clamp(+shared.pitch, -60, 60); }
+  S.spheres = !!shared.spheres; S.rays = !!shared.rays;
+}
+shareState(() => ({alpha: S.alpha, beta: S.beta, d: S.d, yaw: S.yaw, pitch: S.pitch, spheres: S.spheres, rays: S.rays}));
+
+const INK = '#1d2327', CURVE = '#c2569b', PURP = '#6a3fc2', FOC = '#e8890c', DIR = '#3057c9';
+const H3 = 3.2;                     /* the cone is drawn to |z| ≤ 3.2 */
+const f3 = v => v == null || !isFinite(v) ? '—' : fmt(v, 3), f2 = v => v == null || !isFinite(v) ? '—' : fmt(v, 2);
+const setA = (id, o) => { const el = $(id); for (const k in o) el.setAttribute(k, o[k]); };
+
+/* ============================================================================
+   The stage
+   ============================================================================ */
+const svg = $('stage');
+const V3 = {x: 0, y: 0, w: 480, h: 470, cx: 240, cy: 236, k: 52};
+const TS = {x: 490, y: 0, w: 510, h: 470};
+const BT = {y: 478, h: 162};
+const GE = {x: 70, y: 512, w: 330, h: 96};           /* e against cos β */
+const GR = {x: 560, y: 512, w: 380, h: 96};          /* PF/PD along the curve */
+function build(){
+  svg.innerHTML = `
+  <defs>
+    <clipPath id="clip3"><rect x="${V3.x}" y="${V3.y}" width="${V3.w}" height="${V3.h}"/></clipPath>
+    <clipPath id="clipT"><rect x="${TS.x}" y="${TS.y}" width="${TS.w}" height="${TS.h}"/></clipPath>
+    <radialGradient id="gSph" cx="38%" cy="35%"><stop offset="0" stop-color="#ffffff" stop-opacity=".9"/><stop offset="1" stop-color="#8fb0f0" stop-opacity=".45"/></radialGradient>
+  </defs>
+  <rect x="0" y="0" width="1000" height="640" fill="#fbfbf9"/>
+  <line x1="485" y1="16" x2="485" y2="462" stroke="#e4e1d8"/>
+  <line x1="20" y1="${BT.y - 4}" x2="980" y2="${BT.y - 4}" stroke="#e4e1d8"/>
+  <text x="18" y="26" class="serif" font-size="17" fill="${INK}">The cone and the plane</text>
+  <text x="502" y="26" class="serif" font-size="17" fill="${INK}">The cut, laid flat</text>
+  <text x="502" y="44" font-size="11.5" fill="#7c878c">True lengths in the plane. The dashed lines are the directrices.</text>
+  <g clip-path="url(#clip3)">
+    <rect id="rot" x="${V3.x}" y="${V3.y + 34}" width="${V3.w}" height="${V3.h - 34}" fill="transparent"/>
+    <g id="coneBack" stroke="#b7bfd0" stroke-width="1" fill="none"></g>
+    <path id="plane" fill="${PURP}" fill-opacity=".09" stroke="${PURP}" stroke-opacity=".5" stroke-width="1.2"/>
+    <g id="sph3"></g>
+    <path id="cut3" fill="none" stroke="${CURVE}" stroke-width="3.2" stroke-linejoin="round"/>
+    <g id="coneFront" stroke="#7d879c" stroke-width="1.1" fill="none"></g>
+    <g id="foc3" fill="${FOC}"></g>
+    <circle id="vert3" r="3.5" fill="${INK}"/>
+  </g>
+  <text x="18" y="458" font-size="11.5" fill="#7c878c">Drag the cone to turn it.</text>
+  <g clip-path="url(#clipT)">
+    <g id="tsAxes" stroke="#ece9e1"></g>
+    <g id="tsDirs" stroke="${DIR}" stroke-width="1.5" stroke-dasharray="7 6"></g>
+    <g id="tsRays" stroke="#e8890c" stroke-width="1.2" fill="none" opacity=".85"></g>
+    <path id="cutT" fill="none" stroke="${CURVE}" stroke-width="3" stroke-linejoin="round"/>
+    <circle id="ptT" r="5" fill="${CURVE}" opacity="0"/>
+    <line id="lat" stroke="#2f9e5b" stroke-width="2.5"/>
+    <g id="tsSeg" stroke-width="1.6"></g>
+    <g id="tsFoci"></g>
+    <circle id="hP" r="10" fill="${INK}" stroke="#fff" stroke-width="2.5"/>
+    <text id="lP" font-size="14" font-weight="700" fill="${INK}">P</text>
+  </g>
+  <text id="tsNote" x="745" y="250" text-anchor="middle" class="serif" font-size="18" fill="#7c878c"></text>
+  <text x="${GE.x - 50}" y="${BT.y + 18}" class="serif" font-size="15" fill="${INK}">Eccentricity against cos β</text>
+  <g id="geAx"></g>
+  <path id="geFit" stroke="${PURP}" stroke-width="1.6" fill="none"/>
+  <g id="gePts" fill="${CURVE}"></g>
+  <text id="geFitL" x="${GE.x + 8}" y="${GE.y + 12}" class="m" font-size="11.5" fill="${PURP}"></text>
+  <text x="${GR.x - 50}" y="${BT.y + 18}" class="serif" font-size="15" fill="${INK}">Measured all round the curve</text>
+  <g id="grAx"></g>
+  <path id="grRatio" stroke="${CURVE}" stroke-width="2" fill="none"/>
+  <path id="grSum" stroke="${DIR}" stroke-width="2" fill="none" stroke-dasharray="6 4"/>
+  <g id="grLeg" font-size="11.5"></g>
+  `;
+  let ax = '';
+  for (let x = 0; x <= 1; x += 0.25) ax += `<line x1="${gex(x)}" y1="${GE.y}" x2="${gex(x)}" y2="${GE.y + GE.h}" stroke="#ece9e1"/><text x="${gex(x)}" y="${GE.y + GE.h + 15}" text-anchor="middle" class="m" font-size="11" fill="#4a555b">${x}</text>`;
+  for (let y = 0; y <= 2; y += 1) ax += `<line x1="${GE.x}" y1="${gey(y)}" x2="${GE.x + GE.w}" y2="${gey(y)}" stroke="#ece9e1"/><text x="${GE.x - 6}" y="${gey(y) + 4}" text-anchor="end" class="m" font-size="11" fill="#4a555b">${y}</text>`;
+  ax += `<text x="${GE.x + GE.w / 2}" y="${GE.y + GE.h + 30}" text-anchor="middle" font-size="11.5" fill="#4a555b">cos β</text><text x="${GE.x - 44}" y="${gey(1) + 4}" font-size="11.5" fill="#4a555b">e</text>`;
+  $('geAx').innerHTML = ax;
+}
+const gex = x => GE.x + x * GE.w, gey = y => GE.y + GE.h - Math.min(y, 2.2) / 2 * GE.h;
+
+/* ---- 3D: orthographic view, yaw about z then pitch ---------------------------- */
+function proj(p){
+  const cy = Math.cos(S.yaw * D2R), sy = Math.sin(S.yaw * D2R), cp = Math.cos(S.pitch * D2R), sp = Math.sin(S.pitch * D2R);
+  const x1 = p[0] * cy - p[1] * sy, y1 = p[0] * sy + p[1] * cy, z1 = p[2];
+  return {x: V3.cx + V3.k * x1, y: V3.cy - V3.k * (z1 * cp + y1 * sp), depth: y1 * cp - z1 * sp};
+}
+const world = (P, s, t) => [s * P.sb, t, P.z0 + s * P.cb];
+const pathOf = pts => pts.length ? 'M' + pts.map(q => q.x.toFixed(1) + ' ' + q.y.toFixed(1)).join('L') : '';
+
+let CUR = null;     /* the latest conic, branches and flat-view mapping */
+function paint(){
+  const C = conic(S.alpha, S.beta, S.d), P = C.P;
+  const br3 = sample(P, H3), brT = sample(P, 2.4 * H3, 900);
+  /* ---- 3D ---- */
+  const ta = Math.tan(S.alpha * D2R);
+  let back = '', front = '';
+  for (let i = 0; i < 24; i++) {
+    const ps = i / 24 * 2 * Math.PI;
+    for (const sg of [1, -1]) {
+      const end = [H3 * ta * Math.cos(ps), H3 * ta * Math.sin(ps), sg * H3], a = proj([0, 0, 0]), b = proj(end);
+      const seg = `<line x1="${a.x.toFixed(1)}" y1="${a.y.toFixed(1)}" x2="${b.x.toFixed(1)}" y2="${b.y.toFixed(1)}"/>`;
+      if (b.depth > 0) back += seg; else front += seg;
+    }
+  }
+  for (const sg of [1, -1]) {
+    const rim = []; for (let i = 0; i <= 72; i++) { const ps = i / 72 * 2 * Math.PI; rim.push(proj([H3 * ta * Math.cos(ps), H3 * ta * Math.sin(ps), sg * H3])); }
+    front += `<path d="${pathOf(rim)}" stroke-width="1.4"/>`;
+  }
+  const ax0 = proj([0, 0, -H3 - 0.4]), ax1 = proj([0, 0, H3 + 0.4]);
+  back += `<line x1="${ax0.x}" y1="${ax0.y}" x2="${ax1.x}" y2="${ax1.y}" stroke-dasharray="4 5" stroke="#9aa3b8"/>`;
+  $('coneBack').innerHTML = back; $('coneFront').innerHTML = front;
+  const Sp = 3.4, corners = [[-Sp, -Sp], [Sp, -Sp], [Sp, Sp], [-Sp, Sp]].map(([s, t]) => proj(world(P, s, t)));
+  setA('plane', {d: pathOf(corners) + 'Z'});
+  setA('cut3', {d: br3.map(b => b.length === 1 ? '' : pathOf(b.map(([s, t]) => proj(world(P, s, t))))).join(' ')});
+  const v = proj([0, 0, 0]); setA('vert3', {cx: v.x, cy: v.y});
+  const sph = dandelin(S.alpha, S.beta, S.d);
+  $('sph3').innerHTML = S.spheres && S.locked ? sph.filter(o => Math.abs(o.zc) < H3 + 1).map(o => { const c = proj([0, 0, o.zc]); return `<circle cx="${c.x.toFixed(1)}" cy="${c.y.toFixed(1)}" r="${(o.r * V3.k).toFixed(1)}" fill="url(#gSph)" stroke="#5b7fd0" stroke-width="1"/>`; }).join('') : '';
+  $('foc3').innerHTML = S.locked ? C.foci.map(s => { const q = proj(world(P, s, 0)); return `<circle cx="${q.x.toFixed(1)}" cy="${q.y.toFixed(1)}" r="4.5"/>`; }).join('') : '';
+
+  /* ---- the flat view: fit the part of the curve that matters ---- */
+  const pts = brT.flat();
+  let s0 = Math.min(...pts.map(p => p[0])), s1 = Math.max(...pts.map(p => p[0])), t1 = Math.max(0.3, ...pts.map(p => Math.abs(p[1])));
+  for (const f of [...C.foci, ...C.dirs]) { s0 = Math.min(s0, f); s1 = Math.max(s1, f); }
+  if (C.kind === 'point' || C.kind === 'line' || C.kind === 'lines') { s0 = Math.min(s0, -1); s1 = Math.max(s1, 1); }
+  const k = Math.min(160, (TS.w - 70) / Math.max(0.5, s1 - s0), (TS.h - 110) / (2 * t1));
+  const ox = TS.x + TS.w / 2 - (s0 + s1) / 2 * k, oy = 60 + (TS.h - 60) / 2;
+  const X = s => ox + s * k, Y = t => oy - t * k;
+  CUR = {C, brT, X, Y, k, ox, oy};
+  setA('cutT', {d: brT.map(b => b.length === 1 ? '' : 'M' + b.map(([s, t]) => X(s).toFixed(1) + ' ' + Y(t).toFixed(1)).join('L')).join(' ')});
+  const single = brT.length === 1 && brT[0].length === 1;
+  setA('ptT', {cx: X(0), cy: Y(0), opacity: single ? 1 : 0});
+  $('tsAxes').innerHTML = `<line x1="${TS.x}" y1="${oy}" x2="${TS.x + TS.w}" y2="${oy}"/>`;
+  $('tsDirs').innerHTML = S.locked ? C.dirs.map(s => `<line x1="${X(s)}" y1="${60}" x2="${X(s)}" y2="${TS.h - 4}"/>`).join('') : '';
+  $('tsFoci').innerHTML = S.locked ? C.foci.map((s, i) => `<circle cx="${X(s)}" cy="${oy}" r="6" fill="${FOC}" stroke="#fff" stroke-width="2"/><text x="${X(s) + 4}" y="${oy + 22}" font-size="13" font-weight="700" fill="#a45f00">${i ? 'F′' : 'F'}</text>`).join('') +
+    (S.spheres ? sph.map(o => `<circle cx="${X(o.s)}" cy="${Y(o.t)}" r="11" fill="none" stroke="#5b7fd0" stroke-width="1.5"/>`).join('') : '') : '';
+  const lm = latusMeasured(C);
+  if (S.locked && lm != null && isFinite(lm)) setA('lat', {x1: X(C.foci[0]), x2: X(C.foci[0]), y1: Y(lm / 2), y2: Y(-lm / 2), opacity: 1}); else setA('lat', {opacity: 0});
+  /* rays */
+  let rr = '';
+  if (S.rays && S.locked && C.foci.length && !['circle', 'point', 'line', 'lines'].includes(C.kind)) {
+    const L = 2.2 * Math.max(s1 - s0, 2 * t1);
+    for (const r of rays(C, brT)) {
+      const [hs, ht] = r.hit;
+      rr += `<line x1="${X(C.foci[0])}" y1="${oy}" x2="${X(hs).toFixed(1)}" y2="${Y(ht).toFixed(1)}"/>`;
+      if (C.kind === 'hyperbola') rr += `<line x1="${X(hs).toFixed(1)}" y1="${Y(ht).toFixed(1)}" x2="${X(hs + r.out[0] * L).toFixed(1)}" y2="${Y(ht + r.out[1] * L).toFixed(1)}"/>` +
+        `<line x1="${X(hs).toFixed(1)}" y1="${Y(ht).toFixed(1)}" x2="${X(C.foci[1])}" y2="${oy}" stroke-dasharray="3 5" opacity=".6"/>`;
+      else { const len = C.kind === 'ellipse' ? Math.hypot(C.foci[1] - hs, ht) : L; rr += `<line x1="${X(hs).toFixed(1)}" y1="${Y(ht).toFixed(1)}" x2="${X(hs + r.out[0] * len).toFixed(1)}" y2="${Y(ht + r.out[1] * len).toFixed(1)}"/>`; }
+    }
+  }
+  $('tsRays').innerHTML = rr;
+  $('tsNote').textContent = C.kind === 'point' ? 'Just the vertex: a point' : C.kind === 'line' ? 'One straight line' : C.kind === 'lines' ? 'Two straight lines' : '';
+  paintP(C, brT);
+  paintBottom(C, brT);
+  paintSide(C);
+  check(C);
+}
+/* P lives on the curve: keep its s and the sign of t; if the curve moved away, snap to the nearest sample. */
+function placeP(C, brT){
+  const v = tt2(C.P, S.Ps);
+  const inside = brT.some(b => b.length > 1 && S.Ps >= Math.min(...b.map(p => p[0])) && S.Ps <= Math.max(...b.map(p => p[0])));
+  if (v >= 0 && inside) return [S.Ps, S.Psg * Math.sqrt(v)];
+  let best = null, bd = Infinity;
+  for (const b of brT) for (const p of b) { const dd = Math.hypot(p[0] - S.Ps, p[1] - S.Psg); if (dd < bd) { bd = dd; best = p; } }
+  if (!best) return [0, 0];
+  S.Ps = best[0]; S.Psg = best[1] >= 0 ? 1 : -1;
+  return best;
+}
+function paintP(C, brT){
+  const [s, t] = placeP(C, brT), {X, Y} = CUR;
+  CUR.Pst = [s, t];
+  const show = S.locked && !(brT.length === 1 && brT[0].length === 1);
+  setA('hP', {cx: X(s).toFixed(1), cy: Y(t).toFixed(1), opacity: show ? 1 : 0}); $('hP').style.display = show ? '' : 'none';
+  setA('lP', {x: X(s) + 12, y: Y(t) - 10, opacity: show ? 1 : 0});
+  let seg = '';
+  if (show && C.foci.length && C.kind !== 'circle') {
+    seg += `<line x1="${X(s)}" y1="${Y(t)}" x2="${X(C.foci[0])}" y2="${CUR.oy}" stroke="${FOC}"/>`;
+    if (C.foci.length > 1) seg += `<line x1="${X(s)}" y1="${Y(t)}" x2="${X(C.foci[1])}" y2="${CUR.oy}" stroke="${FOC}" stroke-dasharray="4 4"/>`;
+    if (C.dirs.length) seg += `<line x1="${X(s)}" y1="${Y(t)}" x2="${X(C.dirs[0])}" y2="${Y(t)}" stroke="${DIR}"/>`;
+  }
+  $('tsSeg').innerHTML = seg;
+}
+function paintBottom(C, brT){
+  /* e against cos β: the learner's records, and a fitted line through the origin */
+  $('gePts').innerHTML = S.recs.map(([x, y]) => `<circle cx="${gex(x).toFixed(1)}" cy="${gey(y).toFixed(1)}" r="4.5"/>`).join('');
+  const m = S.recs.length >= 2 ? fitThroughOrigin(S.recs) : null;
+  setA('geFit', {d: m ? `M${gex(0)} ${gey(0)} L${gex(Math.min(1, 2.2 / m))} ${gey(Math.min(2.2, m))}` : ''});
+  $('geFitL').textContent = m ? `fitted slope ${fmt(m, 3)} · 1/cos α = ${fmt(1 / Math.cos(S.alpha * D2R), 3)}` : S.locked ? 'Press “Record e” at several β.' : '';
+  /* PF/PD and PF + PF′ (or |PF − PF′|) for every sampled point, left to right round the curve */
+  let rp = '', sp = '', ax = '';
+  const pts = brT.filter(b => b.length > 1).flat();
+  const ms = pts.map(([s, t]) => measure(C, s, t));
+  const rat = ms.map(q => q.ratio), sum = ms.map(q => C.kind === 'hyperbola' ? q.diff : q.sum);
+  const vals = [...rat, ...sum].filter(v => v != null && isFinite(v));
+  const top = vals.length ? Math.max(1.2, Math.ceil(Math.max(...vals) * 1.15 * 2) / 2) : 2;
+  const rx = i => GR.x + i / Math.max(1, pts.length - 1) * GR.w, ry = v => GR.y + GR.h - v / top * GR.h;
+  if (S.locked && pts.length > 1 && C.foci.length) {
+    rat.forEach((v, i) => { if (v != null) rp += (rp ? 'L' : 'M') + rx(i).toFixed(1) + ' ' + ry(v).toFixed(1); });
+    sum.forEach((v, i) => { if (v != null) sp += (sp ? 'L' : 'M') + rx(i).toFixed(1) + ' ' + ry(v).toFixed(1); });
+  }
+  ax += `<line x1="${GR.x}" y1="${GR.y + GR.h}" x2="${GR.x + GR.w}" y2="${GR.y + GR.h}" stroke="#9aa3a6"/>`;
+  for (const v of [0, top / 2, top]) ax += `<text x="${GR.x - 6}" y="${ry(v) + 4}" text-anchor="end" class="m" font-size="11" fill="#4a555b">${fmt(v, 1)}</text><line x1="${GR.x}" y1="${ry(v)}" x2="${GR.x + GR.w}" y2="${ry(v)}" stroke="#ece9e1"/>`;
+  ax += `<text x="${GR.x + GR.w / 2}" y="${GR.y + GR.h + 15}" text-anchor="middle" font-size="11.5" fill="#4a555b">every sampled point P, going round the curve</text>`;
+  $('grAx').innerHTML = ax;
+  setA('grRatio', {d: rp}); setA('grSum', {d: sp});
+  $('grLeg').innerHTML = S.locked && C.foci.length ? `<text x="${GR.x + GR.w}" y="${BT.y + 18}" text-anchor="end" fill="${CURVE}" font-weight="600">— PF / PD</text>` +
+    (C.foci.length > 1 ? `<text x="${GR.x + GR.w - 92}" y="${BT.y + 18}" text-anchor="end" fill="${DIR}" font-weight="600">- - ${C.kind === 'hyperbola' ? '|PF − PF′|' : 'PF + PF′'}</text>` : '') : '';
+}
+const NAMES = {circle: 'Circle', ellipse: 'Ellipse', parabola: 'Parabola', hyperbola: 'Hyperbola', point: 'A point', line: 'A straight line', lines: 'Two straight lines'};
+function paintSide(C){
+  $('alOut').textContent = fmt(S.alpha, 1) + '°'; $('beOut').textContent = fmt(S.beta, 1) + '°'; $('ddOut').textContent = fmt(S.d, 2);
+  $('al').value = S.alpha; $('be').value = S.beta; $('dd').value = S.d;
+  $('cSph').setAttribute('aria-pressed', S.spheres); $('cRay').setAttribute('aria-pressed', S.rays);
+  $('kind').textContent = S.locked ? NAMES[C.kind] : 'A closed curve';
+  let eq = '';
+  if (C.kind === 'ellipse' || C.kind === 'circle') eq = `x²/${f3(C.a * C.a)} + y²/${f3(C.b * C.b)} = 1`;
+  else if (C.kind === 'hyperbola') eq = `x²/${f3(C.a * C.a)} − y²/${f3(C.b * C.b)} = 1`;
+  else if (C.kind === 'parabola') eq = `y² = 4 × ${f3(Math.abs(C.p))} × x`;
+  $('eqn').textContent = S.locked ? eq : '';
+  if (!S.locked) { $('read').innerHTML = '<span>Measurements</span><b>after your prediction</b>'; return; }
+  const [s, t] = CUR.Pst, m = measure(C, s, t), lm = latusMeasured(C);
+  const lf = C.kind === 'parabola' ? 4 * Math.abs(C.p) : C.a ? 2 * C.b * C.b / C.a : null;
+  let h = `<span>e = cos β / cos α</span><b>${f3(C.eTheory)}</b>`;
+  if (C.e != null) h += `<span>e = c / a</span><b>${f3(C.e)}</b>`;
+  if (m.ratio != null) h += `<span>PF / PD, measured</span><b>${f3(m.ratio)}</b>`;
+  h += '<i class="sep"></i>';
+  if (C.a != null && C.kind !== 'parabola') h += `<span>a, b, c</span><b>${f3(C.a)}, ${f3(C.b)}, ${f3(C.c)}</b>`;
+  if (C.kind === 'parabola') h += `<span>a (focus to vertex)</span><b>${f3(Math.abs(C.p))}</b>`;
+  if (m.sum != null && C.kind === 'ellipse') h += `<span>PF + PF′  (2a = ${f3(2 * C.a)})</span><b>${f3(m.sum)}</b>`;
+  if (m.diff != null && C.kind === 'hyperbola') h += `<span>|PF − PF′|  (2a = ${f3(2 * C.a)})</span><b>${f3(m.diff)}</b>`;
+  if (C.kind === 'circle') h += `<span>radius, measured</span><b>${f3(Math.hypot(s - C.centre, t))}</b>`;
+  if (lm != null) h += `<span>latus rectum, measured</span><b>${f3(lm)}</b><span>${C.kind === 'parabola' ? '4a' : '2b² / a'}</span><b>${f3(lf)}</b>`;
+  if (S.spheres && C.foci.length) { const sp = dandelin(S.alpha, S.beta, S.d); h += `<i class="sep"></i><span>spheres touch the plane at s =</span><b>${sp.map(o => f3(o.s)).join(', ')}</b><span>foci from (★) at s =</span><b>${C.foci.map(f3).join(', ')}</b>`; }
+  $('read').innerHTML = h;
+  paintWhy(C, m);
+}
+function paintWhy(C, m){
+  const P = C.P, rel = S.beta > S.alpha ? 'bigger than' : S.beta < S.alpha ? 'smaller than' : 'equal to';
+  let h = `<p>β = ${fmt(S.beta, 1)}° is <b>${rel}</b> α = ${fmt(S.alpha, 1)}°, so A = sin²β − tan²α cos²β = <span class="mono">${fmt(P.A, 4)}</span>`;
+  h += P.A > 1e-9 ? ' is positive: the plane cuts right across one nappe and the curve closes.' : P.A < -1e-9 ? ' is negative: the plane is steeper than the side of the cone, so it cuts both nappes.' : ' is zero: the plane is parallel to a generator, and the curve never closes.';
+  h += '</p>';
+  if (C.kind === 'point' || C.kind === 'line' || C.kind === 'lines') h += `<p>With d = 0 the plane passes through the vertex. The section is ${NAMES[C.kind].toLowerCase()}: a degenerate conic. There are no foci here — the focus–directrix picture breaks down.</p>`;
+  else if (C.kind === 'circle') h += `<p>β = 90°: the plane is square to the axis. Both foci sit at the centre (c = 0, e = 0), and the radius is d tan α = ${f3(S.d * Math.tan(S.alpha * D2R))}.</p>`;
+  else {
+    h += `<p>For every point P on the cut, PF divided by the distance to the directrix is the same number: <b class="mono">${f3(m.ratio)}</b> at this P. It equals cos β / cos α = ${f3(C.eTheory)}.</p>`;
+    if (C.kind === 'ellipse') h += `<p>The book’s definition holds too: PF + PF′ = ${f3(m.sum)} = 2a wherever P is.</p>`;
+    if (C.kind === 'hyperbola') h += `<p>The book’s definition holds too: |PF − PF′| = ${f3(m.diff)} = 2a. The other branch is on the upper nappe.</p>`;
+  }
+  $('why').innerHTML = h;
+}
+
+/* ---- findings -------------------------------------------------------------------- */
+function check(C){
+  if (!S.locked) return;
+  if (C.kind === 'circle') discover('circle');
+  if (C.kind === 'parabola') discover('parabola');
+  if (C.kind === 'hyperbola') discover('hyperbola');
+  if (['point', 'line', 'lines'].includes(C.kind)) discover('degenerate');
+  if (S.spheres && ['ellipse', 'hyperbola', 'parabola'].includes(C.kind)) {
+    const sp = dandelin(S.alpha, S.beta, S.d);
+    if (sp.length && sp.every(o => C.foci.some(f => Math.abs(f - o.s) < 1e-9))) discover('dandelin');
+  }
+  if (S.rays && (C.kind === 'ellipse' || C.kind === 'parabola')) {
+    const rs = rays(C, CUR.brT);
+    if (rs.length >= 8 && rs.every(r => r.miss < 2e-3 * Math.max(1, C.a || 1))) discover('reflect');
+  }
+  if (S.recs.length >= 4) {
+    const xs = S.recs.map(r => r[0]), m = fitThroughOrigin(S.recs);
+    if (Math.max(...xs) - Math.min(...xs) >= 0.4 && Math.abs(m * Math.cos(S.alpha * D2R) - 1) < 0.01) discover('efit');
+  }
+  if (C.kind === 'parabola') maybeExplain(C);
+}
+let EXPLAINED = false;
+function maybeExplain(C){
+  if (EXPLAINED || !POE) return;
+  EXPLAINED = true;
+  const near = conic(S.alpha, S.alpha + 1, S.d);
+  POE.explain(`At β = α = ${fmt(S.alpha, 1)}° the s² term in (★) vanishes: A = ${fmt(C.P.A, 6)}. The equation becomes t² = 4a(s − s₀), a <b>parabola</b>, and e = cos β / cos α = ${f3(C.eTheory)}. ` +
+    `One degree steeper, at β = ${fmt(S.alpha + 1, 1)}°, it is still an ellipse, but ${f2(2 * near.a)} long; at β = α its far end has gone to infinity.`);
+}
+
+/* ============================================================================
+   Controls
+   ============================================================================ */
+build();
+function lockControls(on){
+  for (const id of ['al', 'be', 'dd', 'cSph', 'cRay', 'cRec', 'cClr']) $(id).disabled = on;
+  $('gate').hidden = !on;
+}
+$('al').addEventListener('input', e => { S.alpha = +e.target.value; S.recs = []; paint(); });
+$('be').addEventListener('input', e => { S.beta = +e.target.value; paint(); });
+$('dd').addEventListener('input', e => { S.d = +e.target.value; paint(); });
+$('al').addEventListener('change', () => track('alpha', {alpha: S.alpha}));
+$('be').addEventListener('change', () => track('beta', {beta: S.beta}));
+$('cSph').addEventListener('click', () => { S.spheres = !S.spheres; sound('tick'); paint(); });
+$('cRay').addEventListener('click', () => { S.rays = !S.rays; sound('tick'); paint(); });
+$('cRec').addEventListener('click', () => {
+  const C = CUR.C; if (!C.foci.length || C.kind === 'point') { toast('No foci here: nothing to measure.'); return; }
+  const [s, t] = CUR.Pst, m = measure(C, s, t), e = C.kind === 'circle' ? 0 : m.ratio;
+  S.recs = S.recs.filter(r => Math.abs(r[0] - C.P.cb) > 1e-6); S.recs.push([C.P.cb, e]);
+  sound('pop'); track('record', {beta: S.beta, e}); paint();
+});
+$('cClr').addEventListener('click', () => { S.recs = []; sound('tick'); paint(); });
+let rotFrom = null;
+drag($('rot'), svg, {
+  start(p){ rotFrom = {p, yaw: S.yaw, pitch: S.pitch}; },
+  move(p){ S.yaw = rotFrom.yaw - (p.x - rotFrom.p.x) * 0.5; S.pitch = clamp(rotFrom.pitch + (p.y - rotFrom.p.y) * 0.4, -60, 60); paint(); },
+  end(){ track('rotate', {yaw: S.yaw, pitch: S.pitch}); },
+});
+drag($('hP'), svg, {
+  start(){ if (!S.locked) return false; },
+  move(p){
+    const {X, Y, brT, C} = CUR; let best = null, bd = Infinity;
+    for (const b of brT) for (const q of b) { const dd = Math.hypot(X(q[0]) - p.x, Y(q[1]) - p.y); if (dd < bd) { bd = dd; best = q; } }
+    if (!best) return;
+    S.Ps = best[0]; S.Psg = best[1] >= 0 ? 1 : -1;
+    /* which way round the first focus P is: the ratio must hold in every direction */
+    const ang = Math.atan2(best[1], best[0] - (C.foci[0] || 0));
+    const sec = Math.floor(((ang + Math.PI) / (2 * Math.PI)) * 8) % 8;
+    const m = measure(C, best[0], best[1]);
+    if (m.ratio != null && C.e && Math.abs(m.ratio - C.e) < 1e-6 && !S.sectors.includes(sec)) S.sectors.push(sec);
+    if (S.sectors.length >= 3) discover('ratio');
+    paint();
+  },
+  end(){ track('dragP', {s: S.Ps}); },
+});
+
+/* ============================================================================
+   Start
+   ============================================================================ */
+findings($('finds'), [
+  {id: 'circle',     icon: '○', label: 'β = 90°: a circle', hint: 'Make the plane square to the axis'},
+  {id: 'parabola',   icon: '∪', label: 'β = α: a parabola', hint: 'Plane parallel to the cone’s side'},
+  {id: 'hyperbola',  icon: ')(', label: 'β < α: a hyperbola on both nappes', hint: 'Steeper than the cone'},
+  {id: 'degenerate', icon: '×', label: 'Through the vertex: a point or lines', hint: 'Set d to 0'},
+  {id: 'ratio',      icon: 'e', label: 'PF / PD is the same all round', hint: 'Drag P to different sides'},
+  {id: 'efit',       icon: '╱', label: 'e = cos β / cos α, fitted', hint: 'Record e at four or more tilts'},
+  {id: 'dandelin',   icon: '◎', label: 'Dandelin’s spheres touch at the foci', hint: 'Show the spheres'},
+  {id: 'reflect',    icon: '↯', label: 'Rays from a focus: to the other focus, or parallel', hint: 'Fire rays from a focus'},
+], () => toast('All eight found. Apollonius would approve.', 4000));
+
+const POE = predict($('poe'), {
+  id: 'conic-tilt',
+  q: 'Tilt the cutting plane from level (a circle) towards the slope of the cone’s side. At the moment the plane becomes exactly parallel to the side, what happens to the closed curve?',
+  options: [
+    {id: 'longer', text: 'It stays a closed oval, just a very long one.'},
+    {id: 'opens',  text: 'It stops closing: one end runs off for ever (a parabola).', right: true},
+    {id: 'circle', text: 'It turns back into a circle.'},
+    {id: 'lines',  text: 'It becomes two straight lines.'},
+  ],
+  onLock(){ S.locked = true; lockControls(false); say('Now tilt the plane. Watch the cut, and its foci.'); paint(); },
+});
+lockControls(!POE.locked);
+if (!Play.FF('predict')) S.locked = true;
+paint();
+window.applyFeatures = () => paint();
+window.PG_STATE = () => JSON.parse(JSON.stringify(S));
+window.PG_FLAT = (s, t) => [CUR.X(s), CUR.Y(t)];     /* read-only: where a plane point is drawn, for tests */
+window.PG_MODEL = {setup, tt2, sample, conic, dandelin, measure, latusMeasured, rays, fitThroughOrigin};
+</script>
+</body>
+</html>
