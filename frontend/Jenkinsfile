@@ -1,0 +1,90 @@
+pipeline {
+  agent { label 'box' }
+
+  options {
+    timeout(time: 30, unit: 'MINUTES')
+    disableConcurrentBuilds()
+    buildDiscarder(logRotator(numToKeepStr: '40'))
+    disableResume()
+  }
+
+  environment {
+    NODE_IMAGE = 'emerge-ci/node:24'
+    VERCEL_CLI = 'vercel@63.1.2'
+  }
+
+  stages {
+    stage('Install') {
+      steps {
+        inNode('node --version && npm ci --no-audit --no-fund', false)
+      }
+    }
+
+    stage('Check') {
+      steps {
+        inNode('npm run lint && npm run typecheck && npm run check:routes', false)
+      }
+    }
+
+    stage('Deploy staged production') {
+      when {
+        allOf {
+          branch 'main'
+          not { changeRequest() }
+        }
+      }
+      environment {
+        VERCEL_TOKEN      = credentials('vercel-token')
+        VERCEL_ORG_ID     = credentials('vercel-org-id')
+        VERCEL_PROJECT_ID = credentials('vercel-project-emerge-frontend')
+        DEPLOY_MESSAGE    = sh(script: 'git log -1 --format=%s "$GIT_COMMIT"', returnStdout: true).trim()
+      }
+      steps {
+        inNode('npx --yes "$VERCEL_CLI" pull --yes --environment=production --token="$VERCEL_TOKEN"', true)
+        inNode('npx --yes "$VERCEL_CLI" build --prod', false)
+        inNode('''
+          GIT_DIR=/nonexistent-git npx --yes "$VERCEL_CLI" deploy --prebuilt --prod --skip-domain --format=json --token="$VERCEL_TOKEN" \
+            -m githubCommitMessage="$DEPLOY_MESSAGE" -m githubCommitSha="$GIT_COMMIT" -m githubCommitRef=main \
+            -m githubOrg=Harbour-Emerge -m githubRepo=emerge-frontend \
+            -m githubCommitOrg=Harbour-Emerge -m githubCommitRepo=emerge-frontend -m githubDeployment=1 > .vercel-deploy.json
+          node -e '
+            const fs = require("fs");
+            const out = JSON.parse(fs.readFileSync(".vercel-deploy.json", "utf8"));
+            const d = out.deployment || out;
+            if (!d.url) { console.error("No deployment URL in the CLI output"); process.exit(1); }
+            fs.writeFileSync(".vercel-url", d.url);
+          '
+        ''', true)
+        script {
+          def url = readFile('.vercel-url').trim()
+          currentBuild.description = "staged: ${url}"
+          echo "Staged production deployment: ${url}"
+        }
+      }
+    }
+  }
+
+  post {
+    always {
+      sh 'rm -rf .ci-node.sh .vercel-deploy.json .vercel-url .vercel'
+    }
+  }
+}
+
+// Runs a shell script inside the Node toolchain image, passing the Vercel token only when asked.
+def inNode(String script, boolean withToken) {
+  writeFile(file: '.ci-node.sh', text: "set -eo pipefail\n${script}\n")
+  withEnv(["CI_TOKEN_ARG=${withToken ? '-e VERCEL_TOKEN' : ''}"]) {
+    sh '''
+      set -eu
+      mkdir -p /var/lib/jenkins-agent/cache/node
+      docker run --rm \
+        -v "$WORKSPACE:/src" -w /src \
+        -v /var/lib/jenkins-agent/cache/node:/cache \
+        -e HOME=/cache -e npm_config_cache=/cache/npm -e CI=true \
+        -e NEXT_TELEMETRY_DISABLED=1 -e VERCEL_TELEMETRY_DISABLED=1 \
+        -e VERCEL_CLI -e VERCEL_ORG_ID -e VERCEL_PROJECT_ID -e DEPLOY_MESSAGE -e GIT_COMMIT ${CI_TOKEN_ARG:-} \
+        "$NODE_IMAGE" bash /src/.ci-node.sh
+    '''
+  }
+}
